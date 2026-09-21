@@ -70,6 +70,13 @@ User accounts and preferences.
 | `is_auto_coaching` | `boolean` | default `false` |
 | `last_weekly_summary_at` | `timestamp` | nullable |
 | `last_missed_reminder_at` | `timestamp` | nullable |
+| `email_weekly_review_reminder` | `boolean` | default `false` — per-type toggle for the Sunday-evening weekly review reminder |
+| `email_today_session` | `boolean` | default `false` — per-type toggle for the session brief |
+| `email_analysis_digest` | `boolean` | default `false` — per-type toggle for the stored-analysis digest |
+| `notify_hour` | `integer` | default `7`, CHECK `0..23` — local hour the scheduled emails go out (`users_notify_hour_check`) |
+| `last_weekly_review_reminder_at` | `timestamp` | nullable — claim ledger |
+| `last_today_session_at` | `timestamp` | nullable — claim ledger |
+| `last_analysis_digest_at` | `timestamp` | nullable — claim ledger; also the "newer than" anchor for the digest |
 | `push_refuel_reminder` | `boolean` | default `false` — opt-in push nudge for post-workout recovery fuel |
 | `push_logging_reminder` | `boolean` | default `false` — opt-in 20:00-local push nudge when nothing has been logged |
 | `last_refuel_reminder_at` | `timestamp` | nullable |
@@ -78,9 +85,9 @@ User accounts and preferences.
 | `created_at` | `timestamp` | default `now()` |
 | `updated_at` | `timestamp` | default `now()` |
 
-No additional indexes (queries are by PK).
+No additional indexes (queries are by PK). One CHECK constraint, `users_notify_hour_check`.
 
-**Consent columns.** The four boolean columns above default to `false` at the DB layer so new accounts are opted-out of every third-party data flow by default. The application reads them as follows:
+**Consent columns.** The email and AI boolean columns above default to `false` at the DB layer so new accounts are opted-out of every third-party data flow by default. The application reads them as follows:
 
 - No email is ever sent unless `email_notifications = true` **and** the per-type toggle for the category is `true`. The scheduler in `server/emailScheduler.ts` enforces both checks.
 - No AI provider call is issued unless `ai_coach_enabled = true`. The auto-coach service short-circuits (`server/services/coachService.ts`) and the chat / parsing routes check the flag before composing a prompt.

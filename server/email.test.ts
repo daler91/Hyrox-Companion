@@ -19,6 +19,9 @@ vi.mock("./env", () => ({
     RESEND_API_KEY: "test_key",
     RESEND_FROM_EMAIL: undefined,
     APP_URL: undefined,
+    // The unsubscribe token in every footer/header is an HMAC keyed off this.
+    ENCRYPTION_KEY: "0".repeat(32),
+    ENCRYPTION_KEY_V2: undefined,
   },
 }));
 
@@ -32,8 +35,11 @@ vi.mock("./logger", () => ({
 
 import { createMockMissedWorkout, createMockUser, createMockWeeklySummary } from "../test/factories";
 import {
+  sendAnalysisDigest,
   sendEmail,
   sendMissedWorkoutReminder,
+  sendTodaySessionBrief,
+  sendWeeklyReviewReminder,
   sendWeeklySummary,
 } from "./email";
 import { env } from "./env";
@@ -69,6 +75,16 @@ describe("email sending", () => {
         subject: "Subject",
         html: "<p>Hello</p>",
       });
+    });
+
+    it("forwards custom headers to Resend when given", async () => {
+      await sendEmail("to@example.com", "Subject", "<p>Hello</p>", {
+        headers: { "List-Unsubscribe": "<https://example.com/u>" },
+      });
+
+      expect(sendMock).toHaveBeenCalledWith(
+        expect.objectContaining({ headers: { "List-Unsubscribe": "<https://example.com/u>" } }),
+      );
     });
 
     it("returns true when Resend resolves with no error", async () => {
@@ -173,6 +189,15 @@ describe("email sending", () => {
       expect(payload.html).toContain("Weekly Training Summary");
     });
 
+    it("attaches the one-click unsubscribe headers and footer link", async () => {
+      await sendWeeklySummary(baseUser, weeklyData);
+
+      const payload = sendMock.mock.calls[0][0];
+      expect(payload.headers["List-Unsubscribe"]).toContain("/api/v1/emails/unsubscribe?token=");
+      expect(payload.headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+      expect(payload.html).toContain("/api/v1/emails/unsubscribe?token=");
+    });
+
     it("propagates false when Resend responds with an error", async () => {
       sendMock.mockResolvedValue({
         data: null,
@@ -180,6 +205,50 @@ describe("email sending", () => {
       });
       const result = await sendWeeklySummary(baseUser, weeklyData);
       expect(result).toBe(false);
+    });
+  });
+
+  describe("newer digest wrappers", () => {
+    const reviewData = {
+      weekStart: "2026-07-13", weekEnd: "2026-07-19", weeklyGoal: 4, sessionsLogged: 2, sessionsPlanned: 0,
+      plannedCompleted: 0, missed: 0, totalDurationMin: 90, avgRpe: null, personalRecords: [], previousIntent: null,
+    };
+    const briefData = {
+      date: "2026-07-21", isTomorrow: false,
+      sessions: [{ planDayId: "pd-1", focus: "Easy run", mainWorkout: "40 min", expectedDurationMin: 40, expectedRpe: 4, plannedTimeOfDayMin: null, planName: null }],
+    };
+    const digestData = { racePrediction: null, coachInsightsMarkdown: "**Focus** — run more", coachInsightsGeneratedAt: null };
+
+    it("return false without calling Resend when user.email is null", async () => {
+      const user = { ...baseUser, email: null };
+      expect(await sendWeeklyReviewReminder(user, reviewData)).toBe(false);
+      expect(await sendTodaySessionBrief(user, briefData)).toBe(false);
+      expect(await sendAnalysisDigest(user, digestData)).toBe(false);
+      expect(sendMock).not.toHaveBeenCalled();
+    });
+
+    it("skip an empty brief and an empty digest", async () => {
+      expect(await sendTodaySessionBrief(baseUser, { ...briefData, sessions: [] })).toBe(false);
+      expect(await sendAnalysisDigest(baseUser, { racePrediction: null, coachInsightsMarkdown: null, coachInsightsGeneratedAt: null })).toBe(false);
+      expect(sendMock).not.toHaveBeenCalled();
+    });
+
+    it("send each template with the unsubscribe headers", async () => {
+      expect(await sendWeeklyReviewReminder(baseUser, reviewData)).toBe(true);
+      expect(await sendTodaySessionBrief(baseUser, briefData)).toBe(true);
+      expect(await sendAnalysisDigest(baseUser, digestData)).toBe(true);
+
+      expect(sendMock).toHaveBeenCalledTimes(3);
+      const subjects = sendMock.mock.calls.map((call) => call[0].subject);
+      expect(subjects).toEqual([
+        "Your week is wrapping up — 2 sessions so far",
+        "Today: Easy run",
+        "Your coach insights are ready",
+      ]);
+      for (const [payload] of sendMock.mock.calls) {
+        expect(payload.to).toEqual(["test@example.com"]);
+        expect(payload.headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+      }
     });
   });
 

@@ -1257,6 +1257,24 @@
             "type": "boolean",
             "nullable": true
           },
+          "emailWeeklyReviewReminder": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailTodaySession": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailAnalysisDigest": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "notifyHour": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
           "showAdherenceInsights": {
             "type": "boolean",
             "nullable": true
@@ -1398,6 +1416,10 @@
           "emailNotifications",
           "emailWeeklySummary",
           "emailMissedReminder",
+          "emailWeeklyReviewReminder",
+          "emailTodaySession",
+          "emailAnalysisDigest",
+          "notifyHour",
           "showAdherenceInsights",
           "aiCoachEnabled",
           "coachAutoApplyPlanChanges",
@@ -2034,6 +2056,20 @@
           },
           "emailMissedReminder": {
             "type": "boolean"
+          },
+          "emailWeeklyReviewReminder": {
+            "type": "boolean"
+          },
+          "emailTodaySession": {
+            "type": "boolean"
+          },
+          "emailAnalysisDigest": {
+            "type": "boolean"
+          },
+          "notifyHour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
           },
           "pushRefuelReminder": {
             "type": "boolean"
@@ -3658,6 +3694,10 @@
                 "emailNotifications": true,
                 "emailWeeklySummary": true,
                 "emailMissedReminder": true,
+                "emailWeeklyReviewReminder": false,
+                "emailTodaySession": false,
+                "emailAnalysisDigest": false,
+                "notifyHour": 7,
                 "showAdherenceInsights": true,
                 "aiCoachEnabled": true,
                 "trainingStyleId": "balanced_default",
@@ -3681,6 +3721,10 @@
                   "emailNotifications": true,
                   "emailWeeklySummary": true,
                   "emailMissedReminder": true,
+                  "emailWeeklyReviewReminder": false,
+                  "emailTodaySession": false,
+                  "emailAnalysisDigest": false,
+                  "notifyHour": 7,
                   "showAdherenceInsights": true,
                   "aiCoachEnabled": true,
                   "trainingStyleId": "balanced_default",

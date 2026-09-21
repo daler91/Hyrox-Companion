@@ -87,6 +87,33 @@ describe("usePreferencesForm", () => {
     expect(result.current.hasChanges).toBe(false);
   });
 
+  it("hydrates the notify hour and email digest toggles and sends them on save", async () => {
+    const { result } = renderForm(
+      serverPreferences({ notifyHour: 18, emailAnalysisDigest: true, emailTodaySession: true }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.draft.notifyHour).toBe(18);
+    });
+    expect(result.current.draft.emailAnalysisDigest).toBe(true);
+    expect(result.current.hasChanges).toBe(false);
+
+    act(() => {
+      result.current.updateField("emailTodaySession", false);
+    });
+    expect(result.current.hasChanges).toBe(true);
+    act(() => {
+      result.current.handleSave();
+    });
+
+    await waitFor(() => {
+      expect(harness.updatePreferences).toHaveBeenCalledTimes(1);
+    });
+    expect(harness.updatePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ notifyHour: 18, emailAnalysisDigest: true, emailTodaySession: false }),
+    );
+  });
+
   it("flips hasChanges on edit and back off when the edit is reverted", async () => {
     const { result } = await renderHydratedForm();
 

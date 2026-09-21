@@ -420,48 +420,44 @@ graph TD
 
 ## 7. Cron → Notification Pipeline
 
-The daily notification pipeline is split across three runtimes: `node-cron` fires at a fixed UTC time, the tick enqueues per-user jobs into pg-boss, and the queue workers send email through Resend plus Web Push notifications for subscribed devices. Splitting the work this way means one user's slow send cannot block the next user, and a worker crash mid-batch only loses the in-flight job (the rest stay queued).
+The notification pipeline is split across three runtimes: `node-cron` ticks every hour in UTC, the tick plans and enqueues per-user jobs into pg-boss against each athlete's own wall clock, and the queue workers send email through Resend plus Web Push notifications for subscribed devices. Splitting the work this way means one user's slow send cannot block the next user, and a worker crash mid-batch only loses the in-flight job (the rest stay queued).
 
 ```mermaid
 flowchart LR
-    Cron["node-cron<br/>0 9 * * * UTC"] --> Run[runEmailCronJob]
-    Ext["External cron<br/>GET /api/v1/cron/emails"] -. x-cron-secret .-> Run
+    Cron["node-cron<br/>0 * * * * UTC"] --> Run[runEmailCronJob]
+    Ext["External cron (hourly)<br/>GET /api/v1/cron/emails"] -. x-cron-secret .-> Run
+    Startup["Server boot"] -. 30s delay .-> Run
 
-    Run --> Scan[Iterate eligible users<br/>respects emailWeeklySummary<br/>and emailMissedReminder]
+    Run --> Plan["planEmailJobsForUser<br/>local hour == notifyHour?<br/>local Sunday 17:00?<br/>per-type toggles"]
 
-    Scan --> EnqWeekly[sendJobNoRetry<br/>send-weekly-summary]
-    Scan --> EnqMissed[sendJobNoRetry<br/>send-missed-reminder]
+    Plan --> QW["send-weekly-summary<br/>(local Monday)"]
+    Plan --> QM["send-missed-reminder"]
+    Plan --> QT["send-today-session"]
+    Plan --> QA["send-analysis-digest"]
+    Plan --> QR["send-weekly-review-reminder<br/>(Sunday 17:00 local)"]
 
-    EnqWeekly --> QW[pg-boss queue]
-    EnqMissed --> QM[pg-boss queue]
+    QW --> W["per-user worker<br/>re-fetch user, re-check toggle"]
+    QM --> W
+    QT --> W
+    QA --> W
+    QR --> W
 
-    QW --> WW[send-weekly-summary worker]
-    QM --> MW[send-missed-reminder worker]
+    W --> Guard{"claim ledger<br/>last&lt;Type&gt;At"}
+    Guard -- won --> Tmpl[emailTemplates.*]
+    Guard -- lost --> Skip([skip])
 
-    WW --> Guard1{"has summary<br/>been sent<br/>this week?"}
-    MW --> Guard2{"has reminder<br/>been sent<br/>today?"}
-
-    Guard1 -- No --> Tmpl1[emailTemplates.weeklySummary]
-    Guard2 -- No --> Tmpl2[emailTemplates.missedWorkout]
-
-    Tmpl1 --> Send[Resend.emails.send]
-    Tmpl2 --> Send
-    Tmpl1 --> Push[sendPushToUser]
-    Tmpl2 --> Push
-
-    Send --> Mark[Persist &quot;sent&quot; marker<br/>lastWeeklySummaryAt /<br/>lastMissedReminderAt]
-
-    Guard1 -- Yes --> Skip([skip])
-    Guard2 -- Yes --> Skip
-
-    Startup["Server start after 09:00 UTC"] -. 30s delay .-> Run
+    Tmpl --> Send["Resend.emails.send<br/>+ List-Unsubscribe headers"]
+    Tmpl --> Push[sendPushToUser]
 ```
 
 **Key details:**
-- **Fixed UTC schedule**: `"0 9 * * *"` in `server/cron.ts` — daily at 09:00 UTC. Fourteen other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, RAG chunk prune daily at 03:50, analytics recompute hourly at :05 firing at each user's local midnight, account erasure sweep hourly at :35, nutrition push reminders hourly at :25, the food-embedding backfill every 30 minutes when semantic food search is enabled, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, the Strava auto-sync polling scan every 15 minutes, the Strava webhook subscription check six-hourly and 30 s after boot, and a one-shot startup email catch-up). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
-- **Startup catch-up**: if the server boots after 09:00 UTC (e.g. a Railway restart), `cron.ts` schedules a one-shot catch-up run after 30 s. The per-user "sent" markers below keep this idempotent.
-- **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the final "mark as sent" happens *after* Resend returns, so a retry after a post-send DB failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
-- **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — useful when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
+- **Hourly UTC tick, per-athlete local gate**: `"0 * * * *"` in `server/cron.ts`. `planEmailJobsForUser()` (`server/emailScheduler.ts`) resolves each athlete's local hour and weekday from `users.user_timezone`; the weekly summary, missed reminder, session brief and analysis digest fire at their `notify_hour` (default 07:00), the weekly review reminder on Sunday at 17:00 local. Fourteen other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, RAG chunk prune daily at 03:50, analytics recompute hourly at :05 firing at each user's local midnight, account erasure sweep hourly at :35, nutrition push reminders hourly at :25, the food-embedding backfill every 30 minutes when semantic food search is enabled, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, the Strava auto-sync polling scan every 15 minutes, the Strava webhook subscription check six-hourly and 30 s after boot, and a one-shot startup email catch-up). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
+- **Startup catch-up**: `cron.ts` schedules one catch-up scan 30 s after every boot. The per-user local-hour gate and the claim ledgers keep it idempotent, so it needs no time-of-day condition.
+- **Claim before send**: every worker takes an atomic conditional `UPDATE` on its ledger column (`claimWeeklySummary` and friends in `server/storage/users.ts`) before building the email, with a window deliberately shorter than the cadence; only the winner sends.
+- **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the ledger is stamped at claim time, so a retry after a post-send failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
+- **No AI on the email path**: the analysis digest reads stored `analytics_results` rows only; recomputes stay with the `analyticsRecompute` cron.
+- **Unsubscribe**: every send carries `List-Unsubscribe` / `List-Unsubscribe-Post` headers and a footer link to `/api/v1/emails/unsubscribe`, mounted ahead of the CSRF guard (see [integrations.md § One-Click Unsubscribe](integrations.md#one-click-unsubscribe)).
+- **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — call it hourly when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
 - **Per-job timeout**: every worker is wrapped in `runWithTimeout` (55 min) so a hung Resend or Gemini call cannot leak a worker slot indefinitely.
 - **Same pattern, different payload — stored-first analytics**: the `analyticsRecompute` cron reuses this exact fixed-UTC-tick → local-time-gate → pg-boss → worker shape. It ticks hourly, fires per user at local midnight, and enqueues `recompute-analytics` jobs that refresh the durable `analytics_results` row (Coach Insights / Race Prediction) so the next open paints a fresh result with no AI spend on the read path. See [integrations.md § Analytics Recompute](integrations.md#analytics-recompute-scan).
 - See [integrations.md § Email](integrations.md#email-system-resend) for the prose walkthrough and [integrations.md § Job Queue](integrations.md#job-queue-pg-boss) for the queue-level details.

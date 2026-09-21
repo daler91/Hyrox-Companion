@@ -6,3 +6,17 @@
 # never a real credential. The line now also carries an inline
 # `gitleaks:allow` so future edits don't re-flag at a new fingerprint.
 10fc8f3dd74a082afb0ea7dad833bafd60b92e3e:server/strava.test.ts:generic-api-key:359
+
+# Fake test-only ENCRYPTION_KEY values in the unsubscribe-token test and the
+# HMAC unsubscribe tokens that the email template snapshots embedded before
+# the snapshot test stubbed the token — none are credentials. Both files have
+# since been changed so the current head carries nothing scanner-shaped.
+8b65d885a9f47221fe80e70fb0b8bd5788e7b0dc:server/emailUnsubscribeToken.test.ts:generic-api-key:5
+8b65d885a9f47221fe80e70fb0b8bd5788e7b0dc:server/emailUnsubscribeToken.test.ts:generic-api-key:21
+8b65d885a9f47221fe80e70fb0b8bd5788e7b0dc:server/emailUnsubscribeToken.test.ts:generic-api-key:59
+8b65d885a9f47221fe80e70fb0b8bd5788e7b0dc:server/emailUnsubscribeToken.test.ts:generic-api-key:69
+8b65d885a9f47221fe80e70fb0b8bd5788e7b0dc:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:43
+8b65d885a9f47221fe80e70fb0b8bd5788e7b0dc:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:123
+aa2c9f9dd01208e4f5b3060fb9975a018dd8ee7b:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:70
+aa2c9f9dd01208e4f5b3060fb9975a018dd8ee7b:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:177
+aa2c9f9dd01208e4f5b3060fb9975a018dd8ee7b:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:256

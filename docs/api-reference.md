@@ -1506,6 +1506,23 @@ External cron trigger endpoint for batch email processing across all users.
 - **No Clerk auth required**
 - **Rate limit:** `cronEmails` category, 10/min
 - **Response:** Cron job result summary
+- **Note:** The scan gates per athlete on their local notify hour, so an external scheduler should call this hourly.
+
+### GET /api/v1/emails/unsubscribe
+
+**File:** `server/routes/emailUnsubscribe.ts`. Confirm page for the unsubscribe link every email carries in its footer and `List-Unsubscribe` header. Side-effect free — link scanners prefetch email URLs.
+
+- **Auth:** `token` query parameter (HMAC-signed athlete id; see `server/emailUnsubscribeToken.ts`). No Clerk auth, no CSRF token — mounted ahead of the CSRF guard.
+- **Rate limit:** `emailUnsubscribe` category, 60 per 15 min
+- **Response:** `200` HTML confirm page with a form posting to the same URL; `400` HTML "link no longer valid" page for a bad token
+
+### POST /api/v1/emails/unsubscribe
+
+Turns the master `emailNotifications` toggle off for the athlete the token names. Handles both the RFC 8058 one-click POST from mail clients (body `List-Unsubscribe=One-Click`) and the confirm page's form.
+
+- **Auth:** `token` query parameter, as above
+- **Rate limit:** `emailUnsubscribe` category, 60 per 15 min
+- **Response:** `200` HTML "you're unsubscribed" (or a graceful `200` when the account no longer exists); `400` for a bad token
 
 ---
 

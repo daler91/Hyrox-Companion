@@ -680,6 +680,13 @@
       "when": 1789999892595,
       "tag": "0096_drop_redundant_chat_messages_user_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1790015352830,
+      "tag": "0097_email_digests_notify_hour",
+      "breakpoints": true
     }
   ]
 }

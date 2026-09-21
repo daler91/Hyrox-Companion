@@ -77,16 +77,9 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   };
 }
 
-export function formatSecondsToClock(totalSeconds: number): string {
-  if (!Number.isFinite(totalSeconds)) return "0:00:00";
-  const safe = Math.max(0, Math.round(totalSeconds));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  const seconds = safe % 60;
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
-  return `${hours}:${mm}:${ss}`;
-}
+// Lives in shared/ now so the analysis digest email can quote a finish time
+// with the same formatting the Race Predictor tab uses.
+export { formatSecondsToClock } from "@shared/formatClock";
 
 /** Format a split in seconds as "M:SS" (e.g. 272 → "4:32"). */
 export function formatSecondsToMmSs(totalSeconds: number): string {

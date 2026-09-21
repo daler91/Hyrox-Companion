@@ -78,7 +78,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **MAF Trend** - For MAF Method athletes, chart per-test compliance and pace-at-ceiling progression with classification badges across tagged MAF tests.
 - **Data export** - Download workout timeline and exercise sets as CSV or JSON.
 - **Recycle bin** - Deleted workouts, plan days and training plans can be restored for 90 days, either with Undo on the delete toast or from the Recycle bin tab in Settings.
-- **Email and push notifications** - Send opt-in weekly summaries and missed-day reminders through pg-boss, Resend, and Web Push when configured.
+- **Email and push notifications** - Opt-in weekly summaries, missed-day reminders, Sunday weekly-review reminders, daily session briefs and analysis digests, sent at the athlete's chosen local hour through pg-boss, Resend, and Web Push when configured, with one-click unsubscribe on every email.
 
 ### Privacy & Data Control
 

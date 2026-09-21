@@ -31,6 +31,10 @@ export function setupAuthIntercepts(overrides?: {
     emailNotifications: boolean;
     emailWeeklySummary?: boolean;
     emailMissedReminder?: boolean;
+    emailWeeklyReviewReminder?: boolean;
+    emailTodaySession?: boolean;
+    emailAnalysisDigest?: boolean;
+    notifyHour?: number;
   };
 }) {
   // The SPA fetches a CSRF token before any mutating request (see

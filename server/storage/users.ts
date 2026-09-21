@@ -203,6 +203,21 @@ export class UserStorage {
     }
   }
 
+  /**
+   * Turn the master email toggle off for an unsubscribe link (RFC 8058
+   * one-click). Only the master flag moves: the per-type choices survive so
+   * re-enabling from Settings restores exactly what the athlete had. Returns
+   * false when no such user exists.
+   */
+  async disableEmailNotifications(userId: string): Promise<boolean> {
+    const updated = await db
+      .update(users)
+      .set({ emailNotifications: false, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id });
+    return updated.length > 0;
+  }
+
   async updateUserPreferences(
     userId: string,
     preferences: UpdateUserPreferences,
@@ -774,6 +789,51 @@ export class UserStorage {
         and(
           eq(users.id, userId),
           or(isNull(users.lastLoggingReminderAt), lt(users.lastLoggingReminderAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Sunday-evening weekly-review-reminder counterpart of {@link claimWeeklySummary}. */
+  async claimWeeklyReviewReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastWeeklyReviewReminderAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastWeeklyReviewReminderAt), lt(users.lastWeeklyReviewReminderAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Session-brief counterpart of {@link claimWeeklySummary}. */
+  async claimTodaySession(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastTodaySessionAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastTodaySessionAt), lt(users.lastTodaySessionAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Analysis-digest counterpart of {@link claimWeeklySummary}. */
+  async claimAnalysisDigest(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastAnalysisDigestAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastAnalysisDigestAt), lt(users.lastAnalysisDigestAt, notBefore)),
         ),
       )
       .returning({ id: users.id });

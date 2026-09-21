@@ -250,6 +250,12 @@ time; reduction in plan regenerations.
 **Pitch.** Choose when your daily nudge lands, and get a morning push naming today's actual
 session instead of a 2am guilt message about yesterday.
 
+**Status (2026-09).** Shipped: `users.notify_hour` with the Settings picker, the hourly tick
+gated per athlete in `planEmailJobsForUser`, the session brief (email + push, `send-today-session`),
+plus a Sunday-evening weekly review reminder and a stored-analysis digest. Still open: the
+timezone-aware SQL pre-filter for the hourly scan (it loads every opted-in athlete per tick,
+like the analytics recompute cron).
+
 **The problem.** `server/cron.ts:72` schedules `"0 9 * * *"` with `{ timezone: "Etc/UTC" }`.
 A US-Pacific athlete's _"You missed: Long Run. Get back on track today!"_ arrives at 2am; a
 Sydney athlete's at 8pm. Push has exactly three non-test call sites, all `void

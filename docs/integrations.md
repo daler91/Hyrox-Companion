@@ -366,9 +366,11 @@ A partial unique index on `workout_logs(user_id, garmin_activity_id) WHERE garmi
 
 ### Email Types
 
+Every scheduled email goes out at the athlete's **notify hour** (`users.notify_hour`, 0–23 in their own timezone, default 07:00, picked in Settings) except the weekly review reminder, which has its own moment: Sunday 17:00 local (`WEEKLY_REVIEW_SUNDAY_EVENING_HOUR` in `shared/weeklyReview.ts`, the same hour the in-app Timeline prompt opens). The cron ticks hourly and `planEmailJobsForUser()` resolves each athlete's hour and weekday against their `user_timezone`.
+
 #### 1. Weekly Training Summary
 
-- **Trigger**: Sent on Mondays (day of week = 1), no more than once per 7 days per user
+- **Trigger**: Sent on the athlete's local Monday at their notify hour, no more than once per 7 days per user
 - **Guard**: Checks `user.lastWeeklySummaryAt` to prevent duplicates
 - **Data gathered**: Completed/missed/skipped workout counts for the prior week, completion rate, current streak, total training duration
 - **Subject line**: `Your Week in Review: X workout(s) completed`
@@ -376,11 +378,35 @@ A partial unique index on `workout_logs(user_id, garmin_activity_id) WHERE garmi
 
 #### 2. Missed Workout Reminder
 
-- **Trigger**: Sent daily, no more than once per 24 hours per user
+- **Trigger**: Sent daily at the notify hour, no more than once per 24 hours per user
 - **Guard**: Checks `user.lastMissedReminderAt` to prevent duplicates
 - **Data gathered**: Plan days from yesterday that have "missed" status
 - **Subject line**: `X missed workout(s) -- get back on track`
 - **Template**: HTML email listing each missed workout with focus area, description (truncated to 120 chars), date, and plan name. Includes a CTA to the timeline.
+
+#### 3. Weekly Review Reminder
+
+- **Trigger**: Sunday 17:00 local (independent of the notify hour), for athletes with `emailWeeklyReviewReminder` on
+- **Guard**: Skipped — without burning the claim — when a `weekly_reviews` row already exists for the closing week (the review page writes that row), otherwise claims `user.lastWeeklyReviewReminderAt` (6-day window)
+- **Data gathered**: `buildWeeklyReview()` for the in-progress week: sessions logged vs `weeklyGoal`, plan days done of planned, missed count, total time, average RPE, named PRs, and last week's intent
+- **Subject line**: `Your week is wrapping up — N session(s) so far`
+- **Template**: Stat cards for the week so far, the PRs, "Last week you said: …", and a CTA into `/review?week=<weekStart>`. A push with the same deep link rides along.
+
+#### 4. Session Brief
+
+- **Trigger**: Daily at the notify hour, for athletes with `emailTodaySession` on, when a session is still `planned` on the target date. A notify hour from 12:00 onward briefs **tomorrow** instead of today.
+- **Guard**: Claims `user.lastTodaySessionAt` (20-hour window) only when there is something to send; rest-like days (`isRestLikePlanDay` in `shared/planDayKind.ts`), days inside a declared absence, and retired plans send nothing
+- **Data gathered**: `storage.analytics.getPlannedSessionsForDate()` — focus, expected duration/RPE, planned time of day, the prescription text, plan name
+- **Subject line**: `Today: <focus>` / `Tomorrow: <focus>` (or `Today: N sessions`)
+- **Template**: One card per session and a CTA that deep-links to `/?workout=<planDayId>` for a single session (the timeline root for several). The push mirrors the missed-workout push.
+
+#### 5. Analysis Digest
+
+- **Trigger**: Daily at the notify hour, for athletes with `emailAnalysisDigest` on, when a stored `analytics_results` row (`race_prediction` or `coach_insights`) is newer than `user.lastAnalysisDigestAt`
+- **Guard**: Claims `user.lastAnalysisDigestAt` (6-day window) — so at most about one digest a week however often the analyses refresh. **Never spends AI budget**: it reads stored rows only, so an athlete who has not opened those surfaces has no rows and gets no email. Malformed rows are ignored rather than treated as new.
+- **Data gathered**: Predicted finish time, confidence, cohort percentile and race readiness from the stored prediction; the coach's Markdown rendered through `server/utils/markdownToEmailHtml.ts` (escaped first; headings, bold, lists and paragraphs only)
+- **Subject line**: `Your training analysis: predicted finish H:MM:SS` (or `Your coach insights are ready`)
+- **Template**: Headline card, readiness note, the rendered insights, and a CTA to `/analytics`.
 
 ### User Opt-In
 
@@ -391,12 +417,38 @@ Emails are only sent to users who meet all of these conditions:
 3. The per-type toggle for the specific email is `true`:
    - Weekly summary: `user.emailWeeklySummary` (default `false`)
    - Missed workout reminder: `user.emailMissedReminder` (default `false`)
+   - Weekly review reminder: `user.emailWeeklyReviewReminder` (default `false`)
+   - Session brief: `user.emailTodaySession` (default `false`)
+   - Analysis digest: `user.emailAnalysisDigest` (default `false`)
 
-All three email toggles default to `false`, and legacy nullable values are
+All six email toggles default to `false`, and legacy nullable values are
 serialized as `false` by the preferences API. Users must explicitly opt in
 from `/settings`; the per-type switches are nested under the master toggle
-and are disabled (grayed out) when the master is off. The email footer links
-back to the settings page.
+and are disabled (grayed out) when the master is off, next to the **send
+time** picker (`notifyHour`). Every email footer links to the settings page
+and carries a login-free **Unsubscribe** link (below).
+
+### One-Click Unsubscribe
+
+Every athlete email carries `List-Unsubscribe: <url>` and
+`List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers (RFC 2369 /
+RFC 8058 — what Gmail and Yahoo require of bulk senders) plus the same URL in
+its footer. The URL is `/api/v1/emails/unsubscribe?token=…`, where the token is
+the athlete's id and an HMAC over it, keyed by a value derived from
+`ENCRYPTION_KEY` under a fixed label (`server/emailUnsubscribeToken.ts`), so no
+extra secret is configured and a forged link cannot turn someone else's email
+off. Tokens do not expire; after an `ENCRYPTION_KEY_V2` rotation, links signed
+with the old key keep verifying until that key is dropped.
+
+`server/routes/emailUnsubscribe.ts` mounts **ahead of the CSRF guard** (like
+the Strava webhook) because mail clients POST with neither cookie nor token:
+
+- `GET` only renders a confirm page with a form — link-scanning mail security
+  products prefetch every URL in an email, so a GET that unsubscribed would opt
+  athletes out silently. An invalid token gets a 400 page pointing at Settings.
+- `POST` flips the master `email_notifications` off (per-type choices are kept
+  so re-enabling restores them) and answers 200, for both the RFC 8058 one-click
+  POST and the confirm page's form.
 
 ### Email Sending Pipeline
 
@@ -405,8 +457,12 @@ For an end-to-end diagram covering the cron tick → pg-boss enqueue → per-use
 The `sendEmail()` function in `server/email.ts`:
 
 1. Instantiates a `Resend` client with the API key
-2. Calls `client.emails.send()` with from, to, subject, and HTML body
+2. Calls `client.emails.send()` with from, to, subject, HTML body and any custom headers
 3. Returns `true` on success, `false` on error (errors are logged but not thrown)
+
+The per-type wrappers go through `sendEmailToUser()`, which attaches the
+`List-Unsubscribe` headers for that athlete; templates render the matching
+footer via `renderEmailFooter()` in `server/emailTemplates.ts`.
 
 ### Cron Enqueue
 
@@ -414,11 +470,11 @@ The `sendEmail()` function in `server/email.ts`:
 
 1. Calls `storage.plans.markMissedPlanDays()` to mark past planned days as missed before checking
 2. Fetches all users with `emailNotifications` enabled via `storage.users.getUsersWithEmailNotifications()`
-3. For each user, enqueues a `send-weekly-summary` job (only on Mondays, only if the per-type toggle is on) and/or a `send-missed-reminder` job (if its toggle is on), respecting per-type opt-ins so no job is queued for an email the user opted out of
+3. For each user, `planEmailJobsForUser(user, now)` decides which jobs this tick owes them from their local hour and weekday: at their notify hour, `send-weekly-summary` (local Monday only), `send-missed-reminder`, `send-today-session` and `send-analysis-digest`; on Sunday at 17:00 local, `send-weekly-review-reminder` — each only when its per-type toggle is on. An athlete whose stored timezone is unusable is logged and skipped rather than aborting the scan.
 4. Every `sendJobNoRetry()` enqueue is `await`-ed via `Promise.allSettled` so the returned counts reflect what actually committed to the queue
 5. Returns a summary: users checked, jobs enqueued, and detail strings
 
-The pg-boss workers (`send-weekly-summary`, `send-missed-reminder`) then call `processWeeklySummary()` / `processMissedWorkoutReminder()`, which re-check the per-user idempotency guards and call `sendEmail()`. `checkAndSendEmailsForUser()` is the synchronous equivalent used by the per-user `POST /api/v1/emails/check` route.
+The pg-boss workers then call the matching `process*()` function (`processWeeklySummary`, `processMissedWorkoutReminder`, `processWeeklyReviewReminder`, `processTodaySessionBrief`, `processAnalysisDigest`), which re-fetch the user, re-check the toggles and the claim ledger, and call the send wrapper. `checkAndSendEmailsForUser()` is the synchronous equivalent used by the per-user `POST /api/v1/emails/check` route; it covers the weekly summary and missed reminder only.
 
 ### HTTP Endpoints
 
@@ -426,8 +482,10 @@ The pg-boss workers (`send-weekly-summary`, `send-missed-reminder`) then call `p
 |---|---|---|---|
 | POST | `/api/v1/emails/check` | User auth | Trigger email check for the authenticated user (rate-limited to 5 per window) |
 | GET | `/api/v1/cron/emails` | `x-cron-secret` header | External cron trigger for the full email pipeline. Secret is verified with timing-safe comparison. |
+| GET | `/api/v1/emails/unsubscribe?token=…` | Signed token | Confirm page for the footer/header unsubscribe link. Side-effect free. |
+| POST | `/api/v1/emails/unsubscribe?token=…` | Signed token | Turns the master email toggle off (RFC 8058 one-click, and the confirm page's form). Mounted ahead of the CSRF guard. |
 
-The external cron endpoint (`/api/v1/cron/emails`) allows platforms like Railway or external cron services to trigger the email job via HTTP, as an alternative to the internal node-cron scheduler.
+The external cron endpoint (`/api/v1/cron/emails`) allows platforms like Railway or external cron services to trigger the email scan via HTTP, as an alternative to the internal node-cron scheduler. Because the scan gates per athlete on their local hour, an external scheduler must call it **hourly** (a once-a-day call would only ever reach the athletes whose notify hour happens to match).
 
 ### Encryption at Rest
 
@@ -459,7 +517,7 @@ const queue = new PgBoss(env.DATABASE_URL);
 The queue is started via `startQueue()`, which:
 
 1. Calls `queue.start()` to initialize pg-boss tables and begin polling (wrapped in a 30s timeout that calls `queue.stop()` on failure to avoid leaking the connection pool)
-2. Creates the seven named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `plan-generation`, `recompute-analytics`. An eighth, `strava-sync`, is created by `registerStravaAutoSyncWorker()`, which `server/index.ts` calls right after `startQueue()` — the worker imports the sync engine in `server/strava.ts`, which must stay out of `server/queue.ts`'s import graph.
+2. Creates the ten named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `send-weekly-review-reminder`, `send-today-session`, `send-analysis-digest`, `plan-generation`, `recompute-analytics`. An eleventh, `strava-sync`, is created by `registerStravaAutoSyncWorker()`, which `server/index.ts` calls right after `startQueue()` — the worker imports the sync engine in `server/strava.ts`, which must stay out of `server/queue.ts`'s import graph.
 3. Registers a worker function for each queue
 
 Errors on the queue emit to a global error handler that logs via the application logger.
@@ -501,6 +559,27 @@ Errors on the queue emit to a global error handler that logs via the application
 - **Payload**: `{ userId: string }`
 - **Worker**: Resolves the user, then calls `processMafTestReminder()` from `server/emailScheduler.ts`
 - **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0` like the other email jobs; the "sent" marker prevents duplicates.
+
+#### `send-weekly-review-reminder`
+
+- **Purpose**: Sends one user's Sunday-evening weekly review reminder
+- **Payload**: `{ userId: string }`
+- **Worker**: Resolves the user, then calls `processWeeklyReviewReminder()` from `server/emailScheduler.ts`
+- **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0`; the `lastWeeklyReviewReminderAt` claim prevents duplicates, and an existing `weekly_reviews` row for the week skips the send entirely.
+
+#### `send-today-session`
+
+- **Purpose**: Sends one user's session brief for today (or tomorrow, for an afternoon/evening notify hour)
+- **Payload**: `{ userId: string }`
+- **Worker**: Resolves the user, then calls `processTodaySessionBrief()` from `server/emailScheduler.ts`
+- **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0`; the `lastTodaySessionAt` claim prevents duplicates and is only taken when a session is actually planned.
+
+#### `send-analysis-digest`
+
+- **Purpose**: Sends one user's digest of the stored race prediction and coach insights — reads `analytics_results` only, never triggers a recompute
+- **Payload**: `{ userId: string }`
+- **Worker**: Resolves the user, then calls `processAnalysisDigest()` from `server/emailScheduler.ts`
+- **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0`; the `lastAnalysisDigestAt` claim (6-day window) caps the digest at about one a week.
 
 #### `plan-generation`
 
@@ -548,17 +627,17 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **fifteen recurring** scheduled jobs (the daily email check plus fourteen maintenance/telemetry/sync jobs), one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC, and a one-shot Strava webhook subscription check 30 seconds after every boot. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **fifteen recurring** scheduled jobs (the hourly email scan plus fourteen maintenance/telemetry/sync jobs), a one-shot **startup email catch-up** scan 30 seconds after every boot, and a one-shot Strava webhook subscription check on the same delay. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
-#### Daily Email Check
+#### Email Scheduler
 
-- **Schedule**: `0 9 * * *` (every day at 09:00 UTC)
+- **Schedule**: `0 * * * *` (every hour, on the hour)
 - **Timezone**: `Etc/UTC`
-- **Action**: Calls `runEmailCronJob(storage)` which handles both weekly summaries (Mondays only) and missed workout reminders (daily)
-- **Idempotency**: The email scheduler has built-in guards (`lastWeeklySummaryAt`, `lastMissedReminderAt`) that prevent duplicate sends even if the job runs multiple times
-- **Advisory lock**: `dailyEmail`
+- **Action**: Calls `runEmailCronJob(storage)`, which plans jobs per athlete against their own wall clock: the weekly summary (local Monday), missed reminder, session brief and analysis digest at their `notify_hour`, and the weekly review reminder on Sunday at 17:00 local. See [Email System → Email Types](#email-types).
+- **Idempotency**: Each email has a claim ledger on `users` (`last_weekly_summary_at`, `last_missed_reminder_at`, `last_weekly_review_reminder_at`, `last_today_session_at`, `last_analysis_digest_at`) that prevents duplicate sends even if the scan runs several times in an hour
+- **Advisory lock**: `emailScheduler` (the numeric key is the one the old `dailyEmail` lock used, so mixed-version replicas still contend on it)
 
 #### Maintenance and Telemetry
 
@@ -594,18 +673,16 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 
 ### Startup Catch-Up
 
-If the server starts after 09:00 UTC (e.g., due to a deployment restart on Railway), a catch-up run is triggered after a 30-second delay:
+Thirty seconds after every boot (e.g. a deployment restart on Railway that straddled the top of an hour), one catch-up scan runs:
 
 ```
-const currentHour = new Date().getUTCHours();
-if (currentHour >= 9) {
-  setTimeout(async () => {
-    await runEmailCronJob(storage);
-  }, 30_000);
-}
+emailCatchUpTimer = setTimeout(() => {
+  void runCronJobWithLock("startupEmailCatchUp", () => runEmailCronJob(storage));
+}, 30_000);
+emailCatchUpTimer.unref();
 ```
 
-This ensures emails are not missed due to server restarts. The startup catch-up uses its own advisory lock (`startupEmailCatchUp`), and the email scheduler's idempotency guards prevent double-sending if the scheduled run already completed before the restart.
+It needs no time-of-day condition: the scan gates every email on the athlete's local hour, and the claim ledgers prevent a second send if the hourly tick already ran. The catch-up uses its own advisory lock (`startupEmailCatchUp`) and is cancelled by `stopCron()` on shutdown.
 
 ### Lifecycle
 

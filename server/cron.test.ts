@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   pool: { connect: vi.fn() },
@@ -73,7 +73,8 @@ vi.mock("./logger", () => ({
   },
 }));
 
-import { CRON_LOCK_KEYS, runCronJobWithLock, startCron } from "./cron";
+import { CRON_LOCK_KEYS, runCronJobWithLock, startCron, stopCron } from "./cron";
+import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
 
@@ -113,11 +114,11 @@ describe("cron advisory lock wiring", () => {
     const run = vi.fn().mockResolvedValue("done");
     mocks.withPgAdvisoryLock.mockResolvedValueOnce({ acquired: false, value: undefined });
 
-    await runCronJobWithLock("dailyEmail", run);
+    await runCronJobWithLock("emailScheduler", run);
 
     expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
       mocks.pool,
-      { key: CRON_LOCK_KEYS.dailyEmail, name: "dailyEmail" },
+      { key: CRON_LOCK_KEYS.emailScheduler, name: "emailScheduler" },
       run,
     );
     expect(run).not.toHaveBeenCalled();
@@ -127,7 +128,7 @@ describe("cron advisory lock wiring", () => {
     const run = vi.fn().mockResolvedValue("done");
     mocks.withPgAdvisoryLock.mockRejectedValueOnce(new Error("connect failed"));
 
-    const result = await runCronJobWithLock("dailyEmail", run);
+    const result = await runCronJobWithLock("emailScheduler", run);
 
     expect(result).toEqual({ acquired: false, value: undefined });
     expect(run).not.toHaveBeenCalled();
@@ -140,15 +141,98 @@ describe("cron advisory lock wiring", () => {
 
     const { logger } = await import("./logger");
 
-    const result = await runCronJobWithLock("dailyEmail", run);
+    const result = await runCronJobWithLock("emailScheduler", run);
 
     expect(result).toEqual({ acquired: false, value: undefined });
     expect(logger.error).toHaveBeenCalledWith(
-      { context: "cron", err: error, job: "dailyEmail" },
+      { context: "cron", err: error, job: "emailScheduler" },
       "Cron advisory lock execution failed"
     );
   });
 
+});
+
+describe("email scheduler cron job", () => {
+  let emailCallback: () => Promise<void>;
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    // "0 * * * *": the email scan ticks hourly and gates per athlete on their
+    // local notify hour, rather than once a day at a fixed UTC time.
+    emailCallback = startCronWith({})("0 * * * *");
+  });
+
+  beforeEach(() => {
+    vi.mocked(runEmailCronJob).mockReset();
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("runs the scan under the email scheduler lock and logs the outcome", async () => {
+    vi.mocked(runEmailCronJob).mockResolvedValueOnce({ usersChecked: 4, emailsSent: 2, details: [] });
+
+    await emailCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.emailScheduler, name: "emailScheduler" },
+      expect.any(Function),
+    );
+    expect(runEmailCronJob).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "cron", usersChecked: 4, emailsSent: 2, details: [] },
+      "Email cron complete: 2 sent, 4 checked",
+    );
+  });
+
+  it("logs and swallows a failing scan so the scheduler keeps ticking", async () => {
+    const error = new Error("db down");
+    vi.mocked(runEmailCronJob).mockRejectedValueOnce(error);
+
+    await expect(emailCallback()).resolves.toBeUndefined();
+
+    expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error }, "Email cron job failed");
+  });
+});
+
+describe("startup email catch-up", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(runEmailCronJob).mockReset();
+    vi.mocked(runEmailCronJob).mockResolvedValue({ usersChecked: 0, emailsSent: 0, details: [] });
+  });
+
+  afterEach(async () => {
+    await stopCron();
+    vi.useRealTimers();
+  });
+
+  it("runs one scan 30s after boot whatever the UTC hour", async () => {
+    // 03:00 UTC — under the old daily 09:00 schedule no catch-up would run.
+    vi.setSystemTime(new Date("2026-07-20T03:00:00Z"));
+    startCronWith({});
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.startupEmailCatchUp, name: "startupEmailCatchUp" },
+      expect.any(Function),
+    );
+    expect(runEmailCronJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("is cancelled by stopCron before it fires", async () => {
+    startCronWith({});
+
+    await stopCron();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(runEmailCronJob).not.toHaveBeenCalled();
+  });
 });
 
 describe("nutrition reminders cron job", () => {

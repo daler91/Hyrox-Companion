@@ -28,6 +28,11 @@ export const updateUserPreferencesSchema = z.object({
   // existing users.
   emailWeeklySummary: z.boolean().optional(),
   emailMissedReminder: z.boolean().optional(),
+  emailWeeklyReviewReminder: z.boolean().optional(),
+  emailTodaySession: z.boolean().optional(),
+  emailAnalysisDigest: z.boolean().optional(),
+  // Local hour (0–23) at which the hourly email tick fires for this athlete.
+  notifyHour: z.number().int().min(0).max(23).optional(),
   // Nutrition push reminders (opt-in; push-only, independent of the email
   // master toggle — they only fire for users with a push subscription).
   pushRefuelReminder: z.boolean().optional(),

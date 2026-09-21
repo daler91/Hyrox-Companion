@@ -12,6 +12,7 @@ import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
+import { registerEmailUnsubscribeRoutes } from "./routes/emailUnsubscribe";
 import nutritionRoutes from "./routes/nutrition/index";
 import planProposalRoutes from "./routes/planProposals";
 import planRoutes from "./routes/plans";
@@ -38,6 +39,13 @@ export async function registerRoutes(
   // by design and treats every event as a hint only — see the trust model in
   // server/stravaWebhook.ts.
   registerStravaWebhookRoutes(app);
+
+  // The email unsubscribe endpoint is the same shape: mail clients POST the
+  // List-Unsubscribe URL with neither cookie nor CSRF token (RFC 8058), so it
+  // mounts ahead of the guard and authorises with the signed token alone.
+  // Its GET only renders a confirm page — link scanners prefetch every URL in
+  // an email, so a GET that mutated would opt athletes out on their behalf.
+  registerEmailUnsubscribeRoutes(app);
 
   // All /api/v1 mutating requests (POST/PUT/PATCH/DELETE) must carry a
   // matching x-csrf-token header. Safe methods pass through via the

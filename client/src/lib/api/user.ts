@@ -59,6 +59,14 @@ export interface UserPreferences {
   emailWeeklySummary: boolean;
   /** Per-type toggle for the next-day missed workout reminder. */
   emailMissedReminder: boolean;
+  /** Per-type toggle for the Sunday-evening "write your weekly review" reminder. */
+  emailWeeklyReviewReminder: boolean;
+  /** Per-type toggle for the morning brief naming the day's planned session. */
+  emailTodaySession: boolean;
+  /** Per-type toggle for the digest of stored race-prediction / coach-insights analyses. */
+  emailAnalysisDigest: boolean;
+  /** Local hour (0–23) at which the scheduled emails go out. */
+  notifyHour: number;
   /** Opt-in push nudge when post-workout recovery fuel is still owed. */
   pushRefuelReminder: boolean;
   /** Opt-in 8pm-local push when nothing has been logged that day. */

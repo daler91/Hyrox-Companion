@@ -50,6 +50,10 @@ function serializePreferences(user: {
   emailNotifications: boolean | null;
   emailWeeklySummary: boolean | null;
   emailMissedReminder: boolean | null;
+  emailWeeklyReviewReminder: boolean | null;
+  emailTodaySession: boolean | null;
+  emailAnalysisDigest: boolean | null;
+  notifyHour: number | null;
   showAdherenceInsights: boolean | null;
   aiCoachEnabled: boolean | null;
   coachAutoApplyPlanChanges: boolean | null;
@@ -87,6 +91,10 @@ function serializePreferences(user: {
     emailNotifications: user.emailNotifications ?? false,
     emailWeeklySummary: user.emailWeeklySummary ?? false,
     emailMissedReminder: user.emailMissedReminder ?? false,
+    emailWeeklyReviewReminder: user.emailWeeklyReviewReminder ?? false,
+    emailTodaySession: user.emailTodaySession ?? false,
+    emailAnalysisDigest: user.emailAnalysisDigest ?? false,
+    notifyHour: user.notifyHour ?? 7,
     // Display toggle, not an AI/email consent flag: defaults ON to match the
     // `show_adherence_insights` column default (shared/schema/tables.ts). The
     // consent/notification flags above intentionally default false (opt-in).

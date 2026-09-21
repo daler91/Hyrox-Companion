@@ -6,7 +6,15 @@ import { type Job,PgBoss } from "pg-boss";
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { pool } from "./db";
-import { processMafTestReminder,processMissedWorkoutReminder, processWeeklySummary } from "./emailScheduler";
+import {
+  type EmailJobName,
+  processAnalysisDigest,
+  processMafTestReminder,
+  processMissedWorkoutReminder,
+  processTodaySessionBrief,
+  processWeeklyReviewReminder,
+  processWeeklySummary,
+} from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
@@ -243,7 +251,7 @@ async function registerUserEmailWorker({
   queueName,
   process,
 }: {
-  readonly queueName: "send-weekly-summary" | "send-missed-reminder" | "send-maf-test-reminder";
+  readonly queueName: EmailJobName | "send-maf-test-reminder";
   readonly process: (context: Awaited<ReturnType<typeof requireUserFromJob>>) => Promise<boolean>;
 }) {
   await queue.createQueue(queueName);
@@ -364,6 +372,24 @@ export async function startQueue() {
     queueName: "send-maf-test-reminder",
     process: async (context) =>
       context ? processMafTestReminder(storage, context.user, new Date()) : false,
+  });
+
+  await registerUserEmailWorker({
+    queueName: "send-weekly-review-reminder",
+    process: async (context) =>
+      context ? processWeeklyReviewReminder(storage, context.user, new Date()) : false,
+  });
+
+  await registerUserEmailWorker({
+    queueName: "send-today-session",
+    process: async (context) =>
+      context ? processTodaySessionBrief(storage, context.user, new Date()) : false,
+  });
+
+  await registerUserEmailWorker({
+    queueName: "send-analysis-digest",
+    process: async (context) =>
+      context ? processAnalysisDigest(storage, context.user, new Date()) : false,
   });
 
   await queue.createQueue("plan-generation");

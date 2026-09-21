@@ -171,6 +171,20 @@ export const users = pgTable("users", {
   isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),
+  // Further opt-in email categories (same master-toggle rule as above) and
+  // their claim ledgers. The review reminder goes out on the athlete's local
+  // Sunday evening; the session brief and analysis digest go out at
+  // `notifyHour`. All default off: existing subscribers consented to the
+  // summary and missed reminder, not to new categories.
+  emailWeeklyReviewReminder: boolean("email_weekly_review_reminder").default(false),
+  emailTodaySession: boolean("email_today_session").default(false),
+  emailAnalysisDigest: boolean("email_analysis_digest").default(false),
+  // Local hour (0–23) the hourly email tick fires for this athlete. Nullable
+  // with a default like weeklyGoal/mealSchedule; readers coalesce to 7.
+  notifyHour: integer("notify_hour").default(7),
+  lastWeeklyReviewReminderAt: timestamp("last_weekly_review_reminder_at"),
+  lastTodaySessionAt: timestamp("last_today_session_at"),
+  lastAnalysisDigestAt: timestamp("last_analysis_digest_at"),
   // Nutrition push reminders (opt-in, push-only — no email counterpart) and
   // their send-claim ledgers, same claim-before-send pattern as the email
   // reminders above.
@@ -187,7 +201,9 @@ export const users = pgTable("users", {
   erasureRequestedAt: timestamp("erasure_requested_at", { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, () => [
+  check("users_notify_hour_check", sql`notify_hour IS NULL OR (notify_hour BETWEEN 0 AND 23)`),
+]);
 
 export const rateLimitBuckets = pgTable(
   "rate_limit_buckets",

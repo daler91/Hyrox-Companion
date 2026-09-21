@@ -46,6 +46,10 @@ describe("GET /api/preferences", () => {
       emailNotifications: null,
       emailWeeklySummary: null,
       emailMissedReminder: null,
+      emailWeeklyReviewReminder: null,
+      emailTodaySession: null,
+      emailAnalysisDigest: null,
+      notifyHour: null,
       showAdherenceInsights: null,
       aiCoachEnabled: null,
       trainingStyleId: null,
@@ -71,6 +75,10 @@ describe("GET /api/preferences", () => {
       emailNotifications: false,
       emailWeeklySummary: false,
       emailMissedReminder: false,
+      emailWeeklyReviewReminder: false,
+      emailTodaySession: false,
+      emailAnalysisDigest: false,
+      notifyHour: 7,
       aiCoachEnabled: false,
       onboardingCompleted: false,
     });
@@ -189,6 +197,25 @@ describe("PATCH /api/v1/preferences", () => {
     expect(response.status).toBe(200);
     expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", { weeklyGoal: 6 });
     expect(response.body.onboardingCompleted).toBe(true);
+  });
+
+  it("rejects a notify hour outside 0-23", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ notifyHour: 24 });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("persists the notify hour and the new email toggles when provided", async () => {
+    const response = await request(app)
+      .patch("/api/v1/preferences")
+      .send({ notifyHour: 18, emailTodaySession: true, emailAnalysisDigest: true });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+      notifyHour: 18,
+      emailTodaySession: true,
+      emailAnalysisDigest: true,
+    });
   });
 
   it("rejects an out-of-range resting heart rate", async () => {
