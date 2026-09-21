@@ -613,7 +613,11 @@ function TimelineCardHeader({
           Legacy
         </Badge>
       )}
-      <span className="font-medium">{entry.focus}</span>
+      {/* On phones the badges already fill a line, so the title gets its own
+          and a heavier weight: a card should read title-first when skimmed. */}
+      <span className="basis-full font-semibold leading-snug md:basis-auto md:font-medium">
+        {entry.focus}
+      </span>
     </div>
   );
 }

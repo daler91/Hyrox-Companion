@@ -159,13 +159,20 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-8 px-2 text-xs text-muted-foreground hover:text-foreground md:h-7 ${addNoteClassName}`}
+                className={cn(
+                  "h-8 text-xs text-muted-foreground hover:text-foreground md:h-7",
+                  // Past/future rows drop the label on phones so the date, the
+                  // fuelling chip and the week badge share one line; today
+                  // keeps it, being the entry point new users learn from.
+                  isTodayDate ? "px-2" : "w-8 px-0 sm:w-auto sm:px-2",
+                  addNoteClassName,
+                )}
                 onClick={() => onAddAnnotation(date)}
                 aria-label={`Log a note for ${getDateLabel(dateObj)}`}
                 data-testid={`button-add-annotation-${date}`}
               >
-                <StickyNote className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-                Note
+                <StickyNote className={cn("h-3.5 w-3.5", isTodayDate ? "mr-1" : "sm:mr-1")} aria-hidden="true" />
+                <span className={isTodayDate ? undefined : "hidden sm:inline"}>Note</span>
               </Button>
             ) : null}
           </div>

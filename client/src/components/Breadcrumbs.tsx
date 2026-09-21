@@ -97,7 +97,9 @@ export function Breadcrumbs() {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="px-4 py-2 border-b bg-background/60"
+      // Phones get the tab bar for "where am I", and a 40px trail above every
+      // page was the first thing to scroll past on each visit.
+      className="hidden border-b bg-background/60 px-4 py-2 md:block"
       data-testid="breadcrumbs"
     >
       <ol className="flex items-center gap-1 text-sm text-muted-foreground">

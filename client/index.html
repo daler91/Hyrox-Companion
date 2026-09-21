@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>fitai.coach — AI-Powered Fitness Coaching</title>
     <meta name="description" content="Plan, log, and analyze your training with AI-powered coaching. Track running, strength, functional exercises, and conditioning — for any fitness goal." />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
@@ -12,7 +12,16 @@
     <meta property="og:description" content="Plan, track, and analyze your training with an AI coach that adapts to your goals and performance data." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="mask-icon" href="/mark-currentcolor.svg" color="#0a0a0a" />
-    </head>
+    <!-- Installed-app polish: iOS ignores the manifest icons and reads this
+         one; the *-web-app-capable metas launch the home-screen shortcut
+         without browser chrome, and black-translucent lets the app draw
+         under the status bar (headers pad by env(safe-area-inset-top)). -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="fitai" />
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

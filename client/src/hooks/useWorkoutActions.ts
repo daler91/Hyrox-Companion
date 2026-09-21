@@ -1,6 +1,8 @@
 import type { PlanDaySkipReason, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { useCallback, useState } from "react";
 
+import { haptic } from "@/lib/haptics";
+
 import { isTimelineEntryBulkDeletable } from "./workout-actions/bulkDelete";
 import {
   buildLoggedTimelineEntry,
@@ -29,6 +31,9 @@ export function useWorkoutActions(selectedPlanId: string | null) {
         options?.onError?.(new Error("Cannot complete a workout without a plan day"));
         return;
       }
+      // Ticking off a session is the app's one physical-feeling action, so
+      // phones that can vibrate get a short tap the moment it registers.
+      haptic();
       logWorkoutMutation.mutate({
         planDayId: entry.planDayId,
         date: entry.date,

@@ -128,13 +128,15 @@ export function PlanToolsMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="w-full justify-between md:w-auto"
+          // Icon-only on phones so the plan selector keeps the row's width;
+          // the aria-label carries the name either way.
+          className="h-11 w-11 shrink-0 px-0 md:h-9 md:w-auto md:px-4"
           data-testid="button-plan-tools"
           aria-label="Plan tools"
         >
           <span className="inline-flex items-center gap-2">
-            <MoreHorizontal className="h-4 w-4" />
-            Plan tools
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden md:inline">Plan tools</span>
           </span>
         </Button>
       </DropdownMenuTrigger>

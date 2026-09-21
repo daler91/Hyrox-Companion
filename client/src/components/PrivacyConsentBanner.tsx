@@ -60,7 +60,7 @@ export function PrivacyConsentBanner() {
       aria-label="Privacy notice"
       className="fixed inset-x-0 bottom-0 z-[60] border-t bg-background/95 backdrop-blur-sm shadow-lg"
     >
-      <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 text-sm md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-sm md:flex-row md:items-center md:justify-between">
         <p className="text-muted-foreground">
           We use Sentry for error tracking (PII scrubbed), and you can opt into Strava, Garmin, and
           AI coaching, each off by default. Decline analytics below, or change it anytime in Settings.{" "}

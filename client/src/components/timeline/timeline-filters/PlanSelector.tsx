@@ -30,7 +30,7 @@ export function PlanSelector({
 
   if (plans.length > 0) {
     return (
-      <div className="flex items-center gap-1 flex-1 sm:min-w-[200px]">
+      <div className="flex min-w-0 flex-1 items-center gap-1 sm:min-w-[200px]">
         <Select
           value={selectedPlanId || "__all__"}
           onValueChange={(value) => onPlanChange(value === "__all__" ? null : value)}
@@ -38,7 +38,7 @@ export function PlanSelector({
           <SelectTrigger
             id="plan-select"
             aria-label="Select training plan"
-            className="flex-1"
+            className="min-w-0 flex-1"
             data-testid="select-plan"
           >
             <SelectValue placeholder="All Plans" />
@@ -60,7 +60,9 @@ export function PlanSelector({
                 <Button
                   size="icon-touch"
                   variant="ghost"
-                  className="md:h-9 md:w-9"
+                  // Rename also lives in the Plan tools menu, so on phones the pencil
+                  // gives its 44px back to the plan name.
+                  className="hidden md:inline-flex md:h-9 md:w-9"
                   onClick={openRenameDialog}
                   data-testid="button-rename-plan"
                   aria-label="Rename plan"

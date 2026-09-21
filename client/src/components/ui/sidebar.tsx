@@ -161,7 +161,7 @@ function SidebarMobile({
         data-sidebar="sidebar"
         data-slot="sidebar"
         data-mobile="true"
-        className="bg-sidebar text-sidebar-foreground w-[var(--sidebar-width)] p-0 [&>button]:hidden"
+        className="bg-sidebar text-sidebar-foreground w-[var(--sidebar-width)] p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] [&>button]:hidden"
         // Radix skips links when auto-focusing, so the first candidate here is
         // the theme toggle, whose tooltip then opens over the drawer footer on
         // touch. Focus the drawer itself instead (still inside the focus trap).
