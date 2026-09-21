@@ -18,7 +18,7 @@ function renderCard(overrides: Partial<Parameters<typeof EmailNotificationsCard>
   };
   const utils = render(
     <EmailNotificationsCard
-      emailNotifications={true}
+      emailNotifications
       emailWeeklySummary={false}
       emailMissedReminder={false}
       emailWeeklyReviewReminder={false}

@@ -139,6 +139,8 @@ export function startCron(storage: IStorage): void {
     { timezone: "Etc/UTC" },
   );
 
+  // Static schedule copy and static context only.
+  // bearer:disable javascript_lang_logger_leak
   logger.info(
     { context: "cron" },
     "Email cron scheduled: hourly, firing per athlete at their local notify hour (weekly review reminder Sunday 17:00 local)",
@@ -497,18 +499,26 @@ export function startCron(storage: IStorage): void {
   const runCatchUp = async () => {
     try {
       await runCronJobWithLock("startupEmailCatchUp", async () => {
+        // Static message and static context only.
+        // bearer:disable javascript_lang_logger_leak
         logger.info({ context: "cron" }, "Running startup email catch-up scan");
         try {
           const result = await runEmailCronJob(storage);
+          // Counts (integers), static detail strings and a static context; no PII.
+          // bearer:disable javascript_lang_logger_leak
           logger.info(
             { context: "cron", ...result },
             `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
           );
         } catch (err) {
+          // err is a scheduler/DB error; no PII.
+          // bearer:disable javascript_lang_logger_leak
           logger.error({ context: "cron", err }, "Startup email catch-up failed");
         }
       });
     } catch (err) {
+      // err is a lock/DB error; no PII.
+      // bearer:disable javascript_lang_logger_leak
       logger.error({ context: "cron", err }, "Startup email catch-up task failed before job execution");
     }
   };

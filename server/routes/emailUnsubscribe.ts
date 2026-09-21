@@ -70,6 +70,9 @@ function sendHtml(res: Response, status: number, html: string): void {
 }
 
 function tokenFrom(req: Request): string | null {
+  // A type check on the query parameter; the token's value is only ever
+  // compared in constant time inside verifyUnsubscribeToken.
+  // bearer:disable javascript_lang_observable_timing
   return typeof req.query.token === "string" ? req.query.token : null;
 }
 

@@ -217,7 +217,7 @@ export function buildWeeklyReviewReminderEmail(
     ? `<div class="section-title">Last week you said</div>
     <div class="quote">“${sanitizeHtml(data.previousIntent)}”</div>
     <p class="muted">Did it happen? Two minutes on the review page turns this week into a plan for the next one.</p>`
-    : `<p class="muted">Take two minutes to look back at the week and write one line about what you want from the next one.</p>`;
+    : '<p class="muted">Take two minutes to look back at the week and write one line about what you want from the next one.</p>';
 
   const missedNote =
     hasPlan && data.missed > 0

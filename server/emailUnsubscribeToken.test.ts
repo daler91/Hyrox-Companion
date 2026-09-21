@@ -51,7 +51,7 @@ describe("email unsubscribe token", () => {
   });
 
   it("rejects malformed input", () => {
-    expect(verifyUnsubscribeToken(undefined)).toBeNull();
+    expect(verifyUnsubscribeToken(null)).toBeNull();
     expect(verifyUnsubscribeToken("")).toBeNull();
     expect(verifyUnsubscribeToken("no-dot")).toBeNull();
     expect(verifyUnsubscribeToken("a.b.c")).toBeNull();

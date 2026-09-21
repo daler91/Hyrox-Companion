@@ -401,7 +401,13 @@ describe("email generation", () => {
         ...digestData,
         coachInsightsMarkdown: null,
         coachInsightsGeneratedAt: null,
-        racePrediction: { ...digestData.racePrediction!, percentile: null, raceReadiness: null, generatedAt: "not a date" },
+        racePrediction: {
+          totalFinishSeconds: 5400,
+          overallConfidence: "low",
+          percentile: null,
+          raceReadiness: null,
+          generatedAt: "not a date",
+        },
       });
       expect(html).not.toContain("Faster than");
       expect(html).not.toContain("Readiness:");

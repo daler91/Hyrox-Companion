@@ -31,6 +31,9 @@ function deriveKey(secret: string): Buffer {
 // Derived lazily: `env` is mocked without an encryption key in several test
 // files that never mint a token, and a module-load derivation would throw there.
 function verificationKeys(): Buffer[] {
+  // Presence checks on configuration only — no attacker-supplied value is
+  // compared here; the token itself is compared in constant time below.
+  // bearer:disable javascript_lang_observable_timing
   const keys = [env.ENCRYPTION_KEY_V2, env.ENCRYPTION_KEY].filter(
     (secret): secret is string => typeof secret === "string" && secret.length > 0,
   );
@@ -58,6 +61,9 @@ export function createUnsubscribeToken(userId: string): string {
  * app (or by a key that has since been retired).
  */
 export function verifyUnsubscribeToken(token: unknown): { userId: string } | null {
+  // Shape checks only — the signature's value is compared in constant time by
+  // timingSafeEqual below, never here.
+  // bearer:disable javascript_lang_observable_timing
   if (typeof token !== "string" || token.length === 0 || token.length > 512) return null;
   const parts = token.split(".");
   if (parts.length !== 2) return null;

@@ -74,7 +74,7 @@ export async function sendEmailToUser(
   html: string,
 ): Promise<boolean> {
   if (!user.email) return false;
-  return sendEmail(user.email, subject, html, { headers: buildListUnsubscribeHeaders(user.id) });
+  return await sendEmail(user.email, subject, html, { headers: buildListUnsubscribeHeaders(user.id) });
 }
 
 export async function sendWeeklySummary(
@@ -107,7 +107,7 @@ export async function sendWeeklyReviewReminder(
 ): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildWeeklyReviewReminderEmail(user, data);
-  return sendEmailToUser(user, subject, html);
+  return await sendEmailToUser(user, subject, html);
 }
 
 export async function sendTodaySessionBrief(
@@ -116,7 +116,7 @@ export async function sendTodaySessionBrief(
 ): Promise<boolean> {
   if (!user.email || data.sessions.length === 0) return false;
   const { subject, html } = buildTodaySessionEmail(user, data);
-  return sendEmailToUser(user, subject, html);
+  return await sendEmailToUser(user, subject, html);
 }
 
 export async function sendAnalysisDigest(
@@ -126,5 +126,5 @@ export async function sendAnalysisDigest(
   if (!user.email) return false;
   if (!data.racePrediction && !data.coachInsightsMarkdown) return false;
   const { subject, html } = buildAnalysisDigestEmail(user, data);
-  return sendEmailToUser(user, subject, html);
+  return await sendEmailToUser(user, subject, html);
 }
