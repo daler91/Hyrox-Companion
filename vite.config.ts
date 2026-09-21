@@ -13,7 +13,17 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["favicon.svg", "logo-primary.svg", "logo-ink.svg", "logo-mono.svg", "mark-currentcolor.svg"],
+      includeAssets: [
+        "favicon.svg",
+        "logo-primary.svg",
+        "logo-ink.svg",
+        "logo-mono.svg",
+        "mark-currentcolor.svg",
+        "icon-192.png",
+        "icon-512.png",
+        "icon-maskable-512.png",
+        "apple-touch-icon.png",
+      ],
       manifest: {
         name: "fitai.coach",
         short_name: "fitai",
@@ -22,10 +32,15 @@ export default defineConfig({
         display: "standalone",
         background_color: "#0a0a0a",
         theme_color: "#C4F37E",
+        // Raster icons for the install prompt and home screen. Android needs
+        // 192/512 PNGs to offer "Install app" rather than a plain shortcut,
+        // and the maskable one is full-bleed brand green so the adaptive
+        // icon mask never shows a transparent ring around the mark.
         icons: [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
           { src: "/favicon.svg", sizes: "any", type: "image/svg+xml" },
-          { src: "/logo-primary.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-          { src: "/mark-currentcolor.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
         ],
       },
       workbox: {

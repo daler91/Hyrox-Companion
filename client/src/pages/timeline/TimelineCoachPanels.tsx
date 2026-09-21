@@ -48,7 +48,7 @@ export function TimelineCoachPanels({
         <div className={isWorkoutSurfaceOpen ? "hidden" : "fixed inset-0 z-50 h-[100dvh]"}>
           <div
             data-testid="coach-panel-mobile-sheet"
-            className="relative h-full bg-background shadow-2xl"
+            className="relative h-full bg-background pt-[env(safe-area-inset-top)] shadow-2xl"
           >
             <FeatureErrorBoundaryWrapper featureName="Coach">
               <CoachPanel

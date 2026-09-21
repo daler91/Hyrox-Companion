@@ -380,7 +380,7 @@ export default function Timeline() {
         data-testid="input-csv-upload-onboarding"
       />
       <div className="flex h-full">
-        <div ref={scrollRef} className="flex-1 overflow-auto relative">
+        <div ref={scrollRef} className="relative flex-1 overflow-auto overscroll-y-contain">
           {/* Bottom padding keeps the last card and the "show more" button
               reachable above the stacked floating action pills on phones. */}
           <PageContainer size="default" className="space-y-6 pb-32 md:pb-8">

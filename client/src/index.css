@@ -209,6 +209,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Height of the phone tab bar (MobileTabBar). Fixed elements that hug the
+   bottom edge (the FABs, the log-workout wizard footer, the jump-to-today
+   pill) offset by it so they sit above the bar rather than behind it. Zero
+   from `md` up, where the sidebar takes over and the bar is not rendered. */
+:root {
+  --mobile-nav-h: 3.5rem;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --mobile-nav-h: 0px;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -229,6 +243,10 @@
        `hidden` is the fallback for browsers without `clip` support. */
     overflow: hidden;
     overflow: clip;
+    /* The shell itself never scrolls, so a pull past the top of a list
+       should not chain out to the viewport and trigger the browser's
+       pull-to-refresh (Android Chrome) or rubber-band the whole app (iOS). */
+    overscroll-behavior: none;
   }
 
   .app-shell-locked body #root {
@@ -340,12 +358,35 @@
     /* sits in front of content */
   }
 
-  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
+  /* The hover tint only on devices that can actually hover. On a touch
+     screen a tap leaves the element in :hover until the next tap lands
+     somewhere else, so every card and button looked "stuck" pressed after
+     use. Touch devices get the same tint while the finger is down instead,
+     so a press still reads as a press. */
+  @media (hover: hover) {
+    .hover-elevate:hover:not(.no-default-hover-elevate)::after {
+      background-color: var(--elevate-1);
+    }
+
+    .hover-elevate-2:hover:not(.no-default-hover-elevate)::after {
+      background-color: var(--elevate-2);
+    }
+  }
+
+  @media (hover: none) {
+    .hover-elevate:active:not(.no-default-hover-elevate)::after {
+      background-color: var(--elevate-1);
+    }
+
+    .hover-elevate-2:active:not(.no-default-hover-elevate)::after {
+      background-color: var(--elevate-2);
+    }
+  }
+
   .active-elevate:active:not(.no-default-active-elevate)::after {
     background-color: var(--elevate-1);
   }
 
-  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
   .active-elevate-2:active:not(.no-default-active-elevate)::after {
     background-color: var(--elevate-2);
   }
