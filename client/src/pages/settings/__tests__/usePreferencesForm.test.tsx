@@ -114,6 +114,47 @@ describe("usePreferencesForm", () => {
     );
   });
 
+  it("hydrates per-email send hours and sends an override alongside a cleared one", async () => {
+    const { result } = renderForm(
+      serverPreferences({
+        notifyHour: 7,
+        notifyHourWeeklySummary: 9,
+        notifyHourTodaySession: 19,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.draft.notifyHourWeeklySummary).toBe(9);
+    });
+    expect(result.current.draft.notifyHourTodaySession).toBe(19);
+    // Absent on the wire means "follow the default send time".
+    expect(result.current.draft.notifyHourMissedReminder).toBeNull();
+    expect(result.current.hasChanges).toBe(false);
+
+    act(() => {
+      result.current.updateField("notifyHourTodaySession", null);
+    });
+    act(() => {
+      result.current.updateField("notifyHourMissedReminder", 21);
+    });
+    expect(result.current.hasChanges).toBe(true);
+    act(() => {
+      result.current.handleSave();
+    });
+
+    await waitFor(() => {
+      expect(harness.updatePreferences).toHaveBeenCalledTimes(1);
+    });
+    expect(harness.updatePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notifyHour: 7,
+        notifyHourWeeklySummary: 9,
+        notifyHourMissedReminder: 21,
+        notifyHourTodaySession: null,
+      }),
+    );
+  });
+
   it("flips hasChanges on edit and back off when the edit is reverted", async () => {
     const { result } = await renderHydratedForm();
 

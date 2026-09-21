@@ -54,6 +54,11 @@ type SchedulerUserOverrides = {
   email: string;
   userTimezone?: string;
   notifyHour?: number | null;
+  notifyHourWeeklySummary?: number | null;
+  notifyHourMissedReminder?: number | null;
+  notifyHourWeeklyReviewReminder?: number | null;
+  notifyHourTodaySession?: number | null;
+  notifyHourAnalysisDigest?: number | null;
   emailNotifications?: boolean;
   emailWeeklySummary?: boolean | null;
   emailMissedReminder?: boolean | null;
@@ -71,6 +76,11 @@ function makeMockUser(overrides: SchedulerUserOverrides) {
   return {
     userTimezone: 'UTC',
     notifyHour: 7,
+    notifyHourWeeklySummary: null,
+    notifyHourMissedReminder: null,
+    notifyHourWeeklyReviewReminder: null,
+    notifyHourTodaySession: null,
+    notifyHourAnalysisDigest: null,
     emailNotifications: true,
     emailWeeklySummary: true,
     emailMissedReminder: true,
@@ -324,6 +334,60 @@ describe('planEmailJobsForUser (notify hour gate)', () => {
     expect(planEmailJobsForUser(none, new Date('2026-07-19T17:00:00Z'))).toEqual([]);
     expect(planEmailJobsForUser(none, new Date('2026-07-20T07:00:00Z'))).toEqual([]);
   });
+
+  it('sends each email at its own hour when the athlete has set them apart', () => {
+    const split = user({
+      emailTodaySession: true,
+      notifyHourWeeklySummary: 9,
+      notifyHourTodaySession: 19,
+    });
+    // Monday 07:00 UTC: only the missed reminder, still on the default hour.
+    expect(planEmailJobsForUser(split, new Date('2026-07-20T07:00:00Z'))).toEqual([
+      'send-missed-reminder',
+    ]);
+    expect(planEmailJobsForUser(split, new Date('2026-07-20T09:00:00Z'))).toEqual([
+      'send-weekly-summary',
+    ]);
+    expect(planEmailJobsForUser(split, new Date('2026-07-20T19:00:00Z'))).toEqual([
+      'send-today-session',
+    ]);
+  });
+
+  it('resolves a per-email hour in the athlete\'s own timezone', () => {
+    // 20:00 Monday in Los Angeles is 03:00 UTC on Tuesday — still Monday local,
+    // so the weekly summary is due then and not at 20:00 UTC.
+    const la = user({ userTimezone: 'America/Los_Angeles', notifyHourWeeklySummary: 20, emailMissedReminder: false });
+    expect(planEmailJobsForUser(la, new Date('2026-07-21T03:00:00Z'))).toEqual(['send-weekly-summary']);
+    expect(planEmailJobsForUser(la, new Date('2026-07-20T20:00:00Z'))).toEqual([]);
+  });
+
+  it('moves the review reminder off Sunday evening when it has an hour of its own', () => {
+    const early = user({
+      emailWeeklyReviewReminder: true,
+      notifyHourWeeklyReviewReminder: 9,
+      emailMissedReminder: false,
+      emailWeeklySummary: false,
+    });
+    // Sunday 2026-07-19: 09:00 instead of the 17:00 default.
+    expect(planEmailJobsForUser(early, new Date('2026-07-19T09:00:00Z'))).toEqual([
+      'send-weekly-review-reminder',
+    ]);
+    expect(planEmailJobsForUser(early, new Date('2026-07-19T17:00:00Z'))).toEqual([]);
+    // Still Sunday-only: the day gate is not what the hour overrides.
+    expect(planEmailJobsForUser(early, new Date('2026-07-20T09:00:00Z'))).toEqual([]);
+  });
+
+  it('leaves an email on the default send time when it has no hour of its own', () => {
+    // A default hour of 9 moves every email that has not been given its own.
+    const moved = user({ notifyHour: 9, emailTodaySession: true, notifyHourTodaySession: 19 });
+    expect(planEmailJobsForUser(moved, new Date('2026-07-20T09:00:00Z'))).toEqual([
+      'send-weekly-summary',
+      'send-missed-reminder',
+    ]);
+    expect(planEmailJobsForUser(moved, new Date('2026-07-20T19:00:00Z'))).toEqual([
+      'send-today-session',
+    ]);
+  });
 });
 
 describe('processWeeklyReviewReminder', () => {
@@ -521,6 +585,26 @@ describe('processTodaySessionBrief', () => {
     const [, data] = vi.mocked(sendTodaySessionBrief).mock.calls[0];
     expect(data.isTomorrow).toBe(true);
     expect(data.date).toBe('2026-07-22');
+  });
+
+  it("briefs tomorrow off the brief's own send hour, not the default one", async () => {
+    const { sendTodaySessionBrief } = await import('./email');
+    // The default send time stays at 07:00; only the brief moved to 18:00.
+    const user = makeMockUser({
+      id: 'u1',
+      email: 'a@example.com',
+      userTimezone: 'America/Los_Angeles',
+      notifyHour: 7,
+      notifyHourTodaySession: 18,
+      emailTodaySession: true,
+    });
+    const { storage, getPlannedSessionsForDate } = briefStorage(user, [session]);
+
+    await processTodaySessionBrief(storage, user as never, new Date('2026-07-22T01:00:00Z'));
+
+    expect(getPlannedSessionsForDate).toHaveBeenCalledWith('u1', '2026-07-22');
+    const [, data] = vi.mocked(sendTodaySessionBrief).mock.calls[0];
+    expect(data.isTomorrow).toBe(true);
   });
 
   it('survives a rejected push send', async () => {

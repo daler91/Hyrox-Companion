@@ -1275,6 +1275,36 @@
             "minimum": -2147483648,
             "maximum": 2147483647
           },
+          "notifyHourWeeklySummary": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourMissedReminder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourWeeklyReviewReminder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourTodaySession": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourAnalysisDigest": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
           "showAdherenceInsights": {
             "type": "boolean",
             "nullable": true
@@ -1420,6 +1450,11 @@
           "emailTodaySession",
           "emailAnalysisDigest",
           "notifyHour",
+          "notifyHourWeeklySummary",
+          "notifyHourMissedReminder",
+          "notifyHourWeeklyReviewReminder",
+          "notifyHourTodaySession",
+          "notifyHourAnalysisDigest",
           "showAdherenceInsights",
           "aiCoachEnabled",
           "coachAutoApplyPlanChanges",
@@ -2068,6 +2103,36 @@
           },
           "notifyHour": {
             "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "notifyHourWeeklySummary": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 23
+          },
+          "notifyHourMissedReminder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 23
+          },
+          "notifyHourWeeklyReviewReminder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 23
+          },
+          "notifyHourTodaySession": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 23
+          },
+          "notifyHourAnalysisDigest": {
+            "type": "integer",
+            "nullable": true,
             "minimum": 0,
             "maximum": 23
           },
@@ -3698,6 +3763,11 @@
                 "emailTodaySession": false,
                 "emailAnalysisDigest": false,
                 "notifyHour": 7,
+                "notifyHourWeeklySummary": null,
+                "notifyHourMissedReminder": null,
+                "notifyHourWeeklyReviewReminder": null,
+                "notifyHourTodaySession": 18,
+                "notifyHourAnalysisDigest": null,
                 "showAdherenceInsights": true,
                 "aiCoachEnabled": true,
                 "trainingStyleId": "balanced_default",
@@ -3725,6 +3795,11 @@
                   "emailTodaySession": false,
                   "emailAnalysisDigest": false,
                   "notifyHour": 7,
+                  "notifyHourWeeklySummary": null,
+                  "notifyHourMissedReminder": null,
+                  "notifyHourWeeklyReviewReminder": null,
+                  "notifyHourTodaySession": 18,
+                  "notifyHourAnalysisDigest": null,
                   "showAdherenceInsights": true,
                   "aiCoachEnabled": true,
                   "trainingStyleId": "balanced_default",

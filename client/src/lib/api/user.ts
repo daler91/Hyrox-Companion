@@ -65,8 +65,15 @@ export interface UserPreferences {
   emailTodaySession: boolean;
   /** Per-type toggle for the digest of stored race-prediction / coach-insights analyses. */
   emailAnalysisDigest: boolean;
-  /** Local hour (0–23) at which the scheduled emails go out. */
+  /** Local hour (0–23) the emails below go out at when they carry no time of their own. */
   notifyHour: number;
+  /** Per-email send hour (0–23), or null to follow `notifyHour` (see shared/notifyHours.ts). */
+  notifyHourWeeklySummary: number | null;
+  notifyHourMissedReminder: number | null;
+  /** Null here means the Sunday-evening hour, not `notifyHour`. */
+  notifyHourWeeklyReviewReminder: number | null;
+  notifyHourTodaySession: number | null;
+  notifyHourAnalysisDigest: number | null;
   /** Opt-in push nudge when post-workout recovery fuel is still owed. */
   pushRefuelReminder: boolean;
   /** Opt-in 8pm-local push when nothing has been logged that day. */

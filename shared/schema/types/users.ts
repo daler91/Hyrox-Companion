@@ -11,6 +11,10 @@ export type User = typeof users.$inferSelect;
 // in the browser/edge runtime in a portable way.
 const ianaTimezoneSchema = z.string().min(1).max(64).regex(/^[^\s]+$/, "must be a non-whitespace IANA name");
 
+// A per-email send-hour override: an hour of day, or null to fall back to the
+// athlete's default send time.
+const notifyHourOverrideSchema = z.number().int().min(0).max(23).nullable().optional();
+
 export const updateUserPreferencesSchema = z.object({
   weightUnit: z.enum(["kg", "lbs"]).optional(),
   distanceUnit: z.enum(["km", "miles"]).optional(),
@@ -31,8 +35,16 @@ export const updateUserPreferencesSchema = z.object({
   emailWeeklyReviewReminder: z.boolean().optional(),
   emailTodaySession: z.boolean().optional(),
   emailAnalysisDigest: z.boolean().optional(),
-  // Local hour (0–23) at which the hourly email tick fires for this athlete.
+  // Local hour (0–23) at which the hourly email tick fires for this athlete —
+  // the default behind every email that has no send hour of its own.
   notifyHour: z.number().int().min(0).max(23).optional(),
+  // Per-email send-hour overrides. Explicit null clears an override and puts
+  // that email back on the default above (see shared/notifyHours.ts).
+  notifyHourWeeklySummary: notifyHourOverrideSchema,
+  notifyHourMissedReminder: notifyHourOverrideSchema,
+  notifyHourWeeklyReviewReminder: notifyHourOverrideSchema,
+  notifyHourTodaySession: notifyHourOverrideSchema,
+  notifyHourAnalysisDigest: notifyHourOverrideSchema,
   // Nutrition push reminders (opt-in; push-only, independent of the email
   // master toggle — they only fire for users with a push subscription).
   pushRefuelReminder: z.boolean().optional(),
