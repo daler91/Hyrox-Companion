@@ -44,7 +44,12 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/components/settings/AccountDangerZone", () => ({ AccountDangerZone: () => null }));
 vi.mock("@/components/settings/CoachingSection", () => ({ CoachingSection: () => null }));
-vi.mock("@/components/settings/DataToolsSection", () => ({ DataToolsSection: () => null }));
+vi.mock("@/components/settings/DataToolsSection", () => ({
+  DataToolsSection: () => <div data-testid="data-tools-section" />,
+}));
+vi.mock("@/components/settings/data-tools/RecycleBinCard", () => ({
+  RecycleBinCard: () => <div data-testid="recycle-bin-card" />,
+}));
 vi.mock("@/components/settings/GarminSection", () => ({ GarminSection: () => null }));
 vi.mock("@/components/settings/ProfileSection", () => ({ ProfileSection: () => null }));
 vi.mock("@/components/settings/PushNotificationSection", () => ({
@@ -86,7 +91,7 @@ export async function chooseSelectOption(label: string, option: string) {
 // must activate the owning tab before its fields exist in the DOM. The global
 // save bar lives outside the tabs and stays reachable regardless.
 export async function goToSettingsTab(
-  id: "account" | "training" | "integrations" | "notifications" | "data",
+  id: "account" | "training" | "integrations" | "notifications" | "data" | "recycle-bin",
 ) {
   // Radix Tabs activate on focus (automatic activation), which fireEvent.click
   // doesn't dispatch in jsdom — userEvent does, so the panel actually switches.

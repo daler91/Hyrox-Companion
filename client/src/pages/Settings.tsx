@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Database, Dumbbell, Link2, Loader2, RotateCw, User } from "lucide-react";
+import { Bell, Database, Dumbbell, Link2, Loader2, RotateCw, Trash2, User } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 
 import { AccountDangerZone } from "@/components/settings/AccountDangerZone";
 import { CoachingSection } from "@/components/settings/CoachingSection";
+import { RecycleBinCard } from "@/components/settings/data-tools/RecycleBinCard";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
 import { GarminSection } from "@/components/settings/GarminSection";
 import { AiCoachCard } from "@/components/settings/preferences/AiCoachCard";
@@ -49,7 +50,14 @@ import { usePreferencesForm } from "./settings/usePreferencesForm";
 
 // Tab ids double as the `?tab=` deep-link value. `account` is the default
 // landing tab (omitted from the URL by useUrlQueryState).
-const SETTINGS_TABS = ["account", "training", "integrations", "notifications", "data"] as const;
+const SETTINGS_TABS = [
+  "account",
+  "training",
+  "integrations",
+  "notifications",
+  "data",
+  "recycle-bin",
+] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export default function Settings() {
@@ -176,7 +184,7 @@ export default function Settings() {
         }}
         className="w-full"
       >
-        <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5 sm:gap-0">
+        <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3">
           <TabsTrigger value="account" data-testid="tab-account">
             <User className="h-4 w-4 mr-2" aria-hidden="true" />
             Account
@@ -193,9 +201,13 @@ export default function Settings() {
             <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger value="data" data-testid="tab-data" className="col-span-2 sm:col-span-1">
+          <TabsTrigger value="data" data-testid="tab-data">
             <Database className="h-4 w-4 mr-2" aria-hidden="true" />
             Data &amp; Privacy
+          </TabsTrigger>
+          <TabsTrigger value="recycle-bin" data-testid="tab-recycle-bin">
+            <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+            Recycle bin
           </TabsTrigger>
         </TabsList>
 
@@ -343,6 +355,10 @@ export default function Settings() {
 
         <TabsContent value="data" className="space-y-6">
           <DataToolsSection />
+        </TabsContent>
+
+        <TabsContent value="recycle-bin" className="space-y-6">
+          <RecycleBinCard />
         </TabsContent>
       </Tabs>
 

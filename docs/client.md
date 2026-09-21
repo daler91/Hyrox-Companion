@@ -49,6 +49,7 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 `AppContent` uses Clerk's `<Show when="signed-in">` to conditionally render either the `AuthenticatedLayout` (sidebar + router) or the `Landing` page for unauthenticated users.
 
 `AuthenticatedLayout` wraps the main content in a `SidebarProvider` and renders:
+
 - A skip-to-content accessibility link
 - `AppSidebar` (navigation sidebar)
 - A mobile header with `SidebarTrigger` (visible on `md:hidden`)
@@ -61,16 +62,16 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 
 Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter` mounts six authenticated routes, the signed-out-accessible privacy page, and a catch-all 404:
 
-| Path | Component | Feature Name | Loading |
-|------|-----------|-------------|---------|
-| `/` | `Timeline` | Timeline | Lazy (`React.lazy`) |
-| `/log` | `LogWorkout` | Log Workout | Lazy (`React.lazy`) |
-| `/analytics` | `Analytics` | Analytics | Lazy (`React.lazy`) |
-| `/review` | `Review` | Weekly Review | Lazy (`React.lazy`) |
-| `/nutrition` | `Nutrition` | Nutrition | Lazy (`React.lazy`) — only mounted when `featureFlags.nutritionEnabled` |
-| `/settings` | `Settings` | Settings | Lazy (`React.lazy`) |
-| `/privacy` | `Privacy` | -- | Lazy (`React.lazy`) — accessible signed-out |
-| `*` | `NotFound` | -- | Eagerly loaded |
+| Path         | Component    | Feature Name  | Loading                                                                 |
+| ------------ | ------------ | ------------- | ----------------------------------------------------------------------- |
+| `/`          | `Timeline`   | Timeline      | Lazy (`React.lazy`)                                                     |
+| `/log`       | `LogWorkout` | Log Workout   | Lazy (`React.lazy`)                                                     |
+| `/analytics` | `Analytics`  | Analytics     | Lazy (`React.lazy`)                                                     |
+| `/review`    | `Review`     | Weekly Review | Lazy (`React.lazy`)                                                     |
+| `/nutrition` | `Nutrition`  | Nutrition     | Lazy (`React.lazy`) — only mounted when `featureFlags.nutritionEnabled` |
+| `/settings`  | `Settings`   | Settings      | Lazy (`React.lazy`)                                                     |
+| `/privacy`   | `Privacy`    | --            | Lazy (`React.lazy`) — accessible signed-out                             |
+| `*`          | `NotFound`   | --            | Eagerly loaded                                                          |
 
 `/nutrition` is gated at build time: `featureFlags.nutritionEnabled` (`client/src/lib/featureFlags.ts`) defaults to `true` and is turned off with `VITE_NUTRITION_ENABLED=false`. When it is off the `Route` is never mounted, so the path falls through to the 404.
 
@@ -129,13 +130,14 @@ Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutri
 
 ### Settings (`client/src/pages/Settings.tsx`)
 
-User preferences and account management. Organized into five deep-linkable tabs (`?tab=account|training|integrations|notifications|data`, default `account`) driven by `useUrlQueryState` and mirroring the Analytics tab pattern. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
+User preferences and account management. Organized into six deep-linkable tabs (`?tab=account|training|integrations|notifications|data|recycle-bin`, default `account`) driven by `useUrlQueryState` and mirroring the Analytics tab pattern. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
 
 - **Account** (`?tab=account`, default) -- **ProfileSection** (user name and avatar), **UnitsPreferencesCard** (weight unit kg/lb, distance unit km/mi), a "Getting Started" card to re-run onboarding, and the account **DangerZone** (delete account → hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
 - **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **TrainingGoalsCard** (weekly workout goal), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled), and **CoachingSection** (AI coaching configuration and materials management).
 - **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync now"; surfaces the `lastError` banner and disables sync when the global 429 circuit breaker is tripped).
 - **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch plus nested per-type toggles for the weekly summary and missed-workout reminder, disabled/grayed when the master is off) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
-- **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `RecycleBinCard` — deleted workouts, plan days and training plans, restorable for 90 days, with per-item *Delete forever* and *Empty bin* behind confirm dialogs — `ExportDataCard`, and the error-reporting consent card).
+- **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `ExportDataCard`, and the error-reporting consent card).
+- **Recycle bin** (`?tab=recycle-bin`) -- **RecycleBinCard** (deleted workouts, plan days and training plans, restorable for 90 days, with per-item _Delete forever_ and _Empty bin_ behind confirm dialogs).
 
 ### Privacy (`client/src/pages/Privacy.tsx`)
 
@@ -348,7 +350,7 @@ flowchart TD
         UTF[useTimelineFilters]
         UTS[useTimelineState]
     end
-    
+
     subgraph Components
         TL[Timeline Page]
         TH[TimelineHeader]
@@ -358,7 +360,7 @@ flowchart TD
         WDS[Workout Sheets]
         CP[CoachPanel]
     end
-    
+
     UTS --> UTD
     UTS --> UTF
     UTD -->|entries, plans, PRs| TL
@@ -388,6 +390,7 @@ Dark mode uses the **class strategy** (`darkMode: ["class"]`). The `ThemeProvide
 All colors are defined as HSL CSS custom variables (e.g., `--background`, `--foreground`, `--primary`, etc.) and referenced in Tailwind config using the `hsl(var(--name) / <alpha-value>)` pattern. This enables opacity modifiers on all semantic colors.
 
 Key color tokens:
+
 - `background`, `foreground` -- Base page colors.
 - `card`, `popover` -- Surface colors with optional `border` variants.
 - `primary`, `secondary`, `muted`, `accent`, `destructive` -- Semantic UI colors, each with `foreground` and `border` variants.
@@ -399,6 +402,7 @@ Key color tokens:
 ### Typography
 
 Custom font families are defined via CSS variables:
+
 - `--font-sans` (Open Sans / Geist Sans)
 - `--font-heading` (Space Grotesk)
 - `--font-mono` (Geist Mono)
@@ -412,6 +416,7 @@ Custom font families are defined via CSS variables:
 ### shadcn/ui Configuration
 
 Configured via `components.json` at the project root:
+
 - **Style**: `new-york`
 - **Base color**: `neutral`
 - **CSS variables**: enabled
@@ -544,6 +549,7 @@ survived both sign-out and account deletion.
 ### FallbackErrorBoundary (`client/src/components/FallbackErrorBoundary.tsx`)
 
 A full-page error screen with:
+
 - Error icon and user-friendly message.
 - "Try again" button (calls `resetError`) and "Refresh Page" button.
 - In non-production environments, displays the raw error message in a monospaced block.
@@ -558,13 +564,14 @@ A per-feature error boundary that wraps each route and the Coach panel. Uses `Se
 
 Vite's Rollup configuration in `vite.config.ts` defines manual chunks for optimized bundle splitting:
 
-| Chunk Name | Contents |
-|-----------|----------|
+| Chunk Name     | Contents                       |
+| -------------- | ------------------------------ |
 | `vendor-react` | `react`, `react-dom`, `wouter` |
-| `vendor-ui` | `lucide-react` |
-| `vendor-query` | `@tanstack/react-query` |
+| `vendor-ui`    | `lucide-react`                 |
+| `vendor-query` | `@tanstack/react-query`        |
 
 Additionally, route-level code splitting is achieved via `React.lazy`:
+
 - `LogWorkout`, `Settings`, `Analytics`, and `Landing` are lazy-loaded, each producing a separate chunk.
 - `Timeline` is eagerly loaded since it is the home page.
 
@@ -579,6 +586,7 @@ The app includes two auth bypass mechanisms for development and testing, control
 ### Dev Preview Mode (`isDevPreview`)
 
 Active when **all** of these are true:
+
 - `import.meta.env.DEV` is `true` (Vite dev mode).
 - Either `VITE_CLERK_PUBLISHABLE_KEY` is not set, **or** the window is inside an iframe (`window.self !== window.top`).
 
@@ -597,6 +605,7 @@ In both bypass modes, the app renders the `AuthenticatedLayout` directly (skippi
 ### `vite.config.ts`
 
 Root-level Vite configuration:
+
 - **Plugins**: `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite-plugin-pwa`.
 - **Path aliases**: `@` maps to `client/src`, `@shared` maps to `shared/`, `@assets` maps to `attached_assets/`.
 - **Root**: `client/` directory.
@@ -607,6 +616,7 @@ Root-level Vite configuration:
 ### `tailwind.config.ts`
 
 Root-level Tailwind CSS configuration:
+
 - **Dark mode**: Class-based (`["class"]`).
 - **Content paths**: `client/index.html` and all `client/src/**/*.{js,jsx,ts,tsx}` files.
 - **Custom theme**: HSL color variables, custom border radii, font families, accordion keyframes.
@@ -615,6 +625,7 @@ Root-level Tailwind CSS configuration:
 ### `components.json`
 
 shadcn/ui CLI configuration:
+
 - **Style**: `new-york`.
 - **RSC**: `false`.
 - **TSX**: `true`.

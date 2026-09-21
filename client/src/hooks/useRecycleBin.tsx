@@ -109,7 +109,7 @@ export interface UndoDeleteToastOptions {
 /**
  * The delete toast with an Undo action. One toast is visible at a time and it
  * lives a few seconds (client/src/hooks/constants.ts), so this is the fast
- * path for a mis-tap; Settings → Data & Privacy → Recycle bin is the durable
+ * path for a mis-tap; the Settings → Recycle bin tab is the durable
  * one. A single delete undoes by item id; a bulk delete by its batch id, so
  * the whole selection comes back together.
  */
