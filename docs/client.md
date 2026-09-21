@@ -53,6 +53,7 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 - `AppSidebar` (navigation sidebar)
 - A mobile header with `SidebarTrigger` (visible on `md:hidden`)
 - The `AuthenticatedRouter` as the main content area
+- `MobileTabBar` -- Bottom tab bar for the five primary destinations, visible on `md:hidden`; shares `PRIMARY_NAV_ITEMS` with `AppSidebar` (`client/src/lib/navItems.ts`)
 
 ---
 
@@ -303,7 +304,8 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 ### Root-level Components
 
 - `AppSidebar` -- Main navigation sidebar with Training and Analytics links, user avatar, settings/logout/theme toggle in footer.
-- `Breadcrumbs` -- Route breadcrumb trail driven by `useNavigationBreadcrumb`.
+- `MobileTabBar` -- Bottom tab bar mirroring the sidebar's `PRIMARY_NAV_ITEMS` for phones (`md:hidden`).
+- `Breadcrumbs` -- Route breadcrumb trail driven by `useNavigationBreadcrumb`; desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones.
 - `CoachPanel` -- AI coach chat panel (described above).
 - `OnboardingWizard` -- Multi-step onboarding dialog.
 - `ThemeProvider` -- Dark/light theme context provider.
