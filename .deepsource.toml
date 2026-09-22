@@ -18,6 +18,16 @@ exclude_patterns = [
   # Emitted by script/race-benchmarks — not hand-edited.
   "**/*.generated.ts",
   "script/race-benchmarks/output/**",
+  # Build/tooling config. eslint.config.js ignores `*.config.js` and
+  # `*.config.ts` globally because they sit outside tsconfig.eslint.json and so
+  # can't be type-checked; DeepSource was still analysing vite.config.ts,
+  # vitest*.config.ts, drizzle.config.ts, tailwind.config.ts and cypress.config.ts
+  # under production-strength rules. Listed twice because these live at the repo
+  # root, and a bare `*.config.ts` is not guaranteed to match nested copies.
+  "*.config.js",
+  "*.config.ts",
+  "**/*.config.js",
+  "**/*.config.ts",
 ]
 
 # Test code. Declaring these lets DeepSource drop the checks that only make
@@ -42,6 +52,20 @@ test_patterns = [
   "**/helpers.ts",
   "vitest.setup.ts",
   "vitest.integration.setup.ts",
+  # Test-support code that carries no `.test.` in its name and so was being
+  # analysed as production. `test/**` above is anchored at the repo root and
+  # does not reach client/src/test/, which holds the React factories, harnesses
+  # and module mocks (offlineMutationHarness, radixPointerMocks, …).
+  "client/src/test/**",
+  "**/__mocks__/**",
+  # Shared fixture modules, named per-subject rather than by directory.
+  "**/testFixtures.ts",
+  "server/services/coachService.testFixtures.ts",
+  "server/services/coachService.dbMockState.ts",
+  "server/services/nutrition/foodTestFixture.ts",
+  "shared/nutritionTestFixtures.ts",
+  # Offline harness for the coach-influence experiment, not shipped code.
+  "script/coach-influence/harness.ts",
 ]
 
 [[analyzers]]
@@ -53,3 +77,23 @@ enabled = true
   environment = ["browser", "nodejs"]
   dialect = "typescript"
   module_system = "esm"
+
+  # JS-R1005 ("cyclomatic complexity higher than threshold") was the single
+  # biggest source of failed DeepSource runs, and every instance was a function
+  # nobody would call complex. It fires per risk band, not per number:
+  # unset, this repo's runs were flagging at the "medium" band — complexity 6
+  # and 7 — which is a two-branch function with a couple of guard clauses.
+  #
+  # PR #2029 failed the JavaScript check on exactly one issue: complexity 6 in
+  # `processTodaySessionBrief`, on a line whose diff had *removed* a branch.
+  # PR #2026 carried seven more on its first page of review comments alone,
+  # at 7, 7, 7, 7, 12, 14 and 14.
+  #
+  # "high" is DeepSource's own documented default for the JavaScript analyzer
+  # and raises at >25. That is still stricter than this repo's own gate:
+  # eslint.config.js sets `complexity: ["warn", 45]` on the surfaces it guards
+  # (Timeline, Settings, workout-detail) and no global complexity rule at all,
+  # so nothing between 6 and 25 was ever meant to block a merge. Setting it
+  # here also pins the value in the repo instead of leaving it to the dashboard.
+  # Dial to "very-high" if >25 still proves noisy.
+  cyclomatic_complexity_threshold = "high"

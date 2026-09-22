@@ -3,11 +3,17 @@
 #
 # Paths use Java glob syntax and the leading `---` above is required.
 #
-# Caveat worth knowing before editing: once this file exists, the "Ignored
-# files" list configured in the Codacy web UI stops applying — this file
-# becomes the only source of ignore rules. Codacy also reads the copy on the
-# default branch, so a change here only takes full effect once merged.
+# Two caveats worth knowing before editing:
+#
+#   * Once this file exists, the "Ignored files" list configured in the Codacy
+#     web UI stops applying — this file becomes the only source of ignore
+#     rules. So anything the other analyzers skip has to be repeated here, or
+#     Codacy alone will analyse it.
+#   * Codacy reads the copy on the default branch, so a change here only takes
+#     full effect once merged.
 exclude_paths:
+  # --- Drizzle migration output -------------------------------------------
+  #
   # drizzle-kit writes a complete snapshot of the whole schema next to every
   # migration, so each new migration adds a several-thousand-line JSON file
   # that re-lists every column in the database — including names like
@@ -20,8 +26,62 @@ exclude_paths:
   # carrying a default were `ai_usage_logs.input_tokens` / `output_tokens`,
   # defaulting to the integer 0 — token counts, not credentials.
   #
-  # Deliberately scoped to meta/ only. The migration .sql files beside it stay
-  # analysed, because they are not all generated — several are hand-written
-  # data migrations (see 0018_backfill_plan_dates_and_workout_links.sql,
-  # 0036_maf_post_migration_validation.sql) and are the SQL most worth scanning.
-  - "migrations/meta/**"
+  # The .sql files beside it are excluded for a different reason: the same
+  # PR #2029 also collected a medium Compatibility finding on the generated
+  # `0098_per_email_notify_hours.sql`, and every future migration will collect
+  # more, because drizzle regenerates this tree on each schema change. Codacy's
+  # quality gate is "0 new issues of at least minor severity", so one dialect
+  # nit on generated DDL is enough to fail the PR.
+  #
+  # This matches what the repo already does everywhere else: sonar-project.properties
+  # and .sonarcloud.properties both exclude `migrations/**,**/*.sql` (the PL/SQL
+  # analyzer flags PostgreSQL DDL with Oracle rules like "use VARCHAR2 instead
+  # of VARCHAR"), and .deepsource.toml excludes them too. Codacy was the only
+  # analyzer still reading them.
+  #
+  # The trade-off, stated plainly: 13 of the 99 migrations are hand-written data
+  # migrations (0018_backfill_plan_dates_and_workout_links.sql,
+  # 0036_maf_post_migration_validation.sql and others contain UPDATE/INSERT/DO $$),
+  # and Codacy no longer analyses those either. An include_paths allowlist was
+  # considered and rejected — it would go stale silently, leaving a *new*
+  # hand-written migration unscanned, which is the worse direction to fail in.
+  # The secret-scanning half of that coverage is not lost: the gitleaks workflow
+  # scans every commit a PR introduces with no path exclusions at all, so
+  # migrations are still checked for committed credentials.
+  #
+  # Scoped to migrations/ rather than a repo-wide `**/*.sql` so that any SQL
+  # written outside the generated tree stays in scope.
+  - "migrations/**"
+
+  # --- Generated and non-source files -------------------------------------
+  #
+  # None of these are hand-edited, and all of them are already skipped by
+  # ESLint, DeepSource and SonarCloud. They only reach Codacy because the
+  # config file above disabled the web UI's ignore list.
+
+  # Emitted by script/race-benchmarks/generate.ts from hyrox_results.csv.
+  # raceRankingData.generated.ts alone is 3,549 lines of literal cohort data.
+  - "**/*.generated.ts"
+  - "script/race-benchmarks/output/**"
+
+  # Static assets plus sw-push.js, which runs in a service-worker scope where
+  # `self`, `clients` and `registration` are undefined globals. It carries a
+  # file-level eslint-disable for exactly that reason; Codacy has no equivalent
+  # context and reports the whole file as undefined-variable errors.
+  - "client/public/**"
+
+  # Build/tooling config, outside tsconfig.eslint.json and so not type-checked
+  # by the repo's own lint — 8 files: eslint, vite, the three vitest configs,
+  # drizzle, tailwind and cypress.
+  - "*.config.js"
+  - "*.config.ts"
+
+  # Build output and coverage reports (gitignored, but excluded so a local or
+  # CI-side Codacy run can't pick them up).
+  - "dist/**"
+  - "build/**"
+  - "coverage/**"
+  - "node_modules/**"
+
+  # 467 KB of generated dependency graph.
+  - "pnpm-lock.yaml"
