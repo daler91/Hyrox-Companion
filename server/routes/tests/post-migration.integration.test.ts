@@ -46,7 +46,6 @@ const EXPECTED_INDEXES = [
   "idx_workout_logs_plan_day_id",
   "idx_workout_logs_strava_activity_id",
   "idx_workout_logs_source",
-  "idx_exercise_sets_workout_log_id",
   "idx_exercise_sets_exercise_name",
   "idx_exercise_sets_workout_sort",
   "idx_exercise_sets_workout_exercise",
