@@ -1,0 +1,27 @@
+---
+# Codacy analysis configuration.
+#
+# Paths use Java glob syntax and the leading `---` above is required.
+#
+# Caveat worth knowing before editing: once this file exists, the "Ignored
+# files" list configured in the Codacy web UI stops applying — this file
+# becomes the only source of ignore rules. Codacy also reads the copy on the
+# default branch, so a change here only takes full effect once merged.
+exclude_paths:
+  # drizzle-kit writes a complete snapshot of the whole schema next to every
+  # migration, so each new migration adds a several-thousand-line JSON file
+  # that re-lists every column in the database — including names like
+  # `encrypted_password`, `access_token` and `refresh_token`. Secret scanners
+  # read those as hardcoded credentials and report a high-severity finding per
+  # match: PR #2029 picked up two that way purely for adding a column.
+  #
+  # They are column *names* in generated metadata, never values, and nothing
+  # here is ever executed. Verified at the time: the only matching columns
+  # carrying a default were `ai_usage_logs.input_tokens` / `output_tokens`,
+  # defaulting to the integer 0 — token counts, not credentials.
+  #
+  # Deliberately scoped to meta/ only. The migration .sql files beside it stay
+  # analysed, because they are not all generated — several are hand-written
+  # data migrations (see 0018_backfill_plan_dates_and_workout_links.sql,
+  # 0036_maf_post_migration_validation.sql) and are the SQL most worth scanning.
+  - "migrations/meta/**"
