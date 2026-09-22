@@ -159,7 +159,18 @@ export function ExerciseProgressionCharts({
 
   if (!analyticsData || analyticsData.data.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm py-4">No data available for this exercise yet.</p>
+      <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+        <div>
+          <BarChart3
+            className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3"
+            aria-hidden="true"
+          />
+          <p className="font-medium text-foreground">No data yet</p>
+          <p className="mt-1 text-sm">
+            Log workouts that include this exercise to track your progression over time.
+          </p>
+        </div>
+      </div>
     );
   }
 
