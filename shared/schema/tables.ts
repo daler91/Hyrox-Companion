@@ -791,8 +791,10 @@ export const exerciseSets = pgTable(
     version: integer("version").notNull().default(1),
   },
   (table) => [
-    index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
-    index("idx_exercise_sets_plan_day_id").on(table.planDayId),
+    // ⚡ Bolt: removed redundant single-column indexes on workoutLogId and planDayId.
+    // They were pure write-cost taxes with no read benefit since the composite indexes
+    // (idx_exercise_sets_workout_sort, idx_exercise_sets_workout_exercise, idx_exercise_sets_plan_day_sort)
+    // already lead with those columns and cover these access patterns perfectly.
     index("idx_exercise_sets_plan_day_sort").on(table.planDayId, table.sortOrder),
     index("idx_exercise_sets_exercise_name").on(table.exerciseName),
     index("idx_exercise_sets_workout_sort").on(table.workoutLogId, table.sortOrder),

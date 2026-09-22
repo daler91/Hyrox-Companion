@@ -359,8 +359,6 @@ Individual exercise sets. Each row is either **prescribed** (owned by a `plan_da
 - `exercise_set_block_step_pair_check`: `(block_id IS NULL) = (step_number IS NULL)`
 
 **Indexes:**
-- `idx_exercise_sets_workout_log_id` on (`workout_log_id`)
-- `idx_exercise_sets_plan_day_id` on (`plan_day_id`)
 - `idx_exercise_sets_plan_day_sort` on (`plan_day_id`, `sort_order`) -- composite
 - `idx_exercise_sets_exercise_name` on (`exercise_name`)
 - `idx_exercise_sets_workout_sort` on (`workout_log_id`, `sort_order`) -- composite
