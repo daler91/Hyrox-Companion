@@ -1,0 +1,1 @@
+DROP INDEX "idx_workout_logs_user_id";
