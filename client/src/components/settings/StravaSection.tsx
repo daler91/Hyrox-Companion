@@ -274,25 +274,30 @@ function DisconnectStravaButton({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span tabIndex={disconnectStravaMutation.isPending ? 0 : -1}> {/* NOSONAR */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onRequestDisconnect}
-              disabled={disconnectStravaMutation.isPending}
-              aria-label={
-                disconnectStravaMutation.isPending ? "Disconnecting Strava…" : "Disconnect Strava"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+            onClick={(e) => {
+              if (disconnectStravaMutation.isPending) {
+                e.preventDefault();
+              } else {
+                onRequestDisconnect();
               }
-              aria-busy={disconnectStravaMutation.isPending}
-              data-testid="button-disconnect-strava"
-            >
-              {disconnectStravaMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Unlink className="h-4 w-4" aria-hidden="true" />
-              )}
-            </Button>
-          </span>
+            }}
+            aria-disabled={disconnectStravaMutation.isPending}
+            aria-label={
+              disconnectStravaMutation.isPending ? "Disconnecting Strava…" : "Disconnect Strava"
+            }
+            aria-busy={disconnectStravaMutation.isPending}
+            data-testid="button-disconnect-strava"
+          >
+            {disconnectStravaMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Unlink className="h-4 w-4" aria-hidden="true" />
+            )}
+          </Button>
         </TooltipTrigger>
         <TooltipContent>Disconnect Strava</TooltipContent>
       </Tooltip>

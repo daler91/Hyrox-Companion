@@ -80,19 +80,23 @@ export function TimelineAnnotationCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <span tabIndex={isDeleting ? 0 : -1}> {/* NOSONAR */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 disabled:pointer-events-none"
-                  onClick={() => setConfirmOpen(true)}
-                  disabled={isDeleting}
-                  aria-label={`Delete ${label} annotation`}
-                  data-testid={`button-delete-annotation-${annotation.id}`}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                onClick={(e) => {
+                  if (isDeleting) {
+                    e.preventDefault();
+                  } else {
+                    setConfirmOpen(true);
+                  }
+                }}
+                aria-disabled={isDeleting}
+                aria-label={`Delete ${label} annotation`}
+                data-testid={`button-delete-annotation-${annotation.id}`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent>Delete annotation</TooltipContent>
           </Tooltip>

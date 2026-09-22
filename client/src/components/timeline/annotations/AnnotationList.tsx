@@ -68,19 +68,23 @@ export function AnnotationList({
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span tabIndex={isDeleting ? 0 : -1}> {/* NOSONAR */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="disabled:pointer-events-none"
-                      onClick={() => setPendingDeleteId(annotation.id)}
-                      disabled={isDeleting}
-                      data-testid={`button-delete-annotation-${annotation.id}`}
-                      aria-label={`Delete ${TYPE_LABELS[annotationType]} annotation`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                    onClick={(e) => {
+                      if (isDeleting) {
+                        e.preventDefault();
+                      } else {
+                        setPendingDeleteId(annotation.id);
+                      }
+                    }}
+                    aria-disabled={isDeleting}
+                    data-testid={`button-delete-annotation-${annotation.id}`}
+                    aria-label={`Delete ${TYPE_LABELS[annotationType]} annotation`}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>Delete annotation</TooltipContent>
               </Tooltip>
