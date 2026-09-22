@@ -292,9 +292,9 @@ Logged workouts, entered manually or synced from Strava/Garmin. A synced Strava 
 | `suggested_link_confidence` | `real` | nullable — matcher score for the suggestion |
 
 **Indexes:**
-- `idx_workout_logs_user_id` on (`user_id`)
 - `idx_workout_logs_date` on (`date`)
 - `idx_workout_logs_user_date` on (`user_id`, `date`) -- composite
+- `idx_workout_logs_user_started_at` on (`user_id`, `started_at`) -- composite
 - `idx_workout_logs_plan_day_id` on (`plan_day_id`)
 - `idx_workout_logs_plan_id` on (`plan_id`)
 - `idx_workout_logs_strava_activity_id` on (`strava_activity_id`)

@@ -41,7 +41,6 @@ const EXPECTED_INDEXES = [
   "idx_plan_days_status",
   "idx_plan_days_plan_week",
   "idx_plan_days_plan_status",
-  "idx_workout_logs_user_id",
   "idx_workout_logs_date",
   "idx_workout_logs_user_date",
   "idx_workout_logs_plan_day_id",

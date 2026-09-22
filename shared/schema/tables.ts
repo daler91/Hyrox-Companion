@@ -575,7 +575,12 @@ export const workoutLogs = pgTable(
     suggestedLinkConfidence: real("suggested_link_confidence"),
   },
   (table) => [
-    index("idx_workout_logs_user_id").on(table.userId),
+    // No standalone index on userId: idx_workout_logs_user_date and
+    // idx_workout_logs_user_started_at both lead with userId, so Postgres can
+    // already serve a plain `WHERE user_id = ...` from either composite
+    // index — a single-column sibling would be pure write-amplification on
+    // one of the highest-frequency INSERT paths in the app (every logged
+    // workout, every device sync). See idx_chat_messages_user_id removal.
     index("idx_workout_logs_date").on(table.date),
     index("idx_workout_logs_user_date").on(table.userId, table.date),
     index("idx_workout_logs_plan_day_id").on(table.planDayId),
