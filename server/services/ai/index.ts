@@ -406,7 +406,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
 
   let activePlan: TrainingContext["activePlan"];
   if (activePlanRecord) {
-    const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks);
+    const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks, today);
     activePlan = {
       name: activePlanRecord.name,
       totalWeeks: activePlanRecord.totalWeeks,
@@ -416,7 +416,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
-  const stationGaps = computeExerciseGaps(timeline, trainingConstraints);
+  const stationGaps = computeExerciseGaps(timeline, today, trainingConstraints);
   const weeklyGoal = user?.weeklyGoal ?? 0;
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)

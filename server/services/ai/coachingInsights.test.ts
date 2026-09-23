@@ -13,7 +13,8 @@ import {
 import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
 import type { TimelineEntry } from "./types";
 
-// Fixed "today" (a Monday) so toDateStr()/getMondayWeekBoundaries() are
+// Fixed "today" (a Monday) so getMondayWeekBoundaries() and the helpers that
+// default to the current instant are
 // deterministic. 2026-06-15 is a Monday => thisMonday=2026-06-15,
 // lastMonday=2026-06-08.
 const TODAY = "2026-06-15";
@@ -52,7 +53,7 @@ function recentsWithRpe(rpes: Array<number | null>): RecentWorkout[] {
 
 function gapsByStation(timeline: TimelineEntry[]): Record<string, number | null> {
   return Object.fromEntries(
-    computeExerciseGaps(timeline).map((g) => [g.station, g.daysSinceLastTrained]),
+    computeExerciseGaps(timeline, TODAY).map((g) => [g.station, g.daysSinceLastTrained]),
   );
 }
 
@@ -381,7 +382,7 @@ describe("computeExerciseGaps", () => {
   ];
 
   it("returns every station with a null gap when nothing was trained", () => {
-    const gaps = computeExerciseGaps([]);
+    const gaps = computeExerciseGaps([], TODAY);
     expect(gaps.map((g) => g.station)).toEqual(ALL_STATIONS);
     expect(gaps.every((g) => g.daysSinceLastTrained === null)).toBe(true);
   });
@@ -425,7 +426,7 @@ describe("computeExerciseGaps", () => {
     // The gap computation has no equipment model; without this it renders
     // "sled_push (NEVER TRAINED — CRITICAL)" into the same prompt whose
     // constraints say "no sled at my gym" — every week, forever.
-    const gaps = computeExerciseGaps([], "No sled at my gym. Recovering from wrist injury, no burpees.");
+    const gaps = computeExerciseGaps([], TODAY, "No sled at my gym. Recovering from wrist injury, no burpees.");
     const stations = gaps.map((g) => g.station);
 
     expect(stations).not.toContain("sled_push");
@@ -437,9 +438,9 @@ describe("computeExerciseGaps", () => {
   });
 
   it("suppresses nothing for empty or absent constraints", () => {
-    expect(computeExerciseGaps([], "")).toHaveLength(ALL_STATIONS.length);
-    expect(computeExerciseGaps([], null)).toHaveLength(ALL_STATIONS.length);
-    expect(computeExerciseGaps([])).toHaveLength(ALL_STATIONS.length);
+    expect(computeExerciseGaps([], TODAY, "")).toHaveLength(ALL_STATIONS.length);
+    expect(computeExerciseGaps([], TODAY, null)).toHaveLength(ALL_STATIONS.length);
+    expect(computeExerciseGaps([], TODAY)).toHaveLength(ALL_STATIONS.length);
   });
 
   it("records a zero-day gap for something trained today", () => {

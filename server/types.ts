@@ -23,7 +23,3 @@ export function getUserId(req: Request): string {
 
   throw new Error("User not authenticated");
 }
-
-export function toDateStr(date?: Date): string {
-  return (date || new Date()).toISOString().split("T")[0];
-}

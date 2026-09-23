@@ -27,7 +27,7 @@ export interface PlanPhase {
 }
 
 /**
- * Today as `YYYY-MM-DD` in UTC — matches the server's `toDateStr()` default.
+ * Today as `YYYY-MM-DD` in UTC — the server's calendar day, not the athlete's.
  *
  * Sliced rather than split on "T": `toISOString()` always yields a fixed-width
  * `YYYY-MM-DDTHH:mm:ss.sssZ`, so the first ten characters are exactly the date,

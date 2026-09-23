@@ -32,7 +32,6 @@ vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAu
 // Mock the getUserId function to return our test user
 vi.mock("../../types", () => ({
   getUserId: () => "test_user_id",
-  toDateStr: () => "2024-03-10",
 }));
 
 // Mock the storage functions.
