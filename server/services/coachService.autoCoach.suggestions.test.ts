@@ -185,6 +185,25 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     });
   });
 
+  it("appends to the day's existing notes instead of replacing them", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ notes: "Knee felt tight last week" }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        targetField: "notes",
+        action: "append",
+        recommendation: "Keep the squat depth shallow",
+      }),
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+    expectPlanDayUpdate("day-1", {
+      notes: "Knee felt tight last week\n[AI Coach] Keep the squat depth shallow",
+    });
+  });
+
   it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext, [
       makeTimelineEntry({
