@@ -94,9 +94,11 @@ export function getContextLogger() {
 }
 
 /**
- * Prefer the per-request child logger attached by pino-http (request id +
- * user id are already bound). Fall back to the module-level logger when the
- * request hasn't been through the pino-http middleware yet (e.g. lower-level
+ * Prefer the per-request child logger attached by pino-http, which carries the
+ * request id. Its `userId` binding is always 'anonymous': pino-http binds it at
+ * request start, before Clerk has authenticated the request (see customProps
+ * in server/index.ts). Fall back to the module-level logger when the request
+ * hasn't been through the pino-http middleware yet (e.g. lower-level
  * middleware, or error handlers reached before req.log was set).
  *
  * Extracted so the 24+ `req.log || logger` call sites stay consistent and

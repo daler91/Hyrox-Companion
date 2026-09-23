@@ -27,7 +27,7 @@ export interface PlanPhase {
 }
 
 /**
- * Today as `YYYY-MM-DD` in UTC — matches the server's `toDateStr()` default.
+ * Today as `YYYY-MM-DD` in UTC — the server's calendar day, not the athlete's.
  *
  * Sliced rather than split on "T": `toISOString()` always yields a fixed-width
  * `YYYY-MM-DDTHH:mm:ss.sssZ`, so the first ten characters are exactly the date,
@@ -43,7 +43,8 @@ function utcToday(): string {
 }
 
 /**
- * Which week of the block today falls in, 1-based and clamped to `totalWeeks`.
+ * Which week of the block today falls in, 1-based. Deliberately NOT clamped to
+ * `totalWeeks` — a block that has ended reports a week past its last (see below).
  *
  * A plan that has not started yet reads as week 1 rather than a negative week,
  * and a missing start date is treated the same way — the block exists, we just
@@ -102,7 +103,8 @@ export function computePlanPhase(totalWeeks: number, currentWeek: number): PlanP
   // keeps every band reachable:
   //
   //   12-week: w1 4% early · w4 29% build · w8 63% peak · w11 88% taper · w12 race
-  //    4-week: w1 12% early · w2 38% build · w3 62% peak · w4 race
+  //    4-week: w1 13% early · w2 38% build · w3 63% (taper — the week-before-race
+  //            rule below overrides the peak band) · w4 race
   //    3-week: w1 17% early · w2 50% build · w3 race
   const progressPct = Math.round(((currentWeek - 0.5) / totalWeeks) * 100);
 

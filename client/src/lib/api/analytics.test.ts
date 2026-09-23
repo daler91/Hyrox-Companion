@@ -51,14 +51,26 @@ describe("analytics API client", () => {
   });
 
   describe("timeline", () => {
-    it("get() calls typedRequest with GET and correct URL when planId is not provided", () => {
-      timeline.get();
-      expect(typedRequest).toHaveBeenCalledWith("GET", "/api/v1/timeline");
+    function pageResponse(entries: unknown[], nextCursor: string | null) {
+      return {
+        json: () => Promise.resolve(entries),
+        headers: new Headers(nextCursor ? { "X-Next-Cursor": nextCursor } : {}),
+      } as unknown as Response;
+    }
+
+    it("getPage() requests the first page, with no query, when neither planId nor cursor is given", async () => {
+      vi.mocked(rawRequest).mockResolvedValue(pageResponse([], null));
+      const page = await timeline.getPage();
+      expect(rawRequest).toHaveBeenCalledWith("GET", "/api/v1/timeline");
+      expect(page).toEqual({ entries: [], nextCursor: null });
     });
 
-    it("get() calls typedRequest with GET and correct URL when planId is provided", () => {
-      timeline.get("123");
-      expect(typedRequest).toHaveBeenCalledWith("GET", "/api/v1/timeline?planId=123");
+    it("getPage() sends planId and the before cursor, and reads the next cursor from X-Next-Cursor", async () => {
+      const entries = [{ id: "e1" }];
+      vi.mocked(rawRequest).mockResolvedValue(pageResponse(entries, "2026-01-01"));
+      const page = await timeline.getPage("123", "2026-02-01");
+      expect(rawRequest).toHaveBeenCalledWith("GET", "/api/v1/timeline?planId=123&before=2026-02-01");
+      expect(page).toEqual({ entries, nextCursor: "2026-01-01" });
     });
 
     it("getSuggestions() calls typedRequest with POST, correct URL, and timeout option", () => {

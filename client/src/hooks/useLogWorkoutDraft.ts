@@ -1,8 +1,8 @@
 import type { ExerciseSet, StructureBlockInput, TimelineEntry } from "@shared/schema";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { getTodayString } from "@/lib/dateUtils";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
 const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";

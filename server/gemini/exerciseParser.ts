@@ -1,6 +1,5 @@
 export {
   parseExercisesFromImage,
-  parseExercisesFromImageWithDiagnostics,
   parseWorkoutStructureFromImage,
   parseWorkoutStructureFromImageWithDiagnostics,
 } from "./exerciseParser/image";
@@ -10,7 +9,6 @@ export type {
 export { parsedExerciseSchema } from "./exerciseParser/schema";
 export {
   parseExercisesFromText,
-  parseExercisesFromTextWithDiagnostics,
   parseWorkoutStructureFromText,
   parseWorkoutStructureFromTextWithDiagnostics,
 } from "./exerciseParser/text";

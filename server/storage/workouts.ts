@@ -37,6 +37,13 @@ import {
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
 type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
 
+/** The container a set-level route addresses: a logged workout or a planned day. */
+type SetRouteOwner = { kind: "workoutLog" | "planDay"; ownerId: string };
+
+function toMutationOwnerContext(owner: SetRouteOwner, userId: string): MutationOwnerContext {
+  return { kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId };
+}
+
 function stepTargets(step: WorkoutStructureStepRow): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
   const targets: Record<string, unknown> =
     step.targets && typeof step.targets === "object" && !Array.isArray(step.targets)
@@ -208,29 +215,6 @@ export class WorkoutStorage {
       eq(planDays.planId, trainingPlans.id),
       eq(trainingPlans.userId, userId)
     );
-  }
-
-  async createWorkoutLog(log: InsertWorkoutLog & { userId: string }): Promise<WorkoutLog> {
-    // Wrap the insert and the plan_day status update in a single
-    // transaction so two concurrent saves cannot interleave between the
-    // insert and the status write, leaving the plan day's "completed" flag
-    // out of sync with the underlying workout rows.
-    return await db.transaction(async (tx) => {
-      const [workoutLog] = await tx
-        .insert(workoutLogs)
-        .values(log)
-        .returning();
-
-      if (log.planDayId) {
-        await tx
-          .update(planDays)
-          .set({ status: "completed" })
-          .from(trainingPlans)
-          .where(this.getPlanDayCompletionCondition(log.planDayId, log.userId));
-      }
-
-      return workoutLog;
-    });
   }
 
   /**
@@ -425,36 +409,6 @@ export class WorkoutStorage {
     });
   }
 
-  async deleteWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<boolean> {
-    return await db.transaction(async (tx) => {
-      const result = await tx
-        .delete(workoutLogs)
-        .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
-      const deleted = result.rowCount !== null && result.rowCount > 0;
-      if (!deleted) return false;
-
-      await syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
-      return true;
-    });
-  }
-
-  async getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined> {
-    const [log] = await db
-      .select()
-      .from(workoutLogs)
-      .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)))
-      .limit(1);
-    return log;
-  }
-
-  async getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined> {
-    const [log] = await db
-      .select()
-      .from(workoutLogs)
-      .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)));
-    return log;
-  }
-
   /**
    * The athlete's logs on `dates` that carry no device activity yet — the rows
    * a freshly synced Strava activity may be a recording of (stravaReconciler).
@@ -558,11 +512,6 @@ export class WorkoutStorage {
     return uniqueActivityIds(live, binned);
   }
 
-  async createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]> {
-    if (sets.length === 0) return [];
-    return await db.insert(exerciseSets).values(sets).returning();
-  }
-
   async getExerciseSetsByWorkoutLog(workoutLogId: string): Promise<ExerciseSet[]> {
     return await db
       .select()
@@ -578,25 +527,6 @@ export class WorkoutStorage {
       .from(exerciseSets)
       .where(inArray(exerciseSets.workoutLogId, workoutLogIds))
       .orderBy(asc(exerciseSets.sortOrder));
-  }
-
-  // ⚡ Bolt Performance Optimization:
-  // Removed redundant pre-fetch existence check (getWorkoutLog). The DELETE's
-  // subquery already includes the same userId authorization, so if the workout
-  // doesn't exist or belongs to another user, zero rows are deleted (safe no-op).
-  // Saves 1 DB round trip per call.
-  async deleteExerciseSetsByWorkoutLog(workoutLogId: string, userId: string): Promise<boolean> {
-    await db
-      .delete(exerciseSets)
-      .where(
-        inArray(
-          exerciseSets.workoutLogId,
-          db.select({ id: workoutLogs.id })
-            .from(workoutLogs)
-            .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId)))
-        )
-      );
-    return true;
   }
 
   /**
@@ -837,49 +767,25 @@ export class WorkoutStorage {
   }
 
 
-  async mutateExerciseSetUpdate(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, setId: string, updates: NormalizedSetUpdateInput, userId: string): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, setId, updates);
+  // The set-level CRUD routes (workouts and plan days alike) write through
+  // these three; the owner decides which container the IDOR check targets.
+  async mutateExerciseSetUpdate(owner: SetRouteOwner, setId: string, updates: NormalizedSetUpdateInput, userId: string): Promise<ExerciseSet | undefined> {
+    return await this.updateExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId, updates);
   }
 
-  async mutateExerciseSetAdd(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, set: NormalizedSetCreateInput, userId: string): Promise<ExerciseSet | undefined> {
-    return this.addExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, set);
+  async mutateExerciseSetAdd(owner: SetRouteOwner, set: NormalizedSetCreateInput, userId: string): Promise<ExerciseSet | undefined> {
+    return await this.addExerciseSetNormalized(toMutationOwnerContext(owner, userId), set);
   }
 
-  async mutateExerciseSetDelete(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, setId: string, userId: string): Promise<boolean> {
-    return this.deleteExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, setId);
-  }
-
-  async updateExerciseSet(
-    workoutLogId: string,
-    setId: string,
-    updates: NormalizedSetUpdateInput,
-    userId: string,
-  ): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, setId, updates);
-  }
-
-  async deleteExerciseSet(workoutLogId: string, setId: string, userId: string): Promise<boolean> {
-    return this.deleteExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, setId);
-  }
-
-  /**
-   * Creates a new exercise set under a workoutLog the user owns. Used by the
-   * "+Add" row in the structured exercises table. Auto-assigns sortOrder to
-   * append at the end so the new row lands below existing sets.
-   */
-  async addExerciseSetToWorkoutLog(
-    workoutLogId: string,
-    set: NormalizedSetCreateInput,
-    userId: string,
-  ): Promise<ExerciseSet | undefined> {
-    return this.addExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, set);
+  async mutateExerciseSetDelete(owner: SetRouteOwner, setId: string, userId: string): Promise<boolean> {
+    return await this.deleteExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId);
   }
 
   // -------------------------------------------------------------------
-  // Plan-day prescribed exerciseSets — mirrors the workoutLog CRUD above
-  // but writes to rows owned by a planDay instead. Used by the v2 dialog
-  // when a planned entry is open: the user can edit the prescribed sets
-  // before hitting Mark complete, and those edits get copied into the
+  // Plan-day prescribed exerciseSets — reads. Writes go through the
+  // mutateExerciseSet* methods above with a planDay owner. Used by the v2
+  // dialog when a planned entry is open: the user can edit the prescribed
+  // sets before hitting Mark complete, and those edits get copied into the
   // new workoutLog by createWorkoutInTx's copy-from-plan path.
   // -------------------------------------------------------------------
 
@@ -934,27 +840,6 @@ export class WorkoutStorage {
       else byDay.set(set.planDayId as string, [set]);
     }
     return byDay;
-  }
-
-  async addExerciseSetToPlanDay(
-    planDayId: string,
-    set: NormalizedSetCreateInput,
-    userId: string,
-  ): Promise<ExerciseSet | undefined> {
-    return this.addExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, set);
-  }
-
-  async updateExerciseSetForPlanDay(
-    planDayId: string,
-    setId: string,
-    updates: NormalizedSetUpdateInput,
-    userId: string,
-  ): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId, updates);
-  }
-
-  async deleteExerciseSetForPlanDay(planDayId: string, setId: string, userId: string): Promise<boolean> {
-    return this.deleteExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId);
   }
 
   private async fetchLastSameFocus(

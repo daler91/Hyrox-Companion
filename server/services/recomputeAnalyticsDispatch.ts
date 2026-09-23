@@ -38,7 +38,7 @@ export async function dispatchRecomputeAnalytics(
       // Self-gated: leave the prior stored analysis intact when consent/budget
       // block the call (the caller's once-per-day claim stops a same-day retry).
       // The anchor is read before generating for the reason documented on
-      // regenerateAndStoreRacePrediction.
+      // regenerateAndStore (analyticsPersistence.ts).
       const anchor = await getWorkoutAnchor(userId);
       const outcome = await generateOverviewAnalysisIfAllowed(userId, log);
       if (outcome.ok) {

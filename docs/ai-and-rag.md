@@ -15,8 +15,9 @@ fitai.coach routes text AI through a modular provider layer for workout parsing,
 - Zod -- Structured output validation
 
 Provider selection is operator-only in this release. Set `AI_TEXT_PROVIDER`
-to `gemini`, `anthropic`, or `openai-compatible`; RAG embeddings and
-photo-to-workout parsing still require `GEMINI_API_KEY`.
+to `gemini`, `anthropic`, or `openai-compatible`; RAG embeddings and image
+parsing (photo-to-workout, nutrition meal photos and label scans) still
+require `GEMINI_API_KEY`.
 
 ---
 
@@ -37,7 +38,7 @@ photo-to-workout parsing still require `GEMINI_API_KEY`.
 
 ## Text Provider Layer and Gemini Client
 
-**Files:** `server/ai/providers/*`, `server/gemini/client.ts`
+**Files:** `server/ai/providers/*`, `server/ai/retry.ts`, `server/ai/circuitBreaker.ts`, `server/ai/geminiSdk.ts`, `server/gemini/client.ts`
 
 The text provider layer (`config.ts`, `index.ts`, `types.ts`, `http.ts`,
 `gemini.ts`, `anthropic.ts`, `openaiCompatible.ts`) exposes a canonical
@@ -45,16 +46,19 @@ The text provider layer (`config.ts`, `index.ts`, `types.ts`, `http.ts`,
 `generateText`/`generateJsonText`/`streamText` entry points in `index.ts`.
 The active provider is chosen by `AI_TEXT_PROVIDER`, and `getTextAiProvider()`
 builds and caches a single instance. Each request resolves a per-role model
-(`fast` vs `reasoning`) via `resolveTextAiModel()`. The shared Gemini client
-still provides:
+(`fast` vs `reasoning`) via `resolveTextAiModel()`. The shared pieces live in
+`server/ai/` (retry, timeout, circuit breaker, Gemini SDK factory) and
+`server/gemini/client.ts` (embeddings); `client.ts` re-exports `getAiClient`,
+`retryWithBackoff`, `withTimeout` and `isRetryableError` so older importers
+keep working:
 
-- **Singleton client:** `getAiClient()` lazily initializes a `GoogleGenAI` instance using `GEMINI_API_KEY`.
+- **Singleton client:** `getAiClient()` (`server/ai/geminiSdk.ts`) lazily initializes a `GoogleGenAI` instance using `GEMINI_API_KEY`, and throws while `AI_FEATURES_ENABLED=false`.
 - **Models:**
   - `gemini-2.5-flash-lite` -- Used for exercise parsing (fast, low-cost).
   - `gemini-3.1-pro-preview` -- Used for coaching chat, suggestions, and plan generation (higher quality, with thinking enabled).
-- **Retry with backoff:** `retryWithBackoff(fn, label, maxRetries, baseDelayMs, budgetMs)` retries on rate limits (429), server errors (500/503), and network failures. Exponential backoff (2s base) with a total budget timeout.
-- **Timeout:** `withTimeout(promise, ms, label)` races a promise against a configurable timeout.
-- **Embedding:** `generateEmbedding(text)` and `generateEmbeddings(texts)` produce 3072-dimensional vectors using `gemini-embedding-001`. Batch embeddings process in groups of 5 with 200ms inter-batch delay to avoid rate limiting.
+- **Retry with backoff:** `retryWithBackoff(fn, label, maxRetries, baseDelayMs, budgetMs, callTimeoutMs)` (`server/ai/retry.ts`, used by all three provider adapters for non-streaming calls) retries on rate limits (429), server errors (500/503), and network failures or timeouts. Exponential backoff (2s base, up to 4 retries, with jitter) inside a total budget (120s by default); each attempt is capped (90s by default) and aborted through the `AbortSignal` passed to `fn`.
+- **Timeout:** `withTimeout(promise, ms, label, onTimeout?)` (`server/ai/retry.ts`) races a promise against a configurable timeout.
+- **Embedding:** `generateEmbedding(text)` and `generateEmbeddings(texts)` (`server/gemini/client.ts`) produce 3072-dimensional vectors using `gemini-embedding-001`. Batch embeddings process in groups of 5 with 200ms inter-batch delay to avoid rate limiting. Repeat lookups of the same text are served from a process-local LRU cache (256 entries, 1h TTL), which is deliberately not shared through `server_runtime_cache`.
 
 ### Model Selection
 
@@ -62,6 +66,17 @@ still provides:
 |-------|----------|-----------|
 | `gemini-2.5-flash-lite` | Exercise parsing | Fast and low-cost. Parsing is a structured extraction task that maps free-text to a fixed JSON schema -- it does not require deep reasoning or nuanced coaching knowledge. |
 | `gemini-3.1-pro-preview` | Coaching chat, workout suggestions, plan generation | Higher quality with `ThinkingLevel.HIGH` enabled. These tasks require deeper reasoning about training periodization, fatigue management, and personalized coaching decisions based on complex athlete context. |
+
+### Circuit Breaker
+
+**File:** `server/ai/circuitBreaker.ts`
+
+One process-wide breaker sits in front of every provider call: `retryWithBackoff()` checks it before its first attempt (which covers text generation, embeddings, and image parsing), and the streaming facade (`streamText()` in `server/ai/providers/index.ts`) checks and feeds it too, since streams are never retried.
+
+- **Closed → open:** after 5 consecutive failed calls (`FAILURE_THRESHOLD`). A call counts once, after its retries are exhausted, and only when the failure says something about the provider's health: 400/404/422 and "invalid request"-style errors are ignored, while auth failures (401/403) and rate limits (429) count.
+- **Open:** calls fail fast with `CircuitBreakerOpenError` ("AI provider temporarily unavailable (circuit breaker open)") for 30 seconds (`COOLDOWN_MS`).
+- **Half-open:** after the cooldown a single probe call goes through; success closes the breaker, a provider failure re-opens it for another cooldown. A probe that never reports back is released after 10 seconds (`PROBE_TIMEOUT_MS`).
+- **Persistence:** every transition is written to `server_runtime_cache` (`ai-circuit-breaker:state`, 1-hour TTL), and `loadPersistedBreakerState()` restores it during [startup maintenance](integrations.md#startup-maintenance), so a deploy in the middle of a provider outage does not reset the breaker to closed. A persisted half-open state is restored as open.
 
 ---
 
@@ -177,6 +192,17 @@ Every chat response includes `RagInfo` metadata:
 
 In production, `chunks` and `fallbackReason` are stripped by `sanitizeRagInfo()`.
 
+### Plan Editing From Chat
+
+**Files:** `server/services/chatIntentService.ts`, `server/services/planAdjustmentService.ts`, `server/gemini/planAdjustmentService.ts`, `server/routes/planProposals.ts`
+
+On the streaming route (`POST /api/v1/chat/stream`), a message asking for a plan change gets a structured proposal instead of a prose reply:
+
+1. **Intent gate.** A free keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", and so on) decides whether to classify at all; `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, and any error in this branch falls back to the normal chat stream.
+2. **Proposal.** `createPlanAdjustmentProposal()` shows the reasoning model (`PLAN_ADJUSTMENT_PROMPT`) up to 28 upcoming planned days. Changes to days outside that set are dropped, as are `focus`/`mainWorkout`/`accessory` edits to structure-block (EMOM/AMRAP) days. A red-flag safety signal answers with the safety escalation note instead; no upcoming days, or no change surviving the checks, answers in plain text; a failed generation falls back to the normal chat stream. Otherwise the proposal is stored as `pending` in `plan_adjustment_proposals` (superseding any earlier pending one) and the stream sends its summary text plus a `planProposal` event.
+3. **Apply or dismiss.** The athlete decides via `POST /api/v1/plan-proposals/:id/apply` or `/dismiss` (see [API Reference → Plan Proposal Routes](api-reference.md#plan-proposal-routes)). Apply re-checks every targeted day first: if any is no longer `planned` or has changed since the proposal was built, the whole proposal is marked `invalidated` (409 `stale`). Otherwise table-backed days whose `mainWorkout`/`accessory` text changes are re-parsed into structured rows, all changes are written in one transaction, and the proposal becomes `applied`.
+4. **Auto-apply.** With the `coachAutoApplyPlanChanges` preference on (Settings → "Auto-Apply Chat Plan Changes", default off), the proposal is applied as soon as it is created; if applying fails it keeps its status (pending, or invalidated) for the athlete to retry or dismiss.
+
 ---
 
 ## Auto-Coach Pipeline
@@ -187,7 +213,7 @@ Automatically adjusts upcoming plan days after a workout is completed.
 
 ### Flow
 
-1. **Trigger:** User creates a workout via `POST /api/v1/workouts`. If `aiCoachEnabled`, the route sets `isAutoCoaching = true` on the user record and queues an `auto-coach` job via pg-boss.
+1. **Trigger:** Five events queue an `auto-coach` pg-boss job through `server/services/autoCoachQueue.ts`: a workout created, a logged workout moved to another date, sets edited on an existing workout log, a plan day completed, and a plan day rescheduled (see [What Triggers A Pass](ai-coach-auto-regulation-flow.md#what-triggers-a-pass)). Every producer shares the singleton key `auto-coach:<userId>` with a 60-second window, so a burst of edits collapses into one pass per athlete. Only workout creation (`POST /api/v1/workouts`, via `createWorkoutAndScheduleCoaching()`) also sets `isAutoCoaching = true`, in the same transaction as the insert and only when `aiCoachEnabled`.
 2. **Client polling:** The `useAuth` hook polls `isAutoCoaching` every 2 seconds (max 5 minutes) to show a loading indicator.
 3. **`triggerAutoCoach(userId)`:**
    - Checks if AI coach is enabled; if not, returns `{ adjusted: 0 }` (the `finally` block still clears the flag).
@@ -199,7 +225,7 @@ Automatically adjusts upcoming plan days after a workout is completed.
    - Runs each suggestion through the safety layer (`applySafetyLayerToSuggestions`) and the modification guard (`shouldSuppressRepeatedFatigueReduction`) before applying.
    - Applies surviving modifications and review notes atomically inside a single `db.transaction()`.
    - Resets `isAutoCoaching = false` in a `finally` block.
-4. **Suggestion application:** Suggestions specify a `targetField` (`mainWorkout`, `accessory`, or `notes`) and an `action` (`replace` or `append`). Appended content is prefixed with `[AI Coach]`.
+4. **Suggestion application:** Suggestions specify a `targetField` (`mainWorkout`, `accessory`, or `notes`) and an `action` (`replace` or `append`). A text append written by the auto-coach goes on a new line prefixed with `[AI Coach]` (`buildUpdateValue()` in `coachService.ts`). A suggestion the athlete applies by hand (`POST /api/v1/timeline/ai-suggestions/apply` → `applyTimelineAiSuggestion()` in `server/services/aiSuggestionService.ts`) is appended after a blank line, prefixed with `AI suggestion:`.
 
 ### Repeated-Modification Guard
 
@@ -246,7 +272,7 @@ For a sequence diagram of the full upload → chunk → embed → persist path, 
    - **Boundary detection:** Prefers breaking at paragraph boundaries (`\n\n`), then sentence boundaries (`. `), falling back to raw character limit.
    - The material title is prepended to the first chunk for semantic context.
 3. **Embedding:** Each chunk is embedded via `generateEmbeddings()` (Gemini `gemini-embedding-001`, 3072 dimensions). Processed in batches of 5 with 200ms delay.
-4. **Storage:** Chunks and embeddings are stored in the `document_chunks` table. Old chunks are replaced transactionally via `storage.replaceChunks()`.
+4. **Storage:** Chunks and embeddings are stored in the `document_chunks` table. Old chunks are replaced transactionally via `storage.coaching.replaceChunks()`.
 
 ### Embedding Trigger
 
@@ -260,9 +286,9 @@ Embedding is triggered asynchronously via pg-boss queue (`embed-coaching-materia
 
 `retrieveCoachingContext(userId, query, log)` is the main retrieval entry point:
 
-1. Check if the user has any document chunks (`storage.hasChunksForUser()`).
+1. Check if the user has any document chunks (`storage.coaching.hasChunksForUser()`).
 2. If chunks exist, verify embedding dimensions match (detects model changes).
-3. Generate a query embedding and search via `storage.searchChunksByEmbedding()` (cosine distance, top-6 by default).
+3. Generate a query embedding and search via `storage.coaching.searchChunksByEmbedding()` (cosine distance, top-6 by default).
 4. If RAG succeeds, return chunks with `ragInfo.source = "rag"`.
 5. If RAG fails (no chunks, dimension mismatch, retrieval error), fall back to legacy full-text coaching materials with `ragInfo.source = "legacy"`.
 6. If no coaching materials exist at all, return `ragInfo.source = "none"`.
@@ -322,23 +348,26 @@ Generates structured multi-week training plans via the configured text provider.
 | Field | Type | Description |
 |-------|------|-------------|
 | `goal` | string (required) | Training goal (max 500 chars) |
-| `totalWeeks` | number | 1-24, default 8 |
 | `daysPerWeek` | number | 2-7, default 5 |
-| `experienceLevel` | enum | `"beginner"`, `"intermediate"`, `"advanced"` |
-| `raceDate` | string? | `YYYY-MM-DD`, plan phases peak for this date |
-| `startDate` | string? | `YYYY-MM-DD`, when the plan begins |
+| `experienceLevel` | enum (required) | `"beginner"`, `"intermediate"`, `"advanced"` |
+| `startDate` | string (required) | `YYYY-MM-DD`, when the plan begins |
+| `endDate` | string (required) | `YYYY-MM-DD`, after `startDate`. The plan length is derived from the span (`computePlanWeeks()`, 1-24 weeks); there is no separate weeks field |
+| `endDateIsRaceDate` | boolean? | Default `true`: the end date is the race the plan peaks for (stored as the plan's `raceDate`) |
 | `restDays` | string[]? | Days of the week that must be rest days |
-| `focusAreas` | string[]? | Priority training areas |
-| `injuries` | string? | Injuries/limitations to avoid |
+| `focusAreas` | string[]? | Priority training areas (max 10) |
+| `injuries` | string? | Injuries/limitations to avoid (max 500 chars); also saved to the athlete's profile as `trainingConstraints` |
+| `supersedePlanIds` | string[]? | Up to 5 plans the athlete is switching away from; retired only if this plan generates successfully |
 
 ### Flow
 
-1. `buildGenerationPrompt()` creates a structured prompt from the input.
-2. The provider facade requests JSON output with the configured reasoning model/effort.
-3. Response is parsed and validated against `generatedDaySchema` (Zod). Invalid days are dropped with a warning.
-4. All AI-generated text is HTML-sanitized.
-5. A `TrainingPlan` record is created with associated `PlanDay` records.
-6. If `startDate` or `raceDate` is provided, the plan is auto-scheduled (dates assigned to days, aligned to Monday).
+Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-flight generation for the same athlete (409 `PLAN_GENERATION_IN_PROGRESS`), creates the plan row with `generationStatus: "pending"` (`createPendingPlan()`), enqueues a `plan-generation` pg-boss job (no retries; see [Integrations → Job Types](integrations.md#job-types)), and returns `202` with that stub. The client polls `GET /api/v1/plans/:id/generation-status`. The worker runs `executePlanGeneration()`:
+
+1. Marks the plan `generating` and gathers calibration: the athlete's current training-load posture (for the opening week) and per-exercise load anchors from the last 70 days, plus declared absences inside the plan window. If calibration fails, the plan is generated without it.
+2. Splits the plan into 2-week chunks (`PLAN_GENERATION_CHUNK_WEEKS`) and generates them in parallel, at most 3 at a time (`pLimit(PLAN_CHUNK_CONCURRENCY)`). Each chunk is one JSON-mode request to the reasoning model with the prompt from `buildGenerationPrompt()` for its week range, and a 5-minute timeout (`PLAN_GENERATION_AI_TIMEOUT_MS`).
+3. Each response is validated against `generatedDaySchema` (Zod); invalid days and exercises are dropped with a warning, and `&` is rewritten to `and` in day text and exercise labels.
+4. The combined days must cover every week with all seven days exactly once, and every non-rest day must carry exercise-table rows, or the generation fails (502 `AI_ERROR`). An exercise whose heaviest weight rises more than 8% week over week (`MAX_WEEKLY_WEIGHT_INCREASE_PCT`) is clamped to that ceiling.
+5. Plan days and their exercise sets are written in one transaction, and the plan is scheduled from `startDate` (week 1 aligned to that week's Monday).
+6. A final transaction retires the plans in `supersedePlanIds` and marks this one `ready`. Any error marks it `failed` with a client-safe `generationError`.
 
 ### API Endpoint
 
@@ -463,92 +492,105 @@ Instructions for generating multi-week training plans with day-by-day structure.
 
 ```typescript
 const [trainingContext, coachingContext] = await Promise.all([
-  buildTrainingContext(userId),                     // Last 12 weeks of stats
+  buildTrainingContext(userId),                     // Latest 400 timeline entries + 70-day load window
   retrieveCoachingContext(userId, query, log),      // RAG or legacy materials
 ]);
 ```
 
 ### TrainingContext (from `server/services/ai/`)
 
-Aggregates the user's training state:
+Aggregates the user's training state from two windows that `buildTrainingContext()` (`server/services/ai/index.ts`) reads:
+
+- **Timeline:** the athlete's latest 400 timeline entries (`AI_CONTEXT_TIMELINE_LIMIT` in `server/constants.ts`). These are plan days and logged workouts sorted newest date first, so upcoming plan days count toward the 400. The counts, rate, streak, recent workouts, breakdown and exercise stats below come from this window, as do the timeline-based coaching insights.
+- **Load:** workout logs and exercise sets dated from 70 days before the athlete-local today through today. The load governor and the supplementary signals (personal records, PRs this week, compliance, neglected patterns and muscle groups, race readiness) come from this window.
+
+The context carries:
 - Workout counts (total, completed, planned, missed, skipped)
 - Completion rate and current streak
-- Recent workouts with exercise details (last 12 weeks)
-- Upcoming planned workouts
-- Exercise breakdown (category counts)
+- The 10 most recent completed workouts, with exercise details
+- Upcoming planned workouts (the next 7 planned days)
+- Exercise breakdown (completed workouts per functional exercise named in the focus text, or per focus when none is named)
 - Structured exercise stats (max weight, max distance, best time per exercise)
 - Active plan info (name, weeks, current week, goal)
-- **Coaching insights:** RPE trends, fatigue/undertraining flags, station gaps, plan phase, weekly volume trends, progression flags per exercise
+- **Coaching insights:** RPE trends, fatigue/undertraining flags, station gaps, recent skips with their reasons (`recentSkips`, up to 5), plan phase, weekly volume trends, progression flags per exercise, the training-load governor overview (`loadGovernor`, from `calculateTrainingLoad()` over the last 70 days), and the rule-based training-state decision (`decisionTree` from `decideTrainingState()`: phase, allowed workout types, whether intensity is permitted, rationale codes). When the data supports them, it also carries personal records, PRs this week, plan compliance, neglected movement patterns and muscle groups, and race readiness.
 
 ---
 
 ## Coaching Insights
 
-**File:** `server/services/ai/coachingInsights.ts`
+**File:** `server/services/ai/coachingInsights.ts` (plan phase and current week live in `shared/planPhase.ts` and are re-exported from it)
 
-The coaching insights module computes seven analytical dimensions from the athlete's timeline data. These are included in every `TrainingContext` and injected into the AI system prompt so the model can make data-driven coaching decisions.
+The coaching insights module computes the signals below from the athlete's timeline window and active plan. They are included in every `TrainingContext` and injected into the AI system prompt so the model can make data-driven coaching decisions. Plan phase is absent when there is no active plan or the plan has ended, and weekly volume is absent when the athlete has no weekly goal. `buildTrainingContext()` (`server/services/ai/index.ts`) adds signals computed outside this module to the same `coachingInsights` object: `recentSkips` (`server/services/ai/trainingStats.ts`), `loadGovernor` (`server/services/trainingLoadService.ts`), `decisionTree` (`server/services/ai/trainingDecisionEngine.ts`), and the supplementary signals listed under TrainingContext above.
 
 > **Not to be confused with the user-facing "Coach Insights" tab.** This module (`coachingInsights.ts`) produces the *deterministic signals* fed **into** the AI context. The single-shot AI narrative shown on the Analytics → Coach Insights tab is generated separately by `server/services/coachInsightsService.ts` (the `COACH_INSIGHTS_PROMPT` path) and **persisted** to the `analytics_results` table for instant paint and midnight recompute — see [API Reference — Coach Insights](api-reference.md#get-apiv1coach-insights) and [Integrations — recompute-analytics](integrations.md#job-types).
 
 ### RPE Trend
 
-Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts against the prior 3. Requires at least 3 workouts with RPE data; returns `insufficient_data` otherwise.
+Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts that carry an RPE against the up to 3 rated workouts before them (`computeRpeTrend()`). Both averages are rounded to one decimal. The trend needs at least 5 rated workouts. With 3 or 4, `rpeTrend` is `insufficient_data`, but `avgRpeLast3` is still reported and the absolute flag thresholds below still apply. With fewer than 3, both flags are false.
 
-- **Rising:** difference > 0.8 -- training load is increasing.
+- **Rising:** difference > 0.8 -- perceived effort is climbing.
 - **Stable:** difference between -0.8 and 0.8.
-- **Falling:** difference < -0.8 -- training load is decreasing.
+- **Falling:** difference < -0.8 -- perceived effort is dropping.
 
-Two boolean flags are derived from the last-3 average:
-- `fatigueFlag`: true when avgRPE >= 8 (high perceived effort, risk of overtraining).
-- `undertrainingFlag`: true when avgRPE <= 4 (low perceived effort, stimulus may be insufficient).
+Two boolean flags combine an absolute threshold on the last-3 average with the trend:
+- `fatigueFlag`: true when avgRPE >= 8, or when the trend is rising and avgRPE >= 7.
+- `undertrainingFlag`: true when avgRPE <= 4, or when the trend is falling and avgRPE <= 5.
 
 ### Exercise Gaps (Station Gaps)
 
-Tracks the last trained date for each of the 8 Hyrox functional stations plus running (9 stations total): `skierg`, `sled_push`, `sled_pull`, `burpee_broad_jump`, `rowing`, `farmers_carry`, `sandbag_lunges`, `wall_balls`, and `running`.
+Tracks the last trained date for each of the 8 Hyrox functional stations plus running (9 stations total): `skierg`, `sled_push`, `sled_pull`, `burpee_broad_jump`, `rowing`, `farmers_carry`, `sandbag_lunges`, `wall_balls`, and `running`. `computeExerciseGaps()` is a thin adapter over `buildStationCoverage()` in `shared/stationCoverage.ts`, the same builder the analytics training overview uses. Only completed timeline entries count.
 
 Detection uses two strategies:
-1. **Exercise sets:** Maps `exerciseName` from logged sets to station names. Running exercises (`easy_run`, `tempo_run`, `interval_run`, `long_run`) are all mapped to the `running` station.
-2. **Focus text:** Scans the workout focus string for keywords via `EXERCISE_FOCUS_MAP` (e.g., "ski erg" and "ski-erg" both map to `skierg`).
+1. **Exercise sets:** Maps each logged set's `exerciseName` (canonical name or registered alias) to a station. The interval variants `ski_erg_intervals` and `rowing_intervals` count for `skierg` and `rowing`, and every exercise defined with category `running` counts for `running`.
+2. **Focus text:** Scans the workout focus string for the keywords in `STATION_KEYWORDS`, as a case-insensitive substring match. For example, "ski erg" and "ski-erg" both map to `skierg`, "row" to `rowing` and "run" to `running`.
 
-Returns an array of `{ station, daysSinceLastTrained }` where `daysSinceLastTrained` is `null` if the station has never been trained.
+Stations the athlete's training constraints rule out are dropped. `stationsRuledOutByConstraints()` matches whole words in the `trainingConstraints` text, so "no sled at my gym" drops both sled stations and "can't do burpees" drops `burpee_broad_jump`. The drop is coach-side only: the analytics coverage still shows every station.
+
+Returns an array of `{ station, daysSinceLastTrained }` for the remaining stations. Days are counted to the athlete-local date that `buildTrainingContext()` passes in as `today`. `daysSinceLastTrained` is `null` when no completed entry in the timeline window trained the station.
 
 ### Plan Phase
 
-Maps the athlete's current position within their training plan to a periodization phase:
+Maps the athlete's current week within their training plan to a periodization phase. This is `computePlanPhase()` in `shared/planPhase.ts`, which the Timeline summary card also uses, so the card and the coach agree on the phase:
 
 | Phase | Condition | Description |
 |-------|-----------|-------------|
 | `early` | progressPct < 25% | Aerobic base building, movement pattern establishment |
 | `build` | 25% <= progressPct < 60% | Progressive overload, volume accumulation |
 | `peak` | 60% <= progressPct < 85% | Highest intensity, simulation workouts |
-| `taper` | 85% <= progressPct < 100% | Volume reduction, maintain intensity |
-| `race_week` | currentWeek >= totalWeeks | Light movement only, mental prep |
+| `taper` | progressPct >= 85%, or the second-to-last week of a plan of 4+ weeks | Volume reduction, maintain intensity |
+| `race_week` | currentWeek == totalWeeks (the final week) | Light movement only, mental prep |
 
-`progressPct` is calculated as `round((currentWeek / totalWeeks) * 100)`. Returns `undefined` if no active plan exists.
+The two week-based rules win over the percentage bands. `progressPct` is measured at the midpoint of the current week: `round(((currentWeek - 0.5) / totalWeeks) * 100)`. Returns `undefined` if no active plan exists, or once the plan has ended (`currentWeek > totalWeeks`, see [Current Week](#current-week)).
 
 ### Weekly Volume
 
-Compares workout completion counts between the current week (Monday to today) and the previous full week against the user's `weeklyGoal`. Only computed when `weeklyGoal > 0`.
+Counts completed workouts in the current week (Monday to today) and in the previous week, on the athlete's local calendar (`computeWeeklyVolume()`). Only computed when the athlete's `weeklyGoal > 0`. The goal is passed through for the prompt and plays no part in the trend.
 
-- **Trend:** `increasing` if thisWeek > lastWeek, `decreasing` if thisWeek < lastWeek, `stable` if equal.
-- Output: `{ thisWeekCompleted, lastWeekCompleted, goal, trend }`.
+- **Trend:** compares this week with the same days of last week (Monday up to the same weekday). On a Wednesday, this week's count is weighed against last week's Monday-to-Wednesday count, not its full seven days. `increasing` if this week is ahead, `decreasing` if behind, `stable` if equal.
+- Output: `{ thisWeekCompleted, lastWeekCompleted, goal, trend }`. `lastWeekCompleted` is last week's full total; only the trend uses the same-days slice.
 
 ### Progression Flags
 
-Per-exercise analysis of weight and time trends across completed workouts. Each exercise receives at most one flag:
+Per-exercise analysis of weight, pace and time trends across completed workouts (`computeProgressionFlags()`). Each completed workout that logged sets for an exercise is one session for it, summarised three ways:
+
+- its heaviest weight
+- its fastest set that recorded both a time and a distance, as pace per km or mile in the athlete's distance unit
+- its shortest set that recorded a time but no distance
+
+The last 3 sessions are compared, session 1 being the oldest, and each exercise receives at most one flag:
 
 | Flag | Condition | Detail |
 |------|-----------|--------|
-| `plateau` | Last 3 sessions have identical weight (or time within 0.1min) | Suggests progressive overload is needed |
-| `progressing` | Weight increased (or time decreased) from session 1 to session 3 of last 3 | Positive adaptation signal |
-| `regressing` | Weight decreased (or time increased) from session 1 to session 3 of last 3 | May indicate fatigue or form issues |
-| `new` | Only 1 session logged for this exercise | Insufficient data for trend analysis |
+| `plateau` | Last 3 sessions have identical weight, paces within 3 s (per km or mile) of the first, or times within 0.1min of the first | `Weight stuck at … for last 3 sessions` (likewise `Pace`, `Time`) |
+| `progressing` | From session 1 to session 3: weight increased, pace more than 3 s faster, or time decreased | `Weight increased from … to … over last 3 sessions` (`Pace improved`, `Time improved` likewise) |
+| `regressing` | From session 1 to session 3: weight decreased, pace more than 3 s slower, or time increased | `Weight decreased from … to … over last 3 sessions` (`Pace worsened`, `Time worsened` likewise) |
+| `new` | Only 1 session logged for this exercise | `Only trained once (<date>)` |
 
-Weight analysis takes priority over time analysis. If a weight-based flag is found, time analysis is skipped for that exercise.
+The checks run in order (weight, then pace, then time) and the first that produces a flag wins. Each needs its value in all three sessions. Pace details quote the distance behind each pace, so the model can see when it is comparing efforts of different lengths. Time is compared only for exercises that do not carry a distance (`exerciseTracksDistance()`), and only when the three sessions logged the same rep count on those sets. A distance-carrying exercise logged without distances gets no pace or time flag, and an exercise with exactly two sessions gets no flag at all.
 
 ### Current Week
 
-Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceStart + 1) / 7))`, clamped to `totalWeeks`. Falls back to week 1 if no plan entries have dates.
+Calculated from the active plan's `startDate` to the athlete-local `today` that `buildTrainingContext()` passes in: `max(1, ceil((daysSinceStart + 1) / 7))` (`computeCurrentWeek()` in `shared/planPhase.ts`). It is not clamped to `totalWeeks`. Once the plan has ended, the week runs past `totalWeeks` and [Plan Phase](#plan-phase) returns `undefined`. A plan with no `startDate`, or one that has not started yet, reads as week 1.
 
 ---
 
@@ -622,9 +664,9 @@ assumes every athlete maxes out their $2, which none will.
 | `AI_FEATURES_ENABLED` | `true` | Operator kill switch. `false` returns 503 `AI_FEATURES_DISABLED` for all AI routes |
 | `AI_GLOBAL_DAILY_LIMIT_CENTS` | unset | Application-wide 24h AI spend ceiling in cents. Unset means no global ceiling (per-user cap only) and a startup warning in production. See [Cost controls](#cost-controls) |
 | `AI_TEXT_PROVIDER` | `gemini` | Text provider for chat, text parsing, suggestions, notes, insights, and plan generation (`gemini`, `anthropic`, `openai-compatible`) |
-| `AI_TEXT_MODEL` | provider-specific | Generic text model override (applies to both roles for non-Gemini providers) |
-| `AI_TEXT_FAST_MODEL` | Gemini: `GEMINI_MODEL` | Fast parser model override |
-| `AI_TEXT_REASONING_MODEL` | Gemini: `GEMINI_SUGGESTIONS_MODEL` | Coaching/planning model override |
+| `AI_TEXT_MODEL` | unset | Text model for both roles wherever no role-specific override is set, on every provider (on Gemini it overrides `GEMINI_MODEL` / `GEMINI_SUGGESTIONS_MODEL`). Anthropic and OpenAI-compatible have no built-in default, so this or both role-specific overrides must be set or model resolution throws |
+| `AI_TEXT_FAST_MODEL` | `AI_TEXT_MODEL`; Gemini: then `GEMINI_MODEL` | Fast parser model override |
+| `AI_TEXT_REASONING_MODEL` | `AI_TEXT_MODEL`; Gemini: then `GEMINI_SUGGESTIONS_MODEL` | Coaching/planning model override |
 | `AI_TEXT_REASONING_EFFORT` | `high` | Reasoning effort hint (`none`, `low`, `medium`, `high`) where supported |
 | `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | `openai` | OpenAI-compatible profile (`openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, `custom`) for base URL and key lookup |
 | `AI_TEXT_BASE_URL` | profile default | Overrides the OpenAI-compatible base URL (required for `custom`) |
@@ -634,7 +676,7 @@ assumes every athlete maxes out their $2, which none will.
 | `GEMINI_API_KEY` | required for Gemini text, RAG, image parse | Google Gemini API key |
 | `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Gemini fast/parser model |
 | `GEMINI_SUGGESTIONS_MODEL` | `gemini-3.1-pro-preview` | Gemini reasoning model for chat, suggestions, and plan generation |
-| `GEMINI_VISION_MODEL` | `gemini-2.5-flash` | Gemini model for photo-to-workout parsing |
+| `GEMINI_VISION_MODEL` | `gemini-2.5-flash` | Gemini model for photo-to-workout parsing and nutrition meal-photo / label-scan parsing |
 | `VECTOR_DATABASE_URL` | Falls back to `DATABASE_URL` | Separate pgvector database connection |
 | `RAG_CHUNK_SIZE` | 600 | Characters per document chunk |
 | `RAG_CHUNK_OVERLAP` | 100 | Character overlap between adjacent chunks |
@@ -646,7 +688,10 @@ assumes every athlete maxes out their $2, which none will.
 | File | Purpose |
 |------|---------|
 | `server/ai/providers/` | Text AI provider layer (Gemini, Anthropic, OpenAI-compatible) |
-| `server/gemini/client.ts` | Gemini client, retry logic, circuit breaker, embedding generation |
+| `server/ai/retry.ts` | Provider-neutral `retryWithBackoff()` / `withTimeout()` |
+| `server/ai/circuitBreaker.ts` | Shared AI provider circuit breaker, persisted in `server_runtime_cache` |
+| `server/ai/geminiSdk.ts` | Lazy `GoogleGenAI` client factory (`getAiClient()`) |
+| `server/gemini/client.ts` | Embedding generation (with its process-local cache), vision model name, usage tracking; re-exports `getAiClient`, `retryWithBackoff`, `withTimeout`, `isRetryableError` |
 | `server/gemini/exerciseParser.ts` + `server/gemini/exerciseParser/` | Free-text and photo-to-workout structured exercise parsing |
 | `server/gemini/chatService.ts` | Chat and streaming chat through the text provider facade |
 | `server/gemini/suggestionService.ts` | Workout suggestion generation |
@@ -659,6 +704,7 @@ assumes every athlete maxes out their $2, which none will.
 | `server/services/ragRetrieval.ts` | Vector search and fallback retrieval logic |
 | `server/services/coachService.ts` | Auto-coach pipeline |
 | `server/services/planGenerationService.ts` | AI training plan generation |
+| `server/services/chatIntentService.ts` + `server/services/planAdjustmentService.ts` | Chat plan-edit intent gate and plan-adjustment proposals |
 | `server/middleware/aiConsent.ts` | `aiCoachEnabled` consent gate (403 `AI_COACH_DISABLED`) |
 | `server/middleware/aibudget.ts` | AI kill switch + rolling 24h budget enforcement |
 | `server/prompts.ts` + `server/prompts/` | All prompt templates and context formatters |

@@ -36,20 +36,21 @@ The project follows a testing pyramid with three layers:
 
 Every number below is stale the moment a test lands, so **derive it, don't trust
 it**. The commands are the source of truth; the figures are only a sanity check,
-measured on `main` at the date given.
+measured at the date given.
 
-| Layer                      | Count (2026-09-19) | How to count it                                                     |
+| Layer                      | Count (2026-09-23) | How to count it                                                     |
 | -------------------------- | ------------------- | -------------------------------------------------------------------- |
-| All Vitest test files      | 479                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
-| Unit/component/route tests | 470                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
+| All Vitest test files      | 490                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
+| Unit/component/route tests | 481                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
 | Integration tests          | 8                   | `rg --files -g '*.integration.test.ts'`                              |
 | Smoke test                 | 1                   | `rg --files -g 'smoke.test.ts'`                                      |
 | Cypress E2E specs          | 12                  | `ls cypress/e2e/*.cy.ts`                                             |
 
 Locations: integration tests live in `server/routes/tests/` (HTTP) and
 `server/storage/__tests__/` (storage SQL); the smoke test is
-`server/routes/tests/smoke.test.ts`, run as `pnpm test:smoke` for fast pre-push
-feedback.
+`server/routes/tests/smoke.test.ts`, run as `pnpm test:smoke`. It spawns the
+built `dist/index.js`, so it needs `pnpm build` and a reachable database first —
+it is not a quick pre-push check (see [Production Smoke Tests](#production-smoke-tests)).
 
 > The smoke exclusion is `!smoke.test.ts`, **not** `!*.smoke.test.ts`. The file
 > is named exactly `smoke.test.ts`, which is also what `vitest.smoke.config.ts`
@@ -167,7 +168,10 @@ Example (`shared/schema.test.ts`):
 it("rejects a very large csvContent", () => {
   const result = importPlanRequestSchema.safeParse(payload);
   expect(result.success).toBe(false);
-  expect(result.error.errors[0].message).toBe("CSV content must be 100,000 characters or less");
+  if (!result.success) {
+    // Zod 4: the failures are `error.issues` (there is no `error.errors`)
+    expect(result.error.issues[0].message).toBe("CSV content must be 100,000 characters or less");
+  }
 });
 ```
 
@@ -283,7 +287,11 @@ Current a11y coverage includes:
 - `client/src/components/workout/__tests__/WorkoutHeader.a11y.test.tsx`
 - `client/src/components/timeline/__tests__/TimelineWorkoutCard.a11y.test.tsx`
 - `client/src/components/timeline/__tests__/CoachReviewingIndicator.a11y.test.tsx`
+- `client/src/components/timeline/__tests__/BulkDeleteToolbar.a11y.test.tsx`
 - `client/src/components/coach/__tests__/SuggestionCard.a11y.test.tsx`
+- `client/src/components/analytics/__tests__/TrendArrow.a11y.test.tsx`
+- `client/src/components/onboarding/__tests__/GoalStep.a11y.test.tsx`
+- `client/src/components/settings/preferences/__tests__/PreferenceRows.a11y.test.tsx`
 
 Adding a new a11y test is part of the PR checklist for any user-facing component change. The tests run as part of the normal `pnpm test` Vitest pool — there is no separate command or workflow.
 
@@ -352,6 +360,7 @@ constraint rather than on branch logic.
 | `server/storage/__tests__/timelineWindow.integration.test.ts`   | `getTimeline`: three-source merge per athlete, newest-first ordering, limit/offset windowing, set hydration       |
 | `server/storage/__tests__/nutritionLogging.integration.test.ts` | Food visibility predicate, food-log round trip and ownership, one-version-per-day targets (migration 0091)      |
 | `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct logged-workout and completed-plan-day dates, parity with the full timeline's completed set |
+| `server/storage/__tests__/recycleBin.integration.test.ts`      | Recycle bin: capture inside the delete transaction, restore with the original ids and re-links (plan day, MAF analysis, plan-day status), all-or-nothing batch restore, device-sync dedupe while binned, per-user isolation |
 
 Run them locally against any Postgres with the `vector` extension:
 `CREATE EXTENSION IF NOT EXISTS vector; pnpm exec drizzle-kit push; DATABASE_URL=… pnpm exec vitest run --config vitest.integration.config.ts`.
@@ -402,6 +411,9 @@ defaultCommandTimeout: 10000; // 10 seconds
 **`cypress/support/commands.ts`** -- Custom commands:
 
 - `cy.getBySel(selector)` -- Shorthand for `cy.get('[data-testid="..."]')`. This is the standard way to select elements in E2E tests.
+- `cy.ensureConsentDismissed()` -- Sets the privacy-consent key on the live window if it is missing and dispatches `fitai:privacy-consent-changed`, so the consent banner hides even if it mounted before the key was set.
+- `cy.advanceLogWorkoutToReflect(text)` -- Drives the log-workout stepper from Capture to Reflect, typing `text` first when it is non-empty (then waits on a `@parseExercises` intercept the spec must register).
+- `cy.completeReflectAndSaveWorkout(notes?)` -- From Reflect: optionally types notes, skips RPE, and saves.
 
 **`cypress/support/authIntercepts.ts`** -- Authentication bypass:
 
@@ -461,7 +473,7 @@ The smoke test uses a **separate Vitest config** (`vitest.smoke.config.ts`):
 - Uses `node` environment (no jsdom)
 - Shares the integration setup file (`vitest.integration.setup.ts`)
 - Runs with `fileParallelism: false`
-- Runs with a 90-second suite timeout, since it builds up a real server process
+- Gets a 90-second per-test timeout, since it builds up a real server process. That is set on the `describe` in `smoke.test.ts` (`{ timeout: 90_000 }`), not in this config
 - Runs as its own step in the Cypress workflow (`cypress.yml`), on container 1 only, after the build and `drizzle-kit push` steps
 
 ### What's Tested
@@ -521,7 +533,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Unit Tests
 - **Triggers:** Push to `main`, pull request (opened/synchronize/reopened)
-- **Steps:** Checkout, install pnpm + Node.js 22, `pnpm install`, `pnpm test`
+- **Steps:** Checkout, install pnpm + Node.js 22, `pnpm install --frozen-lockfile --ignore-scripts`, `pnpm test:coverage` (the suite plus the coverage thresholds — see [Coverage Enforcement](#coverage-enforcement))
 - **Environment:** Dummy values for `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL`, `ENCRYPTION_KEY`
 
 ### 2. Cypress Tests (`cypress.yml`)
@@ -546,7 +558,9 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Check Migrations
 - **Triggers:** Push to `main`, pull request
-- **Steps:** Runs `pnpm run db:check` for internal consistency, then `pnpm run db:generate` followed by `git diff --exit-code migrations/` to verify migrations are up to date with the schema.
+- **Jobs:**
+  - `check-migrations` -- runs `pnpm run db:check` for internal consistency, then `pnpm run db:generate` followed by `git diff --exit-code migrations/` to verify migrations are up to date with the schema.
+  - `fresh-db-migrate` -- applies the **real** migration SQL to a fresh PostgreSQL (`pgvector/pgvector:pg16` service), so a migration that fails at apply time on a fresh database is caught: the job above never applies SQL, and `cypress.yml` provisions its database with `drizzle-kit push`. It runs `pnpm run db:migrate` twice (the second run must be an idempotent no-op), checks that the applied count in `__drizzle_migrations` equals the entries in `migrations/meta/_journal.json`, and probes the critical tables (`users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`, `user_training_style`, `maf_profile`, `maf_test_results`, `maf_workout_analysis`).
 
 ### 4. Post-Migration Verification (`post-migration.yml`)
 
@@ -562,7 +576,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
   1. **ESLint** -- `pnpm eslint .`
   2. **TypeScript** -- `pnpm check`, the repo-wide typecheck (TS 7 native compiler)
   3. **TypeScript (`noUncheckedIndexedAccess` ratchet)** -- `pnpm check:strict`, which applies `tsconfig.strict.json` to a deliberately narrow subset (currently `shared/**`). The subset is expanded directory by directory as each is cleaned up; see [CONTRIBUTING.md](../CONTRIBUTING.md).
-  4. **TypeScript (test suite)** -- `pnpm check:test`. The main `tsconfig.json` excludes `**/*.test.ts`, so without this gate no job would typecheck the test files at all. `tsconfig.test.json` carries a shrinking exclude list of pre-existing offenders; every newly added test is checked.
+  4. **TypeScript (test suite)** -- `pnpm check:test`. The main `tsconfig.json` excludes only `**/*.test.ts` (so `*.test.tsx` files under `client/src` are already typechecked by `pnpm check`), which means that without this gate no job would typecheck the `.test.ts` files at all. `tsconfig.test.json` carries a shrinking exclude list of pre-existing offenders; every newly added test is checked.
   5. **OpenAPI snapshot is up-to-date** -- regenerates the spec and fails on `git diff` against the committed [`docs/openapi.json`](openapi.json).
 - **Install:** `pnpm install --frozen-lockfile --ignore-scripts`, which also skips this repo's own `postinstall` (it only patches deps vendored inside the Cypress binary, which this job never touches).
 - **Note:** SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
@@ -579,9 +593,11 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 ## SonarCloud Quality Gate
 
 Pull requests are analysed by **SonarQube Cloud** (project key
-`daler91_Hyrox-Companion`), configured via `sonar-project.properties`. The gate
-runs on the PR diff ("new code") and reports back as the **SonarCloud Code
-Analysis** check. These conditions most often affect test-only PRs:
+`daler91_Hyrox-Companion`) through **Automatic Analysis**, which reads
+`.sonarcloud.properties`, not `sonar-project.properties`. The latter applies
+only to a CI-based scan, and the scan job for one is commented out in
+`build.yml`. The gate runs on the PR diff ("new code") and reports back as the
+**SonarCloud Code Analysis** check. These conditions most often affect test-only PRs:
 
 - **Duplication on New Code ≤ 3%.** Copy-pasting a large fixture factory (for
   example the ~30-field `ExerciseSet` or `TimelineEntry` builder) into multiple
@@ -595,9 +611,13 @@ Analysis** check. These conditions most often affect test-only PRs:
 - **Coverage on New Code** and **Security Hotspots reviewed.** New production code
   should ship with tests, and any flagged hotspots must be triaged.
 
-Test files are declared via `sonar.test.inclusions=**/*.test.ts,**/*.test.tsx`, so
-test code is analysed under the test profile and not counted toward production
-coverage. Drizzle SQL migrations and generated artifacts are excluded. A failing
+`.sonarcloud.properties` sets a single property,
+`sonar.exclusions=migrations/**,**/*.sql`, so Drizzle SQL migrations are
+excluded (the PL/SQL analyzer would otherwise flag them with Oracle-only rules);
+neither file excludes any other generated artifact. The test-file declaration
+(`sonar.test.inclusions=**/*.test.ts,**/*.test.tsx`) and the
+`coverage/lcov.info` report path live only in `sonar-project.properties`, so
+they take effect only if the project switches to the CI scanner. A failing
 gate posts a "Quality Gate failed" comment listing the failed conditions; a
 passing gate may still list non-blocking new issues worth cleaning up.
 
@@ -651,10 +671,12 @@ in `vitest.config.ts` and fails if any metric drops below them. It also writes
 Integration tests require a real PostgreSQL database. Set the following environment variables:
 
 ```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/testdb"
+export DATABASE_URL="postgresql://localhost:5432/testdb"
 export ALLOW_DEV_AUTH_BYPASS="true"
 export ENCRYPTION_KEY="01234567890123456789012345678901"
 ```
+
+Add a user name and password to `DATABASE_URL` if your local server requires them.
 
 Then push the schema and run:
 
@@ -691,19 +713,26 @@ pnpm exec vitest watch server/services/workoutService.test.ts
 
 ## Coverage Enforcement
 
-Coverage thresholds are configured in `vitest.config.ts`:
+Coverage thresholds are configured in `vitest.config.ts` (excerpt — the file also
+lists coverage excludes):
 
 ```typescript
 coverage: {
-  provider: "v8",
+  // provider defaults to 'v8' (@vitest/coverage-v8 is installed)
+  include: ['client/src/**', 'server/**', 'shared/**'],
+  reporter: ['text', 'lcovonly'],
   thresholds: {
-    statements: 80,
-    branches: 80,
-    functions: 80,
-    lines: 80,
-  }
+    lines: 68,
+    functions: 62,
+    branches: 60,
+    statements: 67,
+  },
 }
 ```
+
+These are ratcheted to measured coverage, not aspirational (see
+[Coverage thresholds](#coverage-thresholds)): raise them as coverage grows, never
+lower them to admit an untested change.
 
 Run coverage locally: `pnpm test:coverage`
 
@@ -767,9 +796,8 @@ project-root/
         plans.test.ts
         preferences.test.ts
         workouts.test.ts
-      tests/
+      tests/                         # Integration tests (real database) + smoke test
         smoke.test.ts                # Production smoke test (spawns the built server)
-      tests/                         # Integration tests (real database)
         helpers.ts                   # Integration test setup helper
         api.integration.test.ts
         post-migration.integration.test.ts
@@ -809,14 +837,12 @@ project-root/
       OnboardingWizard.test.tsx       # Onboarding wizard tests
       __tests__/
         ChatMessage.test.tsx          # Chat message component
-        ExerciseInput.test.tsx        # Exercise input component
         RpeSelector.a11y.test.tsx     # RPE selector accessibility
       timeline/
         __tests__/
           TimelineFilters.test.tsx    # Timeline filter component
     hooks/
       __tests__/
-        useBlockCounts.test.ts        # Block counts hook
         useChatSession.test.tsx       # Chat session hook
         useCombineWorkouts.test.tsx   # Combine workouts hook
         usePlanImport.test.tsx        # Plan import hook
@@ -853,7 +879,7 @@ project-root/
       settings.cy.ts
       timeline.cy.ts
     support/
-      commands.ts                    # Custom Cypress commands (getBySel)
+      commands.ts                    # Custom Cypress commands (getBySel, ensureConsentDismissed, log-workout stepper helpers)
       e2e.ts                         # Global hooks and Clerk intercepts
       authIntercepts.ts              # API stub helper for authenticated tests
 test/

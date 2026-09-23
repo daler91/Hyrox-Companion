@@ -159,12 +159,6 @@ function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermedi
 const COVERAGE_NEGLECT_DAYS = 10;
 
 /**
- * Pick the most coaching-relevant recent bests (last ~10 weeks of logged sets)
- * as display-ready strings. Prefers the estimated 1RM (or top weight) so the
- * model can anchor progressive overload, then fills with distance/time bests.
- * Capped to keep the prompt bounded.
- */
-/**
  * The athlete's stored units, defaulted once.
  *
  * `exercise_sets.weight` and `.distance` are stored in the athlete's own unit,
@@ -182,6 +176,12 @@ function resolveUnitPreferences(user: { weightUnit?: string | null; distanceUnit
   };
 }
 
+/**
+ * Pick the most coaching-relevant recent bests (last ~10 weeks of logged sets)
+ * as display-ready strings. Prefers the estimated 1RM (or top weight) so the
+ * model can anchor progressive overload, then fills with distance/time bests.
+ * Capped to keep the prompt bounded.
+ */
 function buildPersonalRecordSummaries(
   prs: ReturnType<typeof calculatePersonalRecords>,
   weightUnit: string,
@@ -406,7 +406,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
 
   let activePlan: TrainingContext["activePlan"];
   if (activePlanRecord) {
-    const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks);
+    const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks, today);
     activePlan = {
       name: activePlanRecord.name,
       totalWeeks: activePlanRecord.totalWeeks,
@@ -416,7 +416,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
-  const stationGaps = computeExerciseGaps(timeline, trainingConstraints);
+  const stationGaps = computeExerciseGaps(timeline, today, trainingConstraints);
   const weeklyGoal = user?.weeklyGoal ?? 0;
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)

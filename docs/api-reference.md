@@ -4,7 +4,7 @@
 
 ## Overview
 
-fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints except the two [health probes](#health-routes) and the cron trigger require Clerk JWT authentication. Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
+fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints require Clerk JWT authentication except the two [health probes](#health-routes), [`GET /api/v1/csrf-token`](#get-apiv1csrf-token), the Strava OAuth callback and webhook (`GET /api/v1/strava/callback`, `GET`/`POST /api/v1/strava/webhook`), the signed-token email unsubscribe link (`GET`/`POST /api/v1/emails/unsubscribe`), and the `x-cron-secret`-gated [cron trigger](#get-apiv1cronemails). Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
 
 **Base URL:** `/api/v1`
 **Content-Type:** `application/json` (requests and responses)
@@ -47,32 +47,36 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints exc
 
 ## Error Responses
 
-All errors follow a standard format:
+There are two standard error body shapes, both carrying a machine-readable `code`:
 
-```json
-{
-  "error": "Human-readable error message",
-  "code": "ERROR_CODE",
-  "details": { "issues": [{ "path": "field", "message": "..." }] }
-}
-```
+- **Global error handler** (`server/index.ts`) — thrown `AppError`s and anything else passed to `next(err)` (including CSRF failures). Handlers that respond directly — `sendNotFound`, the rate limiter, the auth guard — use the same `{ error, code }` pair.
 
-- `details` is only included for validation errors and non-500 responses.
-- 500 errors always return `"Internal Server Error"` to prevent leaking internals.
+  ```json
+  {
+    "error": "Human-readable error message",
+    "code": "ERROR_CODE",
+    "details": {}
+  }
+  ```
+
+  - `details` is only included on 4xx responses whose error carries it.
+  - A 500 always returns `"Internal Server Error"` to prevent leaking internals.
+
+- **Validation middleware** (`validateBody` / `validateQuery` / `validateParams` in `server/routeUtils.ts`) — a failed Zod parse returns `400` with `message` in place of `error` (see [Request Validation](#request-validation)).
 
 **Validation error example (400):**
 
 ```json
 {
-  "error": "Invalid workout data",
   "code": "VALIDATION_ERROR",
+  "message": "Workout date cannot be in the future",
   "details": {
     "issues": [
-      { "path": "date", "message": "Must be a valid date in YYYY-MM-DD format" },
-      { "path": "rpe", "message": "Number must be less than or equal to 10" },
+      { "path": "date", "message": "Workout date cannot be in the future" },
+      { "path": "rpe", "message": "RPE must be at most 10" },
       {
-        "path": "exercises[0].exerciseName",
-        "message": "String must contain at least 1 character(s)"
+        "path": "exercises.0.exerciseName",
+        "message": "Too small: expected string to have >=1 characters"
       }
     ]
   }
@@ -83,18 +87,21 @@ All errors follow a standard format:
 
 ```
 HTTP/1.1 429 Too Many Requests
-Retry-After: 45
+Retry-After: 60
+RateLimit-Policy: 5;w=60
 RateLimit-Limit: 5
 RateLimit-Remaining: 0
-RateLimit-Reset: 1710500045
+RateLimit-Reset: 45
 ```
 
 ```json
 {
-  "error": "Rate limit exceeded",
+  "error": "Too many requests. Please wait 60 seconds before trying again.",
   "code": "RATE_LIMITED"
 }
 ```
+
+`Retry-After` is always the full window length in seconds (the handler overwrites express-rate-limit's time-to-reset value); `RateLimit-Reset` is the seconds left in the current window.
 
 **Not found error example (404):**
 
@@ -111,7 +118,7 @@ RateLimit-Reset: 1710500045
 | ------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 400    | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV`                                                        | Invalid input                                                                                                                                                     |
 | 401    | `UNAUTHORIZED`                                                                                          | Missing or invalid auth                                                                                                                                           |
-| 403    | `FORBIDDEN`, `AI_COACH_DISABLED`                                                                        | Rejected rather than unauthenticated — every CSRF failure lands here                                                                                              |
+| 403    | `EBADCSRFTOKEN`, `FORBIDDEN`, `AI_COACH_DISABLED`                                                       | Rejected rather than unauthenticated — every CSRF failure lands here as `EBADCSRFTOKEN`; `FORBIDDEN` is a Strava webhook verify-token mismatch                    |
 | 404    | `NOT_FOUND`                                                                                             | Resource not found                                                                                                                                                |
 | 409    | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state                                                                                                                                      |
 | 412    | `PRECONDITION_FAILED`                                                                                   | A precondition on the request was not met                                                                                                                         |
@@ -129,12 +136,12 @@ not cause and cannot clear by waiting out their own allowance. See
 
 ## Rate Limiting
 
-Rate limits are applied per-user (keyed by Clerk userId) and namespaced by category so limits are independent across route groups.
+Rate limits are applied per-user (keyed by Clerk userId, falling back to the client IP when the request carries no Clerk session) and namespaced by category so limits are independent across route groups.
 
 - **Default window:** 60 seconds
 - **Strava routes:** 15-minute window
-- **Response on limit:** `429` with `Retry-After` header and `RATE_LIMITED` code
-- **Headers:** Standard `RateLimit-*` headers (RFC 6585)
+- **Response on limit:** `429` with `RATE_LIMITED` code and a `Retry-After` header set to the full window length in seconds
+- **Headers:** `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds until the window resets) — the IETF draft-6 set that express-rate-limit sends for `standardHeaders: true`; legacy `X-RateLimit-*` headers are off
 - **Storage:** PostgreSQL-backed `rate_limit_buckets`, shared across app replicas outside tests
 - **Coverage:** every authenticated `/api/v1` route carries a limiter. Reads fail
   **open** if the Postgres store errors (a store blip must not 500 the read
@@ -147,17 +154,17 @@ Implementation: `server/routeUtils.ts` — `rateLimiter(category, maxRequests, w
 
 ## CSRF Protection
 
-All mutating endpoints (POST/PUT/PATCH/DELETE) require a valid CSRF token, with one exception: [`POST /api/v1/strava/webhook`](#post-apiv1stravawebhook) mounts ahead of the guard because Strava's deliveries carry neither a session cookie nor a token. The token is obtained via:
+All mutating endpoints (POST/PUT/PATCH/DELETE) require a valid CSRF token, with two exceptions that mount ahead of the guard because their callers carry neither a session cookie nor a token: [`POST /api/v1/strava/webhook`](#post-apiv1stravawebhook) (Strava's deliveries) and [`POST /api/v1/emails/unsubscribe`](#post-apiv1emailsunsubscribe) (mail clients' RFC 8058 one-click POST, authorised by its signed token alone). The token is obtained via:
 
 ### GET /api/v1/csrf-token
 
 Retrieve a CSRF token for use in subsequent mutating requests.
 
 - **Auth:** Not strictly required (works pre-login, bound to IP; after login, bound to userId)
-- **Response:** `{ token: string }`
+- **Response:** `{ csrfToken: string }`
 - **Side effects:** Sets a signed `__Host-fitai.x-csrf` cookie (production) or `fitai.x-csrf` (development)
 
-The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in a `403 Forbidden` response.
+The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in `403 { "error": "invalid csrf token", "code": "EBADCSRFTOKEN" }` — csrf-csrf's error, rendered by the global error handler.
 
 ---
 
@@ -165,8 +172,10 @@ The returned token must be sent as the `x-csrf-token` header on all mutating req
 
 Mutating endpoints support the `X-Idempotency-Key` header for safe request replay.
 
-- **Header:** `X-Idempotency-Key` (optional, max 255 characters)
-- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE), the server caches the response for 7 days keyed by `(userId, key)`. Repeat requests with the same key return the cached response without re-executing the handler.
+- **Header:** `X-Idempotency-Key` (optional, max 255 characters — a longer key gets `400 BAD_REQUEST`)
+- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE) behind `protectedMutationGuards`, the server atomically claims `(userId, key)` — not scoped to the route — before the handler runs. Only a 2xx JSON response is cached, for 7 days; repeat requests with the same key return it without re-executing the handler. A non-2xx response releases the claim, so a retry re-executes.
+- **Concurrent duplicates:** a request that arrives while the first is still running gets `409 IDEMPOTENT_REQUEST_IN_PROGRESS`. An abandoned claim expires after 60 seconds.
+- **Large responses:** a 2xx body over 64 KB is cached as the sentinel `{ "idempotencyReplayed": true }` rather than in full.
 - **Use case:** The client's offline queue sends this header when replaying mutations that were queued while offline, preventing duplicate state changes.
 
 ---
@@ -191,12 +200,12 @@ Endpoints use Zod schemas for request body validation via two patterns:
 1. **`validateBody(schema)` middleware** — Parses `req.body` with the schema, returns 400 on failure, replaces `req.body` with parsed data on success.
 2. **Inline `safeParse()`** — Used in routes that need custom error messages or partial validation.
 
-Validation errors return:
+Validation middleware errors return (there is no `error` key — `message` is the first issue's message):
 
 ```json
 {
-  "error": "First validation error message",
   "code": "VALIDATION_ERROR",
+  "message": "First validation error message",
   "details": {
     "issues": [{ "path": "field.nested", "message": "Must be at least 1" }]
   }
@@ -207,7 +216,7 @@ Validation errors return:
 
 ## Health Routes
 
-The only unauthenticated routes in the API. Both are public probes with no credentials attached, so their responses deliberately carry no secrets — a failed boot reports the fixed startup _phase_, never the raw error message (that goes to `logger.fatal` server-side). Defined in `server/bootstrap/health.ts`.
+Unauthenticated, like the few other routes listed in the [Overview](#overview). Both are public probes with no credentials attached, so their responses deliberately carry no secrets — a failed boot reports the fixed startup _phase_, never the raw error message (that goes to `logger.fatal` server-side). Defined in `server/bootstrap/health.ts`.
 
 ### GET /api/v1/health/live
 
@@ -744,7 +753,7 @@ forbids undoing.
 
 ### PATCH /api/v1/plans/:planId/days/:dayId
 
-Update a plan day scoped to its parent plan.
+Update a plan day. Despite the path, `:planId` is not checked: the day is looked up by `dayId` and the caller's `userId`.
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
@@ -762,7 +771,7 @@ remains the internal write surface used by the coach and suggestion services.
 
 ### PATCH /api/v1/plans/days/:dayId
 
-Update a plan day with cleanup (unlinks workout logs when changing status away from completed).
+Update a plan day (`updatePlanDayWithCleanup` in `server/services/planService.ts`). It cannot change `status` and does not touch linked workout logs; the only difference from the scoped route above is that an actual `scheduledDate` change also queues a debounced `auto-coach` run.
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
@@ -990,14 +999,14 @@ Empty the bin.
 
 All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
 
-**Coalesced request cache.** Exercise sets and workout logs used by these routes pass through two in-memory promise caches (`getExerciseSetsCoalesced` and `getWorkoutLogsCoalesced`) keyed by `userId + from + to`. The cache holds the _pending_ promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
+**Coalesced request cache.** Exercise sets, the column-slim sets behind personal records, and workout logs used by these routes pass through three in-memory promise caches (`getExerciseSetsCoalesced`, `getPersonalRecordSetsCoalesced` and `getWorkoutLogsCoalesced`, each built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`) keyed by `userId + from + to`. The cache holds the _pending_ promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
 
-| Knob                  | Value                                                                  | Source                                                             |
-| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| TTL                   | 5 minutes (`ANALYTICS_CACHE_TTL_MS`)                                   | `server/constants.ts`                                              |
-| Max entries per cache | 500 (`MAX_CACHE_SIZE`)                                                 | `server/routes/analytics.ts`                                       |
-| Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()`                                                     |
-| Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `getExerciseSetsCoalesced` / `getWorkoutLogsCoalesced` |
+| Knob                  | Value                                                                  | Source                                   |
+| --------------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
+| TTL                   | 5 minutes (`ANALYTICS_CACHE_TTL_MS`)                                   | `server/constants.ts`                    |
+| Max entries per cache | 500 (`MAX_CACHE_SIZE`)                                                 | `server/services/analyticsRouteCache.ts` |
+| Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` (same file)               |
+| Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `createCoalescedCache()`     |
 
 ### GET /api/v1/personal-records
 
@@ -1203,7 +1212,7 @@ Send a message to the AI coach and receive a complete response.
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** `{ message: string (1-1000 chars), history?: ChatMessage[] (max 20) }`
+- **Body:** `{ message: string (1-1000 chars), history?: ChatMessage[] }` — a longer history is accepted but only its last 20 messages are kept
 - **Validation:** `chatRequestSchema`
 - **Response:** `{ response: string, ragInfo: RagInfo }`
 
@@ -1213,13 +1222,17 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** Same as `/api/v1/chat`
+- **Body:** Same as `/api/v1/chat`, plus two plan-editing fields from `chatRequestSchema`: `planEditing?: boolean` (default `true`; `false` skips plan proposals) and `focusPlanDayId?: string` (max 255 — the plan day being viewed, passed to the proposal generator)
+- **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. Any failure in this branch falls back to the normal chat stream.
 - **Response headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - **SSE events:**
   - `{ ragInfo: RagInfo }` — First event with RAG metadata
-  - `{ text: string }` — Streaming text chunks
+  - `{ planProposalPending: true }` — The message was classified as a plan-change request and a proposal is being generated
+  - `{ text: string }` — Streaming text chunks (on the plan-editing path, a single chunk carrying the proposal summary)
+  - `{ planProposal: { id, planId, status, summaryMessage, changes, createdAt } }` — The proposal that was created (`status: "applied"` when auto-applied)
   - `{ done: true }` — Stream complete
-  - `{ error: string }` — Stream error
+  - `{ error: "auth-expired" | "timeout", reason: string }` — The stream hit its deadline: the Clerk session's expiry (less a 5-second margin) or the 5-minute hard cap
+  - `{ error: "Stream error" }` — Unexpected stream error
 
 **Request example:**
 
@@ -1381,7 +1394,7 @@ Update a coaching material. Re-embeds if content or title changed.
 
 ### DELETE /api/v1/coaching-materials/:id
 
-Delete a coaching material. Document chunks are cascade-deleted via FK.
+Delete a coaching material, then purge its RAG chunks (`deleteChunksByMaterialId`) and clear the user's retrieval cache. The FK cascade only covers single-DB mode — with `VECTOR_DATABASE_URL` set (as in production) `document_chunks` lives in a separate Postgres with no FKs — so the purge is best-effort: a failure is logged and the daily `ragChunkPrune` cron (03:50 UTC) sweeps the orphans.
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 10/min
@@ -1407,7 +1420,7 @@ Re-embed all coaching materials for the current user.
 
 ## Plan Proposal Routes
 
-An auto-coach run that wants to change the athlete's upcoming plan raises a proposal rather than rewriting the plan silently; these routes are how the athlete accepts or declines it. **File:** `server/routes/planProposals.ts`.
+When a coach-chat message reads as a plan-change request, [`POST /api/v1/chat/stream`](#post-apiv1chatstream) raises a proposal (`createPlanAdjustmentProposal` in `server/services/planAdjustmentService.ts`) rather than rewriting the plan silently; these routes are how the athlete accepts or declines it. With `coachAutoApplyPlanChanges` on, the stream tries to apply it straight away. The background auto-coach (`server/services/coachService.ts`) raises no proposals — it writes its plan-day adjustments directly. **File:** `server/routes/planProposals.ts`.
 
 ### GET /api/v1/plan-proposals/pending
 
@@ -1468,7 +1481,7 @@ Get the current user's preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferencesRead` category, 60/min
-- **Response:** Serialized preferences — `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, trainingStylePreviousId, trainingStyleChangedAt, trainingStyleRecomputeNow, onboardingCompleted, mafAge, mafInjuryIllnessMedication, mafConsistency, mafTrend, mafHrDataAvailable, mafHr, mafBaselineTestScheduledAt }` plus two derived fields: `planWeeklyDensity` (the active plan's per-week density — a real number to 2 dp, e.g. `2.5` for a 10-day plan over 4 weeks — or `null`) and `weeklyGoalExceedsPlan` (boolean hint when the user's `weeklyGoal` exceeds that density).
+- **Response:** Serialized preferences — `{ weightUnit, distanceUnit, userTimezone, weeklyGoal, mealSchedule, emailNotifications, emailWeeklySummary, emailMissedReminder, emailWeeklyReviewReminder, emailTodaySession, emailAnalysisDigest, notifyHour, notifyHourWeeklySummary, notifyHourMissedReminder, notifyHourWeeklyReviewReminder, notifyHourTodaySession, notifyHourAnalysisDigest, showAdherenceInsights, aiCoachEnabled, coachAutoApplyPlanChanges, trainingStyleId, trainingStylePreviousId, trainingStyleChangedAt, trainingStyleRecomputeNow, onboardingCompleted, division, gender, age, bodyweightKg, heightCm, restingHr, maxHr, ftp, activityLevel, weightGoalDirection, weightGoalRateKgPerWeek, mafAge, mafInjuryIllnessMedication, mafConsistency, mafTrend, mafCategory, mafHrDataAvailable, mafHr, mafBaselineTestScheduledAt }` (an unset per-email `notifyHour*` override stays `null`, meaning that email follows the default send time) plus two derived fields: `planWeeklyDensity` (the active plan's per-week density — a real number to 2 dp, e.g. `2.5` for a 10-day plan over 4 weeks — or `null`) and `weeklyGoalExceedsPlan` (boolean hint when the user's `weeklyGoal` exceeds that density).
 
 ### PATCH /api/v1/preferences
 
@@ -1476,11 +1489,13 @@ Update user preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferences` category, 20/min
-- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `weeklyGoal?`, the `email*` toggles, `aiCoachEnabled?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, and the `maf*` fields).
+- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `userTimezone?` (IANA name), `weeklyGoal?` (1-14), `mealSchedule?: 3 | 4 | 5`, the `email*` toggles, `notifyHour?` (0-23) and the per-email `notifyHour*` overrides (0-23, or `null` to clear), `aiCoachEnabled?`, `coachAutoApplyPlanChanges?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, the profile fields `division` … `weightGoalRateKgPerWeek`, and the `maf*` fields). Also accepts three fields the response does not echo: `pushRefuelReminder?`, `pushLoggingReminder?` and `trainingConstraints?` (max 500 chars).
 - **Validation:** `updateUserPreferencesSchema`
+- **Timezone validation:** a `userTimezone` the server runtime does not recognise returns `400 { code: "INVALID_TIMEZONE" }`.
 - **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge` plus either `mafCategory`, or the legacy `mafConsistency`/`mafTrend` pair, to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.
-- **Response:** Updated serialized preferences object
-- **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` gate the individual categories and take effect only when the master is on. All three default to `false` at the database level for new users (GDPR-compliant opt-in).
+- **Response:** Updated serialized preferences object (without the two derived fields)
+- **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary`, `emailMissedReminder`, `emailWeeklyReviewReminder`, `emailTodaySession` and `emailAnalysisDigest` gate the individual categories and take effect only when the master is on. All six default to `false` at the database level for new users (GDPR-compliant opt-in).
+- **Auto-apply semantics:** `coachAutoApplyPlanChanges` (default `false`) makes the coach chat try to apply its [plan proposals](#plan-proposal-routes) as soon as they are raised instead of waiting for an explicit apply.
 - **AI consent semantics:** `aiCoachEnabled` gates every outbound AI provider call (workout parsing, chat, auto-coach, embeddings, and image parsing). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new AI requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
 - **Onboarding completion:** `onboardingCompleted` stores whether the welcome flow has finished across devices. It is app state, not a visible Settings preference.
 
@@ -1540,14 +1555,16 @@ Internal structured exercise health rollup endpoint. Defined in `server/routes/a
 
 **File:** `server/routes/push.ts`
 
-Web Push (VAPID) endpoints used by the PWA to deliver missed-workout nudges and weekly summary notifications. All endpoints return `404 PUSH_NOT_CONFIGURED` when `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` are not set.
+Web Push (VAPID) endpoints used by the PWA to deliver missed-workout nudges and weekly summary notifications. Push counts as configured only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set (`isPushEnabled()` in `server/pushNotifications.ts`). Only `GET /api/v1/push/vapid-key` checks this up front; the other routes still run, and `POST /api/v1/push/test` then reports `sent: 0`.
 
 ### GET /api/v1/push/vapid-key
 
 Return the server's VAPID public key so the client can call `PushManager.subscribe`.
 
 - **Auth:** Required
+- **Rate limit:** `push` category, 60/min
 - **Response:** `{ publicKey: string }`
+- **Errors:** `404 PUSH_NOT_CONFIGURED` when push is not configured
 
 ### POST /api/v1/push/subscribe
 
@@ -1599,7 +1616,7 @@ Check if the current user has a Strava connection.
 Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 
 - **Auth:** Required
-- **Rate limit:** IP-based, 20 per 15 minutes
+- **Rate limit:** `stravaAuth` category, 20 per 15 minutes, per user (the limiter runs after `isAuthenticated`; the bucket is shared with `/callback`)
 - **Response:** `{ url: string }` — Redirect URL for Strava OAuth
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback)
 
@@ -1608,7 +1625,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 OAuth callback handler. Exchanges authorization code for tokens, encrypts and stores them.
 
 - **Auth:** Not required (redirect from Strava)
-- **Rate limit:** IP-based, 20 per 15 minutes
+- **Rate limit:** `stravaAuth` category, 20 per 15 minutes (shared with `/auth`) — keyed by userId when the request carries a Clerk session, otherwise by IP
 - **Query:** `code`, `state` (CSRF-verified, single-use — replays redirect to `/settings?strava=error`), `scope`
 - **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
 - **Response:** Redirect to `/settings`
@@ -1618,7 +1635,7 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 Incrementally sync Strava activities into workout logs (since `lastSyncedAt` with a 7-day overlap; 90-day backfill on first sync; up to 5 × 200-activity pages per call). Runs the same `syncStravaForUser()` engine as the background [automatic sync](integrations.md#automatic-sync); the button remains for an on-demand refresh.
 
 - **Auth:** Required
-- **Rate limit:** IP-based, 5 per 15 minutes
+- **Rate limit:** `stravaSync` category, 5 per 15 minutes, per user
 - **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log built like a manual confirm, or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor.
 - **Response:** `{ success: true, imported: number, enriched: number, completedPlanDays: number, suggested: number, standalone: number, skipped: number, total: number, hasMore: boolean }` — `imported` is the sum of the four landing counts; `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
 - **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure).
@@ -1657,7 +1674,7 @@ Strava webhook event receiver — the push half of [automatic sync](integrations
 
 Garmin Connect sync uses a reverse-engineered SSO flow (email + password), not a public OAuth application. See [Integrations → Garmin Connect](integrations.md#garmin-connect-integration) for the rationale, safety stack, and storage model.
 
-All mutating routes apply `protectedMutationGuards` (auth + CSRF + idempotency). Every route short-circuits with HTTP 503 `GARMIN_CIRCUIT_OPEN` when the global 429 circuit breaker is tripped.
+All mutating routes apply `protectedMutationGuards` (auth + idempotency; CSRF is enforced globally, as for every mutation). `POST /connect` and `POST /sync` short-circuit with HTTP 503 `GARMIN_CIRCUIT_OPEN` while the global 429 circuit breaker is tripped (30 minutes after any Garmin 429); `/status` and `/disconnect` do not check it. A trip is persisted to `server_runtime_cache` under `garmin:breaker`, and every instance re-reads it before each Garmin API call, so a 429 seen by one instance freezes them all.
 
 ### GET /api/v1/garmin/status
 
@@ -1677,7 +1694,7 @@ Authenticate with Garmin using email + password and persist the encrypted creden
 - **Behavior:** Logs into Garmin _before_ writing any DB row — nothing is stored on failure. Fetches `getUserProfile()` to capture the display name (optional; non-fatal if it fails).
 - **Responses:**
   - `200 { success: true, garminDisplayName: string | null }`
-  - `400 { code: "BAD_REQUEST" }` — invalid email / empty password
+  - `400 { code: "VALIDATION_ERROR" }` — invalid email / empty password (`validateBody`)
   - `401 { code: "GARMIN_AUTH_FAILED" }` — invalid credentials or 2SV enabled (see error translation in `server/garmin.ts`)
   - `409 { code: "GARMIN_BUSY" }` — another Garmin op for the same user is in progress (per-user mutex)
   - `503 { code: "GARMIN_CIRCUIT_OPEN" }` — global 429 breaker is tripped

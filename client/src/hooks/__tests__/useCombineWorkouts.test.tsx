@@ -117,7 +117,7 @@ describe("useCombineWorkouts", () => {
         }, expect.any(AbortSignal));
         // Combine must invalidate: timeline + workouts (the combined row appears
         // there) *and* personalRecords + exerciseAnalytics + trainingOverview
-        // (the rebuilt exercise sets feed those derived views). Guards against a
+        // (the re-parented exercise sets feed those derived views). Guards against a
         // regression of the analytics-staleness gap flagged on PR #796.
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(5);
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/timeline"] });

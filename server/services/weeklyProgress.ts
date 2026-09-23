@@ -1,5 +1,6 @@
+import { toIsoDateUtc } from "@shared/dateUtils";
+
 import { addDaysLocal, getDayOfWeekForDateStr, getLocalDateStrSafe } from "../timezone";
-import { toDateStr } from "../types";
 
 export interface MondayWeekBoundaries {
   thisMondayStr: string;
@@ -21,7 +22,7 @@ export function getMondayWeekBoundaries(
   userTimezone?: string | null,
 ): MondayWeekBoundaries {
   // The athlete's calendar date when we know their zone; UTC otherwise.
-  const dateStr = userTimezone ? getLocalDateStrSafe(todayInput, userTimezone) : toDateStr(todayInput);
+  const dateStr = userTimezone ? getLocalDateStrSafe(todayInput, userTimezone) : toIsoDateUtc(todayInput);
 
   // Parse it explicitly as a UTC date to prevent local timezone skew
   // new Date(dateStr) automatically parses "YYYY-MM-DD" as UTC midnight,
@@ -39,8 +40,8 @@ export function getMondayWeekBoundaries(
   lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
 
   return {
-    thisMondayStr: toDateStr(thisMonday),
-    lastMondayStr: toDateStr(lastMonday),
+    thisMondayStr: toIsoDateUtc(thisMonday),
+    lastMondayStr: toIsoDateUtc(lastMonday),
   };
 }
 

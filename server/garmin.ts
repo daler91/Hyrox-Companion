@@ -249,6 +249,24 @@ function looksLike429(err: unknown): boolean {
   return /(?:^|\D)429(?:\D|$)/.test(msg) || /too many requests|rate limit/i.test(msg);
 }
 
+/** The athlete-facing text for an open breaker, with the wait rounded up to minutes. */
+function circuitOpenMessage(): string {
+  return `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`;
+}
+
+/**
+ * Thrown by withCircuitBreaker when an open breaker stops a call before it
+ * reaches Garmin. Garmin never saw the request, so this says nothing about the
+ * athlete's connection: callers answer 503 instead of recording lastError,
+ * which would also wipe the stored credentials (setGarminError).
+ */
+class GarminCircuitOpenError extends Error {
+  constructor() {
+    super(circuitOpenMessage());
+    this.name = "GarminCircuitOpenError";
+  }
+}
+
 /**
  * Wraps any Garmin API call with circuit-breaker tripping. If the call throws
  * something that looks like a 429, we trip the breaker BEFORE re-throwing so
@@ -262,12 +280,10 @@ function looksLike429(err: unknown): boolean {
 // A timeout is not a 429, so it never trips the breaker.
 async function withCircuitBreaker<T>(label: string, fn: () => Promise<T>): Promise<T> {
   // W14: adopt any block a sibling instance recorded before gating this call.
+  // The route-level check (rejectIfCircuitOpen) reads only this instance's
+  // copy, so this is where a sibling's trip is first seen.
   await refreshBreakerFromShared();
-  if (garminCircuitBreaker.isOpen()) {
-    throw new Error(
-      `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-    );
-  }
+  if (garminCircuitBreaker.isOpen()) throw new GarminCircuitOpenError();
   try {
     return await withTimeout(fn(), GARMIN_CALL_TIMEOUT_MS, label);
   } catch (err) {
@@ -444,6 +460,8 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
   try {
     await withCircuitBreaker("login", () => client.login(email, password));
   } catch (err) {
+    // An open breaker never reached Garmin; leave the connection intact.
+    if (err instanceof GarminCircuitOpenError) throw err;
     const friendly = translateGarminError(err);
     await storage.users.setGarminError(userId, friendly);
     reqLog.error({ err, userId, context: LOG_CTX }, "Garmin login failed");
@@ -500,13 +518,9 @@ async function handleGarminStatus(req: Request, res: Response) {
 }
 
 async function handleGarminConnect(req: Request<Record<string, never>, unknown, z.infer<typeof garminConnectBodySchema>>, res: Response) {
-  // Layer 5 — refuse before we even validate inputs if Garmin has us in jail.
-  if (garminCircuitBreaker.isOpen()) {
-    return res.status(503).json({
-      error: `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-      code: "GARMIN_CIRCUIT_OPEN",
-    });
-  }
+  // Layer 5 — refuse before any login attempt if Garmin has us in jail. (The
+  // body has already been validated by the route's validateBody middleware.)
+  if (rejectIfCircuitOpen(res)) return;
 
   const { email, password } = req.body;
 
@@ -523,6 +537,10 @@ async function handleGarminConnect(req: Request<Record<string, never>, unknown, 
       try {
         await withCircuitBreaker("connect.login", () => client.login(email, password));
       } catch (err) {
+        if (err instanceof GarminCircuitOpenError) {
+          sendCircuitOpen(res, err.message);
+          return;
+        }
         const friendly = translateGarminError(err);
         reqLog.warn({ err, userId, context: LOG_CTX }, "Initial Garmin connect failed");
         res.status(401).json({ error: friendly, code: "GARMIN_AUTH_FAILED" });
@@ -573,7 +591,8 @@ async function handleGarminConnect(req: Request<Record<string, never>, unknown, 
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("already in progress")) {
-      return res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      return;
     }
     throw err;
   }
@@ -664,16 +683,17 @@ async function fetchAndImportGarminActivities(
   };
 }
 
+function sendCircuitOpen(res: Response, message: string = circuitOpenMessage()): void {
+  res.status(503).json({ error: message, code: "GARMIN_CIRCUIT_OPEN" });
+}
+
 /**
- * Returns a 503 if the global circuit breaker is open. Returns null if the
- * caller should proceed. Extracted for reuse between /connect and /sync.
+ * Sends a 503 and returns true when the global circuit breaker is open;
+ * returns false when the caller should proceed. Shared by /connect and /sync.
  */
 function rejectIfCircuitOpen(res: Response): boolean {
   if (!garminCircuitBreaker.isOpen()) return false;
-  res.status(503).json({
-    error: `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-    code: "GARMIN_CIRCUIT_OPEN",
-  });
+  sendCircuitOpen(res);
   return true;
 }
 
@@ -725,6 +745,10 @@ async function handleGarminSync(req: Request, res: Response) {
       try {
         client = await getGarminClient(userId, reqLog);
       } catch (err) {
+        if (err instanceof GarminCircuitOpenError) {
+          sendCircuitOpen(res, err.message);
+          return;
+        }
         const message = err instanceof Error ? err.message : "Garmin sync failed";
         res.status(401).json({ error: message, code: "GARMIN_AUTH_FAILED" });
         return;
@@ -734,6 +758,10 @@ async function handleGarminSync(req: Request, res: Response) {
       try {
         result = await fetchAndImportGarminActivities(client, userId, reqLog);
       } catch (err) {
+        if (err instanceof GarminCircuitOpenError) {
+          sendCircuitOpen(res, err.message);
+          return;
+        }
         const friendly = translateGarminError(err);
         await storage.users.setGarminError(userId, friendly);
         reqLog.error({ err, userId, context: LOG_CTX }, "Garmin sync failed");
@@ -749,7 +777,8 @@ async function handleGarminSync(req: Request, res: Response) {
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("already in progress")) {
-      return res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      return;
     }
     throw err;
   }

@@ -19,7 +19,7 @@ vi.mock("../../services/planGenerationService", () => ({
 
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
-    workouts: ["deleteWorkoutLogByPlanDayId", "getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
+    workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
     plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "schedulePlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
   }),
@@ -101,6 +101,35 @@ describe("POST /api/plans/import Rate Limiting", () => {
     // Next request should succeed again
     const successfulResponse = await request(app).post("/api/v1/plans/import").send(payload);
     expect(successfulResponse.status).toBe(200);
+  });
+});
+
+describe("GET /api/v1/plans/:id", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("returns the athlete's plan, looked up by id and user", async () => {
+    const plan = { id: "plan-123", userId: "test_user_id", name: "Race Block", days: [] };
+    vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(plan as never);
+
+    const response = await request(app).get("/api/v1/plans/plan-123");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(plan);
+    expect(storage.plans.getTrainingPlan).toHaveBeenCalledWith("plan-123", "test_user_id");
+  });
+
+  it("returns 404 for a plan the athlete does not own", async () => {
+    vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(undefined);
+
+    const response = await request(app).get("/api/v1/plans/plan-123");
+
+    expect(response.status).toBe(404);
   });
 });
 

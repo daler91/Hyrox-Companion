@@ -5,11 +5,11 @@ import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 import * as wouter from 'wouter';
 
-import type { StructuredExercise } from '@/components/ExerciseInput';
 import * as toastHook from '@/hooks/use-toast';
 import * as voiceInputHook from '@/hooks/useVoiceInput';
 import * as workoutEditorHook from '@/hooks/useWorkoutEditor';
 import * as queryClientLib from '@/lib/queryClient';
+import type { StructuredExercise } from '@/lib/structuredExercise';
 
 import { useWorkoutForm } from '../useWorkoutForm';
 import type { UseWorkoutFormProps } from '../workout-form/types';

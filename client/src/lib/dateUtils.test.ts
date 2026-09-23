@@ -9,11 +9,7 @@ import {
   getStartOfWeek,
   getStartOfWeekString,
   getTodayString,
-  isDateFuture,
-  isDateInCurrentWeek,
   isDateInRange,
-  isDatePast,
-  isDateToday,
   toISODateString} from './dateUtils';
 
 describe('dateUtils', () => {
@@ -128,61 +124,6 @@ describe('dateUtils', () => {
       it('should return string representation of end of week', () => {
         expect(getEndOfWeekString()).toBe('2023-10-22');
         expect(getEndOfWeekString(undefined, 0)).toBe('2023-10-21');
-      });
-    });
-
-    describe('isDateInCurrentWeek', () => {
-      it('should return true for dates in current week', () => {
-        // Default is now Monday-start (audit L7): Oct 16 → Oct 22.
-        expect(isDateInCurrentWeek('2023-10-16')).toBe(true);
-        expect(isDateInCurrentWeek('2023-10-18')).toBe(true);
-        expect(isDateInCurrentWeek('2023-10-22')).toBe(true);
-      });
-
-      it('should return false for dates outside current week', () => {
-        expect(isDateInCurrentWeek('2023-10-15')).toBe(false);
-        expect(isDateInCurrentWeek('2023-10-23')).toBe(false);
-      });
-
-      it('should respect weekStartsOn parameter', () => {
-        // Sunday week start: Oct 15 to Oct 21.
-        expect(isDateInCurrentWeek('2023-10-15', 0)).toBe(true);
-        expect(isDateInCurrentWeek('2023-10-22', 0)).toBe(false);
-      });
-    });
-
-    describe('isDatePast', () => {
-      it('should return true for past dates', () => {
-        expect(isDatePast('2023-10-17')).toBe(true);
-        expect(isDatePast('2022-10-18')).toBe(true);
-      });
-
-      it('should return false for today and future dates', () => {
-        expect(isDatePast('2023-10-18')).toBe(false);
-        expect(isDatePast('2023-10-19')).toBe(false);
-      });
-    });
-
-    describe('isDateFuture', () => {
-      it('should return true for future dates', () => {
-        expect(isDateFuture('2023-10-19')).toBe(true);
-        expect(isDateFuture('2024-10-18')).toBe(true);
-      });
-
-      it('should return false for today and past dates', () => {
-        expect(isDateFuture('2023-10-18')).toBe(false);
-        expect(isDateFuture('2023-10-17')).toBe(false);
-      });
-    });
-
-    describe('isDateToday', () => {
-      it('should return true for today', () => {
-        expect(isDateToday('2023-10-18')).toBe(true);
-      });
-
-      it('should return false for other dates', () => {
-        expect(isDateToday('2023-10-17')).toBe(false);
-        expect(isDateToday('2023-10-19')).toBe(false);
       });
     });
 

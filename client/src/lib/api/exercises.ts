@@ -1,8 +1,6 @@
 import type {
   AllowedImageMimeType,
-  CustomExercise,
   ExerciseSet,
-  InsertCustomExercise,
   ParsedExercise,
   StructureBlockInput,
 } from "@shared/schema";
@@ -65,9 +63,4 @@ export const exercises = {
         options?.sessions ? `?sessions=${options.sessions}` : ""
       }`,
     ),
-
-  listCustom: () => typedRequest<CustomExercise[]>("GET", "/api/v1/custom-exercises"),
-
-  createCustom: (data: InsertCustomExercise) =>
-    typedRequest<CustomExercise>("POST", "/api/v1/custom-exercises", data),
 } as const;

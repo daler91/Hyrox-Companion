@@ -1,7 +1,6 @@
 import type {
   InsertTimelineAnnotation,
   TimelineAnnotation,
-  UpdateTimelineAnnotation,
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
@@ -17,9 +16,6 @@ export const timelineAnnotations = {
 
   create: (data: InsertTimelineAnnotation) =>
     typedRequest<TimelineAnnotation>("POST", "/api/v1/timeline-annotations", data),
-
-  update: (id: string, data: UpdateTimelineAnnotation) =>
-    typedRequest<TimelineAnnotation>("PATCH", `/api/v1/timeline-annotations/${id}`, data),
 
   delete: (id: string) =>
     typedRequest<{ success: boolean }>("DELETE", `/api/v1/timeline-annotations/${id}`),

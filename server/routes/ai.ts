@@ -161,12 +161,6 @@ export function computeSseDeadline(req: ExpressRequest): { deadlineMs: number; r
   return { deadlineMs: hardCap, reason: "timeout" };
 }
 
-// Backwards-compat shim for tests still asserting on the old number-returning
-// signature. Internal call sites use computeSseDeadline().
-export function computeSseDeadlineMs(req: ExpressRequest): number {
-  return computeSseDeadline(req).deadlineMs;
-}
-
 type ChatStreamRequest = ExpressRequest<
   Record<string, never>,
   unknown,

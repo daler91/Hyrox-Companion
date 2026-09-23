@@ -3,21 +3,14 @@ import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercise
 import { getWorkoutDistanceDisplay, type UnitPreferences } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
-import { type StructuredExercise } from "@/components/ExerciseInput";
 import { toPreferenceScaleAll } from "@/lib/setDisplay";
+import { type StructuredExercise } from "@/lib/structuredExercise";
 
 export const categoryChipColors: Record<string, string> = {
   functional: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
   running: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   strength: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
   conditioning: "bg-red-500/10 text-red-600 dark:text-red-400",
-};
-
-export const categoryBorderColors: Record<string, string> = {
-  functional: "border-l-orange-500",
-  running: "border-l-blue-500",
-  strength: "border-l-purple-500",
-  conditioning: "border-l-red-500",
 };
 
 export const categoryLabels: Record<string, string> = {

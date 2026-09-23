@@ -16,7 +16,6 @@ import { formatMinutes, minutes, minutesToSeconds, unitless } from "@shared/unit
 
 import type { TrainingContext } from "../../gemini/index";
 import { addDaysLocal, getLocalDateStrSafe } from "../../timezone";
-import { toDateStr } from "../../types";
 import { sanitizeUserInput } from "../../utils/sanitize";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { TimelineEntry } from "./types";
@@ -99,6 +98,7 @@ export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"
  */
 export function computeExerciseGaps(
   timeline: TimelineEntry[],
+  today: string,
   trainingConstraints?: string | null,
 ): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
   const sources: StationCoverageSource[] = [];
@@ -114,7 +114,7 @@ export function computeExerciseGaps(
   }
 
   const ruledOut = new Set(stationsRuledOutByConstraints(trainingConstraints));
-  return buildStationCoverage(sources, toDateStr())
+  return buildStationCoverage(sources, today)
     .filter(({ station }) => !ruledOut.has(station))
     .map(({ station, daysSince }) => ({
       station,

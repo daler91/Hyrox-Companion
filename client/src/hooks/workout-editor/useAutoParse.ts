@@ -2,8 +2,8 @@ import type { StructureBlockInput } from "@shared/schema";
 import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { api, type ParseWorkoutStructureResponse } from "@/lib/api";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 import { mergeParsedWithEdits } from "./parseMerging";
 import { rowsForParsedStructure } from "./structureRows";

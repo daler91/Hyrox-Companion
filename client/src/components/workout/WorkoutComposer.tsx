@@ -2,7 +2,6 @@ import type { ExerciseName } from "@shared/schema";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
@@ -12,6 +11,7 @@ import { WorkoutContentsStatus } from "@/components/workout-detail/shared/Workou
 import type { toast as toastFn } from "@/hooks/use-toast";
 import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 import type { CompressedImage } from "@/lib/image";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 import { cn } from "@/lib/utils";
 
 import type {

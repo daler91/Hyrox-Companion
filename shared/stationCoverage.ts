@@ -174,13 +174,6 @@ export function daysSinceDate(lastTrained: string | null, todayStr: string): num
   return Math.round((today - last) / MS_PER_DAY);
 }
 
-/**
- * Days since each station was last trained, in race order with running last.
- *
- * `todayStr` is the caller's idea of today — the analytics payload counts from
- * the athlete's local calendar, the coach from UTC. That difference is
- * deliberate and stays with the callers.
- */
 /** Fold one session's evidence into the running last-trained-on map. */
 function recordSourceStations(
   lastTrained: Map<CoverageStation, string>,
@@ -201,6 +194,13 @@ function recordSourceStations(
   }
 }
 
+/**
+ * Days since each station was last trained, in race order with running last.
+ *
+ * `todayStr` is the caller's idea of today. Every caller (the analytics
+ * payload, the training summary and the coach's computeExerciseGaps) passes
+ * the athlete's local date, so the two surfaces count gaps the same way.
+ */
 export function buildStationCoverage(
   sources: readonly StationCoverageSource[],
   todayStr: string,

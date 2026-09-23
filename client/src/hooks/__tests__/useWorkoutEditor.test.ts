@@ -4,8 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect,it, vi } from 'vitest';
 
-import type { SetData, StructuredExercise } from '@/components/ExerciseInput';
 import { api, type ParseWorkoutStructureResponse } from '@/lib/api';
+import type { SetData, StructuredExercise } from '@/lib/structuredExercise';
 
 import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId, mergeParsedWithEdits, useWorkoutEditor } from '../useWorkoutEditor';
 

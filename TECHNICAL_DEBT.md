@@ -25,7 +25,7 @@
 
 ## ~~P1 — High Priority~~ (6/6 RESOLVED)
 
-- ~~**7. Replace Proxy-based storage abstraction**~~ — Replaced with explicit `DatabaseStorage` class delegating ~60 methods.
+- ~~**7. Replace Proxy-based storage abstraction**~~ — Replaced with explicit `DatabaseStorage` class delegating ~60 methods. (Since superseded: `server/storage/index.ts` now composes 17 per-domain classes into the `storage` object, with no delegating class.)
 - ~~**8. Fix migration naming conflict + consolidate startup SQL**~~ — `0016_rename_hyrox_station_to_functional.sql` is now in the Drizzle journal (it was missing from the prior fix attempt, so the category rename never actually ran via drizzle-kit). `server/maintenance.ts` startup SQL consolidated into `0018_backfill_plan_dates_and_workout_links.sql`: orphaned plan_day_id cleanup, plan start/end date backfill, and workout log plan_id backfill. Deleted the redundant `ensureSchemaUpToDate()` function (all columns it defensively added are already declared in earlier migrations). Vector-DB setup (`ensurePgvectorExtension`, `ensureVectorSchema`) intentionally remains code-driven since it runs on a separate `vectorPool` that drizzle migrations don't manage.
 - ~~**9. Remove legacy RAG path**~~ — Deleted unused `buildRetrievedMaterialsSection` from ragService.ts. Added sanitization to the active `buildRetrievedChunksSection` in prompts.ts.
 - ~~**11. Formalize API error codes**~~ — Created `AppError` class with `ErrorCode` enum in `server/errors.ts`. Updated Express error handler. Migrated all service-layer `throw new Error` call sites to `throw new AppError` (planService, planGenerationService, chatService, exerciseParser, strava, sanitize). Startup/invariant errors correctly remain as `Error`.
@@ -41,7 +41,6 @@
 - ~~**15. Reduce GeneratePlanDialog state complexity**~~ — Extracted 10 useState calls into `useGeneratePlanForm()` hook.
 - ~~**17. Migrate email scheduler to pg-boss queue**~~ — Cron now enqueues per-user `send-weekly-summary` and `send-missed-reminder` jobs. Workers registered in `queue.ts`.
 - ~~**18. Propagate request ID / tracing context to service layer**~~ — Added `AsyncLocalStorage`-based `requestContext.ts` with middleware. `getContextLogger()` returns child logger with request context.
-- ~~**25. Strict mode disabled in test TypeScript config**~~ — Enabled `strict: true` in `tsconfig.test.json`. Tests now enforce the same type safety as production code.
 
 ### 14. Centralize magic numbers and constants
 - **Files:** `client/src/components/plans/GeneratePlanDialog.tsx`, `client/src/hooks/useChatSession.ts`, `server/services/workoutService.ts`
@@ -55,6 +54,7 @@
 ## P3 — Low Priority / Ongoing
 
 - ~~**24. Hardcoded CORS origins**~~ — Moved to `ALLOWED_ORIGINS` env var with backward-compatible fallback.
+- ~~**25. Strict mode disabled in test TypeScript config**~~ — Enabled `strict: true` in `tsconfig.test.json`. Tests now enforce the same type safety as production code.
 - ~~**26. Silent data loss in offline mutation queue**~~ — Added `onMutationDropped` callback with `useOfflineDropNotifier` hook showing destructive toast on data loss.
 - ~~**27. No route guards for authenticated pages**~~ — Added auth loading guard in `App.tsx` showing spinner while auth state loads.
 - ~~**28. Full pdfjs-dist namespace import**~~ — Changed to targeted `{getDocument, GlobalWorkerOptions}` import.
@@ -68,7 +68,7 @@
 ### ~~22. CSRF protection~~ (RESOLVED)
 - **Files:** `server/middleware/csrf.ts`, `server/routes.ts`, `server/env.ts`
 - **Issue:** The app uses cookie-based auth (`credentials: "include"`) via Clerk, which is CSRF-vulnerable in principle; CORS is not a CSRF control.
-- **Resolution:** Double-submit-cookie CSRF protection (`csrf-csrf`) is now enforced on all state-changing `/api/v1` routes. The `csrf-csrf` `doubleCsrfProtection` handler is re-exported as `csrfProtection` (`server/middleware/csrf.ts:73`) and mounted at `server/routes.ts:45`; the token is issued by `GET /api/v1/csrf-token` (`server/routes.ts:34`) and clients echo it back via the `x-csrf-token` header. The token is bound to the Clerk `userId` session identifier, the cookie is `__Host-`-prefixed with `httpOnly` / `sameSite=strict` / `secure` in production, and `CSRF_SECRET` is required in production and must differ from `ENCRYPTION_KEY` (enforced in `server/env.ts`). Defense-in-depth (CORS allowlist, SameSite cookies, nonce CSP) remains.
+- **Resolution:** Double-submit-cookie CSRF protection (`csrf-csrf`) is now enforced on all state-changing `/api/v1` routes. The `csrf-csrf` `doubleCsrfProtection` handler is re-exported as `csrfProtection` (`server/middleware/csrf.ts:73`) and mounted at `server/routes.ts:53`; the token is issued by `GET /api/v1/csrf-token` (`server/routes.ts:35`) and clients echo it back via the `x-csrf-token` header. The token is bound to the Clerk `userId` session identifier, the cookie is `__Host-`-prefixed with `httpOnly` / `sameSite=strict` / `secure` in production, and `CSRF_SECRET` is required in production and must differ from `ENCRYPTION_KEY` (enforced in `server/env.ts`). Defense-in-depth (CORS allowlist, SameSite cookies, nonce CSP) remains.
 - **Status:** RESOLVED. The original "documented as acceptable — no action needed" note was superseded when `csrf-csrf` was implemented; the entry stayed stale until the 2026-05-29 review.
 
 - ~~**23. Performance optimizations**~~ — Added 120s-TTL in-memory cache for RAG retrieval in `server/services/ragService.ts` (keyed by userId+query+topK, invalidated on `embedCoachingMaterial`). Debounced auto-coach via pg-boss `singletonKey: auto-coach:${userId}`/`singletonSeconds: 60` in `server/services/workoutService.ts` so bulk workout creation coalesces into a single coach run per user.
@@ -77,7 +77,7 @@
 - **Files:** `package.json` (`typescript` 6.0.3 + `typescript7` npm alias for 7.0.2), `.github/dependabot.yml` (typescript major/minor ignore), `CONTRIBUTING.md` (contributor-facing notes)
 - **Issue:** Type-checking runs on the TypeScript 7 native compiler (`check`/`check:strict`/`check:test` invoke `node node_modules/typescript7/bin/tsc`), but the package named `typescript` must stay on 6.0.x because typescript@7 ships no JS compiler API and both typescript-eslint (type-aware linting crashes at module load under TS 7; peer range `<6.1.0`) and Cypress's spec preprocessor (its TS≥7 babel fallback is broken in released binaries ≤15.19.0) resolve that package. This is the interim pattern Microsoft and the typescript-eslint maintainers recommend.
 - **Cost:** two TS installs (~one extra native binary per platform at install time), a permanent pnpm warning about the conflicting `tsc` bin, `typescript7` must be bumped manually (Dependabot ignores `npm:` aliases), and editors using the workspace tsserver check with 6.x while CI checks with 7.x.
-- **Remove when ALL hold:** (i) TypeScript 7.1 ships its stable API, (ii) typescript-eslint releases TS 7 support (watch typescript-eslint/typescript-eslint#10940), (iii) Cypress ≥ 15.19.1 is published — **satisfied**: the repo is on Cypress 16.1.0, so only (i) and (ii) still block. Then: drop the `typescript7` alias and the 6.0.x pin, set `typescript` to 7.x, restore plain `tsc` in the three check scripts, remove the Dependabot ignore block, bump Cypress, and delete the dual-install notes in CONTRIBUTING.md and the `//overrides` guardrail about aliased typescript.
+- **Remove when ALL hold:** (i) TypeScript 7.1 ships its stable API, (ii) typescript-eslint releases TS 7 support (watch typescript-eslint/typescript-eslint#10940), (iii) Cypress ≥ 15.19.1 is published — **satisfied**: the repo is on Cypress 16.1.0, so only (i) and (ii) still block. Then: drop the `typescript7` alias and the 6.0.x pin, set `typescript` to 7.x, restore plain `tsc` in the three check scripts, remove the Dependabot ignore block, and delete the dual-install notes in CONTRIBUTING.md and the `//overrides` guardrail about aliased typescript.
 
 ---
 
@@ -88,5 +88,5 @@
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
-| P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint + Cypress) |
+| P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint) |
 | **Total** | **28/29** | **1** | #29 is intentional interim state, not actionable until upstream ships |

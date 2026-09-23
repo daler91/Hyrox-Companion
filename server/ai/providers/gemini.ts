@@ -3,6 +3,7 @@ import { type GenerateContentResponse, ThinkingLevel } from "@google/genai";
 import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
 import { getAiClient } from "../geminiSdk";
 import { retryWithBackoff, withTimeout } from "../retry";
+import { combineSignals } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiProvider,
@@ -32,14 +33,6 @@ function geminiContents(request: ResolvedTextAiRequest) {
     role: message.role === "assistant" ? "model" : "user",
     parts: [{ text: message.content }],
   }));
-}
-
-/** Combine the caller's cancel signal with the per-call timeout signal (S6). */
-function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
-  const present = signals.filter((s): s is AbortSignal => s != null);
-  if (present.length === 0) return undefined;
-  if (present.length === 1) return present[0];
-  return AbortSignal.any(present);
 }
 
 function geminiConfig(request: ResolvedTextAiRequest, timeoutSignal?: AbortSignal) {

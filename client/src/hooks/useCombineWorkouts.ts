@@ -30,7 +30,8 @@ export function useCombineWorkouts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
-      // Combining workouts deletes/re-creates exercise sets — PRs and analytics
+      // Combining re-parents both sources' exercise sets onto the merged
+      // workout (server/services/combineWorkouts.ts), so the PRs and analytics
       // derived from those sets must refresh.
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});

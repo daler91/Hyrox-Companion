@@ -27,12 +27,8 @@ import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, notExists, or, sql 
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
+import { isUniqueViolation } from "../dbErrors";
 import { logger } from "../logger";
-
-function isUsersEmailUniqueViolation(error: unknown): boolean {
-  const pgError = error as { code?: string; constraint?: string };
-  return pgError.code === "23505" && pgError.constraint === "users_email_unique";
-}
 
 export class UserStorage {
   async getUsers(ids: string[]): Promise<User[]> {
@@ -191,7 +187,7 @@ export class UserStorage {
     try {
       return await this.upsertUserRow(userData);
     } catch (error) {
-      if (userData.email && isUsersEmailUniqueViolation(error)) {
+      if (userData.email && isUniqueViolation(error, "users_email_unique")) {
         const { email: _email, ...userDataWithoutEmail } = userData;
         logger.warn(
           { err: error, userId: userData.id },

@@ -13,7 +13,6 @@ import {
   useDeleteCoachingMaterial,
   useRagStatus,
   useReEmbed,
-  useUpdateCoachingMaterial,
 } from '../useCoachingMaterials';
 
 vi.mock('@/lib/api', () => ({
@@ -25,7 +24,6 @@ vi.mock('@/lib/api', () => ({
     coaching: {
       list: vi.fn(),
       create: vi.fn(),
-      update: vi.fn(),
       delete: vi.fn(),
       getRagStatus: vi.fn(),
       reEmbed: vi.fn(),
@@ -129,26 +127,6 @@ describe('useCoachingMaterials hooks', () => {
         description: 'Creation failed',
         variant: 'destructive',
       });
-    });
-  });
-
-  describe('useUpdateCoachingMaterial', () => {
-    it('updates coaching material and invalidates queries on success', async () => {
-      (api.coaching.update as any).mockResolvedValue({ id: '1' });
-
-      const { result } = renderHook(() => useUpdateCoachingMaterial(), { wrapper });
-
-      act(() => {
-        result.current.mutate({ id: '1', title: 'Updated' });
-      });
-
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-      });
-
-      expect(api.coaching.update).toHaveBeenCalledWith('1', { title: 'Updated' });
-      expect(globalQueryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['coaching-materials'] });
-      expect(mockToast).toHaveBeenCalledWith({ title: 'Coaching material updated' });
     });
   });
 

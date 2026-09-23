@@ -67,7 +67,8 @@ export function getLocalDayOfWeek(instant: Date, tz: string): DayOfWeek {
 /**
  * Return the local calendar date for `instant` as seen in `tz`, formatted
  * "YYYY-MM-DD". The result is suitable for passing to date-typed SQL columns
- * directly and matches the shape `toDateStr` returns for UTC inputs.
+ * directly and matches the shape `toIsoDateUtc` (shared/dateUtils) returns
+ * for UTC inputs.
  */
 export function getLocalDateStr(instant: Date, tz: string): string {
   return getYmdFormatter(tz).format(instant);

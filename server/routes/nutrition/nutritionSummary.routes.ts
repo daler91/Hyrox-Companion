@@ -157,17 +157,17 @@ async function resolveDayTrainingContext(
   return { durationMin: null, rpe: null, hasWorkout: false, timing: "none" };
 }
 
+/** Coerce the stored meal_schedule (3/4/5, nullable) to a valid count. */
+function normalizeMealSchedule(value: number | null | undefined): MealScheduleCount {
+  return value === 3 || value === 5 ? value : DEFAULT_MEAL_SCHEDULE;
+}
+
 /**
  * The day's per-meal fuel targets: distribute the effective daily target across
  * meals with the primary session's pre/post anchors placed first. Called only
  * when an effective target exists, so the (cheap, single-day) workout/plan
  * lookups stay gated. Returns null only when the target carries no macros at all.
  */
-/** Coerce the stored meal_schedule (3/4/5, nullable) to a valid count. */
-function normalizeMealSchedule(value: number | null | undefined): MealScheduleCount {
-  return value === 3 || value === 5 ? value : DEFAULT_MEAL_SCHEDULE;
-}
-
 async function resolveMealFuelTargets(userId: string, logDate: string, effectiveTarget: EffectiveTargetSummary, bodyweightKg: number | null, tz: string, mealSchedule: MealScheduleCount): Promise<MealFuelTargets | null> {
   const [training, overrides] = await Promise.all([
     resolveDayTrainingContext(userId, logDate, tz),

@@ -17,9 +17,9 @@ import { queryClient } from "@/lib/queryClient";
 const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayId] as const;
 
 // Same debounce window the cell inputs used to own. Lifted to the hook
-// because the Save button needs to flush pending cell edits
-// synchronously before regenerating the coach note; a per-component
-// debounce has no flush seam.
+// because LogSheet must flush pending cell edits before "log as planned"
+// (createWorkoutInTx copies the persisted plan-day rows) and before it
+// closes; a per-component debounce has no flush seam.
 const CELL_SAVE_DEBOUNCE_MS = 350;
 
 type PlanDayExerciseData = {

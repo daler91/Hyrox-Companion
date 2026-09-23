@@ -1,6 +1,6 @@
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 interface FieldRequirement {
   field: string;
@@ -66,22 +66,4 @@ export function getMissingFieldWarnings(exercise: StructuredExercise): string[] 
   }
 
   return warnings;
-}
-
-export function getExerciseMissingFields(exercise: StructuredExercise): string[] {
-  const category = getCategory(exercise);
-  const criticalFields = CRITICAL_FIELDS[category];
-  if (!criticalFields) return [];
-
-  const relevantFields = getRelevantFields(exercise);
-  const missing: string[] = [];
-
-  for (const { field, label } of criticalFields) {
-    if (!relevantFields.includes(field) && field !== "sets") continue;
-    if (isFieldMissing(exercise, field)) {
-      missing.push(label);
-    }
-  }
-
-  return missing;
 }

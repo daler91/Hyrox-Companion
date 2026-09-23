@@ -73,7 +73,7 @@ sequenceDiagram
     Clerk->>Browser: JWT cookie
     React->>API: GET /api/v1/auth/user (credentials: include)
     API->>API: clerkMiddleware extracts userId
-    API->>DB: storage.upsertUser({ id, email, name })
+    API->>DB: storage.users.upsertUser({ id, email, firstName, lastName, profileImageUrl })
     DB->>API: User record
     API->>React: User JSON
     React->>React: useAuth returns { user, isAuthenticated: true }
@@ -146,7 +146,7 @@ When a Clerk-authenticated request passes through `isAuthenticated`, the middlew
 1. **Check the user-seen cache.** A user-seen cache (5-minute TTL) tracks recently provisioned users. The cache is layered: a per-process in-memory `Map`, backed by a shared `server_runtime_cache` table so multiple instances share the signal. If the user was seen recently, return immediately (no DB or remote call).
 2. **Check the database.** On a cache miss, look up the user row by ID. If a row already exists, mark the user seen and return.
 3. **Provision a minimal row.** If the user does not exist, upsert a minimal `users` row containing only the Clerk user ID, then call `hydrateClerkProfile()` to fill in the rest.
-4. **Hydrate the Clerk profile.** `hydrateClerkProfile()` fetches the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`, bounded by a 30-second timeout (`Promise.race`, since the Clerk SDK does not accept an `AbortSignal`). It then upserts the `users` row with:
+4. **Hydrate the Clerk profile.** `hydrateClerkProfile()` fetches the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`, bounded by a 15-second timeout (`EXTERNAL_API_TIMEOUT_MS` in `server/constants.ts`, applied with `Promise.race` since the Clerk SDK does not accept an `AbortSignal`). It then upserts the `users` row with:
    - `id` -- The Clerk user ID
    - `email` -- The primary email address
    - `firstName`, `lastName` -- Name fields
@@ -209,12 +209,21 @@ export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
 
 **Key files:** `server/routes/auth.ts`, `server/clerkAuth.ts`, `server/routeUtils.ts`
 
-All `/api/v1/*` routes are protected by the `isAuthenticated` middleware. Each route handler applies it explicitly:
+Every `/api/v1/*` route is protected by the `isAuthenticated` middleware except these endpoints, which have to be reachable without a Clerk session:
+
+- `GET /api/v1/health` and `GET /api/v1/health/live` -- platform health probes (`server/bootstrap/health.ts`)
+- `GET /api/v1/csrf-token` -- CSRF token issuance
+- `GET /api/v1/strava/callback` -- the Strava OAuth redirect, authorised by the signed, single-use OAuth `state`
+- `GET`/`POST /api/v1/strava/webhook` -- Strava webhook deliveries, which the handler treats as hints only (`server/stravaWebhook.ts`)
+- `GET`/`POST /api/v1/emails/unsubscribe` -- email unsubscribe, authorised by the signed unsubscribe token
+- `GET /api/v1/cron/emails` -- the external email-cron trigger, authorised by an `x-cron-secret` header matching `CRON_SECRET`
+
+Every other route applies `isAuthenticated` explicitly, either directly or, for protected mutations, through `protectedMutationGuards` (`server/routeGuards.ts`):
 
 ```ts
 router.get('/api/v1/auth/user', isAuthenticated, rateLimiter("auth", 20), asyncHandler(async (req, res) => {
   const userId = getUserId(req);
-  const user = await storage.getUser(userId);
+  const user = await storage.users.getUser(userId);
   res.json(user);
 }));
 ```
@@ -251,18 +260,18 @@ The application uses CSRF protection via the `csrf-csrf` library (double-submit 
 
 ### Key Separation (CSRF_SECRET vs. ENCRYPTION_KEY)
 
-In production, `CSRF_SECRET` is **required** and **must be distinct** from `ENCRYPTION_KEY`. Both constraints are enforced at startup in `server/env.ts` via Zod `.refine()` checks that hard-fail boot with explicit messages:
+`CSRF_SECRET` is **required** in production, and whenever it is set it **must be distinct** from `ENCRYPTION_KEY`, in every environment. Both constraints are enforced at startup in `server/env.ts` via Zod `.refine()` checks that hard-fail boot with explicit messages:
 
 - `"❌ FATAL: CSRF_SECRET is required in production"`
 - `"❌ FATAL: CSRF_SECRET must differ from ENCRYPTION_KEY for proper key separation"`
 
-Mixing the two keys would tie the HMAC used for CSRF token signing to the same secret that decrypts Strava/Garmin credentials; rotating one would force the other. In development/test, `CSRF_SECRET` may be omitted and the middleware falls back to `ENCRYPTION_KEY` for convenience.
+Mixing the two keys would tie the HMAC used for CSRF token signing to the same secret that decrypts Strava/Garmin credentials; rotating one would force the other. In development/test, `CSRF_SECRET` may be omitted: `resolveCsrfSecret()` in `server/middleware/csrf.ts` then generates a random per-process secret and logs a warning. It never falls back to `ENCRYPTION_KEY`.
 
 ### Client Flow
 
-1. On app load, the API client calls the unprotected `GET /api/v1/csrf-token` endpoint to obtain a CSRF token. The server returns the token in JSON and sets the paired signed httpOnly cookie (`__Host-fitai.x-csrf` in production, `fitai.x-csrf` in development).
+1. On the first mutating request (and again after `resetCsrfToken()` clears the cache), `apiRequest()` in `client/src/lib/queryClient.ts` calls the unprotected `GET /api/v1/csrf-token` endpoint to obtain a CSRF token. Nothing is fetched on app load. The server returns the token in JSON and sets the paired signed httpOnly cookie (`__Host-fitai.x-csrf` in production, `fitai.x-csrf` in development).
 2. The token is cached in memory and attached as the `x-csrf-token` header on all mutating requests.
-3. If a 403 CSRF error is received, the client automatically refetches the token and retries the request.
+3. If a mutation gets a 403 -- whatever the cause, since the client does not distinguish a CSRF rejection from any other 403 -- it refetches the token once and retries the request.
 
 See [Server -- CSRF Protection](server.md#csrf-protection) for full implementation details.
 
@@ -317,12 +326,12 @@ The server configures Express's `trust proxy` setting in `server/bootstrap/appCo
 | `CLERK_PUBLISHABLE_KEY` | Optional* | Server | Clerk publishable key. Passed to Clerk middleware on the server. |
 | `CLERK_SECRET_KEY` | Optional* | Server | Clerk secret key. Used by `@clerk/express` to validate JWTs and by `clerkClient` to call the Clerk API (including `users.deleteUser` in `/api/v1/account`). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Optional* | Client | Clerk publishable key for the React client. Vite exposes this to the browser bundle. |
-| `CSRF_SECRET` | Required in production** | Server | 32+ char secret for CSRF token HMAC. Must differ from `ENCRYPTION_KEY` in production (see [Key Separation](#key-separation-csrf_secret-vs-encryption_key)). Falls back to `ENCRYPTION_KEY` in dev/test only. |
+| `CSRF_SECRET` | Required in production** | Server | 32+ char secret for CSRF token HMAC. Must differ from `ENCRYPTION_KEY` in every environment (see [Key Separation](#key-separation-csrf_secret-vs-encryption_key)). When unset in dev/test, a random per-process secret is generated. |
 | `ALLOW_DEV_AUTH_BYPASS` | Optional | Both | Set to `"true"` to enable the dev auth bypass. Only permitted in `development` and `test` environments. Fatal in production. |
 
 *The Clerk keys are optional in the Zod schema but are effectively required for production. If they are absent and `ALLOW_DEV_AUTH_BYPASS` is not `"true"`, the server will throw an error on startup.
 
-**Enforced at boot by `server/env.ts` `.refine()` guards; missing or `=== ENCRYPTION_KEY` in production aborts startup with an `❌ FATAL:` message.
+**Enforced at boot by `server/env.ts` `.refine()` guards: a missing `CSRF_SECRET` in production, or one equal to `ENCRYPTION_KEY` in any environment, aborts startup with an `❌ FATAL:` message.
 
 ---
 

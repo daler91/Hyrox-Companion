@@ -40,7 +40,7 @@ export type {
   UpdateUserPreferencesPayload,
   UserPreferences,
 } from "./user";
-export { auth, email, garmin, preferences, strava } from "./user";
+export { email, garmin, preferences, strava } from "./user";
 export type {
   BatchReparseResponse,
   BulkDeleteWorkoutsPayload,
@@ -64,11 +64,10 @@ import { planProposals } from "./planProposals";
 import { plans } from "./plans";
 import { recycleBin } from "./recycleBin";
 import { timelineAnnotations } from "./timelineAnnotations";
-import { auth, email, garmin, preferences, strava } from "./user";
+import { email, garmin, preferences, strava } from "./user";
 import { workouts } from "./workouts";
 
 export const api = {
-  auth,
   workouts,
   plans,
   chat,
@@ -118,7 +117,6 @@ export const QUERY_KEYS = {
   planProposalPending: ["/api/v1/plan-proposals/pending"] as const,
   coachingMaterials: ["/api/v1/coaching-materials"] as const,
   ragStatus: ["/api/v1/coaching-materials/rag-status"] as const,
-  customExercises: ["/api/v1/custom-exercises"] as const,
   stravaStatus: ["/api/v1/strava/status"] as const,
   garminStatus: ["/api/v1/garmin/status"] as const,
   mafTests: ["/api/v1/maf-tests"] as const,

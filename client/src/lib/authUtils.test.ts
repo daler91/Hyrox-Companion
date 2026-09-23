@@ -1,24 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { isUnauthorizedError } from './authUtils';
+import { getUserDisplayName } from './authUtils';
 
-describe('authUtils', () => {
-  describe('isUnauthorizedError', () => {
-    it.each([
-      'Unauthorized',
-      'Error: 401 Unauthorized',
-      '401: custom message',
-    ])('returns true for %s', (message) => {
-      expect(isUnauthorizedError(new Error(message))).toBe(true);
-    });
+describe('getUserDisplayName', () => {
+  it('uses the full name when both parts are present', () => {
+    expect(getUserDisplayName({ firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com' })).toBe('Ada Lovelace');
+  });
 
-    it.each([
-      '404: Not Found',
-      'unauthorized',
-      'Unexpected authentication failure',
-      'Something went wrong',
-    ])('returns false for %s', (message) => {
-      expect(isUnauthorizedError(new Error(message))).toBe(false);
-    });
+  it('falls back to the email when either name part is missing', () => {
+    expect(getUserDisplayName({ firstName: 'Ada', lastName: null, email: 'ada@example.com' })).toBe('ada@example.com');
+    expect(getUserDisplayName({ firstName: null, lastName: 'Lovelace', email: 'ada@example.com' })).toBe('ada@example.com');
+  });
+
+  it('falls back to "User" with no name and no email, or no user at all', () => {
+    expect(getUserDisplayName({ firstName: null, lastName: null, email: null })).toBe('User');
+    for (const absent of [null, undefined]) {
+      expect(getUserDisplayName(absent)).toBe('User');
+    }
   });
 });

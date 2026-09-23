@@ -26,11 +26,15 @@ type Params<TSnapshot> = {
   deleteInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
   /**
    * Invoked after ANY successful set write — update, add or delete. Logged
-   * workouts pass `invalidateWorkoutWriteQueries`: editing a set moves personal
-   * records, exercise analytics and the training overview exactly as much as
-   * logging the workout did, yet only the workout's own cache entry was ever
-   * invalidated, so those screens kept serving pre-edit numbers. Planned days
-   * leave it unset — planned sets don't feed any of those derived views.
+   * workouts pass `scheduleWorkoutWriteInvalidation` (lib/workoutInvalidation):
+   * editing a set moves personal records, exercise analytics and the training
+   * overview exactly as much as logging the workout did, yet only the
+   * workout's own cache entry was ever invalidated, so those screens kept
+   * serving pre-edit numbers. The scheduled form coalesces a burst of cell
+   * saves into one trailing refetch (audit P1) — passing the immediate
+   * `invalidateWorkoutWriteQueries` here would bring back the per-keystroke
+   * refetch storm. Planned days leave it unset — planned sets don't feed any
+   * of those derived views.
    */
   onWriteSuccess?: () => void;
   cellSaveDebounceMs?: number;

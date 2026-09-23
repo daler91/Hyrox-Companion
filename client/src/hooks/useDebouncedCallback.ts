@@ -7,8 +7,8 @@ import { useCallback, useEffect, useRef } from "react";
  * silently dropped if the user closes the dialog mid-edit.
  *
  * Deliberately minimal — the codebase already uses plain setTimeout + refs
- * elsewhere (see useOnboarding, useTimelineData), so this is the same
- * pattern in reusable form rather than pulling in lodash.debounce.
+ * elsewhere (see useOnboarding), so this is the same pattern in reusable
+ * form rather than pulling in lodash.debounce.
  */
 export function useDebouncedCallback<TArgs extends unknown[]>(
   fn: (...args: TArgs) => void,

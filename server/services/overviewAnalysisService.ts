@@ -18,6 +18,7 @@ import { generateJsonText } from "../ai/providers";
 import { env } from "../env";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
+import { formatZodIssues } from "../utils/sanitize";
 import { checkAiBudget } from "./aiUsageService";
 import { assembleTrainingOverview } from "./trainingOverviewLoader";
 
@@ -285,10 +286,11 @@ export async function generateOverviewAnalysis(
 
   const parsed = overviewAnalysisAiSchema.safeParse(raw);
   if (!parsed.success) {
-    // zod issue paths/messages
-    // describe the AI output schema, not user data.
+    // zod issue paths/messages describe the AI output schema, not user data —
+    // but the schema's z.record puts model-chosen keys into the paths, so they
+    // go through formatZodIssues (flattened, control chars stripped).
     // bearer:disable javascript_lang_logger_leak
-    log.warn({ issues: parsed.error.issues }, "[overview-analysis] AI output failed validation");
+    log.warn({ issues: formatZodIssues(parsed.error.issues) }, "[overview-analysis] AI output failed validation");
     throw new Error("Overview analysis failed schema validation");
   }
 

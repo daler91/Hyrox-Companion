@@ -2,22 +2,11 @@
 
 A set of specialized slash commands that let you review any codebase through multiple expert lenses using Claude Code.
 
-## Quick Setup
+## Setup
 
-Copy the `review` folder into your project's `.claude/commands/` directory:
-
-```bash
-# From your project root
-mkdir -p .claude/commands
-cp -r review-agents/.claude/commands/review .claude/commands/review
-```
-
-Or install globally (available in all projects):
-
-```bash
-mkdir -p ~/.claude/commands
-cp -r review-agents/.claude/commands/review ~/.claude/commands/review
-```
+Nothing to install in this repo: the profiles live in `.claude/commands/review/`, and Claude Code
+exposes each file there as `/review:<name>`. To reuse them elsewhere, copy this folder into another
+project's `.claude/commands/` (or into `~/.claude/commands/` to make them global).
 
 ## Available Commands
 
@@ -36,21 +25,21 @@ cp -r review-agents/.claude/commands/review ~/.claude/commands/review
 
 ### Run the full review suite
 ```
-/project:review:all
+/review:all
 ```
 
 ### Run individual reviews
 ```
-/project:review:security
-/project:review:ux
-/project:review:performance
+/review:security
+/review:ux
+/review:performance
 ```
 
 ### Review a specific area
 You can also scope a review to specific files by adding context:
 ```
-> Review only the src/api/ directory
-/project:review:security
+> Review only the server/routes/ directory
+/review:security
 ```
 
 ## Recommended Workflow

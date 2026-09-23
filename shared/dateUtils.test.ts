@@ -60,6 +60,9 @@ describe("toIsoDateUtc / parseIsoDate", () => {
     expect(toIsoDateUtc(new Date("2026-03-29T23:30:00Z"))).toBe("2026-03-29");
     // Same instant, but 30 minutes later crosses UTC midnight.
     expect(toIsoDateUtc(new Date("2026-03-30T00:30:00Z"))).toBe("2026-03-30");
+    // An offset-carrying input is converted, not read as a wall-clock date:
+    // 23:00 on the 15th in UTC-4 is already the 16th in UTC.
+    expect(toIsoDateUtc(new Date("2023-10-15T23:00:00-04:00"))).toBe("2023-10-16");
   });
 
   it("parseIsoDate yields UTC midnight, so it round-trips through toIsoDateUtc", () => {

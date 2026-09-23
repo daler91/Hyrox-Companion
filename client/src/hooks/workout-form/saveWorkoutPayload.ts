@@ -1,11 +1,11 @@
 import type { ParsedExercise, StructureBlockInput } from "@shared/schema";
 import { lintWorkoutStructure, type StructureLintIssue } from "@shared/schema/structureLint";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { configToStructureBlock } from "@/components/workout-structure";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
 import { parseOptionalDistanceMeters, parseOptionalInt, validateManualMetrics } from "@/lib/manualMetrics";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 
 import type { SaveWorkoutInput } from "./types";

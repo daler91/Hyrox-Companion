@@ -4,13 +4,13 @@ import {
   EXERCISE_NAME_ALIASES,
   type ExerciseName,
 } from "@shared/schema/exercises";
-import { Plus, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { exerciseIcons } from "@/lib/exerciseIcons";
+import { getExerciseIcon } from "@/lib/exerciseIcons";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
 interface ExerciseSelectorProps {
@@ -201,7 +201,7 @@ export function ExerciseSelector({
             {exercises.map(([name, def]) => {
               const count = countOf(name);
               const isSelected = count > 0;
-              const Icon = exerciseIcons[name] || Plus;
+              const Icon = getExerciseIcon(name);
               return (
                 <Button
                   key={name}

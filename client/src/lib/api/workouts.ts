@@ -93,24 +93,6 @@ export const workouts = {
       )
       : typedRequest<WorkoutCreateResponse>("POST", "/api/v1/workouts", data),
 
-  list: (params?: { limit?: number; offset?: number }) => {
-    let qs = "";
-    if (params) {
-      // ⚡ Bolt Performance Optimization:
-      // Replaced chained `.filter(...).map(...)` on `Object.entries` with a single for...of loop.
-      // This eliminates an intermediate array allocation and a double O(N) traversal.
-      const searchParams = new URLSearchParams();
-      for (const [k, v] of Object.entries(params)) {
-        if (v != null) {
-          searchParams.append(k, String(v));
-        }
-      }
-      const searchString = searchParams.toString();
-      qs = searchString ? `?${searchString}` : "";
-    }
-    return typedRequest<WorkoutLog[]>("GET", `/api/v1/workouts${qs}`);
-  },
-
   /**
    * Fetch the most recent workout log with its exercise sets embedded so the
    * client can hydrate a "duplicate last" prefill in one round-trip.
@@ -158,8 +140,6 @@ export const workouts = {
 
   combine: (data: { newWorkout: Record<string, unknown>; deleteWorkoutIds: string[]; skipPlanDayIds?: string[] }) =>
     typedRequest<WorkoutLog>("POST", "/api/v1/workouts/combine", data),
-
-  getUnstructured: () => typedRequest<WorkoutLog[]>("GET", "/api/v1/workouts/unstructured"),
 
   reparse: (id: string, payload?: ReparseWorkoutTextPayload) =>
     payload === undefined

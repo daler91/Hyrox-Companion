@@ -373,8 +373,8 @@ function ReviewDetailsColumn({
   onDeleteConfirm,
   onResolveReview,
 }: ReviewDetailsColumnProps) {
-  // Read here rather than threading a 25th prop down — it rides on the auth
-  // user query the sheet already holds.
+  // Read here rather than threading yet another prop down — it rides on the
+  // auth user query the sheet already holds.
   const mafCeiling = useMafCeiling();
 
   return (

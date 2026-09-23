@@ -220,7 +220,7 @@ describe("buildTrainingContext", () => {
 
     const ctx = await buildTrainingContext(USER_ID);
 
-    expect(weekMock).toHaveBeenCalledWith("2026-05-01", 12);
+    expect(weekMock).toHaveBeenCalledWith("2026-05-01", 12, TODAY);
     expect(computePlanPhase).toHaveBeenCalledWith(12, 3);
     expect(ctx.activePlan).toEqual({
       name: "12wk Build",
@@ -229,6 +229,28 @@ describe("buildTrainingContext", () => {
       goal: "sub-70",
     });
     expect(ctx.coachingInsights?.planPhase).toEqual({ phaseLabel: "build" });
+  });
+
+  it("anchors the plan week and station gaps on the athlete's date, not UTC's", async () => {
+    // 03:00 UTC on the 15th is still the evening of the 14th in Los Angeles.
+    // Both helpers used to fall back to the UTC date, so for a few hours each
+    // night the coach reasoned about a different day than the load window did.
+    vi.setSystemTime(new Date(`${TODAY}T03:00:00Z`));
+    vi.mocked(storage.users.getUser).mockResolvedValue(
+      makeUser({ userTimezone: "America/Los_Angeles" }),
+    );
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValue({
+      name: "12wk Build",
+      totalWeeks: 12,
+      startDate: "2026-05-01",
+      goal: null,
+    } as never);
+
+    await buildTrainingContext(USER_ID);
+
+    const athleteToday = "2026-06-14";
+    expect(weekMock).toHaveBeenCalledWith("2026-05-01", 12, athleteToday);
+    expect(gapsMock).toHaveBeenCalledWith(expect.any(Array), athleteToday, null);
   });
 
   it("omits the active plan and phase when none is active", async () => {

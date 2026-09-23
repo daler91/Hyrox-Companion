@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { retryWithBackoff } from "../retry";
 import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
 
 vi.mock("../retry", async () => (await import("./testHelpers")).mockRetryModule());
+
+// Placeholder credential for the provider under test; never leaves the process.
+const TEST_KEY = "test-key";
 
 const baseRequest = makeProviderRequest({
   providerId: "openai-compatible",
@@ -23,7 +27,7 @@ describe("openai-compatible text provider", () => {
     }));
 
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,
@@ -39,7 +43,7 @@ describe("openai-compatible text provider", () => {
     });
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://api.x.ai/v1/chat/completions");
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer test-key" });
+    expect(init?.headers).toMatchObject({ Authorization: `Bearer ${TEST_KEY}` });
     expect(requestJsonBody(init)).toMatchObject({
       model: "grok-4.3",
       response_format: { type: "json_object" },
@@ -56,7 +60,7 @@ describe("openai-compatible text provider", () => {
       choices: [{ message: { content: "ok" } }],
     }));
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.groq.com/openai/v1/",
       profile: "groq",
       supportsReasoningEffort: false,
@@ -69,6 +73,31 @@ describe("openai-compatible text provider", () => {
     expect(fetchSpy.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
 
+  it("aborts the HTTP request when retry's per-attempt timeout fires", async () => {
+    // retryWithBackoff abandons a timed-out attempt by aborting the signal it
+    // passes in. The request must listen to it, or the hung call keeps its
+    // socket open and runs on beside the retry.
+    const attempt = new AbortController();
+    vi.mocked(retryWithBackoff).mockImplementationOnce((fn) => fn(attempt.signal));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      choices: [{ message: { content: "ok" } }],
+    }));
+
+    const provider = createOpenAiCompatibleTextProvider({
+      apiKey: TEST_KEY,
+      baseUrl: "https://api.x.ai/v1",
+      profile: "xai",
+      supportsReasoningEffort: true,
+    });
+    await provider.generateText(baseRequest);
+
+    const signal = fetchSpy.mock.calls[0]?.[1]?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
+    attempt.abort();
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("parses streamed SSE deltas", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
       "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n" +
@@ -77,7 +106,7 @@ describe("openai-compatible text provider", () => {
       { status: 200 },
     ));
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,
@@ -99,7 +128,7 @@ describe("openai-compatible text provider", () => {
       { status: 200 },
     ));
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,

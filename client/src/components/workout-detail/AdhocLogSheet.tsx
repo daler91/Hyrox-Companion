@@ -1,6 +1,5 @@
 import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { Dumbbell, ExternalLink, Gauge, ListChecks, Loader2, NotebookPen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -12,10 +11,11 @@ import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
-import { api, QUERY_KEYS } from "@/lib/api";
+import { api } from "@/lib/api";
+import { getTodayString } from "@/lib/dateUtils";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
-import { queryClient } from "@/lib/queryClient";
 import { normalizeDurationMinutes } from "@/lib/workoutDuration";
+import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
 import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 import { ExerciseTable } from "./ExerciseTable";
@@ -30,8 +30,6 @@ interface AdhocLogSheetProps {
 }
 
 const ADHOC_DRAFT_ID = "adhoc-draft";
-
-const todayStr = () => format(new Date(), "yyyy-MM-dd");
 
 const newRowId = () => crypto.randomUUID();
 
@@ -221,7 +219,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   // user never has to clear the field on a quick log. Save still falls back
   // to "Workout" via `title.trim() || "Workout"`.
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(todayStr());
+  const [date, setDate] = useState(getTodayString());
   const [mainWorkout, setMainWorkout] = useState("");
   const [accessory, setAccessory] = useState("");
   const [notes, setNotes] = useState("");
@@ -231,7 +229,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
 
   const resetState = () => {
     setTitle("");
-    setDate(todayStr());
+    setDate(getTodayString());
     setMainWorkout("");
     setAccessory("");
     setNotes("");
@@ -240,7 +238,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     setExerciseSets([]);
   };
 
-  // Re-evaluate todayStr() on every open transition so a long-lived
+  // Re-evaluate getTodayString() on every open transition so a long-lived
   // session that survives midnight doesn't prefill yesterday's date.
   // Sheet stays mounted in Timeline, toggled by `open` — without this
   // effect the date set at mount would persist until the user manually
@@ -370,16 +368,11 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
-      // Server flips isAutoCoaching on workout create; the auth-user
+      // The same set useSaveWorkoutMutation invalidates. It includes the
+      // auth user: the server flips isAutoCoaching on workout create, and that
       // cache transition is what wakes the coaching-polling effect and
-      // schedules follow-up timeline refreshes for AI notes. Mirrors
-      // useSaveWorkoutMutation's invalidation set.
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
+      // schedules follow-up timeline refreshes for AI notes.
+      invalidateWorkoutWriteQueries();
       toast({ title: "Workout logged", description: "Your workout has been saved." });
       toastPersonalRecordAchievements(toast, data.newPersonalRecords);
       handleClose();
@@ -426,7 +419,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                max={todayStr()}
+                max={getTodayString()}
                 data-testid="adhoc-date-input"
               />
             </div>

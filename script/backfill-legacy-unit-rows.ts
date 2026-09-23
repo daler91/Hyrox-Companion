@@ -46,22 +46,7 @@ import {
   loadAthletes,
 } from "../server/services/legacyUnitAudit";
 import { countUnstamped, stampLegacyRowsForUser } from "../server/services/legacyUnitBackfill";
-
-interface Flags {
-  apply: boolean;
-  userId?: string;
-  quiet: boolean;
-}
-
-function parseFlags(argv: string[]): Flags {
-  const flags: Flags = { apply: false, quiet: false };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--apply") flags.apply = true;
-    else if (argv[i] === "--user-id") flags.userId = argv[++i];
-    else if (argv[i] === "--quiet") flags.quiet = true;
-  }
-  return flags;
-}
+import { type BackfillFlags, parseBackfillFlags } from "./backfillCli";
 
 interface StampPlan {
   readonly report: AthleteUnitReport;
@@ -137,7 +122,7 @@ type Outcome =
  * against the database as it is at the moment of writing rather than against a
  * report file. See the header.
  */
-async function processAthlete(athlete: AthleteUnitRow, flags: Flags): Promise<Outcome> {
+async function processAthlete(athlete: AthleteUnitRow, flags: BackfillFlags): Promise<Outcome> {
   const report = await auditAthlete(athlete);
   if (report.verdict === "nothing_to_do") return { kind: "nothing_to_do" };
 
@@ -158,7 +143,7 @@ async function processAthlete(athlete: AthleteUnitRow, flags: Flags): Promise<Ou
 }
 
 async function main(): Promise<void> {
-  const flags = parseFlags(process.argv.slice(2));
+  const flags = parseBackfillFlags(process.argv.slice(2));
 
   const athletes = await loadAthletes(flags.userId);
   const tally = { stamped: 0, weightRows: 0, distanceRows: 0, skipped: 0, nothingToDo: 0 };

@@ -29,6 +29,7 @@ import { env } from "../../env";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { getLocalDateStrSafe } from "../../timezone";
+import { formatZodIssues } from "../../utils/sanitize";
 import { checkAiBudget } from "../aiUsageService";
 import { calculateTrainingLoad, type TrainingLoadSet } from "../trainingLoadService";
 import {
@@ -490,7 +491,7 @@ export async function generateRacePrediction(
     const parsed = racePredictionAiSchema.safeParse(raw);
     if (!parsed.success) {
       log.warn(
-        { issues: parsed.error.issues },
+        { issues: formatZodIssues(parsed.error.issues) },
         "[race-predictor] AI output failed validation; using deterministic baseline",
       );
       return buildDeterministicResponse(features, storedGender, "ai_error", readiness);

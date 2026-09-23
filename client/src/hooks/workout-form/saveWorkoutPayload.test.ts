@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 import { buildWorkoutSavePayload } from "./saveWorkoutPayload";
 

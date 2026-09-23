@@ -21,7 +21,8 @@ import { db, type DbExecutor } from "../db";
  * is a no-op if the plan_day doesn't belong to `userId`.
  *
  * Concurrency: takes SELECT FOR UPDATE on the plan_day row to serialize
- * with concurrent createWorkoutLog paths that update the same row. Without
+ * with the concurrent workout-create paths (createWorkoutInTx, and the bulk
+ * createWorkoutLogs the Strava sync uses) that update the same row. Without
  * the lock, a concurrent INSERT could commit between our count query and
  * our UPDATE, causing us to overwrite a freshly-"completed" plan_day back
  * to "planned". When called outside an existing transaction we open our
@@ -38,7 +39,7 @@ export function syncPlanDayStatusFromWorkouts(
 
 async function syncInTransaction(planDayId: string, userId: string, tx: DbExecutor): Promise<void> {
   // SELECT FOR UPDATE on plan_days only (not training_plans) — locks the
-  // single row whose status we may update. createWorkoutLog's subsequent
+  // single row whose status we may update. A concurrent create's subsequent
   // UPDATE on this row will block until our transaction commits.
   const [row] = await tx
     .select({

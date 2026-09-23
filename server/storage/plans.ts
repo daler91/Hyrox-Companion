@@ -21,9 +21,6 @@ import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
 
-// Re-export for callers that already reach for it via PlanStorage's neighbours.
-export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-
 export class PlanStorage {
   async createTrainingPlan(plan: InsertTrainingPlan, tx?: DbExecutor): Promise<TrainingPlan> {
     const executor = tx ?? db;

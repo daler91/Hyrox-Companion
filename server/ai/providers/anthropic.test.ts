@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { retryWithBackoff } from "../retry";
 import { createAnthropicTextProvider, stripJsonCodeFence } from "./anthropic";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
@@ -43,6 +44,26 @@ describe("anthropic text provider", () => {
       system: expect.stringContaining("Return only valid JSON"),
       messages: [{ role: "user", content: "Hello" }],
     });
+  });
+
+  it("aborts the HTTP request when retry's per-attempt timeout fires", async () => {
+    // retryWithBackoff abandons a timed-out attempt by aborting the signal it
+    // passes in. The request must listen to it, or the hung call keeps its
+    // socket open and runs on beside the retry.
+    const attempt = new AbortController();
+    vi.mocked(retryWithBackoff).mockImplementationOnce((fn) => fn(attempt.signal));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      content: [{ type: "text", text: "ok" }],
+    }));
+
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+    await provider.generateText(baseRequest);
+
+    const signal = fetchSpy.mock.calls[0]?.[1]?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
+    attempt.abort();
+    expect(signal?.aborted).toBe(true);
   });
 
   it("parses streamed content deltas", async () => {

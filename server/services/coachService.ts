@@ -48,7 +48,10 @@ type AutoCoachAiSource = "rag" | "legacy" | "load_governor" | null | undefined;
 function getExistingFieldValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.targetField === "mainWorkout") return entry.mainWorkout;
   if (suggestion.targetField === "accessory") return entry.accessory || "";
-  return "";
+  // Notes too: returning "" here made every "append" to notes REPLACE the
+  // day's existing notes with the coach's line. The manual apply path
+  // (aiSuggestionService getPlanDayFieldValue) already read them.
+  return entry.notes || "";
 }
 
 function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {

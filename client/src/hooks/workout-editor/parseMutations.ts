@@ -2,9 +2,9 @@ import type { StructureBlockInput } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
 import { api, type ParseFromImagePayload, type ParseWorkoutStructureResponse } from "@/lib/api";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 import { getParseSuccessDescription, processParsedExercises } from "./parseMerging";
 import { rowsForParsedStructure } from "./structureRows";

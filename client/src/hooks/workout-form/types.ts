@@ -1,6 +1,6 @@
 import type { InsertWorkoutLog, ParsedExercise, StructureBlockInput } from "@shared/schema";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 export interface WorkoutFormInitialValues {
   title?: string;

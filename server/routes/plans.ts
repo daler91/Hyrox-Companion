@@ -3,6 +3,7 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
+import { isUniqueViolation } from "../dbErrors";
 import { env } from "../env";
 import { AppError, classifyAiError, ErrorCode, isLikelyAiProviderFailure } from "../errors";
 import { reqLogger } from "../logger";
@@ -56,17 +57,10 @@ function sendParseWriteThroughResponse(
 
 /**
  * True when an error is the uq_training_plans_user_in_flight unique violation —
- * the DB-level loser of two concurrent /plans/generate requests. Checks the
- * error and its cause chain because drizzle can wrap the pg error.
+ * the DB-level loser of two concurrent /plans/generate requests.
  */
 function isInFlightPlanUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
-    const rec = current as { code?: unknown; constraint?: unknown; cause?: unknown };
-    if (rec.code === "23505" && rec.constraint === "uq_training_plans_user_in_flight") return true;
-    current = rec.cause;
-  }
-  return false;
+  return isUniqueViolation(error, "uq_training_plans_user_in_flight");
 }
 
 
@@ -150,7 +144,7 @@ router.get("/api/v1/plans", isAuthenticated, rateLimiter("planRead", 60), asyncH
 
 // Returns the full plan with every day, so it is the heaviest read in this
 // router; it was previously the only one without a limiter.
-router.get("/api/v1/plans/:id", isAuthenticated, rateLimiter("planRead", 60), handleGetOrDeletePlan(storage.plans.getTrainingPlan.bind(storage)));
+router.get("/api/v1/plans/:id", isAuthenticated, rateLimiter("planRead", 60), handleGetOrDeletePlan((id, userId) => storage.plans.getTrainingPlan(id, userId)));
 
 protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport", 5), middleware: [validateBody(importPlanRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const { csvContent, fileName, planName } = req.body;
@@ -354,7 +348,8 @@ protectedDelete(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("pla
 
 // -----------------------------------------------------------------------------
 // Plan-day exercise-set CRUD — used by the v2 workout detail dialog when a
-// planned entry is open. Mirrors the workout-log routes in server/routes/workouts.ts
+// planned entry is open. Mirrors the workout-log set routes in
+// server/routes/workouts/workoutsCrud.routes.ts
 // but writes to exercise_sets owned by a planDay. Ownership is enforced per-row
 // through storage.workouts.ownsPlanDay + getExerciseSetOwned.
 // -----------------------------------------------------------------------------

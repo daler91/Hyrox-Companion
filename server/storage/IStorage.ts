@@ -19,7 +19,7 @@ import type { WorkoutStorage } from "./workouts";
 /**
  * Composed storage facade. Callers access domain classes directly:
  *   storage.users.getUser(...)
- *   storage.workouts.createWorkoutLog(...)
+ *   storage.workouts.getWorkoutLog(...)
  *   storage.plans.getActivePlan(...)
  *   storage.timeline.getTimeline(...)
  *   storage.timelineAnnotations.list(...)
