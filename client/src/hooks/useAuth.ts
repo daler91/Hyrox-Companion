@@ -4,11 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
 import { QUERY_KEYS } from "@/lib/api";
+import { shouldBypassAuth } from "@/lib/authBypass";
 import { resetCsrfToken } from "@/lib/queryClient";
-
-const isCypressTest = globalThis.window !== undefined && "Cypress" in globalThis.window;
-const isDevPreview = import.meta.env.DEV && globalThis.window !== undefined && (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || globalThis.window.self !== globalThis.window.top);
-const shouldBypassAuth = isCypressTest || isDevPreview;
 
 /** Max polling duration for auto-coaching status (5 minutes) */
 const MAX_COACHING_POLL_MS = 5 * 60 * 1000;
@@ -130,7 +127,7 @@ function useTestAuthImpl() {
   };
 }
 
-export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
+export const useAuth = shouldBypassAuth() ? useTestAuthImpl : useClerkAuthImpl;
 
 /**
  * Subscribes to a single boolean field on the auth user via React

@@ -22,6 +22,7 @@ import { useFocusMainOnRouteChange } from "@/hooks/useFocusMainOnRouteChange";
 import { useNavigationBreadcrumb } from "@/hooks/useNavigationBreadcrumb";
 import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
 import { useOfflineQueueFlush } from "@/hooks/useOfflineQueueFlush";
+import { isDevPreview, shouldBypassAuth } from "@/lib/authBypass";
 import { featureFlags } from "@/lib/featureFlags";
 import NotFound from "@/pages/not-found";
 
@@ -40,18 +41,6 @@ const Nutrition = lazy(() => import("@/pages/Nutrition"));
 const Review = lazy(() => import("@/pages/Review"));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
-
-function isCypressTest(): boolean {
-  return globalThis.window !== undefined && "Cypress" in globalThis.window;
-}
-
-function isDevPreview(): boolean {
-  return import.meta.env.DEV && (!clerkPubKey || (globalThis.window !== undefined && globalThis.window.self !== globalThis.window.top));
-}
-
-function shouldBypassAuth(): boolean {
-  return isCypressTest() || isDevPreview();
-}
 
 function DevModeBanner() {
   return (
