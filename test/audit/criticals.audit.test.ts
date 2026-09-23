@@ -1,10 +1,11 @@
 /**
- * Characterisation tests for the seven C-tier findings in
+ * Regression guards for the seven C-tier findings (and H1) in
  * docs/CALCULATION_AUDIT_2026-08-20.md.
  *
- * These assert what the code does TODAY, which in every case below is wrong.
- * See ./README.md for the convention and for how to retire a test once its
- * finding is fixed.
+ * These began as characterisation tests pinning the then-current, wrong
+ * behaviour; every finding below has since been fixed and its tests flipped to
+ * assert the intended behaviour. See ./README.md for the history and the
+ * convention.
  */
 import { calculateMafHr, metersPerSecond } from "@shared/maf";
 import {

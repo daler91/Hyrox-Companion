@@ -52,8 +52,8 @@
 **Sidebar Navigation**:
 - Persistent sidebar on desktop (16rem width, 3rem icon mode)
 - Collapses to icon-only on mobile with hamburger trigger
-- Navigation items: Training (timeline), Log Workout, Analytics, Settings
-- Mobile: Sticky top header with breadcrumb navigation
+- Navigation items: Training (timeline), Log Workout, Nutrition (when the nutrition flag is on), Analytics, Settings — one list, `PRIMARY_NAV_ITEMS` in `client/src/lib/navItems.ts`
+- Desktop: breadcrumb bar above the content; phones get a bottom tab bar (`MobileTabBar`) with the same items instead
 - User profile display with avatar in sidebar footer
 - Theme toggle and logout in footer
 
@@ -70,17 +70,16 @@
 - Compact form layout with inline labels
 - Drag-and-drop reordering via dnd-kit
 
-**Exercise Input Cards**:
-- Input fields for sets/reps/weight/time/distance (dynamic per exercise type)
-- AI parsing confidence shown as color-coded badges (green 80+, yellow 60-80, red <60)
-- Missing field warnings with yellow alert boxes
+**Exercise Rows** (Log Workout confirm step and workout detail):
+- Per-set fields for reps/weight/time/distance, chosen per exercise type
+- Missing critical fields (e.g. weight and reps for strength) are reported as warnings when the workout is saved
 
 ### Training Log
 
-**Log Entry Form** (3 input modes):
-- **Voice Input**: Web Speech API with Gemini AI parsing
-- **Text Input**: Free-form text parsed by Gemini
-- **Form Mode**: Structured exercise entry with drag-and-drop ordering
+**Log Entry Form** (a three-step stepper: Capture → Confirm → Reflect):
+- **Capture**: a structured exercise list plus a "Describe / dictate" panel — free text, voice (Web Speech API) or a photo is auto-parsed by the AI into the list
+- **Confirm**: review and correct the parsed rows before saving
+- **Reflect**: RPE and notes
 - Exercise autocomplete (200+ base exercises + custom)
 - Set/rep/weight/distance/time tracking
 - RPE selector and notes field
@@ -89,7 +88,7 @@
 - Vertical timeline with workout cards and date grouping
 - Drag-and-drop workout reordering
 - Filters by status (completed, planned, missed, skipped)
-- Import training plans (CSV/PDF/DOCX)
+- Import training plans (CSV)
 - Inline workout detail dialog with edit mode
 - Floating action button for quick workout logging
 
@@ -99,7 +98,6 @@
 - Streaming chat via Server-Sent Events
 - Auto-suggestions based on plan and recent performance
 - RAG-powered responses from uploaded coaching materials
-- Coach personality customization
 - Message bubbles: User right-aligned, AI left-aligned
 - Input: Fixed bottom with rounded border
 
@@ -107,7 +105,7 @@
 - Personal Records tab (1RM estimation, max weight/distance, best time)
 - Exercise Progression Charts (line, bar, heatmap via Recharts)
 - Training Overview (weekly volume, frequency, intensity)
-- Category Breakdown (strength, conditioning, running, mobility, functional)
+- Category Breakdown (strength, conditioning, running, functional)
 - Advanced filtering by date range and exercise
 
 ### Data Visualization
@@ -152,9 +150,8 @@
 - Empty states: welcome wizard, import plan, generate plan
 
 ### Log Workout (/log)
-- Mode selector (voice, text, form)
-- Exercise blocks with drag-and-drop ordering
-- AI-powered parsing for voice and text modes
+- Capture → Confirm → Reflect stepper
+- Exercise list auto-filled from parsed text, voice or a photo
 - Exercise autocomplete and custom exercise support
 
 ### Analytics (/analytics)
@@ -202,7 +199,7 @@
 **Error Handling**:
 - FallbackErrorBoundary for full-page crashes
 - FeatureErrorBoundary for isolated component failures
-- Toast notifications (max 5, 5-second auto-dismiss, swipe-to-dismiss on mobile)
+- Toast notifications (one at a time — `TOAST_LIMIT = 1` — with swipe-to-dismiss on mobile)
 
 **Offline Support**:
 - PWA with service worker caching (Workbox)

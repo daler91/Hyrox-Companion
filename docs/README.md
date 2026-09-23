@@ -100,7 +100,7 @@ above and the source.
 | [Security Audit](SECURITY_AUDIT_2026-09-19.md)                       | 2026-09-19 — carries a remediation section: what was fixed, and what was deliberately left alone with reasons |
 | [Mapper-Concern Verification](MAPPER_CONCERNS_VERIFIED_2026-09-04.md) | 2026-09-04                                                                                |
 | [Codebase Analysis](CODEBASE_ANALYSIS_2026-08-31.md)                  | 2026-08-31                                                                                |
-| [Calculation Correctness Audit](CALCULATION_AUDIT_2026-08-20.md)      | 2026-08-20 — pinned by characterisation tests in [`test/audit/`](../test/audit/README.md) |
+| [Calculation Correctness Audit](CALCULATION_AUDIT_2026-08-20.md)      | 2026-08-20 — its C-tier fixes are guarded by [`test/audit/`](../test/audit/README.md) |
 | [Codebase Analysis](CODEBASE_ANALYSIS_2026-07-19.md)                  | 2026-07-19                                                                                |
 | [Codebase Analysis](CODEBASE_ANALYSIS_2026-07-01.md)                  | 2026-07-01                                                                                |
 
@@ -114,7 +114,7 @@ including the undated _Deep Codebase Audit_ that sat unlinked at the repo root u
 | [Repo README](../README.md)                                 | Features, tech stack, project structure, setup, scripts, CI      |
 | [CONTRIBUTING](../CONTRIBUTING.md)                          | Local setup, the typecheck ratchet, conventions, PR expectations |
 | [Race benchmarks tool](../script/race-benchmarks/README.md) | Generating and backtesting the race-prediction seed data         |
-| [Calculation audit tests](../test/audit/README.md)          | Why those characterisation tests pin current-but-wrong behaviour |
+| [Calculation audit tests](../test/audit/README.md)          | Regression guards for the audit's fixed C-tier findings, and how they started as characterisation tests |
 
 ---
 

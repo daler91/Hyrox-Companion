@@ -31,14 +31,22 @@ See [`docs/env-reference.md`](docs/env-reference.md) for the full environment-va
 
 ## Required checks
 
-Run these locally before pushing; they also run in CI:
+Run these locally before pushing. CI runs all of them except `pnpm format:check`:
 
-| Command             | Purpose                                                                      |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `pnpm check`        | TypeScript type checking (TS 7 native compiler)                              |
-| `pnpm test`         | Vitest unit/component/route suite (includes `jest-axe` accessibility checks) |
-| `pnpm lint`         | ESLint                                                                       |
-| `pnpm format:check` | Prettier formatting check (use `pnpm format` to fix)                         |
+| Command             | Purpose                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`        | TypeScript type checking (TS 7 native compiler)                                                                                                |
+| `pnpm check:strict` | The `noUncheckedIndexedAccess` ratchet (see [below](#nouncheckedindexedaccess-ratchet))                                                        |
+| `pnpm check:test`   | Typechecks the `*.test.ts` files that `pnpm check` excludes                                                                                    |
+| `pnpm test`         | Vitest unit/component/route suite (includes `jest-axe` accessibility checks). CI runs it as `pnpm test:coverage`, which also enforces the coverage thresholds in `vitest.config.ts` |
+| `pnpm lint`         | ESLint                                                                                                                                         |
+| `pnpm format:check` | Prettier formatting check (use `pnpm format` to fix)                                                                                           |
+
+**Prettier is configured but not yet enforced.** No workflow runs `pnpm format:check`, and
+about 800 existing files predate the Prettier config, so it fails on a clean checkout
+(801 files on 2026-09-22). New files should pass `pnpm exec prettier --check <file>`; in
+existing files, match the surrounding style rather than reformatting the whole file in a
+feature PR, which buries the real change in the diff.
 
 Useful additional suites when relevant to your change:
 
@@ -82,15 +90,17 @@ a single `typescript` dependency.
 
 - **TypeScript** throughout, in strict mode. Prefer the shared types in `shared/schema/`
   over redefining shapes on the client or server.
-- **Formatting** is enforced by Prettier and **linting** by ESLint — do not hand-fight them;
-  run `pnpm format` and `pnpm lint:fix`.
+- **Linting** is enforced by ESLint in CI — run `pnpm lint:fix` rather than hand-fighting it.
+  Prettier formatting is not yet enforced; see [Required checks](#required-checks).
 - **Validation** uses Zod (`shared/schema/zod.ts`); validate request bodies at the route boundary.
 - Keep imports sorted as the existing ESLint config expects.
 
 ### `noUncheckedIndexedAccess` ratchet
 
-The base `tsconfig.json` doesn't yet enable `noUncheckedIndexedAccess` (~370
-call sites need updating). `tsconfig.strict.json` turns it on for a growing
+The base `tsconfig.json` doesn't yet enable `noUncheckedIndexedAccess`: turning it on
+reports ~420 errors (416 on 2026-09-23 — server 222, client 157, script 37, shared 0;
+re-derive with `node node_modules/typescript7/bin/tsc -p tsconfig.json
+--noUncheckedIndexedAccess --noEmit --incremental false`). `tsconfig.strict.json` turns it on for a growing
 subset — currently `shared/**` — and CI runs it as `pnpm check:strict`.
 
 To expand coverage, add the next directory to `tsconfig.strict.json`'s

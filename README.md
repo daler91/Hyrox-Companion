@@ -241,9 +241,10 @@ Hyrox-Companion/
 |       |-- components/        # UI, timeline, coach, analytics, settings, workout surfaces
 |       |-- hooks/             # Custom React hooks
 |       |-- lib/               # API client, query client, utilities
-|       `-- pages/             # Landing, Timeline, LogWorkout, Analytics, Settings, Privacy
+|       `-- pages/             # Landing, Timeline, LogWorkout, Analytics, Nutrition, Review, Settings, Privacy
 |-- server/                    # Express backend
-|   |-- ai/providers/          # Gemini, Anthropic, and OpenAI-compatible text adapters
+|   |-- ai/                    # Provider-agnostic AI core: retry/timeout, circuit breaker, Gemini SDK factory
+|   |   `-- providers/         # Gemini, Anthropic, and OpenAI-compatible text adapters
 |   |-- bootstrap/             # Startup, health, observability, and shutdown wiring
 |   |-- gemini/                # Gemini client, parsing, image, chat, suggestion helpers
 |   |-- middleware/            # CSP nonce, CSRF, idempotency, AI budget/consent
@@ -253,9 +254,11 @@ Hyrox-Companion/
 |   |-- storage/               # Drizzle-backed data access
 |   |-- usecases/              # Use-case orchestration layer
 |   `-- utils/                 # Server utilities
-|-- shared/                    # Drizzle schema, Zod types, OpenAPI registry
+|-- shared/                    # Drizzle schema, Zod types, OpenAPI registry, and the pure domain
+|                              # math both sides share (units, MAF, nutrition targets, race spec, plan phase)
 |-- migrations/                # Drizzle SQL migrations
 |-- cypress/                   # End-to-end specs and support
+|-- test/                      # Cross-cutting suites: docs-sync checks, calculation-audit guards, factories
 |-- docs/                      # Living subsystem docs and OpenAPI snapshot
 |-- script/                    # Build, maintenance, benchmark, and docs scripts
 |-- .github/workflows/         # CI workflows
@@ -371,11 +374,11 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | `pnpm start`                         | Run the production build from `dist/`                                             |
 | `pnpm check`                         | Run TypeScript type checking (TS 7 native compiler)                               |
 | `pnpm check:strict`                  | Typecheck the `noUncheckedIndexedAccess` subset (`tsconfig.strict.json`)          |
-| `pnpm check:test`                    | Typecheck the test suite, which `pnpm check` excludes                             |
+| `pnpm check:test`                    | Typecheck the `*.test.ts` files, which `pnpm check` excludes                      |
 | `pnpm check:bundle`                  | Verify client-bundle invariants against `dist/`                                   |
 | `pnpm test`                          | Run the Vitest unit test suite                                                    |
 | `pnpm test:watch`                    | Run Vitest in watch mode                                                          |
-| `pnpm test:smoke`                    | Run the fast smoke suite via `vitest.smoke.config.ts`                             |
+| `pnpm test:smoke`                    | Smoke-test the built server over HTTP (needs `pnpm build` and a database)         |
 | `pnpm test:coverage`                 | Run the unit suite with coverage reporting                                        |
 | `pnpm lint`                          | Run ESLint                                                                        |
 | `pnpm lint:fix`                      | Auto-fix ESLint issues                                                            |
@@ -412,7 +415,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The suite is around 479 Vitest test files plus 12 Cypress E2E specs (2026-09-19). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
+The suite is around 490 Vitest test files plus 12 Cypress E2E specs (2026-09-23). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 
@@ -423,9 +426,9 @@ GitHub Actions workflows live in [`.github/workflows/`](.github/workflows/):
 | Workflow                        | Trigger                                       | Purpose                                                                                         |
 | ------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | **Build**                       | Push to `main`, pull request                  | ESLint, TypeScript (`check`, `check:strict`, `check:test`), OpenAPI snapshot drift check        |
-| **Unit Tests**                  | Push to `main`, pull request                  | Vitest unit suite                                                                               |
+| **Unit Tests**                  | Push to `main`, pull request                  | Vitest unit suite with coverage thresholds (`pnpm test:coverage`)                               |
 | **Cypress Tests**               | Push, pull request                            | Build, bundle-invariant check, integration tests, smoke tests, Cypress with PostgreSQL/pgvector |
-| **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency                                                                   |
+| **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency and drift; applies the real chain to a fresh pgvector database twice |
 | **Post-Migration Verification** | Manual                                        | Apply migrations and verify a real Neon database                                                |
 | **Dependency Review**           | Pull request                                  | Audit dependency changes                                                                        |
 | **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                                        |

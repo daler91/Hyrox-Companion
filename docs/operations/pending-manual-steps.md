@@ -13,10 +13,13 @@ to a fresh database in CI.
 box and record the date and who ran it in the same PR. An unticked box is a
 live task, not history.
 
-**Verifying.** `pnpm ops:restore-drill` checks every step listed here against
-whatever database you point it at, so the monthly restore drill
+**Verifying.** `pnpm ops:restore-drill` probes the 0081, 0082 and 0091 steps (no
+ownerless private rows, no duplicate target versions, at most one in-flight plan
+generation per user) against whatever database you point it at, so the monthly
+restore drill
 ([backup-restore.md §6](./backup-restore.md#6-restore-drill-cadence--verification))
-re-verifies them for free. Note the reverse hazard too: a restored database is
+re-verifies those for free. It does **not** check the older-migration audit, 0093 or
+0094 — use the verification queries in those sections. Note the reverse hazard too: a restored database is
 as old as its backup, so a step ticked _after_ that backup was taken has been
 rolled back and must be run again.
 
