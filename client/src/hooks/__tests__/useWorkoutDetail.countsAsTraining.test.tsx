@@ -10,38 +10,17 @@ import { queryClient } from "@/lib/queryClient";
 // Same isolation as useWorkoutDetail.rollback.test.tsx: replacing useApiMutation
 // with a passthrough hands back the raw config, so onSuccess can be driven
 // directly without a mocked transport.
-vi.mock("@/hooks/useApiMutation", () => ({
-  useApiMutation: (config: unknown) => ({
-    config,
-    mutate: vi.fn(),
-    mutateAsync: vi.fn().mockResolvedValue(undefined),
-    isPending: false,
-  }),
-}));
+vi.mock("@/hooks/useApiMutation", async () =>
+  (await import("@/test/support/workoutDetailHookMocks")).makeApiMutationPassthroughMock(),
+);
 
-vi.mock("@/lib/queryClient", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/queryClient")>();
-  const { QueryClient } = await import("@tanstack/react-query");
-  return {
-    ...actual,
-    queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-  };
-});
+vi.mock("@/lib/queryClient", async (importOriginal) =>
+  (await import("@/test/support/workoutDetailHookMocks")).makeRealQueryClientMock(importOriginal),
+);
 
-vi.mock("@/lib/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api")>();
-  return {
-    ...actual,
-    api: {
-      ...actual.api,
-      workouts: {
-        ...actual.api.workouts,
-        get: vi.fn().mockResolvedValue(undefined),
-        history: vi.fn().mockResolvedValue(undefined),
-      },
-    },
-  };
-});
+vi.mock("@/lib/api", async (importOriginal) =>
+  (await import("@/test/support/workoutDetailHookMocks")).makeWorkoutReadsApiMock(importOriginal),
+);
 
 const WORKOUT_ID = "workout-1";
 const UNRELATED_KEY = ["/api/v1/unrelated-for-this-test"] as const;

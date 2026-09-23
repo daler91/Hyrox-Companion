@@ -55,6 +55,30 @@ function renderOnboardingWizard(onComplete = vi.fn()) {
   };
 }
 
+type WizardHook = ReturnType<typeof renderOnboardingWizard>["result"];
+
+/** Presses Continue once and lets the step's save settle. */
+async function pressContinue(result: WizardHook) {
+  await act(async () => {
+    await result.current.handleNext();
+  });
+}
+
+// Picks the template and presses Start Training, whose schedule request fails
+// the first time.
+function startTemplateWithFailingSchedule() {
+  mockSamplePlanCreation();
+  vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
+  const { result, onComplete } = renderOnboardingWizard();
+  act(() => {
+    result.current.handleUseSamplePlan();
+  });
+  act(() => {
+    result.current.handleStartTraining();
+  });
+  return { result, onComplete };
+}
+
 describe("useOnboardingWizard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,12 +88,8 @@ describe("useOnboardingWizard", () => {
   it("captures onboarding style and MAF payload when selecting maf_method", async () => {
     const { result } = renderOnboardingWizard();
 
-    await act(async () => {
-      await result.current.handleNext();
-    }); // welcome -> units
-    await act(async () => {
-      await result.current.handleNext();
-    }); // units -> goal
+    await pressContinue(result); // welcome -> units
+    await pressContinue(result); // units -> goal
 
     act(() => {
       result.current.setTrainingStyleId("maf_method");
@@ -78,9 +98,7 @@ describe("useOnboardingWizard", () => {
       result.current.setMafHrDataAvailable(true);
     });
 
-    await act(async () => {
-      await result.current.handleNext();
-    }); // goal -> plan
+    await pressContinue(result); // goal -> plan
 
     expect(api.preferences.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -122,16 +140,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("reuses the created plan when a failed schedule is retried", async () => {
-    mockSamplePlanCreation();
-    vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
-    const { onComplete, result } = renderOnboardingWizard();
-
-    act(() => {
-      result.current.handleUseSamplePlan();
-    });
-    act(() => {
-      result.current.handleStartTraining();
-    });
+    const { onComplete, result } = startTemplateWithFailingSchedule();
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Failed to set up your plan", variant: "destructive" }),
@@ -148,16 +157,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("discards a template plan whose schedule failed when the athlete leaves another way", async () => {
-    mockSamplePlanCreation();
-    vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
-    const { onComplete, result } = renderOnboardingWizard();
-
-    act(() => {
-      result.current.handleUseSamplePlan();
-    });
-    act(() => {
-      result.current.handleStartTraining();
-    });
+    const { onComplete, result } = startTemplateWithFailingSchedule();
     await waitFor(() => expect(api.plans.schedule).toHaveBeenCalled());
     await waitFor(() => expect(result.current.isSchedulePending).toBe(false));
 
@@ -241,9 +241,7 @@ describe("useOnboardingWizard", () => {
     vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error("Failed to update"));
     const { result } = renderOnboardingWizard();
 
-    await act(async () => {
-      await result.current.handleNext();
-    }); // welcome -> units
+    await pressContinue(result); // welcome -> units
 
     expect(result.current.step).toBe("units");
 
@@ -251,9 +249,7 @@ describe("useOnboardingWizard", () => {
     act(() => {
       result.current.setWeightUnit("lbs");
     });
-    await act(async () => {
-      await result.current.handleNext();
-    }); // units -> goal (attempt)
+    await pressContinue(result); // units -> goal (attempt)
 
     expect(mockToast).toHaveBeenCalledWith({
       title: "Could not save preferences",
@@ -267,12 +263,8 @@ describe("useOnboardingWizard", () => {
   it("shows an error toast and does not advance to 'plan' if prefsMutation fails on 'goal' step", async () => {
     const { result } = renderOnboardingWizard();
 
-    await act(async () => {
-      await result.current.handleNext();
-    }); // welcome -> units
-    await act(async () => {
-      await result.current.handleNext();
-    }); // units -> goal
+    await pressContinue(result); // welcome -> units
+    await pressContinue(result); // units -> goal
 
     act(() => {
       result.current.setTrainingStyleId("maf_method");
@@ -281,9 +273,7 @@ describe("useOnboardingWizard", () => {
     });
     vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error("Failed to update"));
 
-    await act(async () => {
-      await result.current.handleNext();
-    }); // goal -> next step (attempt)
+    await pressContinue(result); // goal -> next step (attempt)
 
     expect(mockToast).toHaveBeenCalledWith({
       title: "Could not save training style",
@@ -297,15 +287,9 @@ describe("useOnboardingWizard", () => {
   it("writes nothing when a step is left as saved", async () => {
     const { result } = renderOnboardingWizard();
 
-    await act(async () => {
-      await result.current.handleNext();
-    }); // welcome -> units
-    await act(async () => {
-      await result.current.handleNext();
-    }); // units -> goal
-    await act(async () => {
-      await result.current.handleNext();
-    }); // goal -> next step
+    await pressContinue(result); // welcome -> units
+    await pressContinue(result); // units -> goal
+    await pressContinue(result); // goal -> next step
 
     expect(api.preferences.update).not.toHaveBeenCalled();
     expect(result.current.step).not.toBe("goal");
@@ -314,15 +298,11 @@ describe("useOnboardingWizard", () => {
   // Age used to be saved only through the optional fuelling step (audit M3).
   it("saves a general age from the Units step as a number", async () => {
     const { result } = renderOnboardingWizard();
-    await act(async () => {
-      await result.current.handleNext();
-    }); // welcome -> units
+    await pressContinue(result); // welcome -> units
     act(() => {
       result.current.setAge("41");
     });
-    await act(async () => {
-      await result.current.handleNext();
-    });
+    await pressContinue(result);
 
     expect(api.preferences.update).toHaveBeenCalledWith({ age: 41 });
     expect(result.current.step).toBe("goal");
@@ -330,15 +310,11 @@ describe("useOnboardingWizard", () => {
 
   it("keeps the athlete on the Units step with a named error for an impossible age", async () => {
     const { result } = renderOnboardingWizard();
-    await act(async () => {
-      await result.current.handleNext();
-    });
+    await pressContinue(result);
     act(() => {
       result.current.setAge("7");
     });
-    await act(async () => {
-      await result.current.handleNext();
-    });
+    await pressContinue(result);
 
     expect(result.current.step).toBe("units");
     expect(result.current.ageError).toMatch(/between 13 and 100/);
@@ -353,18 +329,12 @@ describe("useOnboardingWizard", () => {
   // Validation named no field and only toasted (audit M4).
   it("names each missing MAF answer inline instead of toasting", async () => {
     const { result } = renderOnboardingWizard();
-    await act(async () => {
-      await result.current.handleNext();
-    });
-    await act(async () => {
-      await result.current.handleNext();
-    }); // units -> goal
+    await pressContinue(result);
+    await pressContinue(result); // units -> goal
     act(() => {
       result.current.setTrainingStyleId("maf_method");
     });
-    await act(async () => {
-      await result.current.handleNext();
-    });
+    await pressContinue(result);
 
     expect(result.current.step).toBe("goal");
     expect(result.current.mafErrors.age).toBeTruthy();

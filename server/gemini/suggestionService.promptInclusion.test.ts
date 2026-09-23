@@ -648,19 +648,21 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
   });
 });
 
-describe("buildSuggestionsPrompt — load governor gating", () => {
-  const baseInsights = {
-    rpeTrend: "stable" as const,
-    fatigueFlag: false,
-    undertrainingFlag: false,
-    stationGaps: [],
-    progressionFlags: [],
-  };
+// Coaching insights with nothing flagged, for each test below to add the one
+// signal it is about.
+const QUIET_INSIGHTS = {
+  rpeTrend: "stable" as const,
+  fatigueFlag: false,
+  undertrainingFlag: false,
+  stationGaps: [],
+  progressionFlags: [],
+};
 
+describe("buildSuggestionsPrompt — load governor gating", () => {
   it("injects a binding LOAD GOVERNOR block when a restriction is active", () => {
     const ctx = createMockTrainingContext({
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         loadGovernor: summary(
           [
             restriction("posterior_chain_velocity_lock", {
@@ -688,7 +690,7 @@ describe("buildSuggestionsPrompt — load governor gating", () => {
   it("surfaces the block in the yellow zone even without a named restriction", () => {
     const ctx = createMockTrainingContext({
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         loadGovernor: summary([], { zone: "yellow", acwr: 1.4 }),
       },
     });
@@ -702,7 +704,7 @@ describe("buildSuggestionsPrompt — load governor gating", () => {
   it("omits the block for a sweet-spot athlete with no restrictions", () => {
     const ctx = createMockTrainingContext({
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         loadGovernor: summary([], { zone: "sweet_spot", acwr: 1.05 }),
       },
     });
@@ -744,32 +746,28 @@ describe("chat system prompt — coaching analysis inclusion", () => {
     const prompt = buildSystemPrompt(ctx);
 
     // The chat coach previously saw NONE of this — it must now appear.
-    expect(prompt).toContain("--- COACHING ANALYSIS ---");
-    expect(prompt).toContain("RPE TREND: RISING");
-    expect(prompt).toContain("FATIGUE FLAG ACTIVE");
-    expect(prompt).toContain("Wall Balls (22 days");
-    expect(prompt).toContain("TAPER phase");
-    expect(prompt).toContain("LOAD GOVERNOR (auto-regulation — binding):");
-    expect(prompt).toContain("YELLOW zone.");
-    // The plan goal is threaded through from activePlan.goal.
-    expect(prompt).toContain("FINGERPRINT_CHAT_GOAL");
+    for (const section of [
+      "--- COACHING ANALYSIS ---",
+      "RPE TREND: RISING",
+      "FATIGUE FLAG ACTIVE",
+      "Wall Balls (22 days",
+      "TAPER phase",
+      "LOAD GOVERNOR (auto-regulation — binding):",
+      "YELLOW zone.",
+      // The plan goal is threaded through from activePlan.goal.
+      "FINGERPRINT_CHAT_GOAL",
+    ]) {
+      expect(prompt).toContain(section);
+    }
   });
 });
 
 describe("coaching analysis — newly wired-in signals", () => {
-  const baseInsights = {
-    rpeTrend: "stable" as const,
-    fatigueFlag: false,
-    undertrainingFlag: false,
-    stationGaps: [],
-    progressionFlags: [],
-  };
-
   it("renders the training-state decision tree in both prompts", () => {
     const ctx = createMockTrainingContext({
       totalWorkouts: 30,
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         decisionTree: {
           currentPhase: "aerobic_base",
           allowedWorkoutTypes: ["easy_aerobic", "mobility"],
@@ -794,7 +792,7 @@ describe("coaching analysis — newly wired-in signals", () => {
     const ctx = createMockTrainingContext({
       totalWorkouts: 30,
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         raceReadiness: { tsb: 18, status: "peaked", guidance: "FINGERPRINT_TAPER_GUIDANCE" },
       },
     });
@@ -808,7 +806,7 @@ describe("coaching analysis — newly wired-in signals", () => {
     const ctx = createMockTrainingContext({
       totalWorkouts: 30,
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         personalRecords: [{ exercise: "back squat", metric: "e1rm", display: "e1RM 142.5kg" }],
         prsThisWeek: 2,
       },
@@ -823,7 +821,7 @@ describe("coaching analysis — newly wired-in signals", () => {
   it("renders compliance only when adherence is meaningfully below target", () => {
     const lowCtx = createMockTrainingContext({
       totalWorkouts: 30,
-      coachingInsights: { ...baseInsights, compliance: { avgPct: 62, windowDays: 70 } },
+      coachingInsights: { ...QUIET_INSIGHTS, compliance: { avgPct: 62, windowDays: 70 } },
     });
     expect(buildSuggestionsPrompt(lowCtx, [createMockUpcomingWorkout()], "goal")).toContain(
       "PLAN COMPLIANCE: 62% adherence over the last 70 days",
@@ -831,7 +829,7 @@ describe("coaching analysis — newly wired-in signals", () => {
 
     const highCtx = createMockTrainingContext({
       totalWorkouts: 30,
-      coachingInsights: { ...baseInsights, compliance: { avgPct: 96, windowDays: 70 } },
+      coachingInsights: { ...QUIET_INSIGHTS, compliance: { avgPct: 96, windowDays: 70 } },
     });
     expect(buildSuggestionsPrompt(highCtx, [createMockUpcomingWorkout()], "goal")).not.toContain(
       "PLAN COMPLIANCE",
@@ -842,7 +840,7 @@ describe("coaching analysis — newly wired-in signals", () => {
     const ctx = createMockTrainingContext({
       totalWorkouts: 30,
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         neglectedPatterns: [{ label: "Hinge", daysSince: 18 }],
         neglectedMuscles: [{ label: "Hamstrings", daysSince: null }],
       },
@@ -858,7 +856,7 @@ describe("coaching analysis — newly wired-in signals", () => {
     const ctx = createMockTrainingContext({
       totalWorkouts: 30,
       coachingInsights: {
-        ...baseInsights,
+        ...QUIET_INSIGHTS,
         loadGovernor: summary([], {
           zone: "sweet_spot",
           acwr: 1.05,

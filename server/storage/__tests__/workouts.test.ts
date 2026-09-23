@@ -20,67 +20,52 @@ vi.mock("../../db", () => {
   return { db };
 });
 
-describe("WorkoutStorage.mutateExerciseSetDelete (workoutLog owner)", () => {
-  let storage: WorkoutStorage;
+// The nested workout and plan-day routes share one delete, told apart by the
+// owner it is handed.
+describe.each([
+  {
+    kind: "workoutLog",
+    ownerId: "workout-1",
+    missingSet: "workout set",
+    otherOwnerRoute: "another workout from the nested workout route",
+    otherOwnersSet: { id: "set-1", workoutLogId: "other-workout", planDayId: null },
+  },
+  {
+    kind: "planDay",
+    ownerId: "plan-day-1",
+    missingSet: "plan-day set",
+    otherOwnerRoute: "another plan day from the nested plan-day route",
+    otherOwnersSet: { id: "set-1", workoutLogId: null, planDayId: "other-plan-day" },
+  },
+] as const)(
+  "WorkoutStorage.mutateExerciseSetDelete ($kind owner)",
+  ({ kind, ownerId, missingSet, otherOwnerRoute, otherOwnersSet }) => {
+    let storage: WorkoutStorage;
 
-  beforeEach(() => {
-    storage = new WorkoutStorage();
-    vi.clearAllMocks();
-  });
-
-  it("treats a missing workout set as already removed", async () => {
-    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(undefined);
-
-    const result = await storage.mutateExerciseSetDelete({ kind: "workoutLog", ownerId: "workout-1" }, "stale-set", "user-1");
-
-    expect(result).toBe(true);
-    expect(db.delete).not.toHaveBeenCalled();
-  });
-
-  it("rejects a set owned by another workout from the nested workout route", async () => {
-    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue({
-      id: "set-1",
-      workoutLogId: "other-workout",
-      planDayId: null,
+    beforeEach(() => {
+      storage = new WorkoutStorage();
+      vi.clearAllMocks();
     });
 
-    const result = await storage.mutateExerciseSetDelete({ kind: "workoutLog", ownerId: "workout-1" }, "set-1", "user-1");
+    it(`treats a missing ${missingSet} as already removed`, async () => {
+      vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(undefined);
 
-    expect(result).toBe(false);
-    expect(db.delete).not.toHaveBeenCalled();
-  });
-});
+      const result = await storage.mutateExerciseSetDelete({ kind, ownerId }, "stale-set", "user-1");
 
-describe("WorkoutStorage.mutateExerciseSetDelete (planDay owner)", () => {
-  let storage: WorkoutStorage;
-
-  beforeEach(() => {
-    storage = new WorkoutStorage();
-    vi.clearAllMocks();
-  });
-
-  it("treats a missing plan-day set as already removed", async () => {
-    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(undefined);
-
-    const result = await storage.mutateExerciseSetDelete({ kind: "planDay", ownerId: "plan-day-1" }, "stale-set", "user-1");
-
-    expect(result).toBe(true);
-    expect(db.delete).not.toHaveBeenCalled();
-  });
-
-  it("rejects a set owned by another plan day from the nested plan-day route", async () => {
-    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue({
-      id: "set-1",
-      workoutLogId: null,
-      planDayId: "other-plan-day",
+      expect(result).toBe(true);
+      expect(db.delete).not.toHaveBeenCalled();
     });
 
-    const result = await storage.mutateExerciseSetDelete({ kind: "planDay", ownerId: "plan-day-1" }, "set-1", "user-1");
+    it(`rejects a set owned by ${otherOwnerRoute}`, async () => {
+      vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(otherOwnersSet);
 
-    expect(result).toBe(false);
-    expect(db.delete).not.toHaveBeenCalled();
-  });
-});
+      const result = await storage.mutateExerciseSetDelete({ kind, ownerId }, "set-1", "user-1");
+
+      expect(result).toBe(false);
+      expect(db.delete).not.toHaveBeenCalled();
+    });
+  },
+);
 
 describe("WorkoutStorage.createWorkoutLogs", () => {
   let storage: WorkoutStorage;
