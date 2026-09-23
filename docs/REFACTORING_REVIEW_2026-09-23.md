@@ -21,15 +21,15 @@ that a finding depended on was checked in `node_modules` rather than assumed:
 Where a bug fix adds a test that fails on the old code, that was checked by reverting the fix
 and running the test again.
 
-**Result.** Seven bug fixes, about 1,900 lines of dead code and its tests removed, a few small
+**Result.** Eight bug fixes, about 1,900 lines of dead code and its tests removed, a few small
 consolidations, comment corrections, and a documentation sweep. The rest is listed below:
 
-- eight behaviour changes left for the owner to decide;
+- eleven behaviour changes left for the owner to decide;
 - about forty refactors that are real but were deferred;
 - a short list of checked-and-dropped items, so they are not raised again.
 
-Excluding Markdown, the branch changes 130 files (+741 / −2,397). Tests account for
-+350 / −786 of that: deleted tests covered deleted code, and the new ones cover the fixes and
+Excluding Markdown, the branch changes 132 files (+838 / −2,406). Tests account for
++403 / −786 of that: deleted tests covered deleted code, and the new ones cover the fixes and
 the new shared helpers.
 
 ---
@@ -38,7 +38,7 @@ the new shared helpers.
 
 ### Bug fixes
 
-Five of these seven are pinned by a test that fails without the fix. The other two are marked
+Six of these eight are pinned by a test that fails without the fix. The other two are marked
 in the table.
 
 | Commit    | What was wrong                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -50,6 +50,7 @@ in the table.
 | `9ad179e` | **Auto-coach overwrote plan-day notes.** For `notes`, `getExistingFieldValue` in `server/services/coachService.ts` returned `""`, so an "append" replaced the athlete's notes. The manual suggestion path already appended. |
 | `b857d38` | **Timed-out AI calls kept running.** The Anthropic and OpenAI-compatible providers dropped the retry wrapper's per-attempt abort signal, so a hung call held its socket past the timeout. Gemini already merged it. The helper is now shared as `combineSignals` in `server/ai/providers/http.ts`. This was open since the 2026-07-19 analysis. |
 | `527e50f` | **Raw zod issues were logged.** Four AI-output validators logged the raw issue array. The overview schema's `z.record` puts keys chosen by the model into issue paths, so model text reached the logs. They now use `formatZodIssues`, like the other six. This changes only what is logged, and it has no new test. |
+| `cdc5646` | **A breaker trip on another instance wiped Garmin credentials.** The route-level breaker check reads only the instance's own copy; a sibling's trip is first seen inside `withCircuitBreaker`, which threw a plain error. `/sync` then called `setGarminError`, which records `lastError` and wipes the stored email, password and tokens, so the athlete had to reconnect although Garmin never saw the request. `/connect` answered with a credentials error. Both now answer the same 503 `GARMIN_CIRCUIT_OPEN` as the tripping instance and record nothing. |
 
 ### Dead code removed
 
@@ -96,14 +97,19 @@ Every item below had no production caller. Each was checked across `client/`, `s
 
 ### Comments corrected
 
-**`4de5e83`** and **`fe720fe`** fix comments that described code that had moved or changed:
+**`4de5e83`**, **`fe720fe`** and **`79f4d6b`** fix comments that described code that had moved or changed:
 
 - JSDoc blocks stranded above the wrong function (`runBatch`, `buildPersonalRecordSummaries`,
   three stacked blocks in `planGenerationService.ts`);
 - a claim that pg-boss retries only a batch's failed jobs (it retries the whole batch);
 - request-logging comments that assumed Clerk runs before pino-http;
 - cross-references to deleted files;
-- client comments describing per-keystroke saves and a deleted invalidation helper.
+- client comments describing per-keystroke saves and a deleted invalidation helper;
+- a station-coverage doc that still said the coach counts from UTC, and a plan-phase example
+  that predates the taper rule.
+
+Two stale comments came from this branch itself and are fixed in it: `45984f1` separated
+`withCircuitBreaker` from its doc comment, and `1cbb7fa` made the station-coverage doc wrong.
 
 ### Documentation
 
@@ -126,6 +132,9 @@ corrections:
   redundant-index drops. The storage interface lists all 17 domains, and startup maintenance
   has nine steps, not five.
 - **Coverage thresholds.** 68/62/60/67, not 80 across the board.
+- **Coaching context.** The AI docs described a "last 12 weeks" window; the code reads the latest
+  400 timeline entries and a 70-day load window. Five of the coaching-insight rules had changed
+  (RPE trend, station gaps, weekly volume, progression, plan phase).
 
 ---
 
@@ -143,6 +152,9 @@ These are behaviour changes, so none of them was made. Each was confirmed in the
 | D6  | `client/src/components/workout-detail/AdhocLogSheet.tsx:345-358`                                                           | The only workout-create path that does not use `runWithOfflineFallback`, so an offline save fails instead of queueing.                                                                                                                                                                                     | Wrap it like `useSaveWorkoutMutation`, if offline logging from this sheet is wanted.                                                                           |
 | D7  | `server/services/trainingOverviewLoader.ts:18,168`                                                                         | The load window is anchored on `todayUtcYyyyMmDd()` when no `to` is given. This is the H11 class of bug: near midnight the athlete's day and the server's differ. The helper is also written so the UTC-today lint rule cannot see it.                                                                          | Use the athlete-local date the callers already resolve.                                                                                                         |
 | D8  | `server/routes/nutrition/*.routes.ts` (11 calls)                                                                           | These routes call the throwing `getLocalDateStr`. A stored timezone the runtime rejects gives a 500. `PATCH /preferences` validates new values, so only legacy rows or a zone the runtime has dropped are exposed.                                                                                           | `getLocalDateStrSafe` (`server/timezone.ts:176`) already exists.                                                                                                |
+| D9  | `shared/stationCoverage.ts:96-103` `stationsForFreeText`                                                                   | Workout focus text and set labels are matched by substring. Run on real inputs, "Med ball throws", "Narrow-grip push-ups" and "Bent-over rows" all count as the rowing station, and "Brunch" as running. That hides real gaps on the analytics coverage card and in the coach's EXERCISE GAPS. | Word-boundary matching, as `CONSTRAINT_STATION_PATTERNS` in the same file already does, with plurals allowed. Whether strength rows should count as rowing is the open question. |
+| D10 | `server/prompts/coachingAnalysis.ts:18-20` `formatRpeTrend`                                                                 | With 3 or 4 rated workouts, `computeRpeTrend` returns `insufficient_data` but still sets `fatigueFlag`/`undertrainingFlag`, which `aiModificationGuard` acts on. The prompt block says "fewer than 3 workouts" and returns before printing either flag, so the model never sees a flag the guard uses. | State the real threshold, and print the flags in that branch too. Prompt snapshots will change. |
+| D11 | `server/garmin.ts` sync and login catch blocks, `server/storage/users.ts` `setGarminError`                                | A real Garmin 429 during a sync or login records `lastError` and wipes the stored credentials, while the stored message tells the athlete to try again in about 30 minutes. After the cooldown, the next sync demands a full reconnect. | Decide whether a rate limit should end the connection. This is part of Garmin credential custody, which the 2026-09-19 security audit left to the owner. |
 
 ---
 
@@ -273,6 +285,9 @@ Recorded so they are not raised again:
 - **Converting `usePlanImport`'s seven raw `useMutation` calls to `useApiMutation`.** This is
   not behaviour-preserving: it adds `humanizeApiError` descriptions and delays toasts until the
   refetch finishes.
+- **The nutrition load window capping the plan week (`nutrition/dailyLoad.ts` `resolvePhase`).**
+  The cap runs only after a check that the plan's start and end dates cover the day, so an ended
+  plan gets no phase there rather than reading as race week.
 - **Out of scope by decision:** Garmin credential custody (an owner decision, per the
   [2026-09-19 security audit](SECURITY_AUDIT_2026-09-19.md)) and the "⚡ Bolt" comments (left in
   place, per the [2026-08-31 analysis](CODEBASE_ANALYSIS_2026-08-31.md)).
@@ -282,8 +297,9 @@ Recorded so they are not raised again:
 - `shared/` was read where server or client code led into it. `script/` was reviewed only for
   the backfill script, and `cypress/` only for the testing docs.
 - Nothing here was run against production data or a deployed instance. The fixes are verified
-  by unit and integration tests, typecheck, lint and a production build.
+  by the unit test suite, typecheck, lint and a production build. The integration tests, which
+  need a database, were not run.
 - Prettier is not enforced in CI, and about 800 files do not match it. Edits follow the style
   of the code around them rather than reformatting whole files.
-- Mermaid diagrams edited in `architecture.md` were checked by reading only; no Mermaid renderer
-  is installed in the repo.
+- Edited Mermaid diagrams were checked by reading; no Mermaid renderer is installed in the repo.
+  The Garmin diagram was also parsed with mermaid 11 outside the repo, before a one-edge change.
