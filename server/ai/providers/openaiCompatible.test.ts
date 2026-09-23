@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { retryWithBackoff } from "../retry";
 import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
@@ -67,6 +68,31 @@ describe("openai-compatible text provider", () => {
 
     expect(requestJsonBody(fetchSpy.mock.calls[0][1])).not.toHaveProperty("reasoning_effort");
     expect(fetchSpy.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+  });
+
+  it("aborts the HTTP request when retry's per-attempt timeout fires", async () => {
+    // retryWithBackoff abandons a timed-out attempt by aborting the signal it
+    // passes in. The request must listen to it, or the hung call keeps its
+    // socket open and runs on beside the retry.
+    const attempt = new AbortController();
+    vi.mocked(retryWithBackoff).mockImplementationOnce((fn) => fn(attempt.signal));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      choices: [{ message: { content: "ok" } }],
+    }));
+
+    const provider = createOpenAiCompatibleTextProvider({
+      apiKey: "test-key",
+      baseUrl: "https://api.x.ai/v1",
+      profile: "xai",
+      supportsReasoningEffort: true,
+    });
+    await provider.generateText(baseRequest);
+
+    const signal = fetchSpy.mock.calls[0]?.[1]?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal?.aborted).toBe(false);
+    attempt.abort();
+    expect(signal?.aborted).toBe(true);
   });
 
   it("parses streamed SSE deltas", async () => {

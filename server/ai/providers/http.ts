@@ -8,6 +8,18 @@ export interface ParsedSseTextEvent {
   readonly done?: boolean;
 }
 
+/**
+ * Combine the caller's cancel signal with the per-attempt timeout signal that
+ * retryWithBackoff hands each attempt (S6), so a hung call aborts its socket
+ * instead of running on after the attempt has been abandoned.
+ */
+export function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
+  const present = signals.filter((s): s is AbortSignal => s != null);
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return AbortSignal.any(present);
+}
+
 export async function readJsonPayload(response: Response): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }

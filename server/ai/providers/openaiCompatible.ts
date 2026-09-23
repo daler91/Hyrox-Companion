@@ -1,5 +1,5 @@
 import { retryWithBackoff } from "../retry";
-import { contentPartText, readJsonPayload, streamSseTextChunks, trimTrailingSlashes } from "./http";
+import { combineSignals, contentPartText, readJsonPayload, streamSseTextChunks, trimTrailingSlashes } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiMessage,
@@ -91,6 +91,7 @@ async function postJson(
   request: ResolvedTextAiRequest,
   options: OpenAiCompatibleAdapterOptions,
   stream: boolean,
+  attemptSignal?: AbortSignal,
 ): Promise<Response> {
   const { apiKey, url } = requireAdapterConfig(options);
   const response = await fetch(url, {
@@ -100,7 +101,7 @@ async function postJson(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(requestBody(request, options, stream)),
-    signal: request.signal,
+    signal: combineSignals(request.signal, attemptSignal),
     // Never follow a redirect. AI_TEXT_BASE_URL is checked against the SSRF
     // guard when it is parsed, and its host is re-resolved at startup, but
     // fetch's default `redirect: "follow"` would re-POST this body — which
@@ -134,7 +135,7 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
 
     async generateText(request): Promise<TextAiResponse> {
       const response = await retryWithBackoff(
-        () => postJson(request, options, false),
+        (signal) => postJson(request, options, false, signal),
         request.label,
         undefined,
         undefined,

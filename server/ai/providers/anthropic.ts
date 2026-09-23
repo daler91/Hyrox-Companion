@@ -1,5 +1,5 @@
 import { retryWithBackoff } from "../retry";
-import { contentPartText, readJsonPayload, streamSseTextChunks } from "./http";
+import { combineSignals, contentPartText, readJsonPayload, streamSseTextChunks } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiProvider,
@@ -128,6 +128,7 @@ async function postAnthropic(
   request: ResolvedTextAiRequest,
   options: AnthropicAdapterOptions,
   stream: boolean,
+  attemptSignal?: AbortSignal,
 ): Promise<Response> {
   const response = await fetch(ANTHROPIC_API_URL, {
     method: "POST",
@@ -137,7 +138,7 @@ async function postAnthropic(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(requestBody(request, stream)),
-    signal: request.signal,
+    signal: combineSignals(request.signal, attemptSignal),
     // See the note in openaiCompatible.ts: a redirect would re-POST the prompt
     // body to an unvalidated host. The URL here is a constant, so this is
     // belt-and-braces, but the two adapters should behave identically.
@@ -178,7 +179,7 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
 
     async generateText(request): Promise<TextAiResponse> {
       const response = await retryWithBackoff(
-        () => postAnthropic(request, options, false),
+        (signal) => postAnthropic(request, options, false, signal),
         request.label,
         undefined,
         undefined,
