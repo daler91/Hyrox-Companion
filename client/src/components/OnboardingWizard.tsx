@@ -115,7 +115,9 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
 
   // Enter in a step's text field does what Continue does.
   const handleEnter = () => {
-    handleNext().catch(() => {});
+    handleNext().catch(() => {
+      // Nothing to add: each step reports its own save failure in a toast.
+    });
   };
 
   return (
