@@ -59,9 +59,9 @@ sequenceDiagram
     participant Compress as compression()
     participant CORS as cors()
     participant Helmet as helmet() + CSP
-    participant Auth as Clerk Auth Middleware
     participant Body as express.json()
     participant Log as pino-http Logger
+    participant Auth as Clerk Auth Middleware
     participant Route as Route Handler
     participant Service as Service Layer
     participant Storage as Storage Layer (Drizzle)
@@ -71,12 +71,13 @@ sequenceDiagram
     React->>TQ: useQuery / useMutation
     TQ->>Fetch: GET/POST /api/v1/...
     Fetch->>Compress: HTTP request
-    Compress->>CORS: decompress / pass through
+    Compress->>CORS: pass through (compresses the response)
     CORS->>Helmet: validate origin
-    Helmet->>Auth: set security headers & CSP nonce
-    Auth->>Body: verify Clerk JWT, attach userId
-    Body->>Log: parse JSON body (100kb limit)
-    Log->>Route: attach requestId, userId, log request
+    Helmet->>Body: set security headers & CSP nonce
+    Body->>Log: parse JSON body (100kb default limit)
+    Log->>Auth: attach requestId, log request
+    Auth->>Route: clerkMiddleware verifies Clerk JWT, then CSRF check on mutations
+    Route->>Route: isAuthenticated resolves userId
     Route->>Service: call business logic
     Service->>Storage: query / mutate via Drizzle
     Storage->>DB: SQL over connection pool
@@ -101,11 +102,11 @@ sequenceDiagram
 7. `express.json()` -- body parsing: 2mb for `/api/v1/coaching-materials`, 10mb for image-parse routes, 100kb default
 8. `express.urlencoded()` -- form body parsing (100kb limit)
 9. `cookieParser()` -- required by the CSRF double-submit middleware
-10. `pino-http` -- structured request logging with Clerk userId extraction
-11. request-context wiring -- async context carrying `requestId` / `userId`
+10. `pino-http` -- structured request logging; it runs before Clerk auth, so `req.log` carries `userId: "anonymous"` and only the completion line of a failed (>= 400) request logs the real Clerk user id
+11. request-context wiring -- async context carrying `requestId` only
 12. Route handlers (registered via `registerRoutes`)
 
-`registerRoutes()` then mounts `csrfProtection` on `/api/v1`; idempotency runs per protected mutating route via the `protectedRouteBuilder` guards rather than as a global middleware.
+`registerRoutes()` first installs `clerkMiddleware()` via `setupAuth()` (`server/clerkAuth.ts`, when Clerk keys are configured), so Clerk JWT verification runs after everything above, then mounts `csrfProtection` on `/api/v1`; idempotency runs per protected mutating route via the `protectedRouteBuilder` guards rather than as a global middleware.
 
 ---
 
@@ -119,10 +120,7 @@ sequenceDiagram
     participant API as POST /api/v1/workouts
     participant Queue as pg-boss Queue
     participant Coach as triggerAutoCoach
-    participant Parallel as Parallel Fetch
     participant AI as buildTrainingContext
-    participant Plan as storage.getActivePlan
-    participant TL as storage.getTimeline
     participant RAG as retrieveCoachingText
     participant TextAI as generateWorkoutSuggestions (configured text provider)
     participant Storage as Storage Layer
@@ -135,15 +133,11 @@ sequenceDiagram
 
     Queue->>Coach: dequeue and execute triggerAutoCoach(userId)
 
-    Coach->>Parallel: Promise.all(...)
-    Parallel->>AI: buildTrainingContext(userId)
-    Parallel->>Plan: getActivePlan(userId)
-    Parallel->>TL: getTimeline(userId)
-    AI-->>Parallel: TrainingContext
-    Plan-->>Parallel: active plan record
-    TL-->>Parallel: full timeline
+    Coach->>AI: buildTrainingContext(userId)
+    Note over AI: one Promise.all over storage.timeline.getTimeline,<br/>storage.plans.getActivePlan,<br/>storage.timeline.getUpcomingPlannedDays(userId, 7), ...
+    AI-->>Coach: TrainingContext (activePlan, upcomingWorkouts, ...)
 
-    Coach->>Coach: extract upcoming 7 planned days from timeline
+    Coach->>Coach: take the upcoming planned days from TrainingContext.upcomingWorkouts
 
     Coach->>RAG: retrieveCoachingText(userId, query)
     RAG-->>Coach: coaching text + source (rag | legacy | null)
@@ -174,42 +168,39 @@ sequenceDiagram
 
 ## 3b. RAG Ingest Pipeline
 
-Coaching materials (CSV, DOCX, PDF) are uploaded by the user, parsed to plaintext, chunked, embedded, and persisted on the **vector** pool. The read path (§4 below) queries the same `document_chunks` table that this pipeline writes.
+Coaching materials (typed principles, or `.txt` / `.md` / `.csv` / `.pdf` / `.docx` files) are reduced to plaintext **in the browser**, posted as JSON, then chunked, embedded, and persisted on the **vector** pool. The read path (§4 below) queries the same `document_chunks` table that this pipeline writes.
 
 ```mermaid
 sequenceDiagram
-    participant Client as React Client
+    participant Client as React Client (useCoachingUpload)
     participant Upload as POST /api/v1/coaching-materials
-    participant Parser as Parser (csv-parse / mammoth / pdfjs-dist)
     participant Queue as pg-boss Queue
     participant Embed as embedCoachingMaterial
     participant Gemini as generateEmbeddings (Gemini)
     participant Vector as document_chunks (vectorPool)
     participant Cache as retrieval cache
 
-    Client->>Upload: POST file + title (multipart)
-    Upload->>Parser: extract plaintext for the MIME type
-    Parser-->>Upload: content (string)
-    Upload->>Upload: persist coaching_materials row (status = "pending")
-    Upload->>Queue: enqueue embed-coaching-material (idempotent)
-    Upload-->>Client: 201 Created { id, status: "pending" }
+    Client->>Client: extract text in the browser (pdfjs-dist / mammoth / file.text())
+    Client->>Upload: POST JSON { title, content, type }
+    Upload->>Upload: validate, insert coaching_materials row
+    Upload->>Queue: enqueue embed-coaching-material { materialId, userId }
+    Upload-->>Client: 201 Created (the new coaching_materials row)
 
-    Queue->>Embed: dequeue { materialId, userId }
-    Embed->>Embed: chunkText(content, RAG_CHUNK_SIZE, RAG_CHUNK_OVERLAP)
-    Note over Embed: prepends title to each chunk for context;<br/>caps at MAX_CHUNKS_PER_MATERIAL
+    Queue->>Embed: dequeue { materialId, userId }, load the row
+    Embed->>Embed: chunkText(content) sized by RAG_CHUNK_SIZE / RAG_CHUNK_OVERLAP
+    Note over Embed: title prefixed to chunk 0's embedding input only<br/>throws above MAX_CHUNKS_PER_MATERIAL
 
-    Embed->>Gemini: generateEmbeddings(texts)
-    Gemini-->>Embed: Float32 vectors
+    Embed->>Gemini: generateEmbeddings(unique texts)
+    Gemini-->>Embed: embedding vectors
 
     Embed->>Vector: transaction: delete old chunks, insert new
     Embed->>Cache: invalidate user's retrieval cache
-    Embed->>Embed: coaching_materials.status = "ready"
 
     Note over Queue,Embed: Uses DEFAULT_JOB_OPTIONS (retryLimit 3,<br/>exponential backoff) — handler is idempotent<br/>by materialId.
 ```
 
 **Key details:**
-- **Parsers**: `csv-parse` for CSV, `mammoth` for DOCX, `pdfjs-dist` for PDF; each runs synchronously before the row is persisted so the API returns fast.
+- **Parsing happens in the browser**: `useCoachingUpload` (`client/src/components/settings/coaching/useCoachingUpload.ts`) lazy-loads `pdfjs-dist` for PDF and `mammoth` for DOCX and reads other files with `file.text()`, then sends only the extracted text. The server never receives the original file; the route accepts JSON `{ title, content, type }` (`type` is `principles` or `document`) under a 2 MB body limit. `coaching_materials` has no status column: the response is the created row, and embedding progress is derived from `document_chunks` (per-material `chunkCount` / `hasEmbeddings` in `GET /api/v1/coaching-materials/rag-status`).
 - **Chunking**: `chunkText()` in `server/services/ragService.ts` prefers paragraph / sentence boundaries (`\n\n`, `. `) to keep semantic units intact, with `RAG_CHUNK_OVERLAP` characters bridging adjacent chunks for context continuity.
 - **Dimension awareness**: the embedding dimension is recorded per-chunk so the retrieval path (§4) can detect model upgrades and fall back to legacy full-text materials when dimensions mismatch.
 - **Idempotency**: re-enqueuing the same `materialId` replaces the existing chunks in a single transaction so the UI never observes a material in a half-embedded state.
@@ -428,13 +419,13 @@ flowchart LR
     Ext["External cron (hourly)<br/>GET /api/v1/cron/emails"] -. x-cron-secret .-> Run
     Startup["Server boot"] -. 30s delay .-> Run
 
-    Run --> Plan["planEmailJobsForUser<br/>local hour == notifyHour?<br/>local Sunday 17:00?<br/>per-type toggles"]
+    Run --> Plan["planEmailJobsForUser<br/>local hour == resolveNotifyHour(kind)?<br/>local Monday / Sunday gates<br/>per-type toggles"]
 
     Plan --> QW["send-weekly-summary<br/>(local Monday)"]
     Plan --> QM["send-missed-reminder"]
     Plan --> QT["send-today-session"]
     Plan --> QA["send-analysis-digest"]
-    Plan --> QR["send-weekly-review-reminder<br/>(Sunday 17:00 local)"]
+    Plan --> QR["send-weekly-review-reminder<br/>(local Sunday, default 17:00)"]
 
     QW --> W["per-user worker<br/>re-fetch user, re-check toggle"]
     QM --> W
@@ -451,14 +442,14 @@ flowchart LR
 ```
 
 **Key details:**
-- **Hourly UTC tick, per-athlete local gate**: `"0 * * * *"` in `server/cron.ts`. `planEmailJobsForUser()` (`server/emailScheduler.ts`) resolves each athlete's local hour and weekday from `users.user_timezone`; the weekly summary, missed reminder, session brief and analysis digest fire at their `notify_hour` (default 07:00), the weekly review reminder on Sunday at 17:00 local. Fourteen other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, RAG chunk prune daily at 03:50, analytics recompute hourly at :05 firing at each user's local midnight, account erasure sweep hourly at :35, nutrition push reminders hourly at :25, the food-embedding backfill every 30 minutes when semantic food search is enabled, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, the Strava auto-sync polling scan every 15 minutes, the Strava webhook subscription check six-hourly and 30 s after boot, and a one-shot startup email catch-up). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
-- **Startup catch-up**: `cron.ts` schedules one catch-up scan 30 s after every boot. The per-user local-hour gate and the claim ledgers keep it idempotent, so it needs no time-of-day condition.
+- **Hourly UTC tick, per-athlete local gate**: `"0 * * * *"` in `server/cron.ts`. `planEmailJobsForUser()` (`server/emailScheduler.ts`) resolves each athlete's local hour and weekday from `users.user_timezone`. Each email kind has its own send hour, resolved by `resolveNotifyHour()` (`shared/notifyHours.ts`): the kind's optional `notify_hour_*` override, else the athlete's `notify_hour` (default 07:00). The exception is the weekly review reminder, which falls back to 17:00 instead. On top of the hour, the weekly summary only goes out on the athlete's local Monday and the review reminder only on their local Sunday. Fourteen other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, RAG chunk prune daily at 03:50, recycle-bin purge daily at 03:45, analytics recompute hourly at :05 firing at each user's local midnight, account erasure sweep hourly at :35, nutrition push reminders hourly at :25, the food-embedding backfill every 30 minutes when semantic food search is enabled, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, the Strava auto-sync polling scan every 15 minutes, and the Strava webhook subscription check six-hourly and 30 s after boot). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
+- **Startup catch-up**: `cron.ts` schedules one catch-up scan 30 s after every boot, as a one-shot timer (not a cron) under its own `startupEmailCatchUp` advisory lock. The per-user local-hour gate and the claim ledgers keep it idempotent, so it needs no time-of-day condition.
 - **Claim before send**: every worker takes an atomic conditional `UPDATE` on its ledger column (`claimWeeklySummary` and friends in `server/storage/users.ts`) before building the email, with a window deliberately shorter than the cadence; only the winner sends.
 - **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the ledger is stamped at claim time, so a retry after a post-send failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
 - **No AI on the email path**: the analysis digest reads stored `analytics_results` rows only; recomputes stay with the `analyticsRecompute` cron.
 - **Unsubscribe**: every send carries `List-Unsubscribe` / `List-Unsubscribe-Post` headers and a footer link to `/api/v1/emails/unsubscribe`, mounted ahead of the CSRF guard (see [integrations.md § One-Click Unsubscribe](integrations.md#one-click-unsubscribe)).
 - **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — call it hourly when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
-- **Per-job timeout**: every worker is wrapped in `runWithTimeout` (55 min) so a hung Resend or Gemini call cannot leak a worker slot indefinitely.
+- **Per-job timeout**: every worker is wrapped in `runWithTimeout` (50 min, `JOB_TIMEOUT_MS`) so a hung Resend or Gemini call cannot leak a worker slot indefinitely.
 - **Same pattern, different payload — stored-first analytics**: the `analyticsRecompute` cron reuses this exact fixed-UTC-tick → local-time-gate → pg-boss → worker shape. It ticks hourly, fires per user at local midnight, and enqueues `recompute-analytics` jobs that refresh the durable `analytics_results` row (Coach Insights / Race Prediction) so the next open paints a fresh result with no AI spend on the read path. See [integrations.md § Analytics Recompute](integrations.md#analytics-recompute-scan).
 - See [integrations.md § Email](integrations.md#email-system-resend) for the prose walkthrough and [integrations.md § Job Queue](integrations.md#job-queue-pg-boss) for the queue-level details.
 

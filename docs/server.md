@@ -24,22 +24,23 @@ Source entry point: `server/index.ts`
 
 The startup sequence in `server/index.ts` proceeds as follows:
 
-1. **Environment validation** -- `server/env.ts` is imported first. It parses `process.env` against a Zod schema and throws immediately on invalid configuration. A structured JSON boot log line is emitted to stdout before any validation runs.
+1. **Environment validation** -- `server/env.ts` is imported first. Before any validation runs it writes a plain-text `[env] Validating environment pid=… at=…` line to stderr (the pino logger does not exist yet). It then parses `process.env` against a Zod schema and throws immediately on invalid configuration, after writing the formatted errors to stderr and a structured JSON `fatal` line to stdout.
 2. **Dev auth bypass guard** -- If `ALLOW_DEV_AUTH_BYPASS` is `"true"` in production, the process exits with `logger.fatal`. In development it logs a warning.
 3. **Sentry initialization** -- If `SENTRY_DSN` is set, `@sentry/node` is initialized with the current `NODE_ENV`. PII sending is disabled.
 4. **Express + HTTP server creation** -- `express()` is created, `x-powered-by` is disabled, and a raw `http.Server` is created via `createServer(app)`.
 5. **Core middleware wiring** -- Compression, the health endpoint, CORS, CSP/Helmet, body parsers, the cookie parser, request logging, and request-context wiring are registered in `server/index.ts` in deterministic order (see Middleware Stack below). App-level concerns (`trust proxy`, `x-powered-by`), the health endpoint, observability, and shutdown handlers are factored into `server/bootstrap/` (`appConfig.ts`, `health.ts`, `observability.ts`, `lifecycle.ts`). CSRF protection is mounted later inside `registerRoutes`; idempotency is applied per protected route.
-6. **Health endpoint registration** -- `GET /api/v1/health` is registered before async startup tasks and before CORS so platform probes are always reachable.
+6. **Health endpoint registration** -- `GET /api/v1/health` (readiness) and `GET /api/v1/health/live` (liveness) are registered before async startup tasks and before CORS so platform probes are always reachable.
 7. **Early server bind** -- `httpServer.listen()` happens before startup tasks. This keeps `/api/v1/health` reachable while dependencies warm up.
 
-After listening, startup advances through explicit phases exposed by the health endpoint's `phase` field:
+After listening, startup advances from the initial `initializing` phase through explicit phases exposed by the health endpoint's `phase` field:
 
-8. **`db_maintenance` phase** -- `runStartupMaintenance(storage)` executes DB connectivity checks, migrations, schema/extension guards, and cleanup/backfill tasks.
-9. **`queue` phase** -- `startQueue()` starts pg-boss and registers queue workers.
-10. **`cron` phase** -- `startCron(storage)` schedules recurring jobs.
-11. **`routes` phase** -- `registerRoutes(httpServer, app)` mounts auth + API routes.
-12. **Post-route runtime wiring** -- Dev-only Swagger UI (`/api/docs`), global Express error handler, Sentry Express error handler, and static/Vite serving are attached.
-13. **`ready` phase** -- `isReady` flips to `true`; health transitions from `starting` to `ok`.
+8. **`ssrf_guard` phase** (only when `AI_TEXT_BASE_URL` is set) -- `assertResolvedHostIsPublic(env.AI_TEXT_BASE_URL)` resolves the host and aborts startup if it resolves to a private/loopback address (see [SSRF Guard](#ssrf-guard)).
+9. **`db_maintenance` phase** -- `runStartupMaintenance(storage)` executes DB connectivity checks, migrations, schema/extension guards, and cleanup/backfill tasks.
+10. **`queue` phase** -- `startQueue()` starts pg-boss and registers the workers defined in `server/queue.ts`; `registerStravaAutoSyncWorker()` (`server/services/stravaAutoSync.ts`) then registers the `strava-sync` worker.
+11. **`cron` phase** -- `startCron(storage)` schedules recurring jobs, and a warning is logged if `RESEND_API_KEY` is unset.
+12. **`routes` phase** -- `registerRoutes(httpServer, app)` mounts auth + API routes.
+13. **Post-route runtime wiring** -- Dev-only Swagger UI (`/api/docs`), global Express error handler, Sentry Express error handler, and static/Vite serving are attached.
+14. **`ready` phase** -- `isReady` flips to `true`; health transitions from `starting` to `ok` (or `degraded` when a database probe fails).
 
 If any phase throws, `startupError` is set, the process stays bound, and `/api/v1/health` returns `503` with `{ status: "error", phase, ... }`.
 
@@ -62,10 +63,10 @@ Middleware is applied in the following order in `server/index.ts`:
 | 9 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture |
 | 10 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
 | 11 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
-| 12 | `pino-http` | Structured request logging with request ID and user context |
-| 13 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId`/`userId` for logging |
+| 12 | `pino-http` | Structured request logging with request ID. Runs before Clerk auth, so user identity is limited (see [pino-http Middleware](#pino-http-middleware)) |
+| 13 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId` only -- Clerk auth has not run yet at this point |
 
-CSRF protection and idempotency are **not** part of this global chain. `csrfProtection` is mounted on `/api/v1` inside `registerRoutes()`; idempotency is applied per protected mutating route through the `protectedRouteBuilder` guards (`protectedMutationGuards = [isAuthenticated, idempotencyMiddleware]`).
+Clerk auth, CSRF protection and idempotency are **not** part of this global chain. `clerkMiddleware()` is installed by `setupAuth()` (when Clerk keys are configured) at the start of `registerRoutes()`, and `csrfProtection` is mounted on `/api/v1` after it; idempotency is applied per protected mutating route through the `protectedRouteBuilder` guards (`protectedMutationGuards = [isAuthenticated, idempotencyMiddleware]`).
 
 ### Middleware Ordering Rationale
 
@@ -74,7 +75,7 @@ Middleware is ordered intentionally:
 2. **CORS** early -- rejects disallowed origins before any processing
 3. **CSP nonce + Helmet** before route handlers -- security headers (including the nonce-based CSP from `buildCspDirectives()`) on every response
 4. **Body parsing** after security -- limits apply to parsed bodies only
-5. **pino-http** then **request-context** last in the pre-route stack -- logs after auth context is available (extracts userId from Clerk)
+5. **pino-http** then **request-context** last in the pre-route stack -- both run **before** Clerk auth (`clerkMiddleware()` is registered later, inside `registerRoutes()`), so `req.log` is bound with `userId: "anonymous"` and the request context carries `requestId` only
 
 ### CORS allowed origins
 
@@ -93,7 +94,7 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 
 1. **Clerk auth setup** -- `setupAuth(app)` from `server/clerkAuth.ts`
 2. **CSRF token endpoint** -- `GET /api/v1/csrf-token` is mounted before the protecting middleware so the safe-method request can set the cookie.
-3. **CSRF protection** -- `app.use("/api/v1", csrfProtection)` guards every mutating `/api/v1` request. The one exception mounts just before it: `registerStravaWebhookRoutes(app)` from `server/stravaWebhook.ts` registers `GET`/`POST /api/v1/strava/webhook`, which Strava calls without a token (see [Integrations → Automatic Sync](integrations.md#automatic-sync)).
+3. **CSRF protection** -- `app.use("/api/v1", csrfProtection)` guards every mutating `/api/v1` request. Two exceptions mount just before it, because their callers send neither a session cookie nor a CSRF token: `registerStravaWebhookRoutes(app)` from `server/stravaWebhook.ts` registers `GET`/`POST /api/v1/strava/webhook`, which Strava calls without a token (see [Integrations → Automatic Sync](integrations.md#automatic-sync)), and `registerEmailUnsubscribeRoutes(app)` from `server/routes/emailUnsubscribe.ts` registers `GET`/`POST /api/v1/emails/unsubscribe`, which mail clients POST to for one-click unsubscribe and which is authorised by its signed token alone (see [Integrations → One-Click Unsubscribe](integrations.md#one-click-unsubscribe)).
 4. **Strava + Garmin OAuth routes** -- `registerStravaRoutes(app)` from `server/strava.ts` and `registerGarminRoutes(app)` from `server/garmin.ts`.
 5. **API route modules** -- Each mounted via `app.use(router)`:
 
@@ -137,7 +138,7 @@ Helmet is configured with the application's full Content-Security-Policy via `bu
 
 ### CSP Nonces
 
-In production, `server/middleware/cspNonce.ts` generates a 128-bit random nonce (base64-encoded) per request, stored in `res.locals.cspNonce`. The nonce is injected into the `script-src` CSP directive and into `<script>` tags in the served HTML (see `server/static.ts`). In development, `'unsafe-inline'` and `'unsafe-eval'` are used instead.
+In production, `server/middleware/cspNonce.ts` generates a 128-bit random nonce (base64url-encoded, so it never contains `+`, `/` or `=`) per request, stored in `res.locals.cspNonce`. The nonce is injected into the `script-src` CSP directive and into `<script>` tags in the served HTML (see `server/static.ts`). In development, `'unsafe-inline'` and `'unsafe-eval'` are used instead.
 
 ### CORS
 
@@ -159,8 +160,10 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 
 ### Body Size Limits
 
-- `/api/v1/coaching-materials`: 2 MB (coaching documents can be large)
-- All other routes: 100 KB for both JSON and URL-encoded bodies
+- `/api/v1/coaching-materials`: 2 MB JSON (coaching documents can be large)
+- Image-parse routes: 10 MB JSON, for base64 image payloads. The paths are matched by `isImageParsePath()` in `server/imageParsePaths.ts`: the stateless `parse-exercises-from-image` and `parse-workout-structure-from-image` parsers, the workout and plan-day `reparse-from-image` routes, and `nutrition/parse/photo` and `nutrition/parse/label`
+- All other routes: 100 KB JSON
+- URL-encoded bodies: 100 KB on every route
 
 ### Request ID Validation
 
@@ -196,7 +199,9 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 
 - Applies to mutating methods only (POST/PUT/PATCH/DELETE)
 - Requests without the header pass through untouched
-- On first request with a given `(userId, key)` pair, the response is cached in the `idempotency_keys` table with a 7-day TTL
+- Before the handler runs, the `(userId, key)` pair is atomically claimed in the `idempotency_keys` table as an in-progress row with a 60-second TTL, so a crashed or aborted request frees the key quickly. A concurrent duplicate that finds a live claim gets `409` with code `IDEMPOTENT_REQUEST_IN_PROGRESS`
+- Only a `2xx` response sent through `res.json` is cached (status code + body, 7-day TTL). Any other outcome, including a response that finishes without `res.json`, releases the claim so the same key can be retried
+- Response bodies over 64 KB are cached as a `{ idempotencyReplayed: true }` sentinel instead of the full payload
 - On repeat requests with the same key, the cached response (status code + body) is returned without re-executing the handler
 - Key length is capped at 255 characters (returns 400 if exceeded)
 - Must be mounted after `isAuthenticated` so `getUserId()` can resolve the caller
@@ -274,7 +279,7 @@ Structured logging is provided by **Pino** (`server/logger.ts`).
 ### Configuration
 
 - Log level is set via `LOG_LEVEL` environment variable (default: `"info"`)
-- Sensitive headers are redacted: `authorization`, `cookie`, `x-cron-secret`
+- Sensitive headers are redacted: `authorization`, `cookie`, `x-csrf-token`, `x-idempotency-key`, `x-cron-secret`, `x-internal-analytics-secret` (the `SENSITIVE_REQUEST_HEADERS` list, which the Sentry `beforeSend` scrubber in `server/bootstrap/observability.ts` also uses). Credential-like request-body fields (e.g. passwords, access/refresh tokens, API keys, client secrets, `imageBase64`, Web Push `p256dh`/`auth` keys) are redacted too
 - In development, `pino-pretty` is used for human-readable colorized output
 - In production, raw JSON is emitted (suitable for log aggregation)
 
@@ -283,7 +288,7 @@ Structured logging is provided by **Pino** (`server/logger.ts`).
 The `pino-http` middleware adds structured context to every request log:
 
 - **requestId** -- from validated `X-Request-ID` header or generated UUID
-- **userId** -- extracted from Clerk auth (falls back to `"anonymous"`)
+- **userId** -- always `"anonymous"` on the per-request `req.log` child, which is bound at request start, before `clerkMiddleware()` has run. The completion line re-reads Clerk auth: a signed-in request logs `"authenticated"` when it succeeds and its real Clerk user id only when the response status is >= 400, keeping user ids out of the high-volume success log
 - **route** -- the request URL path (query string stripped)
 - **context** -- set to `"http"`
 
@@ -315,10 +320,11 @@ Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`).
 
 - `isReady` starts as `false`, `startupError` as `null`
 - Server listens on port BEFORE routes register (allows health check during startup)
-- `GET /api/v1/health` returns `{ status: "starting" }` while bootstrapping
-- After `registerRoutes()` completes, `isReady = true` -- returns `{ status: "ok" }`
-- If startup throws, `startupError` is set -- returns `{ status: "error", error: "..." }` with 503
-- CI polls this endpoint via `script/wait-for-health.js` to know when the server is ready
+- `GET /api/v1/health` (readiness) returns `503` `{ status: "starting", phase, ... }` while bootstrapping
+- Once the `ready` phase sets `isReady = true` (after `registerRoutes()` and the post-route wiring), it probes the main DB and, when `VECTOR_DATABASE_URL` is set, the vector DB (results cached for 5 s). It returns `{ status: "ok", vectorSchema, ... }` when both answer, otherwise `503` `{ status: "degraded", db, vectorDb, ... }`
+- If startup throws, `startupError` is set -- returns `503` `{ status: "error", error: "startup_error", phase, ... }`. The raw error message is only logged, never returned
+- `GET /api/v1/health/live` (liveness) never touches the DB: it returns `{ status: "alive", uptimeMs, ... }`, or `503` `{ status: "startup_failed", phase, ... }` once startup has failed. `railway.toml` points the platform healthcheck here
+- CI polls `/api/v1/health` via `script/wait-for-health.js` to know when the server is ready
 
 ---
 
@@ -350,7 +356,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `SENTRY_DSN` | No | Sentry error tracking DSN |
 | `RESEND_API_KEY` | No | Resend email delivery API key (email disabled if unset) |
 | `RESEND_FROM_EMAIL` | No | Sender address for outbound emails |
-| `VAPID_PUBLIC_KEY` | No | Web Push VAPID public key (push endpoints return 404 if unset) |
+| `VAPID_PUBLIC_KEY` | No | Web Push VAPID public key. Push is enabled only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set; otherwise `GET /api/v1/push/vapid-key` returns 404 (`PUSH_NOT_CONFIGURED`) and sends are skipped |
 | `VAPID_PRIVATE_KEY` | No | Web Push VAPID private key |
 | `VAPID_EMAIL` | No | Bare contact email address for Web Push; the server prepends `mailto:` when registering VAPID details |
 | `AI_FEATURES_ENABLED` | No | Runtime kill switch for AI provider traffic (default `true`; `false` disables all AI features) |
@@ -384,7 +390,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `RAG_CHUNK_OVERLAP` | No | Overlap characters between RAG chunks (default: `100`) |
 | `ENCRYPTION_KEY_V2` | No | Rotation key for `ENCRYPTION_KEY`. When set, new ciphertext is tagged `v2`; the v1 key stays available to decrypt existing rows. Must differ from `ENCRYPTION_KEY` and `CSRF_SECRET`. |
 | `ENCRYPTION_REENCRYPT_ON_BOOT` | No | `"true"` (with `ENCRYPTION_KEY_V2` set) re-encrypts stored Strava/Garmin credentials to the active key version on boot. Default `"false"`. |
-| `CSRF_SECRET` | Yes (production) | Minimum 32 characters, used for CSRF token HMAC. In production it is **required** and **must differ** from `ENCRYPTION_KEY`. Auto-generated per process in dev/test if unset. |
+| `CSRF_SECRET` | Yes (production) | Minimum 32 characters, used for CSRF token HMAC. It is **required** in production, and whenever it is set it **must differ** from `ENCRYPTION_KEY` (in every environment). Auto-generated per process in dev/test if unset. |
 
 This table covers the variables most relevant to the server runtime. It is not exhaustive -- see [Environment Variables](env-reference.md) for the complete reference, including AI model overrides and feature flags.
 
@@ -398,7 +404,7 @@ This table covers the variables most relevant to the server runtime. It is not e
 - Connection string: `DATABASE_URL`
 - Max connections: 20
 - Idle timeout: 30 s (`DB_IDLE_TIMEOUT_MS`)
-- Connection timeout: 5 s (`DB_CONNECTION_TIMEOUT_MS`)
+- Connection timeout: 10 s (`DB_CONNECTION_TIMEOUT_MS`)
 - Statement timeout: 30 s (`DB_STATEMENT_TIMEOUT_MS`)
 - **SSL selection:** Enabled in production (`rejectUnauthorized: true`) **unless** the `DATABASE_URL` hostname ends in `.railway.internal`. Railway's internal Postgres network stays on private IPv6 and does not speak SSL, so forcing TLS on an internal-host URL breaks connections. The hostname is parsed via `new URL(env.DATABASE_URL)` with a try/catch fallback.
 - Drizzle ORM wraps the pool with the shared schema
@@ -415,7 +421,7 @@ Both pools log unexpected errors on idle clients.
 
 ### Job Queue
 
-pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Workers are registered for every queue at boot — six in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts`.
+pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Workers are registered for every queue at boot — ten in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts`.
 
 **The queue catalogue lives in [Integrations → Job Types](integrations.md#job-types)** — name, worker and payload for each. It is not repeated here: this section previously carried a second copy of that table and drifted from it.
 
@@ -434,7 +440,7 @@ Cron jobs run in-process on **each** app replica; the advisory lock above is wha
 `server/sharedRuntimeState.ts` owns short-lived shared cache helpers backed by Postgres:
 
 - `rate_limit_buckets` stores per-category request counters and reset timestamps for `rateLimiter(...)`.
-- `server_runtime_cache` stores hashed short-lived keys for the Clerk auth seen-cache, Gemini embedding cache, RAG retrieval cache, and embedding health probe.
+- `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, the RAG retrieval cache, and the embedding health probe. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
 - Expired rows are pruned daily by the `sharedRuntimeCleanup` cron job at 04:15 UTC.
 
 ### Route Utilities
