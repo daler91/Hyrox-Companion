@@ -14,7 +14,8 @@
  *    (user_id, strava_activity_id); attach requires both device ids NULL).
  *  - `manual` links are the athlete's decision and outrank the matcher.
  *
- * The sync reconciler and the link/unlink routes are the only callers.
+ * Callers: the sync reconciler, the link/unlink routes, and planService, which
+ * releases a plan day's device activity when the day is un-completed.
  */
 import {
   type DeviceActivitySnapshot,

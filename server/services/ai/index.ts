@@ -159,12 +159,6 @@ function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermedi
 const COVERAGE_NEGLECT_DAYS = 10;
 
 /**
- * Pick the most coaching-relevant recent bests (last ~10 weeks of logged sets)
- * as display-ready strings. Prefers the estimated 1RM (or top weight) so the
- * model can anchor progressive overload, then fills with distance/time bests.
- * Capped to keep the prompt bounded.
- */
-/**
  * The athlete's stored units, defaulted once.
  *
  * `exercise_sets.weight` and `.distance` are stored in the athlete's own unit,
@@ -182,6 +176,12 @@ function resolveUnitPreferences(user: { weightUnit?: string | null; distanceUnit
   };
 }
 
+/**
+ * Pick the most coaching-relevant recent bests (last ~10 weeks of logged sets)
+ * as display-ready strings. Prefers the estimated 1RM (or top weight) so the
+ * model can anchor progressive overload, then fills with distance/time bests.
+ * Capped to keep the prompt bounded.
+ */
 function buildPersonalRecordSummaries(
   prs: ReturnType<typeof calculatePersonalRecords>,
   weightUnit: string,

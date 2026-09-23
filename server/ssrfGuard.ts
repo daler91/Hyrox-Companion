@@ -195,9 +195,14 @@ function withDnsTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
  * loopback / link-local. Literal IPs and `localhost` are already rejected by
  * checkSafeOutboundUrl at env-parse time, so they're skipped here.
  *
- * Throws on a private resolution so the caller can refuse to boot. DNS errors
+ * Throws on a private resolution. Two callers act on it: startup refuses to
+ * boot when AI_TEXT_BASE_URL resolves privately (server/index.ts), and every
+ * push send re-checks its endpoint and drops the subscription
+ * (server/pushNotifications.ts — which recognises this error by its message
+ * text, so keep "resolves to a private/loopback address" stable). DNS errors
  * (NXDOMAIN, timeout, no records) are non-fatal — they don't indicate an SSRF
- * target and shouldn't block startup over a transient resolver hiccup.
+ * target and shouldn't block startup or a send over a transient resolver
+ * hiccup.
  */
 export async function assertResolvedHostIsPublic(
   rawUrl: string,

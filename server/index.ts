@@ -95,10 +95,8 @@ const app = express();
 const { isDev } = configureApp(app);
 const httpServer = createServer(app);
 
-// Re-export AppError class from errors module; also keep a loose interface
-// so the error handler can handle both AppError instances and plain errors
-// with ad-hoc status/code properties (e.g. from third-party middleware).
-export type { AppError } from "./errors";
+// A loose shape for errors that are not AppErrors, so the error handler can
+// read the ad-hoc status/code properties third-party middleware attaches.
 interface LegacyError extends Error {
   status?: number;
   statusCode?: number;
@@ -282,8 +280,13 @@ app.use(pinoHttp({
     // to limit PII in log sinks. The real id is attached only when the request
     // failed (>= 400), where it's needed to triage the error; successful
     // requests log a non-identifying 'authenticated'/'anonymous' marker.
-    // Per-request app logs still bind the real userId via runWithRequestContext
-    // for warn/error correlation.
+    //
+    // pino-http calls this twice: once at request start, to bind `req.log`,
+    // and again for the completion line. The first call runs before
+    // clerkMiddleware (mounted later, in registerRoutes), so `req.log` — what
+    // reqLogger() hands the app — is always bound to 'anonymous'. Only the
+    // completion line of a failed request carries the real id, and the request
+    // context binds requestId only (see the middleware below).
     const isErrorResponse = (res?.statusCode ?? 0) >= 400;
     const loggedUserId =
       isErrorResponse || userId === 'anonymous' ? userId : 'authenticated';
@@ -408,14 +411,14 @@ try {
     // or legacy ad-hoc error properties (e.g. from third-party middleware).
     const isAppError = err.name === "AppError" && "code" in err;
     const status = isAppError
-      ? (err as import("./errors").AppError).status
+      ? (err as AppError).status
       : ((err as LegacyError).status || (err as LegacyError).statusCode || 500);
     const defaultCode = status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
     const code = isAppError
-      ? (err as import("./errors").AppError).code
+      ? (err as AppError).code
       : ((err as LegacyError).code || defaultCode);
     const details = isAppError
-      ? (err as import("./errors").AppError).details
+      ? (err as AppError).details
       : (err as LegacyError).details;
 
     // 🛡️ Sentinel: Prevent leaking sensitive error details to the client

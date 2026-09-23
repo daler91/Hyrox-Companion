@@ -16,6 +16,7 @@ import { generateJsonText } from "../ai/providers";
 import { PLAN_GENERATION_AI_TIMEOUT_MS } from "../constants";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
+import { sanitizeLabel } from "../gemini/exerciseParser/mapping";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
@@ -262,17 +263,6 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
   return lines.join("\n");
 }
 
-// Normalize a single AI-returned exercise into the ParsedExercise shape the
-// rest of the backend already consumes. Mirrors the hardening in
-// `exerciseParser.ts`: unknown exerciseName collapses to "custom" + a
-// customLabel, an empty label triggers low-confidence so the UI can prompt
-// for review.
-// Plain text rendered via React — no HTML encoding needed. See
-// exerciseParser.ts sanitizeLabel for the rationale.
-function sanitizeLabel(v: string): string {
-  return v.replaceAll("&", "and");
-}
-
 function defaultConfidence(isKnown: boolean): number {
   return isKnown ? 95 : 50;
 }
@@ -284,6 +274,11 @@ function resolveGeneratedConfidence(raw: GeneratedExercise, isKnown: boolean): n
   return defaultConfidence(isKnown);
 }
 
+// Normalize a single AI-returned exercise into the ParsedExercise shape the
+// rest of the backend already consumes. Mirrors the hardening in the exercise
+// parser (server/gemini/exerciseParser/mapping.ts, whose sanitizeLabel this
+// shares): unknown exerciseName collapses to "custom" + a customLabel, an
+// empty label triggers low-confidence so the UI can prompt for review.
 function normalizeGeneratedExercise(raw: GeneratedExercise, unitPreferences: UnitPreferences): ParsedExercise {
   const isKnown = VALID_EXERCISE_NAMES.has(raw.exerciseName) && raw.exerciseName !== "custom";
   const validCategory = VALID_CATEGORIES.has(raw.category);
@@ -420,14 +415,6 @@ export interface ProgressiveOverloadViolation {
   increasePct: number;
 }
 
-/**
- * Week-over-week weight jumps that exceed the ceiling, per exercise.
- *
- * Compares each exercise's heaviest prescribed set in consecutive weeks that
- * BOTH prescribe it. A week that drops weight is never a violation — that is a
- * deload, which the same prompt asks for.
- */
-/** exerciseName -> weekNumber -> heaviest prescribed weight that week. */
 /** The unit a generated set's weight is in: its own stamp, else the default. */
 function generatedSetUnit(set: GeneratedExerciseSet, defaultUnit: WeightUnit): WeightUnit {
   return set.weightUnit ? standardizeWeightUnit(set.weightUnit) : defaultUnit;
@@ -440,7 +427,8 @@ function generatedSetWeightKg(set: GeneratedExerciseSet, defaultUnit: WeightUnit
 }
 
 /**
- * Heaviest weight per exercise per week, in kilograms.
+ * Heaviest weight per exercise per week, in kilograms:
+ * exerciseName -> weekNumber -> heaviest prescribed weight that week.
  *
  * Reads each set's own unit stamp: adjacent weeks come from independent
  * model calls, so one week labelled kg and the next lbs is exactly what the
@@ -469,6 +457,13 @@ function collectHeaviestWeightsByWeek(
   return byExercise;
 }
 
+/**
+ * Week-over-week weight jumps that exceed the ceiling, per exercise.
+ *
+ * Compares each exercise's heaviest prescribed set in consecutive weeks that
+ * BOTH prescribe it. A week that drops weight is never a violation — that is a
+ * deload, which the same prompt asks for.
+ */
 export function findProgressiveOverloadViolations(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
