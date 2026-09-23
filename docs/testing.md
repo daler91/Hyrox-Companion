@@ -816,7 +816,6 @@ project-root/
           TimelineFilters.test.tsx    # Timeline filter component
     hooks/
       __tests__/
-        useBlockCounts.test.ts        # Block counts hook
         useChatSession.test.tsx       # Chat session hook
         useCombineWorkouts.test.tsx   # Combine workouts hook
         usePlanImport.test.tsx        # Plan import hook

@@ -28,16 +28,6 @@ export function useCreateCoachingMaterial() {
   });
 }
 
-export function useUpdateCoachingMaterial() {
-  return useApiMutation({
-    mutationFn: ({ id, ...data }: { id: string; title?: string; content?: string; type?: "principles" | "document" }) =>
-      api.coaching.update(id, data),
-    invalidateQueries: [QUERY_KEYS.coachingMaterials],
-    successToast: "Coaching material updated",
-    errorToast: "Failed to update coaching material",
-  });
-}
-
 export function useRagStatus() {
   return useQuery<RagStatus>({
     queryKey: QUERY_KEYS.ragStatus,

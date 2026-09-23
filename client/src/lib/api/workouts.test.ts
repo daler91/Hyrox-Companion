@@ -27,21 +27,6 @@ describe('workouts API client', () => {
     });
   });
 
-  it('list() calls typedRequest with GET and empty query string when no params provided', () => {
-    workouts.list();
-    expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts');
-  });
-
-  it('list() calls typedRequest with GET and correct query string when params provided', () => {
-    workouts.list({ limit: 10, offset: 5 });
-    expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts?limit=10&offset=5');
-  });
-
-  it('list() filters out null or undefined params from query string', () => {
-    workouts.list({ limit: 10, offset: undefined });
-    expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts?limit=10');
-  });
-
   it('get() calls typedRequest with GET and correct id', () => {
     workouts.get('123');
     expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts/123');
@@ -67,11 +52,6 @@ describe('workouts API client', () => {
     const payload = { workoutLogIds: ['w-1'], planDayIds: ['pd-1'] };
     workouts.bulkDelete(payload);
     expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/bulk-delete', payload);
-  });
-
-  it('getUnstructured() calls typedRequest with GET', () => {
-    workouts.getUnstructured();
-    expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts/unstructured');
   });
 
   it('reparse() calls typedRequest with POST and correct id', () => {

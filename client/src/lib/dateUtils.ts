@@ -62,24 +62,6 @@ export function isDateInRange(dateStr: string, startStr: string, endStr: string)
   return dateStr >= startStr && dateStr <= endStr;
 }
 
-export function isDateInCurrentWeek(dateStr: string, weekStartsOn: 0 | 1 = 1): boolean {
-  const startStr = getStartOfWeekString(new Date(), weekStartsOn);
-  const endStr = getEndOfWeekString(new Date(), weekStartsOn);
-  return isDateInRange(dateStr, startStr, endStr);
-}
-
-export function isDatePast(dateStr: string): boolean {
-  return dateStr < getTodayString();
-}
-
-export function isDateFuture(dateStr: string): boolean {
-  return dateStr > getTodayString();
-}
-
-export function isDateToday(dateStr: string): boolean {
-  return dateStr === getTodayString();
-}
-
 export function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

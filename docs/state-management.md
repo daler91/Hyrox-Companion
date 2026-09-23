@@ -108,14 +108,14 @@ Each API domain has a dedicated module in `client/src/lib/api/`:
 
 | Module | File | Functions |
 |--------|------|-----------|
-| Workouts | `workouts.ts` | `create()`, `list()`, `latest()`, `get()`, `update()`, `updateBlockScore()`, `delete()`, `bulkDelete()`, `combine()`, `getUnstructured()`, `reparse()`, `reparseFromImage()`, `batchReparse()`, `history()`, `seedFromPlan()`, `assignPlanDay()`, device-link actions (`linkDeviceActivity()`, `unlinkDeviceActivity()`, `dismissDeviceLinkSuggestion()`), plus exercise-set CRUD (`addSet`/`updateSet`/`deleteSet` via `createExerciseSetMutationApi`) |
-| Plans | `plans.ts` | `list()`, `get()`, `import()`, `createSample()`, `rename()`, `updateGoal()`, `setRetirement()`, `deletePlan()`, `generate()`, `getGenerationStatus()`, `schedule()`, `updateDay()`, `updateDayWithoutPlan()`, `updateDayStatus()`, `deleteDay()`, `getDayExercises()`, `updateDayStructure()`, `addDayExercise()`/`updateDayExercise()`/`deleteDayExercise()`, `regenerateCoachNote()`, `reparseDay()`, `reparseDayFromImage()` |
-| Coaching | `coaching.ts` | `chat` (`send()`, `sendStream()`, `saveMessage()`, `clearHistory()`, `getStoredCoachInsights()`, `regenerateCoachInsights()`), `coaching` materials CRUD (`list`/`create`/`update`/`delete`), `getRagStatus()`, `reEmbed()` |
-| Analytics | `analytics.ts` | `analytics` (`getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` — returns a `TrainingOverview` — `getTrainingSummary()`, `getOverviewAnalysis()`/`regenerateOverviewAnalysis()`, `getRacePrediction()`, `getWeeklyReview()`/`setWeeklyReviewIntent()`, `exportData()`), `timeline` (`get()`, `getPage()`, `getSuggestions()`, `applySuggestion()`) |
-| User | `user.ts` | `auth.getUser()`, `preferences.get/update()` (units, `userTimezone`, `weeklyGoal`, `mealSchedule`, `trainingConstraints`, the email and push toggles, `showAdherenceInsights`, `aiCoachEnabled`, `coachAutoApplyPlanChanges`, `onboardingCompleted`, athlete profile / body composition, training-style and MAF fields), `strava.*` (`auth/disconnect/sync`), `garmin.*` (`connect/disconnect/sync`), `email.check()` |
-| Exercises | `exercises.ts` | `parse()`, `parseStructured()`, `parseFromImage()`, `parseStructuredFromImage()`, `getHistory()`, `listCustom()`, `createCustom()` |
+| Workouts | `workouts.ts` | `create()`, `latest()`, `get()`, `update()`, `updateBlockScore()`, `delete()`, `bulkDelete()`, `combine()`, `reparse()`, `reparseFromImage()`, `batchReparse()`, `history()`, `seedFromPlan()`, `assignPlanDay()`, device-link actions (`linkDeviceActivity()`, `unlinkDeviceActivity()`, `dismissDeviceLinkSuggestion()`), plus exercise-set CRUD (`addSet`/`updateSet`/`deleteSet` via `createExerciseSetMutationApi`) |
+| Plans | `plans.ts` | `list()`, `get()`, `import()`, `createSample()`, `rename()`, `updateGoal()`, `setRetirement()`, `deletePlan()`, `generate()`, `getGenerationStatus()`, `schedule()`, `updateDayWithoutPlan()`, `updateDayStatus()`, `deleteDay()`, `getDayExercises()`, `updateDayStructure()`, `addDayExercise()`/`updateDayExercise()`/`deleteDayExercise()`, `reparseDay()`, `reparseDayFromImage()` |
+| Coaching | `coaching.ts` | `chat` (`send()`, `sendStream()`, `saveMessage()`, `clearHistory()`, `getStoredCoachInsights()`, `regenerateCoachInsights()`), `coaching` materials (`list`/`create`/`delete`), `getRagStatus()`, `reEmbed()` |
+| Analytics | `analytics.ts` | `analytics` (`getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` — returns a `TrainingOverview` — `getTrainingSummary()`, `getOverviewAnalysis()`/`regenerateOverviewAnalysis()`, `getRacePrediction()`, `getWeeklyReview()`/`setWeeklyReviewIntent()`, `exportData()`), `timeline` (`getPage()` — one cursor page of [`GET /api/v1/timeline`](api-reference.md#get-apiv1timeline) — `getSuggestions()`, `applySuggestion()`) |
+| User | `user.ts` | `preferences.update()` (units, `userTimezone`, `weeklyGoal`, `mealSchedule`, `trainingConstraints`, the email and push toggles, `showAdherenceInsights`, `aiCoachEnabled`, `coachAutoApplyPlanChanges`, `onboardingCompleted`, athlete profile / body composition, training-style and MAF fields), `strava.*` (`auth/disconnect/sync`), `garmin.*` (`connect/disconnect/sync`), `email.check()`. Reads of the current user and preferences go through the default query function, keyed by `QUERY_KEYS.authUser` / `QUERY_KEYS.preferences`, so they have no wrapper here |
+| Exercises | `exercises.ts` | `parse()`, `parseStructured()`, `parseFromImage()`, `parseStructuredFromImage()`, `getHistory()` |
 | MAF Tests | `mafTests.ts` | `tagWorkout()`, `updateTest()`, `untagWorkout()`, `list()` for MAF-test tagging and the MAF Trend tab |
-| Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `update()`, `delete()` for injury / illness / travel / rest bands |
+| Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `delete()` for injury / illness / travel / rest bands |
 | Plan Proposals | `planProposals.ts` | `getPending()`, `apply()`, `dismiss()` for conversational plan-adjustment proposals |
 | Recycle Bin | `recycleBin.ts` | `list()`, `restore()`, `restoreBatch()`, `purge()`, `empty()` for the 90-day soft-delete store |
 | Consent | `consent.ts` | `recordServerConsent()` — records a consent grant/revocation server-side |
@@ -192,7 +192,6 @@ Timeline annotation queries and mutations are composed directly from the `client
 | `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state (current step, form values, navigation). |
 | `useOnlineStatus` | `useOnlineStatus.ts` | Tracks `navigator.onLine` with event listeners. |
 | `useOfflineDropNotifier` | `useOfflineDropNotifier.ts` | Subscribes to the offline queue and shows a destructive toast whenever a queued mutation is permanently dropped (data loss). Mounted once near the app root. |
-| `useBlockCounts` | `useBlockCounts.ts` | Calculates exercise block statistics (total sets, exercises). |
 | `useCombineWorkouts` | `useCombineWorkouts.ts` | State for merging multiple workout logs into one. |
 | `use-toast` | `use-toast.ts` | Toast notification state management. |
 | `use-mobile` | `use-mobile.tsx` | Responsive breakpoint detection. |
@@ -324,15 +323,13 @@ The Log Workout page autosaves a working draft to `localStorage` so an accidenta
 
 | Function | Description |
 |----------|-------------|
-| `getTodayString()` | Returns today as `YYYY-MM-DD` |
-| `toISODateString(date)` | Converts a Date to `YYYY-MM-DD` |
-| `getStartOfWeek(date)` | Returns the Monday of the given week |
-| `getEndOfWeek(date)` | Returns the Sunday of the given week |
-| `isDateInRange(date, start, end)` | Range check predicate |
-| `isDatePast(date)` | Whether a date is before today |
-| `isDateToday(date)` | Whether a date is today |
-| `formatTime(minutes)` | Formats minutes as `Xh Ym` |
-| `getCurrentTimeString()` | Returns current time as `HH:MM` |
+| `getTodayString()` / `getYesterdayString()` | The local calendar date as `YYYY-MM-DD` |
+| `toISODateString(date)` | Converts a Date to its local `YYYY-MM-DD` |
+| `getStartOfWeek(date, weekStartsOn = 1)` / `getEndOfWeek(...)` | Monday / Sunday of the given week (Monday-start by default, audit L7) |
+| `getStartOfWeekString(...)` / `getEndOfWeekString(...)` | The same, as `YYYY-MM-DD` |
+| `isDateInRange(date, start, end)` | Inclusive range check on `YYYY-MM-DD` strings |
+| `formatTime(date)` | A Date's local time as `HH:MM` (`toLocaleTimeString`) |
+| `getCurrentTimeString()` | `formatTime(new Date())` |
 
 ### Exercise Utilities
 

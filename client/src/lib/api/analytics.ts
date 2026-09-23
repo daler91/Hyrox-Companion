@@ -122,8 +122,6 @@ function timelineUrl(planId?: string | null, before?: string | null): string {
 }
 
 export const timeline = {
-  get: (planId?: string | null) => typedRequest<TimelineEntry[]>("GET", timelineUrl(planId)),
-
   /**
    * One cursor page (P3). The body is a plain entry array; the exclusive
    * `before` bound for the next older page travels in `X-Next-Cursor`.

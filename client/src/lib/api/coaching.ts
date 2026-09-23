@@ -1,4 +1,4 @@
-import type { ChatMessage, CoachingMaterial, InsertCoachingMaterial, RagInfo } from "@shared/schema";
+import type { ChatMessage, CoachingMaterial, RagInfo } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 
@@ -99,9 +99,6 @@ export const coaching = {
 
   create: (data: { title: string; content: string; type: "principles" | "document" }) =>
     typedRequest<CoachingMaterial>("POST", "/api/v1/coaching-materials", data),
-
-  update: (id: string, data: Partial<InsertCoachingMaterial>) =>
-    typedRequest<CoachingMaterial>("PATCH", `/api/v1/coaching-materials/${id}`, data),
 
   delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/coaching-materials/${id}`),
 

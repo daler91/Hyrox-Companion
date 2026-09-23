@@ -39,10 +39,6 @@ export interface StravaStatus {
   autoSync?: StravaAutoSyncInfo;
 }
 
-export const auth = {
-  getUser: () => typedRequest<User>("GET", "/api/v1/auth/user"),
-} as const;
-
 export interface UserPreferences {
   weightUnit: string;
   distanceUnit: string;
@@ -127,8 +123,6 @@ export interface UserPreferences {
 export type UpdateUserPreferencesPayload = Partial<UserPreferences>;
 
 export const preferences = {
-  get: () => typedRequest<UserPreferences>("GET", "/api/v1/preferences"),
-
   update: (data: UpdateUserPreferencesPayload) =>
     typedRequest<User>("PATCH", "/api/v1/preferences", data),
 } as const;

@@ -25,7 +25,6 @@
     "node_modules",
     "build",
     "dist",
-    "client/src/hooks/__tests__/useBlockCounts.test.ts",
     "client/src/hooks/__tests__/useLogWorkoutDraft.test.ts",
     "client/src/hooks/__tests__/useUrlQueryState.test.ts",
     "client/src/hooks/__tests__/useVoiceInput.test.ts",
