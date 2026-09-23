@@ -24,14 +24,20 @@ vi.mock("../db", () => {
   };
 });
 
+const { createTrainingPlan, createPlanDays, getTrainingPlan } = vi.hoisted(() => ({
+  createTrainingPlan: vi.fn(),
+  createPlanDays: vi.fn(),
+  getTrainingPlan: vi.fn(),
+}));
+
 // We'll mock the storage module to avoid interacting with the database
 vi.mock("../storage", () => {
   return {
     storage: {
     plans: {
-      createTrainingPlan: vi.fn(),
-      createPlanDays: vi.fn(),
-      getTrainingPlan: vi.fn(),
+      createTrainingPlan,
+      createPlanDays,
+      getTrainingPlan,
       getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
       deleteTrainingPlan: vi.fn(),
@@ -142,17 +148,13 @@ describe("planService", () => {
     // Onboarding's goal and race date used to be dropped for template users
     // (onboarding audit M3).
     it("keeps a goal and race date given at creation", async () => {
-      vi.mocked(storage.plans.createTrainingPlan).mockResolvedValue(
-        createMockTrainingPlan({ id: "tpl-1", userId: "u-1" }),
-      );
-      vi.mocked(storage.plans.createPlanDays).mockResolvedValue([] as PlanDay[]);
-      vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(
-        createMockTrainingPlanWithDays({ id: "tpl-1", userId: "u-1" }),
-      );
+      createTrainingPlan.mockResolvedValue(createMockTrainingPlan({ id: "tpl-1", userId: "u-1" }));
+      createPlanDays.mockResolvedValue([]);
+      getTrainingPlan.mockResolvedValue(createMockTrainingPlanWithDays({ id: "tpl-1", userId: "u-1" }));
 
       await createSamplePlan("u-1", { goal: "Complete HYROX Open", raceDate: "2026-11-15" });
 
-      expect(storage.plans.createTrainingPlan).toHaveBeenCalledWith(
+      expect(createTrainingPlan).toHaveBeenCalledWith(
         expect.objectContaining({ goal: "Complete HYROX Open", raceDate: "2026-11-15" }),
       );
     });

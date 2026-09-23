@@ -9,6 +9,28 @@ import { disableErrorReporting, enableErrorReporting } from "@/lib/errorReportin
 import { hasAcknowledgedPrivacyNotice, onPrivacyConsentChange, recordPrivacyConsent } from "@/lib/privacyConsent";
 
 /**
+ * The banner's height while it shows, as a CSS custom property on <html>, so a
+ * bottom-pinned bar can sit above it instead of underneath: the Settings save
+ * bar was covered and couldn't be clicked (onboarding audit M5).
+ */
+export const PRIVACY_BANNER_HEIGHT_VAR = "--privacy-banner-height";
+
+/** Keeps PRIVACY_BANNER_HEIGHT_VAR in step with the banner; returns the cleanup. */
+function publishBannerHeight(banner: HTMLElement): () => void {
+  const root = document.documentElement;
+  const publish = () => {
+    root.style.setProperty(PRIVACY_BANNER_HEIGHT_VAR, `${banner.offsetHeight}px`);
+  };
+  publish();
+  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+  observer?.observe(banner);
+  return () => {
+    observer?.disconnect();
+    root.style.removeProperty(PRIVACY_BANNER_HEIGHT_VAR);
+  };
+}
+
+/**
  * First-load notice listing the third-party services that process user data
  * (Sentry error tracking, browser push, optional AI/OAuth integrations). PII is
  * scrubbed from Sentry and health data never leaves the server, but disclosure
@@ -19,13 +41,6 @@ import { hasAcknowledgedPrivacyNotice, onPrivacyConsentChange, recordPrivacyCons
  * it off, and both persist a localStorage gate plus a best-effort server-side
  * consent record for authenticated users (GDPR Art. 7 / CCPA).
  */
-/**
- * The banner's height while it shows, as a CSS custom property on <html>, so a
- * bottom-pinned bar can sit above it instead of underneath: the Settings save
- * bar was covered and couldn't be clicked (onboarding audit M5).
- */
-export const PRIVACY_BANNER_HEIGHT_VAR = "--privacy-banner-height";
-
 export function PrivacyConsentBanner() {
   const hasBlockingModalLayer = useHasBlockingModalLayer();
   const bannerRef = useRef<HTMLElement>(null);
@@ -47,16 +62,7 @@ export function PrivacyConsentBanner() {
   const shown = visible && !hasBlockingModalLayer;
   useEffect(() => {
     const banner = bannerRef.current;
-    const root = globalThis.document?.documentElement;
-    if (!shown || !banner || !root) return;
-    const publish = () => root.style.setProperty(PRIVACY_BANNER_HEIGHT_VAR, `${banner.offsetHeight}px`);
-    publish();
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
-    observer?.observe(banner);
-    return () => {
-      observer?.disconnect();
-      root.style.removeProperty(PRIVACY_BANNER_HEIGHT_VAR);
-    };
+    return shown && banner ? publishBannerHeight(banner) : undefined;
   }, [shown]);
 
   if (!shown) return null;

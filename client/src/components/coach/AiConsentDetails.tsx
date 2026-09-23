@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * athlete meets it. Extra props land on the root, so it can be a Radix
  * `Description` via `asChild`.
  */
-export function AiConsentDetails({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+export function AiConsentDetails({ className, ...props }: Readonly<HTMLAttributes<HTMLDivElement>>) {
   return (
     <div className={cn("space-y-3 text-sm text-muted-foreground", className)} {...props}>
       <p>

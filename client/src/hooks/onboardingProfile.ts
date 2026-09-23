@@ -45,7 +45,7 @@ export const DEFAULT_ONBOARDING_PROFILE: OnboardingProfile = {
   aiCoachEnabled: false,
 };
 
-const GENDERS: readonly string[] = ["male", "female", "prefer_not_to_say"];
+const GENDERS: ReadonlySet<string> = new Set(["male", "female", "prefer_not_to_say"]);
 
 function numberToInput(value: number | null | undefined): string {
   return value == null ? "" : String(value);
@@ -68,7 +68,7 @@ export function profileFromPreferences(prefs: UserPreferences | undefined): Onbo
     distanceUnit: prefs.distanceUnit === "miles" ? "miles" : "km",
     division: prefs.division === "pro" ? "pro" : "open",
     gender:
-      prefs.gender != null && GENDERS.includes(prefs.gender)
+      prefs.gender != null && GENDERS.has(prefs.gender)
         ? (prefs.gender as OnboardingGender)
         : "prefer_not_to_say",
     trainingStyleId: prefs.trainingStyleId ?? "balanced_default",
@@ -97,11 +97,14 @@ function localeRegion(locale: string): string | undefined {
   }
 }
 
+// The DOM types promise a navigator, but there is none outside a browser.
+function browserLanguages(): readonly string[] {
+  return (globalThis.navigator as Navigator | undefined)?.languages ?? [];
+}
+
 /** True when the browser's first language belongs to an imperial region. */
-export function prefersImperialUnits(
-  languages: readonly string[] | undefined = globalThis.navigator?.languages,
-): boolean {
-  const first = languages?.[0];
+export function prefersImperialUnits(languages: readonly string[] = browserLanguages()): boolean {
+  const first = languages.at(0);
   if (!first) return false;
   const region = localeRegion(first);
   return region !== undefined && IMPERIAL_REGIONS.has(region);
@@ -139,9 +142,9 @@ export function changedFields<K extends keyof OnboardingProfile>(
   saved: OnboardingProfile,
   keys: readonly K[],
 ): Partial<Pick<OnboardingProfile, K>> {
-  const changed: Partial<Pick<OnboardingProfile, K>> = {};
-  for (const key of keys) {
-    if (shown[key] !== saved[key]) changed[key] = shown[key];
-  }
-  return changed;
+  const wanted = new Set<string>(keys);
+  const savedValues = new Map<string, unknown>(Object.entries(saved));
+  return Object.fromEntries(
+    Object.entries(shown).filter(([key, value]) => wanted.has(key) && savedValues.get(key) !== value),
+  ) as Partial<Pick<OnboardingProfile, K>>;
 }

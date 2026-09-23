@@ -378,7 +378,7 @@ describe("useOnboardingWizard", () => {
     expect(result.current.mafErrors.age).toBeTruthy();
   });
 
-  it("starts the MAF age from the age already given", async () => {
+  it("starts the MAF age from the age already given", () => {
     const { result } = renderOnboardingWizard();
     act(() => {
       result.current.setAge("38");

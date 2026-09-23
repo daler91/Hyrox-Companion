@@ -18,13 +18,16 @@ vi.mock("../../services/planGenerationService", () => ({
   createPendingPlan: vi.fn(),
 }));
 
-vi.mock("../../storage", async () =>
-  (await import("./testUtils")).mockStorageModule({
+const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
+
+vi.mock("../../storage", async () => {
+  const { storage } = (await import("./testUtils")).mockStorageModule({
     workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
-    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "schedulePlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
+    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
-  }),
-);
+  });
+  return { storage: { ...storage, plans: { ...storage.plans, schedulePlan } } };
+});
 
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
 
@@ -340,7 +343,7 @@ describe("POST /api/v1/plans/:planId/schedule", () => {
   });
 
   it("schedules the athlete's plan from the chosen date", async () => {
-    vi.mocked(storage.plans.schedulePlan).mockResolvedValue("scheduled");
+    schedulePlan.mockResolvedValue("scheduled");
 
     const response = await request(app)
       .post("/api/v1/plans/plan-123/schedule")
@@ -348,11 +351,11 @@ describe("POST /api/v1/plans/:planId/schedule", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
-    expect(storage.plans.schedulePlan).toHaveBeenCalledWith("plan-123", "2026-09-23", "test_user_id");
+    expect(schedulePlan).toHaveBeenCalledWith("plan-123", "2026-09-23", "test_user_id");
   });
 
   it("returns 404 for a plan the athlete does not own", async () => {
-    vi.mocked(storage.plans.schedulePlan).mockResolvedValue("not_found");
+    schedulePlan.mockResolvedValue("not_found");
 
     const response = await request(app)
       .post("/api/v1/plans/plan-123/schedule")
@@ -363,7 +366,7 @@ describe("POST /api/v1/plans/:planId/schedule", () => {
 
   // Sessions are never placed before the start date (onboarding audit C3).
   it("explains a start date after every session of the plan", async () => {
-    vi.mocked(storage.plans.schedulePlan).mockResolvedValue("nothing_after_start");
+    schedulePlan.mockResolvedValue("nothing_after_start");
 
     const response = await request(app)
       .post("/api/v1/plans/plan-123/schedule")

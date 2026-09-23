@@ -51,7 +51,7 @@ export function OnboardingWizardFrame({
 
   // No step is a <form>, so Enter in a field did nothing (audit M4). A real
   // form would also submit on the calendar's day buttons, which carry no
-  // type, so Enter is handled here for text fields only.
+  // type, so the dialog handles Enter from its text fields only.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Enter" || !onEnter) return;
     const target = event.target;
@@ -66,6 +66,7 @@ export function OnboardingWizardFrame({
       <DialogContent
         className="sm:max-w-lg"
         onPointerDownOutside={(event) => event.preventDefault()}
+        onKeyDown={handleKeyDown}
       >
         <DialogHeader>
           <DialogTitle ref={titleRef} tabIndex={-1} className="text-xl outline-none">
@@ -102,10 +103,7 @@ export function OnboardingWizardFrame({
           ))}
         </div>
 
-        {/* Delegates Enter from the text fields inside; never focused itself. */}
-        <div className="py-4" onKeyDown={handleKeyDown}>
-          {children}
-        </div>
+        <div className="py-4">{children}</div>
         {footer}
       </DialogContent>
     </Dialog>

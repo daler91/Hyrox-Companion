@@ -21,6 +21,24 @@ import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
 
+// A day the athlete already acted on (completed, skipped, or with a logged
+// workout) keeps its date wherever it falls, so their history stays visible.
+function isActedOn(day: PlanDay, loggedDayIds: ReadonlySet<string>): boolean {
+  return day.status === "completed" || day.status === "skipped" || loggedDayIds.has(day.id);
+}
+
+// Only reset status when the day actually moves to a new date. Without
+// this guard, calling schedulePlan with the same startDate (or any
+// reschedule that happens to leave a specific day on its existing
+// calendar slot) would silently revert that day's explicit "skipped"
+// choice back to "planned". We reset both "missed" (system-assigned)
+// and "skipped" (user choice) because a genuine date change semantically
+// gives the day a fresh planned status (S18).
+function needsStatusReset(day: PlanDay, dateStr: string, today: string): boolean {
+  const dateChanged = dateStr !== day.scheduledDate;
+  return dateChanged && (day.status === "missed" || day.status === "skipped") && dateStr >= today;
+}
+
 export class PlanStorage {
   async createTrainingPlan(plan: InsertTrainingPlan, tx?: DbExecutor): Promise<TrainingPlan> {
     const executor = tx ?? db;
@@ -433,27 +451,14 @@ export class PlanStorage {
         );
       }
       const dateStr = addDaysToISODate(weekOneMonday, weekOffset + dayOffset);
-      const actedOn =
-        day.status === "completed" || day.status === "skipped" || loggedDayIds.has(day.id);
-      if (dateStr < startDate && !actedOn) {
+      if (dateStr < startDate && !isActedOn(day, loggedDayIds)) {
         unscheduleIds.push(day.id);
         continue;
       }
-      // Only reset status when the day actually moves to a new date. Without
-      // this guard, calling schedulePlan with the same startDate (or any
-      // reschedule that happens to leave a specific day on its existing
-      // calendar slot) would silently revert that day's explicit "skipped"
-      // choice back to "planned". We reset both "missed" (system-assigned)
-      // and "skipped" (user choice) because a genuine date change semantically
-      // gives the day a fresh planned status (S18).
-      const dateChanged = dateStr !== day.scheduledDate;
       dateUpdates.push({
         id: day.id,
         scheduledDate: dateStr,
-        resetStatus:
-          dateChanged &&
-          (day.status === "missed" || day.status === "skipped") &&
-          dateStr >= today,
+        resetStatus: needsStatusReset(day, dateStr, today),
       });
     }
 

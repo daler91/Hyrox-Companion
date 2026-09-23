@@ -56,6 +56,16 @@ const GOAL_STEP_FIELDS = [
   "mafHrDataAvailable",
 ] as const;
 
+// General age is optional; if given it must be a whole number the server
+// accepts (13-100).
+function validateAge(value: string): string | null {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 13 && parsed <= 100
+    ? null
+    : "Enter a whole number between 13 and 100, or leave it blank.";
+}
+
 export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -75,7 +85,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     queryKey: QUERY_KEYS.preferences,
   });
   const saved = useMemo(() => profileFromPreferences(savedPreferences), [savedPreferences]);
-  const [imperial] = useState(prefersImperialUnits);
+  const imperial = useMemo(() => prefersImperialUnits(), []);
   const [draft, setDraft] = useState<Partial<OnboardingProfile>>({});
   const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
   // "Lose weight" on the Goal step now carries into the fuelling step's weight
@@ -201,16 +211,6 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     if (!mafCategory) errors.category = "Choose the description that fits you best.";
     setMafErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  // General age is optional; if given it must be a whole number the server
-  // accepts (13-100).
-  const validateAge = (value: string): string | null => {
-    if (value.trim() === "") return null;
-    const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed >= 13 && parsed <= 100
-      ? null
-      : "Enter a whole number between 13 and 100, or leave it blank.";
   };
 
   const buildTrainingStylePayload = (
@@ -499,12 +499,12 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     mafAge,
     setMafAge: (value: string) => {
       edit("mafAge")(value);
-      setMafErrors(({ age: _cleared, ...rest }) => rest);
+      setMafErrors((errors) => ({ ...errors, age: undefined }));
     },
     mafCategory,
     setMafCategory: (value: string) => {
       edit("mafCategory")(value);
-      setMafErrors(({ category: _cleared, ...rest }) => rest);
+      setMafErrors((errors) => ({ ...errors, category: undefined }));
     },
     mafErrors,
     raceDate,

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { CoachStep } from "@/components/onboarding/CoachStep";
 import { FuellingStep } from "@/components/onboarding/FuellingStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
+import { LeaveSetupDialog } from "@/components/onboarding/LeaveSetupDialog";
 import { OnboardingWizardFooter } from "@/components/onboarding/OnboardingWizardFooter";
 import { OnboardingWizardFrame } from "@/components/onboarding/OnboardingWizardFrame";
 import { PlanStep } from "@/components/onboarding/PlanStep";
@@ -13,16 +14,6 @@ import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
 import { UnitsStep } from "@/components/onboarding/UnitsStep";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 import { QUERY_KEYS } from "@/lib/api";
@@ -122,6 +113,11 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     if (!nextOpen) setConfirmLeave(true);
   };
 
+  // Enter in a step's text field does what Continue does.
+  const handleEnter = () => {
+    handleNext().catch(() => {});
+  };
+
   return (
     <>
       <OnboardingWizardFrame
@@ -133,7 +129,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
         steps={ONBOARDING_STEPS}
         idx={idx}
         total={total}
-        onEnter={step === "plan" || step === "schedule" ? undefined : () => void handleNext()}
+        onEnter={step === "plan" || step === "schedule" ? undefined : handleEnter}
         footer={
           <OnboardingWizardFooter
             step={step}
@@ -229,25 +225,11 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
         )}
       </OnboardingWizardFrame>
-      <AlertDialog open={open && confirmLeave} onOpenChange={setConfirmLeave}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Leave setup?</AlertDialogTitle>
-            <AlertDialogDescription>
-              What you have saved so far is kept. You can run setup again anytime from Settings →
-              Account → Getting Started.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-onboarding-keep-going">
-              Keep setting up
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleLeaveSetup} data-testid="button-onboarding-leave">
-              Leave setup
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <LeaveSetupDialog
+        open={open && confirmLeave}
+        onOpenChange={setConfirmLeave}
+        onLeave={handleLeaveSetup}
+      />
     </>
   );
 }

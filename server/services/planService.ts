@@ -131,6 +131,25 @@ function collectCSVRows(rows: CSVRow[]): ParsedCSVRows {
   return { weekNumbers, invalidDayNames, validRows };
 }
 
+/** Saves a new plan's days, then reads the whole plan back for the response. */
+async function addDaysAndReadBack(
+  planId: string,
+  userId: string,
+  days: InsertPlanDay[],
+): Promise<TrainingPlanWithDays> {
+  await storage.plans.createPlanDays(days);
+
+  const fullPlan = await storage.plans.getTrainingPlan(planId, userId);
+  if (!fullPlan) {
+    throw new AppError(
+      ErrorCode.INTERNAL_ERROR,
+      `Failed to retrieve training plan ${planId} after creation`,
+      500,
+    );
+  }
+  return fullPlan;
+}
+
 export async function importPlanFromCSV(
   csvContent: string,
   userId: string,
@@ -207,17 +226,7 @@ export async function importPlanFromCSV(
     status: "planned",
   }));
 
-  await storage.plans.createPlanDays(days);
-
-  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
-  if (!fullPlan) {
-    throw new AppError(
-      ErrorCode.INTERNAL_ERROR,
-      `Failed to retrieve training plan ${plan.id} after creation`,
-      500,
-    );
-  }
-  return fullPlan;
+  return addDaysAndReadBack(plan.id, userId, days);
 }
 
 export async function createSamplePlan(
@@ -246,17 +255,7 @@ export async function createSamplePlan(
     status: "planned",
   }));
 
-  await storage.plans.createPlanDays(days);
-
-  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
-  if (!fullPlan) {
-    throw new AppError(
-      ErrorCode.INTERNAL_ERROR,
-      `Failed to retrieve training plan ${plan.id} after creation`,
-      500,
-    );
-  }
-  return fullPlan;
+  return addDaysAndReadBack(plan.id, userId, days);
 }
 
 export async function updatePlanDayWithCleanup(

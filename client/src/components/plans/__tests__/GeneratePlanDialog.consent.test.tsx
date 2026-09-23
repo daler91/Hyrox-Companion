@@ -6,13 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { useToast } from "@/hooks/use-toast";
 import { QUERY_KEYS } from "@/lib/api";
-import * as queryClientLib from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: vi.fn() }));
 vi.mock("@/lib/queryClient", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/queryClient")>()),
   apiRequest: vi.fn(),
-  queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
+  queryClient: { invalidateQueries: vi.fn(() => Promise.resolve()) },
 }));
 
 // Plan generation is consent-gated on the server and every account starts
@@ -24,8 +24,8 @@ describe("GeneratePlanDialog AI consent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useToast).mockReturnValue({ toast } as unknown as ReturnType<typeof useToast>);
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(
-      async () => new Response(JSON.stringify({ aiCoachEnabled: true })),
+    vi.mocked(apiRequest).mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ aiCoachEnabled: true }))),
     );
   });
 
@@ -53,7 +53,7 @@ describe("GeneratePlanDialog AI consent", () => {
     await user.click(screen.getByRole("button", { name: "Enable AI Coach" }));
 
     expect(await screen.findByLabelText("Goal")).toBeInTheDocument();
-    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+    expect(apiRequest).toHaveBeenCalledWith(
       "PATCH",
       "/api/v1/preferences",
       { aiCoachEnabled: true },
@@ -69,12 +69,12 @@ describe("GeneratePlanDialog AI consent", () => {
     await user.click(screen.getByRole("button", { name: "Not now" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+    expect(apiRequest).not.toHaveBeenCalled();
   });
 
   it("stays on the consent step and says so when enabling fails", async () => {
     const user = userEvent.setup();
-    vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error("500: boom"));
+    vi.mocked(apiRequest).mockRejectedValueOnce(new Error("500: boom"));
     renderDialog();
 
     await user.click(screen.getByRole("button", { name: "Enable AI Coach" }));

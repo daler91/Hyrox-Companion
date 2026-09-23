@@ -50,10 +50,10 @@ describe("UserStorage.updateUserPreferences round-trips every validator enum val
     for (const value of options) {
       const payload = updateUserPreferencesSchema.parse({ [field]: value });
       const updated = await storage.users.updateUserPreferences(USER, payload);
-      expect((updated as Record<string, unknown> | undefined)?.[field]).toBe(value);
+      expect(updated).toHaveProperty(field, value);
 
       const reread = await storage.users.getUser(USER);
-      expect((reread as Record<string, unknown> | undefined)?.[field]).toBe(value);
+      expect(reread).toHaveProperty(field, value);
     }
   });
 });

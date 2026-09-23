@@ -41,7 +41,9 @@ export function CoachStep({ aiCoachEnabled, onAiCoachEnabledChange }: Readonly<C
       </div>
       <RadioGroup
         value={selected}
-        onValueChange={(value) => onAiCoachEnabledChange(value === "on")}
+        onValueChange={(value) => {
+          onAiCoachEnabledChange(value === "on");
+        }}
         aria-label="AI Coach"
         className="space-y-2"
       >

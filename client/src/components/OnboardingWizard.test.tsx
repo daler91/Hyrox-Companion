@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
-import * as queryClientLib from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import {
   renderOnboardingWizard,
   resetOnboardingWizardMocks,
@@ -141,7 +141,6 @@ describe("OnboardingWizard Error Handling", () => {
     // Continue only writes what changed, so change something first; the
     // request for it fails.
     fireEvent.click(screen.getByText("Set Weight"));
-    const { apiRequest } = await import("@/lib/queryClient");
     vi.mocked(apiRequest).mockRejectedValueOnce(new Error("Failed to save preferences"));
 
     fireEvent.click(screen.getByText("Continue"));
@@ -199,7 +198,7 @@ describe("OnboardingWizard Error Handling", () => {
     expect(generateButton).not.toHaveTextContent("recommended");
     expect(generateButton).toHaveTextContent("Needs the AI Coach");
     // The choice was left as saved, so nothing was written.
-    expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+    expect(apiRequest).not.toHaveBeenCalled();
     // The Coaching Knowledge (RAG) note no longer sits at the decision point (M6).
     expect(screen.queryByText(/Coaching Knowledge/i)).not.toBeInTheDocument();
   });
@@ -213,7 +212,7 @@ describe("OnboardingWizard Error Handling", () => {
     fireEvent.click(screen.getByText("Continue"));
 
     const generateButton = await screen.findByTestId("button-onboarding-generate-plan");
-    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+    expect(apiRequest).toHaveBeenCalledWith(
       "PATCH",
       "/api/v1/preferences",
       { aiCoachEnabled: true },
@@ -250,8 +249,10 @@ describe("OnboardingWizard Error Handling", () => {
 
   // Template users' goal used to be thrown away (audit M3).
   it("keeps the goal and race date on the template plan", async () => {
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(async (_method, url) =>
-      new Response(JSON.stringify(url === "/api/v1/plans/sample" ? { id: "tpl-1" } : { success: true })),
+    vi.mocked(apiRequest).mockImplementation((_method, url) =>
+      Promise.resolve(
+        new Response(JSON.stringify(url === "/api/v1/plans/sample" ? { id: "tpl-1" } : { success: true })),
+      ),
     );
     renderComponent();
 
@@ -267,7 +268,7 @@ describe("OnboardingWizard Error Handling", () => {
     fireEvent.click(await screen.findByTestId("button-onboarding-start-plan"));
 
     await waitFor(() => expect(mockOnComplete).toHaveBeenCalledWith("sample"));
-    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+    expect(apiRequest).toHaveBeenCalledWith(
       "POST",
       "/api/v1/plans/sample",
       {
@@ -283,7 +284,7 @@ describe("OnboardingWizard Error Handling", () => {
 
     await walkToCoachStep();
     fireEvent.click(screen.getByTestId("radio-coach-on"));
-    vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error("500: boom"));
+    vi.mocked(apiRequest).mockRejectedValueOnce(new Error("500: boom"));
     fireEvent.click(screen.getByText("Continue"));
 
     await waitFor(() =>
@@ -386,7 +387,7 @@ describe("OnboardingWizard leaving setup", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
     expect(await screen.findByText("Leave setup?")).toBeInTheDocument();
-    expect(screen.getByText(/Settings → Account → Getting Started/)).toBeInTheDocument();
+    expect(screen.getByText(/Settings → Account → Getting Started/u)).toBeInTheDocument();
     expect(mockOnComplete).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId("button-onboarding-keep-going"));
@@ -436,7 +437,7 @@ describe("OnboardingWizard saved preferences", () => {
 
   const preferencePatches = () =>
     vi
-      .mocked(queryClientLib.apiRequest)
+      .mocked(apiRequest)
       .mock.calls.filter(([method, url]) => method === "PATCH" && url === "/api/v1/preferences")
       .map(([, , body]) => body);
 

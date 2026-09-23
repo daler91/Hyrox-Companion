@@ -38,7 +38,12 @@ describe("PlanStorage.schedulePlan (real Postgres)", () => {
       )
       .returning();
     const byKey = new Map(rows.map((r) => [`${r.weekNumber}-${r.dayName}`, r]));
-    return { plan, day: (week: number, day: string) => byKey.get(`${week}-${day}`)! };
+    const day = (week: number, dayName: string) => {
+      const row = byKey.get(`${week}-${dayName}`);
+      if (!row) throw new Error(`No seeded plan day for week ${week}, ${dayName}`);
+      return row;
+    };
+    return { plan, day };
   }
 
   async function datesOf(planId: string) {

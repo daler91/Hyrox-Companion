@@ -138,6 +138,18 @@ function HeightInput({
     onHeightCmChange(String(Math.round(ftInToCm(feet, inches) * 10) / 10));
   };
 
+  // 5 ft 12 in reads as 6 ft 0 in once the athlete leaves the field. The height
+  // handed up is the same either way.
+  const carryWholeFeet = () => {
+    const feet = feetInches.feet.trim() === "" ? 0 : Number(feetInches.feet);
+    const inches = Number(feetInches.inches);
+    if (!Number.isFinite(feet) || !Number.isFinite(inches) || inches < 12) return;
+    setFeetInches({
+      feet: String(feet + Math.floor(inches / 12)),
+      inches: String(Math.round((inches % 12) * 10) / 10),
+    });
+  };
+
   return (
     <fieldset className="space-y-1.5">
       <legend className="text-sm font-medium leading-none">Height</legend>
@@ -161,6 +173,7 @@ function HeightInput({
           className="w-20"
           value={feetInches.inches}
           onChange={(e) => update({ ...feetInches, inches: e.target.value })}
+          onBlur={carryWholeFeet}
           aria-label="Height inches"
           data-testid="input-fuelling-height-in"
         />

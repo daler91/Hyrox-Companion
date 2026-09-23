@@ -238,4 +238,23 @@ describe("OnboardingWizard fuelling step", () => {
       expect.anything(),
     );
   });
+
+  it("shows 12 inches or more as whole feet once the athlete leaves the field", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, {
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+      onboardingCompleted: true,
+    });
+    renderComponent();
+    await walkToFuellingStep();
+
+    const feet = screen.getByTestId("input-fuelling-height-ft");
+    const inches = screen.getByTestId("input-fuelling-height-in");
+    fireEvent.change(feet, { target: { value: "5" } });
+    fireEvent.change(inches, { target: { value: "14" } });
+    fireEvent.blur(inches);
+
+    expect(feet).toHaveValue(6);
+    expect(inches).toHaveValue(2);
+  });
 });

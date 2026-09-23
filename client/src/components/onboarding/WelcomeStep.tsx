@@ -37,8 +37,7 @@ export function WelcomeStep() {
           className="rounded underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Read our privacy policy
-        </a>
-        .
+        </a>.
       </p>
     </div>
   );
