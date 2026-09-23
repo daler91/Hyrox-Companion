@@ -19,7 +19,7 @@ export function makeApiMutationPassthroughMock() {
     useApiMutation: (config: unknown) => ({
       config,
       mutate: vi.fn(),
-      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      mutateAsync: vi.fn(() => Promise.resolve()),
       isPending: false,
     }),
   };
@@ -53,8 +53,8 @@ export async function makeWorkoutReadsApiMock(
       ...actual.api,
       workouts: {
         ...actual.api.workouts,
-        get: vi.fn().mockResolvedValue(undefined),
-        history: vi.fn().mockResolvedValue(undefined),
+        get: vi.fn(() => Promise.resolve()),
+        history: vi.fn(() => Promise.resolve()),
       },
     },
   };
