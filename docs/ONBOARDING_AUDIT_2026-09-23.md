@@ -147,8 +147,9 @@ not to say can never save Settings.
 - A DB-backed regression test that round-trips every enum value in `updateUserPreferencesSchema`.
 - Every other enum/varchar pair on `users` was checked and fits (division 16, activity_level 24,
   weight_goal_direction 16).
-- **Ship together with H2.** Right now this failure is what stops "Run setup again" from overwriting
-  units.
+- **Never ship the migration ahead of H2.** Land H2 first or in the same release. Right now this
+  failure is what stops "Run setup again" from overwriting units, so the migration on its own would
+  switch that overwrite on.
 
 ### C3 — The template plan starts with "Missed" workouts
 
@@ -306,8 +307,10 @@ chose the first time.
   saved. It is only used to prefill the AI dialog (`OnboardingWizard.tsx:177`). Template, import and
   skip users give an answer that is thrown away.
 - **General `age`** is described as "collected for every user (profile/onboarding)" and feeds the Race
-  Predictor's age cohort (`shared/schema/tables.ts:120-124`). The wizard only saves it when the
-  _optional_ fuelling profile is complete (`useOnboardingWizard.ts:138-151`).
+  Predictor's age cohort (`shared/schema/tables.ts:120-124`). It is also the heart-rate model's only
+  fallback when no max HR is set. With neither, HR-based training load and the HR zone table are
+  withheld altogether (`server/services/trainingLoad/hrModel.ts:49-58`, `:74-78`). The wizard only
+  saves age when the _optional_ fuelling profile is complete (`useOnboardingWizard.ts:138-151`).
 - **The race date is never asked**, in a HYROX companion. `training_plans.raceDate` exists
   (`tables.ts:347`) but is only reachable from inside the AI dialog. That dialog defaults "This is my
   race date" to on (`useGeneratePlanForm.ts:194`), for an end date the athlete never chose.
@@ -448,14 +451,14 @@ These gaps are why the Critical findings shipped with a green suite:
 
 ## Suggested fix order
 
-| Order | Items         | Why this order                                                                                         |
-| ----- | ------------- | ------------------------------------------------------------------------------------------------------ |
-| 1     | C2 + H2       | The migration is one line. Ship it with the prefilled wizard, or fixing C2 makes H2's overwrite live   |
-| 2     | C1            | Reuse `useAiConsentGate`; humanize the error; stop the duplicate 403                                   |
-| 3     | C3, L1        | A default-start or scheduling change. Decide first whether it applies to onboarding only or everywhere |
-| 4     | H1, H3, H4    | Small, local UI fixes                                                                                  |
-| 5     | M1–M6         | Flow and consent changes; the M4 accessibility fixes are small and can ride along earlier              |
-| 6     | Optimizations | Reshape the flow once the bugs are gone                                                                |
+| Order | Items         | Why this order                                                                                                                                             |
+| ----- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | C2 + H2       | The migration is one line, but it must not ship before H2's prefilled wizard: land H2 first or in the same release, or fixing C2 makes H2's overwrite live |
+| 2     | C1            | Reuse `useAiConsentGate`; humanize the error; stop the duplicate 403                                                                                       |
+| 3     | C3, L1        | A default-start or scheduling change. Decide first whether it applies to onboarding only or everywhere                                                     |
+| 4     | H1, H3, H4    | Small, local UI fixes                                                                                                                                      |
+| 5     | M1–M6         | Flow and consent changes; the M4 accessibility fixes are small and can ride along earlier                                                                  |
+| 6     | Optimizations | Reshape the flow once the bugs are gone                                                                                                                    |
 
 ---
 
