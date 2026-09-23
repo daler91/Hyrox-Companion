@@ -562,18 +562,26 @@ A per-feature error boundary that wraps each route and the Coach panel. Uses `Se
 
 ## Code Splitting
 
-Vite's Rollup configuration in `vite.config.ts` defines manual chunks for optimized bundle splitting:
+Vite 8 bundles with Rolldown, and `vite.config.ts` groups vendor code through
+`build.rollupOptions.output.codeSplitting.groups`:
 
-| Chunk Name     | Contents                       |
-| -------------- | ------------------------------ |
-| `vendor-react` | `react`, `react-dom`, `wouter` |
-| `vendor-ui`    | `lucide-react`                 |
-| `vendor-query` | `@tanstack/react-query`        |
+| Chunk Name      | Contents                                                                    |
+| --------------- | --------------------------------------------------------------------------- |
+| `vendor-clsx`   | `clsx`, `tailwind-merge` — priority 10, so it claims them before `vendor-charts` |
+| `vendor-react`  | `react`, `react-dom`, `wouter`                                              |
+| `vendor-ui`     | `lucide-react`                                                              |
+| `vendor-query`  | `@tanstack/react-query`                                                     |
+| `vendor-charts` | `recharts`                                                                  |
+| `vendor-dnd`    | `@dnd-kit/*`                                                                |
 
-Additionally, route-level code splitting is achieved via `React.lazy`:
+`vendor-clsx` exists because a group captures its package's dependencies recursively: without it,
+`clsx` (a `recharts` dependency that the eager UI shell also imports) lands in `vendor-charts`, and
+every first paint — including the signed-out Landing page — statically imports the charts chunk.
+`pnpm check:bundle` (`script/bundle-check.ts`) fails CI if that regresses.
 
-- `LogWorkout`, `Settings`, `Analytics`, and `Landing` are lazy-loaded, each producing a separate chunk.
-- `Timeline` is eagerly loaded since it is the home page.
+Route-level code splitting is achieved via `React.lazy`: every page — `Timeline`, `LogWorkout`,
+`Settings`, `Analytics`, `Nutrition`, `Review`, `Landing`, and `Privacy` — is lazy-loaded in
+`App.tsx`, each producing its own chunk.
 
 Build output goes to `dist/public`.
 
@@ -606,21 +614,24 @@ In both bypass modes, the app renders the `AuthenticatedLayout` directly (skippi
 
 Root-level Vite configuration:
 
-- **Plugins**: `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite-plugin-pwa`.
-- **Path aliases**: `@` maps to `client/src`, `@shared` maps to `shared/`, `@assets` maps to `attached_assets/`.
+- **Plugins**: `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite-plugin-pwa`, and `@sentry/vite-plugin` (source-map upload; disabled unless `SENTRY_AUTH_TOKEN` is set).
+- **Path aliases**: `@` maps to `client/src`, `@shared` maps to `shared/`.
 - **Root**: `client/` directory.
 - **Build output**: `dist/public/`.
-- **Manual chunks**: `vendor-react`, `vendor-ui`, `vendor-query` (see Code Splitting above).
+- **Vendor chunk groups**: `vendor-clsx`, `vendor-react`, `vendor-ui`, `vendor-query`, `vendor-charts`, `vendor-dnd` (see Code Splitting above).
 - **Dev server**: Strict file system access with dotfile denial (`deny: ["**/.*"]`).
 
 ### `tailwind.config.ts`
 
-Root-level Tailwind CSS configuration:
+Root-level Tailwind CSS configuration, loaded by the `@config` directive in `client/src/index.css`
+(Tailwind 4 is otherwise configured CSS-first):
 
 - **Dark mode**: Class-based (`["class"]`).
 - **Content paths**: `client/index.html` and all `client/src/**/*.{js,jsx,ts,tsx}` files.
 - **Custom theme**: HSL color variables, custom border radii, font families, accordion keyframes.
-- **Plugins**: `tailwindcss-animate`, `@tailwindcss/typography`.
+- **Plugins**: none here. `tailwindcss-animate` and `@tailwindcss/typography` are registered by the
+  `@plugin` directives in `client/src/index.css`; listing them in both places registers each twice
+  and emits every `.prose` rule and animation keyframe twice.
 
 ### `components.json`
 

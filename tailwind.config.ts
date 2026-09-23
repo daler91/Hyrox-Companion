@@ -83,12 +83,6 @@ export default {
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
           border: "var(--sidebar-accent-border)"
         },
-        status: {
-          online: "rgb(34 197 94)",
-          away: "rgb(245 158 11)",
-          busy: "rgb(239 68 68)",
-          offline: "rgb(156 163 175)",
-        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],
@@ -112,5 +106,8 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  // No `plugins` here: tailwindcss-animate and @tailwindcss/typography are
+  // registered by the `@plugin` directives in client/src/index.css. Listing them
+  // here as well registered each one twice, so every `.prose` rule and the
+  // `enter`/`exit` keyframes were emitted twice.
 } satisfies Config;
