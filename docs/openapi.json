@@ -1165,6 +1165,13 @@
               }
             },
             "description": "Structured workout blocks (see the structureBlockSchema Zod type)."
+          },
+          "suggestedRpe": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10,
+            "description": "RPE (1-10) suggested by the recording's average heart rate, for the athlete to confirm. Never saved on its own. Null without heart rate, for strength and mind-body sports, or when the athlete has neither a max HR nor an age on file. Returned whether or not `rpe` is set."
           }
         },
         "required": [
@@ -1211,10 +1218,11 @@
           "suggestedWorkoutLogId",
           "suggestedLinkConfidence",
           "exerciseSets",
-          "structureBlocks"
+          "structureBlocks",
+          "suggestedRpe"
         ],
         "title": "WorkoutLogDetail",
-        "description": "A workout log with its exercise sets and structure blocks"
+        "description": "A workout log with its exercise sets, structure blocks and heart-rate RPE suggestion"
       },
       "PreferencesResponse": {
         "type": "object",
@@ -3527,7 +3535,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The requested workout log with its exercise sets and structure blocks",
+            "description": "The requested workout log with its exercise sets, structure blocks and heart-rate RPE suggestion",
             "content": {
               "application/json": {
                 "example": {
@@ -3554,7 +3562,8 @@
                   "avgWatts": null,
                   "sufferScore": null,
                   "exerciseSets": [],
-                  "structureBlocks": []
+                  "structureBlocks": [],
+                  "suggestedRpe": null
                 },
                 "schema": {
                   "$ref": "#/components/schemas/WorkoutLogDetail"

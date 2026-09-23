@@ -17,6 +17,10 @@
  * is the worse failure — a new Strava sport type, or a Garmin key we have not
  * seen, should show up rather than vanish.
  *
+ * The module also answers one narrower question about a sport, with the same
+ * normalisation and the same deny-list rule: whether its average heart rate is
+ * a fair guide to effort (`heartRateReflectsEffort`, for the RPE suggestion).
+ *
  * Zero-import module so the mappers, the backfill and the client can all share
  * one answer.
  */
@@ -60,4 +64,30 @@ function normalizeSportType(sportType: string): string {
 export function countsAsTraining(sportType: string | null | undefined): boolean {
   if (!sportType) return true;
   return !NON_TRAINING_SPORTS.has(normalizeSportType(sportType));
+}
+
+/**
+ * Sports where average heart rate says little about how hard a session felt,
+ * in both providers' spellings (Strava "WeightTraining", Garmin
+ * "strength_training"). Lifting is the case that matters: its effort is how
+ * close each set came to failure, and a session spent mostly resting between
+ * heavy sets averages a heart rate that reads like a walk. Yoga and Pilates
+ * fail the same way, since the work is muscular rather than cardiac.
+ */
+const HEART_RATE_BLIND_SPORTS: ReadonlySet<string> = new Set([
+  "weighttraining",
+  "strengthtraining",
+  "yoga",
+  "pilates",
+]);
+
+/**
+ * Whether a session's average heart rate is a fair guide to its effort, which
+ * decides whether the review sheet offers a heart-rate RPE suggestion. A
+ * deny-list for the same reason as `countsAsTraining`: an unknown sport still
+ * gets the suggestion, and the athlete has to confirm it either way.
+ */
+export function heartRateReflectsEffort(sportType: string | null | undefined): boolean {
+  if (!sportType) return true;
+  return !HEART_RATE_BLIND_SPORTS.has(normalizeSportType(sportType));
 }

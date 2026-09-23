@@ -6,6 +6,11 @@ import { RpePrompt } from "./RpePrompt";
 interface WorkoutEffortNotesProps {
   readonly rpe: number | null;
   readonly onRpeChange: (next: number | null) => void;
+  /**
+   * The heart-rate RPE to mark in the picker while no rating is set. Only the
+   * review surface has one (a recording's); it is never saved on its own.
+   */
+  readonly suggestedRpe?: number | null;
   readonly note: string | null | undefined;
   readonly onNoteChange: (next: string | null) => void;
   /**
@@ -33,6 +38,7 @@ interface WorkoutEffortNotesProps {
 export function WorkoutEffortNotes({
   rpe,
   onRpeChange,
+  suggestedRpe = null,
   note,
   onNoteChange,
   debounceNote = false,
@@ -56,7 +62,7 @@ export function WorkoutEffortNotes({
 
   return (
     <div className="space-y-4" data-testid="workout-effort-notes">
-      <RpePrompt value={rpeEcho} onChange={handleRpeChange} />
+      <RpePrompt value={rpeEcho} onChange={handleRpeChange} suggestedValue={suggestedRpe} />
       <NoteInput
         value={note}
         onSave={onNoteChange}

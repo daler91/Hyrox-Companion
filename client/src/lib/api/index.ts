@@ -47,6 +47,7 @@ export type {
   BulkDeleteWorkoutsResponse,
   DeleteToRecycleBinResponse,
   ReparseWorkoutTextPayload,
+  WorkoutDetail,
   WorkoutHistoryStats,
   WorkoutReferenceTextPayload,
 } from "./workouts";

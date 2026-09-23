@@ -36,6 +36,17 @@ export interface BulkDeleteWorkoutsResponse {
   recycleBinItemIds: string[];
 }
 
+/**
+ * GET /api/v1/workouts/:id: the log with its sets and structure, plus the RPE
+ * the recording's heart rate suggests. `suggestedRpe` is only ever offered in
+ * the picker for the athlete to confirm; it is never the saved rating.
+ */
+export type WorkoutDetail = WorkoutLog & {
+  exerciseSets?: ExerciseSet[];
+  structureBlocks?: StructureBlockInput[];
+  suggestedRpe?: number | null;
+};
+
 /** A single delete's response: the recycle-bin item that can undo it. */
 export interface DeleteToRecycleBinResponse {
   success: boolean;
@@ -101,7 +112,7 @@ export const workouts = {
   latest: () =>
     typedRequest<WorkoutLog & { exerciseSets: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("GET", "/api/v1/workouts/latest"),
 
-  get: (id: string) => typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("GET", `/api/v1/workouts/${id}`),
+  get: (id: string) => typedRequest<WorkoutDetail>("GET", `/api/v1/workouts/${id}`),
 
   update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
     typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),

@@ -315,7 +315,7 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 - `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in workout detail surfaces.
 - `PrivacyConsentBanner` -- First-load privacy notice listing the third-party processors. "Accept" keeps error reporting on and "Decline analytics" turns Sentry off; either records the `privacy_notice` consent (server-side too, for signed-in athletes) and the banner links to `/privacy`. The AI consent gate is separate (`aiCoachEnabled`).
 - `RagDebugBadge` -- In production, an athlete-facing "Cited N sources" chip shown only when a response actually used RAG; in development, a debug view of which retrieval path (RAG, legacy materials, none) fed the response.
-- `RpeSelector` -- Rate of Perceived Exertion selector.
+- `RpeSelector` -- Rate of Perceived Exertion selector. An optional `suggestedValue` marks one value (dashed) while nothing is selected; the review sheet passes the workout's heart-rate `suggestedRpe` through `WorkoutEffortNotes` → `RpePrompt`, and it is saved only when the athlete taps a value.
 - `VoiceButton` / `VoiceFieldButton` -- Voice input controls.
 - `QuickActions` -- Quick action buttons.
 

@@ -51,7 +51,9 @@ vi.mock("@/components/ui/responsive-sheet", () => ({
 }));
 
 vi.mock("@/components/RpeSelector", () => ({
-  RpeSelector: () => <div data-testid="rpe-selector" />,
+  RpeSelector: ({ suggestedValue }: { suggestedValue?: number | null }) => (
+    <div data-testid="rpe-selector" data-suggested-value={suggestedValue ?? ""} />
+  ),
 }));
 
 vi.mock("@/components/workout-structure", () => ({
@@ -365,6 +367,42 @@ describe("ReviewSurface", () => {
     expect(screen.getByTestId("review-strava-entry-1")).toBeInTheDocument();
     // The device start time wins, so there is no manual session-time picker.
     expect(screen.queryByTestId("input-review-time-of-day")).not.toBeInTheDocument();
+  });
+
+  it("offers the recording's heart-rate RPE in the picker without saving it", () => {
+    const updateRpe = { mutate: vi.fn() };
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({ workout: makeWorkout({ rpe: null, suggestedRpe: 7 }), updateRpe }),
+    );
+
+    render(
+      <ReviewSurface
+        entry={makeEntry({ source: "strava", stravaActivityId: "9001", avgHeartrate: 150 })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("rpe-selector").dataset.suggestedValue).toBe("7");
+    expect(screen.getByTestId("text-rpe-suggestion")).toHaveTextContent(
+      "Your heart rate suggests 7",
+    );
+    // Offered, not applied: the rating is saved only when the athlete taps.
+    expect(updateRpe.mutate).not.toHaveBeenCalled();
+  });
+
+  it("drops the heart-rate suggestion once the workout carries a rating", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({ workout: makeWorkout({ rpe: 6, suggestedRpe: 7 }) }),
+    );
+
+    render(
+      <ReviewSurface
+        entry={makeEntry({ source: "strava", stravaActivityId: "9001", avgHeartrate: 150 })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("text-rpe-suggestion")).not.toBeInTheDocument();
   });
 
   it("shows the Strava session stats on a manual log a recording enriched", () => {

@@ -47,6 +47,7 @@ vi.mock("../../services/workoutService", () => ({
 vi.mock("../../storage", async () =>
   (await import("../__tests__/testUtils")).mockStorageModule({
     workouts: ["listWorkoutLogs", "getExerciseSetsByWorkoutLog", "getWorkoutStructureByWorkoutLog", "getWorkoutLog", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
+    users: ["getUser"],
   }),
 );
 
@@ -155,5 +156,40 @@ describe("GET /api/v1/workouts/:id", () => {
     expect(response.body.exerciseSets).toEqual([{ id: "derived-set-1" }]);
     expect(deriveMissingWorkoutSetsFromStructure).toHaveBeenCalledWith("log-1", "test_user_id");
     expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers the heart-rate RPE suggestion for a recording, read against the athlete's profile", async () => {
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({
+      id: "log-1",
+      source: "strava",
+      focus: "Run",
+      avgHeartrate: 150,
+      rpe: null,
+      deviceActivity: null,
+    } as never);
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([] as never);
+    vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([] as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ maxHr: 190, restingHr: 60 } as never);
+
+    const response = await request(app).get("/api/v1/workouts/log-1");
+
+    expect(response.status).toBe(200);
+    // (150 - 60) / (190 - 60) = 69% of heart-rate reserve -> RPE 7.
+    expect(response.body.suggestedRpe).toBe(7);
+    // A suggestion only: the stored rating is untouched.
+    expect(response.body.rpe).toBeNull();
+    expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
+  });
+
+  it("suggests nothing, and skips the profile read, for a log without heart rate", async () => {
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "log-1", avgHeartrate: null } as never);
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([] as never);
+    vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([] as never);
+
+    const response = await request(app).get("/api/v1/workouts/log-1");
+
+    expect(response.status).toBe(200);
+    expect(response.body.suggestedRpe).toBeNull();
+    expect(storage.users.getUser).not.toHaveBeenCalled();
   });
 });

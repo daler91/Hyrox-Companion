@@ -1,7 +1,12 @@
 import { describe, expect,it } from "vitest";
 
 import type { StravaActivity } from "./stravaMapper";
-import { formatStravaDistance, formatStravaPace,mapStravaActivityToWorkout } from "./stravaMapper";
+import {
+  formatStravaDistance,
+  formatStravaPace,
+  mapStravaActivityToWorkout,
+  perceivedExertionToRpe,
+} from "./stravaMapper";
 
 function makeActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
   return {
@@ -377,5 +382,33 @@ describe("counts as training", () => {
     expect(
       mapStravaActivityToWorkout(makeActivity({ sport_type: undefined, type: "Walk" }), "user-1").countsAsTraining,
     ).toBe(false);
+  });
+});
+
+describe("perceivedExertionToRpe", () => {
+  it("maps the athlete's rating straight across, rounding Strava's float", () => {
+    expect(perceivedExertionToRpe(7)).toBe(7);
+    expect(perceivedExertionToRpe(7.0)).toBe(7);
+    expect(perceivedExertionToRpe(6.6)).toBe(7);
+    expect(perceivedExertionToRpe(1)).toBe(1);
+    expect(perceivedExertionToRpe(10)).toBe(10);
+  });
+
+  it("is empty when the athlete gave no rating", () => {
+    expect(perceivedExertionToRpe(null)).toBeNull();
+    expect(perceivedExertionToRpe(undefined)).toBeNull();
+  });
+
+  it("drops a value off the 1-10 scale rather than clamping it into a rating", () => {
+    expect(perceivedExertionToRpe(0)).toBeNull();
+    expect(perceivedExertionToRpe(11)).toBeNull();
+    expect(perceivedExertionToRpe(-3)).toBeNull();
+    expect(perceivedExertionToRpe(Number.NaN)).toBeNull();
+  });
+});
+
+describe("mapStravaActivityToWorkout rpe", () => {
+  it("leaves the RPE empty: the list row never carries the athlete's rating", () => {
+    expect(mapStravaActivityToWorkout(makeActivity(), "user-1").rpe).toBeNull();
   });
 });

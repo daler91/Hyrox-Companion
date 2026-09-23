@@ -174,6 +174,9 @@ export function ReviewSurface({
   const exerciseSets = sourceExerciseSets;
   const structureBlocks = workout?.structureBlocks ?? entry.structureBlocks ?? [];
   const rpe = workout?.rpe ?? entry.rpe ?? null;
+  // Only the detail read carries it (the timeline entry never does), and it
+  // is only ever offered: see ReviewEffortNotes.
+  const suggestedRpe = workout?.suggestedRpe ?? null;
   const notes = workout?.notes ?? entry.notes ?? null;
 
   // A device recording is a measurement of the session, not the last word
@@ -255,6 +258,7 @@ export function ReviewSurface({
         exerciseSets={exerciseSets}
         structureBlocks={structureBlocks}
         rpe={rpe}
+        suggestedRpe={suggestedRpe}
         notes={notes}
         hasStravaActivity={hasStravaActivity}
         deviceProvider={deviceProvider}
@@ -319,6 +323,7 @@ interface ReviewDetailsColumnProps {
   readonly exerciseSets: ExerciseSet[];
   readonly structureBlocks: TimelineEntry["structureBlocks"];
   readonly rpe: number | null;
+  readonly suggestedRpe: number | null;
   readonly notes: string | null;
   readonly hasStravaActivity: boolean;
   readonly deviceProvider: DeviceProvider | null;
@@ -350,6 +355,7 @@ function ReviewDetailsColumn({
   exerciseSets,
   structureBlocks,
   rpe,
+  suggestedRpe,
   notes,
   hasStravaActivity,
   deviceProvider,
@@ -409,6 +415,7 @@ function ReviewDetailsColumn({
       />
       <ReviewEffortNotes
         rpe={rpe}
+        suggestedRpe={suggestedRpe}
         notes={notes}
         timeOfDayMin={timeOfDayMin}
         countsAsTraining={countsAsTraining}
@@ -474,6 +481,7 @@ function ReviewStravaSection({ entry, distanceUnit, hasStravaActivity }: ReviewS
 
 interface ReviewEffortNotesProps {
   readonly rpe: number | null;
+  readonly suggestedRpe: number | null;
   readonly notes: string | null;
   readonly timeOfDayMin: number | null;
   readonly countsAsTraining: boolean;
@@ -489,10 +497,12 @@ interface ReviewEffortNotesProps {
  * editor — the same position the block holds on LogSheet/AdhocLogSheet —
  * so RPE and notes are found in one consistent place across the whole
  * logging flow. Shown for device imports too: a watch cannot rate the
- * effort, so the athlete does.
+ * effort, so the athlete does. The recording's heart rate can only
+ * suggest a value, marked in the picker until the athlete taps one.
  */
 function ReviewEffortNotes({
   rpe,
+  suggestedRpe,
   notes,
   timeOfDayMin,
   countsAsTraining,
@@ -507,6 +517,7 @@ function ReviewEffortNotes({
         <WorkoutEffortNotes
           rpe={rpe}
           onRpeChange={onRpeChange}
+          suggestedRpe={suggestedRpe}
           note={notes}
           onNoteChange={onSaveNote}
           debounceNote

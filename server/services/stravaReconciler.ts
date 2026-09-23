@@ -10,7 +10,8 @@
  *                        (fill NULL metrics, never overwrite their numbers)
  *   link → plan_day      not logged yet: the activity becomes the day's log,
  *                        built like a manual confirm (prescription, copied
- *                        sets, adherence, day marked completed), RPE left NULL
+ *                        sets, adherence, day marked completed), RPE only
+ *                        from the athlete's own Strava rating, else NULL
  *   suggest              plausible but not certain: import standalone and
  *                        record the candidate for the timeline to offer
  *   none                 import standalone, exactly as before
