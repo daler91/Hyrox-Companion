@@ -1,20 +1,21 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import {
-  Activity,
   CheckCircle2,
+  ChevronRight,
+  Clock,
   Dumbbell,
   Gauge,
   Link2,
+  ListChecks,
   Loader2,
   MessageSquare,
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
-import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/WorkoutStravaStats";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,13 +33,22 @@ import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";
-import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
+import {
+  CoachRationaleSection,
+  DetailGroup,
+  DetailSection,
+  DetailSummary,
+} from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPlanDayPicker } from "./shared/WorkoutPlanDayPicker";
-import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
+import {
+  buildDeviceDetails,
+  buildWorkoutSummaryStats,
+  WorkoutSummaryHeader,
+} from "./shared/WorkoutSummaryHeader";
 import { type WorkoutCoachChatProps, WorkoutCoachSheet } from "./WorkoutCoachPanel";
 
 interface ReviewSurfaceProps extends WorkoutCoachChatProps {
@@ -110,11 +120,13 @@ function useMigrationReview(workoutLogId: string | null) {
 }
 
 /**
- * Sheet-native review surface for already-logged workouts. Shows the
- * actuals editor wired to useWorkoutDetail mutations (autosave per
- * cell), inline RPE + notes editors, Strava stats when applicable,
- * and the coach rationale. Action footer covers ask-coach,
- * status-revert (back to planned), and delete (two-step confirm).
+ * Sheet-native review surface for already-logged workouts, laid out
+ * read-first: one stats card (with the recording's secondary numbers
+ * folded in), the results as one-line rows that open into the autosaving
+ * editor, RPE + notes, then the supporting context (coach rationale,
+ * fuelling, plan link, MAF test, settings) collapsed into a single
+ * "Session details" card. Action footer covers ask-coach, status-revert
+ * (back to planned), and delete (two-step confirm).
  *
  * Skipped cards have their own SkippedSheet surface; this component
  * is only mounted for entries with a workoutLogId.
@@ -184,7 +196,6 @@ export function ReviewSurface({
   // athlete has to be able to describe it, add the exercises they did, and
   // rate it. So every logged workout is editable; the recording's stats
   // simply sit alongside (and on a manual log a recording enriched).
-  const hasStravaActivity = entry.source === "strava" || Boolean(entry.stravaActivityId);
   const deviceProvider = resolveDeviceProvider(entry);
   const canEditActuals = !!workoutLogId;
 
@@ -260,7 +271,6 @@ export function ReviewSurface({
         rpe={rpe}
         suggestedRpe={suggestedRpe}
         notes={notes}
-        hasStravaActivity={hasStravaActivity}
         deviceProvider={deviceProvider}
         canEditActuals={canEditActuals}
         weightUnit={weightUnit}
@@ -325,7 +335,6 @@ interface ReviewDetailsColumnProps {
   readonly rpe: number | null;
   readonly suggestedRpe: number | null;
   readonly notes: string | null;
-  readonly hasStravaActivity: boolean;
   readonly deviceProvider: DeviceProvider | null;
   readonly canEditActuals: boolean;
   readonly weightUnit: WeightUnit;
@@ -357,7 +366,6 @@ function ReviewDetailsColumn({
   rpe,
   suggestedRpe,
   notes,
-  hasStravaActivity,
   deviceProvider,
   canEditActuals,
   weightUnit,
@@ -392,14 +400,14 @@ function ReviewDetailsColumn({
           rpe,
           distanceUnit,
           showAdherence: showPlannedDiffs,
+          // The effort picker below already shows the rating.
+          includeRpe: false,
           mafCeiling,
         })}
+        details={buildDeviceDetails(entry, distanceUnit)}
+        detailsSource="Strava"
+        detailsTestId={`review-strava-${entry.id}`}
         testId={`review-summary-${entry.id}`}
-      />
-      <ReviewStravaSection
-        entry={entry}
-        distanceUnit={distanceUnit}
-        hasStravaActivity={hasStravaActivity}
       />
       <ReviewActualsSection
         entry={entry}
@@ -417,22 +425,36 @@ function ReviewDetailsColumn({
         rpe={rpe}
         suggestedRpe={suggestedRpe}
         notes={notes}
-        timeOfDayMin={timeOfDayMin}
-        countsAsTraining={countsAsTraining}
         onRpeChange={onRpeChange}
         onSaveNote={onSaveNote}
-        onTimeOfDayChange={onTimeOfDayChange}
-        onCountsAsTrainingChange={onCountsAsTrainingChange}
       />
-      <CoachRationaleSection
-        rationale={entry.aiRationale}
-        testId={`review-rationale-${entry.id}`}
-      />
-      {featureFlags.nutritionEnabled && workoutLogId ? (
-        <FuellingAroundSessionPanel workoutLogId={workoutLogId} />
-      ) : null}
-      <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
-      <MafTestTagSection workoutLogId={workoutLogId} workout={detail.workout ?? null} />
+      {/* Everything that supports the session rather than describes it, as
+          one card of rows; each keeps a one-line status while closed. */}
+      <DetailGroup label="Session details" testId={`review-session-details-${entry.id}`}>
+        <CoachRationaleSection
+          rationale={entry.aiRationale}
+          testId={`review-rationale-${entry.id}`}
+          variant="row"
+        />
+        {featureFlags.nutritionEnabled && workoutLogId ? (
+          <FuellingAroundSessionPanel workoutLogId={workoutLogId} variant="row" />
+        ) : null}
+        {onTimeOfDayChange ? (
+          <SessionTimeRow timeOfDayMin={timeOfDayMin} onTimeOfDayChange={onTimeOfDayChange} />
+        ) : null}
+        <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
+        <MafTestTagSection
+          workoutLogId={workoutLogId}
+          workout={detail.workout ?? null}
+          variant="row"
+        />
+        {onCountsAsTrainingChange ? (
+          <CountsAsTrainingRow
+            countsAsTraining={countsAsTraining}
+            onCountsAsTrainingChange={onCountsAsTrainingChange}
+          />
+        ) : null}
+      </DetailGroup>
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
 
       {/* Pinned to the bottom of the scroll area so Ask coach / Reopen /
@@ -455,41 +477,12 @@ function ReviewDetailsColumn({
   );
 }
 
-interface ReviewStravaSectionProps {
-  readonly entry: TimelineEntry;
-  readonly distanceUnit: DistanceUnitPreference;
-  readonly hasStravaActivity: boolean;
-}
-
-function ReviewStravaSection({ entry, distanceUnit, hasStravaActivity }: ReviewStravaSectionProps) {
-  // WorkoutStravaStats renders nothing without chip-level stats; gate
-  // here too so we never paint an empty titled card.
-  const hasChipStats =
-    !!entry.calories ||
-    !!entry.avgWatts ||
-    !!entry.sufferScore ||
-    !!entry.avgCadence ||
-    !!entry.avgSpeed;
-  if (!hasStravaActivity || !hasChipStats) return null;
-
-  return (
-    <DetailSection title="Strava session" icon={Activity} testId={`review-strava-${entry.id}`}>
-      <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
-    </DetailSection>
-  );
-}
-
 interface ReviewEffortNotesProps {
   readonly rpe: number | null;
   readonly suggestedRpe: number | null;
   readonly notes: string | null;
-  readonly timeOfDayMin: number | null;
-  readonly countsAsTraining: boolean;
   readonly onRpeChange: (next: number | null) => void;
   readonly onSaveNote: (next: string | null) => void;
-  readonly onTimeOfDayChange?: (next: number | null) => void;
-  /** Absent when the session has no log to edit. */
-  readonly onCountsAsTrainingChange?: (next: boolean) => void;
 }
 
 /**
@@ -504,64 +497,84 @@ function ReviewEffortNotes({
   rpe,
   suggestedRpe,
   notes,
-  timeOfDayMin,
-  countsAsTraining,
   onRpeChange,
   onSaveNote,
-  onTimeOfDayChange,
-  onCountsAsTrainingChange,
 }: ReviewEffortNotesProps) {
   return (
     <DetailSection title="Effort & notes" icon={Gauge}>
-      <div className="space-y-4">
-        <WorkoutEffortNotes
-          rpe={rpe}
-          onRpeChange={onRpeChange}
-          suggestedRpe={suggestedRpe}
-          note={notes}
-          onNoteChange={onSaveNote}
-          debounceNote
-        />
-        {onTimeOfDayChange && (
-          <div className="space-y-1">
-            <Label htmlFor="review-time-of-day" className="text-sm font-medium">
-              Session time
-            </Label>
-            <Input
-              id="review-time-of-day"
-              type="time"
-              value={minutesToHhmm(timeOfDayMin)}
-              onChange={(event) => onTimeOfDayChange(hhmmToMinutes(event.target.value))}
-              data-testid="input-review-time-of-day"
-              className="w-36"
-            />
-            <p className="text-xs text-muted-foreground">
-              When you trained — sets the recovery-meal timing for this day.
-            </p>
-          </div>
-        )}
-        {onCountsAsTrainingChange && (
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="review-counts-as-training" className="text-sm font-medium">
-                Counts as training
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Off for walks and easy days you don&apos;t want in your session
-                counts, streak or training mix. Calories and training load still
-                count either way.
-              </p>
-            </div>
-            <Switch
-              id="review-counts-as-training"
-              checked={countsAsTraining}
-              onCheckedChange={onCountsAsTrainingChange}
-              data-testid="switch-review-counts-as-training"
-            />
-          </div>
-        )}
-      </div>
+      <WorkoutEffortNotes
+        rpe={rpe}
+        onRpeChange={onRpeChange}
+        suggestedRpe={suggestedRpe}
+        note={notes}
+        onNoteChange={onSaveNote}
+        debounceNote
+      />
     </DetailSection>
+  );
+}
+
+const SETTING_ROW = "flex items-center justify-between gap-4 px-4 py-3";
+const SETTING_LABEL = "flex items-center gap-2 text-sm font-semibold leading-none tracking-tight";
+const SETTING_ICON = "h-4 w-4 shrink-0 text-muted-foreground";
+const SETTING_HINT = "text-xs text-muted-foreground";
+
+/**
+ * Manual session-time picker, as a row of the session details. Only offered
+ * when there's no device start time — a Strava/Garmin `startedAt` already
+ * wins in the fuel-timing resolver.
+ */
+function SessionTimeRow({
+  timeOfDayMin,
+  onTimeOfDayChange,
+}: {
+  readonly timeOfDayMin: number | null;
+  readonly onTimeOfDayChange: (next: number | null) => void;
+}) {
+  return (
+    <div className={SETTING_ROW}>
+      <div className="min-w-0 space-y-1.5">
+        <Label htmlFor="review-time-of-day" className={SETTING_LABEL}>
+          <Clock className={SETTING_ICON} aria-hidden />
+          Session time
+        </Label>
+        <p className={SETTING_HINT}>Sets the recovery-meal timing for this day.</p>
+      </div>
+      <Input
+        id="review-time-of-day"
+        type="time"
+        value={minutesToHhmm(timeOfDayMin)}
+        onChange={(event) => onTimeOfDayChange(hhmmToMinutes(event.target.value))}
+        data-testid="input-review-time-of-day"
+        className="w-32 shrink-0"
+      />
+    </div>
+  );
+}
+
+function CountsAsTrainingRow({
+  countsAsTraining,
+  onCountsAsTrainingChange,
+}: {
+  readonly countsAsTraining: boolean;
+  readonly onCountsAsTrainingChange: (next: boolean) => void;
+}) {
+  return (
+    <div className={SETTING_ROW}>
+      <div className="min-w-0 space-y-1.5">
+        <Label htmlFor="review-counts-as-training" className={SETTING_LABEL}>
+          <ListChecks className={SETTING_ICON} aria-hidden />
+          Counts as training
+        </Label>
+        <p className={SETTING_HINT}>Off for walks and easy days. Calories and load still count.</p>
+      </div>
+      <Switch
+        id="review-counts-as-training"
+        checked={countsAsTraining}
+        onCheckedChange={onCountsAsTrainingChange}
+        data-testid="switch-review-counts-as-training"
+      />
+    </div>
   );
 }
 
@@ -586,6 +599,8 @@ function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionPr
       title="Training plan"
       icon={Link2}
       collapsible
+      variant="row"
+      action={<DetailSummary>{workout?.planDayId ? "Linked" : "Not linked"}</DetailSummary>}
       testId={`review-plan-link-${workoutLogId}`}
     >
       <WorkoutPlanDayPicker
@@ -644,44 +659,68 @@ function ReviewActualsSection({
     });
   };
 
+  const hasSets = exerciseSets.length > 0;
+  const sourceLabel = hasSets ? sourceLabelFor(hasReferenceText, deviceProvider) : null;
+
   // Hosts autosaving editors — must stay an always-open card: collapsing
-  // would unmount the editors and could drop debounced cell edits.
+  // would unmount the editors and could drop debounced cell edits. Rows
+  // start closed (read-first); set cells save through the hook's debounce,
+  // so closing a row never loses an edit.
   return (
-    <DetailSection title="Results" icon={Dumbbell} testId={`review-results-${entry.id}`}>
+    <DetailSection
+      title="Results"
+      icon={Dumbbell}
+      action={sourceLabel ? <DetailSummary>{sourceLabel}</DetailSummary> : undefined}
+      testId={`review-results-${entry.id}`}
+    >
       <WorkoutContentsLayout
         exerciseSets={exerciseSets}
-        sourceLabel={sourceLabelFor(hasReferenceText, deviceProvider)}
-        structureBlockCount={(structureBlocks ?? []).length}
-        summaryLabel="Results contents"
+        showStatus={false}
         isParsing={detail.reparseFreeText.isPending || detail.reparseFromImage.isPending}
-        source={
-          <PrescriptionEditor
-            entryId={entry.id}
-            hasSets={exerciseSets.length > 0}
-            mainWorkout={referenceMainWorkout}
-            accessory={referenceAccessory}
-            notes={null}
-            showNotes={false}
-            onSaveField={(field, value) => {
-              // Notes are owned by the effort/notes block below (writes
-              // through updateNote with optimistic patches); ignore any
-              // stray notes saves so we can't double-write to the same
-              // column.
-              if (field === "notes") return;
-              const normalized = value.trim().length === 0 ? null : value;
-              detail.updateReference.mutate(
-                field === "mainWorkout"
-                  ? { prescribedMainWorkout: normalized }
-                  : { prescribedAccessory: normalized },
-              );
-            }}
-            onParseText={handleExplicitTextParse}
-            onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
-            isParsingText={detail.reparseFreeText.isPending}
-            isParsingImage={detail.reparseFromImage.isPending}
-            title="Workout description"
-            compact
-          />
+        // The description is reference once rows exist, so it sits under
+        // them, folded away with the structure builder.
+        belowTable={
+          <ResultsEditingTools open={!hasSets}>
+            <PrescriptionEditor
+              entryId={entry.id}
+              hasSets={hasSets}
+              mainWorkout={referenceMainWorkout}
+              accessory={referenceAccessory}
+              notes={null}
+              showNotes={false}
+              onSaveField={(field, value) => {
+                // Notes are owned by the effort/notes block below (writes
+                // through updateNote with optimistic patches); ignore any
+                // stray notes saves so we can't double-write to the same
+                // column.
+                if (field === "notes") return;
+                const normalized = value.trim().length === 0 ? null : value;
+                detail.updateReference.mutate(
+                  field === "mainWorkout"
+                    ? { prescribedMainWorkout: normalized }
+                    : { prescribedAccessory: normalized },
+                );
+              }}
+              onParseText={handleExplicitTextParse}
+              onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
+              isParsingText={detail.reparseFreeText.isPending}
+              isParsingImage={detail.reparseFromImage.isPending}
+              title="Workout description"
+              compact
+            />
+            <StructureBlocksEditor
+              value={structureBlocks}
+              onChange={(next) => detail.updateStructure.mutate(next)}
+              exerciseSets={exerciseSets}
+              onUpdateSet={detail.patchSetDebounced}
+              onAddSet={detail.addSet.mutate}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              showScoreControls
+              onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
+              headerless
+            />
+          </ResultsEditingTools>
         }
         table={
           <ExerciseTable
@@ -699,29 +738,43 @@ function ReviewActualsSection({
             }}
             hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
             onOpenConversionHelper={parseVisibleReference}
-            defaultExpanded
             showPlannedDiffs={showPlannedDiffs}
             showLastTime
             currentWorkoutLogId={workoutLogId}
             structureBlocks={structureBlocks}
           />
         }
-        structure={
-          <StructureBlocksEditor
-            value={structureBlocks}
-            onChange={(next) => detail.updateStructure.mutate(next)}
-            exerciseSets={exerciseSets}
-            onUpdateSet={detail.patchSetDebounced}
-            onAddSet={detail.addSet.mutate}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            showScoreControls
-            onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
-            headerless
-          />
-        }
       />
     </DetailSection>
+  );
+}
+
+/**
+ * The workout description (with scan / parse) and the structure builder under
+ * the results. With no rows yet they are how the athlete fills the workout in,
+ * so they start open; once rows exist they fold into one quiet line. A native
+ * <details> hides rather than unmounts, so the autosaving description and the
+ * structure editor keep their pending saves whether it is open or shut — and
+ * the same tree renders either way, so rows landing never remounts them.
+ */
+function ResultsEditingTools({
+  open,
+  children,
+}: {
+  readonly open: boolean;
+  readonly children: ReactNode;
+}) {
+  return (
+    <details className="group" open={open || undefined} data-testid="review-editing-tools">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
+          aria-hidden
+        />
+        Description &amp; structure
+      </summary>
+      <div className="mt-3 space-y-3">{children}</div>
+    </details>
   );
 }
 
@@ -731,7 +784,11 @@ function hasText(value: string | null | undefined): boolean {
 
 // A device import's description is the recording's own summary ("8.1 km,
 // 45:00"), not a coach's prescription, so the provenance hint says so.
-function sourceLabelFor(hasReferenceText: boolean, deviceProvider: DeviceProvider | null): string | null {
+// Shown only once there are rows, which it then describes.
+function sourceLabelFor(
+  hasReferenceText: boolean,
+  deviceProvider: DeviceProvider | null,
+): string | null {
   if (!hasReferenceText) return null;
   return deviceProvider ? `from ${deviceProvider}` : "from coach text";
 }
@@ -821,11 +878,11 @@ function ReviewActionButtons({
 }: ReviewActionButtonsProps) {
   return (
     <>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="flex items-center gap-2">
         {onAskCoach ? (
           <Button
             type="button"
-            variant="outline"
+            className="flex-1"
             onClick={() => onAskCoach(entry, currentCoachSeedText)}
             data-testid={`review-ask-coach-${entry.id}`}
           >
@@ -837,22 +894,26 @@ function ReviewActionButtons({
           <Button
             type="button"
             variant="outline"
+            className={onAskCoach ? undefined : "flex-1"}
             onClick={() => onMarkPlanned(entry)}
             data-testid={`review-mark-planned-${entry.id}`}
           >
             <RotateCcw className="mr-2 h-4 w-4" />
-            Reopen workout
+            Reopen
           </Button>
         ) : null}
         {onDelete ? (
           <Button
             type="button"
             variant="ghost"
+            size="icon"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
             onClick={() => onDeleteConfirmOpenChange(true)}
+            aria-label="Delete workout"
+            title="Delete workout"
             data-testid={`review-delete-${entry.id}`}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Trash2 className="h-4 w-4" />
           </Button>
         ) : null}
       </div>

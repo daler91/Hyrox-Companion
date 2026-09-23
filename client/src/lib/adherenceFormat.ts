@@ -33,3 +33,14 @@ export function getToneClassName(tone: Tone): string {
 export function getAdherenceToneClassName(compliancePct: number): string {
   return getToneClassName(getAdherenceTone(compliancePct));
 }
+
+const ADHERENCE_LABELS: Record<Tone, string> = {
+  good: "On plan",
+  partial: "Partial",
+  low: "Off plan",
+};
+
+/** The words for an adherence tone, so its colour is never the only signal. */
+export function getAdherenceLabel(compliancePct: number): string {
+  return ADHERENCE_LABELS[getAdherenceTone(compliancePct)];
+}

@@ -27,23 +27,23 @@ describe("getMafCeiling", () => {
 describe("summariseMafTile", () => {
   it("names how far under the ceiling an aerobic run sat", () => {
     const summary = summariseMafTile({ avgHeartRate: 138, maxHeartRate: 142, ceiling: 145 });
-    expect(summary.labelSuffix).toBe(" · 7 under MAF");
+    expect(summary.status).toBe("7 under MAF");
     expect(summary.accentClassName).toContain("emerald");
   });
 
   it("reads as at the ceiling when the average lands on it", () => {
-    expect(summariseMafTile({ avgHeartRate: 145, ceiling: 145 }).labelSuffix).toBe(" · at MAF");
+    expect(summariseMafTile({ avgHeartRate: 145, ceiling: 145 }).status).toBe("at MAF");
   });
 
   it("flags peaks when the average held but the peak drifted over", () => {
     const summary = summariseMafTile({ avgHeartRate: 140, maxHeartRate: 158, ceiling: 145 });
-    expect(summary.labelSuffix).toBe(" · MAF peaks");
+    expect(summary.status).toBe("MAF peaks");
     expect(summary.accentClassName).toContain("amber");
   });
 
   it("names the overshoot when the average ran over", () => {
     const summary = summariseMafTile({ avgHeartRate: 150, maxHeartRate: 165, ceiling: 145 });
-    expect(summary.labelSuffix).toBe(" · 5 over MAF");
+    expect(summary.status).toBe("5 over MAF");
     expect(summary.accentClassName).toContain("rose");
     expect(summary.title).toContain("5 bpm over");
   });

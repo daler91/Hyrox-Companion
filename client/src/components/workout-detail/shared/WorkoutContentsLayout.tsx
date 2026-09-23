@@ -18,8 +18,13 @@ interface WorkoutContentsLayoutProps {
   readonly summaryLabel?: string;
   /** Show the parsing strip while a text/image parse is in flight. */
   readonly isParsing: boolean;
+  /**
+   * The one-line contents summary. Off where the rows are shown read-first
+   * and already say what's there (the review sheet). Defaults to true.
+   */
+  readonly showStatus?: boolean;
   /** Collapsed source panel (a configured PrescriptionEditor), rendered above the table. */
-  readonly source: ReactNode;
+  readonly source?: ReactNode;
   /** The exercise table (a configured ExerciseTable). Never unmounted by this component. */
   readonly table: ReactNode;
   /** Optional node between the table and the structure disclosure (e.g. a parse-failure alert). */
@@ -46,6 +51,7 @@ export function WorkoutContentsLayout({
   structureBlockCount = 0,
   summaryLabel,
   isParsing,
+  showStatus = true,
   source,
   table,
   belowTable,
@@ -62,12 +68,14 @@ export function WorkoutContentsLayout({
 
   return (
     <div className="space-y-3">
-      <WorkoutContentsStatus
-        exerciseCount={exerciseCount}
-        sourceLabel={sourceLabel}
-        structureBlockCount={structureBlockCount}
-        summaryLabel={summaryLabel}
-      />
+      {showStatus ? (
+        <WorkoutContentsStatus
+          exerciseCount={exerciseCount}
+          sourceLabel={sourceLabel}
+          structureBlockCount={structureBlockCount}
+          summaryLabel={summaryLabel}
+        />
+      ) : null}
       <ParseStatusStrip parsing={isParsing} />
       {source}
       {table}

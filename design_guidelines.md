@@ -74,6 +74,13 @@
 - Per-set fields for reps/weight/time/distance, chosen per exercise type
 - Missing critical fields (e.g. weight and reps for strength) are reported as warnings when the workout is saved
 
+**Completed-workout detail sheet** (`ReviewSurface`) is read-first — a finished session is mostly looked at, occasionally corrected:
+- One stats card on top: headline numbers in a grid (label, value, unit set smaller), a toned status chip in words where a number is rated (adherence, MAF), and one quiet line of the recording's secondary metrics (pace/speed, cadence, power, relative effort). Nothing is printed twice on the sheet — RPE lives in its picker, calories in the stats
+- Results rows start closed as one-line summaries; tapping opens the set editor. The description/scan/parse tools and the structure builder fold into one "Description & structure" line once rows exist
+- Effort & notes stays open as its own card
+- Supporting context (coach rationale, fuelling, session time, plan link, MAF test, counts-as-training) sits in one `DetailGroup` card as rows: each shows a one-line status when closed and opens in place
+- Footer is one row: Ask coach (primary), Reopen, and an icon-only Delete behind a confirm
+
 ### Training Log
 
 **Log Entry Form** (a three-step stepper: Capture → Confirm → Reflect):

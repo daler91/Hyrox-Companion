@@ -2,7 +2,11 @@ import type { TimelineEntry } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "../WorkoutSummaryHeader";
+import {
+  buildDeviceDetails,
+  buildWorkoutSummaryStats,
+  WorkoutSummaryHeader,
+} from "../WorkoutSummaryHeader";
 
 function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
   return {
@@ -19,7 +23,7 @@ function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
 }
 
 describe("buildWorkoutSummaryStats", () => {
-  it("summarises a completed workout with duration, RPE, adherence and Strava metrics", () => {
+  it("summarises a completed workout, measured numbers first", () => {
     const stats = buildWorkoutSummaryStats({
       entry: makeEntry({
         duration: 45,
@@ -34,15 +38,31 @@ describe("buildWorkoutSummaryStats", () => {
       showAdherence: true,
     });
 
-    expect(stats.map((s) => [s.key, s.value])).toEqual([
-      ["duration", "45 min"],
-      ["rpe", "7/10"],
-      ["adherence", "92%"],
-      ["distance", "5.0 km"],
-      ["avg-hr", "151 bpm"],
-      ["calories", "480 kcal"],
+    expect(stats.map((s) => [s.key, s.value, s.unit])).toEqual([
+      ["duration", "45", "min"],
+      ["distance", "5.0", "km"],
+      ["avg-hr", "151", "bpm"],
+      ["calories", "480", "kcal"],
+      ["rpe", "7/10", undefined],
+      ["adherence", "92%", undefined],
     ]);
-    expect(stats.find((s) => s.key === "adherence")?.accentClassName).toContain("emerald");
+    const adherence = stats.find((s) => s.key === "adherence");
+    // Named as well as coloured.
+    expect(adherence?.status).toBe("On plan");
+    expect(adherence?.accentClassName).toContain("emerald");
+  });
+
+  it("leaves RPE out where the sheet already shows its picker", () => {
+    const stats = buildWorkoutSummaryStats({
+      entry: makeEntry({ duration: 45, rpe: 7 }),
+      variant: "completed",
+      rpe: 8,
+      distanceUnit: "km",
+      showAdherence: false,
+      includeRpe: false,
+    });
+
+    expect(stats.map((s) => s.key)).toEqual(["duration"]);
   });
 
   it("prefers the live RPE over the entry's stale value", () => {
@@ -76,7 +96,7 @@ describe("buildWorkoutSummaryStats", () => {
       showAdherence: false,
     });
 
-    expect(stats).toEqual([expect.objectContaining({ key: "distance", value: "1.0 mi" })]);
+    expect(stats).toEqual([expect.objectContaining({ key: "distance", value: "1.0", unit: "mi" })]);
   });
 
   it("shows targets for a planned workout", () => {
@@ -87,9 +107,9 @@ describe("buildWorkoutSummaryStats", () => {
       showAdherence: false,
     });
 
-    expect(stats.map((s) => [s.key, s.value])).toEqual([
-      ["target-duration", "~60 min"],
-      ["target-rpe", "~6/10"],
+    expect(stats.map((s) => [s.key, s.value, s.unit])).toEqual([
+      ["target-duration", "~60", "min"],
+      ["target-rpe", "~6/10", undefined],
     ]);
   });
 
@@ -110,7 +130,9 @@ describe("buildWorkoutSummaryStats", () => {
     });
 
     expect(planned).toEqual([]);
-    expect(preview).toEqual([expect.objectContaining({ key: "planned-sets", value: "12 sets" })]);
+    expect(preview).toEqual([
+      expect.objectContaining({ key: "planned-sets", value: "12", unit: "sets" }),
+    ]);
   });
 
   describe("the Avg HR tile against a MAF ceiling", () => {
@@ -128,8 +150,9 @@ describe("buildWorkoutSummaryStats", () => {
       });
 
       const avgHr = stats.find((s) => s.key === "avg-hr");
-      // The compliance is in the label, not only in the colour.
-      expect(avgHr?.label).toBe("Avg HR · 5 over MAF");
+      // The compliance is in the status words, not only in the colour.
+      expect(avgHr?.label).toBe("Avg HR");
+      expect(avgHr?.status).toBe("5 over MAF");
       expect(avgHr?.accentClassName).toContain("rose");
       expect(avgHr?.explanation).toBeTruthy();
     });
@@ -143,7 +166,7 @@ describe("buildWorkoutSummaryStats", () => {
         mafCeiling: 145,
       });
 
-      expect(stats.find((s) => s.key === "avg-hr")?.label).toBe("Avg HR · 7 under MAF");
+      expect(stats.find((s) => s.key === "avg-hr")?.status).toBe("7 under MAF");
     });
 
     it("leaves the tile alone on a session that wasn't running", () => {
@@ -162,7 +185,7 @@ describe("buildWorkoutSummaryStats", () => {
       });
 
       const avgHr = stats.find((s) => s.key === "avg-hr");
-      expect(avgHr?.label).toBe("Avg HR");
+      expect(avgHr?.status).toBeUndefined();
       expect(avgHr?.accentClassName).toBeUndefined();
     });
 
@@ -175,7 +198,7 @@ describe("buildWorkoutSummaryStats", () => {
       });
 
       expect(stats.find((s) => s.key === "avg-hr")).toEqual(
-        expect.objectContaining({ label: "Avg HR", value: "150 bpm" }),
+        expect.objectContaining({ label: "Avg HR", value: "150", unit: "bpm" }),
       );
     });
   });
@@ -188,6 +211,53 @@ describe("buildWorkoutSummaryStats", () => {
         distanceUnit: "km",
         showAdherence: true,
       }),
+    ).toEqual([]);
+  });
+});
+
+describe("buildDeviceDetails", () => {
+  const recording = {
+    source: "strava",
+    stravaActivityId: "9001",
+    avgSpeed: 3.05,
+    avgCadence: 76.4,
+    avgWatts: 370,
+    sufferScore: 64,
+    calories: 958,
+  } as const;
+
+  it("lists the recording's secondary numbers, leaving calories to the stats", () => {
+    const details = buildDeviceDetails(makeEntry(recording), "km");
+
+    expect(details.map((d) => [d.key, d.value])).toEqual([
+      ["speed", "11 km/h"],
+      ["cadence", "76 spm"],
+      ["power", "370 W"],
+      ["effort", "64"],
+    ]);
+  });
+
+  it("reads a run as pace rather than speed", () => {
+    const details = buildDeviceDetails(
+      makeEntry({
+        ...recording,
+        exerciseSets: [
+          { id: "s1", exerciseName: "easy_run", setNumber: 1 },
+        ] as TimelineEntry["exerciseSets"],
+      }),
+      "km",
+    );
+
+    expect(details[0]).toEqual({ key: "pace", value: "5:28/km", label: "pace" });
+  });
+
+  it("covers a manual log a recording enriched, and nothing without one", () => {
+    expect(buildDeviceDetails(makeEntry({ ...recording, source: "manual" }), "km")).toHaveLength(4);
+    expect(
+      buildDeviceDetails(
+        makeEntry({ ...recording, source: "manual", stravaActivityId: null }),
+        "km",
+      ),
     ).toEqual([]);
   });
 });
@@ -206,6 +276,34 @@ describe("WorkoutSummaryHeader", () => {
     expect(screen.getByTestId("summary")).toBeInTheDocument();
     expect(screen.getByTestId("summary-stat-duration")).toHaveTextContent("45 min");
     expect(screen.getByTestId("summary-stat-rpe")).toHaveTextContent("7/10");
+  });
+
+  it("names a toned stat's status in words", () => {
+    render(
+      <WorkoutSummaryHeader
+        stats={buildWorkoutSummaryStats({
+          entry: makeEntry({ compliancePct: 40 }),
+          variant: "completed",
+          distanceUnit: "km",
+          showAdherence: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("summary-stat-adherence")).toHaveTextContent("40%Off plan");
+  });
+
+  it("lists device details under the stats with their source", () => {
+    render(
+      <WorkoutSummaryHeader
+        stats={[]}
+        details={[{ key: "power", value: "370 W", label: "power" }]}
+        detailsSource="Strava"
+        detailsTestId="details"
+      />,
+    );
+
+    expect(screen.getByTestId("details")).toHaveTextContent("Strava370 W power");
   });
 
   it("renders nothing when there are no stats", () => {
@@ -229,15 +327,15 @@ describe("the duration tile's stopped time", () => {
   it("names the duration as moving time when the session held a real stop", () => {
     // The real 16.1 km run: 98m 42s moving inside 2h 09m elapsed.
     const stat = durationStat({ stoppedSeconds: 1816 });
-    expect(stat?.label).toBe("Duration (moving)");
+    expect(stat?.label).toBe("Moving time");
     expect(stat?.explanation).toContain("30:16");
   });
 
   it("leaves the value alone — the stop is context, not a correction", () => {
     // Every other surface shows this same figure; the tile must not start
     // disagreeing with them.
-    expect(durationStat({ stoppedSeconds: 1816 })?.value).toBe("99 min");
-    expect(durationStat({ stoppedSeconds: 0 })?.value).toBe("99 min");
+    expect(durationStat({ stoppedSeconds: 1816 })?.value).toBe("99");
+    expect(durationStat({ stoppedSeconds: 0 })?.value).toBe("99");
   });
 
   it("says nothing about a stop too short to be one", () => {
@@ -274,11 +372,11 @@ describe("the duration tile's stopped time", () => {
     });
     expect(stats.map((stat) => stat.key)).toEqual([
       "duration",
-      "rpe",
-      "adherence",
       "distance",
       "avg-hr",
       "calories",
+      "rpe",
+      "adherence",
     ]);
   });
 });

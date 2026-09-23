@@ -16,9 +16,10 @@ import {
   type MafTestsListResponse,
   QUERY_KEYS,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 import { MafTestForm, type MafTestFormInitial } from "./MafTestForm";
-import { DetailSection } from "./shared/DetailSection";
+import { DetailSection, type DetailSectionVariant } from "./shared/DetailSection";
 
 /**
  * "Tag as MAF test" control on the workout review surface. Only shown to
@@ -34,9 +35,12 @@ import { DetailSection } from "./shared/DetailSection";
 export function MafTestTagSection({
   workoutLogId,
   workout,
+  variant = "card",
 }: {
   readonly workoutLogId: string | null;
   readonly workout?: WorkoutLog | null;
+  /** "row" puts the Tag action in the header and keeps the copy to one line. */
+  readonly variant?: DetailSectionVariant;
 }) {
   const { user } = useAuth();
   const isMaf = user?.trainingStyleId === "maf_method" && user?.mafHr != null;
@@ -110,60 +114,14 @@ export function MafTestTagSection({
 
   return (
     <>
-      <DetailSection title="MAF test" icon={Activity} testId={`maf-test-tag-${workoutLogId}`}>
-        <div className="space-y-2">
-          {alreadyTagged ? (
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`maf-test-tagged-${workoutLogId}`}>
-                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-                Tracked in your MAF trend
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={openForm}
-                  data-testid={`maf-test-edit-button-${workoutLogId}`}
-                >
-                  <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Edit
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmOpen(true)}
-                  disabled={untagMutation.isPending}
-                  data-testid={`maf-test-untag-button-${workoutLogId}`}
-                >
-                  {untagMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  )}
-                  Remove
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Tag this run as a MAF test to track your pace at the same heart rate over time.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={openForm}
-                data-testid={`maf-test-tag-button-${workoutLogId}`}
-              >
-                <Activity className="mr-2 h-4 w-4" aria-hidden="true" />
-                Tag as MAF test
-              </Button>
-            </>
-          )}
-        </div>
-      </DetailSection>
+      <MafTestTagContent
+        workoutLogId={workoutLogId}
+        variant={variant}
+        alreadyTagged={alreadyTagged}
+        isRemoving={untagMutation.isPending}
+        onOpenForm={openForm}
+        onRemove={() => setConfirmOpen(true)}
+      />
       <MafTestForm
         key={formNonce}
         open={formOpen}
@@ -186,5 +144,150 @@ export function MafTestTagSection({
         confirmTestId={`maf-test-untag-confirm-${workoutLogId}`}
       />
     </>
+  );
+}
+
+interface MafTestTagContentProps {
+  readonly workoutLogId: string;
+  readonly variant: DetailSectionVariant;
+  readonly alreadyTagged: boolean;
+  readonly isRemoving: boolean;
+  readonly onOpenForm: () => void;
+  readonly onRemove: () => void;
+}
+
+/**
+ * The section itself. As a card it explains the tag and offers it below; as a
+ * `DetailGroup` row the action shares the header line — the tagged controls
+ * drop to named icons and the status to a word — and the copy to one line.
+ */
+function MafTestTagContent({
+  workoutLogId,
+  variant,
+  alreadyTagged,
+  isRemoving,
+  onOpenForm,
+  onRemove,
+}: MafTestTagContentProps) {
+  const compact = variant === "row";
+  const tagButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size={compact ? "sm" : "default"}
+      onClick={onOpenForm}
+      data-testid={`maf-test-tag-button-${workoutLogId}`}
+    >
+      <Activity className="mr-2 h-4 w-4" aria-hidden="true" />
+      {compact ? "Tag" : "Tag as MAF test"}
+    </Button>
+  );
+  const taggedControls = (
+    <>
+      <div
+        className="flex items-center gap-1.5 text-sm text-muted-foreground"
+        data-testid={`maf-test-tagged-${workoutLogId}`}
+      >
+        <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+        {compact ? <span className="text-xs">Tracked</span> : "Tracked in your MAF trend"}
+      </div>
+      <MafTaggedButtons
+        workoutLogId={workoutLogId}
+        compact={compact}
+        isRemoving={isRemoving}
+        onEdit={onOpenForm}
+        onRemove={onRemove}
+      />
+    </>
+  );
+
+  if (compact) {
+    return (
+      <DetailSection
+        title="MAF test"
+        icon={Activity}
+        variant="row"
+        action={
+          alreadyTagged ? (
+            <div className="flex items-center gap-1">{taggedControls}</div>
+          ) : (
+            tagButton
+          )
+        }
+        testId={`maf-test-tag-${workoutLogId}`}
+      >
+        {alreadyTagged ? null : (
+          <p className="text-xs text-muted-foreground">
+            Track your pace at the same heart rate over time.
+          </p>
+        )}
+      </DetailSection>
+    );
+  }
+
+  return (
+    <DetailSection title="MAF test" icon={Activity} testId={`maf-test-tag-${workoutLogId}`}>
+      {alreadyTagged ? (
+        <div className="flex items-center justify-between gap-2">{taggedControls}</div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Tag this run as a MAF test to track your pace at the same heart rate over time.
+          </p>
+          {tagButton}
+        </div>
+      )}
+    </DetailSection>
+  );
+}
+
+function MafTaggedButtons({
+  workoutLogId,
+  compact,
+  isRemoving,
+  onEdit,
+  onRemove,
+}: {
+  readonly workoutLogId: string;
+  readonly compact: boolean;
+  readonly isRemoving: boolean;
+  readonly onEdit: () => void;
+  readonly onRemove: () => void;
+}) {
+  const size = compact ? "icon" : "sm";
+  const sizeClassName = compact ? "size-8" : undefined;
+  const iconClassName = compact ? "h-4 w-4" : "mr-2 h-4 w-4";
+  return (
+    <div className="flex items-center gap-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size={size}
+        className={sizeClassName}
+        onClick={onEdit}
+        aria-label={compact ? "Edit MAF test" : undefined}
+        data-testid={`maf-test-edit-button-${workoutLogId}`}
+      >
+        <Pencil className={iconClassName} aria-hidden="true" />
+        {compact ? null : "Edit"}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size={size}
+        className={sizeClassName}
+        onClick={onRemove}
+        disabled={isRemoving}
+        aria-label={compact ? "Remove MAF test" : undefined}
+        data-testid={`maf-test-untag-button-${workoutLogId}`}
+      >
+        {isRemoving ? (
+          <Loader2 className={cn(iconClassName, "animate-spin")} aria-hidden="true" />
+        ) : (
+          <Trash2 className={iconClassName} aria-hidden="true" />
+        )}
+        {compact ? null : "Remove"}
+      </Button>
+    </div>
   );
 }
