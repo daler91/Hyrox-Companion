@@ -44,7 +44,7 @@ describe("Onboarding Wizard", () => {
     cy.contains("Fuel Your Training").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 4 of");
     cy.getBySel("input-fuelling-bodyweight").should("be.visible");
-    cy.contains("button", "Continue").click();
+    cy.contains("button", "Skip").click();
 
     // Step 5 — AI Coach: an explicit choice, off until the athlete turns it
     // on; choosing "on" shows what it sends (audit M6). Left off here.
@@ -83,7 +83,7 @@ describe("Onboarding Wizard", () => {
     cy.contains("What's Your Goal?").should("be.visible");
     cy.contains("button", "Continue").click();
     cy.contains("Fuel Your Training").should("be.visible");
-    cy.contains("button", "Continue").click();
+    cy.contains("button", "Skip").click();
     cy.contains("Meet Your AI Coach").should("be.visible");
     cy.contains("button", "Continue").click();
 
@@ -112,7 +112,7 @@ describe("Onboarding Wizard", () => {
     cy.contains("What's Your Goal?").should("be.visible");
     cy.contains("button", "Continue").click();
     cy.contains("Fuel Your Training").should("be.visible");
-    cy.contains("button", "Continue").click();
+    cy.contains("button", "Skip").click();
     cy.contains("Meet Your AI Coach").should("be.visible");
     cy.contains("button", "Continue").click();
 

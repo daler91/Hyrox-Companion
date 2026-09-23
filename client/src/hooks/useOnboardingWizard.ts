@@ -4,9 +4,14 @@ import type { UpsertNutritionTargetInput } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 
+import { connectDeviceToastAction } from "@/components/onboarding/connectDeviceToastAction";
 import { parseFuellingProfile } from "@/components/onboarding/FuellingStep";
-import { DEFAULT_ONBOARDING_GOAL_ID } from "@/components/onboarding/onboardingGoals";
+import {
+  DEFAULT_ONBOARDING_GOAL_ID,
+  describeOnboardingGoal,
+} from "@/components/onboarding/onboardingGoals";
 import {
   bodyweightInput,
   changedFields,
@@ -43,7 +48,7 @@ const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = FUELLI
 
 // Saved-profile fields each step writes. A step sends only the ones whose shown
 // value differs from what is saved (see changedFields).
-const UNITS_STEP_FIELDS = ["weightUnit", "distanceUnit", "division", "gender"] as const;
+const UNITS_STEP_FIELDS = ["weightUnit", "distanceUnit", "division", "gender", "age"] as const;
 const GOAL_STEP_FIELDS = [
   "trainingStyleId",
   "mafAge",
@@ -53,8 +58,12 @@ const GOAL_STEP_FIELDS = [
 
 export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const completeOnboarding = useCompleteOnboarding();
   const [step, setStep] = useState<OnboardingWizardStep>("welcome");
+
+  const connectDeviceAction = () =>
+    connectDeviceToastAction(() => navigate("/settings?tab=integrations"));
 
   // The wizard starts from what the athlete has saved, not from hard-coded
   // defaults, and edits a draft on top of it: "Run setup again" used to show an
@@ -68,9 +77,18 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const saved = useMemo(() => profileFromPreferences(savedPreferences), [savedPreferences]);
   const [imperial] = useState(prefersImperialUnits);
   const [draft, setDraft] = useState<Partial<OnboardingProfile>>({});
+  const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
+  // "Lose weight" on the Goal step now carries into the fuelling step's weight
+  // goal, which stayed on Maintain (onboarding audit M3). Only as a starting
+  // value: a saved weight goal or the athlete's own pick wins.
+  const goalSuggestion: Partial<OnboardingProfile> =
+    selectedGoal === "weight_loss" && savedPreferences?.weightGoalDirection == null
+      ? { weightGoalDirection: "lose" }
+      : {};
   const shown: OnboardingProfile = {
     ...saved,
     ...firstRunUnitSuggestion(savedPreferences, imperial),
+    ...goalSuggestion,
     ...draft,
   };
   const edit =
@@ -100,7 +118,13 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const [typedBodyweight, setTypedBodyweight] = useState<string | null>(null);
   const bodyweight = typedBodyweight ?? bodyweightInput(savedPreferences?.bodyweightKg, weightUnit);
 
-  const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
+  // A race the athlete has booked, "" when none. Not a preference: it anchors
+  // the AI plan's end date and is kept on a template plan.
+  const [raceDate, setRaceDate] = useState("");
+  // Inline validation, named per field; the wizard only toasted a generic
+  // "Complete required MAF profile fields" (onboarding audit M4).
+  const [ageError, setAgeError] = useState<string | null>(null);
+  const [mafErrors, setMafErrors] = useState<{ age?: string; category?: string }>({});
   // The template plan is created on Start Training, together with its
   // schedule. Creating it when the template was picked left an unscheduled
   // copy behind every time the athlete went Back from the Schedule step and
@@ -129,7 +153,14 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
   const templateMutation = useMutation({
     mutationFn: async (date: string) => {
-      const planId = createdPlanId ?? (await api.plans.createSample()).id;
+      const planId =
+        createdPlanId ??
+        (
+          await api.plans.createSample({
+            goal: describeOnboardingGoal(selectedGoal, { division, raceDate: raceDate || undefined }),
+            ...(raceDate ? { raceDate } : {}),
+          })
+        ).id;
       setCreatedPlanId(planId);
       await api.plans.schedule(planId, date);
     },
@@ -139,7 +170,9 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       toast({
         title: "Your training plan is ready!",
-        description: "Workouts have been scheduled on your timeline.",
+        description:
+          "Workouts have been scheduled on your timeline. Connect Strava or Garmin to log them automatically.",
+        action: connectDeviceAction(),
       });
       completeOnboarding();
       onComplete("sample");
@@ -158,20 +191,26 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
   const hasValidMafProfile = () => {
     if (!isMafMethod) return true;
-    if (!mafAge || !mafCategory) {
-      toast({ title: "Complete required MAF profile fields", variant: "destructive" });
-      return false;
-    }
+    const errors: { age?: string; category?: string } = {};
     const parsedMafAge = Number(mafAge);
-    if (!Number.isInteger(parsedMafAge) || parsedMafAge < 16 || parsedMafAge > 99) {
-      toast({
-        title: "Enter a valid MAF age",
-        description: "MAF age must be a whole number between 16 and 99.",
-        variant: "destructive",
-      });
-      return false;
+    if (mafAge === "") {
+      errors.age = "Enter your age for the MAF heart-rate calculation.";
+    } else if (!Number.isInteger(parsedMafAge) || parsedMafAge < 16 || parsedMafAge > 99) {
+      errors.age = "Enter a whole number between 16 and 99.";
     }
-    return true;
+    if (!mafCategory) errors.category = "Choose the description that fits you best.";
+    setMafErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // General age is optional; if given it must be a whole number the server
+  // accepts (13-100).
+  const validateAge = (value: string): string | null => {
+    if (value.trim() === "") return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 13 && parsed <= 100
+      ? null
+      : "Enter a whole number between 13 and 100, or leave it blank.";
   };
 
   const buildTrainingStylePayload = (
@@ -297,9 +336,14 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
 
     if (step === "units") {
-      const changes = changedFields(shown, saved, UNITS_STEP_FIELDS);
+      const error = validateAge(age);
+      setAgeError(error);
+      if (error) return;
+      const { age: changedAge, ...changes } = changedFields(shown, saved, UNITS_STEP_FIELDS);
+      const payload: Record<string, unknown> = { ...changes };
+      if (changedAge !== undefined) payload.age = changedAge.trim() === "" ? null : Number(changedAge);
       try {
-        if (Object.keys(changes).length > 0) await prefsMutation.mutateAsync(changes);
+        if (Object.keys(payload).length > 0) await prefsMutation.mutateAsync(payload);
       } catch {
         toast({
           title: "Could not save preferences",
@@ -367,6 +411,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       title: "Setup finished without a plan",
       description:
         "Add one anytime from Plan tools, or run setup again from Settings → Account → Getting Started.",
+      action: connectDeviceAction(),
     });
   };
 
@@ -410,10 +455,24 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     onComplete("generated");
   };
 
-  const idx = ONBOARDING_STEPS.indexOf(step);
-  // The schedule step only exists on the sample-plan path, so it is hidden from
-  // the count until the athlete is actually on it (long-standing behaviour).
-  const total = step === "schedule" ? ONBOARDING_STEPS.length : ONBOARDING_STEPS.length - 1;
+  // The Schedule step is the template's own start-date screen within the Plan
+  // step, so it shares that step's number. The count used to grow on reaching
+  // it ("5 of 5", then "6 of 6"), moving the finish line (onboarding audit M2).
+  const planIdx = ONBOARDING_STEPS.indexOf("plan");
+  const idx = step === "schedule" ? planIdx : ONBOARDING_STEPS.indexOf(step);
+  const total = planIdx + 1;
+  // The optional fuelling step saves nothing unless the profile is complete,
+  // so its button says Skip until then (audit L5).
+  const fuellingComplete =
+    parseFuellingProfile({
+      bodyweight,
+      heightCm,
+      age,
+      activityLevel,
+      weightGoalDirection,
+      weightUnit,
+      gender,
+    }) !== null;
 
   return {
     step,
@@ -430,11 +489,30 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     selectedGoal,
     setSelectedGoal,
     trainingStyleId,
-    setTrainingStyleId: edit("trainingStyleId"),
+    setTrainingStyleId: (value: string) => {
+      edit("trainingStyleId")(value);
+      // Age was already asked on the Units step; don't ask twice.
+      if (value === "maf_method" && mafAge === "" && validateAge(age) === null && age !== "") {
+        edit("mafAge")(age);
+      }
+    },
     mafAge,
-    setMafAge: edit("mafAge"),
+    setMafAge: (value: string) => {
+      edit("mafAge")(value);
+      setMafErrors(({ age: _cleared, ...rest }) => rest);
+    },
     mafCategory,
-    setMafCategory: edit("mafCategory"),
+    setMafCategory: (value: string) => {
+      edit("mafCategory")(value);
+      setMafErrors(({ category: _cleared, ...rest }) => rest);
+    },
+    mafErrors,
+    raceDate,
+    setRaceDate,
+    goalDescription: describeOnboardingGoal(selectedGoal, {
+      division,
+      raceDate: raceDate || undefined,
+    }),
     mafHrDataAvailable,
     setMafHrDataAvailable: edit("mafHrDataAvailable"),
     startDate,
@@ -444,7 +522,11 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     heightCm,
     setHeightCm: edit("heightCm"),
     age,
-    setAge: edit("age"),
+    setAge: (value: string) => {
+      edit("age")(value);
+      setAgeError(null);
+    },
+    ageError,
     activityLevel,
     setActivityLevel: edit("activityLevel"),
     weightGoalDirection,
@@ -461,6 +543,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     handleStartTraining,
     handleUseSamplePlan,
     handleGeneratedPlan,
+    nextLabel: step === "fuelling" && !fuellingComplete ? "Skip" : "Continue",
     isPrefsPending: prefsMutation.isPending || targetMutation.isPending,
     isSchedulePending: templateMutation.isPending,
   };

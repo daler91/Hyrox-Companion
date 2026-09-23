@@ -6,7 +6,6 @@ import { useState } from "react";
 import { CoachStep } from "@/components/onboarding/CoachStep";
 import { FuellingStep } from "@/components/onboarding/FuellingStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
-import { getOnboardingGoalLabel } from "@/components/onboarding/onboardingGoals";
 import { OnboardingWizardFooter } from "@/components/onboarding/OnboardingWizardFooter";
 import { OnboardingWizardFrame } from "@/components/onboarding/OnboardingWizardFrame";
 import { PlanStep } from "@/components/onboarding/PlanStep";
@@ -27,6 +26,7 @@ import {
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 import { QUERY_KEYS } from "@/lib/api";
+import { getTodayString } from "@/lib/dateUtils";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
@@ -89,6 +89,11 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setHeightCm,
     age,
     setAge,
+    ageError,
+    mafErrors,
+    raceDate,
+    setRaceDate,
+    goalDescription,
     activityLevel,
     setActivityLevel,
     weightGoalDirection,
@@ -105,6 +110,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     handleStartTraining,
     handleUseSamplePlan,
     handleGeneratedPlan,
+    nextLabel,
     isPrefsPending,
     isSchedulePending,
   } = useOnboardingWizard(onComplete);
@@ -127,6 +133,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
         steps={ONBOARDING_STEPS}
         idx={idx}
         total={total}
+        onEnter={step === "plan" || step === "schedule" ? undefined : () => void handleNext()}
         footer={
           <OnboardingWizardFooter
             step={step}
@@ -135,6 +142,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             onStartTraining={handleStartTraining}
             isPrefsPending={isPrefsPending}
             isSchedulePending={isSchedulePending}
+            nextLabel={nextLabel}
           />
         }
       >
@@ -145,10 +153,13 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             distanceUnit={distanceUnit}
             division={division}
             gender={gender}
+            age={age}
+            ageError={ageError}
             onWeightUnitChange={setWeightUnit}
             onDistanceUnitChange={setDistanceUnit}
             onDivisionChange={setDivision}
             onGenderChange={setGender}
+            onAgeChange={setAge}
           />
         )}
         {step === "goal" && (
@@ -163,6 +174,10 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             onMafCategoryChange={setMafCategory}
             mafHrDataAvailable={mafHrDataAvailable}
             onMafHrDataAvailableChange={setMafHrDataAvailable}
+            mafErrors={mafErrors}
+            raceDate={raceDate}
+            onRaceDateChange={setRaceDate}
+            minRaceDate={getTodayString()}
           />
         )}
         {step === "fuelling" && (
@@ -199,8 +214,9 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             />
             <GeneratePlanDialog
               mode="onboarding"
-              initialGoal={getOnboardingGoalLabel(selectedGoal)}
+              initialGoal={goalDescription}
               initialStartDate={format(startDate, "yyyy-MM-dd")}
+              initialRaceDate={raceDate || undefined}
               existingPlans={existingPlans}
               aiCoachEnabled={aiCoachEnabled}
               open={showGenerateDialog}

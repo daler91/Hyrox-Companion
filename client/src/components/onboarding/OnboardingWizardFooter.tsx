@@ -10,6 +10,8 @@ interface OnboardingWizardFooterProps {
   readonly onStartTraining: () => void;
   readonly isPrefsPending: boolean;
   readonly isSchedulePending: boolean;
+  /** The forward button's label past the Welcome step. */
+  readonly nextLabel?: string;
 }
 
 export function OnboardingWizardFooter({
@@ -19,6 +21,7 @@ export function OnboardingWizardFooter({
   onStartTraining,
   isPrefsPending,
   isSchedulePending,
+  nextLabel = "Continue",
 }: OnboardingWizardFooterProps) {
   // Pinned to the bottom of the scrolling dialog: on a phone the taller steps
   // pushed Continue and Start Training below the fold (onboarding audit H1).
@@ -47,7 +50,7 @@ export function OnboardingWizardFooter({
       {step !== "plan" && step !== "schedule" ? (
         <Button onClick={onNext} disabled={isPrefsPending}>
           {isPrefsPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden />}
-          {step === "welcome" ? "Get Started" : "Continue"}{" "}
+          {step === "welcome" ? "Get Started" : nextLabel}{" "}
           <ChevronRight className="h-4 w-4 ml-1" aria-hidden />
         </Button>
       ) : null}

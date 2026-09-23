@@ -11,7 +11,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 
-import { PrivacyConsentBanner } from "./PrivacyConsentBanner";
+import { PRIVACY_BANNER_HEIGHT_VAR, PrivacyConsentBanner } from "./PrivacyConsentBanner";
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
 const ERROR_REPORTING_CONSENT_KEY = "fitai-error-reporting-consent-v1";
@@ -75,6 +75,16 @@ describe("PrivacyConsentBanner", () => {
 
     expect(screen.getByLabelText("Privacy notice")).toBeInTheDocument();
     expect(screen.getByText(/We use Sentry for error tracking/)).toBeVisible();
+  });
+
+  // Bottom-pinned bars (the Settings save bar) offset themselves by this, so
+  // the banner no longer covers them (onboarding audit M5).
+  it("publishes its height while it shows, and clears it once dismissed", () => {
+    render(<PrivacyConsentBanner />);
+    expect(document.documentElement.style.getPropertyValue(PRIVACY_BANNER_HEIGHT_VAR)).toMatch(/px$/);
+
+    fireEvent.click(screen.getByTestId("btn-consent-ack"));
+    expect(document.documentElement.style.getPropertyValue(PRIVACY_BANNER_HEIGHT_VAR)).toBe("");
   });
 
   it("records consent and hides when dismissed", () => {

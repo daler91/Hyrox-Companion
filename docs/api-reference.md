@@ -684,11 +684,13 @@ Import a training plan from CSV content.
 
 ### POST /api/v1/plans/sample
 
-Create the built-in sample Hyrox training plan.
+Create the built-in sample Hyrox training plan. Onboarding passes the goal the athlete picked and any race date they gave, so a template plan keeps them (the coach reads the plan's goal); the Timeline sends an empty body.
 
 - **Auth:** Required
 - **Rate limit:** `planSample` category, 5/min
-- **Response:** `TrainingPlanWithDays`
+- **Body (optional):** `{ goal?: string (max 500), raceDate?: "YYYY-MM-DD" }`
+- **Validation:** `createSamplePlanSchema`
+- **Response:** `TrainingPlanWithDays` (unscheduled; follow with [`POST /api/v1/plans/:planId/schedule`](#post-apiv1plansplanidschedule))
 
 ### POST /api/v1/plans/generate
 

@@ -220,12 +220,19 @@ export async function importPlanFromCSV(
   return fullPlan;
 }
 
-export async function createSamplePlan(userId: string): Promise<TrainingPlanWithDays> {
+export async function createSamplePlan(
+  userId: string,
+  options: { goal?: string; raceDate?: string } = {},
+): Promise<TrainingPlanWithDays> {
   const plan = await storage.plans.createTrainingPlan({
     userId,
     name: "8-Week Functional Fitness Plan",
     sourceFileName: null,
     totalWeeks: 8,
+    // The coach reads the plan's goal (coaching context, insights), so the
+    // one the athlete picked in onboarding is kept rather than dropped.
+    goal: options.goal || null,
+    raceDate: options.raceDate ?? null,
   });
 
   const days: InsertPlanDay[] = samplePlanDays.map((d) => ({

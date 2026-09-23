@@ -41,13 +41,25 @@ interface GoalStepProps {
   readonly onMafCategoryChange: (value: string) => void;
   readonly mafHrDataAvailable: boolean;
   readonly onMafHrDataAvailableChange: (value: boolean) => void;
+  /** "YYYY-MM-DD", or "" when the athlete has no race booked. */
+  readonly raceDate?: string;
+  readonly onRaceDateChange?: (value: string) => void;
+  /** Earliest race date offered (today). */
+  readonly minRaceDate?: string;
+  /** Why the MAF answers can't be saved yet, shown under each field. */
+  readonly mafErrors?: { readonly age?: string; readonly category?: string };
 }
 
 export function GoalStep(props: Readonly<GoalStepProps>) {
-  const { selectedGoal, onGoalChange, trainingStyleId } = props;
+  const { selectedGoal, onGoalChange, trainingStyleId, mafErrors } = props;
   return (
     <div className="space-y-4">
-      <RadioGroup value={selectedGoal} onValueChange={onGoalChange} className="space-y-3">
+      <RadioGroup
+        value={selectedGoal}
+        onValueChange={onGoalChange}
+        className="space-y-3"
+        aria-label="Goal"
+      >
         {ONBOARDING_GOALS.map((goal) => {
           const Icon = goalIcons[goal.id];
           return (
@@ -91,27 +103,65 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
           </SelectContent>
         </Select>
       </div>
+      {/* HYROX athletes train toward a race, so ask for it here; it anchors an
+          AI plan's length and is kept on a template plan (onboarding audit M3). */}
+      {props.onRaceDateChange && (
+        <div className="space-y-2">
+          <Label htmlFor="onboarding-race-date">
+            Race date <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <p id="onboarding-race-date-hint" className="text-xs text-muted-foreground">
+            Booked a HYROX race? Your plan and coach will build toward it.
+          </p>
+          <Input
+            id="onboarding-race-date"
+            type="date"
+            min={props.minRaceDate}
+            className="w-auto"
+            value={props.raceDate ?? ""}
+            onChange={(e) => props.onRaceDateChange?.(e.target.value)}
+            aria-describedby="onboarding-race-date-hint"
+            data-testid="input-onboarding-race-date"
+          />
+        </div>
+      )}
       {trainingStyleId === "maf_method" && (
         <div className="space-y-3 rounded-md border p-3">
           <p className="text-sm font-medium">MAF onboarding</p>
-          <Input
-            id="onboarding-maf-age"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={120}
-            placeholder="Age"
-            aria-label="Age"
-            value={props.mafAge}
-            onChange={(e) => props.onMafAgeChange(e.target.value)}
-          />
+          {/* A visible label, and the limits validation actually applies: the
+              field was labelled only by its placeholder and allowed 1-120
+              while 16-99 was required (onboarding audit M4). */}
+          <div className="space-y-1.5">
+            <Label htmlFor="onboarding-maf-age">Age</Label>
+            <Input
+              id="onboarding-maf-age"
+              type="number"
+              inputMode="numeric"
+              min={16}
+              max={99}
+              className="w-24"
+              value={props.mafAge}
+              onChange={(e) => props.onMafAgeChange(e.target.value)}
+              aria-invalid={mafErrors?.age ? true : undefined}
+              aria-describedby={mafErrors?.age ? "onboarding-maf-age-error" : undefined}
+            />
+            {mafErrors?.age && (
+              <p id="onboarding-maf-age-error" className="text-sm text-destructive">
+                {mafErrors.age}
+              </p>
+            )}
+          </div>
           {/* Maffetone's own category question, asked as he states it (audit
               M6). The previous boolean + consistency/trend selects collapsed
               his -10 and -5 categories — allergies cost the same 10 bpm as
               post-surgery recovery — and granted +5 with no training-duration
               question at all. */}
           <Select value={props.mafCategory} onValueChange={props.onMafCategoryChange}>
-            <SelectTrigger aria-label="Maffetone health and training category">
+            <SelectTrigger
+              aria-label="Maffetone health and training category"
+              aria-invalid={mafErrors?.category ? true : undefined}
+              aria-describedby={mafErrors?.category ? "onboarding-maf-category-error" : undefined}
+            >
               <SelectValue placeholder="Which best describes you?" />
             </SelectTrigger>
             <SelectContent>
@@ -129,6 +179,11 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
               </SelectItem>
             </SelectContent>
           </Select>
+          {mafErrors?.category && (
+            <p id="onboarding-maf-category-error" className="text-sm text-destructive">
+              {mafErrors.category}
+            </p>
+          )}
           <div className="flex items-center justify-between">
             <Label htmlFor="onboarding-maf-hr">HR data available?</Label>
             <Switch

@@ -82,9 +82,24 @@ export function useOnboarding(
       setShowOnboarding(false);
       if (choice === "import") {
         setPendingImportCompletion(true);
-        if (fileInputRef.current) {
+        const input = fileInputRef.current;
+        if (input) {
+          // Cancelling the file picker used to leave the athlete on an empty
+          // Timeline, with setup restarting from Welcome on the next visit
+          // (onboarding audit M1). The wizard stays mounted while hidden, so
+          // reopening it lands back on the Plan step with its answers intact.
+          const stopWatching = () => {
+            input.removeEventListener("cancel", reopenWizard);
+            input.removeEventListener("change", stopWatching);
+          };
+          const reopenWizard = () => {
+            stopWatching();
+            setShowOnboarding(true);
+          };
+          input.addEventListener("cancel", reopenWizard);
+          input.addEventListener("change", stopWatching);
           setTimeout(() => {
-            fileInputRef.current?.click();
+            input.click();
           }, IMPORT_INPUT_DELAY_MS);
         }
       } else if (choice === "sample" || choice === "generated") {

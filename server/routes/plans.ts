@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, type CreateSamplePlanInput, createSamplePlanSchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -158,9 +158,9 @@ protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport
     }
   });
 
-protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample", 5) }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample", 5), middleware: [validateBody(createSamplePlanSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, CreateSamplePlanInput>, res: Response) => {
     const userId = getUserId(req);
-    const fullPlan = await createSamplePlan(userId);
+    const fullPlan = await createSamplePlan(userId, req.body);
     res.json(fullPlan);
   });
 

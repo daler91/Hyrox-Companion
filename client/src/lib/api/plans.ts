@@ -1,4 +1,4 @@
-import type { ExerciseSet, GeneratePlanInput, PlanDay, PlanDaySkipReason, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { CreateSamplePlanInput, ExerciseSet, GeneratePlanInput, PlanDay, PlanDaySkipReason, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import { IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
@@ -19,7 +19,8 @@ export const plans = {
   import: (data: { csvContent: string; fileName?: string; planName?: string }) =>
     typedRequest<TrainingPlan>("POST", "/api/v1/plans/import", data),
 
-  createSample: () => typedRequest<TrainingPlan>("POST", "/api/v1/plans/sample", {}),
+  createSample: (input: CreateSamplePlanInput = {}) =>
+    typedRequest<TrainingPlan>("POST", "/api/v1/plans/sample", input),
 
   rename: (planId: string, name: string) =>
     rawRequest("PATCH", `/api/v1/plans/${planId}`, { name }).then(() => undefined),

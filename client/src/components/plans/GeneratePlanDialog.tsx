@@ -27,6 +27,8 @@ interface GeneratePlanDialogProps {
   readonly mode?: "default" | "onboarding";
   readonly initialGoal?: string;
   readonly initialStartDate?: string;
+  /** A race date the athlete already gave; the plan ends on it and peaks for it. */
+  readonly initialRaceDate?: string;
   /**
    * The athlete's existing plans, so the schedule step can offer to archive one
    * this plan would overlap. Onboarding passes them too: "Run setup again" is
@@ -64,6 +66,7 @@ export function GeneratePlanDialog({
   mode = "default",
   initialGoal,
   initialStartDate,
+  initialRaceDate,
   existingPlans,
   aiCoachEnabled = false,
 }: GeneratePlanDialogProps) {
@@ -82,6 +85,7 @@ export function GeneratePlanDialog({
     initialConstraints: user?.trainingConstraints ?? "",
     initialGoal,
     initialStartDate,
+    initialRaceDate,
     existingPlans,
   });
   const generatePlan = useGeneratePlan();

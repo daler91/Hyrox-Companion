@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,16 @@ import { hasAcknowledgedPrivacyNotice, onPrivacyConsentChange, recordPrivacyCons
  * it off, and both persist a localStorage gate plus a best-effort server-side
  * consent record for authenticated users (GDPR Art. 7 / CCPA).
  */
+/**
+ * The banner's height while it shows, as a CSS custom property on <html>, so a
+ * bottom-pinned bar can sit above it instead of underneath: the Settings save
+ * bar was covered and couldn't be clicked (onboarding audit M5).
+ */
+export const PRIVACY_BANNER_HEIGHT_VAR = "--privacy-banner-height";
+
 export function PrivacyConsentBanner() {
   const hasBlockingModalLayer = useHasBlockingModalLayer();
+  const bannerRef = useRef<HTMLElement>(null);
   // Lazy initializer reads localStorage once on mount rather than triggering
   // a cascading setState inside useEffect. hasAcknowledgedPrivacyNotice() guards
   // against missing window / denied storage.
@@ -36,7 +44,22 @@ export function PrivacyConsentBanner() {
     return onPrivacyConsentChange(check);
   }, []);
 
-  if (!visible || hasBlockingModalLayer) return null;
+  const shown = visible && !hasBlockingModalLayer;
+  useEffect(() => {
+    const banner = bannerRef.current;
+    const root = globalThis.document?.documentElement;
+    if (!shown || !banner || !root) return;
+    const publish = () => root.style.setProperty(PRIVACY_BANNER_HEIGHT_VAR, `${banner.offsetHeight}px`);
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(banner);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty(PRIVACY_BANNER_HEIGHT_VAR);
+    };
+  }, [shown]);
+
+  if (!shown) return null;
 
   // Always record the notice acknowledgement; when the user made an explicit
   // telemetry choice (Accept/Decline), also apply + record the error-reporting
@@ -57,6 +80,7 @@ export function PrivacyConsentBanner() {
 
   return (
     <section
+      ref={bannerRef}
       aria-label="Privacy notice"
       className="fixed inset-x-0 bottom-0 z-[60] border-t bg-background/95 backdrop-blur-sm shadow-lg"
     >

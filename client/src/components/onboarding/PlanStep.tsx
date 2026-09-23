@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { FileText, Sparkles, Wand2 } from "lucide-react";
 
+import { downloadTemplate } from "@/components/timeline/timeline-filters/csv-utils";
 import { Button } from "@/components/ui/button";
 
 interface PlanStepProps {
@@ -69,7 +70,7 @@ export function PlanStep({
       title={aiCoachEnabled ? "Generate AI Plan (recommended)" : "Generate AI Plan"}
       description={
         aiCoachEnabled
-          ? "Personalized plan based on your goals, schedule, and experience"
+          ? "Three quick questions, then 1–2 minutes to build a plan around your goal"
           : "Needs the AI Coach. You'll be asked to turn it on first"
       }
       primary={aiCoachEnabled}
@@ -101,6 +102,19 @@ export function PlanStep({
         onClick={onImportPlan}
         testId="button-onboarding-import"
       />
+      {/* The import option gave no hint of the format, so athletes without a
+          file to hand cancelled the picker (onboarding audit M1). */}
+      <p className="px-1 text-xs text-muted-foreground" data-testid="text-onboarding-csv-hint">
+        Columns: Week, Day, Focus, Main Workout, Accessory, Notes.{" "}
+        <button
+          type="button"
+          className="rounded underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={downloadTemplate}
+          data-testid="button-onboarding-csv-template"
+        >
+          Download the template
+        </button>
+      </p>
 
       <Button
         variant="ghost"
@@ -108,7 +122,7 @@ export function PlanStep({
         onClick={onSkip}
         data-testid="button-onboarding-skip"
       >
-        Skip for now - I&apos;ll log workouts manually
+        Skip for now — I&apos;ll log workouts manually
       </Button>
     </div>
   );

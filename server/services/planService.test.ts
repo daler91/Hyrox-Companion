@@ -139,6 +139,24 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
+    // Onboarding's goal and race date used to be dropped for template users
+    // (onboarding audit M3).
+    it("keeps a goal and race date given at creation", async () => {
+      vi.mocked(storage.plans.createTrainingPlan).mockResolvedValue(
+        createMockTrainingPlan({ id: "tpl-1", userId: "u-1" }),
+      );
+      vi.mocked(storage.plans.createPlanDays).mockResolvedValue([] as PlanDay[]);
+      vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(
+        createMockTrainingPlanWithDays({ id: "tpl-1", userId: "u-1" }),
+      );
+
+      await createSamplePlan("u-1", { goal: "Complete HYROX Open", raceDate: "2026-11-15" });
+
+      expect(storage.plans.createTrainingPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ goal: "Complete HYROX Open", raceDate: "2026-11-15" }),
+      );
+    });
+
     it("should create a sample plan and its days correctly", async () => {
       const userId = "test-user-id";
       const mockPlanId = "mock-plan-id";
@@ -169,6 +187,8 @@ describe("planService", () => {
         name: "8-Week Functional Fitness Plan",
         sourceFileName: null,
         totalWeeks: 8,
+        goal: null,
+        raceDate: null,
       });
 
       // Verify createPlanDays was called with correct parameters

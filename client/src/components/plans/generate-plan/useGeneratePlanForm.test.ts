@@ -147,20 +147,36 @@ describe("generate plan form helpers", () => {
     expect(result.current.goal).toBe("Functional fitness");
     expect(result.current.startDate).toBe(initialStartDate);
     expect(result.current.endDate).toBe(expectedEndDate);
-    expect(result.current.endDateIsRaceDate).toBe(true);
+    // No race date was given, so the default end date isn't treated as one.
+    expect(result.current.endDateIsRaceDate).toBe(false);
     expect(result.current.planWeeks).toBe(DEFAULT_WEEKS);
     expect(result.current.canGenerate).toBe(true);
 
     act(() => {
       result.current.setGoal("Changed");
       result.current.setStartDate("");
-      result.current.setEndDateIsRaceDate(false);
+      result.current.setEndDateIsRaceDate(true);
       result.current.resetForm();
     });
 
     expect(result.current.goal).toBe("Functional fitness");
     expect(result.current.startDate).toBe(initialStartDate);
     expect(result.current.endDate).toBe(expectedEndDate);
+    expect(result.current.endDateIsRaceDate).toBe(false);
+  });
+
+  it("ends a plan on a race date the athlete gave, flagged as race day", () => {
+    const { result } = renderHook(() =>
+      useGeneratePlanForm({ initialStartDate: "2026-09-28", initialRaceDate: "2026-11-15" }),
+    );
+
+    expect(result.current.endDate).toBe("2026-11-15");
+    expect(result.current.endDateIsRaceDate).toBe(true);
+
+    act(() => {
+      result.current.setEndDateIsRaceDate(false);
+      result.current.resetForm();
+    });
     expect(result.current.endDateIsRaceDate).toBe(true);
   });
 });

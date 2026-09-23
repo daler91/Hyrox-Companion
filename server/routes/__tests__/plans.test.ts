@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
+import * as planService from "../../services/planService";
 import { storage } from "../../storage";
 import plansRouter from "../plans";
 import { createTestApp } from "./testUtils";
@@ -288,6 +289,44 @@ describe("DELETE /api/v1/plans/:id", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "Training plan not found", code: "NOT_FOUND" });
+  });
+});
+
+describe("POST /api/v1/plans/sample", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+    vi.mocked(planService.createSamplePlan).mockResolvedValue({ id: "sample-1" } as never);
+  });
+
+  it("creates the template with no body, as the Timeline does", async () => {
+    const response = await request(app).post("/api/v1/plans/sample").send({});
+
+    expect(response.status).toBe(200);
+    expect(planService.createSamplePlan).toHaveBeenCalledWith("test_user_id", {});
+  });
+
+  // Onboarding keeps the goal and race date template users give (audit M3).
+  it("passes onboarding's goal and race date through", async () => {
+    const response = await request(app)
+      .post("/api/v1/plans/sample")
+      .send({ goal: "Complete HYROX Open", raceDate: "2026-11-15" });
+
+    expect(response.status).toBe(200);
+    expect(planService.createSamplePlan).toHaveBeenCalledWith("test_user_id", {
+      goal: "Complete HYROX Open",
+      raceDate: "2026-11-15",
+    });
+  });
+
+  it("rejects a malformed race date", async () => {
+    const response = await request(app).post("/api/v1/plans/sample").send({ raceDate: "15/11/2026" });
+
+    expect(response.status).toBe(400);
+    expect(planService.createSamplePlan).not.toHaveBeenCalled();
   });
 });
 

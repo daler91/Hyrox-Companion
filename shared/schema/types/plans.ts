@@ -15,6 +15,18 @@ export const updateTrainingPlanGoalSchema = z.object({
 });
 
 /**
+ * Optional body for `POST /api/v1/plans/sample`. Onboarding passes the goal the
+ * athlete picked and any race date they gave, which used to be discarded for
+ * template users (onboarding audit M3). An empty body keeps the old behaviour.
+ */
+export const createSamplePlanSchema = z
+  .object({
+    goal: z.string().trim().max(500).optional(),
+    raceDate: dateStringSchema.optional(),
+  })
+  .default({});
+
+/**
  * Archive a plan effective a date, or restore it with `null`. The route clamps
  * the date forward to the athlete's own today — see the handler for why a
  * back-dated retirement is refused rather than honoured.
@@ -24,6 +36,7 @@ export const updateTrainingPlanRetirementSchema = z.object({
 });
 
 export type UpdateTrainingPlanGoal = z.infer<typeof updateTrainingPlanGoalSchema>;
+export type CreateSamplePlanInput = z.infer<typeof createSamplePlanSchema>;
 export type UpdateTrainingPlanRetirement = z.infer<typeof updateTrainingPlanRetirementSchema>;
 export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
 export type TrainingPlan = typeof trainingPlans.$inferSelect;

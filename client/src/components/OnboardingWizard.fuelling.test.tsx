@@ -126,8 +126,10 @@ describe("OnboardingWizard fuelling step", () => {
     renderComponent();
     await walkToFuellingStep();
 
+    // Nothing will be saved, so the button says so (audit L5).
+    expect(screen.queryByText("Continue")).not.toBeInTheDocument();
     const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
-    fireEvent.click(screen.getByText("Continue"));
+    fireEvent.click(screen.getByText("Skip"));
     await screen.findByTestId("coach-step");
 
     expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
@@ -203,6 +205,36 @@ describe("OnboardingWizard fuelling step", () => {
         weightGoalDirection: "lose",
         weightGoalRateKgPerWeek: 0.5,
       }),
+      expect.anything(),
+    );
+  });
+
+  // Imperial athletes had to type centimetres here (audit L4).
+  it("takes height in feet and inches from an athlete who weighs in pounds", async () => {
+    const user = userEvent.setup();
+    queryClient.setQueryData(QUERY_KEYS.preferences, {
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+      onboardingCompleted: true,
+    });
+    renderComponent();
+    await walkToFuellingStep();
+
+    expect(screen.queryByTestId("input-fuelling-height")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("input-fuelling-bodyweight"), { target: { value: "176" } });
+    fireEvent.change(screen.getByTestId("input-fuelling-height-ft"), { target: { value: "5" } });
+    fireEvent.change(screen.getByTestId("input-fuelling-height-in"), { target: { value: "11" } });
+    fireEvent.change(screen.getByTestId("input-fuelling-age"), { target: { value: "30" } });
+    await user.click(screen.getByTestId("select-fuelling-activity"));
+    await user.click(await screen.findByText(/Moderately active/));
+
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("coach-step");
+
+    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/preferences",
+      expect.objectContaining({ heightCm: 180.3, bodyweightKg: 79.8 }),
       expect.anything(),
     );
   });

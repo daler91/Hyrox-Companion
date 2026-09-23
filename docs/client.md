@@ -207,14 +207,16 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 ### `onboarding/` -- Onboarding Wizard Steps
 
-- `WelcomeStep` -- Introduction screen.
-- `UnitsStep` -- Weight and distance units, HYROX division and gender. Prefilled from saved preferences; a first run from a US-region browser is offered lbs/miles.
-- `GoalStep` -- Fitness goal selection.
-- `FuellingStep` -- Optional body profile (weight, height, age, activity, goal) → suggested nutrition target; shown only when the nutrition module is enabled.
+- `WelcomeStep` -- Introduction: how long setup takes, what it leads to, and the privacy notice with a policy link (the privacy banner stays hidden while the wizard is open).
+- `UnitsStep` -- Weight and distance units, HYROX division, gender and an optional age (Race Predictor age group; max-HR estimate), each radio group named by its visible label. Prefilled from saved preferences; a first run from a US-region browser is offered lbs/miles. An impossible age is flagged inline.
+- `GoalStep` -- Goal, training style (MAF setup with a labelled age field and inline errors), and an optional race date. The goal and race date become a HYROX-specific goal for the AI generator and are stored on a template plan (`describeOnboardingGoal()` in `onboardingGoals.ts`); a race date also becomes the AI plan's end date, flagged as race day.
+- `FuellingStep` -- Optional body profile (weight, height, age, activity, goal) → suggested nutrition target; shown only when the nutrition module is enabled. Height is in feet and inches for an athlete who weighs in pounds. "Lose weight" on the Goal step starts the weight goal on Lose. The button reads Skip until the profile is complete.
 - `CoachStep` -- Introduces the AI Coach and records the `aiCoachEnabled` consent. Starts from the saved answer (off for a new account); choosing "on" shows the data disclosure before Continue saves it.
 - `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip). The AI plan leads only when the AI Coach is on; otherwise the template leads and the AI option says it needs the coach.
 - `ScheduleStep` -- Start date picker for the template plan. Defaults to the next Monday; today can be chosen; a midweek pick says which week-1 sessions it leaves off the calendar.
 - `OnboardingWizardFooter` -- Back / Continue / Start Training, pinned to the bottom of the scrolling dialog so the primary action stays in view on a phone.
+
+The step counter counts through the Plan step; the template's Schedule step shares the Plan step's number, so the total never grows. When a step changes, focus moves to its heading, and Enter in a text field moves on. Choosing **Import** closes the wizard for the file picker, and cancelling the picker reopens it on the Plan step (the Plan step also shows the CSV columns and a template download). The toasts that end setup offer **Connect a device** (Settings → Integrations).
 
 The template plan is created on **Start Training**, together with its schedule, not when the template is picked, so going Back from the Schedule step never leaves an unscheduled copy. A plan whose schedule failed is reused on retry and discarded if the athlete leaves another way. Esc and the dialog's ✕ open a "Leave setup?" confirmation instead of ending onboarding outright; leaving (or skipping) marks onboarding complete and toasts where to run it again (Settings → Account → Getting Started).
 

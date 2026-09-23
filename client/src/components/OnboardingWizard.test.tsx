@@ -50,16 +50,21 @@ vi.mock("@/components/onboarding/GoalStep", () => ({
     selectedGoal,
     onGoalChange,
     trainingStyleId,
+    onRaceDateChange,
   }: {
     selectedGoal: string;
     onGoalChange: (goal: string) => void;
     trainingStyleId: string;
+    onRaceDateChange?: (value: string) => void;
   }) => (
     <div data-testid="goal-step">
       <div data-testid="text-selected-goal">{selectedGoal}</div>
       <div data-testid="text-training-style">{trainingStyleId}</div>
       <button type="button" onClick={() => onGoalChange("endurance")}>
         Choose endurance
+      </button>
+      <button type="button" onClick={() => onRaceDateChange?.("2026-11-15")}>
+        Set race date
       </button>
     </div>
   ),
@@ -71,6 +76,7 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
     mode,
     initialGoal,
     initialStartDate,
+    initialRaceDate,
     existingPlans,
     aiCoachEnabled,
   }: {
@@ -79,6 +85,7 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
     mode?: string;
     initialGoal?: string;
     initialStartDate?: string;
+    initialRaceDate?: string;
     existingPlans?: readonly unknown[];
     aiCoachEnabled?: boolean;
   }) =>
@@ -89,6 +96,7 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
         <div data-testid="text-generate-existing-plans">{existingPlans?.length ?? "none"}</div>
         <div data-testid="text-generate-goal">{initialGoal}</div>
         <div data-testid="text-generate-start-date">{initialStartDate}</div>
+        <div data-testid="text-generate-race-date">{initialRaceDate ?? "none"}</div>
         <button
           type="button"
           data-testid="button-mock-generated-plan"
@@ -222,6 +230,54 @@ describe("OnboardingWizard Error Handling", () => {
     expect(await screen.findByTestId("text-generate-ai-coach")).toHaveTextContent("true");
   });
 
+  // The race date anchors the AI plan's end and is kept in the goal (audit M3).
+  it("hands a booked race date to the AI generator", async () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Set race date"));
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
+    fireEvent.click(screen.getByText("Continue"));
+    fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
+
+    expect(await screen.findByTestId("text-generate-race-date")).toHaveTextContent("2026-11-15");
+    expect(screen.getByTestId("text-generate-goal")).toHaveTextContent("racing on 2026-11-15");
+  });
+
+  // Template users' goal used to be thrown away (audit M3).
+  it("keeps the goal and race date on the template plan", async () => {
+    vi.mocked(queryClientLib.apiRequest).mockImplementation(async (_method, url) =>
+      new Response(JSON.stringify(url === "/api/v1/plans/sample" ? { id: "tpl-1" } : { success: true })),
+    );
+    renderComponent();
+
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Set race date"));
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
+    fireEvent.click(screen.getByText("Continue"));
+    fireEvent.click(await screen.findByTestId("button-onboarding-sample-plan"));
+    fireEvent.click(await screen.findByTestId("button-onboarding-start-plan"));
+
+    await waitFor(() => expect(mockOnComplete).toHaveBeenCalledWith("sample"));
+    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+      "POST",
+      "/api/v1/plans/sample",
+      {
+        goal: "Complete HYROX Open feeling strong on every station, racing on 2026-11-15",
+        raceDate: "2026-11-15",
+      },
+      expect.anything(),
+    );
+  });
+
   it("keeps the athlete on the coach step when the choice can't be saved", async () => {
     renderComponent();
 
@@ -254,11 +310,60 @@ describe("OnboardingWizard Error Handling", () => {
     fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
 
     expect(await screen.findByTestId("text-generate-mode")).toHaveTextContent("onboarding");
-    expect(screen.getByTestId("text-generate-goal")).toHaveTextContent("Improve endurance");
+    // A HYROX goal the generator can act on, not the bare label (audit L6).
+    expect(screen.getByTestId("text-generate-goal")).toHaveTextContent(
+      "Build my running endurance for HYROX's eight 1 km runs",
+    );
+    expect(screen.getByTestId("text-generate-race-date")).toHaveTextContent("none");
     // The next Monday (today, on a Monday): a Monday start keeps all of week 1
     // on the calendar (onboarding audit C3).
     expect(screen.getByTestId("text-generate-start-date")).toHaveTextContent(
       nextPlanStartDate(format(new Date(), "yyyy-MM-dd")),
+    );
+  });
+});
+
+describe("OnboardingWizard progress and keyboard", () => {
+  let queryClient: QueryClient;
+  const mockToast = vi.fn();
+  const mockOnComplete = vi.fn();
+
+  beforeEach(() => {
+    queryClient = resetOnboardingWizardMocks(mockToast);
+  });
+
+  const walkToPlanStep = async () => {
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("button-onboarding-sample-plan");
+  };
+
+  // The count grew from "5 of 5" to "6 of 6" on reaching the template's
+  // Schedule step, moving the finish line (audit M2).
+  it("keeps the same total from the first step to the template's start date", async () => {
+    renderOnboardingWizard(queryClient, mockOnComplete);
+    const count = () => screen.getByTestId("text-onboarding-step-count").textContent;
+    expect(count()).toBe("Step 1 of 5");
+
+    await walkToPlanStep();
+    expect(count()).toBe("Step 5 of 5");
+    fireEvent.click(screen.getByTestId("button-onboarding-sample-plan"));
+    await screen.findByTestId("calendar-start-date");
+    expect(count()).toBe("Step 5 of 5");
+  });
+
+  // Focus stayed on Continue, so the new step's title went unannounced (M4).
+  it("moves focus to the new step's heading", async () => {
+    renderOnboardingWizard(queryClient, mockOnComplete);
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    await waitFor(() =>
+      expect(document.activeElement).toHaveTextContent("Set Your Preferences"),
     );
   });
 });

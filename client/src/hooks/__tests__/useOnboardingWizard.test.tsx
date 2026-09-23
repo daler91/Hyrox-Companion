@@ -231,6 +231,10 @@ describe("useOnboardingWizard", () => {
     });
     expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
+    // Points at connecting a device, which setup never mentioned (audit L7).
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Your training plan is ready!", action: expect.anything() }),
+    );
   });
 
   it("shows an error toast if prefsMutation fails on 'units' step, but still advances to 'goal' step", async () => {
@@ -305,5 +309,96 @@ describe("useOnboardingWizard", () => {
 
     expect(api.preferences.update).not.toHaveBeenCalled();
     expect(result.current.step).not.toBe("goal");
+  });
+
+  // Age used to be saved only through the optional fuelling step (audit M3).
+  it("saves a general age from the Units step as a number", async () => {
+    const { result } = renderOnboardingWizard();
+    await act(async () => {
+      await result.current.handleNext();
+    }); // welcome -> units
+    act(() => {
+      result.current.setAge("41");
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    });
+
+    expect(api.preferences.update).toHaveBeenCalledWith({ age: 41 });
+    expect(result.current.step).toBe("goal");
+  });
+
+  it("keeps the athlete on the Units step with a named error for an impossible age", async () => {
+    const { result } = renderOnboardingWizard();
+    await act(async () => {
+      await result.current.handleNext();
+    });
+    act(() => {
+      result.current.setAge("7");
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    });
+
+    expect(result.current.step).toBe("units");
+    expect(result.current.ageError).toMatch(/between 13 and 100/);
+    expect(api.preferences.update).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setAge("");
+    });
+    expect(result.current.ageError).toBeNull();
+  });
+
+  // Validation named no field and only toasted (audit M4).
+  it("names each missing MAF answer inline instead of toasting", async () => {
+    const { result } = renderOnboardingWizard();
+    await act(async () => {
+      await result.current.handleNext();
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    }); // units -> goal
+    act(() => {
+      result.current.setTrainingStyleId("maf_method");
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    });
+
+    expect(result.current.step).toBe("goal");
+    expect(result.current.mafErrors.age).toBeTruthy();
+    expect(result.current.mafErrors.category).toBeTruthy();
+    expect(mockToast).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setMafCategory("consistent_up_to_2y");
+    });
+    expect(result.current.mafErrors.category).toBeUndefined();
+    expect(result.current.mafErrors.age).toBeTruthy();
+  });
+
+  it("starts the MAF age from the age already given", async () => {
+    const { result } = renderOnboardingWizard();
+    act(() => {
+      result.current.setAge("38");
+    });
+    act(() => {
+      result.current.setTrainingStyleId("maf_method");
+    });
+    expect(result.current.mafAge).toBe("38");
+  });
+
+  it("carries a lose-weight goal into the fuelling step's weight goal", () => {
+    const { result } = renderOnboardingWizard();
+    expect(result.current.weightGoalDirection).toBe("maintain");
+    act(() => {
+      result.current.setSelectedGoal("weight_loss");
+    });
+    expect(result.current.weightGoalDirection).toBe("lose");
+    act(() => {
+      result.current.setWeightGoalDirection("gain");
+    });
+    expect(result.current.weightGoalDirection).toBe("gain");
   });
 });
