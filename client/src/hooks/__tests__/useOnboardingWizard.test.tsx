@@ -172,6 +172,10 @@ describe("useOnboardingWizard", () => {
 
     expect(result.current.step).toBe("units");
 
+    // Only changed answers are written (onboarding audit H2), so change one.
+    act(() => {
+      result.current.setWeightUnit("lbs");
+    });
     await act(async () => {
       await result.current.handleNext();
     }); // units -> goal (attempt)
@@ -195,18 +199,40 @@ describe("useOnboardingWizard", () => {
       await result.current.handleNext();
     }); // units -> goal
 
+    act(() => {
+      result.current.setTrainingStyleId("maf_method");
+      result.current.setMafAge("40");
+      result.current.setMafCategory("consistent_up_to_2y");
+    });
     vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error("Failed to update"));
 
     await act(async () => {
       await result.current.handleNext();
-    }); // goal -> plan (attempt)
+    }); // goal -> next step (attempt)
 
     expect(mockToast).toHaveBeenCalledWith({
       title: "Could not save training style",
       description: "Please try again. You can also update this later in settings.",
       variant: "destructive",
     });
-    // the code does NOT set step to "plan" if mutation fails
+    // the code does NOT move on if the mutation fails
     expect(result.current.step).toBe("goal");
+  });
+
+  it("writes nothing when a step is left as saved", async () => {
+    const { result } = renderOnboardingWizard();
+
+    await act(async () => {
+      await result.current.handleNext();
+    }); // welcome -> units
+    await act(async () => {
+      await result.current.handleNext();
+    }); // units -> goal
+    await act(async () => {
+      await result.current.handleNext();
+    }); // goal -> next step
+
+    expect(api.preferences.update).not.toHaveBeenCalled();
+    expect(result.current.step).not.toBe("goal");
   });
 });

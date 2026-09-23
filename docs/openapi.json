@@ -1353,7 +1353,7 @@
           "gender": {
             "type": "string",
             "nullable": true,
-            "maxLength": 16
+            "maxLength": 32
           },
           "age": {
             "type": "integer",
