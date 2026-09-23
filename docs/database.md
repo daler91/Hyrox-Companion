@@ -445,8 +445,6 @@ Structured-format primitives (EMOM, AMRAP, intervals, etc.) attached to a workou
 - Non-negative / positive guards on the duration, rounds, and interval columns
 
 **Indexes:**
-- `idx_workout_structure_blocks_workout_log_id` on (`workout_log_id`)
-- `idx_workout_structure_blocks_plan_day_id` on (`plan_day_id`)
 - `idx_workout_structure_blocks_workout_sort` on (`workout_log_id`, `sort_order`) -- composite
 - `idx_workout_structure_blocks_plan_day_sort` on (`plan_day_id`, `sort_order`) -- composite
 
