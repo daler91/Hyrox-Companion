@@ -97,6 +97,7 @@ above and the source.
 
 | Document                                                              | Date                                                                                      |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Onboarding Audit](ONBOARDING_AUDIT_2026-09-23.md)                   | 2026-09-23 — first-run flow, reproduced end to end in the running app; findings ranked by severity with a suggested fix order |
 | [Refactoring Review](REFACTORING_REVIEW_2026-09-23.md)               | 2026-09-23 — what its branch changed, behaviour changes left for the owner, and deferred refactors ranked by risk |
 | [Security Audit](SECURITY_AUDIT_2026-09-19.md)                       | 2026-09-19 — carries a remediation section: what was fixed, and what was deliberately left alone with reasons |
 | [Mapper-Concern Verification](MAPPER_CONCERNS_VERIFIED_2026-09-04.md) | 2026-09-04                                                                                |
