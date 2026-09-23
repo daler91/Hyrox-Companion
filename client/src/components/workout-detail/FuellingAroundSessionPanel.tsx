@@ -1,4 +1,4 @@
-import type { NutritionMacroTotals } from "@shared/schema";
+import type { NutritionMacroTotals, SessionFuellingResponse } from "@shared/schema";
 import { UtensilsCrossed } from "lucide-react";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
 import { FuellingGuidanceNote } from "./FuellingGuidanceNote";
+import { DetailSection, type DetailSectionVariant, DetailSummary } from "./shared/DetailSection";
 
 const MACRO_CHIPS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
   { key: "calories", label: "kcal" },
@@ -77,13 +78,37 @@ function FuellingGroup({
 }
 
 /**
+ * One line for the collapsed row. The session is over, so only recovery can
+ * still be acted on: say what's owed, else what's logged.
+ */
+export function summariseSessionFuelling(data: SessionFuellingResponse): string {
+  const gap = data.gap ?? null;
+  if (gap && gap.postProteinG > 0) return `${gap.postProteinG}g protein to go`;
+  if (gap && gap.postCarbG > 0) return `${gap.postCarbG}g carbs to go`;
+  if (gap) return "Recovery on target";
+  const logged = data.pre.length + data.post.length;
+  if (logged > 0) return `${logged} item${logged === 1 ? "" : "s"} logged`;
+  return "Nothing logged";
+}
+
+/**
  * FR-3.4 + Phase 3 — fuelling context on a workout record. Shows what the athlete
  * ate in the pre-session (carb-forward) and post-session (protein/recovery)
  * windows around the workout, and — new in Phase 3 — the recommended fuelling for
  * the session and how far the logged intake is from it. The caller gates on
  * `featureFlags.nutritionEnabled && entry.workoutLogId`.
+ *
+ * As a `variant="row"` it collapses to one line with what's still owed, for
+ * the review sheet's grouped details; it stays mounted either way (a native
+ * <details>), so its query runs and the summary is ready before it opens.
  */
-export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutLogId: string }) {
+export function FuellingAroundSessionPanel({
+  workoutLogId,
+  variant = "card",
+}: {
+  readonly workoutLogId: string;
+  readonly variant?: DetailSectionVariant;
+}) {
   const { data, isLoading, isError } = useSessionFuelling(workoutLogId);
   const [, setLocation] = useLocation();
 
@@ -116,61 +141,70 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
     />
   ) : undefined;
 
+  const isRow = variant === "row";
+
   return (
-    <section
-      className="space-y-3 rounded-xl border bg-card p-4 shadow-sm"
-      data-testid="fuelling-panel"
+    <DetailSection
+      title={isRow ? "Fuelling" : "Fuelling around this session"}
+      icon={UtensilsCrossed}
+      variant={variant}
+      collapsible={isRow}
+      action={
+        isRow && data ? (
+          <DetailSummary>
+            <span data-testid="fuelling-summary">{summariseSessionFuelling(data)}</span>
+          </DetailSummary>
+        ) : undefined
+      }
+      testId="fuelling-panel"
     >
-      <div className="flex items-center gap-2">
-        <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold">Fuelling around this session</h3>
+      <div className="space-y-3">
+        {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+
+        {data ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FuellingGroup
+                title="Pre-session fuelling"
+                count={data.pre.length}
+                totals={data.preTotals}
+                testId="fuelling-pre-totals"
+                targetLine={preTarget}
+              />
+              <FuellingGroup
+                title="Post-session recovery"
+                count={data.post.length}
+                totals={data.postTotals}
+                emphasizeProtein
+                testId="fuelling-post-totals"
+                targetLine={postTarget}
+              />
+            </div>
+
+            {hasPostGap && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation(`/nutrition?date=${data.date}&meal=post_workout`)}
+                data-testid="button-log-recovery-meal"
+              >
+                <UtensilsCrossed className="mr-2 h-4 w-4" aria-hidden="true" /> Log recovery meal
+              </Button>
+            )}
+
+            {target && (
+              <FuellingGuidanceNote explanation={target.explanation} testId="fuelling-guidance" />
+            )}
+
+            {!data.usedStartTime && (
+              <p className="text-[11px] text-muted-foreground" data-testid="fuelling-fallback-note">
+                Based on your pre/post-workout meal tags. Connect Strava or Garmin for exact session
+                timing.
+              </p>
+            )}
+          </>
+        ) : null}
       </div>
-
-      {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
-
-      {data ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FuellingGroup
-              title="Pre-session fuelling"
-              count={data.pre.length}
-              totals={data.preTotals}
-              testId="fuelling-pre-totals"
-              targetLine={preTarget}
-            />
-            <FuellingGroup
-              title="Post-session recovery"
-              count={data.post.length}
-              totals={data.postTotals}
-              emphasizeProtein
-              testId="fuelling-post-totals"
-              targetLine={postTarget}
-            />
-          </div>
-
-          {hasPostGap && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation(`/nutrition?date=${data.date}&meal=post_workout`)}
-              data-testid="button-log-recovery-meal"
-            >
-              <UtensilsCrossed className="mr-2 h-4 w-4" aria-hidden="true" /> Log recovery meal
-            </Button>
-          )}
-
-          {target && (
-            <FuellingGuidanceNote explanation={target.explanation} testId="fuelling-guidance" />
-          )}
-
-          {!data.usedStartTime && (
-            <p className="text-[11px] text-muted-foreground" data-testid="fuelling-fallback-note">
-              Based on your pre/post-workout meal tags. Connect Strava or Garmin for exact session
-              timing.
-            </p>
-          )}
-        </>
-      ) : null}
-    </section>
+    </DetailSection>
   );
 }

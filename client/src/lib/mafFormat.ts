@@ -39,8 +39,8 @@ const CLASS_TONES: Record<MafComplianceClass, Tone> = {
 };
 
 export interface MafTileSummary {
-  /** Appended to the tile's visible label, so colour is never the only signal. */
-  readonly labelSuffix: string;
+  /** Shown in the tile's status chip, so colour is never the only signal. */
+  readonly status: string;
   readonly accentClassName: string;
   /** The coaching cue from `computeMafCompliance`, for the tile's tooltip. */
   readonly title: string;
@@ -59,17 +59,17 @@ export function summariseMafTile(input: {
   });
   const { avgOverBy } = compliance.details;
 
-  let labelSuffix: string;
+  let status: string;
   if (compliance.classification === "over_ceiling") {
-    labelSuffix = ` · ${avgOverBy} over MAF`;
+    status = `${avgOverBy} over MAF`;
   } else if (compliance.classification === "mostly_compliant") {
-    labelSuffix = " · MAF peaks";
+    status = "MAF peaks";
   } else {
-    labelSuffix = avgOverBy === 0 ? " · at MAF" : ` · ${Math.abs(avgOverBy)} under MAF`;
+    status = avgOverBy === 0 ? "at MAF" : `${Math.abs(avgOverBy)} under MAF`;
   }
 
   return {
-    labelSuffix,
+    status,
     accentClassName: getToneClassName(CLASS_TONES[compliance.classification]),
     title: compliance.nextAction,
   };

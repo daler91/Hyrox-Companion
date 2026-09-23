@@ -183,8 +183,69 @@ describe("ReviewSurface", () => {
       />,
     );
 
-    // The overshoot is spelled out in the label, not carried by colour alone.
-    expect(screen.getByTestId("summary-stat-avg-hr")).toHaveTextContent("Avg HR · 7 over MAF");
+    // The overshoot is spelled out in words, not carried by colour alone.
+    expect(screen.getByTestId("summary-stat-avg-hr")).toHaveTextContent("Avg HR152 bpm7 over MAF");
+  });
+
+  it("leaves RPE out of the stats, since the effort picker shows it", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail({ workout: makeWorkout({ rpe: 6 }) }));
+
+    render(<ReviewSurface entry={makeEntry({ duration: 40, rpe: 6 })} onClose={vi.fn()} />);
+
+    expect(screen.getByTestId("summary-stat-duration")).toBeInTheDocument();
+    expect(screen.queryByTestId("summary-stat-rpe")).not.toBeInTheDocument();
+    expect(screen.getByTestId("rpe-selector")).toBeInTheDocument();
+  });
+
+  it("shows results read-first: rows closed, description and structure folded away", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({
+          exerciseSets: [makeExerciseSet({ workoutLogId: "workout-1" })],
+        }),
+      }),
+    );
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    expect(screen.getByTestId("exercise-row-toggle")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("workout-contents-status")).not.toBeInTheDocument();
+    expect(screen.getByTestId("review-editing-tools")).not.toHaveAttribute("open");
+  });
+
+  it("opens the description tools while there are no rows to show", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    // They are how an empty workout gets filled in.
+    expect(screen.getByTestId("review-editing-tools")).toHaveAttribute("open");
+  });
+
+  it("gathers the supporting context into one session-details card", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({ workout: makeWorkout({ startedAt: null, countsAsTraining: true }) }),
+    );
+
+    render(
+      <ReviewSurface
+        entry={makeEntry({ aiRationale: "Easy aerobic volume." })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const group = screen.getByTestId("review-session-details-entry-1");
+    for (const testId of [
+      "review-rationale-entry-1",
+      "review-plan-link-workout-1",
+      "input-review-time-of-day",
+      "switch-review-counts-as-training",
+    ]) {
+      expect(group).toContainElement(screen.getByTestId(testId));
+    }
+    // Background on a finished workout: a tap away, not the headline.
+    expect(screen.getByTestId("review-rationale-entry-1")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("review-plan-link-workout-1")).toHaveTextContent("Not linked");
   });
 
   it("wires the plan-day picker to the current link and updatePlanDay", async () => {
@@ -232,6 +293,9 @@ describe("ReviewSurface", () => {
 
     render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
 
+    // Summarised on the closed row, then per set once it's opened.
+    expect(screen.getByTestId("exercise-row-planned-diff")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("exercise-row-toggle"));
     expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
   }, RENDER_TIMEOUT_MS);
 
@@ -416,12 +480,19 @@ describe("ReviewSurface", () => {
 
     render(
       <ReviewSurface
-        entry={makeEntry({ source: "manual", stravaActivityId: "9002", calories: 500 })}
+        entry={makeEntry({
+          source: "manual",
+          stravaActivityId: "9002",
+          calories: 500,
+          avgWatts: 210,
+        })}
         onClose={vi.fn()}
       />,
     );
 
-    expect(screen.getByTestId("review-strava-entry-1")).toBeInTheDocument();
+    // Calories are a headline stat; the rest of the recording lines up below.
+    expect(screen.getByTestId("summary-stat-calories")).toHaveTextContent("500 kcal");
+    expect(screen.getByTestId("review-strava-entry-1")).toHaveTextContent("210 W power");
     expect(screen.getByText(/from coach text/)).toBeInTheDocument();
   });
 
