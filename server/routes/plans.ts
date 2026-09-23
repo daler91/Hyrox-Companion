@@ -144,7 +144,7 @@ router.get("/api/v1/plans", isAuthenticated, rateLimiter("planRead", 60), asyncH
 
 // Returns the full plan with every day, so it is the heaviest read in this
 // router; it was previously the only one without a limiter.
-router.get("/api/v1/plans/:id", isAuthenticated, rateLimiter("planRead", 60), handleGetOrDeletePlan(storage.plans.getTrainingPlan.bind(storage)));
+router.get("/api/v1/plans/:id", isAuthenticated, rateLimiter("planRead", 60), handleGetOrDeletePlan((id, userId) => storage.plans.getTrainingPlan(id, userId)));
 
 protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport", 5), middleware: [validateBody(importPlanRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const { csvContent, fileName, planName } = req.body;
