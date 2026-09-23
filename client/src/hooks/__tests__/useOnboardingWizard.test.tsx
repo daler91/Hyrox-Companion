@@ -19,7 +19,7 @@ vi.mock("@/lib/api", () => ({
   },
   api: {
     preferences: { update: vi.fn().mockResolvedValue({}) },
-    plans: { createSample: vi.fn(), schedule: vi.fn() },
+    plans: { createSample: vi.fn(), schedule: vi.fn(), deletePlan: vi.fn().mockResolvedValue({}) },
   },
 }));
 
@@ -93,25 +93,98 @@ describe("useOnboardingWizard", () => {
     );
   });
 
-  it("does not complete onboarding when dismissing after template plan creation before scheduling", async () => {
+  // Creating the template plan on the Plan step left an unscheduled copy
+  // behind every time the athlete went Back and chose again (audit H3).
+  it("creates the template plan only on Start Training, once, however often the athlete goes back", async () => {
     mockSamplePlanCreation();
+    vi.mocked(api.plans.schedule).mockResolvedValueOnce(undefined);
     const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleUseSamplePlan();
     });
-
-    await waitFor(() => {
-      expect(result.current.step).toBe("schedule");
+    expect(result.current.step).toBe("schedule");
+    act(() => {
+      result.current.handleBack();
     });
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+    expect(api.plans.createSample).not.toHaveBeenCalled();
 
     act(() => {
-      result.current.handleDismissAttempt();
+      result.current.handleStartTraining();
+    });
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("sample"));
+    expect(api.plans.createSample).toHaveBeenCalledTimes(1);
+    expect(api.plans.schedule).toHaveBeenCalledWith("sample-plan", expect.any(String));
+  });
+
+  it("reuses the created plan when a failed schedule is retried", async () => {
+    mockSamplePlanCreation();
+    vi.mocked(api.plans.schedule)
+      .mockRejectedValueOnce(new Error("500: boom"))
+      .mockResolvedValueOnce(undefined);
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+    act(() => {
+      result.current.handleStartTraining();
+    });
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Failed to set up your plan", variant: "destructive" }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleStartTraining();
+    });
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("sample"));
+    expect(api.plans.createSample).toHaveBeenCalledTimes(1);
+    expect(api.plans.schedule).toHaveBeenCalledTimes(2);
+    expect(api.plans.deletePlan).not.toHaveBeenCalled();
+  });
+
+  it("discards a template plan whose schedule failed when the athlete leaves another way", async () => {
+    mockSamplePlanCreation();
+    vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+    act(() => {
+      result.current.handleStartTraining();
+    });
+    await waitFor(() => expect(api.plans.schedule).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.isSchedulePending).toBe(false));
+
+    act(() => {
+      result.current.handleSkip();
     });
 
-    expect(result.current.step).toBe("schedule");
-    expect(onComplete).not.toHaveBeenCalled();
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBeNull();
+    expect(api.plans.deletePlan).toHaveBeenCalledWith("sample-plan");
+    expect(onComplete).toHaveBeenCalledWith("skip");
+  });
+
+  // One Esc used to end onboarding for good with no word on how to come back
+  // (audit H4); the wizard now confirms first, and leaving says where to go.
+  it("says where to run setup again when the athlete leaves", () => {
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleLeaveSetup();
+    });
+
+    expect(onComplete).toHaveBeenCalledWith("skip");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Setup closed",
+      description: "Run it again anytime from Settings → Account → Getting Started.",
+    });
   });
 
   it("marks durable completion when skipping onboarding", () => {
@@ -147,9 +220,7 @@ describe("useOnboardingWizard", () => {
       result.current.handleUseSamplePlan();
     });
 
-    await waitFor(() => {
-      expect(result.current.step).toBe("schedule");
-    });
+    expect(result.current.step).toBe("schedule");
 
     act(() => {
       result.current.handleStartTraining();

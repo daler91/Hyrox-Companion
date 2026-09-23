@@ -44,7 +44,12 @@ const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = FUELLI
 // Saved-profile fields each step writes. A step sends only the ones whose shown
 // value differs from what is saved (see changedFields).
 const UNITS_STEP_FIELDS = ["weightUnit", "distanceUnit", "division", "gender"] as const;
-const GOAL_STEP_FIELDS = ["trainingStyleId", "mafAge", "mafCategory", "mafHrDataAvailable"] as const;
+const GOAL_STEP_FIELDS = [
+  "trainingStyleId",
+  "mafAge",
+  "mafCategory",
+  "mafHrDataAvailable",
+] as const;
 
 export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
@@ -57,7 +62,9 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   // (onboarding audit H2). Until the preferences arrive the defaults stand in,
   // and since only differences are ever written, a field the athlete has not
   // touched is never sent.
-  const { data: savedPreferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
+  const { data: savedPreferences } = useQuery<UserPreferences>({
+    queryKey: QUERY_KEYS.preferences,
+  });
   const saved = useMemo(() => profileFromPreferences(savedPreferences), [savedPreferences]);
   const [imperial] = useState(prefersImperialUnits);
   const [draft, setDraft] = useState<Partial<OnboardingProfile>>({});
@@ -94,6 +101,11 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const bodyweight = typedBodyweight ?? bodyweightInput(savedPreferences?.bodyweightKg, weightUnit);
 
   const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
+  // The template plan is created on Start Training, together with its
+  // schedule. Creating it when the template was picked left an unscheduled
+  // copy behind every time the athlete went Back from the Schedule step and
+  // chose again (onboarding audit H3). An id only survives here when the
+  // create worked but the schedule failed, so a retry reuses that plan.
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   // The next Monday, not tomorrow: a Monday start keeps every week-1 session
   // on the calendar (onboarding audit C3).
@@ -115,20 +127,14 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     },
   });
 
-  const sampleMutation = useMutation({
-    mutationFn: () => api.plans.createSample(),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
-      setCreatedPlanId(data.id);
-      setStep("schedule");
+  const templateMutation = useMutation({
+    mutationFn: async (date: string) => {
+      const planId = createdPlanId ?? (await api.plans.createSample()).id;
+      setCreatedPlanId(planId);
+      await api.plans.schedule(planId, date);
     },
-    onError: () => toast({ title: "Failed to create plan", variant: "destructive" }),
-  });
-
-  const scheduleMutation = useMutation({
-    mutationFn: ({ planId, date }: { planId: string; date: string }) =>
-      api.plans.schedule(planId, date),
     onSuccess: () => {
+      setCreatedPlanId(null);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       toast({
@@ -138,7 +144,14 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       completeOnboarding();
       onComplete("sample");
     },
-    onError: () => toast({ title: "Failed to schedule plan", variant: "destructive" }),
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+      toast({
+        title: "Failed to set up your plan",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const isMafMethod = trainingStyleId === "maf_method";
@@ -334,30 +347,45 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
   };
 
-  const guardUnscheduledSamplePlan = () => {
-    if (!createdPlanId) return false;
-    setStep("schedule");
-    toast({
-      title: "Set a start date to finish onboarding",
-      description:
-        "Your template plan has been created. Pick a start date before closing onboarding.",
-    });
-    return true;
+  // A template plan whose schedule failed is abandoned when the athlete takes
+  // another way out, so it doesn't linger unscheduled in their plan list.
+  const discardUnscheduledTemplate = () => {
+    if (!createdPlanId) return;
+    const planId = createdPlanId;
+    setCreatedPlanId(null);
+    api.plans
+      .deletePlan(planId)
+      .then(() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }))
+      .catch(() => {});
   };
 
   const handleSkip = () => {
-    if (guardUnscheduledSamplePlan()) return;
+    discardUnscheduledTemplate();
     completeOnboarding();
     onComplete("skip");
+    toast({
+      title: "Setup finished without a plan",
+      description:
+        "Add one anytime from Plan tools, or run setup again from Settings → Account → Getting Started.",
+    });
   };
 
   const handleImportPlan = () => {
+    discardUnscheduledTemplate();
     onComplete("import");
   };
 
-  const handleDismissAttempt = () => {
-    if (guardUnscheduledSamplePlan()) return;
-    handleSkip();
+  // Esc and ✕ used to end onboarding for good in one keypress, with no word on
+  // how to get back (onboarding audit H4). The wizard now confirms first (see
+  // OnboardingWizard), and leaving says where "Run setup again" lives.
+  const handleLeaveSetup = () => {
+    discardUnscheduledTemplate();
+    completeOnboarding();
+    onComplete("skip");
+    toast({
+      title: "Setup closed",
+      description: "Run it again anytime from Settings → Account → Getting Started.",
+    });
   };
 
   const handleBack = () => {
@@ -367,19 +395,15 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   };
 
   const handleStartTraining = () => {
-    if (createdPlanId) {
-      scheduleMutation.mutate({
-        planId: createdPlanId,
-        date: format(startDate, "yyyy-MM-dd"),
-      });
-    }
+    templateMutation.mutate(format(startDate, "yyyy-MM-dd"));
   };
 
   const handleUseSamplePlan = () => {
-    sampleMutation.mutate();
+    setStep("schedule");
   };
 
   const handleGeneratedPlan = () => {
+    discardUnscheduledTemplate();
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
     completeOnboarding();
@@ -432,13 +456,12 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     handleNext,
     handleSkip,
     handleImportPlan,
-    handleDismissAttempt,
+    handleLeaveSetup,
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,
     handleGeneratedPlan,
     isPrefsPending: prefsMutation.isPending || targetMutation.isPending,
-    isSamplePending: sampleMutation.isPending,
-    isSchedulePending: scheduleMutation.isPending,
+    isSchedulePending: templateMutation.isPending,
   };
 }

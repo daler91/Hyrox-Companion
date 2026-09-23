@@ -263,6 +263,48 @@ describe("OnboardingWizard Error Handling", () => {
   });
 });
 
+// One reflexive Esc or ✕ used to end onboarding for good (audit H4).
+describe("OnboardingWizard leaving setup", () => {
+  let queryClient: QueryClient;
+  const mockToast = vi.fn();
+  const mockOnComplete = vi.fn();
+
+  beforeEach(() => {
+    queryClient = resetOnboardingWizardMocks(mockToast);
+  });
+
+  it("asks before Esc closes setup, and Keep setting up returns to the same step", async () => {
+    renderOnboardingWizard(queryClient, mockOnComplete);
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    expect(await screen.findByText("Leave setup?")).toBeInTheDocument();
+    expect(screen.getByText(/Settings → Account → Getting Started/)).toBeInTheDocument();
+    expect(mockOnComplete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("button-onboarding-keep-going"));
+    await waitFor(() => expect(screen.queryByText("Leave setup?")).not.toBeInTheDocument());
+    expect(screen.getByTestId("units-step")).toBeInTheDocument();
+    expect(mockOnComplete).not.toHaveBeenCalled();
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBeNull();
+  });
+
+  it("leaves setup from the close button only once confirmed, and says where to come back", async () => {
+    renderOnboardingWizard(queryClient, mockOnComplete);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(await screen.findByTestId("button-onboarding-leave"));
+
+    await waitFor(() => expect(mockOnComplete).toHaveBeenCalledWith("skip"));
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Setup closed",
+      description: "Run it again anytime from Settings → Account → Getting Started.",
+    });
+  });
+});
+
 // "Run setup again" and first runs alike: the wizard starts from what the
 // athlete saved and writes only what they change (onboarding audit H2).
 describe("OnboardingWizard saved preferences", () => {

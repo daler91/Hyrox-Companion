@@ -14,6 +14,16 @@ import { ScheduleStep } from "@/components/onboarding/ScheduleStep";
 import { UnitsStep } from "@/components/onboarding/UnitsStep";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 import { QUERY_KEYS } from "@/lib/api";
@@ -44,6 +54,7 @@ const DESCS: Record<OnboardingWizardStep, string> = {
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   // "Run setup again" is how an established athlete switches plans, so the
   // generator gets their plans and can offer to archive the one it overlaps
   // (onboarding audit H2). A first run simply has none.
@@ -89,120 +100,138 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     handleNext,
     handleSkip,
     handleImportPlan,
-    handleDismissAttempt,
+    handleLeaveSetup,
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,
     handleGeneratedPlan,
     isPrefsPending,
-    isSamplePending,
     isSchedulePending,
   } = useOnboardingWizard(onComplete);
 
-  // Esc closes onboarding as "skip"; backdrop clicks remain blocked in the
-  // frame to avoid accidental dismissal mid-wizard.
+  // Esc and ✕ ask before leaving: one reflexive keypress used to end
+  // onboarding for good (onboarding audit H4). Backdrop clicks stay blocked in
+  // the frame.
   const handleDialogOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      handleDismissAttempt();
-    }
+    if (!nextOpen) setConfirmLeave(true);
   };
 
   return (
-    <OnboardingWizardFrame
-      open={open}
-      onOpenChange={handleDialogOpenChange}
-      title={TITLES[step]}
-      description={DESCS[step]}
-      step={step}
-      steps={ONBOARDING_STEPS}
-      idx={idx}
-      total={total}
-      footer={
-        <OnboardingWizardFooter
-          step={step}
-          onBack={handleBack}
-          onNext={handleNext}
-          onStartTraining={handleStartTraining}
-          isPrefsPending={isPrefsPending}
-          isSchedulePending={isSchedulePending}
-        />
-      }
-    >
-      {step === "welcome" && <WelcomeStep />}
-      {step === "units" && (
-        <UnitsStep
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          division={division}
-          gender={gender}
-          onWeightUnitChange={setWeightUnit}
-          onDistanceUnitChange={setDistanceUnit}
-          onDivisionChange={setDivision}
-          onGenderChange={setGender}
-        />
-      )}
-      {step === "goal" && (
-        <GoalStep
-          selectedGoal={selectedGoal}
-          onGoalChange={setSelectedGoal}
-          trainingStyleId={trainingStyleId}
-          onTrainingStyleChange={setTrainingStyleId}
-          mafAge={mafAge}
-          onMafAgeChange={setMafAge}
-          mafCategory={mafCategory}
-          onMafCategoryChange={setMafCategory}
-          mafHrDataAvailable={mafHrDataAvailable}
-          onMafHrDataAvailableChange={setMafHrDataAvailable}
-        />
-      )}
-      {step === "fuelling" && (
-        <FuellingStep
-          fields={{
-            bodyweight,
-            heightCm,
-            age,
-            activityLevel,
-            weightGoalDirection,
-            weightUnit,
-            gender,
-          }}
-          onBodyweightChange={setBodyweight}
-          onHeightCmChange={setHeightCm}
-          onAgeChange={setAge}
-          onActivityLevelChange={setActivityLevel}
-          onWeightGoalDirectionChange={setWeightGoalDirection}
-          applyTargets={applyTargets}
-          onApplyTargetsChange={setApplyTargets}
-        />
-      )}
-      {step === "coach" && (
-        <CoachStep aiCoachEnabled={aiCoachEnabled} onAiCoachEnabledChange={setAiCoachEnabled} />
-      )}
-      {step === "plan" && (
-        <>
-          <PlanStep
-            isPending={isSamplePending}
-            aiCoachEnabled={aiCoachEnabled}
-            onUseSamplePlan={handleUseSamplePlan}
-            onImportPlan={handleImportPlan}
-            onGeneratePlan={() => setShowGenerateDialog(true)}
-            onSkip={handleSkip}
+    <>
+      <OnboardingWizardFrame
+        open={open}
+        onOpenChange={handleDialogOpenChange}
+        title={TITLES[step]}
+        description={DESCS[step]}
+        step={step}
+        steps={ONBOARDING_STEPS}
+        idx={idx}
+        total={total}
+        footer={
+          <OnboardingWizardFooter
+            step={step}
+            onBack={handleBack}
+            onNext={handleNext}
+            onStartTraining={handleStartTraining}
+            isPrefsPending={isPrefsPending}
+            isSchedulePending={isSchedulePending}
           />
-          <GeneratePlanDialog
-            mode="onboarding"
-            initialGoal={getOnboardingGoalLabel(selectedGoal)}
-            initialStartDate={format(startDate, "yyyy-MM-dd")}
-            existingPlans={existingPlans}
-            aiCoachEnabled={aiCoachEnabled}
-            open={showGenerateDialog}
-            onOpenChange={setShowGenerateDialog}
-            onGenerated={handleGeneratedPlan}
+        }
+      >
+        {step === "welcome" && <WelcomeStep />}
+        {step === "units" && (
+          <UnitsStep
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            division={division}
+            gender={gender}
+            onWeightUnitChange={setWeightUnit}
+            onDistanceUnitChange={setDistanceUnit}
+            onDivisionChange={setDivision}
+            onGenderChange={setGender}
           />
-        </>
-      )}
-      {step === "schedule" && (
-        <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
-      )}
-    </OnboardingWizardFrame>
+        )}
+        {step === "goal" && (
+          <GoalStep
+            selectedGoal={selectedGoal}
+            onGoalChange={setSelectedGoal}
+            trainingStyleId={trainingStyleId}
+            onTrainingStyleChange={setTrainingStyleId}
+            mafAge={mafAge}
+            onMafAgeChange={setMafAge}
+            mafCategory={mafCategory}
+            onMafCategoryChange={setMafCategory}
+            mafHrDataAvailable={mafHrDataAvailable}
+            onMafHrDataAvailableChange={setMafHrDataAvailable}
+          />
+        )}
+        {step === "fuelling" && (
+          <FuellingStep
+            fields={{
+              bodyweight,
+              heightCm,
+              age,
+              activityLevel,
+              weightGoalDirection,
+              weightUnit,
+              gender,
+            }}
+            onBodyweightChange={setBodyweight}
+            onHeightCmChange={setHeightCm}
+            onAgeChange={setAge}
+            onActivityLevelChange={setActivityLevel}
+            onWeightGoalDirectionChange={setWeightGoalDirection}
+            applyTargets={applyTargets}
+            onApplyTargetsChange={setApplyTargets}
+          />
+        )}
+        {step === "coach" && (
+          <CoachStep aiCoachEnabled={aiCoachEnabled} onAiCoachEnabledChange={setAiCoachEnabled} />
+        )}
+        {step === "plan" && (
+          <>
+            <PlanStep
+              aiCoachEnabled={aiCoachEnabled}
+              onUseSamplePlan={handleUseSamplePlan}
+              onImportPlan={handleImportPlan}
+              onGeneratePlan={() => setShowGenerateDialog(true)}
+              onSkip={handleSkip}
+            />
+            <GeneratePlanDialog
+              mode="onboarding"
+              initialGoal={getOnboardingGoalLabel(selectedGoal)}
+              initialStartDate={format(startDate, "yyyy-MM-dd")}
+              existingPlans={existingPlans}
+              aiCoachEnabled={aiCoachEnabled}
+              open={showGenerateDialog}
+              onOpenChange={setShowGenerateDialog}
+              onGenerated={handleGeneratedPlan}
+            />
+          </>
+        )}
+        {step === "schedule" && (
+          <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
+        )}
+      </OnboardingWizardFrame>
+      <AlertDialog open={open && confirmLeave} onOpenChange={setConfirmLeave}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave setup?</AlertDialogTitle>
+            <AlertDialogDescription>
+              What you have saved so far is kept. You can run setup again anytime from Settings →
+              Account → Getting Started.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-onboarding-keep-going">
+              Keep setting up
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeaveSetup} data-testid="button-onboarding-leave">
+              Leave setup
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

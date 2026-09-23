@@ -214,6 +214,9 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `CoachStep` -- Introduces the AI Coach and records the `aiCoachEnabled` consent. Starts from the saved answer (off for a new account); choosing "on" shows the data disclosure before Continue saves it.
 - `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip). The AI plan leads only when the AI Coach is on; otherwise the template leads and the AI option says it needs the coach.
 - `ScheduleStep` -- Start date picker for the template plan. Defaults to the next Monday; today can be chosen; a midweek pick says which week-1 sessions it leaves off the calendar.
+- `OnboardingWizardFooter` -- Back / Continue / Start Training, pinned to the bottom of the scrolling dialog so the primary action stays in view on a phone.
+
+The template plan is created on **Start Training**, together with its schedule, not when the template is picked, so going Back from the Schedule step never leaves an unscheduled copy. A plan whose schedule failed is reused on retry and discarded if the athlete leaves another way. Esc and the dialog's ✕ open a "Leave setup?" confirmation instead of ending onboarding outright; leaving (or skipping) marks onboarding complete and toasts where to run it again (Settings → Account → Getting Started).
 
 ### `plans/` -- Plan Management
 

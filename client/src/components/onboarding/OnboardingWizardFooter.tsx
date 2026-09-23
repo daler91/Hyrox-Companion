@@ -20,14 +20,19 @@ export function OnboardingWizardFooter({
   isPrefsPending,
   isSchedulePending,
 }: OnboardingWizardFooterProps) {
+  // Pinned to the bottom of the scrolling dialog: on a phone the taller steps
+  // pushed Continue and Start Training below the fold (onboarding audit H1).
+  // The negative margins run it edge to edge over the dialog's padding.
   return (
-    <div className="flex justify-between pt-2">
-      {step !== "welcome" && step !== "plan" ? (
+    <div className="sticky -bottom-6 z-10 -mx-6 -mb-6 flex justify-between gap-2 border-t bg-background px-6 pb-6 pt-4">
+      {/* Back on the plan step too, e.g. to turn the AI Coach on after seeing
+          that the AI plan needs it. */}
+      {step === "welcome" ? (
+        <div />
+      ) : (
         <Button variant="ghost" onClick={onBack} disabled={isSchedulePending}>
           <ChevronLeft className="h-4 w-4 mr-1" aria-hidden /> Back
         </Button>
-      ) : (
-        <div />
       )}
       {step === "schedule" ? (
         <Button

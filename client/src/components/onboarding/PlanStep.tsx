@@ -1,9 +1,9 @@
-import { FileText, Loader2, Sparkles, Wand2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { FileText, Sparkles, Wand2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
 interface PlanStepProps {
-  readonly isPending: boolean;
   /** Whether the AI Coach is on. The AI plan leads only when it is. */
   readonly aiCoachEnabled: boolean;
   readonly onUseSamplePlan: () => void;
@@ -12,8 +12,47 @@ interface PlanStepProps {
   readonly onSkip: () => void;
 }
 
+interface PlanOptionProps {
+  readonly icon: LucideIcon;
+  readonly title: string;
+  readonly description: string;
+  readonly primary: boolean;
+  readonly onClick: () => void;
+  readonly testId: string;
+}
+
+// The shared Button is `whitespace-nowrap`, so the two lines of copy used to
+// stay on one line each and push the dialog about 120 px past a phone's edge,
+// cutting off the descriptions and the Skip link (onboarding audit H1).
+// `whitespace-normal` and `min-w-0` let them wrap inside the dialog instead.
+function PlanOption({ icon: Icon, title, description, primary, onClick, testId }: PlanOptionProps) {
+  return (
+    <Button
+      variant={primary ? "default" : "outline"}
+      className="h-auto w-full min-w-0 justify-start whitespace-normal py-4"
+      onClick={onClick}
+      data-testid={testId}
+    >
+      <div className="flex w-full min-w-0 items-center gap-3">
+        <Icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1 text-left">
+          <div className="font-medium">{title}</div>
+          <div
+            className={
+              primary
+                ? "text-xs font-normal opacity-80"
+                : "text-xs font-normal text-muted-foreground"
+            }
+          >
+            {description}
+          </div>
+        </div>
+      </div>
+    </Button>
+  );
+}
+
 export function PlanStep({
-  isPending,
   aiCoachEnabled,
   onUseSamplePlan,
   onImportPlan,
@@ -24,91 +63,48 @@ export function PlanStep({
   // no longer claims the recommended slot: the template leads, and the AI
   // option says what it needs (onboarding audit C1).
   const aiOption = (
-    <Button
+    <PlanOption
       key="ai"
-      variant={aiCoachEnabled ? "default" : "outline"}
-      className="w-full justify-start h-auto py-4"
+      icon={Wand2}
+      title={aiCoachEnabled ? "Generate AI Plan (recommended)" : "Generate AI Plan"}
+      description={
+        aiCoachEnabled
+          ? "Personalized plan based on your goals, schedule, and experience"
+          : "Needs the AI Coach. You'll be asked to turn it on first"
+      }
+      primary={aiCoachEnabled}
       onClick={onGeneratePlan}
-      disabled={isPending}
-      data-testid="button-onboarding-generate-plan"
-    >
-      <div className="flex items-center gap-3 w-full">
-        <Wand2 className="h-5 w-5" aria-hidden="true" />
-        <div className="text-left flex-1">
-          <div className="font-medium">
-            {aiCoachEnabled ? "Generate AI Plan (recommended)" : "Generate AI Plan"}
-          </div>
-          <div
-            className={
-              aiCoachEnabled
-                ? "text-xs opacity-80 font-normal"
-                : "text-xs text-muted-foreground font-normal"
-            }
-          >
-            {aiCoachEnabled
-              ? "Personalized plan based on your goals, schedule, and experience"
-              : "Needs the AI Coach. You'll be asked to turn it on first"}
-          </div>
-        </div>
-      </div>
-    </Button>
+      testId="button-onboarding-generate-plan"
+    />
   );
-
   const templateOption = (
-    <Button
+    <PlanOption
       key="template"
-      variant={aiCoachEnabled ? "outline" : "default"}
-      className="w-full justify-start h-auto py-4"
+      icon={Sparkles}
+      title="Use 8-Week Template"
+      description="Structured program with running, strength, and functional exercises"
+      primary={!aiCoachEnabled}
       onClick={onUseSamplePlan}
-      disabled={isPending}
-      data-testid="button-onboarding-sample-plan"
-    >
-      <div className="flex items-center gap-3 w-full">
-        {isPending ? (
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-        ) : (
-          <Sparkles className="h-5 w-5" aria-hidden="true" />
-        )}
-        <div className="text-left flex-1">
-          <div className="font-medium">Use 8-Week Template</div>
-          <div
-            className={
-              aiCoachEnabled
-                ? "text-xs text-muted-foreground font-normal"
-                : "text-xs opacity-80 font-normal"
-            }
-          >
-            Structured program with running, strength, and functional exercises
-          </div>
-        </div>
-      </div>
-    </Button>
+      testId="button-onboarding-sample-plan"
+    />
   );
 
   return (
     <div className="space-y-3">
       {aiCoachEnabled ? [aiOption, templateOption] : [templateOption, aiOption]}
 
-      <Button
-        variant="outline"
-        className="w-full justify-start h-auto py-4"
+      <PlanOption
+        icon={FileText}
+        title="Import Your Own Plan"
+        description="Upload a CSV training plan"
+        primary={false}
         onClick={onImportPlan}
-        data-testid="button-onboarding-import"
-      >
-        <div className="flex items-center gap-3 w-full">
-          <FileText className="h-5 w-5" aria-hidden="true" />
-          <div className="text-left flex-1">
-            <div className="font-medium">Import Your Own Plan</div>
-            <div className="text-xs text-muted-foreground font-normal">
-              Upload a CSV training plan
-            </div>
-          </div>
-        </div>
-      </Button>
+        testId="button-onboarding-import"
+      />
 
       <Button
         variant="ghost"
-        className="w-full"
+        className="h-auto w-full whitespace-normal"
         onClick={onSkip}
         data-testid="button-onboarding-skip"
       >
