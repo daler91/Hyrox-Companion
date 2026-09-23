@@ -27,11 +27,18 @@ import { queryClient } from "@/lib/queryClient";
 const FUELLING_STEP_ENABLED = featureFlags.nutritionEnabled;
 
 export const ONBOARDING_STEPS: OnboardingWizardStep[] = FUELLING_STEP_ENABLED
-  ? ["welcome", "units", "goal", "fuelling", "plan", "schedule"]
-  : ["welcome", "units", "goal", "plan", "schedule"];
+  ? ["welcome", "units", "goal", "fuelling", "coach", "plan", "schedule"]
+  : ["welcome", "units", "goal", "coach", "plan", "schedule"];
 const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = FUELLING_STEP_ENABLED
-  ? { units: "welcome", goal: "units", fuelling: "goal", plan: "fuelling", schedule: "plan" }
-  : { units: "welcome", goal: "units", plan: "goal", schedule: "plan" };
+  ? {
+      units: "welcome",
+      goal: "units",
+      fuelling: "goal",
+      coach: "fuelling",
+      plan: "coach",
+      schedule: "plan",
+    }
+  : { units: "welcome", goal: "units", coach: "goal", plan: "coach", schedule: "plan" };
 
 // Saved-profile fields each step writes. A step sends only the ones whose shown
 // value differs from what is saved (see changedFields).
@@ -78,6 +85,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     age,
     activityLevel,
     weightGoalDirection,
+    aiCoachEnabled,
   } = shown;
   // Bodyweight is typed in the unit shown, so its saved value is formatted in
   // that unit until the athlete types over it.
@@ -183,7 +191,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       gender,
     });
     if (!parsed) {
-      setStep("plan");
+      setStep("coach");
       return;
     }
     // A re-run must not re-save an untouched profile, or replace targets the
@@ -213,7 +221,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       profile.activityLevel === (savedPreferences?.activityLevel ?? null) &&
       profile.goalDirection === (savedPreferences?.weightGoalDirection ?? null);
     if (unchanged) {
-      setStep("plan");
+      setStep("coach");
       return;
     }
 
@@ -246,7 +254,24 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         variant: "destructive",
       });
     }
-    setStep("plan");
+    setStep("coach");
+  };
+
+  // Saves the AI Coach choice when it changed. A failed save keeps the
+  // athlete here: moving on would let the plan step offer AI plans on the
+  // strength of a consent the server never recorded.
+  const handleCoachNext = async () => {
+    const changes = changedFields(shown, saved, ["aiCoachEnabled"]);
+    try {
+      if (Object.keys(changes).length > 0) await prefsMutation.mutateAsync(changes);
+      setStep("plan");
+    } catch {
+      toast({
+        title: "Could not save your AI Coach choice",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleNext = async () => {
@@ -275,6 +300,11 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       return;
     }
 
+    if (step === "coach") {
+      await handleCoachNext();
+      return;
+    }
+
     if (step !== "goal") return;
     const goalChanges = changedFields(shown, saved, GOAL_STEP_FIELDS);
     const hasGoalChanges = Object.keys(goalChanges).length > 0;
@@ -290,7 +320,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         if (age === "" && mafAge !== "") edit("age")(mafAge);
         setStep("fuelling");
       } else {
-        setStep("plan");
+        setStep("coach");
       }
     } catch {
       toast({
@@ -394,6 +424,8 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     setWeightGoalDirection: edit("weightGoalDirection"),
     applyTargets,
     setApplyTargets,
+    aiCoachEnabled,
+    setAiCoachEnabled: edit("aiCoachEnabled"),
     handleNext,
     handleSkip,
     handleImportPlan,

@@ -203,6 +203,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `SuggestionCard` -- AI workout suggestion with apply/dismiss actions.
 - `SuggestionsTab` -- Hook and logic for fetching/applying suggestions.
 - `AIConsentDialog` -- Opt-in consent dialog shown before the first AI coach interaction.
+- `AiConsentDetails` -- The consent disclosure (what the AI Coach sends, the privacy link) shared by `AIConsentDialog`, the AI plan generator's consent step and the onboarding `CoachStep`.
 
 ### `onboarding/` -- Onboarding Wizard Steps
 
@@ -210,12 +211,13 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `UnitsStep` -- Weight and distance units, HYROX division and gender. Prefilled from saved preferences; a first run from a US-region browser is offered lbs/miles.
 - `GoalStep` -- Fitness goal selection.
 - `FuellingStep` -- Optional body profile (weight, height, age, activity, goal) → suggested nutrition target; shown only when the nutrition module is enabled.
-- `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip).
+- `CoachStep` -- Introduces the AI Coach and records the `aiCoachEnabled` consent. Starts from the saved answer (off for a new account); choosing "on" shows the data disclosure before Continue saves it.
+- `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip). The AI plan leads only when the AI Coach is on; otherwise the template leads and the AI option says it needs the coach.
 - `ScheduleStep` -- Start date picker for the training plan.
 
 ### `plans/` -- Plan Management
 
-- `GeneratePlanDialog` -- AI-powered training plan generation dialog.
+- `GeneratePlanDialog` -- AI-powered training plan generation dialog. While the AI Coach is off it shows a consent step (`GeneratePlanConsentStep`) before its three steps, since `POST /api/v1/plans/generate` is consent-gated.
 - `generate-plan/` -- Multi-step generation form: `GeneratePlanGoalStep`, `GeneratePlanScheduleStep`, `GeneratePlanDetailsStep`, and the `useGeneratePlanForm` hook.
 
 ### `settings/` -- Settings Page Sections

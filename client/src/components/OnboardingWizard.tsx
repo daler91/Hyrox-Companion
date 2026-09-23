@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useState } from "react";
 
+import { CoachStep } from "@/components/onboarding/CoachStep";
 import { FuellingStep } from "@/components/onboarding/FuellingStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
 import { getOnboardingGoalLabel } from "@/components/onboarding/onboardingGoals";
@@ -27,6 +28,7 @@ const TITLES: Record<OnboardingWizardStep, string> = {
   units: "Set Your Preferences",
   goal: "What's Your Goal?",
   fuelling: "Fuel Your Training",
+  coach: "Meet Your AI Coach",
   plan: "Choose Your Path",
   schedule: "When Do You Start?",
 };
@@ -35,6 +37,7 @@ const DESCS: Record<OnboardingWizardStep, string> = {
   units: "Choose your measurement units and HYROX race profile.",
   goal: "This helps us tailor your experience.",
   fuelling: "Get suggested daily nutrition targets from your body profile.",
+  coach: "Choose whether the AI Coach can use your training data.",
   plan: "How would you like to start training?",
   schedule: "Pick the first day of your 8-week program.",
 };
@@ -81,6 +84,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setWeightGoalDirection,
     applyTargets,
     setApplyTargets,
+    aiCoachEnabled,
+    setAiCoachEnabled,
     handleNext,
     handleSkip,
     handleImportPlan,
@@ -170,10 +175,14 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           onApplyTargetsChange={setApplyTargets}
         />
       )}
+      {step === "coach" && (
+        <CoachStep aiCoachEnabled={aiCoachEnabled} onAiCoachEnabledChange={setAiCoachEnabled} />
+      )}
       {step === "plan" && (
         <>
           <PlanStep
             isPending={isSamplePending}
+            aiCoachEnabled={aiCoachEnabled}
             onUseSamplePlan={handleUseSamplePlan}
             onImportPlan={handleImportPlan}
             onGeneratePlan={() => setShowGenerateDialog(true)}
@@ -184,6 +193,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             initialGoal={getOnboardingGoalLabel(selectedGoal)}
             initialStartDate={format(startDate, "yyyy-MM-dd")}
             existingPlans={existingPlans}
+            aiCoachEnabled={aiCoachEnabled}
             open={showGenerateDialog}
             onOpenChange={setShowGenerateDialog}
             onGenerated={handleGeneratedPlan}

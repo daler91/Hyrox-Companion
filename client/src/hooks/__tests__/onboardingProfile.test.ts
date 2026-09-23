@@ -42,6 +42,7 @@ describe("profileFromPreferences", () => {
         heightCm: 168,
         activityLevel: "active",
         weightGoalDirection: "lose",
+        aiCoachEnabled: true,
       }),
     );
     expect(profile).toEqual({
@@ -57,6 +58,7 @@ describe("profileFromPreferences", () => {
       heightCm: "168",
       activityLevel: "active",
       weightGoalDirection: "lose",
+      aiCoachEnabled: true,
     });
   });
 

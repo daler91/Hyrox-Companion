@@ -1,7 +1,7 @@
 import { QueryFunctionContext } from "@tanstack/react-query";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiRequest, getQueryFn, humanizeApiError } from "./queryClient";
+import { apiRequest, getQueryFn, humanizeApiError, resetCsrfToken } from "./queryClient";
 
 describe("queryClient", () => {
   const originalFetch = globalThis.fetch;
@@ -79,6 +79,51 @@ describe("queryClient", () => {
         signal: undefined,
       });
       expect(res).toBe(mockResponse);
+    });
+
+    // Only a CSRF rejection is retried with a fresh token; any other 403 would
+    // fail again, and retrying them sent every one twice (onboarding audit L2).
+    describe("403 retry", () => {
+      const forbidden = (body: string) =>
+        new Response(body, { status: 403, headers: { "Content-Type": "application/json" } });
+
+      function routeFetch(first: Response, second: Response = new Response("{}", { status: 200 })) {
+        const responses = [first, second];
+        fetchMock.mockImplementation((url: string) => {
+          if (url === "/api/v1/csrf-token") {
+            return Promise.resolve(new Response(JSON.stringify({ csrfToken: "tok" }), { status: 200 }));
+          }
+          return Promise.resolve(responses.shift() ?? new Response("{}", { status: 200 }));
+        });
+      }
+      const mutationCalls = () => fetchMock.mock.calls.filter(([url]) => url === "/api/test");
+
+      beforeEach(() => resetCsrfToken());
+
+      it("retries once with a fresh token when the server rejects the CSRF token", async () => {
+        routeFetch(forbidden(JSON.stringify({ error: "invalid csrf token", code: "EBADCSRFTOKEN" })));
+        const res = await apiRequest("POST", "/api/test", { foo: "bar" });
+        expect(res.status).toBe(200);
+        expect(mutationCalls()).toHaveLength(2);
+      });
+
+      it("does not resend a 403 that names another cause", async () => {
+        routeFetch(
+          forbidden(
+            JSON.stringify({ error: "AI coaching is disabled for this account.", code: "AI_COACH_DISABLED" }),
+          ),
+        );
+        await expect(apiRequest("POST", "/api/test", { foo: "bar" })).rejects.toThrow(
+          /^403: .*AI_COACH_DISABLED/,
+        );
+        expect(mutationCalls()).toHaveLength(1);
+      });
+
+      it("still retries a 403 it cannot classify", async () => {
+        routeFetch(new Response("Forbidden", { status: 403 }));
+        await apiRequest("POST", "/api/test", { foo: "bar" });
+        expect(mutationCalls()).toHaveLength(2);
+      });
     });
 
     it.each([

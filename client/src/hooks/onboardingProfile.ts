@@ -25,6 +25,8 @@ export interface OnboardingProfile {
   heightCm: string;
   activityLevel: "" | ActivityLevel;
   weightGoalDirection: WeightGoalDirection;
+  /** The AI-processing consent the AI routes check; off for a new account. */
+  aiCoachEnabled: boolean;
 }
 
 export const DEFAULT_ONBOARDING_PROFILE: OnboardingProfile = {
@@ -40,6 +42,7 @@ export const DEFAULT_ONBOARDING_PROFILE: OnboardingProfile = {
   heightCm: "",
   activityLevel: "",
   weightGoalDirection: "maintain",
+  aiCoachEnabled: false,
 };
 
 const GENDERS: readonly string[] = ["male", "female", "prefer_not_to_say"];
@@ -76,6 +79,7 @@ export function profileFromPreferences(prefs: UserPreferences | undefined): Onbo
     heightCm: numberToInput(prefs.heightCm),
     activityLevel: prefs.activityLevel ?? "",
     weightGoalDirection: prefs.weightGoalDirection ?? "maintain",
+    aiCoachEnabled: prefs.aiCoachEnabled ?? false,
   };
 }
 

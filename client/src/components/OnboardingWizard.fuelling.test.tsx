@@ -26,6 +26,9 @@ vi.mock("@/components/onboarding/UnitsStep", () => ({
 vi.mock("@/components/onboarding/GoalStep", () => ({
   GoalStep: () => <div data-testid="goal-step">GoalStep</div>,
 }));
+vi.mock("@/components/onboarding/CoachStep", () => ({
+  CoachStep: () => <div data-testid="coach-step">CoachStep</div>,
+}));
 vi.mock("@/components/onboarding/PlanStep", () => ({
   PlanStep: () => <div data-testid="plan-step">PlanStep</div>,
 }));
@@ -87,7 +90,7 @@ describe("OnboardingWizard fuelling step", () => {
     expect(await screen.findByTestId("fuelling-suggested-targets")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
       "PATCH",
@@ -125,7 +128,7 @@ describe("OnboardingWizard fuelling step", () => {
 
     const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
     expect(targetsCalls()).toHaveLength(0);
@@ -140,7 +143,7 @@ describe("OnboardingWizard fuelling step", () => {
     await user.click(await screen.findByTestId("switch-fuelling-apply"));
 
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
       "PATCH",
@@ -175,7 +178,7 @@ describe("OnboardingWizard fuelling step", () => {
 
     const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     // Neither the profile nor the athlete's own targets are rewritten.
     expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
@@ -189,7 +192,7 @@ describe("OnboardingWizard fuelling step", () => {
 
     fireEvent.change(screen.getByTestId("input-fuelling-height"), { target: { value: "182" } });
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
       "PATCH",

@@ -71,6 +71,7 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
     initialGoal,
     initialStartDate,
     existingPlans,
+    aiCoachEnabled,
   }: {
     open: boolean;
     onGenerated?: (plan: unknown) => void;
@@ -78,9 +79,11 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
     initialGoal?: string;
     initialStartDate?: string;
     existingPlans?: readonly unknown[];
+    aiCoachEnabled?: boolean;
   }) =>
     open ? (
       <div>
+        <div data-testid="text-generate-ai-coach">{String(aiCoachEnabled)}</div>
         <div data-testid="text-generate-mode">{mode}</div>
         <div data-testid="text-generate-existing-plans">{existingPlans?.length ?? "none"}</div>
         <div data-testid="text-generate-goal">{initialGoal}</div>
@@ -147,13 +150,19 @@ describe("OnboardingWizard Error Handling", () => {
     await screen.findByTestId("goal-step");
   });
 
-  it("completes onboarding when an AI plan is generated", async () => {
-    renderComponent();
-
+  const walkToCoachStep = async () => {
     fireEvent.click(screen.getByText("Get Started"));
     await screen.findByTestId("units-step");
     fireEvent.click(screen.getByText("Continue"));
     await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
+  };
+
+  it("completes onboarding when an AI plan is generated", async () => {
+    renderComponent();
+
+    await walkToCoachStep();
     fireEvent.click(screen.getByText("Continue"));
 
     fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
@@ -165,25 +174,68 @@ describe("OnboardingWizard Error Handling", () => {
     expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
   });
 
-  it("recommends AI generation before the template plan and explains Coaching Knowledge", async () => {
+  // A new account's AI Coach is off, and the server refuses AI plans without
+  // it: the recommended option used to be one that always failed (audit C1).
+  it("leads with the template while the AI Coach is off, and says what the AI plan needs", async () => {
     renderComponent();
 
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
+    await walkToCoachStep();
     fireEvent.click(screen.getByText("Continue"));
 
     const generateButton = await screen.findByTestId("button-onboarding-generate-plan");
-    const sampleButton = await screen.findByTestId("button-onboarding-sample-plan");
-
-    expect(generateButton).toHaveTextContent("Generate AI Plan (recommended)");
-    expect(sampleButton).toHaveTextContent("Use 8-Week Template");
-    expect(sampleButton).not.toHaveTextContent("recommended");
+    const sampleButton = screen.getByTestId("button-onboarding-sample-plan");
     expect(
-      generateButton.compareDocumentPosition(sampleButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+      sampleButton.compareDocumentPosition(generateButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByText(/Coaching Knowledge \(RAG\)/i)).toBeInTheDocument();
+    expect(generateButton).not.toHaveTextContent("recommended");
+    expect(generateButton).toHaveTextContent("Needs the AI Coach");
+    // The choice was left as saved, so nothing was written.
+    expect(queryClientLib.apiRequest).not.toHaveBeenCalled();
+    // The Coaching Knowledge (RAG) note no longer sits at the decision point (M6).
+    expect(screen.queryByText(/Coaching Knowledge/i)).not.toBeInTheDocument();
+  });
+
+  it("saves the AI Coach consent and then recommends the AI plan", async () => {
+    renderComponent();
+
+    await walkToCoachStep();
+    fireEvent.click(screen.getByTestId("radio-coach-on"));
+    expect(screen.getByText(/Your recent workout history/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Continue"));
+
+    const generateButton = await screen.findByTestId("button-onboarding-generate-plan");
+    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/preferences",
+      { aiCoachEnabled: true },
+      expect.anything(),
+    );
+    expect(generateButton).toHaveTextContent("Generate AI Plan (recommended)");
+    expect(
+      generateButton.compareDocumentPosition(screen.getByTestId("button-onboarding-sample-plan")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // The generator is told, so it doesn't ask for the consent again.
+    fireEvent.click(generateButton);
+    expect(await screen.findByTestId("text-generate-ai-coach")).toHaveTextContent("true");
+  });
+
+  it("keeps the athlete on the coach step when the choice can't be saved", async () => {
+    renderComponent();
+
+    await walkToCoachStep();
+    fireEvent.click(screen.getByTestId("radio-coach-on"));
+    vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error("500: boom"));
+    fireEvent.click(screen.getByText("Continue"));
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Could not save your AI Coach choice" }),
+      ),
+    );
+    expect(screen.getByText("Meet Your AI Coach")).toBeInTheDocument();
+    expect(screen.queryByTestId("button-onboarding-generate-plan")).not.toBeInTheDocument();
   });
 
   it("passes the selected onboarding goal and start date into AI plan generation", async () => {
@@ -194,6 +246,8 @@ describe("OnboardingWizard Error Handling", () => {
     fireEvent.click(screen.getByText("Continue"));
     await screen.findByTestId("goal-step");
     fireEvent.click(screen.getByText("Choose endurance"));
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
     fireEvent.click(screen.getByText("Continue"));
 
     fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
@@ -242,6 +296,8 @@ describe("OnboardingWizard saved preferences", () => {
     fireEvent.click(screen.getByText("Continue"));
     await screen.findByTestId("goal-step");
     fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
+    fireEvent.click(screen.getByText("Continue"));
     await screen.findByTestId("button-onboarding-generate-plan");
   };
 
@@ -259,6 +315,8 @@ describe("OnboardingWizard saved preferences", () => {
     expect(await screen.findByTestId("text-units-shown")).toHaveTextContent("lbs,miles,pro,female");
     fireEvent.click(screen.getByText("Continue"));
     expect(await screen.findByTestId("text-training-style")).toHaveTextContent("maf_method");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByText("Meet Your AI Coach");
     fireEvent.click(screen.getByText("Continue"));
     await screen.findByTestId("button-onboarding-generate-plan");
 
