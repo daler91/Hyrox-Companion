@@ -1,6 +1,6 @@
 # External Integrations
 
-This document covers the external service integrations used by the fitai.coach application: Strava and Garmin activity syncing, Resend transactional email, pg-boss job queue, node-cron scheduling, and Sentry error tracking.
+This document covers the external service integrations used by the fitai.coach application: Strava and Garmin activity syncing, Resend transactional email, Web Push notifications, pg-boss job queue, node-cron scheduling, and Sentry error tracking.
 
 ---
 
@@ -10,22 +10,24 @@ This document covers the external service integrations used by the fitai.coach a
 2. [Strava Integration](#strava-integration)
 3. [Garmin Connect Integration](#garmin-connect-integration)
 4. [Email System (Resend)](#email-system-resend)
-5. [Job Queue (pg-boss)](#job-queue-pg-boss)
-6. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
-7. [Error Tracking (Sentry)](#error-tracking-sentry)
-8. [Startup Maintenance](#startup-maintenance)
+5. [Web Push Notifications](#web-push-notifications)
+6. [Job Queue (pg-boss)](#job-queue-pg-boss)
+7. [Cron Scheduling (node-cron)](#cron-scheduling-node-cron)
+8. [Error Tracking (Sentry)](#error-tracking-sentry)
+9. [Startup Maintenance](#startup-maintenance)
 
 ---
 
 ## Overview
 
-The application relies on six external integration layers:
+The application relies on seven external integration layers:
 
 - **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts, kept current automatically by Strava's webhook push plus a polling fallback.
 - **Garmin Connect** -- Email/password sign-in against Garmin's reverse-engineered SSO (no public OAuth) to import activities. Wrapped in a strict safety stack because every request goes out through the same shared server IP.
-- **Resend** -- Transactional email delivery for weekly training summaries and missed workout reminders.
-- **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation, and the two transactional email sends). Retries are scoped to idempotent handlers only.
-- **node-cron** -- In-process cron scheduler that triggers the daily email pipeline and a set of maintenance/telemetry jobs.
+- **Resend** -- Transactional email delivery for the six athlete emails: weekly training summary, missed workout reminder, weekly review reminder, session brief, analysis digest, and MAF test reminder.
+- **Web Push** -- Browser push notifications (VAPID, via the `web-push` library) that ride along with those emails and carry the push-only nutrition reminders. Optional; disabled unless all three VAPID variables are set.
+- **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation, the six per-user email sends, plan generation, analytics recompute, and Strava sync). Retries are scoped to idempotent handlers only.
+- **node-cron** -- In-process cron scheduler that triggers the hourly email scan and a set of maintenance/telemetry/sync jobs.
 - **Sentry** -- Server- and client-side error tracking. Completely optional; a missing DSN disables reporting without affecting the rest of the app.
 
 All integrations are configured through environment variables and initialized during server startup.
@@ -97,7 +99,7 @@ sequenceDiagram
 
 3. **Token exchange**: The authorization code is exchanged for an access token, refresh token, and athlete information via a POST to `https://www.strava.com/oauth/token` with `grant_type: authorization_code`.
 
-4. **Connection storage**: The token set and athlete ID are persisted to the `strava_connections` table via `storage.upsertStravaConnection()`.
+4. **Connection storage**: The token set and athlete ID are persisted to the `strava_connections` table via `storage.users.upsertStravaConnection()`.
 
 ### CSRF State Verification
 
@@ -117,8 +119,8 @@ Tokens are encrypted at rest using AES-256-GCM (`server/crypto.ts`):
 
 - **Algorithm**: `aes-256-gcm`
 - **IV**: 12 random bytes per encryption (recommended size for GCM)
-- **Storage format**: `v1:iv:authTag:ciphertext` (all hex-encoded). The legacy unversioned `iv:authTag:ciphertext` (3-part) format is still accepted on read for backward compatibility.
-- **Strict decryption**: The plaintext passthrough has been removed — data that matches neither format throws `Malformed encrypted data`, as does a wrong-length (non-16-byte) auth tag or any GCM authentication failure.
+- **Storage format**: `<version>:iv:authTag:ciphertext` (all hex-encoded), where the version is `v1` (`ENCRYPTION_KEY`) or, once `ENCRYPTION_KEY_V2` is set, `v2` for new writes. The legacy unversioned `iv:authTag:ciphertext` (3-part) format is still accepted on read and decrypted with the v1 key.
+- **Strict decryption**: The plaintext passthrough has been removed — data that matches neither format throws `Malformed encrypted data`; a wrong-length (non-16-byte) auth tag or any GCM authentication failure throws `Failed to decrypt token`.
 
 The encryption key is lazy-loaded so the server can boot in CI environments without performing crypto operations immediately.
 
@@ -171,14 +173,16 @@ The response reports `imported` (activities now on the timeline, wherever they l
 
 ### Disconnect Flow
 
-`DELETE /api/v1/strava/disconnect` first performs a **best-effort upstream revocation** (`POST https://www.strava.com/oauth/deauthorize` via `deauthorizeStravaBestEffort()` — failures are logged and ignored so a Strava outage can never block disconnect), then removes the Strava connection record via `storage.deleteStravaConnection()`. Previously imported workout logs are not deleted. Account deletion reuses the same helper.
+`DELETE /api/v1/strava/disconnect` first performs a **best-effort upstream revocation** (`POST https://www.strava.com/oauth/deauthorize` via `deauthorizeStravaBestEffort()` — failures are logged and ignored so a Strava outage can never block disconnect), then removes the Strava connection record via `storage.users.deleteStravaConnection()`. Previously imported workout logs are not deleted. Account deletion reuses the same helper.
 
 ### Rate Limiting
 
-- Auth and callback endpoints: 20 requests per 15 minutes per IP
-- Sync endpoint: 5 requests per 15 minutes per IP
-- Status endpoint: 60 requests per 15 minutes
-- Disconnect endpoint: 10 requests per 15 minutes
+Every limiter comes from `rateLimiter()` in `server/routeUtils.ts`, which keys its bucket by the Clerk user id when one resolves and by client IP otherwise. All routes except the callback run `isAuthenticated` before the limiter, so their buckets are per user.
+
+- Auth and callback endpoints: 20 requests per 15 minutes from one shared `stravaAuth` limiter. `/auth` is keyed by user; `/callback` has no auth guard, so it counts against the same user's budget when the redirect carries a Clerk session and against the client IP when it does not
+- Sync endpoint: 5 requests per 15 minutes per user
+- Status endpoint: 60 requests per 15 minutes per user
+- Disconnect endpoint: 10 requests per 15 minutes per user
 
 The Garmin equivalents mirror these: connect and sync at 5 per 15 minutes,
 status at 60, disconnect at 10.
@@ -269,7 +273,7 @@ No server-side Garmin client/secret is needed -- there is nothing to configure i
 | DELETE | `/api/v1/garmin/disconnect` | Removes the user's `garmin_connections` row (tokens, credentials, display name). |
 | POST | `/api/v1/garmin/sync` | Imports the 20 most recent activities via `getActivities()`, dedupes against `(user_id, garmin_activity_id)`, and returns `{ success, imported, skipped, total }`. Rate-limited to 5 per 15-minute window per user. |
 
-All mutating routes go through `protectedMutationGuards` (authentication + CSRF + idempotency).
+All mutating routes go through `protectedMutationGuards` (authentication + idempotency, `server/routeGuards.ts`). CSRF protection is not part of that guard: it comes from the global `csrfProtection` middleware that `server/routes.ts` mounts on `/api/v1` before the Garmin routes are registered.
 
 ### Safety Stack
 
@@ -301,7 +305,7 @@ flowchart TD
 | 2. Per-user in-flight mutex | Rejects overlapping `/connect` or `/sync` calls for the same user with HTTP 409 `GARMIN_BUSY`. Catches the gap between the rate limiter and completion. | `withUserLock()` + `inFlightUsers: Set<string>` |
 | 3. Minimum sync interval | Rejects `/sync` with HTTP 429 `GARMIN_SYNC_TOO_SOON` if `lastSyncedAt` is under 5 minutes old. | `MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000` |
 | 4. Fail-fast on `lastError` | If a previous sync left `lastError` set, refuse to retry automatically and return HTTP 401 `GARMIN_RECONNECT_REQUIRED`. The user must disconnect + reconnect, which caps the cost of a broken connection to one failed login attempt. | `handleGarminSync` preflight + `getGarminClient` |
-| 5. Global 429 circuit breaker | On *any* Garmin response that looks like a 429 ("429", "too many", "rate limit"), trip the breaker for 30 minutes. While tripped, every Garmin route returns HTTP 503 `GARMIN_CIRCUIT_OPEN` -- across all users on the instance. | `garminCircuitBreaker`, `GLOBAL_429_COOLDOWN_MS` |
+| 5. Global 429 circuit breaker | On *any* Garmin response that looks like a 429 ("429", "too many", "rate limit"), trip the breaker for 30 minutes. While tripped, `/connect` and `/sync` return HTTP 503 `GARMIN_CIRCUIT_OPEN` for every user (`/status` and `/disconnect` are not gated). The trip is also written to `server_runtime_cache` (key `garmin:breaker`, expiring with the cooldown), and every wrapped Garmin call reads it back before running, so a 429 seen by one instance blocks Garmin calls on all instances. | `garminCircuitBreaker`, `GLOBAL_429_COOLDOWN_MS`, `withCircuitBreaker()`, `rejectIfCircuitOpen()` |
 | 6. No silent re-login | Cached OAuth tokens live ~1 year. If a fresh-looking token unexpectedly 401s, the error surfaces to the user instead of auto-triggering a new login. | `getGarminClient()` does not fall through from the cached-token path back to login |
 | 7. Audit logging | Every Garmin API call and login is logged at `info` level with the user ID and a `context: "garmin"` tag so bans are traceable. | `logger.info({ userId, context: LOG_CTX }, ...)` throughout `server/garmin.ts` |
 
@@ -366,11 +370,11 @@ A partial unique index on `workout_logs(user_id, garmin_activity_id) WHERE garmi
 
 ### Email Types
 
-Every scheduled email goes out at the athlete's **notify hour** (`users.notify_hour`, 0–23 in their own timezone, default 07:00, picked in Settings) except the weekly review reminder, which has its own moment: Sunday 17:00 local (`WEEKLY_REVIEW_SUNDAY_EVENING_HOUR` in `shared/weeklyReview.ts`, the same hour the in-app Timeline prompt opens). The cron ticks hourly and `planEmailJobsForUser()` resolves each athlete's hour and weekday against their `user_timezone`.
+Each scheduled email goes out at its own **send hour** (0–23 in the athlete's timezone), resolved by `resolveNotifyHour()` in `shared/notifyHours.ts`: the email's per-type override column (`notify_hour_weekly_summary`, `notify_hour_missed_reminder`, `notify_hour_weekly_review_reminder`, `notify_hour_today_session`, `notify_hour_analysis_digest`; null means no override) when set, otherwise the athlete's default **notify hour** (`users.notify_hour`, default 07:00). The weekly review reminder is the exception to that fallback: with no override it goes out at 17:00 (`WEEKLY_REVIEW_SUNDAY_EVENING_HOUR` in `shared/weeklyReview.ts`, the same hour the in-app Timeline prompt opens). The default and the per-email hours are all picked in Settings. The cron ticks hourly and `planEmailJobsForUser()` resolves each athlete's hours and weekday against their `user_timezone`. The MAF test reminder (6, below) is not tied to a send hour.
 
 #### 1. Weekly Training Summary
 
-- **Trigger**: Sent on the athlete's local Monday at their notify hour, no more than once per 7 days per user
+- **Trigger**: Sent on the athlete's local Monday at its send hour, no more than once per 7 days per user
 - **Guard**: Checks `user.lastWeeklySummaryAt` to prevent duplicates
 - **Data gathered**: Completed/missed/skipped workout counts for the prior week, completion rate, current streak, total training duration
 - **Subject line**: `Your Week in Review: X workout(s) completed`
@@ -378,7 +382,7 @@ Every scheduled email goes out at the athlete's **notify hour** (`users.notify_h
 
 #### 2. Missed Workout Reminder
 
-- **Trigger**: Sent daily at the notify hour, no more than once per 24 hours per user
+- **Trigger**: Sent daily at its send hour, no more than once per 24 hours per user
 - **Guard**: Checks `user.lastMissedReminderAt` to prevent duplicates
 - **Data gathered**: Plan days from yesterday that have "missed" status
 - **Subject line**: `X missed workout(s) -- get back on track`
@@ -386,7 +390,7 @@ Every scheduled email goes out at the athlete's **notify hour** (`users.notify_h
 
 #### 3. Weekly Review Reminder
 
-- **Trigger**: Sunday 17:00 local (independent of the notify hour), for athletes with `emailWeeklyReviewReminder` on
+- **Trigger**: Sunday at its send hour — 17:00 local unless the athlete has given it an hour of its own (it never falls back to the default notify hour) — for athletes with `emailWeeklyReviewReminder` on
 - **Guard**: Skipped — without burning the claim — when a `weekly_reviews` row already exists for the closing week (the review page writes that row), otherwise claims `user.lastWeeklyReviewReminderAt` (6-day window)
 - **Data gathered**: `buildWeeklyReview()` for the in-progress week: sessions logged vs `weeklyGoal`, plan days done of planned, missed count, total time, average RPE, named PRs, and last week's intent
 - **Subject line**: `Your week is wrapping up — N session(s) so far`
@@ -394,7 +398,7 @@ Every scheduled email goes out at the athlete's **notify hour** (`users.notify_h
 
 #### 4. Session Brief
 
-- **Trigger**: Daily at the notify hour, for athletes with `emailTodaySession` on, when a session is still `planned` on the target date. A notify hour from 12:00 onward briefs **tomorrow** instead of today.
+- **Trigger**: Daily at its send hour, for athletes with `emailTodaySession` on, when a session is still `planned` on the target date. A send hour from 12:00 onward (`BRIEF_TOMORROW_FROM_HOUR`) briefs **tomorrow** instead of today.
 - **Guard**: Claims `user.lastTodaySessionAt` (20-hour window) only when there is something to send; rest-like days (`isRestLikePlanDay` in `shared/planDayKind.ts`), days inside a declared absence, and retired plans send nothing
 - **Data gathered**: `storage.analytics.getPlannedSessionsForDate()` — focus, expected duration/RPE, planned time of day, the prescription text, plan name
 - **Subject line**: `Today: <focus>` / `Tomorrow: <focus>` (or `Today: N sessions`)
@@ -402,11 +406,19 @@ Every scheduled email goes out at the athlete's **notify hour** (`users.notify_h
 
 #### 5. Analysis Digest
 
-- **Trigger**: Daily at the notify hour, for athletes with `emailAnalysisDigest` on, when a stored `analytics_results` row (`race_prediction` or `coach_insights`) is newer than `user.lastAnalysisDigestAt`
+- **Trigger**: Daily at its send hour, for athletes with `emailAnalysisDigest` on, when a stored `analytics_results` row (`race_prediction` or `coach_insights`) is newer than `user.lastAnalysisDigestAt`
 - **Guard**: Claims `user.lastAnalysisDigestAt` (6-day window) — so at most about one digest a week however often the analyses refresh. **Never spends AI budget**: it reads stored rows only, so an athlete who has not opened those surfaces has no rows and gets no email. Malformed rows are ignored rather than treated as new.
 - **Data gathered**: Predicted finish time, confidence, cohort percentile and race readiness from the stored prediction; the coach's Markdown rendered through `server/utils/markdownToEmailHtml.ts` (escaped first; headings, bold, lists and paragraphs only)
 - **Subject line**: `Your training analysis: predicted finish H:MM:SS` (or `Your coach insights are ready`)
 - **Template**: Headline card, readiness note, the rendered insights, and a CTA to `/analytics`.
+
+#### 6. MAF Test Reminder
+
+- **Trigger**: One-shot, for athletes on the MAF training style (`training_style_id = 'maf_method'`) once `users.maf_baseline_test_scheduled_at` has passed — the Settings form sets it seven days out when the athlete switches to that style. The hourly scan finds these athletes with its own query (`storage.users.getUsersWithDueMafBaselineTest()`) rather than through `planEmailJobsForUser()`, so the reminder has no send hour and no per-type toggle.
+- **Guard**: `storage.users.claimMafBaselineTest()` clears the schedule in one conditional UPDATE, and only the job that wins that claim sends. A claimed reminder that fails to deliver is not retried.
+- **Data gathered**: None beyond the athlete's name
+- **Subject line**: `Time for your MAF test`
+- **Template**: How to run the test (a fixed distance or time at or just under the MAF heart-rate ceiling) and a CTA to `/log`. The email needs only an address and the master toggle; the push that accompanies it (same `/log` link) goes out even when email is off.
 
 ### User Opt-In
 
@@ -421,12 +433,17 @@ Emails are only sent to users who meet all of these conditions:
    - Session brief: `user.emailTodaySession` (default `false`)
    - Analysis digest: `user.emailAnalysisDigest` (default `false`)
 
+The MAF test reminder is the exception to condition 3: it has no per-type
+toggle, so conditions 1 and 2 are enough.
+
 All six email toggles default to `false`, and legacy nullable values are
 serialized as `false` by the preferences API. Users must explicitly opt in
 from `/settings`; the per-type switches are nested under the master toggle
-and are disabled (grayed out) when the master is off, next to the **send
-time** picker (`notifyHour`). Every email footer links to the settings page
-and carries a login-free **Unsubscribe** link (below).
+and are disabled (grayed out) when the master is off, below the **Default
+send time** picker (`notifyHour`). Each enabled email also shows its own
+**Send at** picker, whose "Default" option clears that email's override.
+Every email footer links to the settings page and carries a login-free
+**Unsubscribe** link (below).
 
 ### One-Click Unsubscribe
 
@@ -468,13 +485,13 @@ footer via `renderEmailFooter()` in `server/emailTemplates.ts`.
 
 `runEmailCronJob()` in `server/emailScheduler.ts` does **not** send email directly — it enqueues one pg-boss job per user per email type, and the per-user worker performs the actual send:
 
-1. Calls `storage.plans.markMissedPlanDays()` to mark past planned days as missed before checking
-2. Fetches all users with `emailNotifications` enabled via `storage.users.getUsersWithEmailNotifications()`
-3. For each user, `planEmailJobsForUser(user, now)` decides which jobs this tick owes them from their local hour and weekday: at their notify hour, `send-weekly-summary` (local Monday only), `send-missed-reminder`, `send-today-session` and `send-analysis-digest`; on Sunday at 17:00 local, `send-weekly-review-reminder` — each only when its per-type toggle is on. An athlete whose stored timezone is unusable is logged and skipped rather than aborting the scan.
+1. Runs three queries concurrently: `storage.plans.markMissedPlanDays()` marks past planned days as missed, `storage.users.getUsersWithEmailNotifications()` fetches all users with `emailNotifications` enabled, and `storage.users.getUsersWithDueMafBaselineTest(now)` fetches MAF athletes whose baseline test is due
+2. For each email user, `planEmailJobsForUser(user, now)` decides which jobs this tick owes them from their local hour and weekday: `send-weekly-summary` (local Monday only), `send-missed-reminder`, `send-today-session`, `send-analysis-digest` and `send-weekly-review-reminder` (local Sunday only), each when the local hour equals that email's send hour (`resolveNotifyHour()`) and its per-type toggle is on. An athlete whose stored timezone is unusable is logged and skipped rather than aborting the scan.
+3. For each due MAF athlete, one `send-maf-test-reminder` job. This is a separate scan because those athletes may be push-only and so missing from the email-notifications set.
 4. Every `sendJobNoRetry()` enqueue is `await`-ed via `Promise.allSettled` so the returned counts reflect what actually committed to the queue
 5. Returns a summary: users checked, jobs enqueued, and detail strings
 
-The pg-boss workers then call the matching `process*()` function (`processWeeklySummary`, `processMissedWorkoutReminder`, `processWeeklyReviewReminder`, `processTodaySessionBrief`, `processAnalysisDigest`), which re-fetch the user, re-check the toggles and the claim ledger, and call the send wrapper. `checkAndSendEmailsForUser()` is the synchronous equivalent used by the per-user `POST /api/v1/emails/check` route; it covers the weekly summary and missed reminder only.
+The pg-boss workers then call the matching `process*()` function (`processWeeklySummary`, `processMissedWorkoutReminder`, `processWeeklyReviewReminder`, `processTodaySessionBrief`, `processAnalysisDigest`), which re-fetch the user, re-check the toggles and the claim ledger, and call the send wrapper. `processMafTestReminder` instead re-checks the training style and takes the one-shot schedule claim. `checkAndSendEmailsForUser()` is the synchronous equivalent used by the per-user `POST /api/v1/emails/check` route; it covers the weekly summary and missed reminder only.
 
 ### HTTP Endpoints
 
@@ -485,7 +502,7 @@ The pg-boss workers then call the matching `process*()` function (`processWeekly
 | GET | `/api/v1/emails/unsubscribe?token=…` | Signed token | Confirm page for the footer/header unsubscribe link. Side-effect free. |
 | POST | `/api/v1/emails/unsubscribe?token=…` | Signed token | Turns the master email toggle off (RFC 8058 one-click, and the confirm page's form). Mounted ahead of the CSRF guard. |
 
-The external cron endpoint (`/api/v1/cron/emails`) allows platforms like Railway or external cron services to trigger the email scan via HTTP, as an alternative to the internal node-cron scheduler. Because the scan gates per athlete on their local hour, an external scheduler must call it **hourly** (a once-a-day call would only ever reach the athletes whose notify hour happens to match).
+The external cron endpoint (`/api/v1/cron/emails`) allows platforms like Railway or external cron services to trigger the email scan via HTTP, as an alternative to the internal node-cron scheduler. Because the scan gates per athlete on their local hour, an external scheduler must call it **hourly** (a once-a-day call would only ever reach the athletes whose send hours happen to match).
 
 ### Encryption at Rest
 
@@ -493,10 +510,27 @@ Strava and Garmin tokens are encrypted at rest using AES-256-GCM (`server/crypto
 
 - **Algorithm**: AES-256-GCM with random 12-byte IV per encryption
 - **Key**: 32-byte key from `ENCRYPTION_KEY` env var. Accepts a 64-char hex string, or any other string (SHA-256 hashed to 32 bytes as fallback).
-- **Format**: Stored as `v1:${iv}:${authTag}:${encryptedText}` (all hex-encoded). The legacy 3-part `${iv}:${authTag}:${encryptedText}` format is still accepted on read.
+- **Format**: Stored as `${version}:${iv}:${authTag}:${encryptedText}` (all hex-encoded), with version `v1`, or `v2` for data written while `ENCRYPTION_KEY_V2` is set. The legacy 3-part `${iv}:${authTag}:${encryptedText}` format is still accepted on read.
 - **No plaintext fallback**: A stored value matching neither format throws `Malformed encrypted data`. The unencrypted-legacy passthrough has been removed.
-- **Lazy key loading**: Key is loaded on first use, not at boot. This allows the server to start in CI environments without `ENCRYPTION_KEY`.
+- **Lazy key loading**: The key is derived on first use and cached, not at boot, so startup performs no crypto work. `ENCRYPTION_KEY` itself is still mandatory: `server/env.ts` refuses to boot without it (minimum 32 characters).
 - **Failure mode**: Decryption failures throw (strict) -- never return corrupted data. The auth tag must be exactly 16 bytes.
+
+---
+
+## Web Push Notifications
+
+**Key files:**
+
+- `server/pushNotifications.ts` -- VAPID setup (`web-push` library), `isPushEnabled()` and `sendPushToUser()`
+- `server/routes/push.ts` -- VAPID-key, subscribe, unsubscribe and test endpoints
+- `server/storage/push.ts` -- `push_subscriptions` rows and the per-user device cap
+- `client/src/hooks/usePushNotifications.ts` -- The browser subscription flow behind the Settings toggle
+
+Web Push is the second delivery channel next to email. It needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` (see [Environment Variable Reference → Web Push (VAPID)](env-reference.md#web-push-vapid)); `isPushEnabled()` requires all three, and without them every send is a no-op and `GET /api/v1/push/vapid-key` returns `404 PUSH_NOT_CONFIGURED`.
+
+- **Who sends**: each of the six email jobs in `server/emailScheduler.ts` also sends a push once it has claimed its send, fire-and-forget, with a `url` deep link (the payload is `{ title, body, url }`). Only the MAF test reminder pushes when the athlete's email is off. The hourly `nutritionReminders` cron (`server/services/nutrition/reminders.ts`) sends the push-only post-workout refuel and 20:00-local logging reminders, and skips its scan entirely when push is not configured. `POST /api/v1/push/test` sends a test notification to the caller's devices.
+- **Subscriptions**: `POST /api/v1/push/subscribe` accepts only an `https://` endpoint that does not point at a local or private address. An athlete keeps at most 10 subscriptions (`MAX_PUSH_SUBSCRIPTIONS_PER_USER`); registering an eleventh evicts the oldest rather than refusing the new one.
+- **Sending**: `sendPushToUser()` sends to all of the athlete's subscriptions in parallel and returns how many succeeded. Each endpoint's host is re-resolved just before the send (`assertResolvedHostIsPublic`); a subscription that now resolves to a private address, or that the push service answers with 404 or 410, is deleted.
 
 ---
 
@@ -562,14 +596,14 @@ Errors on the queue emit to a global error handler that logs via the application
 
 #### `send-weekly-review-reminder`
 
-- **Purpose**: Sends one user's Sunday-evening weekly review reminder
+- **Purpose**: Sends one user's Sunday weekly review reminder (17:00 local unless the athlete picked another hour)
 - **Payload**: `{ userId: string }`
 - **Worker**: Resolves the user, then calls `processWeeklyReviewReminder()` from `server/emailScheduler.ts`
 - **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0`; the `lastWeeklyReviewReminderAt` claim prevents duplicates, and an existing `weekly_reviews` row for the week skips the send entirely.
 
 #### `send-today-session`
 
-- **Purpose**: Sends one user's session brief for today (or tomorrow, for an afternoon/evening notify hour)
+- **Purpose**: Sends one user's session brief for today (or tomorrow, when the brief's send hour is 12:00 or later)
 - **Payload**: `{ userId: string }`
 - **Worker**: Resolves the user, then calls `processTodaySessionBrief()` from `server/emailScheduler.ts`
 - **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0`; the `lastTodaySessionAt` claim prevents duplicates and is only taken when a session is actually planned.
@@ -586,7 +620,7 @@ Errors on the queue emit to a global error handler that logs via the application
 - **Purpose**: Runs an AI training-plan generation in the background so the request returns immediately
 - **Payload**: `{ planId: string, userId: string, input: GeneratePlanInput }`
 - **Worker**: Calls `executePlanGeneration(planId, input, userId, signal)`; the in-flight plan row is reconciled if the job fails, and a new generation is rejected while one is already running for the user (see [API Reference — `POST /api/v1/plans/generate`](api-reference.md))
-- **Enqueued via**: `sendJob()` (`DEFAULT_JOB_OPTIONS`) — the handler is keyed by `planId`, so a retry is safe.
+- **Enqueued via**: `sendJobNoRetry()` from `POST /api/v1/plans/generate` — `retryLimit: 0`, so a failed generation is not replayed. `executePlanGeneration()` marks the plan `failed` when it throws, and a plan left in `pending`/`generating` by a crashed worker is failed on the next boot once its generation started more than an hour ago (`storage.plans.failStalePlanGenerations()`; see [Startup Maintenance](#startup-maintenance)).
 
 #### `recompute-analytics`
 
@@ -635,8 +669,8 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 
 - **Schedule**: `0 * * * *` (every hour, on the hour)
 - **Timezone**: `Etc/UTC`
-- **Action**: Calls `runEmailCronJob(storage)`, which plans jobs per athlete against their own wall clock: the weekly summary (local Monday), missed reminder, session brief and analysis digest at their `notify_hour`, and the weekly review reminder on Sunday at 17:00 local. See [Email System → Email Types](#email-types).
-- **Idempotency**: Each email has a claim ledger on `users` (`last_weekly_summary_at`, `last_missed_reminder_at`, `last_weekly_review_reminder_at`, `last_today_session_at`, `last_analysis_digest_at`) that prevents duplicate sends even if the scan runs several times in an hour
+- **Action**: Calls `runEmailCronJob(storage)`, which plans jobs per athlete against their own wall clock: each email at its own send hour (the per-email override, else `notify_hour`; the weekly review reminder falls back to 17:00 instead), with the weekly summary only on the local Monday and the weekly review reminder only on the local Sunday, plus a `send-maf-test-reminder` job for every MAF athlete whose baseline test has come due. See [Email System → Email Types](#email-types).
+- **Idempotency**: Each email has a claim ledger on `users` (`last_weekly_summary_at`, `last_missed_reminder_at`, `last_weekly_review_reminder_at`, `last_today_session_at`, `last_analysis_digest_at`) that prevents duplicate sends even if the scan runs several times in an hour; the MAF test reminder's claim clears `maf_baseline_test_scheduled_at` instead
 - **Advisory lock**: `emailScheduler` (the numeric key is the one the old `dailyEmail` lock used, so mixed-version replicas still contend on it)
 
 #### Maintenance and Telemetry
@@ -719,10 +753,10 @@ unless the developer explicitly opts in by setting the DSN variables.
 
 ### What Is Reported
 
-- **Server**: unhandled errors thrown from routes (via the Express error handler), rejected promises inside `asyncHandler`, and fatal errors from `runStartupMaintenance` before the HTTP listener binds.
+- **Server**: unhandled errors thrown from routes (via the Express error handler), rejected promises inside `asyncHandler`, and any error that fails a startup phase (including `runStartupMaintenance`). `server/index.ts` binds the HTTP listener *before* running those phases, so a startup failure is captured while the process keeps running, with its health endpoints answering 503, rather than exiting.
 - **Client**: render-time errors caught by `Sentry.ErrorBoundary` / `FeatureErrorBoundaryWrapper`, plus any explicit `Sentry.captureException` calls inside fetch wrappers.
 
-PII-sensitive payloads are scrubbed before being sent. The server `beforeSend` hook in `server/bootstrap/observability.ts` strips request body and query string, cookies, the `authorization`/`cookie`/`x-csrf-token`/`x-idempotency-key` headers, and the user's `email`, `username`, and `ip_address`. The server trace sample rate is `0.1` in production and `1.0` otherwise; `sendDefaultPii` is `false`.
+PII-sensitive payloads are scrubbed before being sent. The server `beforeSend` hook (`scrubSentryEvent()` in `server/bootstrap/observability.ts`) strips the request body, query string and cookies; the `SENSITIVE_REQUEST_HEADERS` it shares with the pino log redaction in `server/logger.ts` (`authorization`, `cookie`, `x-csrf-token`, `x-idempotency-key`, `x-cron-secret`, `x-internal-analytics-secret`); the user's `email`, `username`, and `ip_address`; the `body`/`payload`/`request_body`/`response_body` data and URL query strings on breadcrumbs; and the `request`/`response` contexts. The server trace sample rate is `0.1` in production and `1.0` otherwise; `sendDefaultPii` is `false`.
 
 ### Sourcemap Upload and Release Tagging (Build-Time)
 
@@ -756,21 +790,29 @@ Both Sentry inits also pass an explicit `release` field:
 
 **Key file:** `server/maintenance.ts`
 
-The `runStartupMaintenance(storage)` function runs a consolidated sequence of checks and migrations every time the server starts. These ensure the database is in a consistent state before the application begins serving requests. The maintenance logic was consolidated from multiple scattered startup functions into a single sequential pipeline.
+The `runStartupMaintenance(storage)` function runs a consolidated sequence of checks and migrations every time the server starts. These ensure the database is in a consistent state before the API routes are registered. The HTTP listener is already bound by then, so the readiness probe (`/api/v1/health`) answers 503 `starting` meanwhile; a step that throws fails startup (both health endpoints then answer 503) without exiting the process. The maintenance logic was consolidated from multiple scattered startup functions into a single sequential pipeline.
 
 ### Execution Order
 
-1. **Test database connection** -- Attempts to connect to PostgreSQL and run `SELECT 1`. Times out after 15 seconds. If this fails, the server startup is aborted (fatal error).
+1. **Test database connection** -- Attempts to connect to PostgreSQL and run `SELECT 1`, up to 4 times; each attempt times out after 15 seconds, with exponential backoff between attempts (2 s, 4 s, 8 s). If every attempt fails, the server startup is aborted (fatal error).
 
-2. **Run Drizzle migrations** -- Executes pending migrations from the `migrations/` folder using `drizzle-orm/node-postgres/migrator`. "Already exists" errors are expected in environments where `drizzle-kit push` has previously run and are treated as non-fatal.
+2. **Run Drizzle migrations** -- Executes pending migrations from the `migrations/` folder using `drizzle-orm/node-postgres/migrator`, under a Postgres advisory lock (`drizzleMigrations`, key `42_010_010`): an instance that finds the lock held skips `migrate()`, since the holder applies the same migrations. Idempotency errors ("already exists", "duplicate key", "duplicate object") are expected in environments where `drizzle-kit push` has previously run and are treated as non-fatal; any other migration error is reported to Sentry and aborts startup.
 
-3. **Ensure pgvector extension** -- Runs `CREATE EXTENSION IF NOT EXISTS vector` on the vector database to enable vector similarity search.
+3. **Assert critical tables exist** -- `assertCriticalTablesExist()` (`server/migrationGuards.ts`) throws if any of `users`, `workout_logs`, `plan_days`, `foods` or `analytics_results` is missing, so a failed or skipped migration cannot boot against an empty or partial schema.
 
-4. **Ensure vector schema** -- Creates the `document_chunks` table on the vector database if it does not exist. Also checks that the `embedding` column uses the native `vector` type (not `text`) and converts it if needed. This step runs on the separate `vectorPool` that Drizzle migrations do not manage.
+4. **Ensure pgvector extension** -- Runs `CREATE EXTENSION IF NOT EXISTS vector` on the vector database to enable vector similarity search. A failure is logged as a warning.
 
-5. **Mark missed plan days** -- Calls `storage.plans.markMissedPlanDays()` to flag any past planned days that were never completed. Non-fatal; logged as a warning if it fails.
+5. **Ensure vector schema** -- Creates the `document_chunks` and `food_embeddings` tables on the vector database if they do not exist, converts a `text` `embedding` column on `document_chunks` to the native `vector` type, and creates the halfvec HNSW indexes (`idx_document_chunks_embedding_hnsw`, `idx_food_embeddings_hnsw`). Non-fatal: an index that cannot be created leaves search on a sequential scan (status `degraded`), and any other failure is reported to Sentry (status `failed`); `/api/v1/health` reports the status as `vectorSchema` but does not gate readiness on it. This step runs on the separate `vectorPool` that Drizzle migrations do not manage.
 
-6. **Reset stale auto-coaching flags** -- Calls `storage.users.resetStaleAutoCoaching()` to clear the `is_auto_coaching` flag on any user whose previous server process died mid-coach. Non-fatal; logged as a warning if it fails.
+6. **Mark missed plan days** -- Calls `storage.plans.markMissedPlanDays()` to flag any past planned days that were never completed. Non-fatal; logged as a warning if it fails.
+
+7. **Reset stale auto-coaching flags** -- Calls `storage.users.resetStaleAutoCoaching()` to clear the `is_auto_coaching` flag on any user whose previous server process died mid-coach. Non-fatal; logged as a warning if it fails.
+
+8. **Fail stale plan generations** -- Calls `storage.plans.failStalePlanGenerations()` to mark plans still `pending`/`generating` whose generation started more than an hour ago as `failed` (the `plan-generation` job is not retried, so a worker that crashed mid-job would otherwise leave them loading forever). Non-fatal; logged as a warning if it fails.
+
+9. **Restore AI circuit-breaker state** -- `loadPersistedBreakerState()` (`server/ai/circuitBreaker.ts`) reloads the breaker snapshot from `server_runtime_cache`, so a deploy in the middle of a provider outage does not reset it to closed (see [AI and RAG → Circuit Breaker](ai-and-rag.md#circuit-breaker)). Swallows its own errors.
+
+10. **Optional key-rotation sweep** -- `maybeReencryptOnBoot()` (`server/services/keyRotation.ts`) re-encrypts stored Strava and Garmin credentials to the active key version. A no-op unless `ENCRYPTION_KEY_V2` is set and `ENCRYPTION_REENCRYPT_ON_BOOT=true`; swallows its own errors.
 
 Historical schema-patching steps (defensive `ALTER TABLE` adds for `ai_coach_enabled`, `email_notifications`, `goal`, `is_auto_coaching`, `ai_source`, and the `coaching_materials` table) were removed once those columns and tables became part of the Drizzle migration sequence; see the resolution of `TECHNICAL_DEBT.md` #8.
 

@@ -45,7 +45,7 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 | `ENCRYPTION_REENCRYPT_ON_BOOT` | Optional | `"false"` | `"true"` (and `ENCRYPTION_KEY_V2` set) re-encrypts every stored Strava/Garmin credential to the active key version on boot (`server/services/keyRotation.ts`, invoked from `server/maintenance.ts`). |
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
 | `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/bootstrap/appConfig.ts`. |
-| `ALLOWED_ORIGINS` | Optional | — | CORS allow-list (`server/index.ts`). Localhost is always allowed. |
+| `ALLOWED_ORIGINS` | Optional | — | Comma-separated extra CORS origins (`server/index.ts`), added to `APP_URL` and `https://fitai.coach`. `http://localhost:5000` and `http://localhost:5173` are allowed only when `NODE_ENV` is not `production`. |
 
 ### Safety invariants (enforced at startup in `server/env.ts`)
 
@@ -89,26 +89,26 @@ Clerk is optional. When unset, you can run with `ALLOW_DEV_AUTH_BYPASS=true` for
 
 ## AI (Text Providers, Gemini Embeddings, Gemini Vision)
 
-Text AI defaults to Gemini for backwards compatibility. Operators can route chat, text parsing, coach suggestions, review notes, coach insights, and plan generation through Anthropic or an OpenAI-compatible provider by changing environment variables. RAG embeddings and photo-to-workout parsing remain pinned to Gemini in this release.
+Text AI defaults to Gemini for backwards compatibility. Operators can route chat, text parsing, coach suggestions, review notes, coach insights, and plan generation through Anthropic or an OpenAI-compatible provider by changing environment variables. Embeddings (RAG and semantic food search) and image parsing (photo-to-workout, nutrition meal photos and label scans) remain pinned to Gemini in this release.
 
 | Variable | Req? | Default | Used by |
 |---|---|---|---|
 | `AI_FEATURES_ENABLED` | Optional | `true` | Runtime kill switch for **all** AI routes (chat, parsing, plan generation, RAG, coach suggestions). Set to `false` to disable AI provider traffic without redeploying or rotating keys. Enforced in `server/middleware/aibudget.ts`. |
 | `AI_GLOBAL_DAILY_LIMIT_CENTS` | Optional | — | Application-wide AI spend ceiling in cents over a rolling 24h window, across all users. The per-user cap ($2/day, `DAILY_LIMIT_CENTS`) bounds one athlete but not the bill — total spend otherwise scales linearly with sign-ups. When the ceiling is reached every AI route returns `503 AI_GLOBAL_BUDGET_EXCEEDED` until spend ages out of the window. Unset disables the check (per-user cap only) and logs a startup warning in production. Size it from (active athletes x realistic daily spend), not from the per-user cap x user count. |
 | `AI_TEXT_PROVIDER` | Optional | `gemini` | Text provider: `gemini`, `anthropic`, or `openai-compatible`. |
-| `AI_TEXT_MODEL` | Optional | - | Generic text model override for non-Gemini providers. |
-| `AI_TEXT_FAST_MODEL` | Optional | provider default | Fast parser model override. Gemini fallback: `GEMINI_MODEL`. |
-| `AI_TEXT_REASONING_MODEL` | Optional | provider default | Coaching/planning model override. Gemini fallback: `GEMINI_SUGGESTIONS_MODEL`. |
+| `AI_TEXT_MODEL` | Optional | - | Text model for both roles (fast and reasoning) wherever no role-specific override is set. Applies to every provider, so on Gemini it also overrides `GEMINI_MODEL` / `GEMINI_SUGGESTIONS_MODEL`. Anthropic and OpenAI-compatible providers have no built-in default model: without this or both role-specific overrides, model resolution throws (`resolveTextAiModel()` in `server/ai/providers/config.ts`). |
+| `AI_TEXT_FAST_MODEL` | Optional | `AI_TEXT_MODEL` | Fast parser model override. Falls back to `AI_TEXT_MODEL`, then (Gemini only) `GEMINI_MODEL`. |
+| `AI_TEXT_REASONING_MODEL` | Optional | `AI_TEXT_MODEL` | Coaching/planning model override. Falls back to `AI_TEXT_MODEL`, then (Gemini only) `GEMINI_SUGGESTIONS_MODEL`. |
 | `AI_TEXT_REASONING_EFFORT` | Optional | `high` | Reasoning effort hint: `none`, `low`, `medium`, `high`. Applied only where supported. |
 | `AI_TEXT_API_KEY` | Optional | - | Generic key fallback for Anthropic or OpenAI-compatible providers. |
 | `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | Optional | `openai` | OpenAI-compatible profile: `openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, or `custom`. |
 | `AI_TEXT_BASE_URL` | Optional | profile default | Base URL override for OpenAI-compatible providers. Required for `custom`. |
 | `OPENAI_API_KEY` / `XAI_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` / `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` | Optional | - | Profile-specific OpenAI-compatible API keys. |
 | `ANTHROPIC_API_KEY` | Optional | - | Anthropic Messages API key. |
-| `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, semantic food search embeddings (`gemini-embedding-001`), and photo-to-workout parsing. |
+| `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, semantic food search embeddings (`gemini-embedding-001`), and image parsing (photo-to-workout, nutrition meal photos and label scans). |
 | `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Legacy Gemini fast text model. |
 | `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Legacy Gemini reasoning text model. |
-| `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`). |
+| `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`), and nutrition meal-photo parsing (`POST /api/v1/nutrition/parse/photo`) and label scans (`POST /api/v1/nutrition/parse/label`) via `server/services/nutrition/visionParsing.ts`. |
 | `RAG_CHUNK_SIZE` | Optional | `600` | Characters per chunk during coaching-material embedding. |
 | `RAG_CHUNK_OVERLAP` | Optional | `100` | Character overlap between adjacent chunks. |
 
@@ -142,7 +142,7 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
-| `CRON_SECRET` | Optional | — | `GET /api/v1/cron/emails` requires `x-cron-secret` to match (timing-safe compare). Used by external cron (Railway / GitHub Actions) to hit the endpoint instead of relying on the in-process node-cron. Call it **hourly**: the scan gates each athlete on their local notify hour. |
+| `CRON_SECRET` | Optional | — | `GET /api/v1/cron/emails` requires `x-cron-secret` to match (timing-safe compare). Used by external cron (Railway / GitHub Actions) to hit the endpoint instead of relying on the in-process node-cron. Call it **hourly**: the scan matches each athlete's emails against their local send hours. |
 | `INTERNAL_ANALYTICS_SECRET` | Optional | — | `GET /api/v1/analytics/internal/structured-exercise-health` requires `x-internal-analytics-secret` to match. Server-only; do not expose to Vite. |
 
 ### Garmin Connect
@@ -168,7 +168,7 @@ Open Food Facts needs no key (their policy requires a custom `User-Agent`) and k
 
 ## Web Push (VAPID)
 
-When any of these are unset, `/api/v1/push/*` endpoints return `404 PUSH_NOT_CONFIGURED` and the Settings UI hides the notification toggle.
+Push is enabled only when all three are set (`isPushEnabled()` in `server/pushNotifications.ts`). When any is missing, `GET /api/v1/push/vapid-key` returns `404 PUSH_NOT_CONFIGURED`, so switching on the Settings toggle fails without subscribing, and every server-side send (`sendPushToUser()`) is a no-op. The other `/api/v1/push/*` routes do not check the configuration, and the Settings toggle is replaced by a "not supported" notice only when the browser itself lacks push support.
 
 ```sh
 npx web-push generate-vapid-keys
