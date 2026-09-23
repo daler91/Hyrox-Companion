@@ -79,7 +79,7 @@ export function profileFromPreferences(prefs?: UserPreferences): OnboardingProfi
     heightCm: numberToInput(prefs.heightCm),
     activityLevel: prefs.activityLevel ?? "",
     weightGoalDirection: prefs.weightGoalDirection ?? "maintain",
-    aiCoachEnabled: prefs.aiCoachEnabled ?? false,
+    aiCoachEnabled: prefs.aiCoachEnabled,
   };
 }
 

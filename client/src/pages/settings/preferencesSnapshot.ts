@@ -241,23 +241,10 @@ export function preferencesToDraft(preferences: UserPreferences): PreferencesDra
   return snapshotToDraft(preferencesToSnapshot(preferences));
 }
 
-export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft {
+// The settings the draft and the save payload both take straight from the
+// snapshot: nothing to parse from input text and no default to apply.
+function passThroughFields(snapshot: PreferencesSnapshot) {
   return {
-    trainingConstraints: snapshot.trainingConstraints,
-    weightUnit: snapshot.weightUnit,
-    distanceUnit: snapshot.distanceUnit,
-    division: snapshot.division,
-    gender: snapshot.gender,
-    ageInput: snapshot.age == null ? "" : String(snapshot.age),
-    bodyweightKg: snapshot.bodyweightKg,
-    heightCm: snapshot.heightCm,
-    restingHrInput: snapshot.restingHr == null ? "" : String(snapshot.restingHr),
-    maxHrInput: snapshot.maxHr == null ? "" : String(snapshot.maxHr),
-    ftpInput: snapshot.ftp == null ? "" : String(snapshot.ftp),
-    activityLevel: snapshot.activityLevel ?? "",
-    weightGoalDirection: snapshot.weightGoalDirection ?? "",
-    weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
-    weeklyGoal: snapshot.weeklyGoal,
     mealSchedule: snapshot.mealSchedule,
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
@@ -275,6 +262,27 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
     aiCoachEnabled: snapshot.aiCoachEnabled,
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
     trainingStyleId: snapshot.trainingStyleId,
+  };
+}
+
+export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft {
+  return {
+    trainingConstraints: snapshot.trainingConstraints,
+    weightUnit: snapshot.weightUnit,
+    distanceUnit: snapshot.distanceUnit,
+    division: snapshot.division,
+    gender: snapshot.gender,
+    ageInput: snapshot.age == null ? "" : String(snapshot.age),
+    bodyweightKg: snapshot.bodyweightKg,
+    heightCm: snapshot.heightCm,
+    restingHrInput: snapshot.restingHr == null ? "" : String(snapshot.restingHr),
+    maxHrInput: snapshot.maxHr == null ? "" : String(snapshot.maxHr),
+    ftpInput: snapshot.ftp == null ? "" : String(snapshot.ftp),
+    activityLevel: snapshot.activityLevel ?? "",
+    weightGoalDirection: snapshot.weightGoalDirection ?? "",
+    weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
+    weeklyGoal: snapshot.weeklyGoal,
+    ...passThroughFields(snapshot),
     mafAgeInput: snapshot.mafAge == null ? "" : String(snapshot.mafAge),
     mafCategoryInput: snapshot.mafCategory ?? "",
     mafHrDataAvailableInput: mafHrDataAvailableToInput(snapshot.mafHrDataAvailable),
@@ -351,23 +359,7 @@ export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayloa
     weightGoalDirection: snapshot.weightGoalDirection,
     weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
     weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
-    mealSchedule: snapshot.mealSchedule,
-    emailNotifications: snapshot.emailNotifications,
-    emailWeeklySummary: snapshot.emailWeeklySummary,
-    emailMissedReminder: snapshot.emailMissedReminder,
-    emailWeeklyReviewReminder: snapshot.emailWeeklyReviewReminder,
-    emailTodaySession: snapshot.emailTodaySession,
-    emailAnalysisDigest: snapshot.emailAnalysisDigest,
-    notifyHour: snapshot.notifyHour,
-    notifyHourWeeklySummary: snapshot.notifyHourWeeklySummary,
-    notifyHourMissedReminder: snapshot.notifyHourMissedReminder,
-    notifyHourWeeklyReviewReminder: snapshot.notifyHourWeeklyReviewReminder,
-    notifyHourTodaySession: snapshot.notifyHourTodaySession,
-    notifyHourAnalysisDigest: snapshot.notifyHourAnalysisDigest,
-    showAdherenceInsights: snapshot.showAdherenceInsights,
-    aiCoachEnabled: snapshot.aiCoachEnabled,
-    coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
-    trainingStyleId: snapshot.trainingStyleId,
+    ...passThroughFields(snapshot),
     mafAge: snapshot.mafAge,
     mafCategory: snapshot.mafCategory,
     mafHrDataAvailable: snapshot.mafHrDataAvailable,

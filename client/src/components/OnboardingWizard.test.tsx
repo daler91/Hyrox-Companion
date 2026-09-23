@@ -117,6 +117,26 @@ vi.mock("@/lib/queryClient", async () =>
   (await import("@/test/support/queryClientLibMock")).makeQueryClientLibMock(),
 );
 
+// Walks from Welcome to the AI Coach step, leaving the Units step as it is.
+// `goalStepButton` is clicked on the Goal step before its Continue, to pick a
+// goal or set a race date.
+async function walkToCoachStep(goalStepButton?: string) {
+  fireEvent.click(screen.getByText("Get Started"));
+  await screen.findByTestId("units-step");
+  fireEvent.click(screen.getByText("Continue"));
+  await screen.findByTestId("goal-step");
+  if (goalStepButton !== undefined) fireEvent.click(screen.getByText(goalStepButton));
+  fireEvent.click(screen.getByText("Continue"));
+  await screen.findByText("Meet Your AI Coach");
+}
+
+// Walks on to the Plan step, leaving the AI Coach choice as it is.
+async function walkToPlanStep(goalStepButton?: string) {
+  await walkToCoachStep(goalStepButton);
+  fireEvent.click(screen.getByText("Continue"));
+  await screen.findByTestId("button-onboarding-sample-plan");
+}
+
 describe("OnboardingWizard Error Handling", () => {
   let queryClient: QueryClient;
   const mockToast = vi.fn();
@@ -158,22 +178,12 @@ describe("OnboardingWizard Error Handling", () => {
     await screen.findByTestId("goal-step");
   });
 
-  const walkToCoachStep = async () => {
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByText("Meet Your AI Coach");
-  };
-
   it("completes onboarding when an AI plan is generated", async () => {
     renderComponent();
 
-    await walkToCoachStep();
-    fireEvent.click(screen.getByText("Continue"));
+    await walkToPlanStep();
 
-    fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
+    fireEvent.click(screen.getByTestId("button-onboarding-generate-plan"));
     fireEvent.click(await screen.findByTestId("button-mock-generated-plan"));
 
     await waitFor(() => {
@@ -187,10 +197,9 @@ describe("OnboardingWizard Error Handling", () => {
   it("leads with the template while the AI Coach is off, and says what the AI plan needs", async () => {
     renderComponent();
 
-    await walkToCoachStep();
-    fireEvent.click(screen.getByText("Continue"));
+    await walkToPlanStep();
 
-    const generateButton = await screen.findByTestId("button-onboarding-generate-plan");
+    const generateButton = screen.getByTestId("button-onboarding-generate-plan");
     const sampleButton = screen.getByTestId("button-onboarding-sample-plan");
     expect(
       sampleButton.compareDocumentPosition(generateButton) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -233,15 +242,8 @@ describe("OnboardingWizard Error Handling", () => {
   it("hands a booked race date to the AI generator", async () => {
     renderComponent();
 
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
-    fireEvent.click(screen.getByText("Set race date"));
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByText("Meet Your AI Coach");
-    fireEvent.click(screen.getByText("Continue"));
-    fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
+    await walkToPlanStep("Set race date");
+    fireEvent.click(screen.getByTestId("button-onboarding-generate-plan"));
 
     expect(await screen.findByTestId("text-generate-race-date")).toHaveTextContent("2026-11-15");
     expect(screen.getByTestId("text-generate-goal")).toHaveTextContent("racing on 2026-11-15");
@@ -256,15 +258,8 @@ describe("OnboardingWizard Error Handling", () => {
     );
     renderComponent();
 
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
-    fireEvent.click(screen.getByText("Set race date"));
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByText("Meet Your AI Coach");
-    fireEvent.click(screen.getByText("Continue"));
-    fireEvent.click(await screen.findByTestId("button-onboarding-sample-plan"));
+    await walkToPlanStep("Set race date");
+    fireEvent.click(screen.getByTestId("button-onboarding-sample-plan"));
     fireEvent.click(await screen.findByTestId("button-onboarding-start-plan"));
 
     await waitFor(() => expect(mockOnComplete).toHaveBeenCalledWith("sample"));
@@ -299,16 +294,9 @@ describe("OnboardingWizard Error Handling", () => {
   it("passes the selected onboarding goal and start date into AI plan generation", async () => {
     renderComponent();
 
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
-    fireEvent.click(screen.getByText("Choose endurance"));
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByText("Meet Your AI Coach");
-    fireEvent.click(screen.getByText("Continue"));
+    await walkToPlanStep("Choose endurance");
 
-    fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
+    fireEvent.click(screen.getByTestId("button-onboarding-generate-plan"));
 
     expect(await screen.findByTestId("text-generate-mode")).toHaveTextContent("onboarding");
     // A HYROX goal the generator can act on, not the bare label (audit L6).
@@ -332,17 +320,6 @@ describe("OnboardingWizard progress and keyboard", () => {
   beforeEach(() => {
     queryClient = resetOnboardingWizardMocks(mockToast);
   });
-
-  const walkToPlanStep = async () => {
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByText("Meet Your AI Coach");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("button-onboarding-sample-plan");
-  };
 
   // The count grew from "5 of 5" to "6 of 6" on reaching the template's
   // Schedule step, moving the finish line (audit M2).
@@ -440,17 +417,6 @@ describe("OnboardingWizard saved preferences", () => {
       .mocked(apiRequest)
       .mock.calls.filter(([method, url]) => method === "PATCH" && url === "/api/v1/preferences")
       .map(([, , body]) => body);
-
-  const walkToPlanStep = async () => {
-    fireEvent.click(screen.getByText("Get Started"));
-    await screen.findByTestId("units-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("goal-step");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByText("Meet Your AI Coach");
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("button-onboarding-generate-plan");
-  };
 
   it("writes nothing when a first run keeps every default", async () => {
     renderOnboardingWizard(queryClient, mockOnComplete);
