@@ -854,8 +854,10 @@ export const workoutStructureBlocks = pgTable(
     sortOrder: integer("sort_order").notNull().default(0),
   },
   (table) => [
-    index("idx_workout_structure_blocks_workout_log_id").on(table.workoutLogId),
-    index("idx_workout_structure_blocks_plan_day_id").on(table.planDayId),
+    // ⚡ Bolt: removed redundant single-column indexes on workoutLogId and planDayId.
+    // They were pure write-cost taxes with no read benefit since the composite indexes
+    // (idx_workout_structure_blocks_workout_sort, idx_workout_structure_blocks_plan_day_sort)
+    // already lead with those columns and cover every eq()/inArray() lookup call site.
     index("idx_workout_structure_blocks_workout_sort").on(table.workoutLogId, table.sortOrder),
     index("idx_workout_structure_blocks_plan_day_sort").on(table.planDayId, table.sortOrder),
     check(
