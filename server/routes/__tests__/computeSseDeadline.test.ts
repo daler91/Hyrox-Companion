@@ -11,13 +11,13 @@ vi.mock("@clerk/express", () => ({
   clerkClient: { users: { getUser: vi.fn() } },
 }));
 
-import { computeSseDeadlineMs } from "../ai";
+import { computeSseDeadline } from "../ai";
 
 function makeReq(): ExpressRequest {
   return {} as ExpressRequest;
 }
 
-describe("computeSseDeadlineMs", () => {
+describe("computeSseDeadline", () => {
   beforeEach(() => {
     getAuthSpy.mockReset();
     vi.useFakeTimers();
@@ -37,9 +37,10 @@ describe("computeSseDeadlineMs", () => {
     getAuthSpy.mockReturnValue({
       sessionClaims: { exp: Math.floor((now() + 60_000) / 1000) },
     });
-    const deadline = computeSseDeadlineMs(makeReq());
-    expect(deadline).toBeLessThan(now() + HARD_CAP_MS);
-    expect(deadline).toBe(now() + 60_000 - MARGIN_MS);
+    const { deadlineMs, reason } = computeSseDeadline(makeReq());
+    expect(deadlineMs).toBeLessThan(now() + HARD_CAP_MS);
+    expect(deadlineMs).toBe(now() + 60_000 - MARGIN_MS);
+    expect(reason).toBe("auth-expired");
   });
 
   it("returns the hard cap when the JWT expires later than the cap", () => {
@@ -47,8 +48,9 @@ describe("computeSseDeadlineMs", () => {
     getAuthSpy.mockReturnValue({
       sessionClaims: { exp: Math.floor((now() + 60 * 60_000) / 1000) },
     });
-    const deadline = computeSseDeadlineMs(makeReq());
-    expect(deadline).toBe(now() + HARD_CAP_MS);
+    const { deadlineMs, reason } = computeSseDeadline(makeReq());
+    expect(deadlineMs).toBe(now() + HARD_CAP_MS);
+    expect(reason).toBe("timeout");
   });
 
   it("clamps to now when the JWT is already past its margin", () => {
@@ -57,8 +59,9 @@ describe("computeSseDeadlineMs", () => {
     getAuthSpy.mockReturnValue({
       sessionClaims: { exp: Math.floor((now() + 2_000) / 1000) },
     });
-    const deadline = computeSseDeadlineMs(makeReq());
-    expect(deadline).toBe(now());
+    const { deadlineMs, reason } = computeSseDeadline(makeReq());
+    expect(deadlineMs).toBe(now());
+    expect(reason).toBe("auth-expired");
   });
 
   it("clamps to now when the JWT already expired", () => {
@@ -68,23 +71,26 @@ describe("computeSseDeadlineMs", () => {
     getAuthSpy.mockReturnValue({
       sessionClaims: { exp: Math.floor((now() - 60_000) / 1000) },
     });
-    const deadline = computeSseDeadlineMs(makeReq());
-    expect(deadline).toBe(now());
+    const { deadlineMs, reason } = computeSseDeadline(makeReq());
+    expect(deadlineMs).toBe(now());
+    expect(reason).toBe("auth-expired");
   });
 
   it("falls back to the hard cap when sessionClaims is missing", () => {
     // Dev bypass and test harnesses don't populate sessionClaims —
     // the hard cap is the only defence and must still apply.
     getAuthSpy.mockReturnValue({ sessionClaims: null });
-    const deadline = computeSseDeadlineMs(makeReq());
-    expect(deadline).toBe(now() + HARD_CAP_MS);
+    const { deadlineMs, reason } = computeSseDeadline(makeReq());
+    expect(deadlineMs).toBe(now() + HARD_CAP_MS);
+    expect(reason).toBe("timeout");
   });
 
   it("falls back to the hard cap when getAuth throws", () => {
     getAuthSpy.mockImplementation(() => {
       throw new Error("clerk middleware not mounted");
     });
-    const deadline = computeSseDeadlineMs(makeReq());
-    expect(deadline).toBe(now() + HARD_CAP_MS);
+    const { deadlineMs, reason } = computeSseDeadline(makeReq());
+    expect(deadlineMs).toBe(now() + HARD_CAP_MS);
+    expect(reason).toBe("timeout");
   });
 });

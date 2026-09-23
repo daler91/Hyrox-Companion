@@ -18,7 +18,6 @@ import {
   normalizeParserBlocks,
 } from "./structure";
 import type {
-  ParseExercisesWithDiagnosticsResult,
   ParseUnitInput,
   ParseWorkoutStructureWithDiagnosticsResult,
 } from "./types";
@@ -110,45 +109,6 @@ export async function parseWorkoutStructureFromText(
     warnings: [...parserWarnings(normalized.warnings), ...warnings],
     confidence: normalized.confidence,
   };
-}
-
-export async function parseExercisesFromTextWithDiagnostics(
-  text: string,
-  unitsInput: ParseUnitInput = "kg",
-  customExerciseNames?: string[],
-  userId?: string,
-): Promise<ParseExercisesWithDiagnosticsResult> {
-  if (!text || text.trim().length === 0) {
-    return { acceptedRows: [], rejectedRows: [], fallbackUsed: false };
-  }
-
-  const units = resolveParseUnitPreferences(unitsInput);
-  const responseText = await callTextProviderParse(text, units, customExerciseNames, userId);
-  const raw = parseRawResponseSafe(responseText);
-  const jsonFailed = raw === undefined;
-  const rawArray = Array.isArray(raw) ? raw : [];
-  const normalized = normalizeParserPayload(raw);
-  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-
-  if (validated.acceptedRows.length > 0) {
-    return {
-      acceptedRows: validated.acceptedRows.map((exercise) => mapValidatedExercise(exercise, text, units)),
-      rejectedRows: validated.rejectedRows,
-      fallbackUsed: false,
-    };
-  }
-
-  const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
-  if (fallbackValidated.acceptedRows.length > 0) {
-    return {
-      acceptedRows: fallbackValidated.acceptedRows.map((exercise) => mapValidatedExercise(exercise, text, units)),
-      rejectedRows: [...validated.rejectedRows, ...fallbackValidated.rejectedRows],
-      fallbackUsed: true,
-    };
-  }
-
-  if (jsonFailed) throwInvalidJsonError();
-  return { acceptedRows: [], rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
 
 export async function parseWorkoutStructureFromTextWithDiagnostics(

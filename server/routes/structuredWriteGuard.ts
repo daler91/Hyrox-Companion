@@ -99,4 +99,3 @@ export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, o
   }
 }
 
-export const structuredRowsRequiredMessage = STRUCTURED_REQUIRED_MSG;

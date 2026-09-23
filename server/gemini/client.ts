@@ -12,8 +12,6 @@ import { getRuntimeCache, hashRuntimeKey } from "../sharedRuntimeState";
 export { getAiClient } from "../ai/geminiSdk";
 export { isRetryableError, retryWithBackoff, withTimeout } from "../ai/retry";
 
-export const GEMINI_MODEL = env.GEMINI_MODEL;
-export const GEMINI_SUGGESTIONS_MODEL = env.GEMINI_SUGGESTIONS_MODEL;
 export const GEMINI_VISION_MODEL = env.GEMINI_VISION_MODEL;
 
 const EMBEDDING_MODEL = "gemini-embedding-001";

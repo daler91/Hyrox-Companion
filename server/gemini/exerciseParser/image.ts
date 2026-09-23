@@ -18,7 +18,6 @@ import {
 } from "./structure";
 import type {
   ParseExercisesFromImageInput,
-  ParseExercisesWithDiagnosticsResult,
   ParseWorkoutStructureWithDiagnosticsResult,
 } from "./types";
 import { validateRows, validateRowsDetailed } from "./validation";
@@ -106,24 +105,6 @@ export async function parseWorkoutStructureFromImage(
     structureBlocks,
     warnings: [...parserWarnings(normalized.warnings), ...warnings],
     confidence: normalized.confidence,
-  };
-}
-
-export async function parseExercisesFromImageWithDiagnostics(
-  input: ParseExercisesFromImageInput,
-): Promise<ParseExercisesWithDiagnosticsResult> {
-  const { imageBase64, mimeType, weightUnit = "kg", distanceUnit = "km", customExerciseNames, userId } = input;
-  const units = resolveParseUnitPreferences({ weightUnit, distanceUnit });
-  const responseText = await callGeminiParseImage(imageBase64, mimeType, units, customExerciseNames, userId);
-  const raw = parseRawResponse(responseText);
-  const rawArray = Array.isArray(raw) ? raw : [];
-  const normalized = normalizeParserPayload(raw);
-  const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
-
-  return {
-    acceptedRows: validated.acceptedRows.map((exercise) => mapValidatedExercise(exercise, "", units)),
-    rejectedRows: validated.rejectedRows,
-    fallbackUsed: false,
   };
 }
 
