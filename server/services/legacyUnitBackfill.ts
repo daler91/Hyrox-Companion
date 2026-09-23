@@ -17,7 +17,7 @@
 import { exerciseSets, workoutLogs } from "@shared/schema";
 import { and, count, eq, inArray, isNull, type SQL } from "drizzle-orm";
 
-import { db } from "../db";
+import { db, type DbExecutor } from "../db";
 
 export type UnitColumn = "weight" | "distance";
 
@@ -45,10 +45,17 @@ export function unstampedRowsOf(userId: string, column: UnitColumn): SQL | undef
 }
 
 /** The UPDATE, un-executed. Returned rather than run so a test can read the SQL
- *  it would issue without needing a database. */
-export function stampUpdateFor(userId: string, column: UnitColumn, unit: string) {
+ *  it would issue without needing a database — and `stampLegacyRowsForUser`
+ *  awaits this same builder, so the statement the test pins is the statement
+ *  production runs. */
+export function stampUpdateFor(
+  userId: string,
+  column: UnitColumn,
+  unit: string,
+  executor: DbExecutor = db,
+) {
   const set = column === "weight" ? { weightUnit: unit } : { distanceUnit: unit };
-  return db.update(exerciseSets).set(set).where(unstampedRowsOf(userId, column));
+  return executor.update(exerciseSets).set(set).where(unstampedRowsOf(userId, column));
 }
 
 export async function countUnstamped(userId: string, column: UnitColumn): Promise<number> {
@@ -76,13 +83,7 @@ export async function stampLegacyRowsForUser(
   stamp: { readonly weightUnit: string; readonly distanceUnit: string },
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx
-      .update(exerciseSets)
-      .set({ weightUnit: stamp.weightUnit })
-      .where(unstampedRowsOf(userId, "weight"));
-    await tx
-      .update(exerciseSets)
-      .set({ distanceUnit: stamp.distanceUnit })
-      .where(unstampedRowsOf(userId, "distance"));
+    await stampUpdateFor(userId, "weight", stamp.weightUnit, tx);
+    await stampUpdateFor(userId, "distance", stamp.distanceUnit, tx);
   });
 }
