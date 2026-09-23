@@ -44,16 +44,16 @@ describe("isUniqueViolation", () => {
   });
 
   it("returns false for non-errors", () => {
-    expect(isUniqueViolation(undefined)).toBe(false);
-    expect(isUniqueViolation(null)).toBe(false);
-    expect(isUniqueViolation("23505")).toBe(false);
+    for (const value of [undefined, null, "23505"]) {
+      expect(isUniqueViolation(value)).toBe(false);
+    }
   });
 
   it("stops at a cyclic cause chain instead of spinning", () => {
-    const a: { cause?: unknown } = {};
-    const b: { cause?: unknown } = { cause: a };
-    a.cause = b;
-    expect(isUniqueViolation(a)).toBe(false);
+    const outer: { cause?: unknown } = {};
+    const inner: { cause?: unknown } = { cause: outer };
+    outer.cause = inner;
+    expect(isUniqueViolation(outer)).toBe(false);
   });
 
   it("bounds the walk at five links", () => {

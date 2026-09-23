@@ -591,7 +591,8 @@ async function handleGarminConnect(req: Request<Record<string, never>, unknown, 
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("already in progress")) {
-      return res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      return;
     }
     throw err;
   }
@@ -776,7 +777,8 @@ async function handleGarminSync(req: Request, res: Response) {
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("already in progress")) {
-      return res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      res.status(409).json({ error: err.message, code: "GARMIN_BUSY" });
+      return;
     }
     throw err;
   }

@@ -770,15 +770,15 @@ export class WorkoutStorage {
   // The set-level CRUD routes (workouts and plan days alike) write through
   // these three; the owner decides which container the IDOR check targets.
   async mutateExerciseSetUpdate(owner: SetRouteOwner, setId: string, updates: NormalizedSetUpdateInput, userId: string): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId, updates);
+    return await this.updateExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId, updates);
   }
 
   async mutateExerciseSetAdd(owner: SetRouteOwner, set: NormalizedSetCreateInput, userId: string): Promise<ExerciseSet | undefined> {
-    return this.addExerciseSetNormalized(toMutationOwnerContext(owner, userId), set);
+    return await this.addExerciseSetNormalized(toMutationOwnerContext(owner, userId), set);
   }
 
   async mutateExerciseSetDelete(owner: SetRouteOwner, setId: string, userId: string): Promise<boolean> {
-    return this.deleteExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId);
+    return await this.deleteExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId);
   }
 
   // -------------------------------------------------------------------

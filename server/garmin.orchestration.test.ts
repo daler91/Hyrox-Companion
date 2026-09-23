@@ -54,17 +54,19 @@ vi.mock("./sharedRuntimeState", () => ({
   deleteRuntimeCache: vi.fn().mockResolvedValue(undefined),
 }));
 
+const noop = (): void => undefined;
+
 // Fake SDK injected through the constructor seam.
 class FakeGarminConnect {
   static instances: FakeGarminConnect[] = [];
   static loginImpl: () => Promise<unknown> = () => Promise.resolve(undefined);
   static getActivitiesImpl: () => Promise<unknown> = () => Promise.resolve([]);
-  static onConstruct: () => void = () => {};
+  static onConstruct: () => void = noop;
   static reset(): void {
     this.instances = [];
     this.loginImpl = () => Promise.resolve(undefined);
     this.getActivitiesImpl = () => Promise.resolve([]);
-    this.onConstruct = () => {};
+    this.onConstruct = noop;
   }
 
   login = vi.fn((_email?: string, _password?: string) => FakeGarminConnect.loginImpl());
@@ -290,9 +292,9 @@ describe("circuit breaker integration", () => {
   }
 
   it("answers 503 and keeps the connection when the breaker blocks the activity fetch", async () => {
-    vi.mocked(storage.users.getGarminConnection).mockImplementation(async () => {
+    vi.mocked(storage.users.getGarminConnection).mockImplementation(() => {
       tripAfterRouteCheck();
-      return conn();
+      return Promise.resolve(conn());
     });
 
     const res = await request(app).post("/api/v1/garmin/sync");
@@ -304,9 +306,9 @@ describe("circuit breaker integration", () => {
   });
 
   it("answers 503 and keeps the connection when the breaker blocks the sync login", async () => {
-    vi.mocked(storage.users.getGarminConnection).mockImplementation(async () => {
+    vi.mocked(storage.users.getGarminConnection).mockImplementation(() => {
       tripAfterRouteCheck();
-      return conn({ tokenExpiresAt: null }); // forces the login path
+      return Promise.resolve(conn({ tokenExpiresAt: null })); // forces the login path
     });
 
     const res = await request(app).post("/api/v1/garmin/sync");

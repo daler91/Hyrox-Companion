@@ -14,7 +14,8 @@ describe('getUserDisplayName', () => {
 
   it('falls back to "User" with no name and no email, or no user at all', () => {
     expect(getUserDisplayName({ firstName: null, lastName: null, email: null })).toBe('User');
-    expect(getUserDisplayName(null)).toBe('User');
-    expect(getUserDisplayName(undefined)).toBe('User');
+    for (const absent of [null, undefined]) {
+      expect(getUserDisplayName(absent)).toBe('User');
+    }
   });
 });
