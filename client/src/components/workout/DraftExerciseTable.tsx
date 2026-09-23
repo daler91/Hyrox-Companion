@@ -1,9 +1,9 @@
 import type { ExerciseName, ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import { createDefaultSet, type SetData, type StructuredExercise } from "@/components/ExerciseInput";
 import { ExerciseTable } from "@/components/workout-detail/ExerciseTable";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
+import { createDefaultSet, type SetData, type StructuredExercise } from "@/lib/structuredExercise";
 
 interface DraftExerciseTableProps {
   readonly exerciseBlocks: string[];

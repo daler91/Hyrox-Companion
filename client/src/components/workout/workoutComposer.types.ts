@@ -1,7 +1,7 @@
 import type { ExerciseName, StructureBlockInput } from "@shared/schema";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { ParseDiagnostics } from "@/hooks/useWorkoutEditor";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 export interface ComposerTextProps {
   readonly freeText: string;

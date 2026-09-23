@@ -1,7 +1,6 @@
 import type { StructureBlockInput } from "@shared/schema";
 import { useEffect, useMemo, useState } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { useToast } from "@/hooks/use-toast";
 import {
   hasAnnouncedDraftRestore,
@@ -11,6 +10,7 @@ import {
   saveLogWorkoutDraft,
   type WorkoutStep,
 } from "@/hooks/useLogWorkoutDraft";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 

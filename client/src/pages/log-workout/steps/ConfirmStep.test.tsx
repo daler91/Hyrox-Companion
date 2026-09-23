@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 import { ConfirmStep } from "./ConfirmStep";
 

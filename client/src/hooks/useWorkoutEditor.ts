@@ -2,7 +2,7 @@ import type { StructureBlockInput } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
+import { createDefaultSet, type StructuredExercise } from "@/lib/structuredExercise";
 
 import { getBlockExerciseName, makeBlockId } from "./workout-editor/blockHelpers";
 import { useParseWorkoutFromImageMutation, useParseWorkoutMutation } from "./workout-editor/parseMutations";

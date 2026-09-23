@@ -4,7 +4,7 @@ import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 import type { MutableRefObject } from "react";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 export function makeBlockId(name: string, counterRef: MutableRefObject<number>) {
   counterRef.current += 1;

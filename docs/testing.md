@@ -809,7 +809,6 @@ project-root/
       OnboardingWizard.test.tsx       # Onboarding wizard tests
       __tests__/
         ChatMessage.test.tsx          # Chat message component
-        ExerciseInput.test.tsx        # Exercise input component
         RpeSelector.a11y.test.tsx     # RPE selector accessibility
       timeline/
         __tests__/

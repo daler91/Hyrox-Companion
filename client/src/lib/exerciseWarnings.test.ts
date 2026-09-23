@@ -1,8 +1,8 @@
 import { describe, expect,it } from "vitest";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
-import { getExerciseMissingFields,getMissingFieldWarnings } from "./exerciseWarnings";
+import { getMissingFieldWarnings } from "./exerciseWarnings";
 
 describe("exerciseWarnings", () => {
   describe("getMissingFieldWarnings", () => {
@@ -127,34 +127,6 @@ describe("exerciseWarnings", () => {
       expect(warnings).toContain("Custom is missing weight");
       expect(warnings).toContain("Custom is missing reps");
       expect(warnings).toHaveLength(2);
-    });
-  });
-
-  describe("getExerciseMissingFields", () => {
-    it("should return the labels of the missing fields", () => {
-      const exercise: StructuredExercise = {
-        exerciseName: "easy_run",
-        category: "running",
-        sets: [
-          { setNumber: 1, distance: undefined, time: undefined },
-        ],
-      };
-      const missingFields = getExerciseMissingFields(exercise);
-      expect(missingFields).toContain("Distance");
-      expect(missingFields).toContain("Time");
-      expect(missingFields).toHaveLength(2);
-    });
-
-    it("should return an empty array if no fields are missing", () => {
-      const exercise: StructuredExercise = {
-        exerciseName: "easy_run",
-        category: "running",
-        sets: [
-          { setNumber: 1, distance: 5000, time: 1800 },
-        ],
-      };
-      const missingFields = getExerciseMissingFields(exercise);
-      expect(missingFields).toEqual([]);
     });
   });
 });

@@ -261,20 +261,10 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 - `AthleteNoteInput` -- Free-text note capture scoped to the workout.
 - `SaveStatePill` -- Autosave indicator for structured table and note edits.
 
-### `exercise-input/` -- Exercise Entry Widgets
-
-Structured exercise entry surfaces shared across logging and detail:
-
-- `ExerciseHeader` -- Exercise title, category icon, action menu.
-- `ExerciseWarnings` -- Inline validation hints (e.g. implausible load or time).
-- `MultiSetTable` -- Tabular editor for multi-set exercises (load × reps × rest × time).
-- `SingleSetFields` -- Flat editor used when an exercise has a single prescribed set.
-- `types.ts` / `index.ts` -- Shared types + barrel exports.
-
 ### `exercise-row/` -- Exercise Row Renderer
 
 - `InlineSetEditor` -- Inline per-row set editor used from the exercise table.
-- `fieldMeta.ts` -- Shared metadata describing which fields are relevant per exercise category (reps-primary vs. time-primary vs. distance-primary).
+- `fieldMeta.ts` -- `getFields` (which per-set fields an exercise surfaces, from its definition) and `getFieldLabel` (unit-aware field labels).
 
 ### `icons/` -- Integration Icons
 
@@ -291,7 +281,6 @@ Shared building blocks for the Log Workout stepper's Capture and Confirm steps:
 - `WorkoutTextMode` -- Textarea + voice dictation used inside the composer's collapsible panel. Also mounts `ImageCaptureButton` for photo-to-workout parsing; the voice button is hidden while a photo preview is active to avoid conflicting input surfaces.
 - `DraftExerciseTable` -- Editable draft exercise/set table shown on the Confirm step.
 - `ParseStatusStrip` -- Inline status indicator for the auto-parse pipeline.
-- `ExerciseRow` -- Exercise row renderer used by the composer.
 - `ExerciseImagePreview` -- Thumbnail + remove control rendered after a user captures a workout photo but before the parsed exercises are committed.
 
 ### `workout-structure/` -- Structured Format Editor
@@ -318,14 +307,12 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 - `ChatMessage` -- Chat bubble rendering.
 - `ChatInput` -- Chat text input.
 - `ExerciseSelector` -- Exercise picker.
-- `ExerciseInput` -- Individual exercise input fields.
 - `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in workout detail surfaces.
-- `PrivacyConsentBanner` -- AI-consent gate shown on first entry when `aiCoachEnabled` is `false`; opens the relevant Settings section on "Manage".
-- `RagDebugBadge` -- Dev-only indicator that surfaces which RAG chunks (if any) were injected into the last chat response; gated behind a dev flag.
+- `PrivacyConsentBanner` -- First-load privacy notice listing the third-party processors. "Accept" keeps error reporting on and "Decline analytics" turns Sentry off; either records the `privacy_notice` consent (server-side too, for signed-in athletes) and the banner links to `/privacy`. The AI consent gate is separate (`aiCoachEnabled`).
+- `RagDebugBadge` -- In production, an athlete-facing "Cited N sources" chip shown only when a response actually used RAG; in development, a debug view of which retrieval path (RAG, legacy materials, none) fed the response.
 - `RpeSelector` -- Rate of Perceived Exertion selector.
 - `VoiceButton` / `VoiceFieldButton` -- Voice input controls.
 - `QuickActions` -- Quick action buttons.
-- `WorkoutCard` -- Workout display card.
 
 ### Photo-to-Workout Parsing
 

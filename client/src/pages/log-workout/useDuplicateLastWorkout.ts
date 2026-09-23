@@ -3,10 +3,10 @@ import type { UnitPreferences } from "@shared/unitConversion";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
 import type { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
+import type { StructuredExercise } from "@/lib/structuredExercise";
 
 interface UseDuplicateLastWorkoutOptions {
   readonly setDate: (value: string) => void;

@@ -14,46 +14,15 @@ type LabelResolver = {
 
 interface FieldSpec {
   label: LabelResolver;
-  defaultStep: number;
-  stepOptions: readonly number[];
-  shortLabel: string;
-  validationHint: string;
-  prefersMultiSet: boolean;
 }
 
 export const fieldMeta: Record<FieldKey, FieldSpec> = {
-  reps: {
-    label: withLegacyLabel(() => "Reps"),
-    shortLabel: "Reps",
-    defaultStep: 1,
-    stepOptions: [1, 5],
-    validationHint: "Whole number count",
-    prefersMultiSet: true,
-  },
-  weight: {
-    label: withLegacyLabel(({ weightUnit }) => `Weight (${weightUnit})`),
-    shortLabel: "Wt",
-    defaultStep: 2.5,
-    stepOptions: [1, 2.5, 5, 10],
-    validationHint: "Load per set",
-    prefersMultiSet: true,
-  },
+  reps: { label: withLegacyLabel(() => "Reps") },
+  weight: { label: withLegacyLabel(({ weightUnit }) => `Weight (${weightUnit})`) },
   distance: {
     label: withLegacyLabel(({ distanceUnit }) => `Distance (${distanceUnit === "km" ? "m" : "ft"})`),
-    shortLabel: "Dist",
-    defaultStep: 50,
-    stepOptions: [10, 50, 100, 500],
-    validationHint: "Numeric distance",
-    prefersMultiSet: false,
   },
-  time: {
-    label: withLegacyLabel(() => "Time (min)"),
-    shortLabel: "Time",
-    defaultStep: 1,
-    stepOptions: [1, 5, 10],
-    validationHint: "Duration in minutes",
-    prefersMultiSet: false,
-  },
+  time: { label: withLegacyLabel(() => "Time (min)") },
 };
 
 function withLegacyLabel(getLabel: (context: FieldContext) => string): LabelResolver {
@@ -85,10 +54,6 @@ export function getFields(exerciseName: string): FieldKey[] {
   return out;
 }
 
-export function getFieldSpec(field: FieldKey): FieldSpec {
-  return fieldMeta[field];
-}
-
 function normalizeLabelContext(
   contextOrWeightUnit: FieldContext | string,
   distanceUnit?: string,
@@ -111,12 +76,4 @@ export function getFieldLabel(
 ): string {
   const context = normalizeLabelContext(contextOrWeightUnit, distanceUnit);
   return fieldMeta[field].label(context);
-}
-
-export function isFieldEditableForExercise(exerciseName: string, field: FieldKey): boolean {
-  return getFields(exerciseName).includes(field);
-}
-
-export function shouldUseMultiSetForFields(fields: readonly FieldKey[]): boolean {
-  return fields.some((field) => fieldMeta[field].prefersMultiSet);
 }
