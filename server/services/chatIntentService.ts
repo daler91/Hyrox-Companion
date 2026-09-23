@@ -3,7 +3,7 @@ import { type ChatIntentResult, chatIntentResultSchema, type ChatMessage } from 
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { CHAT_INTENT_PROMPT } from "../prompts";
-import { sanitizeUserInput } from "../utils/sanitize";
+import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 
 /**
  * Two-stage intent gate for conversational plan editing.
@@ -81,10 +81,11 @@ export async function classifyPlanEditIntent(
     const parsed = chatIntentResultSchema.safeParse(JSON.parse(response.text || "{}"));
     if (!parsed.success) {
       // zod issue paths/messages on the classifier's output schema plus a
-      // length count, not user data.
+      // length count, not user data. Paths are keys from the model's JSON,
+      // so they go through formatZodIssues (flattened, control chars stripped).
       // bearer:disable javascript_lang_logger_leak
       logger.warn(
-        { issues: parsed.error.issues, responseLength: response.text?.length ?? 0 },
+        { issues: formatZodIssues(parsed.error.issues), responseLength: response.text?.length ?? 0 },
         "[chat-intent] Invalid classifier output; falling back to normal chat",
       );
       return NORMAL_CHAT;

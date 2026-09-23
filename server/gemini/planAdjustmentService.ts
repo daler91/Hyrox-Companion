@@ -131,10 +131,12 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
 
   const envelope = looseEnvelopeSchema.safeParse(raw);
   if (!envelope.success) {
-    // zod issue paths/messages describe the AI output schema, not user data.
+    // zod issue paths/messages describe the AI output schema, not user data;
+    // formatted like the per-change log below so model-chosen keys can't
+    // inject log lines.
     // bearer:disable javascript_lang_logger_leak
     logger.error(
-      { issues: envelope.error.issues },
+      { issues: formatZodIssues(envelope.error.issues) },
       "[gemini] plan-adjustment envelope validation failed.",
     );
     return null;
