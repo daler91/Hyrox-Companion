@@ -90,7 +90,7 @@ The home page and primary view. Displays a chronological timeline of training pl
 - **Onboarding wizard** -- Shown for new users via `OnboardingWizard` dialog.
 - **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile.
 - **Virtual scrolling** -- Uses `@tanstack/react-virtual` (`useVirtualizer`) to efficiently render large timeline lists.
-- **Timeline filtering** -- Filter by plan and by workout status (completed, planned, skipped). Collapsible past/future groups with "show more" buttons.
+- **Timeline filtering** -- Filter by plan and by workout status (completed, planned, missed, skipped; deep-linkable as `?status=`). Collapsible past/future groups with "show more" buttons.
 - **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting.
 - **Workout actions** -- Mark complete, change status, skip with confirmation (`SkipConfirmDialog`), open the sheet-based planned/logged/skipped workout surfaces, edit workout titles inline from sheet headers, delete, and combine workouts (`CombineWorkoutsDialog`).
 - **Floating action button** -- Toggles the coach panel.
@@ -109,7 +109,7 @@ A `StepIndicator` allows jumping between steps. Drafts are persisted client-side
 
 ### Analytics (`client/src/pages/Analytics.tsx`)
 
-Displays training data analysis across five tabs (a sixth, **MAF Trend**, appears for athletes on the MAF training style):
+Displays training data analysis across five base tabs plus two conditional ones — **MAF Trend** for athletes on the MAF training style, and **Fuelling** whenever `featureFlags.nutritionEnabled` is on (the default) — so six tabs by default and seven for MAF athletes:
 
 - **Overview** (`TrainingOverviewTab`) -- Training volume summary, completion rates, streaks, weekly goal tracking, and workout heatmap. Six summary cards (avg/week, total workouts, running distance, avg duration, avg RPE, avg adherence) render a `DeltaIndicator` showing the percentage change versus the equal-length prior period (derived server-side — see [`previousStats` in `/training-overview`](api-reference.md#get-apiv1training-overview)). The weekly workout chart overlays shaded bands for any timeline annotations that intersect the visible window.
 - **Breakdown** (`CategoryBreakdownTab`) -- Category-level training distribution (functional, running, strength, conditioning).
@@ -117,8 +117,9 @@ Displays training data analysis across five tabs (a sixth, **MAF Trend**, appear
 - **Coach Insights** (`CoachInsightsTab`) -- AI-surfaced coaching signals: RPE trends, plan phase, weekly volume, station gaps, and fatigue/progression flags. Paints the last stored result instantly and shows a `LastUpdatedNote` (see [stored-first Coach Insights](api-reference.md#get-apiv1coach-insights)).
 - **Race Predictor** (`RacePredictorTab`) -- Predicted HYROX finish time from logged history; also stored-first with instant paint and a manual refresh button.
 - **MAF Trend** (`MafTrendTab`, MAF training style only) -- Pace-at-MAF-ceiling trend across MAF tests over time.
+- **Fuelling** (`FuellingTab`, nutrition flag only) -- The nutrition block view for the selected range: daily intake vs. training load (`IntakeVsTrainingChart`) plus a `FuellingCorrelationCard` comparing session RPE and workout compliance on days the load-adjusted carb target was hit vs. missed. "All time" is capped to the last 365 days.
 
-A date range selector filters data across all tabs (30 days, 90 days, 6 months, 1 year, all time).
+A date range selector (`?range=`; 30 days, 90 days (default), 6 months, 1 year, all time) filters the Overview, Breakdown, PRs & Trends and Fuelling tabs. Coach Insights, Race Predictor and MAF Trend do not take the range.
 
 ### Weekly Review (`client/src/pages/Review.tsx`)
 
@@ -126,16 +127,16 @@ A per-week retrospective at `/review`, deep-linkable through `?week=<any date in
 
 ### Nutrition (`client/src/pages/Nutrition.tsx`)
 
-Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` per meal → `MicronutrientPanel` → `MyFoodsSection` → `NutritionInsightsPanel`. Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
+Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `EnergyBalanceCard` (shown when the profile supports a BMR) → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` per meal → `MicronutrientPanel` → `MyFoodsSection` → `NutritionInsightsPanel`. Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
 
 ### Settings (`client/src/pages/Settings.tsx`)
 
 User preferences and account management. Organized into six deep-linkable tabs (`?tab=account|training|integrations|notifications|data|recycle-bin`, default `account`) driven by `useUrlQueryState` and mirroring the Analytics tab pattern. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
 
 - **Account** (`?tab=account`, default) -- **ProfileSection** (user name and avatar), **UnitsPreferencesCard** (weight unit kg/lb, distance unit km/mi), a "Getting Started" card to re-run onboarding, and the account **DangerZone** (delete account → hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
-- **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **TrainingGoalsCard** (weekly workout goal), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled), and **CoachingSection** (AI coaching configuration and materials management).
+- **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **HealthMetricsCard** (optional resting HR, max HR and FTP that sharpen hrTSS/TSS training load; left blank, max HR is estimated from age), **NutritionPreferencesCard** (meals per day — 3, 4 or 5 — that the per-meal fuel targets are spread across), **TrainingGoalsCard** (weekly workout goal), **TrainingConstraintsCard** (free-text injuries & limitations, up to 500 characters, used when generating a plan), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled -- plus the auto-apply-chat-plan-changes toggle), and **CoachingSection** (AI coaching configuration and materials management).
 - **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync now"; surfaces the `lastError` banner and disables sync when the global 429 circuit breaker is tripped).
-- **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch plus nested per-type toggles for the weekly summary and missed-workout reminder, disabled/grayed when the master is off) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
+- **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch; nested under it, a default send hour (`notifyHour`, 07:00 unless changed) and per-type toggles for the weekly summary, missed-workout reminder, weekly review reminder, session brief and analysis digest. The nested group is grayed and the per-type toggles disabled while the master is off. Each type that is switched on shows its own "Send at" hour override, which defaults to following the default send hour — except the weekly review reminder, whose fallback is 17:00, Sunday evening) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
 - **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `ExportDataCard`, and the error-reporting consent card).
 - **Recycle bin** (`?tab=recycle-bin`) -- **RecycleBinCard** (deleted workouts, plan days and training plans, restorable for 90 days, with per-item _Delete forever_ and _Empty bin_ behind confirm dialogs).
 
@@ -149,10 +150,13 @@ Marketing/landing page for unauthenticated users. Contains:
 
 - Sticky header with branding and "Log In" button (via Clerk `SignInButton`).
 - Hero section with animated timeline mockup and CTA buttons.
-- Feature highlights (AI Auto-Coach, Training Timeline, Strava Integration, Analytics & PRs).
-- "How It Works" three-step flow (Import Plan, Train & Log, AI Adapts).
-- Exercise category grid (Functional, Running, Strength, Conditioning).
-- Final CTA section and footer.
+- Social-proof strip (200+ Exercises, Strava & Garmin Sync, AI-Powered Coaching, Voice & Photo Logging, plus Nutrition & Macros when the nutrition flag is on).
+- Feature highlights (AI Auto-Coach, Training Timeline, Voice & Photo Logging, Strava & Garmin Sync, Analytics & PRs, AI Plan Builder, Nutrition & Fuelling when the nutrition flag is on, and Your Coaching Playbook).
+- "How It Works" three-step flow (Set Up Your Plan, Train & Log, AI Adapts).
+- Exercise category grid (Functional, Running, Strength, Conditioning) with Gap Analysis, Pacing Strategy, Personal Records and Chat with Your Coach highlights.
+- "Fuel Every Session" nutrition showcase (`NutritionShowcase`), rendered only when `featureFlags.nutritionEnabled` is on.
+- FAQ accordion (a nutrition question is appended when the flag is on).
+- Final CTA section and footer (Features, How It Works, FAQ and Privacy links).
 
 Uses `IntersectionObserver` for fade-up scroll animations.
 
@@ -173,7 +177,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 ### `analytics/` -- Analytics Tab Components
 
 - `TrainingOverviewTab` -- Summary cards, completion rates, workout heatmap.
-- `DeltaIndicator` -- Arrow + percentage chip rendered on each of the four overview stat cards. Consumes `currentStats` / `previousStats` from `GET /api/v1/training-overview` and handles the "no prior data" case by rendering nothing.
+- `DeltaIndicator` -- Arrow + percentage chip rendered on each of the six overview stat cards (`OverviewStatsGrid`). Fed from the `currentStats` / `previousStats` of `GET /api/v1/training-overview`; nothing renders when there is no previous period or both periods are zero, and a muted "new" label replaces the percentage when only the previous value is zero.
 - `ProgressTab` -- "PRs & Trends" tab; a nested `Tabs` wrapping `PersonalRecordsTab` and `ExerciseProgressionTab`.
 - `ExerciseProgressionTab` -- Per-exercise charts.
 - `PersonalRecordsTab` / `PersonalRecordItem` -- PR listings.
@@ -186,6 +190,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `MuscleHeatMapCard` -- Muscle-group coverage heatmap card.
 - `CoachInsightsTab` -- AI coaching-signal tab (RPE trends, plan phase, fatigue/progression flags); stored-first with instant paint.
 - `ExerciseProgressionCharts` -- Per-exercise progression chart group used by the Trends tab.
+- `FuellingTab` -- Fuelling tab (nutrition flag only): `IntakeVsTrainingChart` and `FuellingCorrelationCard` over the nutrition block view, loaded by `useFuellingAnalytics`.
 - `chartConstants.ts` -- Shared chart configuration.
 - `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, and the `useTrainingOverviewData` hook.
 
@@ -221,15 +226,15 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `AccountDangerZone` -- Account deletion (hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
 - `TrainingStyleSection` -- Balanced/MAF style selector, MAF setup dialog, style transition notice, and local settings audit.
 - `PushNotificationSection` -- Web Push subscribe/unsubscribe and test-notification controls.
-- `DataToolsSection` -- Structure old workouts, the recycle bin, data export, and error-reporting consent.
+- `DataToolsSection` -- Structure old workouts, data export, and error-reporting consent. The recycle bin is not part of it: Settings mounts `RecycleBinCard` directly on its own Recycle bin tab.
 - `CoachingSection` -- AI coaching configuration.
 - `coaching/CoachingMaterialList` -- Uploaded coaching materials list.
 - `coaching/CoachingUploadDialog` -- Upload dialog for coaching materials.
 - `coaching/RagStatusCard` -- RAG processing status indicator.
 - `coaching/useCoachingUpload.ts` -- Upload logic hook.
-- `data-tools/` -- `ExportDataCard`, `RecycleBinCard` (backed by the `useRecycleBin` hooks: list, restore, purge, empty), `StructureOldWorkoutsCard`, and the `useWorkoutReparseTools` hook backing `DataToolsSection`.
+- `data-tools/` -- `StructureOldWorkoutsCard`, `ExportDataCard`, `ErrorReportingConsentCard` and the `useWorkoutReparseTools` hook (together backing `DataToolsSection`), plus `RecycleBinCard` for the Recycle bin tab (backed by the `useRecycleBin` hooks: list, restore, purge, empty).
 - `garmin/` -- `GarminConnectForm`, `GarminErrorBanner`, `GarminStatusRow`, and the `useGarminConnectionController` hook backing `GarminSection`.
-- `preferences/` -- `UnitsPreferencesCard`, `AthleteProfileCard`, `BodyCompositionCard`, `TrainingGoalsCard`, `EmailNotificationsCard`, `WorkoutReviewCard`, `AiCoachCard`, and the shared `PreferenceRows`. These cards are composed directly into the Settings tabs.
+- `preferences/` -- `UnitsPreferencesCard`, `AthleteProfileCard`, `BodyCompositionCard`, `HealthMetricsCard`, `NutritionPreferencesCard`, `TrainingGoalsCard`, `TrainingConstraintsCard`, `EmailNotificationsCard`, `WorkoutReviewCard`, `AiCoachCard`, and the shared `PreferenceRows`. These cards are composed directly into the Settings tabs.
 
 ### `timeline/` -- Timeline Page Components
 
@@ -237,7 +242,7 @@ The largest component group, further subdivided:
 
 - **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view), `CoachReviewingIndicator`, `SuggestionsPanel`.
 - **Annotations**: `AnnotationsDialog`, `TimelineAnnotationCard`, `AnnotationTypeIcon` — inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
-- **Dialogs and surfaces**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, `ConfirmDialog`, and `TimelineWorkoutSurfaces`, which wires the workout-detail sheet surfaces from `workout-detail/`.
+- **Dialogs and surfaces**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, and `ConfirmDialog`. `TimelineWorkoutSurfaces`, which wires the workout-detail sheet surfaces from `workout-detail/`, lives beside the page in `client/src/pages/timeline/` rather than in this directory.
 - **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `GoalDialog`, `csv-utils.ts`.
 - **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, utility and type files.
 - **`combine-workouts-dialog/`**: `CombineWorkoutsDialog`, `FieldSelector`, `WorkoutCard`, `CombinedResultSummary`.
@@ -294,7 +299,7 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 
 ### Root-level Components
 
-- `AppSidebar` -- Main navigation sidebar with Training and Analytics links, user avatar, settings/logout/theme toggle in footer.
+- `AppSidebar` -- Main navigation sidebar rendering `PRIMARY_NAV_ITEMS` (Training, Log Workout, Nutrition when the nutrition flag is on, Analytics, Settings); the footer holds the user avatar and name, the theme toggle, and a log-out button.
 - `MobileTabBar` -- Bottom tab bar mirroring the sidebar's `PRIMARY_NAV_ITEMS` for phones (`md:hidden`).
 - `Breadcrumbs` -- Route breadcrumb trail driven by `useNavigationBreadcrumb`; desktop-only (`hidden md:block`) since the tab bar covers "where am I" on phones.
 - `CoachPanel` -- AI coach chat panel (described above).
@@ -478,7 +483,7 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
   - `importScripts: ["sw-push.js"]` pulls the push handlers into this same worker — see [Push notifications](#push-notifications-and-the-service-worker) below.
   - Runtime caching for `/api/` responses — see [Cached API data](#cached-api-data-and-sign-out).
 - **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks. There is exactly **one** registration.
-- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, pending queued workout-create saves, and sync/drop feedback after replay attempts.
+- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, the count of queued writes awaiting replay (workout creates, plan-day status changes and food logs — see [Offline Queue](state-management.md#offline-queue)), and sync/drop feedback after replay attempts.
 
 ### Push notifications and the service worker
 

@@ -161,8 +161,8 @@ Timeline annotation queries and mutations are composed directly from the `client
 | Hook | File | Purpose |
 |------|------|---------|
 | `useWorkoutEditor` | `useWorkoutEditor.ts` | Manages exercise blocks for the LogWorkout page. Handles adding/removing/reordering exercises (dnd-kit integration), parsing text into exercises, and tracking block state. |
-| `useWorkoutForm` | `useWorkoutForm.ts` | Manages workout form state (date, focus, RPE, notes, duration). Handles submission with exercise data. |
-| `useWorkoutVoiceForm` | `useWorkoutVoiceForm.ts` | Extends workout form with voice input integration. |
+| `useWorkoutForm` | `useWorkoutForm.tsx` | Manages workout form state (date, focus, RPE, notes, duration). Handles submission with exercise data. |
+| `useWorkoutVoiceForm` | `useWorkoutVoiceForm.ts` | Voice dictation (via `useVoiceInput`) into an `EditFormState` (focus / main workout / accessory / notes). Standalone — it does not wrap `useWorkoutForm`. |
 
 ### Chat and Coaching
 
@@ -214,10 +214,13 @@ flowchart TD
     UTD --> |React Query| API2["/api/v1/plans"]
     UTD --> |React Query| API3["/api/v1/personal-records"]
     
-    UWF[useWorkoutForm] --> UWE[useWorkoutEditor]
-    UWF --> UWA[useWorkoutActions]
-    UWVF[useWorkoutVoiceForm] --> UWF
-    UWVF --> UVI[useVoiceInput]
+    LWF[LogWorkoutForm] --> UWE[useWorkoutEditor]
+    LWF --> UWF[useWorkoutForm]
+    UWF --> UWFV[useWorkoutFormVoice]
+    UWF --> USWM[useSaveWorkoutMutation]
+    UWFV --> UVI[useVoiceInput]
+    USWM --> |offline fallback| API6["/api/v1/workouts"]
+    UWVF[useWorkoutVoiceForm] --> UVI
     
     UCS[useChatSession] --> UCM[useChatMutations]
     UCS --> |SSE stream| API4["/api/v1/chat/stream"]
@@ -232,7 +235,13 @@ flowchart TD
 
 **File:** `client/src/lib/offlineQueue.ts`
 
-A localStorage-backed mutation queue used by workout logging creates. Other mutations still use direct server requests unless they explicitly opt into this queue.
+A localStorage-backed mutation queue. Writes opt in through `runWithOfflineFallback` (`client/src/lib/offlineMutationFallback.ts`), which enqueues instead of sending when the browser is offline, or when the live call fails with a connectivity-shaped error (application 4xx/5xx errors are rethrown, not queued). Three writes use it:
+
+- workout-log creates — `POST /api/v1/workouts` (`useSaveWorkoutMutation`);
+- plan-day status changes, skips included — `PATCH /api/v1/plans/days/:dayId/status` (`useWorkoutActionMutations`), whose optimistic timeline flip stays in place for the session while the change is queued;
+- food-log creates — `POST /api/v1/nutrition/logs` (`useLogFood`).
+
+All other mutations use direct server requests.
 
 ### Design
 
@@ -240,7 +249,7 @@ A localStorage-backed mutation queue used by workout logging creates. Other muta
 - **Max queue size:** 100 mutations (oldest evicted when full).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
 - **Max retries:** 5 per mutation -- dropped after exceeding.
-- **Idempotency:** Workout saves generate a crypto-backed unique ID before the first request, send it as `X-Idempotency-Key`, and reuse it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
+- **Idempotency:** Each queue-backed write generates a crypto-backed unique ID before the first request, sends it as `X-Idempotency-Key`, and reuses it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
 - **Privacy cleanup:** Signout and account deletion clear queued mutation bodies and user-scoped drafts from browser storage.
 
 ### API
@@ -308,10 +317,10 @@ sequenceDiagram
 The Log Workout page autosaves a working draft to `localStorage` so an accidental refresh or navigation does not lose in-progress data.
 
 - **Storage keys:**
-  - `fitai-log-workout-draft` — the draft payload, in `localStorage` (durable across sessions and tabs).
-  - `fitai-log-workout-draft-announced` — a per-tab flag in `sessionStorage` that suppresses re-showing the "restored a draft" toast more than once within the same browser session. Scoped to `sessionStorage` deliberately so a fresh tab announces the restore again.
-- **Schema version:** `DRAFT_VERSION = 3`. Drafts written under v2 are still readable for backward compatibility; older versions are discarded.
-- **Lifetime:** Drafts persist **indefinitely** until they are explicitly cleared. The hook stores `savedAt: Date.now()` but never checks the timestamp for expiry — clearing only happens when the user successfully saves the workout, taps the "discard draft" affordance, signs out (via `clearUserLocalData()` in `client/src/hooks/useSignOut.ts`), or deletes their account (via `AccountDangerZone`). This is intentional, since the draft is single-user device-local state with no privacy retention concern beyond the signout/deletion paths that already clear it.
+  - `fitai-log-workout-draft:<userKey>` — the draft payload, in `localStorage` (durable across sessions and tabs). A draft whose stored `userKey` does not match is ignored.
+  - `fitai-log-workout-draft-announced:<userKey>` — a per-tab flag in `sessionStorage` that suppresses re-showing the "Draft restored" toast more than once within the same browser session. Scoped to `sessionStorage` deliberately so a fresh tab announces the restore again.
+- **Schema version:** `DRAFT_VERSION = 5` (v5 added the manual session start time `timeOfDayMin`, v4 `distance` / `avgHeartrate` / `maxHeartrate`, v3 `durationMinutes`). Drafts written under v2–v4 still load, with the missing fields hydrated as blank/null; any other version (v1) is discarded on load.
+- **Lifetime:** Drafts persist **indefinitely** until they are explicitly cleared. The hook stores `savedAt: Date.now()` but never checks the timestamp for expiry — clearing only happens when the user successfully saves the workout, empties the form (a blank draft is removed rather than saved), signs out (via `clearUserLocalData()` in `client/src/hooks/useSignOut.ts`), or deletes their account (via `AccountDangerZone`). This is intentional, since the draft is single-user device-local state with no privacy retention concern beyond the signout/deletion paths that already clear it.
 
 ---
 
@@ -350,10 +359,11 @@ Performance: Uses `Set`-based lookups for O(1) membership checks instead of `Arr
 
 | Function | Description |
 |----------|-------------|
-| `calculatePersonalRecords(sets)` | Max weight, max distance, best time per exercise |
-| `calculateExerciseAnalytics(sets)` | Volume and intensity per day/exercise |
-| `buildWeeklySummaries(logs, sets)` | Weekly aggregations with RPE averages |
-| `buildCategoryTotals(sets)` | Exercise category breakdown (count, total sets) |
+| `calculateStats(timeline)` | One pass over the timeline entries → `TrainingStats` for the Coach panel: `workoutsThisWeek` / `completedThisWeek` (Monday-start week, matching the server), `plannedUpcoming`, and an all-time `completionRate` over finished days — today and `excused` days are left out, and it is `null` until something has come due |
+| `formatSecondsToMmSs(seconds)` | A split as `M:SS` (272 → `4:32`) |
+| `formatSecondsToClock(seconds)` | Re-exported from `shared/formatClock.ts`: a duration as `H:MM:SS` |
+
+Personal-record, exercise-analytics, weekly-summary and category-total calculations are server-side, in `server/services/analyticsService.ts`.
 
 ---
 
@@ -448,7 +458,7 @@ The 5-minute stale time prevents redundant API calls when navigating between pag
 | `client/src/hooks/*.ts` | All custom React hooks |
 | `client/src/lib/dateUtils.ts` | Date formatting and predicates |
 | `client/src/lib/exerciseUtils.ts` | Exercise data helpers |
-| `client/src/lib/statsUtils.ts` | Statistics calculations |
+| `client/src/lib/statsUtils.ts` | Coach panel training stats, split/clock formatting |
 
 ---
 
