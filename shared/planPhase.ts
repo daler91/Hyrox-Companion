@@ -43,7 +43,8 @@ function utcToday(): string {
 }
 
 /**
- * Which week of the block today falls in, 1-based and clamped to `totalWeeks`.
+ * Which week of the block today falls in, 1-based. Deliberately NOT clamped to
+ * `totalWeeks` — a block that has ended reports a week past its last (see below).
  *
  * A plan that has not started yet reads as week 1 rather than a negative week,
  * and a missing start date is treated the same way — the block exists, we just
