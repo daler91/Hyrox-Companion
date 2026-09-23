@@ -473,7 +473,7 @@ The smoke test uses a **separate Vitest config** (`vitest.smoke.config.ts`):
 - Uses `node` environment (no jsdom)
 - Shares the integration setup file (`vitest.integration.setup.ts`)
 - Runs with `fileParallelism: false`
-- Runs with a 90-second suite timeout, since it builds up a real server process
+- Gets a 90-second per-test timeout, since it builds up a real server process. That is set on the `describe` in `smoke.test.ts` (`{ timeout: 90_000 }`), not in this config
 - Runs as its own step in the Cypress workflow (`cypress.yml`), on container 1 only, after the build and `drizzle-kit push` steps
 
 ### What's Tested
