@@ -24,7 +24,8 @@ describe("authBypass", () => {
   });
 
   it("uses Clerk in a dev build that has a key and is not framed", () => {
-    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "pk_test_123");
+    // Any non-empty value counts as configured; the predicate never parses it.
+    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", "configured");
     expect(isDevPreview()).toBe(false);
     expect(shouldBypassAuth()).toBe(false);
   });

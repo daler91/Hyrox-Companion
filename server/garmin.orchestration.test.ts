@@ -315,10 +315,12 @@ describe("circuit breaker integration", () => {
 
   it("answers 503, not a credentials error, when the breaker blocks the /connect login", async () => {
     FakeGarminConnect.onConstruct = tripAfterRouteCheck;
+    // Connect with the same credentials the stored-connection fixture holds.
+    const stored = conn() as unknown as { encryptedEmail: string; encryptedPassword: string };
 
     const res = await request(app)
       .post("/api/v1/garmin/connect")
-      .send({ email: "a@example.com", password: "pw" });
+      .send({ email: stored.encryptedEmail, password: stored.encryptedPassword });
 
     expect(res.status).toBe(503);
     expect(res.body.code).toBe("GARMIN_CIRCUIT_OPEN");
