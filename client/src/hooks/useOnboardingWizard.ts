@@ -232,6 +232,55 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     return payload;
   };
 
+  // Saves the units and race-profile answers that changed. An age the server
+  // would refuse keeps the athlete here; a failed save does not, since
+  // Settings can change all of these later.
+  const handleUnitsNext = async () => {
+    const error = validateAge(age);
+    setAgeError(error);
+    if (error) return;
+    const { age: changedAge, ...changes } = changedFields(shown, saved, UNITS_STEP_FIELDS);
+    const payload: Record<string, unknown> = { ...changes };
+    if (changedAge !== undefined) payload.age = changedAge.trim() === "" ? null : Number(changedAge);
+    try {
+      if (Object.keys(payload).length > 0) await prefsMutation.mutateAsync(payload);
+    } catch {
+      toast({
+        title: "Could not save preferences",
+        description: "You can update them later in settings.",
+        variant: "destructive",
+      });
+    }
+    setStep("goal");
+  };
+
+  // Saves the training style when it changed. An untouched training style is
+  // left as saved, even a legacy MAF profile this step would no longer accept
+  // as complete.
+  const handleGoalNext = async () => {
+    const goalChanges = changedFields(shown, saved, GOAL_STEP_FIELDS);
+    const hasGoalChanges = Object.keys(goalChanges).length > 0;
+    if (hasGoalChanges && !hasValidMafProfile()) return;
+
+    try {
+      const payload = hasGoalChanges ? buildTrainingStylePayload(goalChanges) : {};
+      if (Object.keys(payload).length > 0) await prefsMutation.mutateAsync(payload);
+      if (FUELLING_STEP_ENABLED) {
+        // The MAF profile already asked for age — don't ask twice.
+        if (age === "" && mafAge !== "") edit("age")(mafAge);
+        setStep("fuelling");
+      } else {
+        setStep("coach");
+      }
+    } catch {
+      toast({
+        title: "Could not save training style",
+        description: "Please try again. You can also update this later in settings.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Saves the optional fuelling profile: with a complete, plausible profile the
   // fields are persisted and (unless declined) the computed target is set, so
   // per-meal fuel targets and the Timeline fuelling chips light up from day one.
@@ -331,66 +380,26 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
   };
 
+  // Continue on each step. The plan and schedule steps have no Continue: they
+  // move on through their own buttons.
   const handleNext = async () => {
     if (step === "welcome") {
       setStep("units");
       return;
     }
-
     if (step === "units") {
-      const error = validateAge(age);
-      setAgeError(error);
-      if (error) return;
-      const { age: changedAge, ...changes } = changedFields(shown, saved, UNITS_STEP_FIELDS);
-      const payload: Record<string, unknown> = { ...changes };
-      if (changedAge !== undefined) payload.age = changedAge.trim() === "" ? null : Number(changedAge);
-      try {
-        if (Object.keys(payload).length > 0) await prefsMutation.mutateAsync(payload);
-      } catch {
-        toast({
-          title: "Could not save preferences",
-          description: "You can update them later in settings.",
-          variant: "destructive",
-        });
-      }
-      setStep("goal");
+      await handleUnitsNext();
       return;
     }
-
+    if (step === "goal") {
+      await handleGoalNext();
+      return;
+    }
     if (step === "fuelling") {
       await handleFuellingNext();
       return;
     }
-
-    if (step === "coach") {
-      await handleCoachNext();
-      return;
-    }
-
-    if (step !== "goal") return;
-    const goalChanges = changedFields(shown, saved, GOAL_STEP_FIELDS);
-    const hasGoalChanges = Object.keys(goalChanges).length > 0;
-    // An untouched training style is left as saved, even a legacy MAF profile
-    // this step would no longer accept as complete.
-    if (hasGoalChanges && !hasValidMafProfile()) return;
-
-    try {
-      const payload = hasGoalChanges ? buildTrainingStylePayload(goalChanges) : {};
-      if (Object.keys(payload).length > 0) await prefsMutation.mutateAsync(payload);
-      if (FUELLING_STEP_ENABLED) {
-        // The MAF profile already asked for age — don't ask twice.
-        if (age === "" && mafAge !== "") edit("age")(mafAge);
-        setStep("fuelling");
-      } else {
-        setStep("coach");
-      }
-    } catch {
-      toast({
-        title: "Could not save training style",
-        description: "Please try again. You can also update this later in settings.",
-        variant: "destructive",
-      });
-    }
+    if (step === "coach") await handleCoachNext();
   };
 
   // A template plan whose schedule failed is abandoned when the athlete takes
