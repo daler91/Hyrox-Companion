@@ -70,3 +70,54 @@ export function addDaysToISODate(date: string, days: number): string {
   const day = String(next.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+/** Plan-day names, Monday first. A plan's week 1 is the Monday-anchored week
+ *  that contains its start date. */
+export const PLAN_WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
+/** 0 for a Monday through 6 for a Sunday. */
+export function weekdayIndex(date: string): number {
+  return (parseIsoDate(date).getUTCDay() + 6) % 7;
+}
+
+/** The Monday that opens week 1 of a plan starting on `startDate`. */
+export function planWeekOneMonday(startDate: string): string {
+  return addDaysToISODate(startDate, -weekdayIndex(startDate));
+}
+
+/**
+ * Week 1's day names that fall before `startDate`. Scheduling leaves any
+ * session on those days off the calendar instead of back-dating it: a plan
+ * started on a Wednesday used to open with Monday and Tuesday already marked
+ * missed (onboarding audit C3). Empty for a Monday start.
+ */
+export function weekOneDaysBeforeStart(startDate: string): readonly string[] {
+  return PLAN_WEEKDAYS.slice(0, weekdayIndex(startDate));
+}
+
+/**
+ * The first Monday on or after `today`. Every start-date picker defaults to
+ * it, because a Monday start leaves no week-1 session off the calendar.
+ */
+export function nextPlanStartDate(today: string): string {
+  const index = weekdayIndex(today);
+  return index === 0 ? today : addDaysToISODate(today, 7 - index);
+}
+
+/**
+ * A run of consecutive weekday names as prose: "Monday", "Monday and
+ * Tuesday", or "Monday to Thursday" for three or more.
+ */
+export function describeWeekdaySpan(days: readonly string[]): string {
+  if (days.length <= 1) return days.join("");
+  if (days.length === 2) return `${days[0]} and ${days[1]}`;
+  return `${days[0]} to ${days.at(-1)}`;
+}

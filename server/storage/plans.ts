@@ -1,4 +1,4 @@
-import { addDaysToISODate } from "@shared/dateUtils";
+import { addDaysToISODate, planWeekOneMonday } from "@shared/dateUtils";
 import {
   type InsertPlanDay,
   type InsertTrainingPlan,
@@ -359,9 +359,30 @@ export class PlanStorage {
     });
   }
 
-  async schedulePlan(planId: string, startDate: string, userId: string): Promise<boolean> {
+  /**
+   * Lays a plan's days onto the calendar. Week 1 is the Monday-anchored week
+   * that contains `startDate`, so every day keeps its weekday, but no session
+   * is placed before `startDate`: a day that would land earlier is left
+   * unscheduled (null date, off the timeline) rather than back-dated. Starting
+   * a plan on a Wednesday used to put its Monday and Tuesday sessions in the
+   * past, where they read as missed before the athlete had done anything
+   * (onboarding audit C3).
+   *
+   * A day the athlete has already acted on (completed, skipped, or with a
+   * logged workout) always keeps a date. The timeline only reads scheduled
+   * days, so unscheduling one would hide the athlete's own history.
+   *
+   * The plan's own start date stays week 1's Monday, which keeps week-number
+   * math (computeCurrentWeek, the plan phase) aligned with the days'
+   * weekNumber/dayName.
+   */
+  async schedulePlan(
+    planId: string,
+    startDate: string,
+    userId: string,
+  ): Promise<"scheduled" | "not_found" | "nothing_after_start"> {
     const plan = await this.getTrainingPlan(planId, userId);
-    if (!plan) return false;
+    if (!plan) return "not_found";
 
     const dayNameToOffset: Record<string, number> = {
       monday: 0,
@@ -379,11 +400,9 @@ export class PlanStorage {
     // and then walked it with local-time accessors (getDay/setDate), so the
     // whole schedule shifted by a day whenever the server process ran in a
     // non-UTC zone. addDaysToISODate never leaves date-only space.
-    const startDayOfWeek = new Date(`${startDate}T00:00:00Z`).getUTCDay();
-    const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek;
-    const weekOneMonday = addDaysToISODate(startDate, mondayOffset);
+    const weekOneMonday = planWeekOneMonday(startDate);
 
-    if (plan.days.length === 0) return true;
+    if (plan.days.length === 0) return "scheduled";
 
     // ⚡ Perf: Replaced mapped array and Math.min spread with a single O(N) linear scan
     // to avoid intermediate array allocation and prevent "Maximum call stack size exceeded" errors.
@@ -398,8 +417,10 @@ export class PlanStorage {
     // Whether a rescheduled day lands in the future is judged on the athlete's
     // calendar, like every other "today" in this class.
     const today = await this.resolveUserToday(userId);
+    const loggedDayIds = await this.getPlanDayIdsWithWorkouts(plan.days.map((day) => day.id));
 
     const dateUpdates: { id: string; scheduledDate: string; resetStatus: boolean }[] = [];
+    const unscheduleIds: string[] = [];
     for (const day of plan.days) {
       const normalizedWeek = (day.weekNumber || 1) - minWeek + 1;
       const weekOffset = (normalizedWeek - 1) * 7;
@@ -412,6 +433,12 @@ export class PlanStorage {
         );
       }
       const dateStr = addDaysToISODate(weekOneMonday, weekOffset + dayOffset);
+      const actedOn =
+        day.status === "completed" || day.status === "skipped" || loggedDayIds.has(day.id);
+      if (dateStr < startDate && !actedOn) {
+        unscheduleIds.push(day.id);
+        continue;
+      }
       // Only reset status when the day actually moves to a new date. Without
       // this guard, calling schedulePlan with the same startDate (or any
       // reschedule that happens to leave a specific day on its existing
@@ -430,9 +457,11 @@ export class PlanStorage {
       });
     }
 
-    if (dateUpdates.length === 0) return true;
+    // Only possible for a one-week plan whose every session falls before the
+    // start: refuse rather than leave the plan with nothing on the calendar.
+    if (dateUpdates.length === 0) return "nothing_after_start";
 
-    // Derive plan-level start/end dates from the scheduled days
+    // Derive the plan-level end date from the scheduled days
     const scheduledDates = dateUpdates.map((u) => u.scheduledDate);
     // ⚡ Bolt Performance Optimization:
     // Replaced localeCompare with standard string comparison for YYYY-MM-DD dates.
@@ -442,7 +471,7 @@ export class PlanStorage {
       if (a > b) return 1;
       return 0;
     });
-    const planStartDate = scheduledDates[0];
+    const planStartDate = weekOneMonday;
     const planEndDate = scheduledDates.at(-1) ?? scheduledDates[0];
 
     return await db.transaction(async (tx) => {
@@ -463,6 +492,13 @@ export class PlanStorage {
         .set({ scheduledDate: caseSql })
         .where(inArray(planDays.id, updateIds));
 
+      if (unscheduleIds.length > 0) {
+        await tx
+          .update(planDays)
+          .set({ scheduledDate: null })
+          .where(inArray(planDays.id, unscheduleIds));
+      }
+
       const resetUpdateIds = dateUpdates.filter((u) => u.resetStatus).map((u) => u.id);
       if (resetUpdateIds.length > 0) {
         await tx
@@ -477,8 +513,18 @@ export class PlanStorage {
         .set({ startDate: planStartDate, endDate: planEndDate })
         .where(eq(trainingPlans.id, planId));
 
-      return true;
+      return "scheduled" as const;
     });
+  }
+
+  /** The ids among `dayIds` that a workout log is linked to. */
+  private async getPlanDayIdsWithWorkouts(dayIds: readonly string[]): Promise<Set<string>> {
+    if (dayIds.length === 0) return new Set();
+    const rows = await db
+      .selectDistinct({ planDayId: workoutLogs.planDayId })
+      .from(workoutLogs)
+      .where(inArray(workoutLogs.planDayId, [...dayIds]));
+    return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
   }
 
   async findMatchingPlanDay(planId: string, date: string): Promise<PlanDay | undefined> {

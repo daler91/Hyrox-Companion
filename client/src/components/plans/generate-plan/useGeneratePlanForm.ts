@@ -9,6 +9,7 @@ import type { GeneratePlanInput, TrainingPlan } from "@shared/schema";
 import { useMemo, useState } from "react";
 
 import { getTodayString } from "@/lib/dateUtils";
+import { defaultPlanStartDate } from "@/lib/planStart";
 
 // Stable identity, so the overlap memo isn't invalidated on every render when
 // the caller passes no plans.
@@ -181,8 +182,9 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
 export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const initialGoal = options.initialGoal ?? "";
   // Plan length is derived from the dates, so both are always prefilled: start
-  // from the caller (onboarding) or today, end at the historical default length.
-  const baseStartDate = options.initialStartDate || getTodayString();
+  // from the caller (onboarding) or the next Monday, end at the historical
+  // default length. A Monday start gives the plan a whole first week.
+  const baseStartDate = options.initialStartDate || defaultPlanStartDate();
   const defaultEndDate = addDaysToISODate(baseStartDate, DEFAULT_WEEKS * 7);
 
   const [step, setStep] = useState<GeneratePlanStep>(0);

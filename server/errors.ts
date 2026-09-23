@@ -25,6 +25,8 @@ export enum ErrorCode {
   MAF_SETUP_REQUIRED = "MAF_SETUP_REQUIRED",
   PUSH_NOT_CONFIGURED = "PUSH_NOT_CONFIGURED",
   PLAN_OVERLAP = "PLAN_OVERLAP",
+  /** Scheduling refused: every session of the plan falls before the chosen start. */
+  NO_SESSIONS_AFTER_START = "NO_SESSIONS_AFTER_START",
   // Recycle-bin restore refused: the record (or its device activity) already exists again.
   RECYCLE_BIN_CONFLICT = "RECYCLE_BIN_CONFLICT",
   PLAN_GENERATION_IN_PROGRESS = "PLAN_GENERATION_IN_PROGRESS",

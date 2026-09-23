@@ -366,7 +366,7 @@ Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-fl
 2. Splits the plan into 2-week chunks (`PLAN_GENERATION_CHUNK_WEEKS`) and generates them in parallel, at most 3 at a time (`pLimit(PLAN_CHUNK_CONCURRENCY)`). Each chunk is one JSON-mode request to the reasoning model with the prompt from `buildGenerationPrompt()` for its week range, and a 5-minute timeout (`PLAN_GENERATION_AI_TIMEOUT_MS`).
 3. Each response is validated against `generatedDaySchema` (Zod); invalid days and exercises are dropped with a warning, and `&` is rewritten to `and` in day text and exercise labels.
 4. The combined days must cover every week with all seven days exactly once, and every non-rest day must carry exercise-table rows, or the generation fails (502 `AI_ERROR`). An exercise whose heaviest weight rises more than 8% week over week (`MAX_WEEKLY_WEIGHT_INCREASE_PCT`) is clamped to that ceiling.
-5. Plan days and their exercise sets are written in one transaction, and the plan is scheduled from `startDate` (week 1 aligned to that week's Monday).
+5. Plan days and their exercise sets are written in one transaction, and the plan is scheduled from `startDate` (week 1 aligned to that week's Monday; no session is placed before `startDate`). For a midweek start, the prompt for the chunk holding week 1 carries a `PLAN START` block naming the week-1 days before the start, so the model keeps them as rest instead of losing sessions to them.
 6. A final transaction retires the plans in `supersedePlanIds` and marks this one `ready`. Any error marks it `failed` with a client-safe `generationError`.
 
 ### API Endpoint

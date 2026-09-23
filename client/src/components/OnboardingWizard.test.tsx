@@ -1,6 +1,7 @@
+import { nextPlanStartDate } from "@shared/dateUtils";
 import type { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
@@ -254,8 +255,10 @@ describe("OnboardingWizard Error Handling", () => {
 
     expect(await screen.findByTestId("text-generate-mode")).toHaveTextContent("onboarding");
     expect(screen.getByTestId("text-generate-goal")).toHaveTextContent("Improve endurance");
+    // The next Monday (today, on a Monday): a Monday start keeps all of week 1
+    // on the calendar (onboarding audit C3).
     expect(screen.getByTestId("text-generate-start-date")).toHaveTextContent(
-      format(addDays(new Date(), 1), "yyyy-MM-dd"),
+      nextPlanStartDate(format(new Date(), "yyyy-MM-dd")),
     );
   });
 });

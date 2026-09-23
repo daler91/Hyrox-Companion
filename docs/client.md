@@ -91,7 +91,7 @@ The home page and primary view. Displays a chronological timeline of training pl
 - **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile.
 - **Virtual scrolling** -- Uses `@tanstack/react-virtual` (`useVirtualizer`) to efficiently render large timeline lists.
 - **Timeline filtering** -- Filter by plan and by workout status (completed, planned, missed, skipped; deep-linkable as `?status=`). Collapsible past/future groups with "show more" buttons.
-- **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting.
+- **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting. Every start-date picker (this dialog, the onboarding `ScheduleStep` and the AI generator) defaults to the next Monday, or today on a Monday, via `defaultPlanStartDate()` in `lib/planStart.ts`, and a midweek pick explains which week-1 sessions it leaves off the calendar.
 - **Workout actions** -- Mark complete, change status, skip with confirmation (`SkipConfirmDialog`), open the sheet-based planned/logged/skipped workout surfaces, edit workout titles inline from sheet headers, delete, and combine workouts (`CombineWorkoutsDialog`).
 - **Floating action button** -- Toggles the coach panel.
 
@@ -213,7 +213,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `FuellingStep` -- Optional body profile (weight, height, age, activity, goal) → suggested nutrition target; shown only when the nutrition module is enabled.
 - `CoachStep` -- Introduces the AI Coach and records the `aiCoachEnabled` consent. Starts from the saved answer (off for a new account); choosing "on" shows the data disclosure before Continue saves it.
 - `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip). The AI plan leads only when the AI Coach is on; otherwise the template leads and the AI option says it needs the coach.
-- `ScheduleStep` -- Start date picker for the training plan.
+- `ScheduleStep` -- Start date picker for the template plan. Defaults to the next Monday; today can be chosen; a midweek pick says which week-1 sessions it leaves off the calendar.
 
 ### `plans/` -- Plan Management
 

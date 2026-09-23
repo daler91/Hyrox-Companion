@@ -1,6 +1,7 @@
+import { nextPlanStartDate } from "@shared/dateUtils";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { format, startOfWeek } from "date-fns";
+import { format } from "date-fns";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,7 +22,8 @@ const createWrapper = () => {
   };
 };
 
-vi.mock("@/lib/queryClient", () => ({
+vi.mock("@/lib/queryClient", async (importOriginal) => ({
+  humanizeApiError: (await importOriginal<typeof import("@/lib/queryClient")>()).humanizeApiError,
   apiRequest: vi.fn(),
   queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
 }));
@@ -58,9 +60,10 @@ describe("usePlanImport", () => {
       const { result } = runHook();
       expect(result.current.csvPreview).toBeNull();
       expect(result.current.schedulingPlanId).toBeNull();
-      expect(result.current.startDate).toBe(
-        format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"),
-      );
+      // The next Monday (today, on a Monday). This week's Monday is in the past
+      // on any other day, and accepting it opened the plan with missed
+      // sessions (onboarding audit C3).
+      expect(result.current.startDate).toBe(nextPlanStartDate(format(new Date(), "yyyy-MM-dd")));
       expect(result.current.fileInputRef.current).toBeNull();
     });
   });
@@ -236,7 +239,31 @@ describe("usePlanImport", () => {
         trigger(result);
       });
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: eToast, variant: "destructive" });
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: eToast, variant: "destructive" }),
+        );
+      });
+    });
+
+    it("shows the server's reason when a plan can't be scheduled from that date", async () => {
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(
+        new Error(
+          `400: ${JSON.stringify({
+            error: "None of this plan's sessions fall on or after that date. Choose an earlier start date.",
+            code: "NO_SESSIONS_AFTER_START",
+          })}`,
+        ),
+      );
+      const { result } = runHook();
+      act(() => {
+        result.current.schedulePlanMutation.mutate({ planId: "p1", startDate: "2026-09-27" });
+      });
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Failed to schedule plan",
+          description: "None of this plan's sessions fall on or after that date. Choose an earlier start date.",
+          variant: "destructive",
+        });
       });
     });
 

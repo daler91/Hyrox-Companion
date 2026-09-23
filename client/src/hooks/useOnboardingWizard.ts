@@ -2,7 +2,7 @@ import { calculateMafHr, type MafCategory } from "@shared/maf";
 import { calculateNutritionTarget } from "@shared/nutritionTargets";
 import type { UpsertNutritionTargetInput } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { addDays, format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
 
 import { parseFuellingProfile } from "@/components/onboarding/FuellingStep";
@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompleteOnboarding } from "@/hooks/useCompleteOnboarding";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { featureFlags } from "@/lib/featureFlags";
+import { defaultPlanStartDate } from "@/lib/planStart";
 import { queryClient } from "@/lib/queryClient";
 
 // The fuelling step only earns its place when the nutrition module is on —
@@ -94,7 +95,9 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
   const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
+  // The next Monday, not tomorrow: a Monday start keeps every week-1 session
+  // on the calendar (onboarding audit C3).
+  const [startDate, setStartDate] = useState<Date>(() => parseISO(defaultPlanStartDate()));
   const [applyTargets, setApplyTargets] = useState(true);
 
   const prefsMutation = useMutation({

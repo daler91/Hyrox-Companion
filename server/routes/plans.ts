@@ -307,9 +307,17 @@ protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("
     const userId = getUserId(req);
     const { planId } = req.params;
 
-    const success = await storage.plans.schedulePlan(planId, startDate, userId);
-    if (!success) {
+    const outcome = await storage.plans.schedulePlan(planId, startDate, userId);
+    if (outcome === "not_found") {
       return sendNotFound(res, "Training plan not found");
+    }
+    if (outcome === "nothing_after_start") {
+      // Sessions are never placed before the start date (onboarding audit C3),
+      // so a one-week plan started after its last session has nothing to show.
+      return res.status(400).json({
+        error: "None of this plan's sessions fall on or after that date. Choose an earlier start date.",
+        code: ErrorCode.NO_SESSIONS_AFTER_START,
+      });
     }
 
     res.json({ success: true });

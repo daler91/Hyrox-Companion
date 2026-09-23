@@ -116,7 +116,7 @@ RateLimit-Reset: 45
 
 | Status | Code                                                                                                    | Meaning                                                                                                                                                           |
 | ------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 400    | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV`                                                        | Invalid input                                                                                                                                                     |
+| 400    | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV`, `NO_SESSIONS_AFTER_START`                             | Invalid input                                                                                                                                                     |
 | 401    | `UNAUTHORIZED`                                                                                          | Missing or invalid auth                                                                                                                                           |
 | 403    | `EBADCSRFTOKEN`, `FORBIDDEN`, `AI_COACH_DISABLED`                                                       | Rejected rather than unauthenticated — every CSRF failure lands here as `EBADCSRFTOKEN`; `FORBIDDEN` is a Strava webhook verify-token mismatch                    |
 | 404    | `NOT_FOUND`                                                                                             | Resource not found                                                                                                                                                |
@@ -810,13 +810,13 @@ Delete a single plan day. Snapshotted into the [recycle bin](#recycle-bin-routes
 
 ### POST /api/v1/plans/:planId/schedule
 
-Schedule a plan by assigning dates to all days starting from a given date.
+Schedule a plan by assigning dates to its days from a given start date. Week 1 is the Monday-anchored week that contains `startDate`, so every day keeps its weekday. No session is placed before `startDate`: a week-1 day that would land earlier is left unscheduled (`scheduledDate: null`, off the timeline) instead of back-dated into the past, where it would read as missed. A day the athlete already completed, skipped or logged a workout against keeps its date. The plan's own `startDate` is week 1's Monday; its `endDate` is the last scheduled day.
 
 - **Auth:** Required
 - **Rate limit:** `planSchedule` category, 10/min
 - **Body:** `{ startDate: "YYYY-MM-DD" }`
 - **Validation:** `schedulePlanRequestSchema`
-- **Response:** `{ success: true }`
+- **Response:** `{ success: true }`; 404 for a plan the athlete does not own; 400 `NO_SESSIONS_AFTER_START` when every session of a one-week plan falls before `startDate`
 
 ### GET /api/v1/plans/days/:dayId/sets
 

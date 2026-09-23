@@ -291,6 +291,51 @@ describe("DELETE /api/v1/plans/:id", () => {
   });
 });
 
+describe("POST /api/v1/plans/:planId/schedule", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("schedules the athlete's plan from the chosen date", async () => {
+    vi.mocked(storage.plans.schedulePlan).mockResolvedValue("scheduled");
+
+    const response = await request(app)
+      .post("/api/v1/plans/plan-123/schedule")
+      .send({ startDate: "2026-09-23" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true });
+    expect(storage.plans.schedulePlan).toHaveBeenCalledWith("plan-123", "2026-09-23", "test_user_id");
+  });
+
+  it("returns 404 for a plan the athlete does not own", async () => {
+    vi.mocked(storage.plans.schedulePlan).mockResolvedValue("not_found");
+
+    const response = await request(app)
+      .post("/api/v1/plans/plan-123/schedule")
+      .send({ startDate: "2026-09-23" });
+
+    expect(response.status).toBe(404);
+  });
+
+  // Sessions are never placed before the start date (onboarding audit C3).
+  it("explains a start date after every session of the plan", async () => {
+    vi.mocked(storage.plans.schedulePlan).mockResolvedValue("nothing_after_start");
+
+    const response = await request(app)
+      .post("/api/v1/plans/plan-123/schedule")
+      .send({ startDate: "2026-09-27" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("NO_SESSIONS_AFTER_START");
+    expect(response.body.error).toMatch(/earlier start date/);
+  });
+});
+
 describe("POST /api/v1/plans/generate", () => {
   let app: express.Express;
 
