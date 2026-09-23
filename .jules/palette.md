@@ -10,3 +10,6 @@
 ## 2024-05-24 - Accessible tooltips on disabled buttons
 **Learning:** Using the native `disabled` attribute prevents elements from receiving focus, rendering attached tooltips inaccessible to keyboard users. Wrapping them in a `<span tabIndex={0}>` restores focus but breaks semantic meaning and ARIA associations.
 **Action:** Use `aria-disabled` instead of `disabled` on interactive elements that have tooltips, and handle the visual disabled state via CSS (e.g. `aria-disabled:opacity-50 aria-disabled:cursor-not-allowed`) while preventing clicks in the event handler.
+## 2026-09-23 - Add Tooltip to Purge Button
+**Learning:** Icon-only buttons in dense data rows like Recycle Bin often lack explicit context for destructive actions and aren't focusable when using native `disabled`, making tooltip explanations inaccessible.
+**Action:** Consistently replace `disabled` with `aria-disabled` and manage visual states via Tailwind (`aria-disabled:opacity-50 aria-disabled:cursor-not-allowed`) for isolated icon buttons that need a tooltip. Wrap them in a local `<TooltipProvider>` for the tooltip to render and be accessible even when "disabled".
