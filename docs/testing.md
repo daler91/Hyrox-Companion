@@ -671,10 +671,12 @@ in `vitest.config.ts` and fails if any metric drops below them. It also writes
 Integration tests require a real PostgreSQL database. Set the following environment variables:
 
 ```bash
-export DATABASE_URL="postgresql://user:password@localhost:5432/testdb"
+export DATABASE_URL="postgresql://localhost:5432/testdb"
 export ALLOW_DEV_AUTH_BYPASS="true"
 export ENCRYPTION_KEY="01234567890123456789012345678901"
 ```
+
+Add a user name and password to `DATABASE_URL` if your local server requires them.
 
 Then push the schema and run:
 

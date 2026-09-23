@@ -56,7 +56,8 @@ describe("anthropic text provider", () => {
       content: [{ type: "text", text: "ok" }],
     }));
 
-    await createAnthropicTextProvider({ apiKey: "anthropic-key" }).generateText(baseRequest);
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+    await provider.generateText(baseRequest);
 
     const signal = fetchSpy.mock.calls[0]?.[1]?.signal;
     expect(signal).toBeInstanceOf(AbortSignal);

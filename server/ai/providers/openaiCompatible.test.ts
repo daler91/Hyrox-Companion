@@ -7,6 +7,9 @@ import type { TextAiStreamChunk } from "./types";
 
 vi.mock("../retry", async () => (await import("./testHelpers")).mockRetryModule());
 
+// Placeholder credential for the provider under test; never leaves the process.
+const TEST_KEY = "test-key";
+
 const baseRequest = makeProviderRequest({
   providerId: "openai-compatible",
   model: "grok-4.3",
@@ -24,7 +27,7 @@ describe("openai-compatible text provider", () => {
     }));
 
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,
@@ -40,7 +43,7 @@ describe("openai-compatible text provider", () => {
     });
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://api.x.ai/v1/chat/completions");
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer test-key" });
+    expect(init?.headers).toMatchObject({ Authorization: `Bearer ${TEST_KEY}` });
     expect(requestJsonBody(init)).toMatchObject({
       model: "grok-4.3",
       response_format: { type: "json_object" },
@@ -57,7 +60,7 @@ describe("openai-compatible text provider", () => {
       choices: [{ message: { content: "ok" } }],
     }));
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.groq.com/openai/v1/",
       profile: "groq",
       supportsReasoningEffort: false,
@@ -81,7 +84,7 @@ describe("openai-compatible text provider", () => {
     }));
 
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,
@@ -103,7 +106,7 @@ describe("openai-compatible text provider", () => {
       { status: 200 },
     ));
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,
@@ -125,7 +128,7 @@ describe("openai-compatible text provider", () => {
       { status: 200 },
     ));
     const provider = createOpenAiCompatibleTextProvider({
-      apiKey: "test-key",
+      apiKey: TEST_KEY,
       baseUrl: "https://api.x.ai/v1",
       profile: "xai",
       supportsReasoningEffort: true,

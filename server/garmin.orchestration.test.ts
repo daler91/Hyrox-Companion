@@ -82,13 +82,17 @@ class FakeGarminConnect {
   }
 }
 
+// The stored-connection fixture's login, shared by the tests that log in with it.
+const FIXTURE_EMAIL = "a@example.com";
+const FIXTURE_PW = "pw";
+
 function conn(overrides: Record<string, unknown> = {}) {
   return {
     userId: "user-1",
     garminDisplayName: "Test Athlete",
     // Storage decrypts in place — plaintext despite the column names.
-    encryptedEmail: "a@example.com",
-    encryptedPassword: "pw",
+    encryptedEmail: FIXTURE_EMAIL,
+    encryptedPassword: FIXTURE_PW,
     encryptedOauth1Token: JSON.stringify({ oauth_token: "o1" }),
     encryptedOauth2Token: JSON.stringify({ access_token: "o2" }),
     tokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // fresh (> 5-min buffer)
@@ -210,7 +214,7 @@ describe("getGarminClient token strategy", () => {
     expect(res.status).toBe(200);
     const client = FakeGarminConnect.instances[0];
     expect(client.loadToken).not.toHaveBeenCalled();
-    expect(client.login).toHaveBeenCalledWith("a@example.com", "pw");
+    expect(client.login).toHaveBeenCalledWith(FIXTURE_EMAIL, FIXTURE_PW);
     expect(storage.users.updateGarminTokens).toHaveBeenCalledWith(
       "user-1",
       JSON.stringify({ oauth_token: "o1" }),
@@ -315,12 +319,9 @@ describe("circuit breaker integration", () => {
 
   it("answers 503, not a credentials error, when the breaker blocks the /connect login", async () => {
     FakeGarminConnect.onConstruct = tripAfterRouteCheck;
-    // Connect with the same credentials the stored-connection fixture holds.
-    const stored = conn() as unknown as { encryptedEmail: string; encryptedPassword: string };
-
     const res = await request(app)
       .post("/api/v1/garmin/connect")
-      .send({ email: stored.encryptedEmail, password: stored.encryptedPassword });
+      .send({ email: FIXTURE_EMAIL, password: FIXTURE_PW });
 
     expect(res.status).toBe(503);
     expect(res.body.code).toBe("GARMIN_CIRCUIT_OPEN");

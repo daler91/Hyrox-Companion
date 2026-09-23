@@ -186,7 +186,7 @@ CSRF protection uses the **double-submit cookie pattern** via the `csrf-csrf` li
 **Configuration:**
 
 - Cookie: `httpOnly: true`, `sameSite: "strict"`, `secure: true` (production)
-- Secret: `CSRF_SECRET` env var. **Required in production** and **must differ from `ENCRYPTION_KEY`** — both invariants are enforced at startup by `server/env.ts` Zod `.refine()` guards that abort boot with `❌ FATAL:` messages. When unset in dev/test, `resolveCsrfSecret()` generates a random per-process secret (it is **not** aliased to `ENCRYPTION_KEY`). See [Authentication → Key Separation](authentication.md#key-separation-csrf_secret-vs-encryption_key).
+- HMAC signing key: the `CSRF_SECRET` env var. **Required in production** and **must differ from `ENCRYPTION_KEY`** — both invariants are enforced at startup by `server/env.ts` Zod `.refine()` guards that abort boot with `❌ FATAL:` messages. When unset in dev/test, `resolveCsrfSecret()` generates a random per-process secret (it is **not** aliased to `ENCRYPTION_KEY`). See [Authentication → Key Separation](authentication.md#key-separation-csrf_secret-vs-encryption_key).
 - Safe methods (GET/HEAD/OPTIONS) are exempt from verification
 
 ### Idempotency Middleware
