@@ -59,10 +59,12 @@ class FakeGarminConnect {
   static instances: FakeGarminConnect[] = [];
   static loginImpl: () => Promise<unknown> = () => Promise.resolve(undefined);
   static getActivitiesImpl: () => Promise<unknown> = () => Promise.resolve([]);
+  static onConstruct: () => void = () => {};
   static reset(): void {
     this.instances = [];
     this.loginImpl = () => Promise.resolve(undefined);
     this.getActivitiesImpl = () => Promise.resolve([]);
+    this.onConstruct = () => {};
   }
 
   login = vi.fn((_email?: string, _password?: string) => FakeGarminConnect.loginImpl());
@@ -76,6 +78,7 @@ class FakeGarminConnect {
 
   constructor(public opts: { username: string; password: string }) {
     FakeGarminConnect.instances.push(this);
+    FakeGarminConnect.onConstruct();
   }
 }
 
@@ -271,6 +274,56 @@ describe("circuit breaker integration", () => {
     expect(second.body.code).toBe("GARMIN_CIRCUIT_OPEN");
     // Short-circuited before any storage read.
     expect(vi.mocked(storage.users.getGarminConnection).mock.calls).toHaveLength(callsAfterFirst);
+  });
+
+  // The route-level check reads only this instance's copy of the breaker; a
+  // trip recorded by a sibling instance is first seen inside withCircuitBreaker
+  // (W14). These tests trip the breaker just after the route-level check to
+  // stand in for that adoption. Garmin never sees the request, so the stored
+  // connection must survive: setGarminError would also wipe the credentials.
+  function tripAfterRouteCheck(): void {
+    __testing.garminCircuitBreaker.trip("adopted from a sibling instance");
+  }
+
+  it("answers 503 and keeps the connection when the breaker blocks the activity fetch", async () => {
+    vi.mocked(storage.users.getGarminConnection).mockImplementation(async () => {
+      tripAfterRouteCheck();
+      return conn();
+    });
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe("GARMIN_CIRCUIT_OPEN");
+    expect(storage.users.setGarminError).not.toHaveBeenCalled();
+    expect(FakeGarminConnect.instances[0].getActivities).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 and keeps the connection when the breaker blocks the sync login", async () => {
+    vi.mocked(storage.users.getGarminConnection).mockImplementation(async () => {
+      tripAfterRouteCheck();
+      return conn({ tokenExpiresAt: null }); // forces the login path
+    });
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe("GARMIN_CIRCUIT_OPEN");
+    expect(storage.users.setGarminError).not.toHaveBeenCalled();
+    expect(FakeGarminConnect.instances[0].login).not.toHaveBeenCalled();
+  });
+
+  it("answers 503, not a credentials error, when the breaker blocks the /connect login", async () => {
+    FakeGarminConnect.onConstruct = tripAfterRouteCheck;
+
+    const res = await request(app)
+      .post("/api/v1/garmin/connect")
+      .send({ email: "a@example.com", password: "pw" });
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe("GARMIN_CIRCUIT_OPEN");
+    expect(FakeGarminConnect.instances[0].login).not.toHaveBeenCalled();
+    expect(storage.users.upsertGarminConnection).not.toHaveBeenCalled();
   });
 });
 
