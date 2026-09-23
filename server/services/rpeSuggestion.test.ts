@@ -53,7 +53,7 @@ describe("suggestRpeFromHeartRate", () => {
   it("suggests nothing without a max HR or an age to read the heart rate against", () => {
     // hrReserveRatio withholds rather than assume a 26-year-old's max (audit H3).
     expect(suggestRpeFromHeartRate(importedRun(150), { restingHr: 60 })).toBeNull();
-    expect(suggestRpeFromHeartRate(importedRun(150), undefined)).toBeNull();
+    expect(suggestRpeFromHeartRate(importedRun(150), {})).toBeNull();
   });
 
   it("suggests nothing without heart rate", () => {
@@ -147,7 +147,8 @@ describe("loadSuggestedRpe", () => {
   });
 
   it("suggests nothing for an athlete with no profile row", async () => {
-    getUser.mockResolvedValue(undefined);
+    // Reset in beforeEach, so the profile read finds no row.
     await expect(loadSuggestedRpe(importedRun(150), "user-1")).resolves.toBeNull();
+    expect(getUser).toHaveBeenCalledWith("user-1");
   });
 });

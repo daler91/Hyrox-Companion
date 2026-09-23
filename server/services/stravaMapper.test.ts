@@ -395,8 +395,8 @@ describe("perceivedExertionToRpe", () => {
   });
 
   it("is empty when the athlete gave no rating", () => {
+    // An omitted field takes the same path; the sync's test covers it (strava.test.ts).
     expect(perceivedExertionToRpe(null)).toBeNull();
-    expect(perceivedExertionToRpe(undefined)).toBeNull();
   });
 
   it("drops a value off the 1-10 scale rather than clamping it into a rating", () => {
