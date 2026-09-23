@@ -21,12 +21,12 @@ vi.mock("../../services/planGenerationService", () => ({
 const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
 
 vi.mock("../../storage", async () => {
-  const { storage } = (await import("./testUtils")).mockStorageModule({
+  const mocked = (await import("./testUtils")).mockStorageModule({
     workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
     plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
   });
-  return { storage: { ...storage, plans: { ...storage.plans, schedulePlan } } };
+  return { storage: { ...mocked.storage, plans: { ...mocked.storage.plans, schedulePlan } } };
 });
 
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));

@@ -54,7 +54,7 @@ export function OnboardingWizardFrame({
   // type, so the dialog handles Enter from its text fields only.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Enter" || !onEnter) return;
-    const target = event.target;
+    const { target } = event;
     if (target instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(target.type)) {
       event.preventDefault();
       onEnter();
