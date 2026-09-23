@@ -1,5 +1,19 @@
 import { setupAuthIntercepts } from "../support/authIntercepts";
 
+// Walks from Welcome to the Plan step. Nothing is changed on the way, so
+// nothing is saved. Each step's title is waited for before it is left.
+function walkToPlanStep() {
+  cy.contains("button", "Get Started").click();
+  cy.contains("Set Your Preferences").should("exist");
+  cy.contains("button", "Continue").click();
+  cy.contains("What's Your Goal?").should("exist");
+  cy.contains("button", "Continue").click();
+  cy.contains("Fuel Your Training").should("exist");
+  cy.contains("button", "Skip").click();
+  cy.contains("Meet Your AI Coach").should("exist");
+  cy.contains("button", "Continue").click();
+}
+
 // E2E coverage for the first-time onboarding flow, the new "Step N of N"
 // counter, and the re-entry point added to Settings. Covers findings
 // O-1..O-4 from the UX review.
@@ -31,7 +45,8 @@ describe("Onboarding Wizard", () => {
     // app also PATCHes the detected timezone on load (useDetectTimezone), so
     // the units save is picked out by its body rather than by arrival order.
     cy.intercept("PATCH", "/api/v1/preferences", (req) => {
-      if (req.body?.gender !== undefined) req.alias = "saveUnits";
+      const body = req.body as { gender?: string } | undefined;
+      if (body?.gender !== undefined) req.alias = "saveUnits";
       req.reply({ statusCode: 200, body: { ok: true } });
     });
     cy.contains("Set Your Preferences").should("be.visible");
@@ -83,15 +98,7 @@ describe("Onboarding Wizard", () => {
     cy.wait("@timeline");
     cy.wait("@plans");
 
-    cy.contains("button", "Get Started").click();
-    cy.contains("Set Your Preferences").should("be.visible");
-    cy.contains("button", "Continue").click();
-    cy.contains("What's Your Goal?").should("be.visible");
-    cy.contains("button", "Continue").click();
-    cy.contains("Fuel Your Training").should("be.visible");
-    cy.contains("button", "Skip").click();
-    cy.contains("Meet Your AI Coach").should("be.visible");
-    cy.contains("button", "Continue").click();
+    walkToPlanStep();
 
     // The generator asks first instead of failing with a 403 after three steps.
     // Its own alias: an en-US browser may already have saved suggested units.
@@ -111,16 +118,7 @@ describe("Onboarding Wizard", () => {
     cy.wait("@timeline");
     cy.wait("@plans");
 
-    // Walk to the Plan step. Nothing is changed on the way, so nothing is saved.
-    cy.contains("button", "Get Started").click();
-    cy.contains("Set Your Preferences").should("be.visible");
-    cy.contains("button", "Continue").click();
-    cy.contains("What's Your Goal?").should("be.visible");
-    cy.contains("button", "Continue").click();
-    cy.contains("Fuel Your Training").should("be.visible");
-    cy.contains("button", "Skip").click();
-    cy.contains("Meet Your AI Coach").should("be.visible");
-    cy.contains("button", "Continue").click();
+    walkToPlanStep();
 
     cy.getBySel("button-onboarding-skip").click();
     cy.contains("Choose Your Path").should("not.exist");

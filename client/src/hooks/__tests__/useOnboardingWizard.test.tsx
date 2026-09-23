@@ -96,8 +96,9 @@ describe("useOnboardingWizard", () => {
   // Creating the template plan on the Plan step left an unscheduled copy
   // behind every time the athlete went Back and chose again (audit H3).
   it("creates the template plan only on Start Training, once, however often the athlete goes back", async () => {
+    // api.plans.schedule is a bare mock, so scheduling succeeds unless a test
+    // says otherwise.
     mockSamplePlanCreation();
-    vi.mocked(api.plans.schedule).mockResolvedValueOnce(undefined);
     const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
@@ -122,9 +123,7 @@ describe("useOnboardingWizard", () => {
 
   it("reuses the created plan when a failed schedule is retried", async () => {
     mockSamplePlanCreation();
-    vi.mocked(api.plans.schedule)
-      .mockRejectedValueOnce(new Error("500: boom"))
-      .mockResolvedValueOnce(undefined);
+    vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
     const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
@@ -232,9 +231,10 @@ describe("useOnboardingWizard", () => {
     expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
     // Points at connecting a device, which setup never mentioned (audit L7).
-    expect(mockToast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Your training plan is ready!", action: expect.anything() }),
+    expect(mockToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "Your training plan is ready!" }),
     );
+    expect(mockToast.mock.lastCall?.[0]).toHaveProperty("action");
   });
 
   it("shows an error toast if prefsMutation fails on 'units' step, but still advances to 'goal' step", async () => {

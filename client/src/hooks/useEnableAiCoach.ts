@@ -12,8 +12,12 @@ export function useEnableAiCoach() {
   return useMutation({
     mutationFn: () => api.preferences.update({ aiCoachEnabled: true }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }),
+      ]).catch(() => {
+        // The consent is saved; a failed refetch only delays showing it.
+      });
     },
   });
 }

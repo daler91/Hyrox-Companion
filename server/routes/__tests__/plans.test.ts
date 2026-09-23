@@ -3,7 +3,7 @@ import request from "supertest";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
-import * as planService from "../../services/planService";
+import { createSamplePlan } from "../../services/planService";
 import { storage } from "../../storage";
 import plansRouter from "../plans";
 import { createTestApp } from "./testUtils";
@@ -302,14 +302,14 @@ describe("POST /api/v1/plans/sample", () => {
     vi.clearAllMocks();
     clearRateLimitBuckets();
     app = createTestApp(plansRouter);
-    vi.mocked(planService.createSamplePlan).mockResolvedValue({ id: "sample-1" } as never);
+    vi.mocked(createSamplePlan).mockResolvedValue({ id: "sample-1" } as never);
   });
 
   it("creates the template with no body, as the Timeline does", async () => {
     const response = await request(app).post("/api/v1/plans/sample").send({});
 
     expect(response.status).toBe(200);
-    expect(planService.createSamplePlan).toHaveBeenCalledWith("test_user_id", {});
+    expect(createSamplePlan).toHaveBeenCalledWith("test_user_id", {});
   });
 
   // Onboarding keeps the goal and race date template users give (audit M3).
@@ -319,7 +319,7 @@ describe("POST /api/v1/plans/sample", () => {
       .send({ goal: "Complete HYROX Open", raceDate: "2026-11-15" });
 
     expect(response.status).toBe(200);
-    expect(planService.createSamplePlan).toHaveBeenCalledWith("test_user_id", {
+    expect(createSamplePlan).toHaveBeenCalledWith("test_user_id", {
       goal: "Complete HYROX Open",
       raceDate: "2026-11-15",
     });
@@ -329,7 +329,7 @@ describe("POST /api/v1/plans/sample", () => {
     const response = await request(app).post("/api/v1/plans/sample").send({ raceDate: "15/11/2026" });
 
     expect(response.status).toBe(400);
-    expect(planService.createSamplePlan).not.toHaveBeenCalled();
+    expect(createSamplePlan).not.toHaveBeenCalled();
   });
 });
 
@@ -373,8 +373,8 @@ describe("POST /api/v1/plans/:planId/schedule", () => {
       .send({ startDate: "2026-09-27" });
 
     expect(response.status).toBe(400);
-    expect(response.body.code).toBe("NO_SESSIONS_AFTER_START");
-    expect(response.body.error).toMatch(/earlier start date/);
+    expect(response.body).toHaveProperty("code", "NO_SESSIONS_AFTER_START");
+    expect(response.text).toMatch(/earlier start date/);
   });
 });
 

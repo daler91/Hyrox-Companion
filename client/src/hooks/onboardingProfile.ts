@@ -61,7 +61,7 @@ function numberToInput(value: number | null | undefined): string {
  * Race Predictor, so leaving that answer as it is sends nothing and the column
  * keeps its "not answered yet" null.
  */
-export function profileFromPreferences(prefs: UserPreferences | undefined): OnboardingProfile {
+export function profileFromPreferences(prefs?: UserPreferences): OnboardingProfile {
   if (!prefs) return DEFAULT_ONBOARDING_PROFILE;
   return {
     weightUnit: prefs.weightUnit === "lbs" ? "lbs" : "kg",

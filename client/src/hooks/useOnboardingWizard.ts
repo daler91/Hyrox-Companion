@@ -188,7 +188,9 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       onComplete("sample");
     },
     onError: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {
+        // Only a refresh; the toast below already reports the failure.
+      });
       toast({
         title: "Failed to set up your plan",
         description: "Please try again.",
@@ -400,7 +402,9 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     api.plans
       .deletePlan(planId)
       .then(() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }))
-      .catch(() => {});
+      .catch(() => {
+        // Best effort: a plan that survives stays in the list, where it can be deleted.
+      });
   };
 
   const handleSkip = () => {

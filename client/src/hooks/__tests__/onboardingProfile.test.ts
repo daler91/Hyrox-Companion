@@ -24,7 +24,7 @@ function prefs(overrides: Partial<UserPreferences> = {}): UserPreferences {
 
 describe("profileFromPreferences", () => {
   it("falls back to the defaults before the preferences load", () => {
-    expect(profileFromPreferences(undefined)).toEqual(DEFAULT_ONBOARDING_PROFILE);
+    expect(profileFromPreferences()).toEqual(DEFAULT_ONBOARDING_PROFILE);
   });
 
   it("reads an established athlete's saved answers", () => {

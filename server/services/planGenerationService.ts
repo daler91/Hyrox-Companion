@@ -251,8 +251,8 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
   if (daysBeforeStart.length > 0) {
     const firstDay = PLAN_WEEKDAYS[daysBeforeStart.length];
     lines.push(
-      ``,
-      `PLAN START:`,
+      "",
+      "PLAN START:",
       `- The athlete starts on ${firstDay} of week 1 (${input.startDate}). Week 1's ${describeWeekdaySpan(daysBeforeStart)} come before the start and are never scheduled: make them rest days, and fit week 1's training into ${firstDay} through Sunday.`,
     );
   }

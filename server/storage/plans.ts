@@ -39,6 +39,16 @@ function needsStatusReset(day: PlanDay, dateStr: string, today: string): boolean
   return dateChanged && (day.status === "missed" || day.status === "skipped") && dateStr >= today;
 }
 
+/** The ids among `dayIds` that a workout log is linked to. */
+async function getPlanDayIdsWithWorkouts(dayIds: readonly string[]): Promise<Set<string>> {
+  if (dayIds.length === 0) return new Set();
+  const rows = await db
+    .selectDistinct({ planDayId: workoutLogs.planDayId })
+    .from(workoutLogs)
+    .where(inArray(workoutLogs.planDayId, [...dayIds]));
+  return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
+}
+
 export class PlanStorage {
   async createTrainingPlan(plan: InsertTrainingPlan, tx?: DbExecutor): Promise<TrainingPlan> {
     const executor = tx ?? db;
@@ -435,7 +445,7 @@ export class PlanStorage {
     // Whether a rescheduled day lands in the future is judged on the athlete's
     // calendar, like every other "today" in this class.
     const today = await this.resolveUserToday(userId);
-    const loggedDayIds = await this.getPlanDayIdsWithWorkouts(plan.days.map((day) => day.id));
+    const loggedDayIds = await getPlanDayIdsWithWorkouts(plan.days.map((day) => day.id));
 
     const dateUpdates: { id: string; scheduledDate: string; resetStatus: boolean }[] = [];
     const unscheduleIds: string[] = [];
@@ -520,16 +530,6 @@ export class PlanStorage {
 
       return "scheduled" as const;
     });
-  }
-
-  /** The ids among `dayIds` that a workout log is linked to. */
-  private async getPlanDayIdsWithWorkouts(dayIds: readonly string[]): Promise<Set<string>> {
-    if (dayIds.length === 0) return new Set();
-    const rows = await db
-      .selectDistinct({ planDayId: workoutLogs.planDayId })
-      .from(workoutLogs)
-      .where(inArray(workoutLogs.planDayId, [...dayIds]));
-    return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
   }
 
   async findMatchingPlanDay(planId: string, date: string): Promise<PlanDay | undefined> {
