@@ -1,3 +1,5 @@
+import type { TrainingPlan } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useState } from "react";
 
@@ -13,6 +15,7 @@ import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
+import { QUERY_KEYS } from "@/lib/api";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
@@ -38,6 +41,10 @@ const DESCS: Record<OnboardingWizardStep, string> = {
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  // "Run setup again" is how an established athlete switches plans, so the
+  // generator gets their plans and can offer to archive the one it overlaps
+  // (onboarding audit H2). A first run simply has none.
+  const { data: existingPlans } = useQuery<TrainingPlan[]>({ queryKey: QUERY_KEYS.plans });
   const {
     step,
     idx,
@@ -176,6 +183,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             mode="onboarding"
             initialGoal={getOnboardingGoalLabel(selectedGoal)}
             initialStartDate={format(startDate, "yyyy-MM-dd")}
+            existingPlans={existingPlans}
             open={showGenerateDialog}
             onOpenChange={setShowGenerateDialog}
             onGenerated={handleGeneratedPlan}

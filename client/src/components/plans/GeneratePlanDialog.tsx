@@ -26,7 +26,8 @@ interface GeneratePlanDialogProps {
   readonly initialStartDate?: string;
   /**
    * The athlete's existing plans, so the schedule step can offer to archive one
-   * this plan would overlap. Omitted in onboarding, where there are none yet.
+   * this plan would overlap. Onboarding passes them too: "Run setup again" is
+   * where an established athlete goes to switch plans.
    */
   readonly existingPlans?: readonly TrainingPlan[];
 }

@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { QUERY_KEYS } from "@/lib/api";
 import * as queryClientLib from "@/lib/queryClient";
 import {
   renderOnboardingWizard,
@@ -148,5 +149,58 @@ describe("OnboardingWizard fuelling step", () => {
       expect.anything(),
     );
     expect(targetsCalls()).toHaveLength(0);
+  });
+
+  // "Run setup again": the step arrives prefilled with the saved profile.
+  const SAVED_PROFILE = {
+    weightUnit: "kg",
+    distanceUnit: "km",
+    onboardingCompleted: true,
+    bodyweightKg: 80.37,
+    heightCm: 180,
+    age: 30,
+    activityLevel: "moderate",
+    weightGoalDirection: "lose",
+    weightGoalRateKgPerWeek: 0.5,
+  };
+
+  it("prefills a re-run from the saved profile and writes nothing when it is left alone", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, SAVED_PROFILE);
+    renderComponent();
+    await walkToFuellingStep();
+
+    expect(screen.getByTestId("input-fuelling-bodyweight")).toHaveValue(80.4);
+    expect(screen.getByTestId("input-fuelling-height")).toHaveValue(180);
+    expect(screen.getByTestId("input-fuelling-age")).toHaveValue(30);
+
+    const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("plan-step");
+
+    // Neither the profile nor the athlete's own targets are rewritten.
+    expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
+    expect(targetsCalls()).toHaveLength(0);
+  });
+
+  it("keeps the saved bodyweight and goal rate when another field changes", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, SAVED_PROFILE);
+    renderComponent();
+    await walkToFuellingStep();
+
+    fireEvent.change(screen.getByTestId("input-fuelling-height"), { target: { value: "182" } });
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("plan-step");
+
+    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/preferences",
+      expect.objectContaining({
+        bodyweightKg: 80.37,
+        heightCm: 182,
+        weightGoalDirection: "lose",
+        weightGoalRateKgPerWeek: 0.5,
+      }),
+      expect.anything(),
+    );
   });
 });

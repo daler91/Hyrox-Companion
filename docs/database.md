@@ -48,7 +48,7 @@ User accounts and preferences.
 | `training_style_recompute_now` | `boolean` | default `false` |
 | `onboarding_completed` | `boolean` | NOT NULL, default `false` |
 | `division` | `varchar(16)` | default `'open'` — HYROX division; drives station load standards and Race Predictor benchmarks |
-| `gender` | `varchar(16)` | nullable — null ≡ not answered, treated as `prefer_not_to_say` by the predictor |
+| `gender` | `varchar(32)` | nullable — `male`/`female`/`prefer_not_to_say`; null ≡ not answered, treated as `prefer_not_to_say` by the predictor. Widened from 16 in `0102`: `prefer_not_to_say` is 17 characters |
 | `age` | `integer` | nullable — general athlete age for the Race Predictor cohort; distinct from `maf_age` |
 | `bodyweight_kg` | `real` | nullable — canonical kg (formula input, not a display unit; see [ADR: Units](adr-units.md)) |
 | `height_cm` | `real` | nullable — canonical cm |
@@ -1316,7 +1316,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **101 migrations**, `0000` through `0100`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **103 migrations**, `0000` through `0102`:
 
 ```
 migrations/
@@ -1359,11 +1359,13 @@ migrations/
   0098_per_email_notify_hours.sql    # users: per-email notify_hour_* overrides
   0099_drop_redundant_workout_logs_user_id_index.sql   # drop idx_workout_logs_user_id
   0100_amusing_moonstone.sql         # drop idx_exercise_sets_workout_log_id / _plan_day_id
+  0101_heavy_rogue.sql               # drop idx_workout_structure_blocks_workout_log_id / _plan_day_id
+  0102_widen_users_gender.sql        # users.gender varchar(16) -> varchar(32)
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0100_snapshot.json
+    0102_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.

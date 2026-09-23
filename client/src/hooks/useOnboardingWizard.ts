@@ -1,20 +1,24 @@
 import { calculateMafHr, type MafCategory } from "@shared/maf";
-import {
-  type ActivityLevel,
-  calculateNutritionTarget,
-  type WeightGoalDirection,
-} from "@shared/nutritionTargets";
+import { calculateNutritionTarget } from "@shared/nutritionTargets";
 import type { UpsertNutritionTargetInput } from "@shared/schema";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { parseFuellingProfile } from "@/components/onboarding/FuellingStep";
 import { DEFAULT_ONBOARDING_GOAL_ID } from "@/components/onboarding/onboardingGoals";
+import {
+  bodyweightInput,
+  changedFields,
+  firstRunUnitSuggestion,
+  type OnboardingProfile,
+  prefersImperialUnits,
+  profileFromPreferences,
+} from "@/hooks/onboardingProfile";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { useToast } from "@/hooks/use-toast";
 import { useCompleteOnboarding } from "@/hooks/useCompleteOnboarding";
-import { api, QUERY_KEYS } from "@/lib/api";
+import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { featureFlags } from "@/lib/featureFlags";
 import { queryClient } from "@/lib/queryClient";
 
@@ -29,30 +33,60 @@ const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = FUELLI
   ? { units: "welcome", goal: "units", fuelling: "goal", plan: "fuelling", schedule: "plan" }
   : { units: "welcome", goal: "units", plan: "goal", schedule: "plan" };
 
+// Saved-profile fields each step writes. A step sends only the ones whose shown
+// value differs from what is saved (see changedFields).
+const UNITS_STEP_FIELDS = ["weightUnit", "distanceUnit", "division", "gender"] as const;
+const GOAL_STEP_FIELDS = ["trainingStyleId", "mafAge", "mafCategory", "mafHrDataAvailable"] as const;
+
 export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
   const completeOnboarding = useCompleteOnboarding();
   const [step, setStep] = useState<OnboardingWizardStep>("welcome");
-  const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
-  const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
-  const [division, setDivision] = useState<"open" | "pro">("open");
-  const [gender, setGender] = useState<"male" | "female" | "prefer_not_to_say">("prefer_not_to_say");
+
+  // The wizard starts from what the athlete has saved, not from hard-coded
+  // defaults, and edits a draft on top of it: "Run setup again" used to show an
+  // established athlete kg/km/Open/Balanced and write them back on Continue
+  // (onboarding audit H2). Until the preferences arrive the defaults stand in,
+  // and since only differences are ever written, a field the athlete has not
+  // touched is never sent.
+  const { data: savedPreferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
+  const saved = useMemo(() => profileFromPreferences(savedPreferences), [savedPreferences]);
+  const [imperial] = useState(prefersImperialUnits);
+  const [draft, setDraft] = useState<Partial<OnboardingProfile>>({});
+  const shown: OnboardingProfile = {
+    ...saved,
+    ...firstRunUnitSuggestion(savedPreferences, imperial),
+    ...draft,
+  };
+  const edit =
+    <K extends keyof OnboardingProfile>(key: K) =>
+    (value: OnboardingProfile[K]) =>
+      setDraft((current) => ({ ...current, [key]: value }));
+  const {
+    weightUnit,
+    distanceUnit,
+    division,
+    gender,
+    trainingStyleId,
+    mafAge,
+    // Maffetone's category question, answered directly (audit M6). Replaces the
+    // legacy injury-boolean + consistency/trend proxies, which collapsed his -10
+    // and -5 categories and granted +5 with no training-duration question.
+    mafCategory,
+    mafHrDataAvailable,
+    heightCm,
+    age,
+    activityLevel,
+    weightGoalDirection,
+  } = shown;
+  // Bodyweight is typed in the unit shown, so its saved value is formatted in
+  // that unit until the athlete types over it.
+  const [typedBodyweight, setTypedBodyweight] = useState<string | null>(null);
+  const bodyweight = typedBodyweight ?? bodyweightInput(savedPreferences?.bodyweightKg, weightUnit);
+
   const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
-  const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
-  const [mafAge, setMafAge] = useState("");
-  // Maffetone's category question, answered directly (audit M6). Replaces the
-  // legacy injury-boolean + consistency/trend proxies, which collapsed his -10
-  // and -5 categories and granted +5 with no training-duration question.
-  const [mafCategory, setMafCategory] = useState("");
-  const [mafHrDataAvailable, setMafHrDataAvailable] = useState(false);
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
-  // Fuelling step (optional): body profile → suggested daily nutrition targets.
-  const [bodyweight, setBodyweight] = useState("");
-  const [heightCm, setHeightCm] = useState("");
-  const [age, setAge] = useState("");
-  const [activityLevel, setActivityLevel] = useState<"" | ActivityLevel>("");
-  const [weightGoalDirection, setWeightGoalDirection] = useState<WeightGoalDirection>("maintain");
   const [applyTargets, setApplyTargets] = useState(true);
 
   const prefsMutation = useMutation({
@@ -116,8 +150,11 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     return true;
   };
 
-  const buildTrainingStylePayload = (): Record<string, unknown> => {
-    const payload: Record<string, unknown> = { trainingStyleId };
+  const buildTrainingStylePayload = (
+    changes: Partial<Pick<OnboardingProfile, (typeof GOAL_STEP_FIELDS)[number]>>,
+  ): Record<string, unknown> => {
+    const payload: Record<string, unknown> =
+      changes.trainingStyleId === undefined ? {} : { trainingStyleId };
     if (!isMafMethod) return payload;
 
     const age = Number(mafAge);
@@ -136,7 +173,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   // An incomplete profile just skips ahead — the step is optional and Settings
   // can finish the job later. Nutrition setup never blocks onboarding.
   const handleFuellingNext = async () => {
-    const profile = parseFuellingProfile({
+    const parsed = parseFuellingProfile({
       bodyweight,
       heightCm,
       age,
@@ -145,7 +182,37 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
       weightUnit,
       gender,
     });
-    if (!profile) {
+    if (!parsed) {
+      setStep("plan");
+      return;
+    }
+    // A re-run must not re-save an untouched profile, or replace targets the
+    // athlete tuned by hand, just because the prefilled step was complete. So
+    // "unchanged" is judged on the fields this step shows; the goal rate is not
+    // one of them. Untouched bodyweight keeps its exact saved kilograms rather
+    // than the rounded figure the input shows, and an unchanged lose/gain goal
+    // keeps the rate set in Settings rather than the onboarding default.
+    const savedRate = savedPreferences?.weightGoalRateKgPerWeek;
+    const keepSavedRate =
+      parsed.goalDirection !== "maintain" &&
+      parsed.goalDirection === saved.weightGoalDirection &&
+      savedRate != null &&
+      savedRate > 0;
+    const profile = {
+      ...parsed,
+      bodyweightKg:
+        typedBodyweight === null && savedPreferences?.bodyweightKg != null
+          ? savedPreferences.bodyweightKg
+          : parsed.bodyweightKg,
+      goalRateKgPerWeek: keepSavedRate ? savedRate : parsed.goalRateKgPerWeek,
+    };
+    const unchanged =
+      profile.bodyweightKg === (savedPreferences?.bodyweightKg ?? null) &&
+      profile.heightCm === (savedPreferences?.heightCm ?? null) &&
+      profile.ageYears === (savedPreferences?.age ?? null) &&
+      profile.activityLevel === (savedPreferences?.activityLevel ?? null) &&
+      profile.goalDirection === (savedPreferences?.weightGoalDirection ?? null);
+    if (unchanged) {
       setStep("plan");
       return;
     }
@@ -189,8 +256,9 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
 
     if (step === "units") {
+      const changes = changedFields(shown, saved, UNITS_STEP_FIELDS);
       try {
-        await prefsMutation.mutateAsync({ weightUnit, distanceUnit, division, gender });
+        if (Object.keys(changes).length > 0) await prefsMutation.mutateAsync(changes);
       } catch {
         toast({
           title: "Could not save preferences",
@@ -208,13 +276,18 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
 
     if (step !== "goal") return;
-    if (!hasValidMafProfile()) return;
+    const goalChanges = changedFields(shown, saved, GOAL_STEP_FIELDS);
+    const hasGoalChanges = Object.keys(goalChanges).length > 0;
+    // An untouched training style is left as saved, even a legacy MAF profile
+    // this step would no longer accept as complete.
+    if (hasGoalChanges && !hasValidMafProfile()) return;
 
     try {
-      await prefsMutation.mutateAsync(buildTrainingStylePayload());
+      const payload = hasGoalChanges ? buildTrainingStylePayload(goalChanges) : {};
+      if (Object.keys(payload).length > 0) await prefsMutation.mutateAsync(payload);
       if (FUELLING_STEP_ENABLED) {
         // The MAF profile already asked for age — don't ask twice.
-        if (age === "" && mafAge !== "") setAge(mafAge);
+        if (age === "" && mafAge !== "") edit("age")(mafAge);
         setStep("fuelling");
       } else {
         setStep("plan");
@@ -290,35 +363,35 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     idx,
     total,
     weightUnit,
-    setWeightUnit,
+    setWeightUnit: edit("weightUnit"),
     distanceUnit,
-    setDistanceUnit,
+    setDistanceUnit: edit("distanceUnit"),
     division,
-    setDivision,
+    setDivision: edit("division"),
     gender,
-    setGender,
+    setGender: edit("gender"),
     selectedGoal,
     setSelectedGoal,
     trainingStyleId,
-    setTrainingStyleId,
+    setTrainingStyleId: edit("trainingStyleId"),
     mafAge,
-    setMafAge,
+    setMafAge: edit("mafAge"),
     mafCategory,
-    setMafCategory,
+    setMafCategory: edit("mafCategory"),
     mafHrDataAvailable,
-    setMafHrDataAvailable,
+    setMafHrDataAvailable: edit("mafHrDataAvailable"),
     startDate,
     setStartDate,
     bodyweight,
-    setBodyweight,
+    setBodyweight: setTypedBodyweight,
     heightCm,
-    setHeightCm,
+    setHeightCm: edit("heightCm"),
     age,
-    setAge,
+    setAge: edit("age"),
     activityLevel,
-    setActivityLevel,
+    setActivityLevel: edit("activityLevel"),
     weightGoalDirection,
-    setWeightGoalDirection,
+    setWeightGoalDirection: edit("weightGoalDirection"),
     applyTargets,
     setApplyTargets,
     handleNext,

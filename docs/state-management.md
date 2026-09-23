@@ -189,7 +189,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 |------|------|---------|
 | `useTimelineFilters` | `useTimelineFilters.ts` | Filter state for timeline (plan selector, status filter, date range). |
 | `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local legacy fallback. |
-| `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state (current step, form values, navigation). |
+| `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state and navigation. The form is a draft over the athlete's saved preferences (`onboardingProfile.ts`), and each step writes only the fields that differ from what is saved, so "Run setup again" never resets an established athlete's settings. |
 | `useOnlineStatus` | `useOnlineStatus.ts` | Tracks `navigator.onLine` with event listeners. |
 | `useOfflineDropNotifier` | `useOfflineDropNotifier.ts` | Subscribes to the offline queue and shows a destructive toast whenever a queued mutation is permanently dropped (data loss). Mounted once near the app root. |
 | `useCombineWorkouts` | `useCombineWorkouts.ts` | State for merging multiple workout logs into one. |

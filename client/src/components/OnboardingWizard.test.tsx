@@ -3,6 +3,8 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { addDays, format } from "date-fns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { QUERY_KEYS } from "@/lib/api";
+import * as queryClientLib from "@/lib/queryClient";
 import {
   renderOnboardingWizard,
   resetOnboardingWizardMocks,
@@ -21,13 +23,22 @@ vi.mock("@/components/onboarding/WelcomeStep", () => ({
 }));
 vi.mock("@/components/onboarding/UnitsStep", () => ({
   UnitsStep: ({
+    weightUnit,
+    distanceUnit,
+    division,
+    gender,
     onWeightUnitChange,
     onDistanceUnitChange,
   }: {
+    weightUnit: string;
+    distanceUnit: string;
+    division: string;
+    gender: string;
     onWeightUnitChange: (v: string) => void;
     onDistanceUnitChange: (v: string) => void;
   }) => (
     <div data-testid="units-step">
+      <div data-testid="text-units-shown">{[weightUnit, distanceUnit, division, gender].join(",")}</div>
       <button onClick={() => onWeightUnitChange("lbs")}>Set Weight</button>
       <button onClick={() => onDistanceUnitChange("miles")}>Set Distance</button>
     </div>
@@ -37,12 +48,15 @@ vi.mock("@/components/onboarding/GoalStep", () => ({
   GoalStep: ({
     selectedGoal,
     onGoalChange,
+    trainingStyleId,
   }: {
     selectedGoal: string;
     onGoalChange: (goal: string) => void;
+    trainingStyleId: string;
   }) => (
     <div data-testid="goal-step">
       <div data-testid="text-selected-goal">{selectedGoal}</div>
+      <div data-testid="text-training-style">{trainingStyleId}</div>
       <button type="button" onClick={() => onGoalChange("endurance")}>
         Choose endurance
       </button>
@@ -56,16 +70,19 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
     mode,
     initialGoal,
     initialStartDate,
+    existingPlans,
   }: {
     open: boolean;
     onGenerated?: (plan: unknown) => void;
     mode?: string;
     initialGoal?: string;
     initialStartDate?: string;
+    existingPlans?: readonly unknown[];
   }) =>
     open ? (
       <div>
         <div data-testid="text-generate-mode">{mode}</div>
+        <div data-testid="text-generate-existing-plans">{existingPlans?.length ?? "none"}</div>
         <div data-testid="text-generate-goal">{initialGoal}</div>
         <div data-testid="text-generate-start-date">{initialStartDate}</div>
         <button
@@ -109,8 +126,9 @@ describe("OnboardingWizard Error Handling", () => {
     // Wait for the units step to render
     await screen.findByTestId("units-step");
 
-    // In the units step, clicking "Continue" calls handleNext(), which triggers prefsMutation.
-    // We mock the API request to fail for the /api/preferences endpoint.
+    // Continue only writes what changed, so change something first; the
+    // request for it fails.
+    fireEvent.click(screen.getByText("Set Weight"));
     const { apiRequest } = await import("@/lib/queryClient");
     vi.mocked(apiRequest).mockRejectedValueOnce(new Error("Failed to save preferences"));
 
@@ -185,5 +203,109 @@ describe("OnboardingWizard Error Handling", () => {
     expect(screen.getByTestId("text-generate-start-date")).toHaveTextContent(
       format(addDays(new Date(), 1), "yyyy-MM-dd"),
     );
+  });
+});
+
+// "Run setup again" and first runs alike: the wizard starts from what the
+// athlete saved and writes only what they change (onboarding audit H2).
+describe("OnboardingWizard saved preferences", () => {
+  let queryClient: QueryClient;
+  const mockToast = vi.fn();
+  const mockOnComplete = vi.fn();
+
+  const ESTABLISHED = {
+    weightUnit: "lbs",
+    distanceUnit: "miles",
+    division: "pro",
+    gender: "female",
+    trainingStyleId: "maf_method",
+    mafAge: 41,
+    mafCategory: "consistent_up_to_2y",
+    mafHrDataAvailable: true,
+    onboardingCompleted: true,
+    aiCoachEnabled: false,
+  };
+
+  beforeEach(() => {
+    queryClient = resetOnboardingWizardMocks(mockToast);
+  });
+
+  const preferencePatches = () =>
+    vi
+      .mocked(queryClientLib.apiRequest)
+      .mock.calls.filter(([method, url]) => method === "PATCH" && url === "/api/v1/preferences")
+      .map(([, , body]) => body);
+
+  const walkToPlanStep = async () => {
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("button-onboarding-generate-plan");
+  };
+
+  it("writes nothing when a first run keeps every default", async () => {
+    renderOnboardingWizard(queryClient, mockOnComplete);
+    await walkToPlanStep();
+    expect(preferencePatches()).toEqual([]);
+  });
+
+  it("shows an established athlete's saved answers and writes nothing unchanged", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, ESTABLISHED);
+    renderOnboardingWizard(queryClient, mockOnComplete);
+
+    fireEvent.click(screen.getByText("Get Started"));
+    expect(await screen.findByTestId("text-units-shown")).toHaveTextContent("lbs,miles,pro,female");
+    fireEvent.click(screen.getByText("Continue"));
+    expect(await screen.findByTestId("text-training-style")).toHaveTextContent("maf_method");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("button-onboarding-generate-plan");
+
+    expect(preferencePatches()).toEqual([]);
+  });
+
+  it("sends only the field the athlete changed", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, { ...ESTABLISHED, weightUnit: "kg" });
+    renderOnboardingWizard(queryClient, mockOnComplete);
+
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Set Weight"));
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+
+    expect(preferencePatches()).toEqual([{ weightUnit: "lbs" }]);
+  });
+
+  it("suggests pounds and miles on an American first run, and saves them on Continue", async () => {
+    // jsdom's navigator.languages is ["en-US", "en"].
+    queryClient.setQueryData(QUERY_KEYS.preferences, {
+      weightUnit: "kg",
+      distanceUnit: "km",
+      division: "open",
+      gender: null,
+      onboardingCompleted: false,
+    });
+    renderOnboardingWizard(queryClient, mockOnComplete);
+
+    fireEvent.click(screen.getByText("Get Started"));
+    expect(await screen.findByTestId("text-units-shown")).toHaveTextContent(
+      "lbs,miles,open,prefer_not_to_say",
+    );
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+
+    expect(preferencePatches()).toEqual([{ weightUnit: "lbs", distanceUnit: "miles" }]);
+  });
+
+  it("hands the athlete's plans to the generator so it can offer to archive an overlap", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, ESTABLISHED);
+    queryClient.setQueryData(QUERY_KEYS.plans, [{ id: "current-plan" }]);
+    renderOnboardingWizard(queryClient, mockOnComplete);
+    await walkToPlanStep();
+
+    fireEvent.click(screen.getByTestId("button-onboarding-generate-plan"));
+    expect(await screen.findByTestId("text-generate-existing-plans")).toHaveTextContent("1");
   });
 });
