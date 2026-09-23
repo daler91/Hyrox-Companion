@@ -3,6 +3,7 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
+import { isUniqueViolation } from "../dbErrors";
 import { env } from "../env";
 import { AppError, classifyAiError, ErrorCode, isLikelyAiProviderFailure } from "../errors";
 import { reqLogger } from "../logger";
@@ -56,17 +57,10 @@ function sendParseWriteThroughResponse(
 
 /**
  * True when an error is the uq_training_plans_user_in_flight unique violation —
- * the DB-level loser of two concurrent /plans/generate requests. Checks the
- * error and its cause chain because drizzle can wrap the pg error.
+ * the DB-level loser of two concurrent /plans/generate requests.
  */
 function isInFlightPlanUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
-    const rec = current as { code?: unknown; constraint?: unknown; cause?: unknown };
-    if (rec.code === "23505" && rec.constraint === "uq_training_plans_user_in_flight") return true;
-    current = rec.cause;
-  }
-  return false;
+  return isUniqueViolation(error, "uq_training_plans_user_in_flight");
 }
 
 

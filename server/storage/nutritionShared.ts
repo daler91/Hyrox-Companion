@@ -22,6 +22,7 @@ import {
 } from "drizzle-orm";
 
 import { db } from "../db";
+import { isUniqueViolation } from "../dbErrors";
 
 /**
  * Run a delete-then-insert version write, retrying exactly once when it loses a
@@ -35,19 +36,10 @@ export async function retryOnceOnUniqueViolation<T>(
   indexName: string,
   write: () => Promise<T>,
 ): Promise<T> {
-  const isViolation = (error: unknown): boolean => {
-    let current: unknown = error;
-    for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
-      const rec = current as { code?: unknown; constraint?: unknown; cause?: unknown };
-      if (rec.code === "23505" && rec.constraint === indexName) return true;
-      current = rec.cause;
-    }
-    return false;
-  };
   try {
     return await write();
   } catch (err) {
-    if (!isViolation(err)) throw err;
+    if (!isUniqueViolation(err, indexName)) throw err;
     return await write();
   }
 }

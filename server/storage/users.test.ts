@@ -1,6 +1,6 @@
 import { calculateMafHr } from '@shared/maf';
 import { type InsertStravaConnection, stravaConnections, type UpdateUserPreferences, type User,users } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { DrizzleQueryError, eq } from 'drizzle-orm';
 import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import * as crypto from '../crypto';
@@ -287,11 +287,20 @@ describe('UserStorage', () => {
   });
 
   describe('upsertUser', () => {
-    it('retries without email when the email unique constraint is hit', async () => {
-      const duplicateEmailError = Object.assign(new Error('duplicate email'), {
+    const pgDuplicateEmail = () =>
+      Object.assign(new Error('duplicate email'), {
         code: '23505',
         constraint: 'users_email_unique',
       });
+
+    // Production errors arrive wrapped: drizzle rethrows every driver error as
+    // a DrizzleQueryError with the pg error on `.cause`. The retry used to read
+    // only the top-level error, so it never fired outside this test.
+    it.each([
+      ['a bare pg error', () => pgDuplicateEmail()],
+      ['a DrizzleQueryError-wrapped pg error', () => new DrizzleQueryError('insert into "users" ...', [], pgDuplicateEmail())],
+    ])('retries without email when the email unique constraint is hit (%s)', async (_label, makeError) => {
+      const duplicateEmailError = makeError();
       const savedUser = { id: 'user-1', email: null, firstName: 'Test' };
 
       const firstReturningMock = vi.fn().mockRejectedValue(duplicateEmailError);
