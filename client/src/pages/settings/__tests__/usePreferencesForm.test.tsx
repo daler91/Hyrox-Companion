@@ -271,6 +271,39 @@ describe("usePreferencesForm", () => {
     expect(result.current.hasRequiredMafInputs).toBe(false);
   });
 
+  it("reports a style change as saved even when its audit entry can't be stored", async () => {
+    // The audit write runs inside the mutation's onSuccess; TanStack Query
+    // routes a throw from there to onError, which told the athlete a save
+    // the server had accepted had failed.
+    const { result } = renderForm(serverPreferences({ trainingStyleId: "maf_method" }));
+    await waitFor(() => {
+      expect(result.current.draft.trainingStyleId).toBe("maf_method");
+    });
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    });
+
+    try {
+      act(() => {
+        result.current.updateField("trainingStyleId", "balanced_default");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Settings saved" }));
+      });
+      expect(harness.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Error" }));
+      expect(result.current.styleAuditEntries[0]).toMatchObject({
+        fromStyleId: "maf_method",
+        toStyleId: "balanced_default",
+      });
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
   it("offers Undo after save that restores and persists the previous values", async () => {
     const { result } = await renderHydratedForm();
 

@@ -10,6 +10,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { safeLocalStorage } from "@/lib/safeStorage";
 
 import {
   ageInputToSnapshot,
@@ -112,7 +113,10 @@ export function usePreferencesForm() {
       if (pendingStyleAuditRef.current) {
         const nextAudit = [pendingStyleAuditRef.current, ...styleAuditEntries].slice(0, 10);
         setStyleAuditEntries(nextAudit);
-        localStorage.setItem(STYLE_AUDIT_STORAGE_KEY, JSON.stringify(nextAudit));
+        // Guarded: this runs inside the mutation's onSuccess, so a storage
+        // exception (quota, blocked storage) would otherwise flip a save the
+        // server already accepted into the "Failed to save settings" toast.
+        safeLocalStorage.setItem(STYLE_AUDIT_STORAGE_KEY, JSON.stringify(nextAudit));
         pendingStyleAuditRef.current = null;
       }
       const previous = undoSnapshotRef.current;
