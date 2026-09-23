@@ -113,8 +113,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     if (!nextOpen) setConfirmLeave(true);
   };
 
-  // Enter in a step's text field does what Continue does.
-  const handleEnter = () => {
+  // Continue, and Enter in a step's text field, move the step on.
+  const goToNextStep = () => {
     handleNext().catch(() => {
       // Nothing to add: each step reports its own save failure in a toast.
     });
@@ -131,12 +131,12 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
         steps={ONBOARDING_STEPS}
         idx={idx}
         total={total}
-        onEnter={step === "plan" || step === "schedule" ? undefined : handleEnter}
+        onEnter={step === "plan" || step === "schedule" ? undefined : goToNextStep}
         footer={
           <OnboardingWizardFooter
             step={step}
             onBack={handleBack}
-            onNext={handleNext}
+            onNext={goToNextStep}
             onStartTraining={handleStartTraining}
             isPrefsPending={isPrefsPending}
             isSchedulePending={isSchedulePending}
