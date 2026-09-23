@@ -29,6 +29,71 @@ where these failures happen (see [Test coverage gaps](#test-coverage-gaps)).
 
 ---
 
+## Remediation status (updated 2026-09-23)
+
+Every finding is fixed on `claude/ecstatic-pasteur-iok3dj`, apart from the parts listed under
+[Deliberately not changed](#deliberately-not-changed) below. Checks run on the final code:
+
+- typecheck in all three configurations, lint, and the full unit suite;
+- the real-Postgres integration suite, which gains two files: `userPreferences.integration.test.ts`
+  round-trips every preference enum value, and `schedulePlan.integration.test.ts` covers the new
+  scheduling rule;
+- every finding walked again in the running app with Playwright, at 1280×800 and 375×667.
+
+The Cypress onboarding spec was updated for the new flow and gained a consent case. It could not be
+run in this environment (the Cypress binary download is blocked), so CI is its first run.
+
+| ID  | Fix                                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C1  | `GeneratePlanDialog` shows a consent step before its three steps whenever the AI Coach is off, so every way in (onboarding, the empty Timeline, the plan menu) is covered. Errors go through `humanizeApiError`. The Plan step leads with the template while the coach is off.                                                                                                             |
+| C2  | `users.gender` is `varchar(32)` (migration `0102`). The new integration test fails on the old width with the production error.                                                                                                                                                                                                                                                             |
+| C3  | `schedulePlan` no longer places a session before the start date. Week-1 days before it are left unscheduled, except days the athlete already completed, skipped or logged. This applies to template, imported and AI plans alike. Every start-date picker defaults to the next Monday. AI generation is told about a midweek start, and a picked midweek date explains what it leaves off. |
+| H1  | Plan options wrap. The wizard footer is sticky, so the primary action stays on screen at 375 px.                                                                                                                                                                                                                                                                                           |
+| H2  | The wizard starts from the saved preferences (`onboardingProfile.ts`) and writes only what changed. The AI dialog receives `existingPlans`.                                                                                                                                                                                                                                                |
+| H3  | The template plan is created on Start Training, together with its schedule. A failed schedule is retried with the same plan, and the plan is discarded if the athlete leaves another way.                                                                                                                                                                                                  |
+| H4  | Esc and ✕ open a "Leave setup?" confirmation. Leaving or skipping toasts where to run setup again.                                                                                                                                                                                                                                                                                         |
+| M1  | Cancelling the file picker reopens the wizard on the Plan step. The step shows the CSV columns and a template download.                                                                                                                                                                                                                                                                    |
+| M2  | The Schedule step shares the Plan step's number, so the total never grows. The AI option says what it involves.                                                                                                                                                                                                                                                                            |
+| M3  | The goal becomes a HYROX-specific sentence: it prefills the AI generator and is stored on a template plan. Age is asked on the Units step. An optional race date becomes the AI plan's end date and race day, and is stored on a template plan. "This is my race date" no longer starts on for a date nobody chose. "Lose weight" starts the fuelling weight goal on Lose.                 |
+| M4  | Radio groups are named. The MAF age field has a visible label and the 16–99 limits its validation uses. Errors appear inline. Focus moves to each new step's heading, and Enter in a field moves on.                                                                                                                                                                                       |
+| M5  | The Welcome step carries the privacy line and policy link. The Settings save bar sits above the banner.                                                                                                                                                                                                                                                                                    |
+| M6  | A new "Meet Your AI Coach" step records the consent, starting from the saved answer (off for a new account). The RAG note is gone from the Plan step.                                                                                                                                                                                                                                      |
+| L1  | Today can be picked as a start date.                                                                                                                                                                                                                                                                                                                                                       |
+| L2  | Only a 403 that may be a CSRF rejection (`EBADCSRFTOKEN`, or no code) is retried.                                                                                                                                                                                                                                                                                                          |
+| L3  | The Welcome step gives the time estimate and what setup leads to.                                                                                                                                                                                                                                                                                                                          |
+| L4  | Height is entered in feet and inches for athletes who weigh in pounds. A first run from a US-region browser is offered lbs and miles.                                                                                                                                                                                                                                                      |
+| L5  | The blank fuelling step's button reads Skip. The Skip link uses an em dash.                                                                                                                                                                                                                                                                                                                |
+| L6  | The AI dialog is prefilled with a HYROX goal, not the bare label.                                                                                                                                                                                                                                                                                                                          |
+| L7  | The toasts that end setup offer **Connect a device**, linking to Settings → Integrations.                                                                                                                                                                                                                                                                                                  |
+
+### Behaviour changes to know about
+
+- **Scheduling applies everywhere.** A plan started midweek has no week-1 sessions before its start
+  date. The plan's own `startDate` stays week 1's Monday, which keeps week-number math aligned. A
+  one-week plan whose every session falls before the start is refused with
+  `400 NO_SESSIONS_AFTER_START`.
+- **Onboarding has one more step:** the AI Coach step. That makes six numbered steps with nutrition on
+  and five without.
+- **The AI generator's race-date switch** starts off unless a race date was given.
+- **`POST /api/v1/plans/sample`** accepts an optional `{ goal, raceDate }` body.
+
+### Deliberately not changed
+
+- **M2: folding the AI generator into the wizard, and generating in the background.** Nothing outside
+  the dialog tracks an in-flight generation, so both would need a new feature (a global poller and
+  somewhere to show its status), not a fix. The AI option now says what the path involves instead.
+- **M3: stretching or shifting the template to a race date.** The template stays 8 weeks and starts
+  when the athlete picks. Its race date is stored for the countdown and the coach; the AI plan is the
+  path that plans around a race.
+- **L3: the duplicate "Welcome to fitai.coach" heading** in the empty state behind the modal. It sits
+  under the overlay, and the E2E specs find the wizard by that text.
+- **L7: a reminder opt-in.** The email reminders need the master email toggle and a send hour, which
+  belongs with the reshape below.
+- **[Optimizations beyond the bugs](#optimizations-beyond-the-bugs)**, including the Getting started
+  checklist, were not started.
+
+---
+
 ## How the flow works today
 
 ```
