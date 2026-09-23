@@ -1208,7 +1208,7 @@ Each domain class owns a cohesive slice of functionality:
 | `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
 | `RecycleBinStorage` | `server/storage/recycleBin.ts` | Recycle bin: list, restore (single or bulk-delete batch), purge; the delete-time snapshots themselves are written by `recycleBinCapture.ts` |
 
-Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts`, `raceDayView.ts` and `recycleBinCapture.ts` (the delete-time snapshot writers that `workouts.ts`, `plans.ts` and `bulkDeleteWorkouts.ts` call inside their own transactions). `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
+Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts`, `raceDayView.ts` and `recycleBinCapture.ts` (the delete-time snapshot writers that `workouts.ts`, `plans.ts` and `bulkDeleteWorkouts.ts` call inside their own transactions). `WorkoutStorage` is a single module, `server/storage/workouts.ts`; custom exercises live on `UserStorage`.
 
 ### Composed Facade (`server/storage/index.ts`)
 
@@ -1242,7 +1242,7 @@ Usage from routes and services:
 
 ```typescript
 await storage.users.getUser(userId);
-await storage.workouts.createWorkoutLog(log);
+await storage.workouts.getWorkoutLog(logId, userId);
 await storage.plans.getActivePlan(userId);
 await storage.timeline.getTimeline(userId);
 await storage.analytics.getWeeklyStats(userId, start, end);
@@ -1254,9 +1254,9 @@ Adding a new storage method means editing exactly one file — the owning domain
 ### Notable Storage Patterns
 
 - **Upserts**: `UserStorage.upsertUser()` and `upsertStravaConnection()` use Drizzle's `onConflictDoUpdate` for idempotent writes.
-- **Cascading status updates**: `WorkoutStorage.createWorkoutLog()` automatically marks the linked plan day as `"completed"` using a JOIN-based update.
+- **Cascading status updates**: a plan day's status follows its linked logs. `createWorkoutInTx` (`server/services/workoutService/workouts.ts`) and the bulk Strava insert `WorkoutStorage.createWorkoutLogs()` mark the linked plan day `"completed"`; deletes and re-links call `syncPlanDayStatusFromWorkouts` (`server/storage/planDayStatus.ts`), which recomputes it under a row lock.
 - **Token encryption**: Strava access and refresh tokens are encrypted before storage and decrypted on read.
-- **Batch operations**: `CoachingStorage.insertChunks()` and `replaceChunks()` batch inserts in groups of 100 using raw SQL through the vector pool.
+- **Batch operations**: `CoachingStorage.replaceChunks()` batch-inserts in groups of 100 using raw SQL through the vector pool.
 - **Transactions**: `PlanStorage.deleteTrainingPlan()` and `schedulePlan()` use Drizzle transactions. `CoachingStorage.replaceChunks()` uses raw `BEGIN/COMMIT/ROLLBACK` on the vector pool.
 
 ---

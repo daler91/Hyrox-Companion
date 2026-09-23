@@ -36,10 +36,6 @@ vi.mock("../storage", () => {
       updatePlanDay: vi.fn(),
       deleteTrainingPlan: vi.fn(),
     },
-    workouts: {
-      getWorkoutLogByPlanDayId: vi.fn(),
-      deleteWorkoutLogByPlanDayId: vi.fn(),
-    },
     users: {
       getUser: vi.fn(),
     },

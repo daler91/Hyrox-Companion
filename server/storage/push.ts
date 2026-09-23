@@ -1,4 +1,4 @@
-import { pushSubscriptions, users } from "@shared/schema";
+import { pushSubscriptions } from "@shared/schema";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 import { db } from "../db";
@@ -90,18 +90,5 @@ export class PushStorage {
       })
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.userId, userId));
-  }
-
-  /**
-   * Fetch all user IDs that have at least one push subscription
-   * and have email notifications enabled (reusing the same opt-in flag).
-   */
-  async getUsersWithPushSubscriptions(): Promise<string[]> {
-    const rows = await db
-      .selectDistinct({ userId: pushSubscriptions.userId })
-      .from(pushSubscriptions)
-      .innerJoin(users, eq(users.id, pushSubscriptions.userId))
-      .where(eq(users.emailNotifications, true));
-    return rows.map((r) => r.userId);
   }
 }

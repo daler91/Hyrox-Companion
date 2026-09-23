@@ -14,7 +14,6 @@ vi.mock("../storage", () => ({
   storage: {
     coaching: {
       deleteChunksByMaterialId: vi.fn(),
-      insertChunks: vi.fn(),
       replaceChunks: vi.fn(),
       searchChunksByEmbedding: vi.fn(),
       listPrincipleMaterialIds: vi.fn(),

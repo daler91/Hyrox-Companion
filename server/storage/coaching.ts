@@ -59,34 +59,6 @@ export class CoachingStorage {
 
   // RAG chunk methods — all use vectorPool (Supabase when VECTOR_DATABASE_URL is set)
 
-  async insertChunks(chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]> {
-    if (chunks.length === 0) return [];
-    const BATCH_SIZE = 100;
-    const results: DocumentChunk[] = [];
-    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-      const batch = chunks.slice(i, i + BATCH_SIZE);
-      const cols = '("id", "material_id", "user_id", "content", "chunk_index", "embedding")';
-      const values = batch.flatMap((c) => [
-        c.materialId,
-        c.userId,
-        c.content,
-        c.chunkIndex,
-        c.embedding ? `[${c.embedding.join(",")}]` : null,
-      ]);
-      const result = await vectorPool.query<DocumentChunk>(
-        `INSERT INTO document_chunks ${cols} VALUES ${batch
-          .map((_, j) => {
-            const o = j * 5;
-            return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5})`;
-          })
-          .join(", ")} RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
-        values,
-      );
-      results.push(...result.rows);
-    }
-    return results;
-  }
-
   /**
    * Delete one material's RAG chunks from the vector database. Required on
    * per-material deletion for the same reason as `deleteChunksByUserId`: in
