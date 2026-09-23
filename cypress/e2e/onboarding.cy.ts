@@ -27,12 +27,18 @@ describe("Onboarding Wizard", () => {
     cy.contains("button", "Get Started").click();
 
     // Step 2 — Units. Only answers that differ from the saved preferences
-    // are written (audit H2), so pick one to make the save deterministic.
+    // are written (audit H2), so pick one to make the save deterministic. The
+    // app also PATCHes the detected timezone on load (useDetectTimezone), so
+    // the units save is picked out by its body rather than by arrival order.
+    cy.intercept("PATCH", "/api/v1/preferences", (req) => {
+      if (req.body?.gender !== undefined) req.alias = "saveUnits";
+      req.reply({ statusCode: 200, body: { ok: true } });
+    });
     cy.contains("Set Your Preferences").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 2 of");
     cy.contains("label", "Men").click();
     cy.contains("button", "Continue").click();
-    cy.wait("@savePreferences").its("request.body").should("include", { gender: "male" });
+    cy.wait("@saveUnits").its("request.body").should("include", { gender: "male" });
 
     // Step 3 — Goal. Left as saved, so nothing is written.
     cy.contains("What's Your Goal?").should("be.visible");
