@@ -492,19 +492,24 @@ Instructions for generating multi-week training plans with day-by-day structure.
 
 ```typescript
 const [trainingContext, coachingContext] = await Promise.all([
-  buildTrainingContext(userId),                     // Last 12 weeks of stats
+  buildTrainingContext(userId),                     // Latest 400 timeline entries + 70-day load window
   retrieveCoachingContext(userId, query, log),      // RAG or legacy materials
 ]);
 ```
 
 ### TrainingContext (from `server/services/ai/`)
 
-Aggregates the user's training state:
+Aggregates the user's training state from two windows that `buildTrainingContext()` (`server/services/ai/index.ts`) reads:
+
+- **Timeline:** the athlete's latest 400 timeline entries (`AI_CONTEXT_TIMELINE_LIMIT` in `server/constants.ts`). These are plan days and logged workouts sorted newest date first, so upcoming plan days count toward the 400. The counts, rate, streak, recent workouts, breakdown and exercise stats below come from this window, as do the timeline-based coaching insights.
+- **Load:** workout logs and exercise sets dated from 70 days before the athlete-local today through today. The load governor and the supplementary signals (personal records, PRs this week, compliance, neglected patterns and muscle groups, race readiness) come from this window.
+
+The context carries:
 - Workout counts (total, completed, planned, missed, skipped)
 - Completion rate and current streak
-- Recent workouts with exercise details (last 12 weeks)
-- Upcoming planned workouts
-- Exercise breakdown (category counts)
+- The 10 most recent completed workouts, with exercise details
+- Upcoming planned workouts (the next 7 planned days)
+- Exercise breakdown (completed workouts per functional exercise named in the focus text, or per focus when none is named)
 - Structured exercise stats (max weight, max distance, best time per exercise)
 - Active plan info (name, weeks, current week, goal)
 - **Coaching insights:** RPE trends, fatigue/undertraining flags, station gaps, recent skips with their reasons (`recentSkips`, up to 5), plan phase, weekly volume trends, progression flags per exercise, the training-load governor overview (`loadGovernor`, from `calculateTrainingLoad()` over the last 70 days), and the rule-based training-state decision (`decisionTree` from `decideTrainingState()`: phase, allowed workout types, whether intensity is permitted, rationale codes). When the data supports them, it also carries personal records, PRs this week, plan compliance, neglected movement patterns and muscle groups, and race readiness.
@@ -513,71 +518,79 @@ Aggregates the user's training state:
 
 ## Coaching Insights
 
-**File:** `server/services/ai/coachingInsights.ts`
+**File:** `server/services/ai/coachingInsights.ts` (plan phase and current week live in `shared/planPhase.ts` and are re-exported from it)
 
-The coaching insights module computes seven analytical dimensions from the athlete's timeline data. These are included in every `TrainingContext` and injected into the AI system prompt so the model can make data-driven coaching decisions. `buildTrainingContext()` (`server/services/ai/index.ts`) adds signals computed outside this module to the same `coachingInsights` object: `recentSkips` (`server/services/ai/trainingStats.ts`), `loadGovernor` (`server/services/trainingLoadService.ts`), `decisionTree` (`server/services/ai/trainingDecisionEngine.ts`), and the supplementary signals listed under TrainingContext above.
+The coaching insights module computes the signals below from the athlete's timeline window and active plan. They are included in every `TrainingContext` and injected into the AI system prompt so the model can make data-driven coaching decisions. Plan phase is absent when there is no active plan or the plan has ended, and weekly volume is absent when the athlete has no weekly goal. `buildTrainingContext()` (`server/services/ai/index.ts`) adds signals computed outside this module to the same `coachingInsights` object: `recentSkips` (`server/services/ai/trainingStats.ts`), `loadGovernor` (`server/services/trainingLoadService.ts`), `decisionTree` (`server/services/ai/trainingDecisionEngine.ts`), and the supplementary signals listed under TrainingContext above.
 
 > **Not to be confused with the user-facing "Coach Insights" tab.** This module (`coachingInsights.ts`) produces the *deterministic signals* fed **into** the AI context. The single-shot AI narrative shown on the Analytics → Coach Insights tab is generated separately by `server/services/coachInsightsService.ts` (the `COACH_INSIGHTS_PROMPT` path) and **persisted** to the `analytics_results` table for instant paint and midnight recompute — see [API Reference — Coach Insights](api-reference.md#get-apiv1coach-insights) and [Integrations — recompute-analytics](integrations.md#job-types).
 
 ### RPE Trend
 
-Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts against the prior 3. Requires at least 3 workouts with RPE data; returns `insufficient_data` otherwise.
+Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts that carry an RPE against the up to 3 rated workouts before them (`computeRpeTrend()`). Both averages are rounded to one decimal. The trend needs at least 5 rated workouts. With 3 or 4, `rpeTrend` is `insufficient_data`, but `avgRpeLast3` is still reported and the absolute flag thresholds below still apply. With fewer than 3, both flags are false.
 
-- **Rising:** difference > 0.8 -- training load is increasing.
+- **Rising:** difference > 0.8 -- perceived effort is climbing.
 - **Stable:** difference between -0.8 and 0.8.
-- **Falling:** difference < -0.8 -- training load is decreasing.
+- **Falling:** difference < -0.8 -- perceived effort is dropping.
 
-Two boolean flags are derived from the last-3 average:
-- `fatigueFlag`: true when avgRPE >= 8 (high perceived effort, risk of overtraining).
-- `undertrainingFlag`: true when avgRPE <= 4 (low perceived effort, stimulus may be insufficient).
+Two boolean flags combine an absolute threshold on the last-3 average with the trend:
+- `fatigueFlag`: true when avgRPE >= 8, or when the trend is rising and avgRPE >= 7.
+- `undertrainingFlag`: true when avgRPE <= 4, or when the trend is falling and avgRPE <= 5.
 
 ### Exercise Gaps (Station Gaps)
 
-Tracks the last trained date for each of the 8 Hyrox functional stations plus running (9 stations total): `skierg`, `sled_push`, `sled_pull`, `burpee_broad_jump`, `rowing`, `farmers_carry`, `sandbag_lunges`, `wall_balls`, and `running`.
+Tracks the last trained date for each of the 8 Hyrox functional stations plus running (9 stations total): `skierg`, `sled_push`, `sled_pull`, `burpee_broad_jump`, `rowing`, `farmers_carry`, `sandbag_lunges`, `wall_balls`, and `running`. `computeExerciseGaps()` is a thin adapter over `buildStationCoverage()` in `shared/stationCoverage.ts`, the same builder the analytics training overview uses. Only completed timeline entries count.
 
 Detection uses two strategies:
-1. **Exercise sets:** Maps `exerciseName` from logged sets to station names. Running exercises (`easy_run`, `tempo_run`, `interval_run`, `long_run`) are all mapped to the `running` station.
-2. **Focus text:** Scans the workout focus string for keywords via `EXERCISE_FOCUS_MAP` (e.g., "ski erg" and "ski-erg" both map to `skierg`).
+1. **Exercise sets:** Maps each logged set's `exerciseName` (canonical name or registered alias) to a station. The interval variants `ski_erg_intervals` and `rowing_intervals` count for `skierg` and `rowing`, and every exercise defined with category `running` counts for `running`.
+2. **Focus text:** Scans the workout focus string for the keywords in `STATION_KEYWORDS`, as a case-insensitive substring match. For example, "ski erg" and "ski-erg" both map to `skierg`, "row" to `rowing` and "run" to `running`.
 
-Returns an array of `{ station, daysSinceLastTrained }` where `daysSinceLastTrained` is `null` if the station has never been trained.
+Stations the athlete's training constraints rule out are dropped. `stationsRuledOutByConstraints()` matches whole words in the `trainingConstraints` text, so "no sled at my gym" drops both sled stations and "can't do burpees" drops `burpee_broad_jump`. The drop is coach-side only: the analytics coverage still shows every station.
+
+Returns an array of `{ station, daysSinceLastTrained }` for the remaining stations. Days are counted to the athlete-local date that `buildTrainingContext()` passes in as `today`. `daysSinceLastTrained` is `null` when no completed entry in the timeline window trained the station.
 
 ### Plan Phase
 
-Maps the athlete's current position within their training plan to a periodization phase:
+Maps the athlete's current week within their training plan to a periodization phase. This is `computePlanPhase()` in `shared/planPhase.ts`, which the Timeline summary card also uses, so the card and the coach agree on the phase:
 
 | Phase | Condition | Description |
 |-------|-----------|-------------|
 | `early` | progressPct < 25% | Aerobic base building, movement pattern establishment |
 | `build` | 25% <= progressPct < 60% | Progressive overload, volume accumulation |
 | `peak` | 60% <= progressPct < 85% | Highest intensity, simulation workouts |
-| `taper` | 85% <= progressPct < 100% | Volume reduction, maintain intensity |
-| `race_week` | currentWeek >= totalWeeks | Light movement only, mental prep |
+| `taper` | progressPct >= 85%, or the second-to-last week of a plan of 4+ weeks | Volume reduction, maintain intensity |
+| `race_week` | currentWeek == totalWeeks (the final week) | Light movement only, mental prep |
 
-`progressPct` is calculated as `round((currentWeek / totalWeeks) * 100)`. Returns `undefined` if no active plan exists.
+The two week-based rules win over the percentage bands. `progressPct` is measured at the midpoint of the current week: `round(((currentWeek - 0.5) / totalWeeks) * 100)`. Returns `undefined` if no active plan exists, or once the plan has ended (`currentWeek > totalWeeks`, see [Current Week](#current-week)).
 
 ### Weekly Volume
 
-Compares workout completion counts between the current week (Monday to today) and the previous full week against the user's `weeklyGoal`. Only computed when `weeklyGoal > 0`.
+Counts completed workouts in the current week (Monday to today) and in the previous week, on the athlete's local calendar (`computeWeeklyVolume()`). Only computed when the athlete's `weeklyGoal > 0`. The goal is passed through for the prompt and plays no part in the trend.
 
-- **Trend:** `increasing` if thisWeek > lastWeek, `decreasing` if thisWeek < lastWeek, `stable` if equal.
-- Output: `{ thisWeekCompleted, lastWeekCompleted, goal, trend }`.
+- **Trend:** compares this week with the same days of last week (Monday up to the same weekday). On a Wednesday, this week's count is weighed against last week's Monday-to-Wednesday count, not its full seven days. `increasing` if this week is ahead, `decreasing` if behind, `stable` if equal.
+- Output: `{ thisWeekCompleted, lastWeekCompleted, goal, trend }`. `lastWeekCompleted` is last week's full total; only the trend uses the same-days slice.
 
 ### Progression Flags
 
-Per-exercise analysis of weight and time trends across completed workouts. Each exercise receives at most one flag:
+Per-exercise analysis of weight, pace and time trends across completed workouts (`computeProgressionFlags()`). Each completed workout that logged sets for an exercise is one session for it, summarised three ways:
+
+- its heaviest weight
+- its fastest set that recorded both a time and a distance, as pace per km or mile in the athlete's distance unit
+- its shortest set that recorded a time but no distance
+
+The last 3 sessions are compared, session 1 being the oldest, and each exercise receives at most one flag:
 
 | Flag | Condition | Detail |
 |------|-----------|--------|
-| `plateau` | Last 3 sessions have identical weight (or time within 0.1min) | Suggests progressive overload is needed |
-| `progressing` | Weight increased (or time decreased) from session 1 to session 3 of last 3 | Positive adaptation signal |
-| `regressing` | Weight decreased (or time increased) from session 1 to session 3 of last 3 | May indicate fatigue or form issues |
-| `new` | Only 1 session logged for this exercise | Insufficient data for trend analysis |
+| `plateau` | Last 3 sessions have identical weight, paces within 3 s (per km or mile) of the first, or times within 0.1min of the first | `Weight stuck at … for last 3 sessions` (likewise `Pace`, `Time`) |
+| `progressing` | From session 1 to session 3: weight increased, pace more than 3 s faster, or time decreased | `Weight increased from … to … over last 3 sessions` (`Pace improved`, `Time improved` likewise) |
+| `regressing` | From session 1 to session 3: weight decreased, pace more than 3 s slower, or time increased | `Weight decreased from … to … over last 3 sessions` (`Pace worsened`, `Time worsened` likewise) |
+| `new` | Only 1 session logged for this exercise | `Only trained once (<date>)` |
 
-Weight analysis takes priority over time analysis. If a weight-based flag is found, time analysis is skipped for that exercise.
+The checks run in order (weight, then pace, then time) and the first that produces a flag wins. Each needs its value in all three sessions. Pace details quote the distance behind each pace, so the model can see when it is comparing efforts of different lengths. Time is compared only for exercises that do not carry a distance (`exerciseTracksDistance()`), and only when the three sessions logged the same rep count on those sets. A distance-carrying exercise logged without distances gets no pace or time flag, and an exercise with exactly two sessions gets no flag at all.
 
 ### Current Week
 
-Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceStart + 1) / 7))`, clamped to `totalWeeks`. Falls back to week 1 if no plan entries have dates.
+Calculated from the active plan's `startDate` to the athlete-local `today` that `buildTrainingContext()` passes in: `max(1, ceil((daysSinceStart + 1) / 7))` (`computeCurrentWeek()` in `shared/planPhase.ts`). It is not clamped to `totalWeeks`. Once the plan has ended, the week runs past `totalWeeks` and [Plan Phase](#plan-phase) returns `undefined`. A plan with no `startDate`, or one that has not started yet, reads as week 1.
 
 ---
 

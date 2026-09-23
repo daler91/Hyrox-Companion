@@ -277,44 +277,54 @@ All mutating routes go through `protectedMutationGuards` (authentication + idemp
 
 ### Safety Stack
 
-The order matters: each layer is designed to short-circuit requests before they cost the application a Garmin round-trip.
+The order matters: each layer is designed to short-circuit requests before they cost the application a Garmin round-trip. The layer numbers are the ones the header comment in `server/garmin.ts` uses, not the order the checks run in. The diagram shows the run order. After the per-route limiter, both routes check the global breaker (`rejectIfCircuitOpen()`), so on `/sync` it runs before the connection row is even read. `/sync` then runs its preflight on the stored connection (`rejectSyncPreflight()`: not connected, minimum interval, prior `lastError`). The per-user lock is taken last and held for the Garmin work itself. `/connect` skips layers 3, 4 and 6, because it has no stored connection to check and always performs a fresh login.
 
 ```mermaid
 flowchart TD
     Req([Request hits /connect or /sync]) --> L1{"Layer 1 — Per-route limiter<br/>5 / 15min per user"}
-    L1 -- over --> R429a["429 rate_limited"]
-    L1 -- ok --> L2{"Layer 2 — Per-user mutex<br/>inFlightUsers"}
-    L2 -- overlap --> R409["409 GARMIN_BUSY"]
-    L2 -- ok --> L3{"Layer 3 — Min sync interval<br/>lastSyncedAt &lt; 5min?"}
+    L1 -- over --> R429a["429 RATE_LIMITED"]
+    L1 -- ok --> L5{"Layer 5 — Global 429 breaker<br/>blockedUntil &gt; now?"}
+    L5 -- tripped --> R503["503 GARMIN_CIRCUIT_OPEN"]
+    L5 -- "ok, /connect" --> L2
+    L5 -- "ok, /sync" --> L3{"Layer 3 — Min sync interval<br/>lastSyncedAt &lt; 5min?"}
     L3 -- too soon --> R429b["429 GARMIN_SYNC_TOO_SOON"]
     L3 -- ok --> L4{"Layer 4 — Prior lastError<br/>on the connection?"}
     L4 -- yes --> R401["401 GARMIN_RECONNECT_REQUIRED"]
-    L4 -- no --> L5{"Layer 5 — Global 429 breaker<br/>blockedUntil &gt; now?"}
-    L5 -- tripped --> R503["503 GARMIN_CIRCUIT_OPEN"]
-    L5 -- ok --> L6["Layer 6 — Use cached OAuth token<br/>(no silent re-login on 401)"]
-    L6 --> Call[Call Garmin SSO / API]
-    Call --> Audit["Layer 7 — Audit log<br/>context=garmin, userId"]
-    Call -- looksLike429 --> Trip[trip circuit breaker<br/>30-min cooldown]
+    L4 -- no --> L2{"Layer 2 — Per-user lock<br/>inFlightUsers + shared claim"}
+    L2 -- held --> R409["409 GARMIN_BUSY"]
+    L2 -- "ok, /connect" --> Login["Fresh login<br/>credentials stored only on success"]
+    L2 -- "ok, /sync" --> L6["Layer 6 — Cached OAuth token if still fresh, else login<br/>(no silent re-login on 401)"]
+    Login --> Gate
+    L6 --> Gate{"withCircuitBreaker — breaker open?<br/>re-read from server_runtime_cache"}
+    Gate -- "open, record nothing" --> R503
+    Gate -- closed --> Call["Call Garmin SSO / API<br/>60s timeout"]
+    Call -. logged .-> Audit["Layer 7 — Audit log<br/>context=garmin, userId"]
+    Call -- looksLike429 --> Trip["trip circuit breaker<br/>30-min cooldown, shared"]
+    Call -- other error --> Fail
     Trip --> Fail([re-throw])
-    Audit --> Ok([success])
+    Call -- ok --> Ok([success])
 ```
+
+Two checks outside the numbered layers also answer early. `/connect` validates its body after the limiter and before the breaker check (400 `VALIDATION_ERROR`). `/sync` answers 404 `GARMIN_NOT_CONNECTED` ahead of layer 3 when the user has no stored connection.
 
 | Layer | Mechanism | File location |
 |---|---|---|
 | 1. Per-route rate limiter | 5 requests per 15 minutes per authenticated user on `/connect` and `/sync` | `garminConnectLimiter`, `garminSyncLimiter` in `server/garmin.ts` |
-| 2. Per-user in-flight mutex | Rejects overlapping `/connect` or `/sync` calls for the same user with HTTP 409 `GARMIN_BUSY`. Catches the gap between the rate limiter and completion. | `withUserLock()` + `inFlightUsers: Set<string>` |
+| 2. Per-user in-flight mutex | Rejects overlapping `/connect` or `/sync` calls for the same user with HTTP 409 `GARMIN_BUSY`. Catches the gap between the rate limiter and completion. Taken after the route-level checks and held for the Garmin work itself. The claim is held in the in-process `inFlightUsers` set and also as a `garmin:inflight:<userId>` key in `server_runtime_cache`, which is atomic across instances, so a double-tap that lands on two instances is caught too. That key has a 150-second TTL in case the process dies mid-call. If the shared store is unreachable, the local set alone decides. | `withUserLock()` + `inFlightUsers: Set<string>` + `claimSharedUserLock()` |
 | 3. Minimum sync interval | Rejects `/sync` with HTTP 429 `GARMIN_SYNC_TOO_SOON` if `lastSyncedAt` is under 5 minutes old. | `MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000` |
-| 4. Fail-fast on `lastError` | If a previous sync left `lastError` set, refuse to retry automatically and return HTTP 401 `GARMIN_RECONNECT_REQUIRED`. The user must disconnect + reconnect, which caps the cost of a broken connection to one failed login attempt. | `handleGarminSync` preflight + `getGarminClient` |
-| 5. Global 429 circuit breaker | On *any* Garmin response that looks like a 429 ("429", "too many", "rate limit"), trip the breaker for 30 minutes. While tripped, `/connect` and `/sync` return HTTP 503 `GARMIN_CIRCUIT_OPEN` for every user (`/status` and `/disconnect` are not gated). The trip is also written to `server_runtime_cache` (key `garmin:breaker`, expiring with the cooldown), and every wrapped Garmin call reads it back before running, so a 429 seen by one instance blocks Garmin calls on all instances. | `garminCircuitBreaker`, `GLOBAL_429_COOLDOWN_MS`, `withCircuitBreaker()`, `rejectIfCircuitOpen()` |
-| 6. No silent re-login | Cached OAuth tokens live ~1 year. If a fresh-looking token unexpectedly 401s, the error surfaces to the user instead of auto-triggering a new login. | `getGarminClient()` does not fall through from the cached-token path back to login |
-| 7. Audit logging | Every Garmin API call and login is logged at `info` level with the user ID and a `context: "garmin"` tag so bans are traceable. | `logger.info({ userId, context: LOG_CTX }, ...)` throughout `server/garmin.ts` |
+| 4. Fail-fast on `lastError` | If a previous sync left `lastError` set, refuse to retry automatically and return HTTP 401 `GARMIN_RECONNECT_REQUIRED`. The user must disconnect + reconnect, which caps the cost of a broken connection to one failed login attempt. | `rejectSyncPreflight()` (called by `handleGarminSync`) + `getGarminClient()` |
+| 5. Global 429 circuit breaker | On any Garmin error that looks like a 429, trip the breaker for 30 minutes. That means an HTTP status of 429, or, when the error carries no status, a message containing a standalone "429", "too many requests" or "rate limit". While it is tripped, `/connect` and `/sync` return HTTP 503 `GARMIN_CIRCUIT_OPEN` for every user (`/status` and `/disconnect` are not gated). That route-level check reads only the instance's in-process copy. The trip is also written to `server_runtime_cache` (key `garmin:breaker`, expiring with the cooldown), and `withCircuitBreaker()` reads it back before every Garmin call, so a 429 seen by one instance blocks Garmin calls on all instances. A request that gets past the route-level check anyway (another instance tripped the breaker, or it tripped mid-request) is stopped at that per-call check, which throws `GarminCircuitOpenError`. `/connect` and `/sync` answer that with the same 503 and record nothing: Garmin never saw the request, so it is not stored as `lastError`, and the credentials are kept. | `garminCircuitBreaker`, `GLOBAL_429_COOLDOWN_MS`, `withCircuitBreaker()`, `rejectIfCircuitOpen()` |
+| 6. No silent re-login | Cached OAuth tokens live ~1 year. If a fresh-looking token unexpectedly 401s, the error surfaces to the user instead of auto-triggering a new login. Applies to `/sync` only, since `/connect` always logs in fresh. | `getGarminClient()` returns the cached-token client with no login fallback. Only unparseable token JSON falls through to a fresh login. |
+| 7. Audit logging | Each login and each activity fetch is logged at `info` level, with the user ID and a `context: "garmin"` tag, before it goes out. Each successful `/connect` and `/sync` is logged the same way when it completes, so bans are traceable. Failed calls are logged at `warn` or `error` under the same tag. | `logger.info({ userId, context: LOG_CTX }, ...)` throughout `server/garmin.ts` |
 
 ### Error Translation
 
 `translateGarminError()` converts the library's stringly-typed errors into user-facing messages. Notable mappings:
 
-- "429" / "too many" / "rate limit" → circuit breaker tripped, surface the 30-minute cooldown message.
-- "401" / "unauthor" → invalid credentials, suggest disconnect + reconnect.
+A structured HTTP status on the error wins; the message is consulted only when there is none, and digit matches are standalone (an activity id containing "429" does not count).
+
+- 429 / "too many requests" / "rate limit" → circuit breaker tripped, surface the 30-minute cooldown message.
+- 401 or 403 / "unauthor" / "forbidden" → invalid credentials, suggest disconnect + reconnect.
 - "ticket" / "csrf" / "mfa" / "2fa" / "verification" → 2SV is enabled on the Garmin account; library cannot continue.
 
 ### Token Storage
