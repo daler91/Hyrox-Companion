@@ -302,7 +302,8 @@ Get a single workout log by ID. If the workout has structure blocks but no exerc
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 60/min
-- **Response:** `WorkoutLog` with `exerciseSets` and `structureBlocks`
+- **Response:** `WorkoutLog` with `exerciseSets`, `structureBlocks` and `suggestedRpe`
+- **`suggestedRpe`:** the RPE (1–10) the log's average heart rate suggests, which the review sheet marks in its RPE picker for the athlete to confirm. It is never saved on its own. `null` without heart rate, for lifting, yoga and Pilates, or when the athlete has neither a max HR nor an age on file. It is returned whether or not `rpe` is set; the client shows it only while `rpe` is empty. The athlete's profile is read only for a log that could get one. See [Heart-rate RPE suggestion](integrations.md) in the Strava section.
 - **404:** Workout not found
 
 ### POST /api/v1/workouts

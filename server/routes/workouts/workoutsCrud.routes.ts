@@ -18,6 +18,7 @@ import {
   isBulkDeleteWorkoutsNotFoundError,
 } from "../../services/bulkDeleteWorkouts";
 import { combineWorkouts } from "../../services/combineWorkouts";
+import { loadSuggestedRpe } from "../../services/rpeSuggestion";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
@@ -178,10 +179,15 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     }
     // ⚡ Bolt Performance Optimization: same independent-reads pattern as
     // GET /api/v1/workouts/latest above — parallelize instead of awaiting sequentially.
-    let [exerciseSets, structureBlocks] = await Promise.all([
+    const [initialSets, initialBlocks, suggestedRpe] = await Promise.all([
       storage.workouts.getExerciseSetsByWorkoutLog(log.id),
       storage.workouts.getWorkoutStructureByWorkoutLog(log.id),
+      // The heart-rate RPE the review sheet offers for the athlete to confirm;
+      // never saved on its own (services/rpeSuggestion.ts).
+      loadSuggestedRpe(log, userId),
     ]);
+    let exerciseSets = initialSets;
+    let structureBlocks = initialBlocks;
     if (exerciseSets.length === 0 && structureBlocks.length > 0) {
       await deriveMissingWorkoutSetsFromStructure(log.id, userId);
       [exerciseSets, structureBlocks] = await Promise.all([
@@ -189,7 +195,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
         storage.workouts.getWorkoutStructureByWorkoutLog(log.id),
       ]);
     }
-    res.json({ ...log, exerciseSets, structureBlocks });
+    res.json({ ...log, exerciseSets, structureBlocks, suggestedRpe });
   }));
 
   protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request, res: Response) => {

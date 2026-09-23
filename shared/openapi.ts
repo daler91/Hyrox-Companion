@@ -175,10 +175,21 @@ export const WorkoutLogDetailSchema = registry.register(
       structureBlocks: z
         .array(z.record(z.string(), z.unknown()))
         .openapi({ description: "Structured workout blocks (see the structureBlockSchema Zod type)." }),
+      suggestedRpe: z
+        .number()
+        .int()
+        .min(1)
+        .max(10)
+        .nullable()
+        .openapi({
+          description:
+            "RPE (1-10) suggested by the recording's average heart rate, for the athlete to confirm. Never saved on its own. Null without heart rate, for strength and mind-body sports, or when the athlete has neither a max HR nor an age on file. Returned whether or not `rpe` is set.",
+        }),
     })
     .openapi({
       title: "WorkoutLogDetail",
-      description: "A workout log with its exercise sets and structure blocks",
+      description:
+        "A workout log with its exercise sets, structure blocks and heart-rate RPE suggestion",
     }),
 );
 
@@ -405,11 +416,12 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "The requested workout log with its exercise sets and structure blocks",
+      description:
+        "The requested workout log with its exercise sets, structure blocks and heart-rate RPE suggestion",
       content: {
         "application/json": {
           schema: WorkoutLogDetailSchema,
-          example: { ...EXAMPLE_WORKOUT_RESPONSE, structureBlocks: [] },
+          example: { ...EXAMPLE_WORKOUT_RESPONSE, structureBlocks: [], suggestedRpe: null },
         },
       },
     },

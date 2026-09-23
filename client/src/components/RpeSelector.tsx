@@ -26,20 +26,46 @@ function getRpeColor(value: number): string {
   return "bg-red-600 text-white";
 }
 
+const UNSELECTED_ITEM = "bg-muted hover:bg-muted/80 text-muted-foreground";
+// Dashed, like the app's other not-yet-applied states (ParseStatusStrip): a
+// value on offer, never mistaken for a saved rating.
+const SUGGESTED_ITEM =
+  "border border-dashed border-primary bg-primary/5 text-primary hover:bg-primary/10";
+
+function getItemColor(rpeValue: number, value: number | null, suggested: number | null): string {
+  if (value === rpeValue) return getRpeColor(rpeValue);
+  if (suggested === rpeValue) return SUGGESTED_ITEM;
+  return UNSELECTED_ITEM;
+}
+
 interface RpeSelectorProps {
   readonly value: number | null;
   readonly onChange: (value: number | null) => void;
   readonly showLabel?: boolean;
   readonly compact?: boolean;
+  /**
+   * A value to mark while nothing is selected, such as the heart-rate
+   * suggestion on a recording. Only a mark: it is not selected, and nothing
+   * reaches `onChange` until the athlete picks a value.
+   */
+  readonly suggestedValue?: number | null;
 }
 
-export function RpeSelector({ value, onChange, showLabel = true, compact = false }: Readonly<RpeSelectorProps>) {
+export function RpeSelector({
+  value,
+  onChange,
+  showLabel = true,
+  compact = false,
+  suggestedValue = null,
+}: Readonly<RpeSelectorProps>) {
   // Default mode meets the 44x44 touch-target recommendation (h-11 w-11); the
   // row uses flex-wrap so the ten buttons wrap on narrow screens rather than
   // overflow. Compact mode (28x28) stays below it by design for dense layouts
   // where the parent decides density; arrow-key navigation (via Radix
   // RadioGroup) keeps it keyboard-friendly there (S9).
   const buttonSize = compact ? "h-7 w-7 text-xs" : "h-11 w-11 text-sm";
+  // Once the athlete has picked a value, theirs is the answer.
+  const suggested = value === null ? suggestedValue : null;
 
   return (
     <fieldset className="space-y-2 border-0 m-0 p-0">
@@ -61,18 +87,19 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
           aria-label="RPE 1 through 10"
         >
           {Array.from({ length: 10 }, (_, i) => i + 1).map((rpeValue) => {
-            const isSelected = value === rpeValue;
+            const isSuggested = suggested === rpeValue;
             return (
               <RadioGroupPrimitive.Item
                 key={rpeValue}
                 value={String(rpeValue)}
-                aria-label={`RPE ${rpeValue}, ${getRpeLabel(rpeValue)}`}
-                className={`${buttonSize} rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
-                  isSelected
-                    ? getRpeColor(rpeValue)
-                    : "bg-muted hover:bg-muted/80 text-muted-foreground"
-                }`}
+                aria-label={`RPE ${rpeValue}, ${getRpeLabel(rpeValue)}${isSuggested ? ", suggested" : ""}`}
+                className={`${buttonSize} rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${getItemColor(
+                  rpeValue,
+                  value,
+                  suggested,
+                )}`}
                 data-testid={`button-rpe-${rpeValue}`}
+                data-suggested={isSuggested ? "true" : undefined}
               >
                 {rpeValue}
               </RadioGroupPrimitive.Item>

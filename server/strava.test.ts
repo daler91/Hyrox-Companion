@@ -11,7 +11,7 @@ import {
   computeSyncAfterEpoch,
   createSignedState,
   deauthorizeStravaBestEffort,
-  enrichCaloriesFromDetail,
+  enrichFromActivityDetail,
   fetchStravaActivities,
   verifySignedState,
 } from './strava';
@@ -285,15 +285,16 @@ describe('fetchStravaActivities', () => {
   });
 });
 
-describe('enrichCaloriesFromDetail', () => {
+describe('enrichFromActivityDetail', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   const log = { warn: vi.fn() };
 
-  function candidates(count: number) {
+  function candidates(count: number, calories: number | null = null) {
     return Array.from({ length: count }, (_, i) => ({
       stravaActivityId: String(i + 1),
-      calories: null as number | null,
-    })) as unknown as Parameters<typeof enrichCaloriesFromDetail>[1];
+      calories,
+      rpe: null as number | null,
+    })) as unknown as Parameters<typeof enrichFromActivityDetail>[1];
   }
 
   beforeEach(() => {
@@ -313,11 +314,36 @@ describe('enrichCaloriesFromDetail', () => {
     fetchMock.mockResolvedValue(stravaResponse({ id: 1, calories: 480.4 }));
     const workouts = candidates(3);
 
-    await enrichCaloriesFromDetail('token', workouts, log);
+    await enrichFromActivityDetail('token', workouts, log);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(workouts.map((w) => w.calories)).toEqual([480, 480, 480]);
     expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it("takes the athlete's own Strava rating as the RPE, and leaves it empty without one", async () => {
+    fetchMock
+      .mockResolvedValueOnce(stravaResponse({ id: 1, calories: 400, perceived_exertion: 7.0 }))
+      .mockResolvedValueOnce(stravaResponse({ id: 2, calories: 400, perceived_exertion: null }))
+      .mockResolvedValueOnce(stravaResponse({ id: 3, calories: 400 }));
+    const workouts = candidates(3);
+
+    await enrichFromActivityDetail('token', workouts, log);
+
+    expect(workouts.map((w) => w.rpe)).toEqual([7, null, null]);
+  });
+
+  it('fetches the detail for a power-meter ride too, keeping its kilojoule calories', async () => {
+    // The rating only exists on the detail, so a row whose calories the list
+    // already gave (kilojoules) still needs the read — but its calories stay.
+    fetchMock.mockResolvedValue(stravaResponse({ id: 1, calories: 900, perceived_exertion: 6 }));
+    const workouts = candidates(1, 612);
+
+    await enrichFromActivityDetail('token', workouts, log);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(workouts[0].calories).toBe(612);
+    expect(workouts[0].rpe).toBe(6);
   });
 
   it('stops once the overall budget is spent, keeping the rows already enriched', async () => {
@@ -329,7 +355,7 @@ describe('enrichCaloriesFromDetail', () => {
     });
     const workouts = candidates(5);
 
-    await enrichCaloriesFromDetail('token', workouts, log);
+    await enrichFromActivityDetail('token', workouts, log);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(workouts.map((w) => w.calories)).toEqual([500, 500, 500, null, null]);
@@ -658,12 +684,12 @@ describe('syncStravaForUser', () => {
     vi.clearAllMocks();
   });
 
-  it('fetches from the overlap cursor, dedups, enriches calories, reconciles and advances the cursor', async () => {
+  it('fetches from the overlap cursor, dedups, enriches from the detail, reconciles and advances the cursor', async () => {
     fetchMock
       // The activities page (short → single page).
       .mockResolvedValueOnce(stravaResponse([activity(1), activity(2)]))
-      // Calorie detail for the one new activity.
-      .mockResolvedValueOnce(stravaResponse({ id: 2, calories: 321.4 }));
+      // Detail for the one new activity: calories and the athlete's rating.
+      .mockResolvedValueOnce(stravaResponse({ id: 2, calories: 321.4, perceived_exertion: 8 }));
     getExistingStravaActivityIds.mockResolvedValue(['1']);
     reconcileStravaActivities.mockResolvedValue({ ...zeroCounts, enriched: 1 });
 
@@ -694,6 +720,7 @@ describe('syncStravaForUser', () => {
     expect(items[0].activity.id).toBe(2);
     expect(items[0].row.stravaActivityId).toBe('2');
     expect(items[0].row.calories).toBe(321);
+    expect(items[0].row.rpe).toBe(8);
     // A complete sync moves the cursor to "now" (no explicit cursor argument).
     expect(updateStravaLastSync).toHaveBeenCalledWith('user-1');
     expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ imported: 1 }), 'strava.sync.ok');
@@ -756,7 +783,7 @@ describe('syncStravaForUser', () => {
 
   it('lets a reconciler failure propagate instead of advancing the cursor past it', async () => {
     fetchMock.mockResolvedValueOnce(stravaResponse([activity(3)]));
-    // No calorie detail: the enrichment fetch fails softly.
+    // No detail: the enrichment fetch fails softly.
     fetchMock.mockResolvedValueOnce(stravaResponse(null, 404));
     reconcileStravaActivities.mockRejectedValue(new Error('db down'));
 

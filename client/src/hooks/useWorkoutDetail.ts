@@ -9,12 +9,13 @@ import {
   type ParseFromImagePayload,
   QUERY_KEYS,
   type ReparseWorkoutTextPayload,
+  type WorkoutDetail,
   type WorkoutReferenceTextPayload,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { flushWorkoutWriteInvalidation, scheduleWorkoutWriteInvalidation } from "@/lib/workoutInvalidation";
 
-type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] };
+type WorkoutWithSets = WorkoutDetail;
 
 export function isLatestMutationSequence(seq: number, latestSeq: number | undefined): boolean {
   return seq === latestSeq;

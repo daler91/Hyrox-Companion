@@ -286,7 +286,7 @@ Logged workouts, entered manually or synced from Strava/Garmin. A synced Strava 
 | `removed_set_count` | `integer` | nullable |
 | `compliance_pct` | `integer` | nullable |
 | `duration` | `integer` | nullable (minutes) |
-| `rpe` | `integer` | nullable |
+| `rpe` | `integer` | nullable — the athlete's own rating (1–10): typed in the app, or their Strava Perceived Exertion on a synced activity. Never estimated from heart rate; that is only suggested on read (`suggestedRpe`) |
 | `plan_day_id` | `varchar(255)` | FK -> `plan_days.id` ON DELETE SET NULL |
 | `plan_id` | `varchar(255)` | FK -> `training_plans.id` ON DELETE SET NULL |
 | `source` | `varchar(255)` | default `'manual'` |

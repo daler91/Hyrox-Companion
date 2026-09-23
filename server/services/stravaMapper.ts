@@ -58,6 +58,23 @@ function getCalories(activity: StravaActivity): number | null {
   return null;
 }
 
+/**
+ * Strava's Perceived Exertion as the app's RPE, or null when there is none.
+ *
+ * `perceived_exertion` is the athlete's own answer to Strava's "How did that
+ * feel?" — a rating, not a measurement, which is why it may fill `rpe` when
+ * nothing a device recorded ever does. Only the per-activity detail endpoint
+ * returns it. It is on the same 1-10 scale as RPE, so it maps straight across:
+ * rounded because Strava sends a float and the column is an integer, and
+ * dropped rather than clamped when it falls outside the scale, because such a
+ * value is not a rating the athlete gave.
+ */
+export function perceivedExertionToRpe(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const rpe = Math.round(value);
+  return rpe >= 1 && rpe <= 10 ? rpe : null;
+}
+
 function getAccessory(activity: StravaActivity, distanceUnit: DistanceUnit, isDistanceActivity: boolean): string | null {
   const accessoryParts: string[] = [];
   if (activity.total_elevation_gain > 0) {
@@ -107,7 +124,9 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
     accessory,
     notes,
     duration: durationMinutes,
-    rpe: null,
+    // The list row never carries the athlete's Perceived Exertion; the sync's
+    // detail enrichment fills it when they gave one (server/strava.ts).
+    rpe: null as number | null,
     planDayId: null,
     source: "strava" as const,
     stravaActivityId: String(activity.id),

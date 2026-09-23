@@ -13,7 +13,11 @@ import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
-import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
+import {
+  mapStravaActivityToWorkout,
+  perceivedExertionToRpe,
+  type StravaActivity,
+} from "./services/stravaMapper";
 import { reconcileStravaActivities, type StravaImportItem } from "./services/stravaReconciler";
 import {
   enqueueStravaSync,
@@ -559,42 +563,66 @@ export async function fetchStravaActivities(
   return { activities, hasMore: true };
 }
 
-// The list endpoint NEVER returns `calories` (only the per-activity detail
-// endpoint does) and the kilojoules fallback only exists for power-meter
-// rides — so without enrichment nearly every imported activity shows an
-// empty calories chip. Cap detail fetches per sync to protect Strava's
-// 100-reads/15-min app budget: steady-state syncs import a handful of
-// activities and get fully enriched; a large backfill enriches only the
+// The list endpoint NEVER returns `calories` or the athlete's Perceived
+// Exertion (only the per-activity detail endpoint does), and the kilojoules
+// fallback only exists for power-meter rides — so without enrichment nearly
+// every imported activity shows an empty calories chip, and none carries the
+// rating the athlete gave on Strava. Cap detail fetches per sync to protect
+// Strava's 100-reads/15-min app budget: steady-state syncs import a handful
+// of activities and get fully enriched; a large backfill enriches only the
 // newest 25 (the ones users actually look at).
-const STRAVA_CALORIE_DETAIL_LIMIT = 25;
+const STRAVA_DETAIL_ENRICHMENT_LIMIT = 25;
 // Wall-clock budget for the whole enrichment pass. The per-call timeout only
 // bounds one request; 25 sequential calls that each limp to the timeout (and
 // retry once) would hold the sync request open for minutes. Once spent, the
-// remaining rows import without calories — the same non-fatal outcome as a
-// failed detail call.
+// remaining rows import without calories or a rating — the same non-fatal
+// outcome as a failed detail call.
 const STRAVA_ENRICHMENT_BUDGET_MS = 30_000;
 
 interface StravaDetailedActivity {
   id: number;
   calories?: number;
+  /**
+   * The athlete's 1-10 answer to Strava's "How did that feel?", from its save
+   * or edit screen; null when they gave none. Detail endpoint only.
+   */
+  perceived_exertion?: number | null;
+}
+
+type MappedStravaWorkout = ReturnType<typeof mapStravaActivityToWorkout>;
+
+/**
+ * Copy what only the detail knows onto the list-derived row. Fills, never
+ * overwrites: kilojoule-derived calories stay as they are, and the rating
+ * lands only on a row that has none.
+ */
+function applyActivityDetail(workout: MappedStravaWorkout, detail: StravaDetailedActivity): void {
+  if (workout.calories === null && detail.calories) {
+    workout.calories = Math.round(detail.calories);
+  }
+  // The athlete's own rating or nothing. A recording's heart rate is never
+  // turned into an RPE here: that is only ever offered as a suggestion the
+  // athlete confirms (services/rpeSuggestion.ts).
+  workout.rpe ??= perceivedExertionToRpe(detail.perceived_exertion);
 }
 
 /**
- * Best-effort, budget-capped calorie enrichment for newly-imported workouts
- * (mutated in place). Never throws — a failed detail fetch just leaves the
+ * Best-effort, budget-capped detail enrichment for newly-imported workouts
+ * (mutated in place): calories where the list row had none, and the RPE the
+ * athlete gave on Strava. Never throws — a failed detail fetch just leaves the
  * list-derived row as-is.
  */
 /** Exported ONLY for the time-budget regression test (strava.test.ts). */
-export async function enrichCaloriesFromDetail(
+export async function enrichFromActivityDetail(
   accessToken: string,
-  workouts: ReturnType<typeof mapStravaActivityToWorkout>[],
+  workouts: MappedStravaWorkout[],
   log: Pick<typeof logger, "warn">,
 ): Promise<void> {
+  // Every new row is a candidate, including a power-meter ride whose calories
+  // came from kilojoules: the Perceived Exertion is only ever on the detail.
   // Activities arrive in ascending start_date order — slice from the end to
   // enrich the newest ones.
-  const candidates = workouts
-    .filter((w) => w.calories === null)
-    .slice(-STRAVA_CALORIE_DETAIL_LIMIT);
+  const candidates = workouts.slice(-STRAVA_DETAIL_ENRICHMENT_LIMIT);
 
   const startedAt = Date.now();
   let failures = 0;
@@ -605,7 +633,7 @@ export async function enrichCaloriesFromDetail(
       // bearer:disable javascript_lang_logger_leak
       log.warn(
         { attempted, of: candidates.length },
-        "Strava calorie enrichment stopped early: time budget spent (non-fatal)",
+        "Strava detail enrichment stopped early: time budget spent (non-fatal)",
       );
       break;
     }
@@ -626,25 +654,23 @@ export async function enrichCaloriesFromDetail(
               parseRetryAfter(response.headers.get("retry-after")),
             );
           }
-          // Any other failure: keep the list-derived row, no calories.
+          // Any other failure: keep the list-derived row as it is.
           if (!response.ok) return null;
           return (await response.json()) as StravaDetailedActivity;
         },
         // Enrichment is optional garnish — retry once, not the full 3 times.
         { label: "strava.activityDetail", retries: 1 },
       );
-      if (detail?.calories) {
-        workout.calories = Math.round(detail.calories);
-      }
+      if (detail) applyActivityDetail(workout, detail);
     } catch (err) {
       if (err instanceof RetryableHttpError && err.status === 429) {
         // Rate-limited: stop hammering — the remaining rows simply keep
-        // calories null. The sync itself still succeeds. Only a count is
-        // logged; no activity data or token material.
+        // what the list row gave them. The sync itself still succeeds. Only
+        // a count is logged; no activity data or token material.
         // bearer:disable javascript_lang_logger_leak
         log.warn(
           { attempted: candidates.length },
-          "Strava calorie enrichment stopped early: rate-limited (non-fatal)",
+          "Strava detail enrichment stopped early: rate-limited (non-fatal)",
         );
         return;
       }
@@ -656,7 +682,7 @@ export async function enrichCaloriesFromDetail(
     // bearer:disable javascript_lang_logger_leak
     log.warn(
       { failures, attempted: candidates.length },
-      "Strava calorie enrichment partially failed (non-fatal)",
+      "Strava detail enrichment partially failed (non-fatal)",
     );
   }
 }
@@ -766,10 +792,11 @@ export type StravaSyncOutcome =
 type StravaSyncLogger = Pick<typeof logger, "info" | "warn" | "error">;
 
 /**
- * One incremental sync for one athlete: cursor → fetch → dedup → calorie
- * enrichment → reconcile → advance cursor. The single engine behind the
- * manual Sync button (handleStravaSync) and the background jobs
- * (server/services/stravaAutoSync.ts), so both paths import identically.
+ * One incremental sync for one athlete: cursor → fetch → dedup → detail
+ * enrichment (calories, the athlete's Strava rating) → reconcile → advance
+ * cursor. The single engine behind the manual Sync button (handleStravaSync)
+ * and the background jobs (server/services/stravaAutoSync.ts), so both paths
+ * import identically.
  *
  * Never throws for a Strava-side problem — those come back as an outcome the
  * caller maps to an HTTP response or a job result. Anything else (a DB
@@ -818,7 +845,7 @@ export async function syncStravaForUser(
   const { items, skipped } = await selectStravaActivitiesToImport(activities, userId, distanceUnit);
 
   if (items.length > 0) {
-    await enrichCaloriesFromDetail(accessToken, items.map((item) => item.row), log);
+    await enrichFromActivityDetail(accessToken, items.map((item) => item.row), log);
   }
 
   // Each new activity is matched against the day's existing rows before

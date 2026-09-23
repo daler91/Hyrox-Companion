@@ -94,6 +94,20 @@ export function hrIntensityFactor(hrr: number): number {
   return intensityFactorFromFraction(hrr);
 }
 
+/**
+ * The RPE the load model already treats as equal to this heart-rate reserve.
+ *
+ * Both cardio branches score `0.6 + x² · 2`, with x the HRR fraction for heart
+ * rate and rpe / 10 for RPE, so a session at this HRR scores the same as one
+ * rated 10 × HRR. Rounded onto the 1-10 scale. This is a SUGGESTION for the
+ * athlete to confirm (services/rpeSuggestion.ts), never a rating written on
+ * their behalf. Retuning either curve breaks the equivalence, and
+ * rpeSuggestion.test.ts pins it so that cannot happen silently.
+ */
+export function rpeEquivalentOfHrReserve(hrr: number): number {
+  return Math.min(10, Math.max(1, Math.round(hrr * 10)));
+}
+
 // Power-based intensity factor from %FTP (avgWatts / FTP). Null without usable
 // FTP + watts. Above-threshold efforts clamp at the band ceiling.
 export function powerIntensityFactor(

@@ -23,6 +23,14 @@ describe("RpeSelector a11y", () => {
     expect(results).toHaveNoViolations();
   }, AXE_TIMEOUT_MS);
 
+  it("has no WCAG violations with a suggested value marked", async () => {
+    const { container } = render(
+      <RpeSelector value={null} onChange={vi.fn()} compact showLabel={false} suggestedValue={7} />,
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  }, AXE_TIMEOUT_MS);
+
   it("has no WCAG violations in compact mode without a visible legend", async () => {
     const { container } = render(
       <RpeSelector value={null} onChange={vi.fn()} compact showLabel={false} />,

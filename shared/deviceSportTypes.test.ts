@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countsAsTraining } from "./deviceSportTypes";
+import { countsAsTraining, heartRateReflectsEffort } from "./deviceSportTypes";
 
 describe("countsAsTraining", () => {
   it("excludes the sports that arrive without being training", () => {
@@ -56,5 +56,30 @@ describe("countsAsTraining", () => {
     expect(countsAsTraining(null)).toBe(true);
     expect(countsAsTraining(undefined)).toBe(true);
     expect(countsAsTraining("")).toBe(true);
+  });
+});
+
+describe("heartRateReflectsEffort", () => {
+  it("rules out lifting in both providers' spellings", () => {
+    // A heavy session's average heart rate reads like a walk.
+    expect(heartRateReflectsEffort("WeightTraining")).toBe(false);
+    expect(heartRateReflectsEffort("strength_training")).toBe(false);
+  });
+
+  it("rules out the mind-body sports", () => {
+    expect(heartRateReflectsEffort("Yoga")).toBe(false);
+    expect(heartRateReflectsEffort("pilates")).toBe(false);
+  });
+
+  it("keeps the sports whose effort shows in the heart rate", () => {
+    for (const sport of ["Run", "Ride", "Rowing", "Swim", "Workout", "Crossfit", "indoor_cardio"]) {
+      expect(heartRateReflectsEffort(sport), sport).toBe(true);
+    }
+  });
+
+  it("keeps an unknown or missing sport, whose suggestion the athlete still confirms", () => {
+    expect(heartRateReflectsEffort("SomeNewStravaSport")).toBe(true);
+    expect(heartRateReflectsEffort(null)).toBe(true);
+    expect(heartRateReflectsEffort("")).toBe(true);
   });
 });

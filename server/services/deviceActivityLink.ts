@@ -37,7 +37,16 @@ import { deviceActivitySetRow } from "./deviceActivitySets";
 import { mapStravaActivityToWorkout } from "./stravaMapper";
 import { createWorkoutInTx, type WorkoutTx } from "./workoutService";
 
-/** The workout_logs columns a device recording can fill. */
+/**
+ * The workout_logs columns a device recording can fill.
+ *
+ * `rpe` is the one that is not a measurement. It is here because a Strava
+ * activity can carry the athlete's own Perceived Exertion (see
+ * `perceivedExertionToRpe`), and a rating they gave on Strava should reach
+ * the log that takes the recording, follow the same fill-only-NULL rule, and
+ * leave again on unlink like every other column the link wrote. Nothing here
+ * ever estimates one.
+ */
 export const DEVICE_METRIC_COLUMNS = [
   "duration",
   "calories",
@@ -51,6 +60,7 @@ export const DEVICE_METRIC_COLUMNS = [
   "avgWatts",
   "sufferScore",
   "startedAt",
+  "rpe",
 ] as const;
 
 export type DeviceMetricColumn = (typeof DEVICE_METRIC_COLUMNS)[number];
@@ -210,7 +220,9 @@ export interface CreateFromPlanDayInput {
  * The plan day has no log yet, so the activity becomes its log — built the
  * way a manual confirm builds one (prescription text, copied sets and
  * structure, adherence snapshot, day marked completed) with the recording's
- * metrics on top. RPE stays NULL: a watch cannot tell how it felt.
+ * metrics on top. RPE comes only from the athlete's own Strava rating, when
+ * `metrics` carries one; otherwise it stays NULL, because a watch cannot tell
+ * how it felt.
  */
 export async function createLogFromPlanDayWithStravaInTx(
   tx: WorkoutTx,
@@ -226,7 +238,6 @@ export async function createLogFromPlanDayWithStravaInTx(
       mainWorkout: planDay.mainWorkout,
       accessory: planDay.accessory ?? null,
       notes: joinNotes(planDay.notes, activityLabel),
-      rpe: null,
       planDayId: planDay.id,
       planId: planDay.planId,
       source: "strava",
@@ -435,10 +446,14 @@ export async function releaseStravaActivityInTx(
   const raw = snapshot?.raw ?? legacyRawFromLog(log);
 
   const standaloneRow = mapStravaActivityToWorkout(raw, userId, distanceUnit);
-  // The list row never carries calories; the linked row does if the link
-  // fetched them. Carry them across so the split loses nothing.
+  // The list row never carries calories or the athlete's Strava rating; the
+  // linked row does if the link filled them. Carry them across so the split
+  // loses nothing.
   if (standaloneRow.calories == null && snapshot?.filledColumns.includes("calories")) {
     standaloneRow.calories = log.calories;
+  }
+  if (standaloneRow.rpe == null && snapshot?.filledColumns.includes("rpe")) {
+    standaloneRow.rpe = log.rpe;
   }
 
   const [standalone] = await tx

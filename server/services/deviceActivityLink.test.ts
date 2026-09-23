@@ -1,10 +1,12 @@
 import type { StravaActivitySummary, WorkoutLog } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createMockPlanDay } from "../../test/factories";
 import { db } from "../db";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
 import {
   attachStravaActivityToLogInTx,
+  createLogFromPlanDayWithStravaInTx,
   dismissDeviceLinkSuggestion,
   legacyRawFromLog,
   linkStandaloneDeviceLog,
@@ -98,6 +100,35 @@ describe("attachStravaActivityToLogInTx", () => {
     expect(patch.deviceActivity.raw).toEqual(RAW);
   });
 
+  /** Attach a recording the athlete rated 6 on Strava to a log with `logRpe`; returns the UPDATE patch. */
+  async function attachRatedRecording(logRpe: number | null) {
+    const tx = makeTx();
+    const existing = makeWorkoutLog({ id: "log-1", rpe: logRpe });
+    tx.for.mockResolvedValue([existing]);
+    tx.returning.mockResolvedValue([{ ...existing, stravaActivityId: "9001" }]);
+    await attachStravaActivityToLogInTx(tx as never, {
+      logId: "log-1",
+      userId: USER,
+      raw: RAW,
+      metrics: { ...pickDeviceMetrics(mapStravaActivityToWorkout(RAW, USER, "km")), rpe: 6 },
+      linkSource: "auto",
+      confidence: 0.9,
+    });
+    return tx.set.mock.calls[0][0];
+  }
+
+  it("fills an empty RPE from the athlete's Strava rating and records it for unlink", async () => {
+    const patch = await attachRatedRecording(null);
+    expect(patch.rpe).toBe(6);
+    expect(patch.deviceActivity.filledColumns).toContain("rpe");
+  });
+
+  it("never replaces an RPE the athlete gave with the one they gave on Strava", async () => {
+    const patch = await attachRatedRecording(8);
+    expect(patch.rpe).toBeUndefined();
+    expect(patch.deviceActivity.filledColumns).not.toContain("rpe");
+  });
+
   it("returns undefined when the row already carries a device activity", async () => {
     const tx = makeTx();
     tx.for.mockResolvedValue([]);
@@ -111,6 +142,41 @@ describe("attachStravaActivityToLogInTx", () => {
     });
     expect(result).toBeUndefined();
     expect(tx.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("createLogFromPlanDayWithStravaInTx", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createWorkoutInTx).mockResolvedValue(makeWorkoutLog({ id: "created" }));
+  });
+
+  const planDay = createMockPlanDay({ id: "pd-1", scheduledDate: "2026-09-08", focus: "Tempo" });
+  const metrics = pickDeviceMetrics(mapStravaActivityToWorkout(RAW, USER, "km"));
+
+  /** Complete the plan day from a recording rated `rpe` on Strava; returns the new log's payload. */
+  async function completeDayWith(rpe: number | null) {
+    await createLogFromPlanDayWithStravaInTx(makeTx() as never, {
+      userId: USER,
+      planDay,
+      raw: RAW,
+      metrics: { ...metrics, rpe },
+      linkSource: "auto",
+      confidence: 0.9,
+    });
+    return vi.mocked(createWorkoutInTx).mock.calls[0][1];
+  }
+
+  it("gives the day's new log the athlete's Strava rating", async () => {
+    const payload = await completeDayWith(7);
+    expect(payload).toMatchObject({ planDayId: "pd-1", rpe: 7 });
+    expect(payload.deviceActivity?.filledColumns).toContain("rpe");
+  });
+
+  it("leaves the RPE empty when the athlete gave no rating: a watch cannot tell how it felt", async () => {
+    const payload = await completeDayWith(null);
+    expect(payload.rpe).toBeNull();
+    expect(payload.deviceActivity?.filledColumns).not.toContain("rpe");
   });
 });
 
@@ -263,6 +329,30 @@ describe("linkStandaloneDeviceLog", () => {
     expect(createWorkoutInTx).not.toHaveBeenCalled();
   });
 
+  it("brings the import's rating along to a log that has none", async () => {
+    // The import's RPE (the athlete's Strava rating, or one they gave the
+    // import here) would otherwise go with the deleted row.
+    const standalone = makeWorkoutLog({
+      id: "import-1",
+      source: "strava",
+      stravaActivityId: "9001",
+      rpe: 7,
+      deviceActivity: { provider: "strava", raw: RAW, filledColumns: [], linkedAt: "2026-09-08T12:00:00Z" },
+    });
+    const target = makeWorkoutLog({ id: "log-1", rpe: null });
+    tx.for.mockResolvedValueOnce([standalone]).mockResolvedValueOnce([target]);
+    tx.where.mockReturnValueOnce(tx);
+    tx.where.mockResolvedValueOnce({ rowCount: 1 });
+    tx.returning.mockResolvedValueOnce([{ ...target, stravaActivityId: "9001", rpe: 7 }]);
+
+    await linkStandaloneDeviceLog({ userId: USER, deviceLogId: "import-1", target: { workoutLogId: "log-1" } });
+
+    const [patch] = tx.set.mock.calls[0];
+    expect(patch.rpe).toBe(7);
+    // Recorded as filled, so an unlink hands it back to the recording.
+    expect(patch.deviceActivity.filledColumns).toContain("rpe");
+  });
+
   it("refuses to move a recording that is already someone's log", async () => {
     tx.for.mockResolvedValueOnce([
       makeWorkoutLog({ id: "log-1", stravaActivityId: "9001", deviceLinkSource: "auto" }),
@@ -312,6 +402,33 @@ describe("releaseStravaActivityInTx", () => {
       raw: { id: 9001, name: "Morning Run" },
     });
     expect(standalone.id).toBe("standalone");
+  });
+
+  function linkedLog(rpe: number, filledColumns: string[]): WorkoutLog {
+    return makeWorkoutLog({
+      id: "log-9",
+      source: "strava",
+      planDayId: "pd-1",
+      stravaActivityId: "9001",
+      rpe,
+      deviceActivity: { provider: "strava", raw: RAW, filledColumns, linkedAt: "2026-09-08T12:00:00Z" },
+    });
+  }
+
+  /** Release `log`'s recording; returns the standalone row it inserted. */
+  async function releasedRow(log: WorkoutLog) {
+    const tx = makeTx();
+    tx.returning.mockResolvedValueOnce([makeWorkoutLog({ id: "standalone" })]);
+    await releaseStravaActivityInTx(tx as never, log, USER, "km");
+    return tx.values.mock.calls[0][0];
+  }
+
+  it("takes a Strava rating the link filled along with the recording", async () => {
+    expect((await releasedRow(linkedLog(6, ["duration", "rpe"]))).rpe).toBe(6);
+  });
+
+  it("leaves behind a rating the log had before the link", async () => {
+    expect((await releasedRow(linkedLog(8, ["duration"]))).rpe).toBeNull();
   });
 });
 
