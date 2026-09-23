@@ -5,7 +5,8 @@ import {
   type NutritionTargetInput,
   type WeightGoalDirection,
 } from "@shared/nutritionTargets";
-import { convertWeight } from "@shared/unitConversion";
+import { cmToFtIn, convertWeight, ftInToCm } from "@shared/unitConversion";
+import { useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,6 +87,103 @@ export function parseFuellingProfile(f: FuellingProfileFields): NutritionTargetI
 }
 
 /**
+ * Height in centimetres, or in feet and inches for an athlete who weighs in
+ * pounds (as Settings does). Imperial athletes had to type centimetres here
+ * (onboarding audit L4). The value handed up is always centimetres.
+ */
+function HeightInput({
+  heightCm,
+  imperial,
+  onHeightCmChange,
+}: {
+  readonly heightCm: string;
+  readonly imperial: boolean;
+  readonly onHeightCmChange: (v: string) => void;
+}) {
+  const [feetInches, setFeetInches] = useState(() => {
+    const cm = Number(heightCm);
+    if (heightCm.trim() === "" || !Number.isFinite(cm) || cm <= 0) return { feet: "", inches: "" };
+    const { feet, inches } = cmToFtIn(cm);
+    return { feet: String(feet), inches: String(inches) };
+  });
+
+  if (!imperial) {
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor="fuelling-height">Height (cm)</Label>
+        <Input
+          id="fuelling-height"
+          type="number"
+          min={0}
+          step="any"
+          inputMode="decimal"
+          className="w-28"
+          value={heightCm}
+          onChange={(e) => onHeightCmChange(e.target.value)}
+          data-testid="input-fuelling-height"
+        />
+      </div>
+    );
+  }
+
+  const update = (next: { feet: string; inches: string }) => {
+    setFeetInches(next);
+    if (next.feet.trim() === "" && next.inches.trim() === "") {
+      onHeightCmChange("");
+      return;
+    }
+    const feet = next.feet.trim() === "" ? 0 : Number(next.feet);
+    const inches = next.inches.trim() === "" ? 0 : Number(next.inches);
+    if (!Number.isFinite(feet) || !Number.isFinite(inches) || feet < 0 || inches < 0) return;
+    onHeightCmChange(String(Math.round(ftInToCm(feet, inches) * 10) / 10));
+  };
+
+  // 5 ft 12 in reads as 6 ft 0 in once the athlete leaves the field. The height
+  // handed up is the same either way.
+  const carryWholeFeet = () => {
+    const feet = feetInches.feet.trim() === "" ? 0 : Number(feetInches.feet);
+    const inches = Number(feetInches.inches);
+    if (!Number.isFinite(feet) || !Number.isFinite(inches) || inches < 12) return;
+    setFeetInches({
+      feet: String(feet + Math.floor(inches / 12)),
+      inches: String(Math.round((inches % 12) * 10) / 10),
+    });
+  };
+
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-sm font-medium leading-none">Height</legend>
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          className="w-20"
+          value={feetInches.feet}
+          onChange={(e) => update({ ...feetInches, feet: e.target.value })}
+          aria-label="Height feet"
+          data-testid="input-fuelling-height-ft"
+        />
+        <span className="text-sm text-muted-foreground">ft</span>
+        <Input
+          type="number"
+          min={0}
+          max={11}
+          inputMode="numeric"
+          className="w-20"
+          value={feetInches.inches}
+          onChange={(e) => update({ ...feetInches, inches: e.target.value })}
+          onBlur={carryWholeFeet}
+          aria-label="Height inches"
+          data-testid="input-fuelling-height-in"
+        />
+        <span className="text-sm text-muted-foreground">in</span>
+      </div>
+    </fieldset>
+  );
+}
+
+/**
  * Optional onboarding step: body profile → suggested daily nutrition targets.
  *
  * The targets engine (shared/nutritionTargets) has always been able to compute
@@ -124,7 +222,7 @@ export function FuellingStep({
         training. Skip it and you can set targets anytime in Nutrition.
       </p>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="fuelling-bodyweight">Weight ({fields.weightUnit})</Label>
           <Input
@@ -136,19 +234,6 @@ export function FuellingStep({
             value={fields.bodyweight}
             onChange={(e) => onBodyweightChange(e.target.value)}
             data-testid="input-fuelling-bodyweight"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="fuelling-height">Height (cm)</Label>
-          <Input
-            id="fuelling-height"
-            type="number"
-            min={0}
-            step="any"
-            inputMode="decimal"
-            value={fields.heightCm}
-            onChange={(e) => onHeightCmChange(e.target.value)}
-            data-testid="input-fuelling-height"
           />
         </div>
         <div className="space-y-1.5">
@@ -164,6 +249,12 @@ export function FuellingStep({
           />
         </div>
       </div>
+
+      <HeightInput
+        heightCm={fields.heightCm}
+        imperial={fields.weightUnit === "lbs"}
+        onHeightCmChange={onHeightCmChange}
+      />
 
       <div className="space-y-1.5">
         <Label htmlFor="fuelling-activity">Activity level</Label>

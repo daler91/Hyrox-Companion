@@ -9,6 +9,7 @@ import type { GeneratePlanInput, TrainingPlan } from "@shared/schema";
 import { useMemo, useState } from "react";
 
 import { getTodayString } from "@/lib/dateUtils";
+import { defaultPlanStartDate } from "@/lib/planStart";
 
 // Stable identity, so the overlap memo isn't invalidated on every render when
 // the caller passes no plans.
@@ -70,6 +71,11 @@ export interface GeneratePlanFormValues {
 export interface GeneratePlanFormOptions {
   readonly initialGoal?: string;
   readonly initialStartDate?: string;
+  /**
+   * A race date the athlete already gave (onboarding asks for one). It becomes
+   * the plan's end date, flagged as race day so the plan peaks for it.
+   */
+  readonly initialRaceDate?: string;
   /**
    * The athlete's remembered injuries/limitations, prefilled into the box so
    * they are not retyped on every regeneration. Passed in rather than read from
@@ -181,9 +187,15 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
 export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const initialGoal = options.initialGoal ?? "";
   // Plan length is derived from the dates, so both are always prefilled: start
-  // from the caller (onboarding) or today, end at the historical default length.
-  const baseStartDate = options.initialStartDate || getTodayString();
-  const defaultEndDate = addDaysToISODate(baseStartDate, DEFAULT_WEEKS * 7);
+  // from the caller (onboarding) or the next Monday, end at the historical
+  // default length. A Monday start gives the plan a whole first week.
+  const baseStartDate = options.initialStartDate || defaultPlanStartDate();
+  const defaultEndDate =
+    options.initialRaceDate || addDaysToISODate(baseStartDate, DEFAULT_WEEKS * 7);
+  // "This is my race date" starts on only for a race date the athlete gave.
+  // It used to start on for the default end date too, a date nobody chose,
+  // and the plan tapered into it (onboarding audit M3).
+  const defaultEndDateIsRaceDate = Boolean(options.initialRaceDate);
 
   const [step, setStep] = useState<GeneratePlanStep>(0);
   const [goal, setGoal] = useState(initialGoal);
@@ -191,7 +203,7 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>("intermediate");
   const [startDate, setStartDate] = useState(baseStartDate);
   const [endDate, setEndDate] = useState(defaultEndDate);
-  const [endDateIsRaceDate, setEndDateIsRaceDate] = useState(true);
+  const [endDateIsRaceDate, setEndDateIsRaceDate] = useState(defaultEndDateIsRaceDate);
   const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   // Prefilled from the athlete's remembered constraints so they do not retype
@@ -228,7 +240,7 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
     setExperienceLevel("intermediate");
     setStartDate(baseStartDate);
     setEndDate(defaultEndDate);
-    setEndDateIsRaceDate(true);
+    setEndDateIsRaceDate(defaultEndDateIsRaceDate);
     setRestDays(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
     setFocusAreas([]);
     setInjuries(rememberedConstraints);

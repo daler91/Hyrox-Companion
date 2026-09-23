@@ -1,5 +1,19 @@
 import { setupAuthIntercepts } from "../support/authIntercepts";
 
+// Walks from Welcome to the Plan step. Nothing is changed on the way, so
+// nothing is saved. Each step's title is waited for before it is left.
+function walkToPlanStep() {
+  cy.contains("button", "Get Started").click();
+  cy.contains("Set Your Preferences").should("exist");
+  cy.contains("button", "Continue").click();
+  cy.contains("What's Your Goal?").should("exist");
+  cy.contains("button", "Continue").click();
+  cy.contains("Fuel Your Training").should("exist");
+  cy.contains("button", "Skip").click();
+  cy.contains("Meet Your AI Coach").should("exist");
+  cy.contains("button", "Continue").click();
+}
+
 // E2E coverage for the first-time onboarding flow, the new "Step N of N"
 // counter, and the re-entry point added to Settings. Covers findings
 // O-1..O-4 from the UX review.
@@ -26,32 +40,76 @@ describe("Onboarding Wizard", () => {
       .and("contain", "Step 1 of");
     cy.contains("button", "Get Started").click();
 
-    // Step 2 — Units
+    // Step 2 — Units. Only answers that differ from the saved preferences
+    // are written (audit H2), so pick one to make the save deterministic. The
+    // app also PATCHes the detected timezone on load (useDetectTimezone), so
+    // the units save is picked out by its body rather than by arrival order.
+    cy.intercept("PATCH", "/api/v1/preferences", (req) => {
+      const body = req.body as { gender?: string } | undefined;
+      if (body?.gender !== undefined) req.alias = "saveUnits";
+      req.reply({ statusCode: 200, body: { ok: true } });
+    });
     cy.contains("Set Your Preferences").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 2 of");
+    cy.contains("label", "Men").click();
     cy.contains("button", "Continue").click();
-    cy.wait("@savePreferences");
+    cy.wait("@saveUnits").its("request.body").should("include", { gender: "male" });
 
-    // Step 3 — Goal
+    // Step 3 — Goal. Left as saved, so nothing is written.
     cy.contains("What's Your Goal?").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 3 of");
     cy.contains("button", "Continue").click();
-    cy.wait("@savePreferences");
 
     // Step 4 — Fuelling (optional; present because the nutrition module is on
     // by default). Leaving it blank skips without saving anything.
     cy.contains("Fuel Your Training").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 4 of");
     cy.getBySel("input-fuelling-bodyweight").should("be.visible");
+    cy.contains("button", "Skip").click();
+
+    // Step 5 — AI Coach: an explicit choice, off until the athlete turns it
+    // on; choosing "on" shows what it sends (audit M6). Left off here.
+    cy.contains("Meet Your AI Coach").should("be.visible");
+    cy.getBySel("text-onboarding-step-count").should("contain", "Step 5 of");
+    cy.getBySel("radio-coach-off").should("have.attr", "aria-checked", "true");
+    cy.getBySel("radio-coach-on").click();
+    cy.contains("Your recent workout history").should("be.visible");
+    cy.getBySel("radio-coach-off").click();
     cy.contains("button", "Continue").click();
 
-    // Step 5 — Plan
+    // Step 6 — Plan. The AI Coach was left off, so the template leads and the
+    // AI option says it needs the coach (audit C1).
     cy.contains("Choose Your Path").should("be.visible");
-    cy.getBySel("text-onboarding-step-count").should("contain", "Step 5 of");
-    // 8-Week Sample Plan should be the primary CTA now (default button variant).
+    cy.getBySel("text-onboarding-step-count").should("contain", "Step 6 of");
     cy.getBySel("button-onboarding-sample-plan").should("be.visible");
-    cy.getBySel("button-onboarding-generate-plan").should("be.visible");
+    cy.getBySel("button-onboarding-generate-plan")
+      .should("be.visible")
+      .and("contain", "Needs the AI Coach");
     cy.getBySel("button-onboarding-skip").should("be.visible");
+  });
+
+  it("asks for AI consent before the AI plan steps when the coach is off", () => {
+    cy.intercept("GET", "/api/v1/auth/user", {
+      statusCode: 200,
+      body: { id: "test-user-123", email: "test@example.com", aiCoachEnabled: false },
+    }).as("authUser");
+    cy.visit("/");
+    cy.wait("@authUser");
+    cy.wait("@timeline");
+    cy.wait("@plans");
+
+    walkToPlanStep();
+
+    // The generator asks first instead of failing with a 403 after three steps.
+    // Its own alias: an en-US browser may already have saved suggested units.
+    cy.intercept("PATCH", "/api/v1/preferences", { statusCode: 200, body: { ok: true } }).as(
+      "enableAiCoach",
+    );
+    cy.getBySel("button-onboarding-generate-plan").click();
+    cy.contains("AI plans are written by the AI Coach").should("be.visible");
+    cy.getBySel("button-generate-enable-ai").click();
+    cy.wait("@enableAiCoach").its("request.body").should("deep.equal", { aiCoachEnabled: true });
+    cy.get("textarea#goal").should("be.visible");
   });
 
   it("can skip onboarding and close the wizard", () => {
@@ -60,14 +118,7 @@ describe("Onboarding Wizard", () => {
     cy.wait("@timeline");
     cy.wait("@plans");
 
-    // Walk to the Plan step (goal saves prefs; the blank fuelling step doesn't)
-    cy.contains("button", "Get Started").click();
-    cy.contains("button", "Continue").click();
-    cy.wait("@savePreferences");
-    cy.contains("button", "Continue").click();
-    cy.wait("@savePreferences");
-    cy.contains("Fuel Your Training").should("be.visible");
-    cy.contains("button", "Continue").click();
+    walkToPlanStep();
 
     cy.getBySel("button-onboarding-skip").click();
     cy.contains("Choose Your Path").should("not.exist");

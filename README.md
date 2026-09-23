@@ -39,7 +39,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **Training plans** - Import CSV plans, start from built-in programming, or generate a plan with AI.
 - **Training styles** - Choose balanced programming or MAF Method constraints, with MAF setup fields used to calculate and persist the athlete's heart-rate ceiling. MAF athletes can tag any logged workout, including synced Strava runs, as a MAF test to track pace at the same heart rate over time.
 - **Timeline annotations** - Mark injury, illness, travel, rest, or other date ranges so analytics and training gaps have context.
-- **Guided onboarding** - Configure profile, units, goals, schedule, and initial plan setup before landing in the main app.
+- **Guided onboarding** - Set units, race profile and age, a goal and optional race date, an optional fuelling target, and the AI Coach consent, then start a plan (AI, template or CSV import) before landing in the main app. Re-running it from Settings starts from the saved answers.
 
 ### AI Coaching
 

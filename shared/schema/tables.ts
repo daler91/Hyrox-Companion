@@ -114,9 +114,11 @@ export const users = pgTable("users", {
   // Athlete competition profile — drives HYROX station load standards and the
   // benchmark fallbacks used by the Race Predictor. `division` defaults to the
   // recreational "open" standard; `gender` is nullable (null ≡ not yet
-  // answered, treated as "prefer_not_to_say" by the predictor).
+  // answered, treated as "prefer_not_to_say" by the predictor). 32, not 16:
+  // "prefer_not_to_say" is 17 characters, and at 16 every save carrying it
+  // failed with a 500 (onboarding audit C2).
   division: varchar("division", { length: 16 }).default("open"),
-  gender: varchar("gender", { length: 16 }),
+  gender: varchar("gender", { length: 32 }),
   // General athlete age, collected for every user (profile/onboarding) and used
   // by the Race Predictor to pick an age cohort. Distinct from `mafAge`, which
   // is only set during MAF onboarding — so balanced-style athletes previously

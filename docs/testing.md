@@ -291,6 +291,7 @@ Current a11y coverage includes:
 - `client/src/components/coach/__tests__/SuggestionCard.a11y.test.tsx`
 - `client/src/components/analytics/__tests__/TrendArrow.a11y.test.tsx`
 - `client/src/components/onboarding/__tests__/GoalStep.a11y.test.tsx`
+- `client/src/components/onboarding/__tests__/CoachStep.test.tsx`, `WelcomeStep.test.tsx` and `PlanStep.test.tsx` (axe checks alongside their behaviour tests)
 - `client/src/components/settings/preferences/__tests__/PreferenceRows.a11y.test.tsx`
 
 Adding a new a11y test is part of the PR checklist for any user-facing component change. The tests run as part of the normal `pnpm test` Vitest pool — there is no separate command or workflow.

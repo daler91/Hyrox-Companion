@@ -230,6 +230,33 @@ describe("buildGenerationPrompt — injuries", () => {
   });
 });
 
+// Scheduling never places a session before the start date (onboarding audit
+// C3), so the chunk holding week 1 is told which days come first.
+describe("buildGenerationPrompt — midweek start", () => {
+  const units = { weightUnit: "kg", distanceUnit: "km" } as Parameters<typeof buildGenerationPrompt>[2];
+  const prompt = (startDate: string, range = { startWeek: 1, endWeek: 2 }) =>
+    buildGenerationPrompt(
+      { ...baseInput, totalWeeks: 4, startDate },
+      range,
+      units,
+      null,
+    );
+
+  it("names the week-1 days before a Thursday start and asks for rest on them", () => {
+    // 2026-01-08 is a Thursday.
+    const text = prompt("2026-01-08");
+    expect(text).toContain("PLAN START:");
+    expect(text).toContain("starts on Thursday of week 1 (2026-01-08)");
+    expect(text).toContain("Week 1's Monday to Wednesday come before the start");
+    expect(text).toContain("make them rest days");
+  });
+
+  it("says nothing for a Monday start, or in a chunk without week 1", () => {
+    expect(prompt("2026-01-05")).not.toContain("PLAN START:");
+    expect(prompt("2026-01-08", { startWeek: 3, endWeek: 4 })).not.toContain("PLAN START:");
+  });
+});
+
 describe("buildGenerationAbsences", () => {
   // 2026-01-05 is a Monday, so week 1 runs Mon 05 → Sun 11.
   const START = "2026-01-05";
@@ -396,7 +423,7 @@ describe("executePlanGeneration", () => {
     mocks.transaction.mockImplementation(<T,>(fn: (tx: unknown) => Promise<T>) => fn(mocks.tx));
     mocks.getAiClient.mockReturnValue({ models: { generateContent: mocks.generateContent } });
     mocks.retryWithBackoff.mockImplementation((fn: () => Promise<unknown>) => fn());
-    mocks.plans.schedulePlan.mockResolvedValue(true);
+    mocks.plans.schedulePlan.mockResolvedValue("scheduled");
     mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
     mocks.plans.retirePlans.mockResolvedValue([]);
     mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });

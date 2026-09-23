@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { QUERY_KEYS } from "@/lib/api";
 import * as queryClientLib from "@/lib/queryClient";
 import {
   renderOnboardingWizard,
@@ -24,6 +25,9 @@ vi.mock("@/components/onboarding/UnitsStep", () => ({
 }));
 vi.mock("@/components/onboarding/GoalStep", () => ({
   GoalStep: () => <div data-testid="goal-step">GoalStep</div>,
+}));
+vi.mock("@/components/onboarding/CoachStep", () => ({
+  CoachStep: () => <div data-testid="coach-step">CoachStep</div>,
 }));
 vi.mock("@/components/onboarding/PlanStep", () => ({
   PlanStep: () => <div data-testid="plan-step">PlanStep</div>,
@@ -86,7 +90,7 @@ describe("OnboardingWizard fuelling step", () => {
     expect(await screen.findByTestId("fuelling-suggested-targets")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
       "PATCH",
@@ -122,9 +126,11 @@ describe("OnboardingWizard fuelling step", () => {
     renderComponent();
     await walkToFuellingStep();
 
+    // Nothing will be saved, so the button says so (audit L5).
+    expect(screen.queryByText("Continue")).not.toBeInTheDocument();
     const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
-    fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    fireEvent.click(screen.getByText("Skip"));
+    await screen.findByTestId("coach-step");
 
     expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
     expect(targetsCalls()).toHaveLength(0);
@@ -139,7 +145,7 @@ describe("OnboardingWizard fuelling step", () => {
     await user.click(await screen.findByTestId("switch-fuelling-apply"));
 
     fireEvent.click(screen.getByText("Continue"));
-    await screen.findByTestId("plan-step");
+    await screen.findByTestId("coach-step");
 
     expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
       "PATCH",
@@ -148,5 +154,107 @@ describe("OnboardingWizard fuelling step", () => {
       expect.anything(),
     );
     expect(targetsCalls()).toHaveLength(0);
+  });
+
+  // "Run setup again": the step arrives prefilled with the saved profile.
+  const SAVED_PROFILE = {
+    weightUnit: "kg",
+    distanceUnit: "km",
+    onboardingCompleted: true,
+    bodyweightKg: 80.37,
+    heightCm: 180,
+    age: 30,
+    activityLevel: "moderate",
+    weightGoalDirection: "lose",
+    weightGoalRateKgPerWeek: 0.5,
+  };
+
+  it("prefills a re-run from the saved profile and writes nothing when it is left alone", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, SAVED_PROFILE);
+    renderComponent();
+    await walkToFuellingStep();
+
+    expect(screen.getByTestId("input-fuelling-bodyweight")).toHaveValue(80.4);
+    expect(screen.getByTestId("input-fuelling-height")).toHaveValue(180);
+    expect(screen.getByTestId("input-fuelling-age")).toHaveValue(30);
+
+    const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("coach-step");
+
+    // Neither the profile nor the athlete's own targets are rewritten.
+    expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
+    expect(targetsCalls()).toHaveLength(0);
+  });
+
+  it("keeps the saved bodyweight and goal rate when another field changes", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, SAVED_PROFILE);
+    renderComponent();
+    await walkToFuellingStep();
+
+    fireEvent.change(screen.getByTestId("input-fuelling-height"), { target: { value: "182" } });
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("coach-step");
+
+    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/preferences",
+      expect.objectContaining({
+        bodyweightKg: 80.37,
+        heightCm: 182,
+        weightGoalDirection: "lose",
+        weightGoalRateKgPerWeek: 0.5,
+      }),
+      expect.anything(),
+    );
+  });
+
+  // Imperial athletes had to type centimetres here (audit L4).
+  it("takes height in feet and inches from an athlete who weighs in pounds", async () => {
+    const user = userEvent.setup();
+    queryClient.setQueryData(QUERY_KEYS.preferences, {
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+      onboardingCompleted: true,
+    });
+    renderComponent();
+    await walkToFuellingStep();
+
+    expect(screen.queryByTestId("input-fuelling-height")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("input-fuelling-bodyweight"), { target: { value: "176" } });
+    fireEvent.change(screen.getByTestId("input-fuelling-height-ft"), { target: { value: "5" } });
+    fireEvent.change(screen.getByTestId("input-fuelling-height-in"), { target: { value: "11" } });
+    fireEvent.change(screen.getByTestId("input-fuelling-age"), { target: { value: "30" } });
+    await user.click(screen.getByTestId("select-fuelling-activity"));
+    await user.click(await screen.findByText(/Moderately active/));
+
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("coach-step");
+
+    expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/preferences",
+      expect.objectContaining({ heightCm: 180.3, bodyweightKg: 79.8 }),
+      expect.anything(),
+    );
+  });
+
+  it("shows 12 inches or more as whole feet once the athlete leaves the field", async () => {
+    queryClient.setQueryData(QUERY_KEYS.preferences, {
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+      onboardingCompleted: true,
+    });
+    renderComponent();
+    await walkToFuellingStep();
+
+    const feet = screen.getByTestId("input-fuelling-height-ft");
+    const inches = screen.getByTestId("input-fuelling-height-in");
+    fireEvent.change(feet, { target: { value: "5" } });
+    fireEvent.change(inches, { target: { value: "14" } });
+    fireEvent.blur(inches);
+
+    expect(feet).toHaveValue(6);
+    expect(inches).toHaveValue(2);
   });
 });

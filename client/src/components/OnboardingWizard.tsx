@@ -1,9 +1,12 @@
+import type { TrainingPlan } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useState } from "react";
 
+import { CoachStep } from "@/components/onboarding/CoachStep";
 import { FuellingStep } from "@/components/onboarding/FuellingStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
-import { getOnboardingGoalLabel } from "@/components/onboarding/onboardingGoals";
+import { LeaveSetupDialog } from "@/components/onboarding/LeaveSetupDialog";
 import { OnboardingWizardFooter } from "@/components/onboarding/OnboardingWizardFooter";
 import { OnboardingWizardFrame } from "@/components/onboarding/OnboardingWizardFrame";
 import { PlanStep } from "@/components/onboarding/PlanStep";
@@ -13,6 +16,8 @@ import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
+import { QUERY_KEYS } from "@/lib/api";
+import { getTodayString } from "@/lib/dateUtils";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
@@ -24,6 +29,7 @@ const TITLES: Record<OnboardingWizardStep, string> = {
   units: "Set Your Preferences",
   goal: "What's Your Goal?",
   fuelling: "Fuel Your Training",
+  coach: "Meet Your AI Coach",
   plan: "Choose Your Path",
   schedule: "When Do You Start?",
 };
@@ -32,12 +38,18 @@ const DESCS: Record<OnboardingWizardStep, string> = {
   units: "Choose your measurement units and HYROX race profile.",
   goal: "This helps us tailor your experience.",
   fuelling: "Get suggested daily nutrition targets from your body profile.",
+  coach: "Choose whether the AI Coach can use your training data.",
   plan: "How would you like to start training?",
   schedule: "Pick the first day of your 8-week program.",
 };
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  // "Run setup again" is how an established athlete switches plans, so the
+  // generator gets their plans and can offer to archive the one it overlaps
+  // (onboarding audit H2). A first run simply has none.
+  const { data: existingPlans } = useQuery<TrainingPlan[]>({ queryKey: QUERY_KEYS.plans });
   const {
     step,
     idx,
@@ -68,123 +80,158 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setHeightCm,
     age,
     setAge,
+    ageError,
+    mafErrors,
+    raceDate,
+    setRaceDate,
+    goalDescription,
     activityLevel,
     setActivityLevel,
     weightGoalDirection,
     setWeightGoalDirection,
     applyTargets,
     setApplyTargets,
+    aiCoachEnabled,
+    setAiCoachEnabled,
     handleNext,
     handleSkip,
     handleImportPlan,
-    handleDismissAttempt,
+    handleLeaveSetup,
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,
     handleGeneratedPlan,
+    nextLabel,
     isPrefsPending,
-    isSamplePending,
     isSchedulePending,
   } = useOnboardingWizard(onComplete);
 
-  // Esc closes onboarding as "skip"; backdrop clicks remain blocked in the
-  // frame to avoid accidental dismissal mid-wizard.
+  // Esc and ✕ ask before leaving: one reflexive keypress used to end
+  // onboarding for good (onboarding audit H4). Backdrop clicks stay blocked in
+  // the frame.
   const handleDialogOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      handleDismissAttempt();
-    }
+    if (!nextOpen) setConfirmLeave(true);
+  };
+
+  // Continue, and Enter in a step's text field, move the step on.
+  const goToNextStep = () => {
+    handleNext().catch(() => {
+      // Nothing to add: each step reports its own save failure in a toast.
+    });
   };
 
   return (
-    <OnboardingWizardFrame
-      open={open}
-      onOpenChange={handleDialogOpenChange}
-      title={TITLES[step]}
-      description={DESCS[step]}
-      step={step}
-      steps={ONBOARDING_STEPS}
-      idx={idx}
-      total={total}
-      footer={
-        <OnboardingWizardFooter
-          step={step}
-          onBack={handleBack}
-          onNext={handleNext}
-          onStartTraining={handleStartTraining}
-          isPrefsPending={isPrefsPending}
-          isSchedulePending={isSchedulePending}
-        />
-      }
-    >
-      {step === "welcome" && <WelcomeStep />}
-      {step === "units" && (
-        <UnitsStep
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          division={division}
-          gender={gender}
-          onWeightUnitChange={setWeightUnit}
-          onDistanceUnitChange={setDistanceUnit}
-          onDivisionChange={setDivision}
-          onGenderChange={setGender}
-        />
-      )}
-      {step === "goal" && (
-        <GoalStep
-          selectedGoal={selectedGoal}
-          onGoalChange={setSelectedGoal}
-          trainingStyleId={trainingStyleId}
-          onTrainingStyleChange={setTrainingStyleId}
-          mafAge={mafAge}
-          onMafAgeChange={setMafAge}
-          mafCategory={mafCategory}
-          onMafCategoryChange={setMafCategory}
-          mafHrDataAvailable={mafHrDataAvailable}
-          onMafHrDataAvailableChange={setMafHrDataAvailable}
-        />
-      )}
-      {step === "fuelling" && (
-        <FuellingStep
-          fields={{
-            bodyweight,
-            heightCm,
-            age,
-            activityLevel,
-            weightGoalDirection,
-            weightUnit,
-            gender,
-          }}
-          onBodyweightChange={setBodyweight}
-          onHeightCmChange={setHeightCm}
-          onAgeChange={setAge}
-          onActivityLevelChange={setActivityLevel}
-          onWeightGoalDirectionChange={setWeightGoalDirection}
-          applyTargets={applyTargets}
-          onApplyTargetsChange={setApplyTargets}
-        />
-      )}
-      {step === "plan" && (
-        <>
-          <PlanStep
-            isPending={isSamplePending}
-            onUseSamplePlan={handleUseSamplePlan}
-            onImportPlan={handleImportPlan}
-            onGeneratePlan={() => setShowGenerateDialog(true)}
-            onSkip={handleSkip}
+    <>
+      <OnboardingWizardFrame
+        open={open}
+        onOpenChange={handleDialogOpenChange}
+        title={TITLES[step]}
+        description={DESCS[step]}
+        step={step}
+        steps={ONBOARDING_STEPS}
+        idx={idx}
+        total={total}
+        onEnter={step === "plan" || step === "schedule" ? undefined : goToNextStep}
+        footer={
+          <OnboardingWizardFooter
+            step={step}
+            onBack={handleBack}
+            onNext={goToNextStep}
+            onStartTraining={handleStartTraining}
+            isPrefsPending={isPrefsPending}
+            isSchedulePending={isSchedulePending}
+            nextLabel={nextLabel}
           />
-          <GeneratePlanDialog
-            mode="onboarding"
-            initialGoal={getOnboardingGoalLabel(selectedGoal)}
-            initialStartDate={format(startDate, "yyyy-MM-dd")}
-            open={showGenerateDialog}
-            onOpenChange={setShowGenerateDialog}
-            onGenerated={handleGeneratedPlan}
+        }
+      >
+        {step === "welcome" && <WelcomeStep />}
+        {step === "units" && (
+          <UnitsStep
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            division={division}
+            gender={gender}
+            age={age}
+            ageError={ageError}
+            onWeightUnitChange={setWeightUnit}
+            onDistanceUnitChange={setDistanceUnit}
+            onDivisionChange={setDivision}
+            onGenderChange={setGender}
+            onAgeChange={setAge}
           />
-        </>
-      )}
-      {step === "schedule" && (
-        <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
-      )}
-    </OnboardingWizardFrame>
+        )}
+        {step === "goal" && (
+          <GoalStep
+            selectedGoal={selectedGoal}
+            onGoalChange={setSelectedGoal}
+            trainingStyleId={trainingStyleId}
+            onTrainingStyleChange={setTrainingStyleId}
+            mafAge={mafAge}
+            onMafAgeChange={setMafAge}
+            mafCategory={mafCategory}
+            onMafCategoryChange={setMafCategory}
+            mafHrDataAvailable={mafHrDataAvailable}
+            onMafHrDataAvailableChange={setMafHrDataAvailable}
+            mafErrors={mafErrors}
+            raceDate={raceDate}
+            onRaceDateChange={setRaceDate}
+            minRaceDate={getTodayString()}
+          />
+        )}
+        {step === "fuelling" && (
+          <FuellingStep
+            fields={{
+              bodyweight,
+              heightCm,
+              age,
+              activityLevel,
+              weightGoalDirection,
+              weightUnit,
+              gender,
+            }}
+            onBodyweightChange={setBodyweight}
+            onHeightCmChange={setHeightCm}
+            onAgeChange={setAge}
+            onActivityLevelChange={setActivityLevel}
+            onWeightGoalDirectionChange={setWeightGoalDirection}
+            applyTargets={applyTargets}
+            onApplyTargetsChange={setApplyTargets}
+          />
+        )}
+        {step === "coach" && (
+          <CoachStep aiCoachEnabled={aiCoachEnabled} onAiCoachEnabledChange={setAiCoachEnabled} />
+        )}
+        {step === "plan" && (
+          <>
+            <PlanStep
+              aiCoachEnabled={aiCoachEnabled}
+              onUseSamplePlan={handleUseSamplePlan}
+              onImportPlan={handleImportPlan}
+              onGeneratePlan={() => setShowGenerateDialog(true)}
+              onSkip={handleSkip}
+            />
+            <GeneratePlanDialog
+              mode="onboarding"
+              initialGoal={goalDescription}
+              initialStartDate={format(startDate, "yyyy-MM-dd")}
+              initialRaceDate={raceDate || undefined}
+              existingPlans={existingPlans}
+              aiCoachEnabled={aiCoachEnabled}
+              open={showGenerateDialog}
+              onOpenChange={setShowGenerateDialog}
+              onGenerated={handleGeneratedPlan}
+            />
+          </>
+        )}
+        {step === "schedule" && (
+          <ScheduleStep startDate={startDate} onStartDateChange={setStartDate} />
+        )}
+      </OnboardingWizardFrame>
+      <LeaveSetupDialog
+        open={open && confirmLeave}
+        onOpenChange={setConfirmLeave}
+        onLeave={handleLeaveSetup}
+      />
+    </>
   );
 }

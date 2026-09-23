@@ -55,6 +55,44 @@ describe("useOnboarding", () => {
     expect(result.current.pendingImportCompletion).toBe(false);
   });
 
+  // Cancelling the picker used to strand the athlete on an empty Timeline
+  // (onboarding audit M1).
+  it("reopens the wizard when the athlete cancels the file picker", () => {
+    const input = document.createElement("input");
+    input.click = vi.fn();
+    const { result } = renderHook(() =>
+      useOnboarding(true, { current: input }, { onboardingCompleted: false }),
+    );
+    expect(result.current.showOnboarding).toBe(true);
+
+    act(() => {
+      result.current.handleOnboardingComplete("import");
+    });
+    expect(result.current.showOnboarding).toBe(false);
+
+    act(() => {
+      input.dispatchEvent(new Event("cancel"));
+    });
+    expect(result.current.showOnboarding).toBe(true);
+  });
+
+  it("stays closed once a file is chosen", () => {
+    const input = document.createElement("input");
+    input.click = vi.fn();
+    const { result } = renderHook(() =>
+      useOnboarding(true, { current: input }, { onboardingCompleted: false }),
+    );
+
+    act(() => {
+      result.current.handleOnboardingComplete("import");
+    });
+    act(() => {
+      input.dispatchEvent(new Event("change"));
+      input.dispatchEvent(new Event("cancel"));
+    });
+    expect(result.current.showOnboarding).toBe(false);
+  });
+
   it("does not show onboarding when durable completion is true", () => {
     const fileInputRef = { current: document.createElement("input") };
     const { result } = renderHook(() =>

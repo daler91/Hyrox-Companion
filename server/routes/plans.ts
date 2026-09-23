@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, type CreateSamplePlanInput, createSamplePlanSchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -158,9 +158,9 @@ protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport
     }
   });
 
-protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample", 5) }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample", 5), middleware: [validateBody(createSamplePlanSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, CreateSamplePlanInput>, res: Response) => {
     const userId = getUserId(req);
-    const fullPlan = await createSamplePlan(userId);
+    const fullPlan = await createSamplePlan(userId, req.body);
     res.json(fullPlan);
   });
 
@@ -307,9 +307,17 @@ protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("
     const userId = getUserId(req);
     const { planId } = req.params;
 
-    const success = await storage.plans.schedulePlan(planId, startDate, userId);
-    if (!success) {
+    const outcome = await storage.plans.schedulePlan(planId, startDate, userId);
+    if (outcome === "not_found") {
       return sendNotFound(res, "Training plan not found");
+    }
+    if (outcome === "nothing_after_start") {
+      // Sessions are never placed before the start date (onboarding audit C3),
+      // so a one-week plan started after its last session has nothing to show.
+      return res.status(400).json({
+        error: "None of this plan's sessions fall on or after that date. Choose an earlier start date.",
+        code: ErrorCode.NO_SESSIONS_AFTER_START,
+      });
     }
 
     res.json({ success: true });

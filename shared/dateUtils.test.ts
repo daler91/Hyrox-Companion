@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { addDaysToISODate, computePlanWeeks, dayDiff, MAX_PLAN_WEEKS, MIN_PLAN_WEEKS, parseIsoDate, toIsoDateUtc } from "./dateUtils";
+import {
+  addDaysToISODate,
+  computePlanWeeks,
+  dayDiff,
+  describeWeekdaySpan,
+  MAX_PLAN_WEEKS,
+  MIN_PLAN_WEEKS,
+  nextPlanStartDate,
+  parseIsoDate,
+  planWeekOneMonday,
+  toIsoDateUtc,
+  weekdayIndex,
+  weekOneDaysBeforeStart,
+} from "./dateUtils";
 
 describe("dayDiff", () => {
   it("returns the positive whole-day span when end is after start", () => {
@@ -69,5 +82,43 @@ describe("toIsoDateUtc / parseIsoDate", () => {
     const parsed = parseIsoDate("2024-02-29");
     expect(parsed.toISOString()).toBe("2024-02-29T00:00:00.000Z");
     expect(toIsoDateUtc(parsed)).toBe("2024-02-29");
+  });
+});
+
+// 2026-09-21 is a Monday.
+describe("plan week 1", () => {
+  it("indexes weekdays from Monday", () => {
+    expect(weekdayIndex("2026-09-21")).toBe(0);
+    expect(weekdayIndex("2026-09-23")).toBe(2);
+    expect(weekdayIndex("2026-09-27")).toBe(6);
+  });
+
+  it("opens week 1 on the Monday of the start date's week", () => {
+    expect(planWeekOneMonday("2026-09-21")).toBe("2026-09-21");
+    expect(planWeekOneMonday("2026-09-24")).toBe("2026-09-21");
+    expect(planWeekOneMonday("2026-09-27")).toBe("2026-09-21");
+  });
+
+  it("names the week-1 days that fall before a midweek start", () => {
+    expect(weekOneDaysBeforeStart("2026-09-21")).toEqual([]);
+    expect(weekOneDaysBeforeStart("2026-09-23")).toEqual(["Monday", "Tuesday"]);
+    expect(weekOneDaysBeforeStart("2026-09-27")).toHaveLength(6);
+  });
+
+  it("defaults a start to the next Monday, or today when today is one", () => {
+    expect(nextPlanStartDate("2026-09-21")).toBe("2026-09-21");
+    expect(nextPlanStartDate("2026-09-22")).toBe("2026-09-28");
+    expect(nextPlanStartDate("2026-09-27")).toBe("2026-09-28");
+    // Across a month and a year boundary.
+    expect(nextPlanStartDate("2026-12-30")).toBe("2027-01-04");
+  });
+});
+
+describe("describeWeekdaySpan", () => {
+  it("reads one, two, or a longer run of days as prose", () => {
+    expect(describeWeekdaySpan([])).toBe("");
+    expect(describeWeekdaySpan(["Monday"])).toBe("Monday");
+    expect(describeWeekdaySpan(["Monday", "Tuesday"])).toBe("Monday and Tuesday");
+    expect(describeWeekdaySpan(["Monday", "Tuesday", "Wednesday", "Thursday"])).toBe("Monday to Thursday");
   });
 });

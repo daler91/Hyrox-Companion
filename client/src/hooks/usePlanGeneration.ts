@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { QUERY_KEYS } from "@/lib/api/index";
-import { AiBudgetExceededError, RateLimitError } from "@/lib/queryClient";
+import { AiBudgetExceededError, humanizeApiError, RateLimitError } from "@/lib/queryClient";
 
 export function getGeneratePlanErrorToast(error: Error) {
   const message = error.message.toLowerCase();
@@ -23,9 +23,12 @@ export function getGeneratePlanErrorToast(error: Error) {
     };
   }
 
+  // Through humanizeApiError, never the raw message: a new account's first
+  // attempt used to toast `403: {"error":…,"code":"AI_COACH_DISABLED"}`
+  // verbatim (onboarding audit C1).
   return {
     title: "Failed to generate plan",
-    description: error.message,
+    description: humanizeApiError(error),
   };
 }
 

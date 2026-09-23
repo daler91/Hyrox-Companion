@@ -125,6 +125,26 @@ function tryParseAiBudgetError(text: string): AiBudgetExceededError | null {
   return null;
 }
 
+// The error code csrf-csrf answers a missing or stale token with. It is the
+// only 403 a fresh token can fix.
+const CSRF_REJECTION_CODE = "EBADCSRFTOKEN";
+
+/**
+ * Whether a 403 may be a CSRF rejection, and so worth one retry with a fresh
+ * token. A 403 that names another code (AI consent off, not your resource)
+ * would only fail again: retrying every 403 sent each of those twice
+ * (onboarding audit L2). A body with no code, or one that is not JSON (a
+ * proxy's error page, say), is still retried, as it always was.
+ */
+async function mayBeCsrfRejection(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown } | null;
+    return body?.code == null || body.code === CSRF_REJECTION_CODE;
+  } catch {
+    return true;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -175,7 +195,7 @@ export async function apiRequest(
     res = await doFetch(token);
     // On 403 the token may have been invalidated (e.g. session rebind after
     // login). Refresh once and retry before surfacing the error.
-    if (res.status === 403) {
+    if (res.status === 403 && (await mayBeCsrfRejection(res))) {
       const freshToken = await getCsrfToken(true);
       res = await doFetch(freshToken);
     }

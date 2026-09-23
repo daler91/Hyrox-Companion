@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
 import {
   Dialog,
@@ -20,7 +20,11 @@ interface OnboardingWizardFrameProps {
   readonly total: number;
   readonly children: ReactNode;
   readonly footer: ReactNode;
+  /** Called on Enter in a text field, so a step moves on as a form would. */
+  readonly onEnter?: () => void;
 }
+
+const TEXT_INPUT_TYPES = new Set(["text", "number", "date", "email", "tel", "search", "url"]);
 
 export function OnboardingWizardFrame({
   open,
@@ -33,15 +37,39 @@ export function OnboardingWizardFrame({
   total,
   children,
   footer,
+  onEnter,
 }: OnboardingWizardFrameProps) {
+  // Focus moves to the new step's heading, so it is announced. It used to
+  // stay on Continue, and the new title went unread (onboarding audit M4).
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const shownStep = useRef(step);
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    titleRef.current?.focus();
+  }, [step]);
+
+  // No step is a <form>, so Enter in a field did nothing (audit M4). A real
+  // form would also submit on the calendar's day buttons, which carry no
+  // type, so the dialog handles Enter from its text fields only.
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" || !onEnter) return;
+    const { target } = event;
+    if (target instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(target.type)) {
+      event.preventDefault();
+      onEnter();
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-lg"
         onPointerDownOutside={(event) => event.preventDefault()}
+        onKeyDown={handleKeyDown}
       >
         <DialogHeader>
-          <DialogTitle className="text-xl">
+          <DialogTitle ref={titleRef} tabIndex={-1} className="text-xl outline-none">
             <span className="sr-only">
               Step {idx + 1} of {total},{" "}
             </span>

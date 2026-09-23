@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { aiWeekOneStartNote } from "@/lib/planStart";
 
 import {
   DAY_NAMES,
@@ -68,6 +69,9 @@ export function GeneratePlanScheduleStep({
   onNext,
   canProceed,
 }: GeneratePlanScheduleStepProps) {
+  // A midweek start is fine for an AI plan (it is told and plans rest before
+  // it), but say what happens to week 1 (onboarding audit C3).
+  const weekOneNote = startDate ? aiWeekOneStartNote(startDate) : null;
   // Points the disabled Next button at whichever rendered hint explains the
   // block (the date error and the rest-day hint render under the same
   // conditions these ids are chosen under).
@@ -145,6 +149,7 @@ export function GeneratePlanScheduleStep({
               type="date"
               value={startDate}
               onChange={(event) => onStartDateChange(event.target.value)}
+              aria-describedby={weekOneNote ? "startDate-note" : undefined}
             />
           </div>
           <div className="space-y-2">
@@ -158,6 +163,12 @@ export function GeneratePlanScheduleStep({
             />
           </div>
         </div>
+
+        {weekOneNote && (
+          <p id="startDate-note" className="text-xs text-muted-foreground" data-testid="text-ai-week-one-note">
+            {weekOneNote}
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-0.5">

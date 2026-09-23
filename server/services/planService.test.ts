@@ -24,14 +24,20 @@ vi.mock("../db", () => {
   };
 });
 
+const { createTrainingPlan, createPlanDays, getTrainingPlan } = vi.hoisted(() => ({
+  createTrainingPlan: vi.fn(),
+  createPlanDays: vi.fn(),
+  getTrainingPlan: vi.fn(),
+}));
+
 // We'll mock the storage module to avoid interacting with the database
 vi.mock("../storage", () => {
   return {
     storage: {
     plans: {
-      createTrainingPlan: vi.fn(),
-      createPlanDays: vi.fn(),
-      getTrainingPlan: vi.fn(),
+      createTrainingPlan,
+      createPlanDays,
+      getTrainingPlan,
       getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
       deleteTrainingPlan: vi.fn(),
@@ -139,6 +145,20 @@ describe("planService", () => {
       vi.clearAllMocks();
     });
 
+    // Onboarding's goal and race date used to be dropped for template users
+    // (onboarding audit M3).
+    it("keeps a goal and race date given at creation", async () => {
+      createTrainingPlan.mockResolvedValue(createMockTrainingPlan({ id: "tpl-1", userId: "u-1" }));
+      createPlanDays.mockResolvedValue([]);
+      getTrainingPlan.mockResolvedValue(createMockTrainingPlanWithDays({ id: "tpl-1", userId: "u-1" }));
+
+      await createSamplePlan("u-1", { goal: "Complete HYROX Open", raceDate: "2026-11-15" });
+
+      expect(createTrainingPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ goal: "Complete HYROX Open", raceDate: "2026-11-15" }),
+      );
+    });
+
     it("should create a sample plan and its days correctly", async () => {
       const userId = "test-user-id";
       const mockPlanId = "mock-plan-id";
@@ -169,6 +189,8 @@ describe("planService", () => {
         name: "8-Week Functional Fitness Plan",
         sourceFileName: null,
         totalWeeks: 8,
+        goal: null,
+        raceDate: null,
       });
 
       // Verify createPlanDays was called with correct parameters

@@ -1,4 +1,11 @@
-import { addDaysToISODate, computePlanWeeks } from "@shared/dateUtils";
+import {
+  addDaysToISODate,
+  computePlanWeeks,
+  describeWeekdaySpan,
+  PLAN_WEEKDAYS,
+  planWeekOneMonday,
+  weekOneDaysBeforeStart,
+} from "@shared/dateUtils";
 import {
   exerciseSets,
   exerciseSetSchema,
@@ -145,9 +152,7 @@ export function buildGenerationAbsences(
   planStartDate: string,
   totalWeeks: number,
 ): GenerationAbsence[] {
-  const startDayOfWeek = new Date(`${planStartDate}T00:00:00Z`).getUTCDay();
-  const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek;
-  const weekOneMonday = addDaysToISODate(planStartDate, mondayOffset);
+  const weekOneMonday = planWeekOneMonday(planStartDate);
   const windowEnd = addDaysToISODate(weekOneMonday, totalWeeks * 7 - 1);
 
   const weekOneMondayMs = Date.parse(`${weekOneMonday}T00:00:00Z`);
@@ -234,6 +239,21 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
       `DECLARED ABSENCES (athlete-logged dates they will not train normally):`,
       ...chunkAbsences.map((a) => a.line),
       `Schedule rest days or easy/portable sessions across those days — never key sessions. After an injury or illness range, keep the first sessions back conservative.`,
+    );
+  }
+
+  // Week 1 is anchored to the Monday of the start week, but scheduling never
+  // places a session before the start date (onboarding audit C3). Tell the
+  // chunk holding week 1 which days those are, so it plans them as rest
+  // instead of losing a key session to them.
+  const daysBeforeStart =
+    range.startWeek === 1 && input.startDate ? weekOneDaysBeforeStart(input.startDate) : [];
+  if (daysBeforeStart.length > 0) {
+    const firstDay = PLAN_WEEKDAYS[daysBeforeStart.length];
+    lines.push(
+      "",
+      "PLAN START:",
+      `- The athlete starts on ${firstDay} of week 1 (${input.startDate}). Week 1's ${describeWeekdaySpan(daysBeforeStart)} come before the start and are never scheduled: make them rest days, and fit week 1's training into ${firstDay} through Sunday.`,
     );
   }
 

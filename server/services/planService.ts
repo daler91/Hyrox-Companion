@@ -131,6 +131,25 @@ function collectCSVRows(rows: CSVRow[]): ParsedCSVRows {
   return { weekNumbers, invalidDayNames, validRows };
 }
 
+/** Saves a new plan's days, then reads the whole plan back for the response. */
+async function addDaysAndReadBack(
+  planId: string,
+  userId: string,
+  days: InsertPlanDay[],
+): Promise<TrainingPlanWithDays> {
+  await storage.plans.createPlanDays(days);
+
+  const fullPlan = await storage.plans.getTrainingPlan(planId, userId);
+  if (!fullPlan) {
+    throw new AppError(
+      ErrorCode.INTERNAL_ERROR,
+      `Failed to retrieve training plan ${planId} after creation`,
+      500,
+    );
+  }
+  return fullPlan;
+}
+
 export async function importPlanFromCSV(
   csvContent: string,
   userId: string,
@@ -207,25 +226,22 @@ export async function importPlanFromCSV(
     status: "planned",
   }));
 
-  await storage.plans.createPlanDays(days);
-
-  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
-  if (!fullPlan) {
-    throw new AppError(
-      ErrorCode.INTERNAL_ERROR,
-      `Failed to retrieve training plan ${plan.id} after creation`,
-      500,
-    );
-  }
-  return fullPlan;
+  return addDaysAndReadBack(plan.id, userId, days);
 }
 
-export async function createSamplePlan(userId: string): Promise<TrainingPlanWithDays> {
+export async function createSamplePlan(
+  userId: string,
+  options: { goal?: string; raceDate?: string } = {},
+): Promise<TrainingPlanWithDays> {
   const plan = await storage.plans.createTrainingPlan({
     userId,
     name: "8-Week Functional Fitness Plan",
     sourceFileName: null,
     totalWeeks: 8,
+    // The coach reads the plan's goal (coaching context, insights), so the
+    // one the athlete picked in onboarding is kept rather than dropped.
+    goal: options.goal || null,
+    raceDate: options.raceDate ?? null,
   });
 
   const days: InsertPlanDay[] = samplePlanDays.map((d) => ({
@@ -239,17 +255,7 @@ export async function createSamplePlan(userId: string): Promise<TrainingPlanWith
     status: "planned",
   }));
 
-  await storage.plans.createPlanDays(days);
-
-  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
-  if (!fullPlan) {
-    throw new AppError(
-      ErrorCode.INTERNAL_ERROR,
-      `Failed to retrieve training plan ${plan.id} after creation`,
-      500,
-    );
-  }
-  return fullPlan;
+  return addDaysAndReadBack(plan.id, userId, days);
 }
 
 export async function updatePlanDayWithCleanup(

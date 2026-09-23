@@ -1,11 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
-import { format, startOfWeek } from "date-fns";
 import { type RefObject, useCallback, useRef, useState } from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
-import { queryClient } from "@/lib/queryClient";
+import { defaultPlanStartDate } from "@/lib/planStart";
+import { humanizeApiError, queryClient } from "@/lib/queryClient";
 
 import { useUndoDeleteToast } from "./useRecycleBin";
 
@@ -29,9 +29,10 @@ export function usePlanImport({
   const showUndoDelete = useUndoDeleteToast();
   const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
   const [schedulingPlanId, setSchedulingPlanId] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<string>(
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"),
-  );
+  // The next Monday. This used to be the Monday of the current week, which is
+  // in the past on any other day, so an accepted default opened the plan with
+  // missed sessions (onboarding audit C3).
+  const [startDate, setStartDate] = useState<string>(defaultPlanStartDate);
   const internalFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = externalFileInputRef ?? internalFileInputRef;
 
@@ -140,8 +141,14 @@ export function usePlanImport({
       setSchedulingPlanId(null);
       toast({ title: "Training plan scheduled!" });
     },
-    onError: () => {
-      toast({ title: "Failed to schedule plan", variant: "destructive" });
+    // The server's own message says what to change, e.g. an earlier start for
+    // a one-week plan whose sessions all fall before the chosen date.
+    onError: (error: unknown) => {
+      toast({
+        title: "Failed to schedule plan",
+        description: humanizeApiError(error),
+        variant: "destructive",
+      });
     },
   });
 

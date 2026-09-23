@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
+import { createSamplePlan } from "../../services/planService";
 import { storage } from "../../storage";
 import plansRouter from "../plans";
 import { createTestApp } from "./testUtils";
@@ -17,13 +18,16 @@ vi.mock("../../services/planGenerationService", () => ({
   createPendingPlan: vi.fn(),
 }));
 
-vi.mock("../../storage", async () =>
-  (await import("./testUtils")).mockStorageModule({
+const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
+
+vi.mock("../../storage", async () => {
+  const mocked = (await import("./testUtils")).mockStorageModule({
     workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
-    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "schedulePlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
+    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
-  }),
-);
+  });
+  return { storage: { ...mocked.storage, plans: { ...mocked.storage.plans, schedulePlan } } };
+});
 
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
 
@@ -288,6 +292,89 @@ describe("DELETE /api/v1/plans/:id", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "Training plan not found", code: "NOT_FOUND" });
+  });
+});
+
+describe("POST /api/v1/plans/sample", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+    vi.mocked(createSamplePlan).mockResolvedValue({ id: "sample-1" } as never);
+  });
+
+  it("creates the template with no body, as the Timeline does", async () => {
+    const response = await request(app).post("/api/v1/plans/sample").send({});
+
+    expect(response.status).toBe(200);
+    expect(createSamplePlan).toHaveBeenCalledWith("test_user_id", {});
+  });
+
+  // Onboarding keeps the goal and race date template users give (audit M3).
+  it("passes onboarding's goal and race date through", async () => {
+    const response = await request(app)
+      .post("/api/v1/plans/sample")
+      .send({ goal: "Complete HYROX Open", raceDate: "2026-11-15" });
+
+    expect(response.status).toBe(200);
+    expect(createSamplePlan).toHaveBeenCalledWith("test_user_id", {
+      goal: "Complete HYROX Open",
+      raceDate: "2026-11-15",
+    });
+  });
+
+  it("rejects a malformed race date", async () => {
+    const response = await request(app).post("/api/v1/plans/sample").send({ raceDate: "15/11/2026" });
+
+    expect(response.status).toBe(400);
+    expect(createSamplePlan).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/v1/plans/:planId/schedule", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("schedules the athlete's plan from the chosen date", async () => {
+    schedulePlan.mockResolvedValue("scheduled");
+
+    const response = await request(app)
+      .post("/api/v1/plans/plan-123/schedule")
+      .send({ startDate: "2026-09-23" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true });
+    expect(schedulePlan).toHaveBeenCalledWith("plan-123", "2026-09-23", "test_user_id");
+  });
+
+  it("returns 404 for a plan the athlete does not own", async () => {
+    schedulePlan.mockResolvedValue("not_found");
+
+    const response = await request(app)
+      .post("/api/v1/plans/plan-123/schedule")
+      .send({ startDate: "2026-09-23" });
+
+    expect(response.status).toBe(404);
+  });
+
+  // Sessions are never placed before the start date (onboarding audit C3).
+  it("explains a start date after every session of the plan", async () => {
+    schedulePlan.mockResolvedValue("nothing_after_start");
+
+    const response = await request(app)
+      .post("/api/v1/plans/plan-123/schedule")
+      .send({ startDate: "2026-09-27" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty("code", "NO_SESSIONS_AFTER_START");
+    expect(response.text).toMatch(/earlier start date/);
   });
 });
 

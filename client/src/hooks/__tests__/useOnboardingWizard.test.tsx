@@ -19,7 +19,7 @@ vi.mock("@/lib/api", () => ({
   },
   api: {
     preferences: { update: vi.fn().mockResolvedValue({}) },
-    plans: { createSample: vi.fn(), schedule: vi.fn() },
+    plans: { createSample: vi.fn(), schedule: vi.fn(), deletePlan: vi.fn().mockResolvedValue({}) },
   },
 }));
 
@@ -93,25 +93,97 @@ describe("useOnboardingWizard", () => {
     );
   });
 
-  it("does not complete onboarding when dismissing after template plan creation before scheduling", async () => {
+  // Creating the template plan on the Plan step left an unscheduled copy
+  // behind every time the athlete went Back and chose again (audit H3).
+  it("creates the template plan only on Start Training, once, however often the athlete goes back", async () => {
+    // api.plans.schedule is a bare mock, so scheduling succeeds unless a test
+    // says otherwise.
     mockSamplePlanCreation();
     const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleUseSamplePlan();
     });
-
-    await waitFor(() => {
-      expect(result.current.step).toBe("schedule");
+    expect(result.current.step).toBe("schedule");
+    act(() => {
+      result.current.handleBack();
     });
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+    expect(api.plans.createSample).not.toHaveBeenCalled();
 
     act(() => {
-      result.current.handleDismissAttempt();
+      result.current.handleStartTraining();
+    });
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("sample"));
+    expect(api.plans.createSample).toHaveBeenCalledTimes(1);
+    expect(api.plans.schedule).toHaveBeenCalledWith("sample-plan", expect.any(String));
+  });
+
+  it("reuses the created plan when a failed schedule is retried", async () => {
+    mockSamplePlanCreation();
+    vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+    act(() => {
+      result.current.handleStartTraining();
+    });
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Failed to set up your plan", variant: "destructive" }),
+      ),
+    );
+
+    act(() => {
+      result.current.handleStartTraining();
+    });
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("sample"));
+    expect(api.plans.createSample).toHaveBeenCalledTimes(1);
+    expect(api.plans.schedule).toHaveBeenCalledTimes(2);
+    expect(api.plans.deletePlan).not.toHaveBeenCalled();
+  });
+
+  it("discards a template plan whose schedule failed when the athlete leaves another way", async () => {
+    mockSamplePlanCreation();
+    vi.mocked(api.plans.schedule).mockRejectedValueOnce(new Error("500: boom"));
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+    act(() => {
+      result.current.handleStartTraining();
+    });
+    await waitFor(() => expect(api.plans.schedule).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.isSchedulePending).toBe(false));
+
+    act(() => {
+      result.current.handleSkip();
     });
 
-    expect(result.current.step).toBe("schedule");
-    expect(onComplete).not.toHaveBeenCalled();
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBeNull();
+    expect(api.plans.deletePlan).toHaveBeenCalledWith("sample-plan");
+    expect(onComplete).toHaveBeenCalledWith("skip");
+  });
+
+  // One Esc used to end onboarding for good with no word on how to come back
+  // (audit H4); the wizard now confirms first, and leaving says where to go.
+  it("says where to run setup again when the athlete leaves", () => {
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleLeaveSetup();
+    });
+
+    expect(onComplete).toHaveBeenCalledWith("skip");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Setup closed",
+      description: "Run it again anytime from Settings → Account → Getting Started.",
+    });
   });
 
   it("marks durable completion when skipping onboarding", () => {
@@ -147,9 +219,7 @@ describe("useOnboardingWizard", () => {
       result.current.handleUseSamplePlan();
     });
 
-    await waitFor(() => {
-      expect(result.current.step).toBe("schedule");
-    });
+    expect(result.current.step).toBe("schedule");
 
     act(() => {
       result.current.handleStartTraining();
@@ -160,6 +230,11 @@ describe("useOnboardingWizard", () => {
     });
     expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
+    // Points at connecting a device, which setup never mentioned (audit L7).
+    expect(mockToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "Your training plan is ready!" }),
+    );
+    expect(mockToast.mock.lastCall?.[0]).toHaveProperty("action");
   });
 
   it("shows an error toast if prefsMutation fails on 'units' step, but still advances to 'goal' step", async () => {
@@ -172,6 +247,10 @@ describe("useOnboardingWizard", () => {
 
     expect(result.current.step).toBe("units");
 
+    // Only changed answers are written (onboarding audit H2), so change one.
+    act(() => {
+      result.current.setWeightUnit("lbs");
+    });
     await act(async () => {
       await result.current.handleNext();
     }); // units -> goal (attempt)
@@ -195,18 +274,131 @@ describe("useOnboardingWizard", () => {
       await result.current.handleNext();
     }); // units -> goal
 
+    act(() => {
+      result.current.setTrainingStyleId("maf_method");
+      result.current.setMafAge("40");
+      result.current.setMafCategory("consistent_up_to_2y");
+    });
     vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error("Failed to update"));
 
     await act(async () => {
       await result.current.handleNext();
-    }); // goal -> plan (attempt)
+    }); // goal -> next step (attempt)
 
     expect(mockToast).toHaveBeenCalledWith({
       title: "Could not save training style",
       description: "Please try again. You can also update this later in settings.",
       variant: "destructive",
     });
-    // the code does NOT set step to "plan" if mutation fails
+    // the code does NOT move on if the mutation fails
     expect(result.current.step).toBe("goal");
+  });
+
+  it("writes nothing when a step is left as saved", async () => {
+    const { result } = renderOnboardingWizard();
+
+    await act(async () => {
+      await result.current.handleNext();
+    }); // welcome -> units
+    await act(async () => {
+      await result.current.handleNext();
+    }); // units -> goal
+    await act(async () => {
+      await result.current.handleNext();
+    }); // goal -> next step
+
+    expect(api.preferences.update).not.toHaveBeenCalled();
+    expect(result.current.step).not.toBe("goal");
+  });
+
+  // Age used to be saved only through the optional fuelling step (audit M3).
+  it("saves a general age from the Units step as a number", async () => {
+    const { result } = renderOnboardingWizard();
+    await act(async () => {
+      await result.current.handleNext();
+    }); // welcome -> units
+    act(() => {
+      result.current.setAge("41");
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    });
+
+    expect(api.preferences.update).toHaveBeenCalledWith({ age: 41 });
+    expect(result.current.step).toBe("goal");
+  });
+
+  it("keeps the athlete on the Units step with a named error for an impossible age", async () => {
+    const { result } = renderOnboardingWizard();
+    await act(async () => {
+      await result.current.handleNext();
+    });
+    act(() => {
+      result.current.setAge("7");
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    });
+
+    expect(result.current.step).toBe("units");
+    expect(result.current.ageError).toMatch(/between 13 and 100/);
+    expect(api.preferences.update).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setAge("");
+    });
+    expect(result.current.ageError).toBeNull();
+  });
+
+  // Validation named no field and only toasted (audit M4).
+  it("names each missing MAF answer inline instead of toasting", async () => {
+    const { result } = renderOnboardingWizard();
+    await act(async () => {
+      await result.current.handleNext();
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    }); // units -> goal
+    act(() => {
+      result.current.setTrainingStyleId("maf_method");
+    });
+    await act(async () => {
+      await result.current.handleNext();
+    });
+
+    expect(result.current.step).toBe("goal");
+    expect(result.current.mafErrors.age).toBeTruthy();
+    expect(result.current.mafErrors.category).toBeTruthy();
+    expect(mockToast).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.setMafCategory("consistent_up_to_2y");
+    });
+    expect(result.current.mafErrors.category).toBeUndefined();
+    expect(result.current.mafErrors.age).toBeTruthy();
+  });
+
+  it("starts the MAF age from the age already given", () => {
+    const { result } = renderOnboardingWizard();
+    act(() => {
+      result.current.setAge("38");
+    });
+    act(() => {
+      result.current.setTrainingStyleId("maf_method");
+    });
+    expect(result.current.mafAge).toBe("38");
+  });
+
+  it("carries a lose-weight goal into the fuelling step's weight goal", () => {
+    const { result } = renderOnboardingWizard();
+    expect(result.current.weightGoalDirection).toBe("maintain");
+    act(() => {
+      result.current.setSelectedGoal("weight_loss");
+    });
+    expect(result.current.weightGoalDirection).toBe("lose");
+    act(() => {
+      result.current.setWeightGoalDirection("gain");
+    });
+    expect(result.current.weightGoalDirection).toBe("gain");
   });
 });

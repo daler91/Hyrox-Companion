@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 /**
  * Sticky save bar, rendered only while some tab has unsaved preference edits.
  * It lives outside the Settings tabs so edits made on any tab are saved by
- * the one button and survive tab switches.
+ * the one button and survive tab switches. It sits above the first-load
+ * privacy banner, which used to cover it (onboarding audit M5).
  */
 export function SaveSettingsBar({
   hasChanges,
@@ -16,7 +17,7 @@ export function SaveSettingsBar({
 
   return (
     <div
-      className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
+      className="sticky bottom-[var(--privacy-banner-height,0px)] -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
       role="status"
       aria-live="polite"
     >
