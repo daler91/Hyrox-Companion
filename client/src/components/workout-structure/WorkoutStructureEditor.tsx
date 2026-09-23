@@ -98,9 +98,11 @@ export function isGuidedFormat(type: string): type is GuidedFormat {
 
 /**
  * Everything the editor needs to let a work step link to a real exercise
- * row. Omitted entirely when the editor is used somewhere without
- * exercise rows (e.g. the log-workout confirm step), which keeps the
- * movement list clean instead of showing dead "link a row" affordances.
+ * row. Its one caller, StructureBlocksEditor, always passes it — including
+ * on the log-workout confirm step, which has no exercise rows. There the
+ * link actions have nothing to offer and StepLinkActions renders nothing,
+ * which keeps the movement list clean instead of showing dead "link a row"
+ * affordances.
  */
 export interface StepLinking {
   readonly block: StructureBlockInput;

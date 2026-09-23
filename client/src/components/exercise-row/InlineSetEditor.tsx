@@ -35,15 +35,14 @@ interface InlineSetEditorProps {
 /**
  * Tabular per-set editor that renders inline under a `GroupRow` when
  * the row is expanded. One row per set, columns derived from the
- * exercise definition (reps / weight / distance / time). Cells call
- * `onUpdate(patch)` synchronously on each keystroke; debouncing +
- * merging happens one level up in `usePlanDayExercises` /
- * `useWorkoutDetail` so the Save button can flush pending edits before
- * firing the coach-note regenerate.
+ * exercise definition (reps / weight / distance / time). A number cell
+ * commits with `onUpdate(patch)` on blur or Enter; debouncing + merging
+ * of those patches happens one level up in `usePlanDayExercises` /
+ * `useWorkoutDetail`, which expose `flushPendingSetPatches` so LogSheet
+ * can push queued edits before logging the day or closing.
  *
- * Keeps the compact tabular aesthetic of the log-workout MultiSetTable
- * rather than the large-card stepper pattern. A per-set notes toggle
- * is tucked on the right so the row stays narrow by default.
+ * Compact and tabular rather than a large-card stepper. A per-set notes
+ * toggle is tucked on the right so the row stays narrow by default.
  */
 export const InlineSetEditor = memo(function InlineSetEditor({
   sets,
@@ -420,21 +419,20 @@ const FieldInput = memo(function FieldInput({
 
   const commitDraft = () => {
     if (!isDirty) return;
-    const parsed = parseDraft(draft);
-    if (parsed == null || !Number.isNaN(parsed)) {
-      const next = parsed ?? undefined;
-      const nextDraft = formatInitial(next);
-      const storedNext = getStoredFieldValue(next, field, displayUnit, distanceUnit);
-      setLastCommitted(next);
-      setCommittedDraft(nextDraft);
-      setDraft(nextDraft);
-      setPendingCommit(next);
-      setCommitObserved(false);
-      setCommitBaseValue(lastCommitted);
-      setSuppressTransientEmpty(nextDraft.trim() !== "");
-      if (storedNext !== current) {
-        onUpdate({ [field]: storedNext ?? null });
-      }
+    // parseDraft maps unparseable input to null, so there is no NaN case:
+    // an empty or invalid cell commits as a cleared value.
+    const next = parseDraft(draft) ?? undefined;
+    const nextDraft = formatInitial(next);
+    const storedNext = getStoredFieldValue(next, field, displayUnit, distanceUnit);
+    setLastCommitted(next);
+    setCommittedDraft(nextDraft);
+    setDraft(nextDraft);
+    setPendingCommit(next);
+    setCommitObserved(false);
+    setCommitBaseValue(lastCommitted);
+    setSuppressTransientEmpty(nextDraft.trim() !== "");
+    if (storedNext !== current) {
+      onUpdate({ [field]: storedNext ?? null });
     }
     setIsDirty(false);
   };
