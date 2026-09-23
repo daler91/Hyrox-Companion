@@ -202,7 +202,7 @@ sequenceDiagram
 **Key details:**
 - **Parsing happens in the browser**: `useCoachingUpload` (`client/src/components/settings/coaching/useCoachingUpload.ts`) lazy-loads `pdfjs-dist` for PDF and `mammoth` for DOCX and reads other files with `file.text()`, then sends only the extracted text. The server never receives the original file; the route accepts JSON `{ title, content, type }` (`type` is `principles` or `document`) under a 2 MB body limit. `coaching_materials` has no status column: the response is the created row, and embedding progress is derived from `document_chunks` (per-material `chunkCount` / `hasEmbeddings` in `GET /api/v1/coaching-materials/rag-status`).
 - **Chunking**: `chunkText()` in `server/services/ragService.ts` prefers paragraph / sentence boundaries (`\n\n`, `. `) to keep semantic units intact, with `RAG_CHUNK_OVERLAP` characters bridging adjacent chunks for context continuity.
-- **Dimension awareness**: the embedding dimension is recorded per-chunk so the retrieval path (§4) can detect model upgrades and fall back to legacy full-text materials when dimensions mismatch.
+- **Dimension awareness**: no dimension is stored as such; `getStoredEmbeddingDimension()` (`server/storage/coaching.ts`) counts the components of one of the athlete's stored vectors, so the retrieval path (§4) can detect a model change and fall back to legacy full-text materials when the dimensions mismatch.
 - **Idempotency**: re-enqueuing the same `materialId` replaces the existing chunks in a single transaction so the UI never observes a material in a half-embedded state.
 
 ---

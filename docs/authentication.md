@@ -271,7 +271,7 @@ Mixing the two keys would tie the HMAC used for CSRF token signing to the same s
 
 1. On the first mutating request (and again after `resetCsrfToken()` clears the cache), `apiRequest()` in `client/src/lib/queryClient.ts` calls the unprotected `GET /api/v1/csrf-token` endpoint to obtain a CSRF token. Nothing is fetched on app load. The server returns the token in JSON and sets the paired signed httpOnly cookie (`__Host-fitai.x-csrf` in production, `fitai.x-csrf` in development).
 2. The token is cached in memory and attached as the `x-csrf-token` header on all mutating requests.
-3. If a 403 CSRF error is received, the client automatically refetches the token and retries the request.
+3. If a mutation gets a 403 -- whatever the cause, since the client does not distinguish a CSRF rejection from any other 403 -- it refetches the token once and retries the request.
 
 See [Server -- CSRF Protection](server.md#csrf-protection) for full implementation details.
 

@@ -137,7 +137,7 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
       "[rag] Embedding coaching material",
     );
 
-    // Prefix chunks with title for better semantic context
+    // Prefix the first chunk with the title for better semantic context
     const textsToEmbed = chunks.map(
       (chunk, i) =>
         i === 0
