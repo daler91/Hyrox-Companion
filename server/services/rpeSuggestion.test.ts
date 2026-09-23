@@ -1,12 +1,12 @@
 import type { StravaActivitySummary } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { storage } from "../storage";
 import { loadSuggestedRpe, suggestRpeFromHeartRate } from "./rpeSuggestion";
 import { calculateCardioStressScore } from "./trainingLoad/stressScores";
 import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
 
-vi.mock("../storage", () => ({ storage: { users: { getUser: vi.fn() } } }));
+const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
+vi.mock("../storage", () => ({ storage: { users: { getUser } } }));
 
 // Resting 60, max 190: a 130-beat reserve, so every 13 bpm is a tenth of it.
 const ATHLETE = { restingHr: 60, maxHr: 190 };
@@ -125,18 +125,14 @@ describe("suggestRpeFromHeartRate", () => {
 
 describe("loadSuggestedRpe", () => {
   beforeEach(() => {
-    vi.mocked(storage.users.getUser).mockReset();
+    getUser.mockReset();
   });
 
   it("reads the athlete's heart-rate profile for a log that can get a suggestion", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({
-      restingHr: 60,
-      maxHr: 190,
-      age: 35,
-    } as never);
+    getUser.mockResolvedValue({ restingHr: 60, maxHr: 190, age: 35 });
 
     await expect(loadSuggestedRpe(importedRun(150), "user-1")).resolves.toBe(7);
-    expect(storage.users.getUser).toHaveBeenCalledWith("user-1");
+    expect(getUser).toHaveBeenCalledWith("user-1");
   });
 
   it("skips the profile read when there is nothing to suggest from", async () => {
@@ -147,11 +143,11 @@ describe("loadSuggestedRpe", () => {
       avgHeartrate: 120,
     });
     await expect(loadSuggestedRpe(lifting, "user-1")).resolves.toBeNull();
-    expect(storage.users.getUser).not.toHaveBeenCalled();
+    expect(getUser).not.toHaveBeenCalled();
   });
 
   it("suggests nothing for an athlete with no profile row", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
+    getUser.mockResolvedValue(undefined);
     await expect(loadSuggestedRpe(importedRun(150), "user-1")).resolves.toBeNull();
   });
 });
