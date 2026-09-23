@@ -184,13 +184,6 @@ export async function runWithTimeout<T>(
   }
 }
 
-/**
- * Runs `processJob` against every job in the batch with bounded parallelism
- * and `Promise.allSettled` semantics so a single poison job does not throw
- * away the whole batch. Aggregates failures into a summary error so pg-boss
- * still sees the batch as failed when any job failed (and can retry only
- * the failed ones on the next poll, per pg-boss semantics for batch-work).
- */
 // Resolve the correlation id for a job: the propagated request id if the job
 // was enqueued within a request, else a fresh id so cron-originated jobs are
 // still self-correlated (S19).
@@ -205,6 +198,18 @@ export function jobDataKeys(job: Job): string[] {
   return job.data && typeof job.data === "object" ? Object.keys(job.data) : [];
 }
 
+/**
+ * Runs `processJob` against every job in the batch with bounded parallelism
+ * and `Promise.allSettled` semantics so a single poison job does not stop the
+ * others from running. Aggregates failures into a summary error so pg-boss
+ * still sees the batch as failed when any job failed.
+ *
+ * pg-boss fails — and retries — the WHOLE batch when the handler throws,
+ * including jobs that succeeded. That is harmless today only because every
+ * `queue.work()` here uses the default batchSize of 1, so a batch is one job.
+ * Raising batchSize would re-run successful jobs on retry (duplicate AI spend
+ * for auto-coach and plan generation), so it needs per-job completion first.
+ */
 export async function runBatch<T>(
   queueName: string,
   jobs: Job[],
@@ -252,7 +257,9 @@ async function registerUserEmailWorker({
   process,
 }: {
   readonly queueName: EmailJobName | "send-maf-test-reminder";
-  readonly process: (context: Awaited<ReturnType<typeof requireUserFromJob>>) => Promise<boolean>;
+  // Never called with a null context: jobs whose user can't be resolved are
+  // skipped (and logged) before `process` runs.
+  readonly process: (context: NonNullable<Awaited<ReturnType<typeof requireUserFromJob>>>) => Promise<boolean>;
 }) {
   await queue.createQueue(queueName);
   await queue.work(queueName, async (jobs: Job[]) => {
@@ -358,38 +365,32 @@ export async function startQueue() {
 
   await registerUserEmailWorker({
     queueName: "send-weekly-summary",
-    process: async (context) =>
-      context ? processWeeklySummary(storage, context.user, new Date()) : false,
+    process: ({ user }) => processWeeklySummary(storage, user, new Date()),
   });
 
   await registerUserEmailWorker({
     queueName: "send-missed-reminder",
-    process: async (context) =>
-      context ? processMissedWorkoutReminder(storage, context.user, new Date()) : false,
+    process: ({ user }) => processMissedWorkoutReminder(storage, user, new Date()),
   });
 
   await registerUserEmailWorker({
     queueName: "send-maf-test-reminder",
-    process: async (context) =>
-      context ? processMafTestReminder(storage, context.user, new Date()) : false,
+    process: ({ user }) => processMafTestReminder(storage, user, new Date()),
   });
 
   await registerUserEmailWorker({
     queueName: "send-weekly-review-reminder",
-    process: async (context) =>
-      context ? processWeeklyReviewReminder(storage, context.user, new Date()) : false,
+    process: ({ user }) => processWeeklyReviewReminder(storage, user, new Date()),
   });
 
   await registerUserEmailWorker({
     queueName: "send-today-session",
-    process: async (context) =>
-      context ? processTodaySessionBrief(storage, context.user, new Date()) : false,
+    process: ({ user }) => processTodaySessionBrief(storage, user, new Date()),
   });
 
   await registerUserEmailWorker({
     queueName: "send-analysis-digest",
-    process: async (context) =>
-      context ? processAnalysisDigest(storage, context.user, new Date()) : false,
+    process: ({ user }) => processAnalysisDigest(storage, user, new Date()),
   });
 
   await queue.createQueue("plan-generation");

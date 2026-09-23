@@ -260,14 +260,15 @@ function looksLike429(err: unknown): boolean {
 // linger, but the app-level promise — and the per-user mutex it's holding — is
 // freed within the budget instead of pinning a worker for the full job timeout.
 // A timeout is not a 429, so it never trips the breaker.
+/** The athlete-facing text for an open breaker, with the wait rounded up to minutes. */
+function circuitOpenMessage(): string {
+  return `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`;
+}
+
 async function withCircuitBreaker<T>(label: string, fn: () => Promise<T>): Promise<T> {
   // W14: adopt any block a sibling instance recorded before gating this call.
   await refreshBreakerFromShared();
-  if (garminCircuitBreaker.isOpen()) {
-    throw new Error(
-      `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-    );
-  }
+  if (garminCircuitBreaker.isOpen()) throw new Error(circuitOpenMessage());
   try {
     return await withTimeout(fn(), GARMIN_CALL_TIMEOUT_MS, label);
   } catch (err) {
@@ -501,12 +502,7 @@ async function handleGarminStatus(req: Request, res: Response) {
 
 async function handleGarminConnect(req: Request<Record<string, never>, unknown, z.infer<typeof garminConnectBodySchema>>, res: Response) {
   // Layer 5 — refuse before we even validate inputs if Garmin has us in jail.
-  if (garminCircuitBreaker.isOpen()) {
-    return res.status(503).json({
-      error: `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-      code: "GARMIN_CIRCUIT_OPEN",
-    });
-  }
+  if (rejectIfCircuitOpen(res)) return;
 
   const { email, password } = req.body;
 
@@ -665,15 +661,12 @@ async function fetchAndImportGarminActivities(
 }
 
 /**
- * Returns a 503 if the global circuit breaker is open. Returns null if the
- * caller should proceed. Extracted for reuse between /connect and /sync.
+ * Sends a 503 and returns true when the global circuit breaker is open;
+ * returns false when the caller should proceed. Shared by /connect and /sync.
  */
 function rejectIfCircuitOpen(res: Response): boolean {
   if (!garminCircuitBreaker.isOpen()) return false;
-  res.status(503).json({
-    error: `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
-    code: "GARMIN_CIRCUIT_OPEN",
-  });
+  res.status(503).json({ error: circuitOpenMessage(), code: "GARMIN_CIRCUIT_OPEN" });
   return true;
 }
 
