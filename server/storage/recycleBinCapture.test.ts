@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
+import { makeQueryBuilderMock } from "./__tests__/queryBuilderMock";
 import {
   capturePlanDays,
   captureTrainingPlan,
@@ -9,22 +10,11 @@ import {
   summarizeText,
 } from "./recycleBinCapture";
 
-/**
- * Program-order query-builder mock: every chain method returns the same
- * object, which is itself a thenable resolving the next queued result, so a
- * query can end on `where`, `orderBy`, `limit` or `returning` alike. Queue
- * results in the order the code awaits them. The SQL itself is proven by
- * recycleBin.integration.test.ts against a real Postgres; this pins the
- * ownership short-circuits and the denormalised listing columns.
- */
-function makeTx() {
-  const results: unknown[] = [];
-  const tx: Record<string, ReturnType<typeof vi.fn>> & { queue: (...next: unknown[]) => void } = {
-    queue: (...next: unknown[]) => {
-      results.push(...next);
-    },
-  } as never;
-  for (const method of [
+// The SQL itself is proven by recycleBin.integration.test.ts against a real
+// Postgres; this pins the ownership short-circuits and the denormalised
+// listing columns.
+const makeTx = () =>
+  makeQueryBuilderMock([
     "select",
     "from",
     "where",
@@ -35,14 +25,7 @@ function makeTx() {
     "values",
     "onConflictDoUpdate",
     "returning",
-  ]) {
-    tx[method] = vi.fn().mockReturnValue(tx);
-  }
-  tx.then = vi.fn((resolve: (value: unknown) => unknown) =>
-    Promise.resolve(results.shift()).then(resolve),
-  );
-  return tx;
-}
+  ]);
 
 describe("recycleBinCapture helpers", () => {
   it("expires an item RECYCLE_BIN_RETENTION_DAYS (90) after now", () => {

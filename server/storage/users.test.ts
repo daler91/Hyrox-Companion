@@ -463,6 +463,75 @@ describe('UserStorage', () => {
     });
   });
 
+  // Wires db.update().set().where().returning() to resolve `rows` and
+  // returns the setMock, so a claim/update test is one arrange line.
+  function mockUpdateReturning(rows: unknown[]) {
+    const returningMock = vi.fn().mockResolvedValue(rows);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockReturnValue({ where: whereMock });
+    vi.mocked(db.update).mockReturnValue({ set: setMock });
+    return setMock;
+  }
+
+  describe.each([
+    {
+      name: 'claimWeeklyReviewReminder',
+      claim: (u: string, notBefore: Date, now?: Date) => userStorage.claimWeeklyReviewReminder(u, notBefore, now),
+      field: 'lastWeeklyReviewReminderAt',
+      now: new Date('2026-08-06T20:00:00Z'),
+    },
+    {
+      name: 'claimTodaySession',
+      claim: (u: string, notBefore: Date, now?: Date) => userStorage.claimTodaySession(u, notBefore, now),
+      field: 'lastTodaySessionAt',
+      now: new Date('2026-08-06T06:00:00Z'),
+    },
+    {
+      name: 'claimAnalysisDigest',
+      claim: (u: string, notBefore: Date, now?: Date) => userStorage.claimAnalysisDigest(u, notBefore, now),
+      field: 'lastAnalysisDigestAt',
+      now: new Date('2026-08-06T21:00:00Z'),
+    },
+  ])('$name', ({ claim, field, now }) => {
+    it(`wins the claim and stamps ${field} when the row updates`, async () => {
+      const setMock = mockUpdateReturning([{ id: 'user-1' }]);
+
+      const result = await claim('user-1', new Date('2026-08-06T00:00:00Z'), now);
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith({ [field]: now });
+    });
+
+    it('loses the claim when no row matched (already claimed within the window)', async () => {
+      mockUpdateReturning([]);
+
+      const result = await claim('user-1', new Date('2026-08-06T00:00:00Z'));
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('disableEmailNotifications', () => {
+    it('turns the master email flag off and returns true for an existing user', async () => {
+      const setMock = mockUpdateReturning([{ id: 'user-1' }]);
+
+      const result = await userStorage.disableEmailNotifications('user-1');
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ emailNotifications: false }),
+      );
+    });
+
+    it('returns false when no such user exists', async () => {
+      mockUpdateReturning([]);
+
+      const result = await userStorage.disableEmailNotifications('nonexistent');
+
+      expect(result).toBe(false);
+    });
+  });
+
   describe('getUsersWithNutritionPushReminders', () => {
     it('returns users opted into either nutrition push reminder', async () => {
       const optedInUsers = [{ id: 'user-1' }, { id: 'user-2' }];
