@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
       createPlanDays: vi.fn(),
       schedulePlan: vi.fn(),
       updateGenerationStatus: vi.fn(),
+      updateEngineState: vi.fn(),
       retirePlans: vi.fn(),
     },
     users: {
@@ -583,6 +584,13 @@ describe("executePlanGeneration", () => {
       (row) => row.planDayId === "day-4-Monday" && row.exerciseName === "front_squat",
     );
     expect(raceWeekSquat.map((row) => row.weight)).toEqual([60, 60, 60]);
+    // The plan remembers what it was written against, for the auto-coach.
+    expect(mocks.plans.updateEngineState).toHaveBeenCalledWith(
+      "plan-1",
+      "user-1",
+      expect.objectContaining({ version: 1, runVdot: null, adaptedLogIds: [] }),
+      mocks.tx,
+    );
   });
 
   it("still sends the goal lens and blueprint when the athlete's history can't be read", async () => {

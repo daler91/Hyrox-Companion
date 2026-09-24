@@ -128,6 +128,21 @@ function exerciseNames(exercise: string): string[] {
   return [label, exercise.replaceAll("_", " ")].filter((name): name is string => Boolean(name));
 }
 
+/** Apply `edit` to the first line of `text` that names the exercise; every other line is untouched. */
+function rewriteExerciseLine(
+  text: string,
+  exercise: string,
+  edit: (line: string) => string,
+): string {
+  const names = exerciseNames(exercise).map((name) => name.toLowerCase());
+  const lines = text.split("\n");
+  const index = lines.findIndex((line) => names.some((name) => line.toLowerCase().includes(name)));
+  const line = lines[index];
+  if (index < 0 || line == null) return text;
+  lines[index] = edit(line);
+  return lines.join("\n");
+}
+
 /**
  * Rewrite the numbers on the first line of `text` that names the exercise, so
  * the session as written agrees with its table. A line whose numbers the
@@ -139,16 +154,21 @@ export function rewriteLiftLine(
   want: LiftPrescription,
   unit: WeightUnit,
 ): string {
-  const names = exerciseNames(exercise).map((name) => name.toLowerCase());
-  const lines = text.split("\n");
-  const index = lines.findIndex((line) => names.some((name) => line.toLowerCase().includes(name)));
-  const line = lines[index];
-  if (index < 0 || line == null) return text;
-  let rewritten = line.replace(SETS_REPS, `${want.sets}x${want.reps}`);
-  if (want.load != null) rewritten = rewritten.replace(AT_LOAD, `@ ${want.load} ${unit}`);
-  rewritten = rewritten.replace(RPE, want.effort);
-  lines[index] = rewritten;
-  return lines.join("\n");
+  return rewriteExerciseLine(text, exercise, (line) => {
+    let rewritten = line.replace(SETS_REPS, `${want.sets}x${want.reps}`);
+    if (want.load != null) rewritten = rewritten.replace(AT_LOAD, `@ ${want.load} ${unit}`);
+    return rewritten.replace(RPE, want.effort);
+  });
+}
+
+/** Only the load on the exercise's line: what an adaptation changes. */
+export function rewriteLiftLoad(
+  text: string,
+  exercise: string,
+  load: number,
+  unit: string,
+): string {
+  return rewriteExerciseLine(text, exercise, (line) => line.replace(AT_LOAD, `@ ${load} ${unit}`));
 }
 
 function dayOrder(day: RepairableDay): number {

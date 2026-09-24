@@ -37,6 +37,7 @@ const samplePlan = {
   generationError: null,
   retiredOn: null,
   generationStartedAt: null,
+  engineState: null,
 };
 
 function mockSamplePlanCreation() {

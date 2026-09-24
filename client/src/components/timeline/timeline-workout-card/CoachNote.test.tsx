@@ -52,6 +52,30 @@ describe("CoachNote", () => {
     expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Review");
   });
 
+  it("labels auto-progression notes and lists exactly what moved", () => {
+    render(
+      <CoachNote
+        {...baseProps}
+        rationale="Auto-progression: Tuesday's 4x8 @ 82.5 kg beat the planned 4x6 @ 82.5 kg."
+        source="progression"
+        inputsUsed={{
+          planPhase: "build",
+          lastModification: { kind: "auto_progression" },
+          progressionChanges: [
+            { exercise: "front_squat", kind: "raise", from: 85, to: 90, unit: "kg" },
+            { exercise: "run_paces", kind: "pace", from: 40, to: 42.4, unit: "vdot" },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Auto-progression");
+    const changes = screen.getByTestId("coach-note-progression-plan-day-1");
+    expect(changes).toHaveTextContent("Front Squat: 85 → 90 kg");
+    expect(changes).toHaveTextContent("Run paces: fitness 40 → 42.4 (VDOT)");
+    expect(screen.getByText("Your logged sessions")).toBeInTheDocument();
+  });
+
   it("labels load-governor notes and renders mechanical risk chips", () => {
     render(
       <CoachNote

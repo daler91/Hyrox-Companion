@@ -34,6 +34,7 @@ describe("TimelineFilters", () => {
         generationError: null,
         retiredOn: null,
         generationStartedAt: null,
+        engineState: null,
       },
       {
         id: "plan-2",
@@ -51,6 +52,7 @@ describe("TimelineFilters", () => {
         generationError: null,
         retiredOn: null,
         generationStartedAt: null,
+        engineState: null,
       },
     ],
     plansLoading: false,

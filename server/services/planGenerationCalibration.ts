@@ -21,6 +21,7 @@ import { buildExerciseSelectionBrief, type ExerciseSelectionBrief } from "./ai/e
 import { buildCoverageSources } from "./analyticsService";
 import { buildLoadAnchors, type LoadAnchor } from "./loadAnchors";
 import { calculateTrainingLoad } from "./trainingLoadService";
+import { ADAPTATION_WINDOW_DAYS } from "./workoutEngine/adaptation";
 import { buildWorkoutEnginePlan, type WorkoutEnginePlan } from "./workoutEngine/enginePlan";
 
 // Look-back window for the athlete's current training-load posture, matching the
@@ -42,6 +43,12 @@ export interface GenerationCalibration {
    * lens and primary lifts, so it is null whenever the brief is.
    */
   readonly engine?: WorkoutEnginePlan | null;
+  /**
+   * Recent training logs the plan's numbers were computed from. The plan's
+   * engine state starts with them marked adapted, so the auto-coach does not
+   * apply the same sessions a second time on its first pass.
+   */
+  readonly reflectedLogIds?: readonly string[];
 }
 
 /**
@@ -270,5 +277,17 @@ export async function computeGenerationCalibration(
     ...describeLoadCalibration(history, user, today),
     exerciseSelection,
     engine: buildGenerationEngine(input, user, today, history, exerciseSelection),
+    reflectedLogIds: reflectedLogIds(history, today),
   };
+}
+
+/** The training logs recent enough that adaptation would otherwise pick them up. */
+export function reflectedLogIds(
+  history: Pick<GenerationHistory, "workoutLogs"> | null,
+  today: string,
+): string[] {
+  const since = addDaysToISODate(today, -ADAPTATION_WINDOW_DAYS);
+  return trainingHistory(history ? { workoutLogs: history.workoutLogs, sets: [] } : null)
+    .workoutLogs.filter((log) => log.date >= since)
+    .map((log) => log.id);
 }

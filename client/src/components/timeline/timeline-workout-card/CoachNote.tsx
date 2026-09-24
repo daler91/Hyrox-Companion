@@ -1,5 +1,6 @@
 import { formatPhaseName, PLAN_PHASE_ORDER } from "@shared/planPhase";
-import type { CoachNoteInputs, TimelineEntry } from "@shared/schema";
+import type { CoachNoteInputs, ProgressionChangeRecord, TimelineEntry } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -22,6 +23,7 @@ function sourceLabel(source: CoachNoteSource): string {
     case "legacy": return "Legacy";
     case "review": return "Review";
     case "load_governor": return "Load governor";
+    case "progression": return "Auto-progression";
   }
 }
 
@@ -35,6 +37,8 @@ function sourceBadgeClasses(source: CoachNoteSource): string {
       return "text-sky-600 border-sky-200 bg-sky-50 dark:text-sky-400 dark:border-sky-800 dark:bg-sky-950";
     case "load_governor":
       return "text-red-600 border-red-200 bg-red-50 dark:text-red-400 dark:border-red-800 dark:bg-red-950";
+    case "progression":
+      return "text-violet-600 border-violet-200 bg-violet-50 dark:text-violet-400 dark:border-violet-800 dark:bg-violet-950";
   }
 }
 
@@ -93,9 +97,22 @@ function loadGovernorVectorChips(inputs: CoachNoteInputs): string[] {
   return chips;
 }
 
+/**
+ * One line per load or pace an auto-progression moved, e.g. "Front Squat
+ * 85 → 90 kg" — the number the athlete will actually see changed on the day.
+ */
+function describeProgressionChange(change: ProgressionChangeRecord): string {
+  if (change.kind === "pace") return `Run paces: fitness ${change.from} → ${change.to} (VDOT)`;
+  const label =
+    EXERCISE_DEFINITIONS[change.exercise as ExerciseName]?.label ??
+    change.exercise.replaceAll("_", " ");
+  return `${label}: ${change.from} → ${change.to} ${change.unit}`;
+}
+
 function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
   if (!inputs) return [];
   const candidates: Array<string | null | undefined> = [
+    inputs.lastModification?.kind === "auto_progression" ? "Your logged sessions" : null,
     inputs.planGoalPresent ? "Plan goal" : null,
     phaseChip(inputs.planPhase),
     remainingPhasesChip(inputs.planPhase),
@@ -177,6 +194,16 @@ export function CoachNote({
           >
             {rationale}
           </p>
+          {inputsUsed?.progressionChanges && inputsUsed.progressionChanges.length > 0 && (
+            <ul
+              className="space-y-0.5 text-xs text-foreground/80"
+              data-testid={`coach-note-progression-${entryId}`}
+            >
+              {inputsUsed.progressionChanges.map((change) => (
+                <li key={`${change.exercise}-${change.kind}`}>{describeProgressionChange(change)}</li>
+              ))}
+            </ul>
+          )}
           {inputsUsed?.replacedPrescription && (
             <p
               className="text-xs text-muted-foreground italic"

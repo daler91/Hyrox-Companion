@@ -27,6 +27,7 @@ import {
   type LiftWeekTarget,
   LIGHT_EXPOSURE_FRACTION,
 } from "../services/workoutEngine/strength";
+import type { TrainingTargets } from "../services/workoutEngine/trainingTargets";
 import type { SkeletonLift, SkeletonSession } from "../services/workoutEngine/weekSkeleton";
 
 export interface EngineChunk {
@@ -230,4 +231,29 @@ export function describeEngineTargetLines(
     lines.push(...weekLines(engine, week, chunk, programs));
   }
   return lines;
+}
+
+/**
+ * The TRAINING TARGETS block of a coach or chat prompt: the athlete's current
+ * estimated 1RMs with the working loads they imply, and their run paces. Empty
+ * when there is nothing to report.
+ */
+export function formatTrainingTargets(targets: TrainingTargets | null | undefined): string {
+  if (!targets) return "";
+  const lines = [
+    "TRAINING TARGETS (computed from the athlete's logs by the same engine that builds and adapts their plan — prescribe loads and paces from these numbers):",
+  ];
+  const unit = targets.weightUnit;
+  for (const lift of targets.lifts) {
+    lines.push(
+      `- ${selectionExerciseLabel(lift.exercise)}: est. 1RM ${lift.e1rm} ${unit} (from ${lift.basis.weight} ${unit} x ${lift.basis.reps} on ${lift.basis.date}) → 5 reps @ RPE 8 ≈ ${lift.fiveAtRpe8} ${unit} · 8 reps @ RPE 8 ≈ ${lift.eightAtRpe8} ${unit}`,
+    );
+  }
+  if (targets.paces) {
+    const unitName = targets.distanceUnit === "miles" ? "miles" : "km";
+    lines.push(
+      `- Run paces: ${describePaceZones(targets.paces, unitName)} (fitted to the best recent run, ${targets.paces.basis.date}).`,
+    );
+  }
+  return lines.join("\n");
 }

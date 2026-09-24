@@ -1045,6 +1045,19 @@ export async function executePlanGeneration(
           "[planGen] Retired superseded plans",
         );
       }
+      // What the plan's paces were written against, so the auto-coach can move
+      // them when the athlete runs faster (workoutEngine/adaptation.ts).
+      await storage.plans.updateEngineState(
+        planId,
+        userId,
+        {
+          version: 1,
+          runVdot: calibration.engine?.paces?.vdot ?? null,
+          adaptedLogIds: [...(calibration.reflectedLogIds ?? [])],
+          updatedAt: new Date().toISOString(),
+        },
+        tx,
+      );
       await storage.plans.updateGenerationStatus(planId, "ready", null, tx);
     });
 

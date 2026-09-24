@@ -19,6 +19,7 @@ import {
   type CoachingMaterialInput,
 } from "./prompts/materialsBuilder";
 import { buildNutritionSection } from "./prompts/nutritionContext";
+import { formatTrainingTargets } from "./prompts/workoutEngine";
 
 export type { CoachingMaterialInput } from "./prompts/materialsBuilder";
 export {
@@ -81,7 +82,8 @@ const COACH_PRESCRIPTION_DETAIL_RULES = `PRESCRIPTION DETAIL (every mainWorkout 
 - Lifts: sets x reps @ load in the athlete's unit, then effort and rest in parentheses — "Back Squat 4x5 @ 100 kg (RPE 7, rest 2-3 min)". Add a tempo only when it serves the change ("3-1-1 tempo" to break a stall or rebuild control).
 - Runs and ergs: the structure plus a target — "6x800 m @ 4:05-4:10/km (RPE 8), 90 s jog recovery" — using pace from the athlete's logs, otherwise effort (RPE, heart-rate zone, talk test). Easy work is capped by effort, not pace.
 - Stations: distance or reps @ load, relative to the RACE STANDARDS when given — "Sled Push 4x25 m @ 120 kg (~80% race load), rest 90 s".
-- Anchor loads on FAMILIAR EXERCISES, recent bests and e1RM; with no anchor, prescribe by effort (RPE or reps in reserve) rather than inventing a number.`;
+- Anchor loads on TRAINING TARGETS when given (the athlete's estimated 1RMs and the working loads they imply), otherwise on FAMILIAR EXERCISES and recent bests; take paces from its run paces. With no anchor, prescribe by effort (RPE or reps in reserve) rather than inventing a number.
+- Loads in the plan that carry an "Auto-progression" note were just set from the athlete's own logged sessions: keep them unless fatigue or safety says otherwise.`;
 
 export const SUGGESTIONS_PROMPT = `You are an expert AI fitness coach. Your job is to ACTIVELY coach this athlete by analyzing their training data, coaching analysis, and upcoming workouts, then making the modifications that will most improve their performance.
 
@@ -659,6 +661,10 @@ export function buildSystemPrompt(
   // answer about "what should I do instead of X" draws on the same needs.
   const selectionSection = formatExerciseSelectionBrief(trainingContext.exerciseSelection, "coach");
   if (selectionSection) contextSection += `\n\n${selectionSection}`;
+  // The numbers the plan itself is built on, so a chat answer about loads or
+  // paces agrees with the plan instead of guessing.
+  const targetsSection = formatTrainingTargets(trainingContext.trainingTargets);
+  if (targetsSection) contextSection += `\n\n${targetsSection}`;
 
   const nutritionSection = buildNutritionSection(trainingContext);
   if (nutritionSection) contextSection += `\n\n${nutritionSection}`;

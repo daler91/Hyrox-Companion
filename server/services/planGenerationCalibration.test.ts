@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildGenerationEngine, buildGenerationSelection } from "./planGenerationCalibration";
+import {
+  buildGenerationEngine,
+  buildGenerationSelection,
+  reflectedLogIds,
+} from "./planGenerationCalibration";
 
 vi.mock("../storage", () => ({ storage: {} }));
 vi.mock("../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
@@ -148,5 +152,17 @@ describe("buildGenerationEngine", () => {
     const brief = buildGenerationSelection(constrained, user(), TODAY, null);
     const engine = buildGenerationEngine(constrained, user(), TODAY, null, brief);
     expect(engine?.stations.early?.doses.map((dose) => dose.station)).not.toContain("sled_push");
+  });
+});
+
+describe("reflectedLogIds", () => {
+  it("marks the recent training sessions the new plan was computed from", () => {
+    const sessions = history([
+      { id: "old", date: "2026-05-20", countsAsTraining: true, exerciseName: "front_squat" },
+      { id: "recent", date: "2026-06-10", countsAsTraining: true, exerciseName: "front_squat" },
+      { id: "walk", date: "2026-06-12", countsAsTraining: false, exerciseName: "walking" },
+    ]);
+    expect(reflectedLogIds(sessions, TODAY)).toEqual(["recent"]);
+    expect(reflectedLogIds(null, TODAY)).toEqual([]);
   });
 });

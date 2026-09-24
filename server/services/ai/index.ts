@@ -1,6 +1,6 @@
 import { addDaysToISODate as addDays, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
-import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { getStoredDistanceUnit, standardizeWeightUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
@@ -18,6 +18,9 @@ import {
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
 import { calculateTrainingLoad } from "../trainingLoadService";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
+import type { EngineSet } from "../workoutEngine/loadMath";
+import type { EngineRunLog } from "../workoutEngine/running";
+import { buildTrainingTargets, type TrainingTargets } from "../workoutEngine/trainingTargets";
 import {
   computeCurrentWeek,
   computeExerciseGaps,
@@ -348,6 +351,34 @@ function mapUpcomingWorkout(
 }
 
 /**
+ * The athlete's current estimated 1RMs and run paces for the coach, from the
+ * reads buildTrainingContext already made. Same failure rule as the brief: a
+ * coach without them is the coach this app had before they existed.
+ */
+function coachTrainingTargetsField(params: {
+  readonly sets: readonly EngineSet[];
+  readonly logs: readonly EngineRunLog[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  /** Its primary lifts are listed first: they are the plan's backbone. */
+  readonly brief: ExerciseSelectionBrief | undefined;
+}): { trainingTargets?: TrainingTargets } {
+  try {
+    const trainingTargets = buildTrainingTargets({
+      sets: params.sets,
+      logs: params.logs,
+      weightUnit: standardizeWeightUnit(params.weightUnit),
+      distanceUnit: params.distanceUnit,
+      priority: params.brief?.primaryLifts.map((lift) => lift.exercise) ?? [],
+    });
+    return trainingTargets ? { trainingTargets } : {};
+  } catch (err) {
+    logger.warn({ err }, "[coach] training targets unavailable; coaching without them");
+    return {};
+  }
+}
+
+/**
  * The exercise-selection brief for the coach, from reads buildTrainingContext
  * has already made — no extra IO — as a field to spread into the context.
  * Never allowed to take the context down with it: a coach without the brief
@@ -581,6 +612,14 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     upcomingDays,
   });
 
+  const trainingTargetsField = coachTrainingTargetsField({
+    sets: trainingSets,
+    logs: trainingLogs,
+    weightUnit,
+    distanceUnit,
+    brief: exerciseSelectionField.exerciseSelection,
+  });
+
   const coachingInsights: TrainingContext["coachingInsights"] = {
     ...rpeTrend,
     stationGaps,
@@ -674,6 +713,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     ...(nutrition ? { nutrition } : {}),
     ...exerciseSelectionField,
+    ...trainingTargetsField,
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map(mapUpcomingWorkout),
     exerciseBreakdown,

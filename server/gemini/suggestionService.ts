@@ -16,6 +16,7 @@ import {
 } from "../prompts/exerciseSetFormatter";
 import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
+import { formatTrainingTargets } from "../prompts/workoutEngine";
 import { formatZodIssues, sanitizeForLog, sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -33,7 +34,7 @@ export interface UpcomingWorkout {
   accessory?: string;
   notes?: string;
   exerciseDetails?: PromptExerciseSet[];
-  aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
+  aiSource?: "rag" | "legacy" | "review" | "load_governor" | "progression" | null;
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;
@@ -313,6 +314,9 @@ export function buildPromptDataSections(
   // change a session, the brief says which exercise to change it to.
   const selectionSection = formatExerciseSelectionBrief(trainingContext.exerciseSelection, "coach");
   if (selectionSection) sections.push(selectionSection);
+  // And the brief says which exercise; the targets say how heavy and how fast.
+  const targetsSection = formatTrainingTargets(trainingContext.trainingTargets);
+  if (targetsSection) sections.push(targetsSection);
 
   const nutritionSection = buildNutritionSection(trainingContext);
   if (nutritionSection) sections.push(nutritionSection);

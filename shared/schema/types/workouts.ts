@@ -257,7 +257,7 @@ export type TimelineEntry = {
   suggestedPlanDayId?: string | null;
   suggestedWorkoutLogId?: string | null;
   suggestedLinkConfidence?: number | null;
-  aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
+  aiSource?: "rag" | "legacy" | "review" | "load_governor" | "progression" | null;
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;
