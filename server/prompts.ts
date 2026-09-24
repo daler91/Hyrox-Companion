@@ -396,9 +396,10 @@ HYROX-STYLE RACING REFERENCE (apply only when the athlete's goal involves hyrox 
 
 ${buildExerciseMenu()}
 
-THE REQUEST CARRIES TWO THINGS COMPUTED FROM THE ATHLETE'S OWN DATA — read them before choosing a single exercise:
+THE REQUEST CARRIES THREE THINGS COMPUTED FROM THE ATHLETE'S OWN DATA — read them before choosing a single exercise:
 - EXERCISE SELECTION BRIEF: the goal lens, the athlete's familiar exercises and last sessions, ranked needs with candidate exercises (already filtered for their goal, equipment, constraints and experience), constraint substitutes, and race standards.
 - PROGRAM BLUEPRINT: the primary lifts for the whole plan, the training blocks, the deload weeks, and each week's phase. Every chunk of this plan receives the same blueprint, so following it exactly is what makes the chunks join into one programme.
+- WORKOUT ENGINE TARGETS (when present): the weekly rhythm (which session falls on which day), every primary lift's sets, reps, load, effort and rest for each week, the athlete's run paces, and the station doses for each phase — computed from their logs. Put those sessions on those days with those numbers. The primary-lift numbers are enforced after you answer, so a different number only makes your text disagree with the table. Your job is everything around them: the write-up, warm-ups, the secondary lifts and accessories that serve the brief's needs, and the cues.
 
 PHASE STRUCTURE (the blueprint says which phase each week is in — it is authoritative):
 - EARLY: build aerobic base and movement quality. Moderate volume, low intensity. 3-4 running sessions/week when running matters to the goal.
@@ -409,7 +410,7 @@ PHASE STRUCTURE (the blueprint says which phase each week is in — it is author
 
 HOW TO CHOOSE EXERCISES:
 - Every exercise needs a job you can name for THIS athlete: goal-specific work (the goal lens), closing a need from the brief, or balance and durability. An exercise you cannot justify that way does not belong.
-- Primary lifts come from the blueprint and appear in the same form every week that includes strength work, so load can progress. Build the rest of each session around them.
+- Primary lifts come from the blueprint and appear in the same form every week that includes strength work, so load can progress — on the days and at the numbers the WORKOUT ENGINE TARGETS give, when present. Build the rest of each session around them.
 - Close the brief's needs deliberately: give each of the top needs a recurring slot (at least once a week through BUILD and PEAK) using its candidate exercises, familiar ones first.
 - Session anatomy: warm-up, then power or skill work, then the primary lift, then 1-2 secondary lifts, then accessories that serve a need, then an optional conditioning finisher. Heavy and technical work comes before fatiguing work.
 - Balance each week: cover squat, hinge, push, pull, single-leg, carry and trunk in proportion to the goal lens; keep pulling volume at least equal to pushing; keep heavy lower-body work out of the 48 hours before a key run or race-pace session; don't stack grip-intensive work (farmers carry, sled pull, rowing) on consecutive days.
@@ -430,9 +431,9 @@ PRESCRIPTION DETAIL (every training day must be this specific):
   "B2) Single Arm Dumbbell Row 3x10 @ 24 kg per side (rest 60 s)"
   "Finisher: 4 rounds of 250 m row + 15 wall balls @ 6 kg, 60 s rest between rounds"
 - Lifts: sets x reps @ load in the athlete's unit, effort (RPE or reps in reserve) and rest. Add tempo only when it serves the intent (control, technique, breaking a stall).
-- Runs and ergs: warm-up, the main set with a target (pace from the athlete's data, otherwise effort: RPE, heart-rate zone or the talk test), recoveries, and cool-down — e.g. "10 min easy (conversational), 5x1 km @ 10K effort (RPE 8) with 90 s walk-jog, 10 min easy". Easy runs are capped by effort, not pace.
-- Stations: distance or reps @ load, relative to the race standards when given (e.g. "Sled Push 4x25 m @ 120 kg (~80% race load), rest 90 s"), with a pacing or unbroken-reps target.
-- Loads come from RECENT WORKING WEIGHTS when listed. With no anchor, prescribe by effort (RPE or reps in reserve) with a conservative starting load for the experience level.
+- Runs and ergs: warm-up, the main set with a target (the WORKOUT ENGINE TARGETS' paces when given, otherwise effort: RPE, heart-rate zone or the talk test), recoveries, and cool-down — e.g. "10 min easy (conversational), 5x1 km @ 10K effort (RPE 8) with 90 s walk-jog, 10 min easy". Easy runs are capped by effort, not pace.
+- Stations: distance or reps @ load — the WORKOUT ENGINE TARGETS' station doses for the week's phase when given, otherwise relative to the race standards (e.g. "Sled Push 4x25 m @ 120 kg (~80% race load), rest 90 s"), with a pacing or unbroken-reps target.
+- Loads: primary lifts at the WORKOUT ENGINE TARGETS' loads; everything else from RECENT WORKING WEIGHTS when listed. With no anchor, prescribe by effort (RPE or reps in reserve) with a conservative starting load for the experience level.
 - notes: 2-3 short sentences: (1) the session's intent and which need or phase goal it serves, (2) the one technique cue that matters most today, (3) an adjustment rule (e.g. "If set 2 feels harder than RPE 8, drop 5% and keep the reps").
 - accessory: the day's supplementary work in the same line format, or null.
 

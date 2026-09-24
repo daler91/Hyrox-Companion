@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildGenerationSelection } from "./planGenerationCalibration";
+import { buildGenerationEngine, buildGenerationSelection } from "./planGenerationCalibration";
 
 vi.mock("../storage", () => ({ storage: {} }));
 vi.mock("../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
@@ -103,5 +103,50 @@ describe("buildGenerationSelection", () => {
     expect(brief?.lens).toBe("hyrox");
     expect(brief?.needs[0]?.candidates[0]?.exercise).toBe("sled_pull");
     expect(brief?.primaryLifts.length).toBeGreaterThan(0);
+  });
+});
+
+describe("buildGenerationEngine", () => {
+  const plan = {
+    ...input,
+    daysPerWeek: 4,
+    restDays: undefined,
+    totalWeeks: 8,
+    raceDate: "2026-08-10",
+  };
+
+  it("needs the brief's lens and primary lifts", () => {
+    expect(buildGenerationEngine(plan, user(), TODAY, null, null)).toBeNull();
+  });
+
+  it("lays out the plan from the brief even with no history", () => {
+    const brief = buildGenerationSelection(plan, user(), TODAY, null);
+    const engine = buildGenerationEngine(plan, user(), TODAY, null, brief);
+    expect(engine?.lens).toBe("hyrox");
+    expect(engine?.hasRace).toBe(true);
+    expect(engine?.weeks[0]?.sessions).toHaveLength(4);
+    expect(engine?.lifts.map((lift) => lift.exercise)).toEqual(
+      brief?.primaryLifts.map((lift) => lift.exercise),
+    );
+    expect(engine?.lifts.every((lift) => lift.estimate === null)).toBe(true);
+  });
+
+  it("estimates strength from training sessions only", () => {
+    const sessions = history([
+      { id: "a", date: "2026-06-01", countsAsTraining: true, exerciseName: "front_squat" },
+      { id: "b", date: "2026-06-08", countsAsTraining: true, exerciseName: "front_squat" },
+      { id: "w", date: "2026-06-09", countsAsTraining: false, exerciseName: "front_squat" },
+    ]);
+    const brief = buildGenerationSelection(plan, user(), TODAY, sessions);
+    const engine = buildGenerationEngine(plan, user(), TODAY, sessions, brief);
+    const squat = engine?.lifts.find((lift) => lift.exercise === "front_squat");
+    expect(squat?.estimate?.sessions).toBe(2);
+  });
+
+  it("drops the stations the plan's constraints rule out", () => {
+    const constrained = { ...plan, injuries: "no sled at my gym" };
+    const brief = buildGenerationSelection(constrained, user(), TODAY, null);
+    const engine = buildGenerationEngine(constrained, user(), TODAY, null, brief);
+    expect(engine?.stations.early?.doses.map((dose) => dose.station)).not.toContain("sled_push");
   });
 });

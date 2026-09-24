@@ -12,7 +12,7 @@
 import { addDaysToISODate } from "@shared/dateUtils";
 import type { GeneratePlanInput, TrainingLoadOverview } from "@shared/schema";
 import { buildStationCoverage, stationsRuledOutByConstraints } from "@shared/stationCoverage";
-import { standardizeWeightUnit } from "@shared/unitConversion";
+import { standardizeDistanceUnit, standardizeWeightUnit } from "@shared/unitConversion";
 
 import { logger } from "../logger";
 import { storage } from "../storage";
@@ -21,6 +21,7 @@ import { buildExerciseSelectionBrief, type ExerciseSelectionBrief } from "./ai/e
 import { buildCoverageSources } from "./analyticsService";
 import { buildLoadAnchors, type LoadAnchor } from "./loadAnchors";
 import { calculateTrainingLoad } from "./trainingLoadService";
+import { buildWorkoutEnginePlan, type WorkoutEnginePlan } from "./workoutEngine/enginePlan";
 
 // Look-back window for the athlete's current training-load posture, matching the
 // coach/analytics load context.
@@ -35,6 +36,12 @@ export interface GenerationCalibration {
   readonly startLoadPosture: string | null;
   readonly loadAnchors: readonly LoadAnchor[];
   readonly exerciseSelection?: ExerciseSelectionBrief | null;
+  /**
+   * The workout engine's answer for the whole plan — weekly rhythm, primary
+   * lift targets, run paces and volume, station doses. Built on the brief's
+   * lens and primary lifts, so it is null whenever the brief is.
+   */
+  readonly engine?: WorkoutEnginePlan | null;
 }
 
 /**
@@ -63,6 +70,13 @@ type GenerationSelectionInput = Pick<
   GeneratePlanInput,
   "goal" | "focusAreas" | "experienceLevel" | "injuries"
 >;
+
+/** The parts the engine reads on top of the brief's: the plan's shape. */
+type GenerationEngineInput = GenerationSelectionInput &
+  Pick<GeneratePlanInput, "daysPerWeek" | "restDays"> & {
+    readonly totalWeeks: number;
+    readonly raceDate?: string;
+  };
 
 /** The athlete's last 70 days, read once and shared by every calibration. */
 interface GenerationHistory {
@@ -130,6 +144,36 @@ function describeLoadCalibration(
 }
 
 /**
+ * The constraints this plan is written for. The route saves the wizard's box
+ * to the profile before queueing, so the two normally agree; the input wins
+ * because it is what the athlete just confirmed for THIS plan.
+ */
+function generationConstraints(
+  input: GenerationSelectionInput,
+  user: GenerationUser,
+): string | null {
+  return input.injuries ?? user?.trainingConstraints ?? null;
+}
+
+/**
+ * Training sessions only — the same split buildTrainingContext makes: a walk
+ * is real load, but it is not an exercise habit or a strength estimate.
+ */
+function trainingHistory(history: Pick<GenerationHistory, "workoutLogs" | "sets"> | null): {
+  workoutLogs: GenerationHistory["workoutLogs"];
+  sets: GenerationHistory["sets"];
+} {
+  const workoutLogs = history?.workoutLogs ?? [];
+  const nonTrainingLogIds = new Set(
+    workoutLogs.filter((log) => log.countsAsTraining === false).map((log) => log.id),
+  );
+  return {
+    workoutLogs: workoutLogs.filter((log) => log.countsAsTraining !== false),
+    sets: (history?.sets ?? []).filter((set) => !nonTrainingLogIds.has(set.workoutLogId)),
+  };
+}
+
+/**
  * The exercise-selection brief for this plan. Without history it still knows
  * the goal, focus areas, constraints and experience level, which settle a lot
  * about exercise choice on their own. Never blocks plan generation.
@@ -141,18 +185,8 @@ export function buildGenerationSelection(
   history: Pick<GenerationHistory, "workoutLogs" | "sets"> | null,
 ): ExerciseSelectionBrief | null {
   try {
-    // The route saves the wizard's box to the profile before queueing, so the
-    // two normally agree; the input wins because it is what the athlete just
-    // confirmed for THIS plan.
-    const constraints = input.injuries ?? user?.trainingConstraints ?? null;
-    // Training sessions only — the same split buildTrainingContext makes: a
-    // walk is real load, but it is not an exercise habit.
-    const workoutLogs = history?.workoutLogs ?? [];
-    const nonTrainingLogIds = new Set(
-      workoutLogs.filter((log) => log.countsAsTraining === false).map((log) => log.id),
-    );
-    const trainingLogs = workoutLogs.filter((log) => log.countsAsTraining !== false);
-    const sets = (history?.sets ?? []).filter((set) => !nonTrainingLogIds.has(set.workoutLogId));
+    const constraints = generationConstraints(input, user);
+    const { workoutLogs: trainingLogs, sets } = trainingHistory(history);
     // Same suppression as the coach's computeExerciseGaps, so a station the
     // athlete can't train is never reported as a gap to close.
     const ruledOut = new Set(stationsRuledOutByConstraints(constraints));
@@ -179,10 +213,51 @@ export function buildGenerationSelection(
   }
 }
 
+/**
+ * The workout engine's plan-wide targets. Needs the brief (its lens and
+ * primary lifts); without history it still lays out the weekly rhythm, the
+ * effort-based lift progression and the station doses. Never blocks plan
+ * generation.
+ */
+export function buildGenerationEngine(
+  input: GenerationEngineInput,
+  user: GenerationUser,
+  today: string,
+  history: Pick<GenerationHistory, "workoutLogs" | "sets"> | null,
+  brief: ExerciseSelectionBrief | null,
+): WorkoutEnginePlan | null {
+  if (!brief) return null;
+  try {
+    const { workoutLogs, sets } = trainingHistory(history);
+    return buildWorkoutEnginePlan({
+      lens: brief.lens,
+      experience: brief.experienceLevel,
+      primaryLifts: brief.primaryLifts,
+      goal: input.goal,
+      focusAreas: input.focusAreas,
+      constraints: generationConstraints(input, user),
+      totalWeeks: input.totalWeeks,
+      daysPerWeek: input.daysPerWeek,
+      restDays: input.restDays,
+      hasRace: Boolean(input.raceDate),
+      today,
+      weightUnit: standardizeWeightUnit(user?.weightUnit),
+      distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
+      division: user?.division,
+      gender: user?.gender,
+      sets,
+      logs: workoutLogs,
+    });
+  } catch (err) {
+    logger.warn({ err }, "[planGen] workout engine unavailable; generating without it.");
+    return null;
+  }
+}
+
 export async function computeGenerationCalibration(
   userId: string,
   user: GenerationUser,
-  input: GenerationSelectionInput,
+  input: GenerationEngineInput,
 ): Promise<GenerationCalibration> {
   // The athlete's calendar date, not the server's: a UTC "today" put the
   // load window a day off for everyone west of Greenwich, so the posture and
@@ -190,8 +265,10 @@ export async function computeGenerationCalibration(
   // against (resolveUserTodayForPlan makes the same call for the schedule).
   const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const history = await loadGenerationHistory(userId, today);
+  const exerciseSelection = buildGenerationSelection(input, user, today, history);
   return {
     ...describeLoadCalibration(history, user, today),
-    exerciseSelection: buildGenerationSelection(input, user, today, history),
+    exerciseSelection,
+    engine: buildGenerationEngine(input, user, today, history, exerciseSelection),
   };
 }

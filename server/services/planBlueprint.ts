@@ -108,6 +108,8 @@ export function describeProgramBlueprintLines(input: {
   readonly range: BlueprintChunk;
   readonly hasRace: boolean;
   readonly primaryLifts: readonly PrimaryLift[];
+  /** The WORKOUT ENGINE TARGETS block follows with the lifts' exact numbers. */
+  readonly hasEngineTargets?: boolean;
 }): string[] {
   const { totalWeeks, range, hasRace, primaryLifts } = input;
   const outline = buildPlanOutline(totalWeeks);
@@ -123,8 +125,11 @@ export function describeProgramBlueprintLines(input: {
   const blocks = describeBlocks(outline);
   if (blocks) lines.push(blocks);
   if (primaryLifts.length > 0) {
+    const progression = input.hasEngineTargets
+      ? "at exactly the sets, reps and loads the WORKOUT ENGINE TARGETS give for each week"
+      : "and progress them against RECENT WORKING WEIGHTS when listed";
     lines.push(
-      `- Primary lifts for the whole plan: ${formatPrimaryLifts(primaryLifts)}. Use these exact exercises (not look-alikes) every week that includes strength work, and progress them against RECENT WORKING WEIGHTS when listed.`,
+      `- Primary lifts for the whole plan: ${formatPrimaryLifts(primaryLifts)}. Use these exact exercises (not look-alikes) every week that includes strength work, ${progression}.`,
     );
   }
   if (showPhases) {

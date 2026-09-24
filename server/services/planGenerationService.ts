@@ -26,12 +26,15 @@ import { sanitizeLabel } from "../gemini/exerciseParser/mapping";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
+import { describeEngineTargetLines } from "../prompts/workoutEngine";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 import { describeLoadAnchorLines } from "./loadAnchors";
-import { describeProgramBlueprintLines } from "./planBlueprint";
+import { describeProgramBlueprintLines, planDeloadWeeks } from "./planBlueprint";
 import { computeGenerationCalibration, type GenerationCalibration } from "./planGenerationCalibration";
+import { loadIncrement } from "./workoutEngine/loadMath";
+import { repairPrimaryLifts } from "./workoutEngine/planRepair";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
 // Calibration moved to its own module; these stay importable from here, where
@@ -280,8 +283,13 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
       range,
       hasRace: Boolean(input.raceDate),
       primaryLifts: selection?.primaryLifts ?? [],
+      hasEngineTargets: Boolean(calibration?.engine),
     }),
   );
+  // The engine's slice for these weeks: rhythm, lift numbers, paces, station
+  // doses. Shared state of the same kind as the blueprint, and the numbers the
+  // repair pass enforces after the model has written the sessions.
+  lines.push(...describeEngineTargetLines(calibration?.engine, { ...range, daysBeforeStart }));
 
   // Include rest days in the total
   const restDaysPerWeek = 7 - input.daysPerWeek;
@@ -489,38 +497,74 @@ function collectHeaviestWeightsByWeek(
   return byExercise;
 }
 
+/** What the ceiling reads beyond the percentage. */
+export interface OverloadCeilingOptions {
+  /** The blueprint's deload weeks: the week after one is measured against the week before it. */
+  readonly deloadWeeks?: ReadonlySet<number>;
+}
+
+/**
+ * The week a week's load is measured against: the one before it — or, coming
+ * out of a deload, the loading week before the deload. Measured against the
+ * deload itself, every return to normal loads read as a 10%+ jump and was
+ * clamped back to deload x 1.08, so each deload the prompt asked for quietly
+ * cost the athlete the progress made before it.
+ */
+function basisWeek(weekNumber: number, deloadWeeks: ReadonlySet<number>): number {
+  return deloadWeeks.has(weekNumber - 1) && !deloadWeeks.has(weekNumber)
+    ? weekNumber - 2
+    : weekNumber - 1;
+}
+
+/**
+ * The heaviest a week may prescribe, in kg: the percentage ceiling, or one real
+ * plate step on the exercise's implement when that is larger. On a 20 kg
+ * dumbbell the smallest possible increase is 10%, and holding it to 8% clamped
+ * every dumbbell progression to a weight no gym stocks (21.6 kg).
+ */
+function weeklyCeilingKg(
+  basisKg: number,
+  exerciseName: string,
+  maxIncreasePct: number,
+  defaultUnit: WeightUnit,
+): number {
+  const stepKg = convertWeight(loadIncrement(exerciseName, defaultUnit), defaultUnit, "kg");
+  return Math.max(basisKg * (1 + maxIncreasePct / 100), basisKg + stepKg);
+}
+
 /**
  * Week-over-week weight jumps that exceed the ceiling, per exercise.
  *
- * Compares each exercise's heaviest prescribed set in consecutive weeks that
- * BOTH prescribe it. A week that drops weight is never a violation — that is a
- * deload, which the same prompt asks for.
+ * Compares each exercise's heaviest prescribed set against its basis week (the
+ * week before, or the week before a deload) when BOTH prescribe it. A week that
+ * drops weight is never a violation — that is a deload, which the same prompt
+ * asks for.
  */
 export function findProgressiveOverloadViolations(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
   defaultUnit: WeightUnit = "kg",
+  options: OverloadCeilingOptions = {},
 ): ProgressiveOverloadViolation[] {
+  const deloadWeeks = options.deloadWeeks ?? new Set<number>();
   const byExercise = collectHeaviestWeightsByWeek(days, defaultUnit);
   const violations: ProgressiveOverloadViolation[] = [];
   for (const [exerciseName, weeks] of byExercise) {
-    const ordered = [...weeks.keys()].sort((a, b) => a - b);
-    for (let i = 1; i < ordered.length; i++) {
-      const fromWeek = ordered[i - 1];
-      const toWeek = ordered[i];
-      // Only adjacent weeks: a gap means the exercise was not prescribed in
+    for (const toWeek of [...weeks.keys()].sort((a, b) => a - b)) {
+      // Only the basis week: a gap means the exercise was not prescribed in
       // between, and a jump across a rest period is not a weekly increase.
-      if (toWeek !== fromWeek + 1) continue;
-      const fromWeight = weeks.get(fromWeek)!;
+      const fromWeek = basisWeek(toWeek, deloadWeeks);
+      const fromWeight = weeks.get(fromWeek);
       const toWeight = weeks.get(toWeek)!;
-      if (toWeight <= fromWeight) continue;
+      if (fromWeight == null || toWeight <= fromWeight) continue;
       const increasePct = ((toWeight - fromWeight) / fromWeight) * 100;
-      // Epsilon because increasePct is a ratio of differences and carries float
-      // noise: a weight sitting EXACTLY on the ceiling measures 8.000000000000002
-      // against a ceiling of 8 and was flagged as a violation of itself. The
-      // ceiling is inclusive — "increase weights up to 8%" permits 8% — so the
-      // boundary must not be decided by representation (same class as audit L2).
-      if (increasePct > maxIncreasePct + PCT_COMPARISON_EPSILON) {
+      const ceiling = weeklyCeilingKg(fromWeight, exerciseName, maxIncreasePct, defaultUnit);
+      // Epsilon because the comparison is of computed floats: a weight sitting
+      // EXACTLY on the ceiling measured 8.000000000000002% against a ceiling of
+      // 8 and was flagged as a violation of itself. The ceiling is inclusive —
+      // "increase weights up to 8%" permits 8% — so the boundary must not be
+      // decided by representation (same class as audit L2).
+      if (toWeight > ceiling * (1 + PCT_COMPARISON_EPSILON)) {
         violations.push({
           exerciseName,
           fromWeek,
@@ -562,28 +606,25 @@ export function clampProgressiveOverload(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
   defaultUnit: WeightUnit = "kg",
+  options: OverloadCeilingOptions = {},
 ): ProgressiveOverloadClamp[] {
+  const deloadWeeks = options.deloadWeeks ?? new Set<number>();
   const clamps: ProgressiveOverloadClamp[] = [];
   const weeksByExercise = collectHeaviestWeightsByWeek(days, defaultUnit);
 
   for (const [exerciseName, weeks] of weeksByExercise) {
-    let previousWeek: number | null = null;
-    let previousMax: number | null = null;
-
+    // Walked in order, each week's CLAMPED weight written back before a later
+    // week is measured against it.
     for (const weekNumber of [...weeks.keys()].sort((a, b) => a - b)) {
-      let heaviest = weeks.get(weekNumber)!;
-
-      if (previousMax != null && previousWeek != null && weekNumber === previousWeek + 1) {
-        const ceiling = Math.floor(previousMax * (1 + maxIncreasePct / 100) * 10) / 10;
-        if (heaviest > ceiling) {
-          clamps.push({ exerciseName, weekNumber, fromWeight: heaviest, toWeight: ceiling, ceiling });
-          applyWeightCeiling(days, exerciseName, weekNumber, ceiling, defaultUnit);
-          heaviest = ceiling;
-        }
-      }
-
-      previousWeek = weekNumber;
-      previousMax = heaviest;
+      const basis = weeks.get(basisWeek(weekNumber, deloadWeeks));
+      const heaviest = weeks.get(weekNumber)!;
+      if (basis == null) continue;
+      const ceiling =
+        Math.floor(weeklyCeilingKg(basis, exerciseName, maxIncreasePct, defaultUnit) * 10) / 10;
+      if (heaviest <= ceiling) continue;
+      clamps.push({ exerciseName, weekNumber, fromWeight: heaviest, toWeight: ceiling, ceiling });
+      applyWeightCeiling(days, exerciseName, weekNumber, ceiling, defaultUnit);
+      weeks.set(weekNumber, ceiling);
     }
   }
 
@@ -732,6 +773,19 @@ async function generatePlanDays(
   }
   assertTableFirstGeneratedDays(days);
 
+  // The engine's primary-lift targets are enforced before the clamp runs, so
+  // the clamp sees the numbers the athlete will actually be given; a target
+  // never steps more than 7.5% or one plate, so the clamp has nothing to undo
+  // in it and stays the guarantee for everything else the model wrote.
+  const liftRepairs = repairPrimaryLifts(days, calibration?.engine);
+  if (liftRepairs.length > 0) {
+    logger.debug(
+      { context: "plan-generation", repairedLiftDays: liftRepairs.length },
+      "[planGen] Snapped primary lifts to the workout engine's targets",
+    );
+  }
+  const overloadOptions = { deloadWeeks: new Set(planDeloadWeeks(input.totalWeeks)) };
+
   // The progressive-overload ceiling is ENFORCED BY CLAMPING (audit H17, M7).
   // Rejecting would make the athlete wait out another model round-trip for a
   // fault that is not theirs, and a persistent violation could loop; logging
@@ -741,11 +795,18 @@ async function generatePlanDays(
   // The trade-off, recorded because it is real: the numbers no longer match what
   // the model wrote, so a coaching rationale referring to a specific load can
   // disagree with the set it describes. Everything clamped is logged.
-  const overloadViolations = findProgressiveOverloadViolations(days);
+  const athleteWeightUnit = standardizeWeightUnit(unitPreferences.weightUnit);
+  const overloadViolations = findProgressiveOverloadViolations(
+    days,
+    MAX_WEEKLY_WEIGHT_INCREASE_PCT,
+    athleteWeightUnit,
+    overloadOptions,
+  );
   const overloadClamps = clampProgressiveOverload(
     days,
     MAX_WEEKLY_WEIGHT_INCREASE_PCT,
-    standardizeWeightUnit(unitPreferences.weightUnit),
+    athleteWeightUnit,
+    overloadOptions,
   );
   if (overloadViolations.length > 0) {
     // Carries neither the athlete's id nor their prescribed loads. The logger

@@ -94,6 +94,23 @@ describe("describeProgramBlueprintLines", () => {
     expect(chunk).not.toContain("Blocks:");
   });
 
+  it("points the primary lifts at the engine's numbers when the engine block follows", () => {
+    const withEngine = describeProgramBlueprintLines({
+      totalWeeks: 12,
+      range: { startWeek: 1, endWeek: 2 },
+      hasRace: true,
+      primaryLifts,
+      hasEngineTargets: true,
+    }).join("\n");
+    expect(withEngine).toContain(
+      "at exactly the sets, reps and loads the WORKOUT ENGINE TARGETS give for each week",
+    );
+    expect(withEngine).not.toContain("RECENT WORKING WEIGHTS");
+    expect(text({ startWeek: 1, endWeek: 2 })).toContain(
+      "progress them against RECENT WORKING WEIGHTS",
+    );
+  });
+
   it("omits the primary-lift line when there are none", () => {
     const chunk = describeProgramBlueprintLines({
       totalWeeks: 8,

@@ -522,6 +522,69 @@ describe("executePlanGeneration", () => {
     expect(prompts[1]).toContain("week 3 = TAPER (block 1); week 4 = RACE WEEK (block 1)");
   });
 
+  it("hands each chunk its weeks of engine targets and persists the primary lift at them", async () => {
+    // 4 weeks → two chunks. The model drifts the athlete's own primary lift
+    // (front squat, 4 x 80 kg x 5 logged) to 3x10 @ 60 kg; the plan that is
+    // saved carries the engine's week-1 target instead: 4x8 at RPE ~7 off an
+    // estimated 1RM of 98.7 kg → 72.5 kg.
+    const input = { ...baseInput, endDate: "2026-02-02" } as const;
+    const drifted = {
+      mainWorkout: "A) Front Squat 3x10 @ 60 kg (RPE 7)",
+      exercises: [
+        {
+          exerciseName: "front_squat",
+          category: "strength",
+          sets: [1, 2, 3].map((setNumber) => ({ setNumber, reps: 10, weight: 60, weightUnit: "kg" })),
+        },
+      ],
+    };
+    const weeks = [1, 2, 3, 4].map((week) => makeGeneratedWeek(week, drifted));
+    setupPlanStorage(input, createPlanDaysFromGenerated(weeks.flat()));
+    mockAiChunks([...weeks[0], ...weeks[1]], [...weeks[2], ...weeks[3]]);
+    const sessionDates = ["2025-12-15", "2025-12-19", "2025-12-23", "2025-12-29"];
+    mocks.analytics.getWorkoutLogsByDateRange.mockResolvedValue(
+      sessionDates.map((date) => ({ id: `log-${date}`, date, focus: "Strength", countsAsTraining: true })),
+    );
+    mocks.analytics.getAllExerciseSetsWithDates.mockResolvedValue(
+      sessionDates.map((date) => ({
+        workoutLogId: `log-${date}`,
+        date,
+        exerciseName: "front_squat",
+        customLabel: null,
+        setNumber: 1,
+        reps: 5,
+        weight: 80,
+        weightUnit: "kg",
+      })),
+    );
+
+    await executePlanGeneration("plan-1", input, "user-1");
+
+    const [first, second] = mocks.generateContent.mock.calls.map(getPromptText);
+    for (const prompt of [first, second]) {
+      expect(prompt).toContain("WORKOUT ENGINE TARGETS");
+      expect(prompt).toContain("front_squat est. 1RM 98.7 kg (from 80 kg x 5 on 2025-12-29)");
+      expect(prompt).toContain("at exactly the sets, reps and loads the WORKOUT ENGINE TARGETS give");
+    }
+    expect(first).toContain("Week 1 — EARLY (block 1):");
+    expect(first).not.toContain("Week 3 — ");
+    expect(second).toContain("Week 4 — RACE WEEK (block 1):");
+
+    const rows = mocks.insertValues.mock.calls[0][0] as Array<Record<string, unknown>>;
+    const weekOneSquat = rows.filter(
+      (row) => row.planDayId === "day-1-Monday" && row.exerciseName === "front_squat",
+    );
+    expect(weekOneSquat).toHaveLength(4);
+    expect(weekOneSquat.every((row) => row.reps === 8 && row.weight === 72.5)).toBe(true);
+    const savedDays = mocks.plans.createPlanDays.mock.calls[0][0] as PlanDay[];
+    expect(savedDays[0].mainWorkout).toBe("A) Front Squat 4x8 @ 72.5 kg (RPE 7)");
+    // Race week's primers are left as the model wrote them.
+    const raceWeekSquat = rows.filter(
+      (row) => row.planDayId === "day-4-Monday" && row.exerciseName === "front_squat",
+    );
+    expect(raceWeekSquat.map((row) => row.weight)).toEqual([60, 60, 60]);
+  });
+
   it("still sends the goal lens and blueprint when the athlete's history can't be read", async () => {
     const sortedDays = makeGeneratedWeeks(1, 1);
     setupPlanStorage(baseInput, createPlanDaysFromGenerated(sortedDays));
@@ -1009,6 +1072,41 @@ describe("clampProgressiveOverload (audit H17, M7 — enforcement)", () => {
     // Ceiling 108 kg = 238.099 lbs, floored to 238.0 in the set's own unit —
     // 238.1 lbs would convert back to 108.004 kg, above the ceiling.
     expect(weekTwoWeight()).toBe(238);
+  });
+
+  it("measures the week after a deload against the loading week before it", () => {
+    // Week 4 deloads to 90; week 5 returns at 105 — 5% over week 3, not 16.7%
+    // over the deload. Measured against the deload, every return to normal
+    // loads was clamped and each deload cost the athlete their progress.
+    const aware = [day(3, "back_squat", [100]), day(4, "back_squat", [90]), day(5, "back_squat", [105])];
+    expect(clampProgressiveOverload(aware, 8, "kg", { deloadWeeks: new Set([4]) })).toEqual([]);
+    expect(aware[2].exercises[0].sets[0].weight).toBe(105);
+    expect(
+      findProgressiveOverloadViolations(aware as never, 8, "kg", { deloadWeeks: new Set([4]) }),
+    ).toEqual([]);
+
+    const unaware = [day(3, "back_squat", [100]), day(4, "back_squat", [90]), day(5, "back_squat", [105])];
+    expect(clampProgressiveOverload(unaware)).toHaveLength(1);
+  });
+
+  it("still clamps a post-deload week that jumps past the pre-deload level", () => {
+    const days = [day(3, "back_squat", [100]), day(4, "back_squat", [90]), day(5, "back_squat", [130])];
+
+    clampProgressiveOverload(days, 8, "kg", { deloadWeeks: new Set([4]) });
+
+    expect(days[2].exercises[0].sets[0].weight).toBe(108);
+  });
+
+  it("allows one real plate step where the percentage is smaller than any plate", () => {
+    // 20 -> 22 kg dumbbells is 10%: the smallest jump a dumbbell rack allows.
+    // Held to 8% it became 21.6 kg, a weight no gym stocks.
+    const oneStep = [day(1, "goblet_squat", [20]), day(2, "goblet_squat", [22])];
+    expect(clampProgressiveOverload(oneStep)).toEqual([]);
+    expect(findProgressiveOverloadViolations(oneStep as never)).toEqual([]);
+
+    const twoSteps = [day(1, "goblet_squat", [20]), day(2, "goblet_squat", [24])];
+    clampProgressiveOverload(twoSteps);
+    expect(twoSteps[1].exercises[0].sets[0].weight).toBe(22);
   });
 
   it("leaves a plan that already respects the ceiling untouched", () => {
