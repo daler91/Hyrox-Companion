@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { buildWorkoutEnginePlan, type WorkoutEnginePlan } from "./enginePlan";
 import type { EngineSet } from "./loadMath";
-import { type RepairableDay, repairPrimaryLifts, rewriteLiftLine } from "./planRepair";
+import {
+  type RepairableDay,
+  type RepairableSet,
+  repairPrimaryLifts,
+  rewriteLiftLine,
+} from "./planRepair";
+import type { LiftWeekTarget } from "./strength";
 
 function squatHistory(): EngineSet[] {
   return ["2026-09-01", "2026-09-08", "2026-09-15"].map((date, index) => ({
@@ -47,6 +53,18 @@ function squatSets(weights: number[], reps = 10) {
   return weights.map((weight, index) => ({ setNumber: index + 1, reps, weight, weightUnit: "kg" }));
 }
 
+/** The sets of the day's first exercise; a day without a table fails the test. */
+function firstSets(day: RepairableDay): RepairableSet[] {
+  const sets = day.exercises?.at(0)?.sets;
+  if (!sets) throw new Error(`expected an exercise table on ${day.dayName}`);
+  return sets;
+}
+
+function loadOf(target: LiftWeekTarget | undefined): number {
+  if (target?.load == null) throw new Error("expected the engine to compute a load");
+  return target.load;
+}
+
 describe("repairPrimaryLifts", () => {
   it("snaps a drifted primary lift to the week's target, sets and text alike", () => {
     const plan = engine();
@@ -58,7 +76,7 @@ describe("repairPrimaryLifts", () => {
     const repairs = repairPrimaryLifts([day], plan);
 
     expect(repairs).toEqual([{ exercise: "front_squat", weekNumber: 1, dayName: "Monday" }]);
-    const sets = day.exercises![0].sets;
+    const sets = firstSets(day);
     expect(sets).toHaveLength(target.sets);
     expect(sets.every((set) => set.reps === target.reps && set.weight === target.load)).toBe(true);
     expect(sets[0].notes).toBe(`RPE ${target.rpe} · rest 90-120 s`);
@@ -80,9 +98,10 @@ describe("repairPrimaryLifts", () => {
     // Handed over out of order: exposures follow the week, not the array.
     repairPrimaryLifts([thursday, monday], plan);
 
-    expect(monday.exercises![0].sets[0].weight).toBe(target.load);
-    expect(thursday.exercises![0].sets[0].weight).toBeLessThan(target.load!);
-    expect(thursday.exercises![0].sets[0].weight).toBeGreaterThanOrEqual(target.load! * 0.85);
+    const load = loadOf(target);
+    expect(firstSets(monday).at(0)?.weight).toBe(load);
+    expect(firstSets(thursday).at(0)?.weight).toBeLessThan(load);
+    expect(firstSets(thursday).at(0)?.weight).toBeGreaterThanOrEqual(load * 0.85);
   });
 
   it("enforces sets and reps but keeps the model's weight for a lift with no logged load", () => {
@@ -94,8 +113,10 @@ describe("repairPrimaryLifts", () => {
 
     repairPrimaryLifts([day], plan);
 
-    const sets = day.exercises![0].sets;
-    expect(sets.map((set) => set.reps)).toEqual(Array(target.sets).fill(target.reps));
+    const sets = firstSets(day);
+    expect(sets.map((set) => set.reps)).toEqual(
+      Array.from({ length: target.sets }, () => target.reps),
+    );
     expect(sets.map((set) => set.weight)).toEqual([40, 45, 45, 45].slice(0, target.sets));
   });
 
@@ -105,7 +126,10 @@ describe("repairPrimaryLifts", () => {
     const day = strengthDay(1, "Monday", [
       {
         exerciseName: "front_squat",
-        sets: squatSets(Array(target.sets).fill(target.load), target.reps),
+        sets: squatSets(
+          Array.from({ length: target.sets }, () => loadOf(target)),
+          target.reps,
+        ),
       },
     ]);
     const before = day.mainWorkout;
@@ -124,7 +148,7 @@ describe("repairPrimaryLifts", () => {
     ]);
 
     expect(repairPrimaryLifts([raceWeek, accessory], plan)).toEqual([]);
-    expect(raceWeek.exercises![0].sets[0].weight).toBe(50);
+    expect(firstSets(raceWeek).at(0)?.weight).toBe(50);
   });
 
   it("does nothing without an engine plan", () => {
@@ -144,6 +168,12 @@ describe("rewriteLiftLine", () => {
       "A) Front squat 4x6 @ 85 kg, RPE 8",
       "B) Front squat 2x5",
     ]);
+  });
+
+  it("keeps the punctuation around the numbers it rewrites", () => {
+    expect(
+      rewriteLiftLine("A) Front squat 3x5 @ 80kg (RPE ~7.5).", "front_squat", want, "kg"),
+    ).toBe("A) Front squat 4x6 @ 85 kg (RPE 8).");
   });
 
   it("leaves text that never names the lift untouched", () => {

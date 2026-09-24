@@ -68,7 +68,7 @@ export interface WorkoutEnginePlan {
   /** The week's sessions, per week (index = week - 1). */
   readonly weeks: readonly WeekSkeleton[];
   /** Station doses per phase, when the goal trains stations. */
-  readonly stations: Readonly<Partial<Record<TrainingPhase, StationPhasePlan>>>;
+  readonly stations: ReadonlyMap<TrainingPhase, StationPhasePlan>;
 }
 
 function stationsMatter(input: WorkoutEngineInput): boolean {
@@ -78,17 +78,21 @@ function stationsMatter(input: WorkoutEngineInput): boolean {
 function buildStationPlans(
   input: WorkoutEngineInput,
   outline: readonly PlanWeekOutline[],
-): Partial<Record<TrainingPhase, StationPhasePlan>> {
-  if (!stationsMatter(input)) return {};
+): Map<TrainingPhase, StationPhasePlan> {
+  const plans = new Map<TrainingPhase, StationPhasePlan>();
+  if (!stationsMatter(input)) return plans;
   const excluded = new Set<string>(stationsRuledOutByConstraints(input.constraints ?? null));
-  const plans: Partial<Record<TrainingPhase, StationPhasePlan>> = {};
   for (const { phase } of outline) {
-    plans[phase] ??= buildStationPhasePlan(phase, {
-      division: input.division,
-      gender: input.gender,
-      unit: input.weightUnit,
-      excluded,
-    });
+    if (plans.has(phase)) continue;
+    plans.set(
+      phase,
+      buildStationPhasePlan(phase, {
+        division: input.division,
+        gender: input.gender,
+        unit: input.weightUnit,
+        excluded,
+      }),
+    );
   }
   return plans;
 }

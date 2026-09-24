@@ -5,6 +5,7 @@ import {
   LENS_SUMMARIES,
   PATTERN_GROUP_LABELS,
   PATTERN_GROUPS,
+  type PatternGroup,
   PRIMARY_SLOT_LABELS,
   STRESS_REGION_LABELS,
 } from "../services/ai/exerciseKnowledge";
@@ -117,7 +118,7 @@ function constraintLines(brief: ExerciseSelectionBrief): string[] {
   const parts: string[] = [];
   if (brief.limitedRegions.length > 0) {
     parts.push(
-      `limits ${joinList(brief.limitedRegions.map((region) => STRESS_REGION_LABELS[region]))}`,
+      `limits ${joinList(brief.limitedRegions.map((region) => STRESS_REGION_LABELS.get(region) ?? region))}`,
     );
   }
   if (brief.unavailableEquipment.length > 0) {
@@ -131,9 +132,13 @@ function constraintLines(brief: ExerciseSelectionBrief): string[] {
   ];
 }
 
+function groupLabel(group: PatternGroup): string {
+  return PATTERN_GROUP_LABELS.get(group) ?? group;
+}
+
 function shapeLine(shape: UpcomingPatternShape): string {
   const counts = PATTERN_GROUPS.map(
-    (group) => `${PATTERN_GROUP_LABELS[group]} ${shape.setsByGroup[group]}`,
+    (group) => `${groupLabel(group)} ${shape.setsByGroup.get(group) ?? 0}`,
   ).join(" · ");
   const parts = [
     `UPCOMING WEEK SHAPE (${shape.structuredDays} of ${shape.totalDays} upcoming days have exercise tables) — planned sets by pattern: ${counts}.`,
@@ -141,7 +146,7 @@ function shapeLine(shape: UpcomingPatternShape): string {
   if (shape.missing.length > 0) {
     const pronoun = shape.missing.length === 1 ? "it" : "them";
     parts.push(
-      `This goal also needs ${joinList(shape.missing.map((group) => PATTERN_GROUP_LABELS[group]))} work, which the coming week never touches — cover ${pronoun} by swapping a redundant exercise, never by adding a session, and not at all in TAPER or RACE WEEK.`,
+      `This goal also needs ${joinList(shape.missing.map(groupLabel))} work, which the coming week never touches — cover ${pronoun} by swapping a redundant exercise, never by adding a session, and not at all in TAPER or RACE WEEK.`,
     );
   }
   if (shape.backToBackLowerBody.length > 0) {
@@ -343,7 +348,7 @@ export function buildExerciseMenu(): string {
   return [
     "EXERCISE KEYS (use these exact keys for exerciseName; grouped by what they train):",
     ...EXERCISE_MENU_GROUPS.map(([label, exercises]) => `- ${label}: ${exercises.join(", ")}`),
-    `- Anything else: exerciseName "custom" with a clear customLabel (e.g. "Turkish Get-Up").`,
+    '- Anything else: exerciseName "custom" with a clear customLabel (e.g. "Turkish Get-Up").',
   ].join("\n");
 }
 

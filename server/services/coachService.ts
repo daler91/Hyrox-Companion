@@ -653,7 +653,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     };
 
     if (!budget.allowed) {
-      logger.info({ userId }, "[coach] AI budget exceeded — applying rule-based stages only");
+      logger.info("[coach] AI budget exceeded — applying rule-based stages only");
       return await applyDeterministicStagesOnly(stages, deterministicContext);
     }
 

@@ -275,7 +275,7 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
   // history could not be read.
   const selection = calibration?.exerciseSelection;
   if (selection) {
-    lines.push(``, formatExerciseSelectionBrief(selection, "plan"));
+    lines.push("", formatExerciseSelectionBrief(selection, "plan"));
   }
   lines.push(
     ...describeProgramBlueprintLines({
@@ -617,8 +617,8 @@ export function clampProgressiveOverload(
     // week is measured against it.
     for (const weekNumber of [...weeks.keys()].sort((a, b) => a - b)) {
       const basis = weeks.get(basisWeek(weekNumber, deloadWeeks));
-      const heaviest = weeks.get(weekNumber)!;
-      if (basis == null) continue;
+      const heaviest = weeks.get(weekNumber);
+      if (basis == null || heaviest == null) continue;
       const ceiling =
         Math.floor(weeklyCeilingKg(basis, exerciseName, maxIncreasePct, defaultUnit) * 10) / 10;
       if (heaviest <= ceiling) continue;

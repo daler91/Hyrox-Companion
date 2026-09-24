@@ -59,19 +59,19 @@ describe("buildWorkoutEnginePlan", () => {
 
   it("loads station doses from the race standard, minus the stations the athlete can't do", () => {
     const plan = buildWorkoutEnginePlan(input({ constraints: "no sled at my gym" }));
-    const early = plan.stations.early!;
-    expect(early.doses.map((dose) => dose.station)).not.toContain("sled_push");
-    expect(early.doses.find((dose) => dose.station === "wall_balls")?.load).toBe(4);
+    const early = plan.stations.get("early");
+    expect(early?.doses.map((dose) => dose.station)).not.toContain("sled_push");
+    expect(early?.doses.find((dose) => dose.station === "wall_balls")?.load).toBe(4);
   });
 
   it("has no stations and no running backbone for a strength goal", () => {
     const plan = buildWorkoutEnginePlan(input({ lens: "strength" }));
-    expect(plan.stations).toEqual({});
+    expect(plan.stations.size).toBe(0);
     expect(plan.runVolume).toEqual([]);
   });
 
   it("trains stations for a non-HYROX goal that asked for one as a focus area", () => {
     const plan = buildWorkoutEnginePlan(input({ lens: "general", focusAreas: ["wall_balls"] }));
-    expect(plan.stations.early).toBeDefined();
+    expect(plan.stations.has("early")).toBe(true);
   });
 });

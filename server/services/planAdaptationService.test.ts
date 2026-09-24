@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TrainingContext } from "../gemini/index";
-import { storage } from "../storage";
 import {
   adaptedDayIds,
   applyPlanAdaptation,
@@ -10,21 +9,18 @@ import {
   type PlanAdaptation,
 } from "./planAdaptationService";
 
-vi.mock("../storage", () => ({
-  storage: {
-    plans: {
-      getActivePlan: vi.fn(),
-      getPlanDaysForAdaptation: vi.fn(),
-      updatePlanDay: vi.fn(),
-      updatePlanDaySets: vi.fn(),
-      updateEngineState: vi.fn(),
-    },
-    analytics: {
-      getWorkoutLogsByDateRange: vi.fn(),
-      getAllExerciseSetsWithDates: vi.fn(),
-    },
-  },
+const plans = vi.hoisted(() => ({
+  getActivePlan: vi.fn(),
+  getPlanDaysForAdaptation: vi.fn(),
+  updatePlanDay: vi.fn(),
+  updatePlanDaySets: vi.fn(),
+  updateEngineState: vi.fn(),
 }));
+const analytics = vi.hoisted(() => ({
+  getWorkoutLogsByDateRange: vi.fn(),
+  getAllExerciseSetsWithDates: vi.fn(),
+}));
+vi.mock("../storage", () => ({ storage: { plans, analytics } }));
 vi.mock("../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 const TODAY = "2026-10-14";
@@ -53,17 +49,17 @@ function planDayRow() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(storage.plans.getActivePlan).mockResolvedValue({
+  plans.getActivePlan.mockResolvedValue({
     id: "plan-1",
     startDate: "2026-09-14",
     totalWeeks: 12,
     engineState: null,
-  } as never);
-  vi.mocked(storage.plans.getPlanDaysForAdaptation).mockResolvedValue([planDayRow()] as never);
-  vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+  });
+  plans.getPlanDaysForAdaptation.mockResolvedValue([planDayRow()]);
+  analytics.getWorkoutLogsByDateRange.mockResolvedValue([
     { id: "log-1", date: "2026-10-13", focus: "Strength", rpe: 7, countsAsTraining: true },
-  ] as never);
-  vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue(
+  ]);
+  analytics.getAllExerciseSetsWithDates.mockResolvedValue(
     [1, 2, 3, 4].map((setNumber) => ({
       workoutLogId: "log-1",
       date: "2026-10-13",
@@ -75,7 +71,7 @@ beforeEach(() => {
       weightUnit: "kg",
       plannedReps: 6,
       plannedWeight: 82.5,
-    })) as never,
+    })),
   );
 });
 
@@ -83,12 +79,8 @@ describe("computePlanAdaptation", () => {
   it("adapts the active plan from its stored days and the athlete's logs", async () => {
     const result = await computePlanAdaptation("user-1", context, units, new Set());
 
-    expect(storage.plans.getPlanDaysForAdaptation).toHaveBeenCalledWith("plan-1", TODAY);
-    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
-      "user-1",
-      "2026-08-05",
-      TODAY,
-    );
+    expect(plans.getPlanDaysForAdaptation).toHaveBeenCalledWith("plan-1", TODAY);
+    expect(analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("user-1", "2026-08-05", TODAY);
     expect(result?.planId).toBe("plan-1");
     expect(result?.result.days[0]?.setUpdates.map((update) => update.weight)).toEqual([
       90, 90, 90, 90,
@@ -111,12 +103,10 @@ describe("computePlanAdaptation", () => {
   });
 
   it("is null without an active plan, and never throws", async () => {
-    vi.mocked(storage.plans.getActivePlan).mockResolvedValueOnce(undefined);
+    plans.getActivePlan.mockResolvedValueOnce(undefined);
     expect(await computePlanAdaptation("user-1", context, units, new Set())).toBeNull();
 
-    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockRejectedValueOnce(
-      new Error("db down"),
-    );
+    analytics.getAllExerciseSetsWithDates.mockRejectedValueOnce(new Error("db down"));
     expect(await computePlanAdaptation("user-1", context, units, new Set())).toBeNull();
   });
 });
@@ -149,13 +139,11 @@ describe("applyPlanAdaptation", () => {
   };
 
   it("writes each day's note, text and sets, then the plan's engine state", async () => {
-    vi.mocked(storage.plans.updatePlanDay)
-      .mockResolvedValueOnce({ id: "day-a" } as never)
-      .mockResolvedValueOnce(undefined);
+    plans.updatePlanDay.mockResolvedValueOnce({ id: "day-a" }).mockResolvedValueOnce(undefined);
 
     expect(await applyPlanAdaptation(pass, "user-1", tx)).toBe(1);
 
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+    expect(plans.updatePlanDay).toHaveBeenCalledWith(
       "day-a",
       expect.objectContaining({
         mainWorkout: "A) Front Squat 4x6 @ 90 kg",
@@ -167,13 +155,13 @@ describe("applyPlanAdaptation", () => {
       tx,
     );
     // A day the athlete doesn't own gets no set writes.
-    expect(storage.plans.updatePlanDaySets).toHaveBeenCalledTimes(1);
-    expect(storage.plans.updatePlanDaySets).toHaveBeenCalledWith(
+    expect(plans.updatePlanDaySets).toHaveBeenCalledTimes(1);
+    expect(plans.updatePlanDaySets).toHaveBeenCalledWith(
       "day-a",
       pass.result.days[0].setUpdates,
       tx,
     );
-    expect(storage.plans.updateEngineState).toHaveBeenCalledWith(
+    expect(plans.updateEngineState).toHaveBeenCalledWith(
       "plan-1",
       "user-1",
       pass.result.engineState,
@@ -183,7 +171,7 @@ describe("applyPlanAdaptation", () => {
 
   it("does nothing without an adaptation", async () => {
     expect(await applyPlanAdaptation(null, "user-1", tx)).toBe(0);
-    expect(storage.plans.updateEngineState).not.toHaveBeenCalled();
+    expect(plans.updateEngineState).not.toHaveBeenCalled();
   });
 });
 

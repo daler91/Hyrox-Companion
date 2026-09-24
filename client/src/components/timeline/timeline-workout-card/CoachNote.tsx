@@ -1,6 +1,6 @@
 import { formatPhaseName, PLAN_PHASE_ORDER } from "@shared/planPhase";
 import type { CoachNoteInputs, ProgressionChangeRecord, TimelineEntry } from "@shared/schema";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
+import { knownExerciseLabel } from "@shared/schema/exercises";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -103,9 +103,7 @@ function loadGovernorVectorChips(inputs: CoachNoteInputs): string[] {
  */
 function describeProgressionChange(change: ProgressionChangeRecord): string {
   if (change.kind === "pace") return `Run paces: fitness ${change.from} → ${change.to} (VDOT)`;
-  const label =
-    EXERCISE_DEFINITIONS[change.exercise as ExerciseName]?.label ??
-    change.exercise.replaceAll("_", " ");
+  const label = knownExerciseLabel(change.exercise) ?? change.exercise.replaceAll("_", " ");
   return `${label}: ${change.from} → ${change.to} ${change.unit}`;
 }
 

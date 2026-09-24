@@ -172,10 +172,10 @@ function trainingHistory(history: Pick<GenerationHistory, "workoutLogs" | "sets"
 } {
   const workoutLogs = history?.workoutLogs ?? [];
   const nonTrainingLogIds = new Set(
-    workoutLogs.filter((log) => log.countsAsTraining === false).map((log) => log.id),
+    workoutLogs.filter((log) => !log.countsAsTraining).map((log) => log.id),
   );
   return {
-    workoutLogs: workoutLogs.filter((log) => log.countsAsTraining !== false),
+    workoutLogs: workoutLogs.filter((log) => log.countsAsTraining),
     sets: (history?.sets ?? []).filter((set) => !nonTrainingLogIds.has(set.workoutLogId)),
   };
 }
@@ -215,6 +215,9 @@ export function buildGenerationSelection(
       gender: user?.gender,
     });
   } catch (err) {
+    // A bug in a pure computation over data already loaded: the error carries
+    // a message and stack, never the athlete's records.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err }, "[planGen] exercise-selection brief unavailable; generating without it.");
     return null;
   }
@@ -256,6 +259,8 @@ export function buildGenerationEngine(
       logs: workoutLogs,
     });
   } catch (err) {
+    // As above: a pure computation, so the error holds no athlete data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err }, "[planGen] workout engine unavailable; generating without it.");
     return null;
   }

@@ -29,6 +29,12 @@ describe("rescalePaces", () => {
     expect(text).toMatch(/^tempo @ 7:\d\d\/mi$/);
   });
 
+  it("moves a range only when both of its ends are zone paces", () => {
+    for (const text of ["walk 12:30-6:05/km", "jog 6:05 - 12:30 per km"]) {
+      expect(rescalePaces(text, 40, 42)).toEqual({ text, changed: false });
+    }
+  });
+
   it("leaves numbers that were never a zone pace alone", () => {
     for (const text of ["walk 12:30/km", "rest 1:30 between sets", "sprint 2:10/km"]) {
       expect(rescalePaces(text, 40, 42)).toEqual({ text, changed: false });

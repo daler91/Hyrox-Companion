@@ -26,8 +26,11 @@ describe("training targets — reach the prompts that prescribe loads", () => {
     ],
     weightUnit: "kg",
     distanceUnit: "km",
-  })!;
-  const ctx = createMockTrainingContext({ totalWorkouts: 12, trainingTargets });
+  });
+  const ctx = createMockTrainingContext({
+    totalWorkouts: 12,
+    trainingTargets: trainingTargets ?? undefined,
+  });
   const line =
     "- Front Squat: est. 1RM 104.8 kg (from 85 kg x 5 on 2026-09-09) → 5 reps @ RPE 8 ≈ 85 kg · 8 reps @ RPE 8 ≈ 77.5 kg";
 

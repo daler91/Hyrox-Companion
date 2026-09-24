@@ -19,9 +19,10 @@
 import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import { HYROX_STATION_ORDER, type HyroxStation, STATION_LOADS_KG } from "@shared/raceConstants";
 import {
-  EXERCISE_DEFINITIONS,
   type ExerciseName,
   getExerciseMovementPatterns,
+  isRunningExerciseName,
+  knownExerciseLabel,
   normalizeExerciseName,
 } from "@shared/schema/exercises";
 import {
@@ -40,6 +41,8 @@ import {
   type Equipment,
   type ExperienceLevel,
   type GoalLens,
+  groupPool,
+  groupReason,
   LIFT_VARIATIONS,
   NEED_POOLS,
   PATTERN_GROUP_BY_MOVEMENT,
@@ -50,6 +53,7 @@ import {
   PRIMARY_ELIGIBLE,
   PRIMARY_SLOTS_BY_LENS,
   type PrimarySlot,
+  requiredGroups,
   STALL_METHODS,
   STATION_BUILDERS,
   STATION_PATTERN_GROUP,
@@ -160,7 +164,7 @@ export interface StationSubstitution {
 export interface UpcomingPatternShape {
   readonly structuredDays: number;
   readonly totalDays: number;
-  readonly setsByGroup: Readonly<Record<PatternGroup, number>>;
+  readonly setsByGroup: ReadonlyMap<PatternGroup, number>;
   /** Groups this goal needs that the coming week never touches. */
   readonly missing: readonly PatternGroup[];
   /** Consecutive dates that both carry heavy squat/hinge work. */
@@ -225,57 +229,6 @@ const RUN_SESSION_POOL: readonly ExerciseName[] = [
 ];
 /** Race-specific running for a HYROX athlete: 1 km repeats off a station. */
 const HYROX_RUN_POOL: readonly ExerciseName[] = ["run_1k", "interval_run", "tempo_run", "easy_run"];
-
-/** a1, b1, a2, b2, … — so a four-candidate cut offers both directions. */
-function interleave<T>(a: readonly T[], b: readonly T[]): T[] {
-  const out: T[] = [];
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const [first, second] = [a[i], b[i]];
-    if (first !== undefined) out.push(first);
-    if (second !== undefined) out.push(second);
-  }
-  return out;
-}
-
-const GROUP_POOLS: Readonly<Record<PatternGroup, readonly ExerciseName[]>> = {
-  squat: NEED_POOLS.squat,
-  hinge: NEED_POOLS.hinge,
-  push: interleave(NEED_POOLS.horizontal_push, NEED_POOLS.vertical_push),
-  pull: interleave(NEED_POOLS.horizontal_pull, NEED_POOLS.vertical_pull),
-  single_leg: NEED_POOLS.single_leg,
-  carry: NEED_POOLS.carry,
-  trunk: NEED_POOLS.trunk,
-};
-
-/** The pattern groups a goal cannot go four weeks without. */
-const REQUIRED_GROUPS: Readonly<Record<GoalLens, readonly PatternGroup[]>> = {
-  hyrox: ["single_leg", "carry", "pull", "hinge"],
-  running: ["single_leg", "hinge", "trunk"],
-  strength: ["squat", "hinge", "push", "pull"],
-  hybrid: ["single_leg", "hinge", "pull"],
-  weight_loss: ["squat", "hinge", "push", "pull", "single_leg"],
-  general: ["squat", "hinge", "push", "pull", "single_leg", "trunk"],
-};
-
-/** Why a goal needs a pattern — the reason the athlete will read back. */
-const GROUP_REASONS: Readonly<Partial<Record<GoalLens, Partial<Record<PatternGroup, string>>>>> = {
-  hyrox: {
-    single_leg: "leg endurance for the sandbag lunges",
-    carry: "grip and trunk for the farmers carry and sled pull",
-    pull: "pulling strength for the sled pull, row and SkiErg",
-    hinge: "posterior chain for sled work and rowing",
-  },
-  running: {
-    single_leg: "running is single-leg: this is what protects knees and hips",
-    hinge: "posterior-chain strength drives stride power",
-    trunk: "trunk stiffness keeps form together late in a run",
-  },
-  hybrid: {
-    single_leg: "single-leg strength carries straight over to running",
-    hinge: "posterior-chain strength for stride power",
-    pull: "keeps the upper body balanced against pressing",
-  },
-};
 
 const CALF_EXERCISES: ReadonlySet<string> = new Set<ExerciseName>([
   ...NEED_POOLS.calves_feet,
@@ -429,9 +382,14 @@ function buildStaples(
     });
   }
   return staples
-    .sort((a, b) => b.sessions - a.sessions || b.lastDate.localeCompare(a.lastDate))
+    .toSorted((a, b) => b.sessions - a.sessions || b.lastDate.localeCompare(a.lastDate))
     .slice(0, MAX_STAPLES)
-    .map(({ lastDate: _lastDate, ...staple }) => staple);
+    .map(({ exercise, sessions, daysSince, lastSession }) => ({
+      exercise,
+      sessions,
+      daysSince,
+      lastSession,
+    }));
 }
 
 function totalSessions(histories: Map<string, ExerciseHistory>): number {
@@ -476,17 +434,17 @@ function rankCandidates(
       candidates.push({ exercise, sessions });
     }
   }
-  return candidates.sort((a, b) => b.sessions - a.sessions).slice(0, MAX_CANDIDATES);
+  return candidates.toSorted((a, b) => b.sessions - a.sessions).slice(0, MAX_CANDIDATES);
 }
 
 /** Display name for a canonical key or a `custom:<label>` key. */
 export function selectionExerciseLabel(exercise: string): string {
   if (exercise.startsWith("custom:")) return exercise.slice("custom:".length);
-  return EXERCISE_DEFINITIONS[exercise as ExerciseName]?.label ?? exercise;
+  return knownExerciseLabel(exercise) ?? exercise;
 }
 
 function coverageLabel(station: HyroxStation | "running"): string {
-  return station === "running" ? "Running" : EXERCISE_DEFINITIONS[station].label;
+  return station === "running" ? "Running" : selectionExerciseLabel(station);
 }
 
 // ---------------------------------------------------------------------------
@@ -506,7 +464,7 @@ function stationNeedCandidates(scope: SelectionScope, station: HyroxStation): Se
     // load the same muscles in the same direction.
     return rankCandidates(
       scope,
-      [...STATION_SUBSTITUTES[station], ...STATION_BUILDERS[station]],
+      [...(STATION_SUBSTITUTES.get(station) ?? []), ...(STATION_BUILDERS.get(station) ?? [])],
       stationOnly,
     );
   }
@@ -515,23 +473,27 @@ function stationNeedCandidates(scope: SelectionScope, station: HyroxStation): Se
   // never having pushed a sled.
   return [
     own,
-    ...rankCandidates(scope, STATION_BUILDERS[station], stationOnly).slice(0, MAX_CANDIDATES - 1),
+    ...rankCandidates(scope, STATION_BUILDERS.get(station) ?? [], stationOnly).slice(
+      0,
+      MAX_CANDIDATES - 1,
+    ),
   ];
 }
 
-const FOCUS_POOLS: Readonly<Record<string, readonly ExerciseName[]>> = {
-  running: RUN_SESSION_POOL,
-  strength: [
-    ...PRIMARY_DEFAULTS.squat.standard,
-    ...PRIMARY_DEFAULTS.hinge.standard,
-    ...PRIMARY_DEFAULTS.pull.standard,
+const FOCUS_POOLS: ReadonlyMap<string, readonly ExerciseName[]> = new Map([
+  ["running", RUN_SESSION_POOL],
+  [
+    "strength",
+    (["squat", "hinge", "pull"] as const).flatMap(
+      (slot) => PRIMARY_DEFAULTS.get(slot)?.standard ?? [],
+    ),
   ],
-  conditioning: NEED_POOLS.engine,
-};
+  ["conditioning", NEED_POOLS.engine],
+]);
 
 function focusAreaNeed(scope: SelectionScope, area: string): RankedNeed | null {
   const station = STATION_KEYS.has(area) ? (area as HyroxStation) : null;
-  const pool = station ? null : FOCUS_POOLS[area];
+  const pool = station ? null : FOCUS_POOLS.get(area);
   if (!station && !pool) return null;
   const candidates = station
     ? stationNeedCandidates(scope, station)
@@ -572,7 +534,7 @@ function staleStations(
     if (isStale) stale.push({ station, daysSince: gap.daysSince });
   }
   const staleness = (gap: StaleStation) => gap.daysSince ?? Number.POSITIVE_INFINITY;
-  return stale.sort((a, b) => staleness(b) - staleness(a)).slice(0, MAX_STATION_GAP_NEEDS);
+  return stale.toSorted((a, b) => staleness(b) - staleness(a)).slice(0, MAX_STATION_GAP_NEEDS);
 }
 
 function stationGapNeed(scope: SelectionScope, gap: StaleStation): RankedNeed | null {
@@ -601,7 +563,8 @@ function stationGapNeed(scope: SelectionScope, gap: StaleStation): RankedNeed | 
 
 function primaryPoolFor(exercise: ExerciseName): readonly ExerciseName[] {
   const pattern = getExerciseMovementPatterns(exercise).at(0);
-  return pattern ? GROUP_POOLS[PATTERN_GROUP_BY_MOVEMENT[pattern]] : [];
+  const group = pattern ? PATTERN_GROUP_BY_MOVEMENT.get(pattern) : undefined;
+  return group ? groupPool(group) : [];
 }
 
 /**
@@ -630,7 +593,7 @@ function stallNeeds(scope: SelectionScope, units: DisplayUnits): RankedNeed[] {
     const last = stalledAt(history, minWeight);
     const canonical = history.canonical;
     if (!last || !canonical || last.topWeight == null) continue;
-    const variations = LIFT_VARIATIONS[canonical] ?? primaryPoolFor(canonical);
+    const variations = LIFT_VARIATIONS.get(canonical) ?? primaryPoolFor(canonical);
     const reps = last.repsAtTop == null ? "" : ` x ${last.repsAtTop}`;
     stalls.push({
       lastDate: last.date,
@@ -644,7 +607,7 @@ function stallNeeds(scope: SelectionScope, units: DisplayUnits): RankedNeed[] {
     });
   }
   return stalls
-    .sort((a, b) => b.lastDate.localeCompare(a.lastDate))
+    .toSorted((a, b) => b.lastDate.localeCompare(a.lastDate))
     .slice(0, MAX_STALL_NEEDS)
     .map((stall) => stall.need);
 }
@@ -652,25 +615,30 @@ function stallNeeds(scope: SelectionScope, units: DisplayUnits): RankedNeed[] {
 function patternGroupsOf(exerciseName: string): Set<PatternGroup> | null {
   const canonical = normalizeExerciseName(exerciseName);
   if (!canonical || BALANCE_EXCLUDED.has(canonical)) return null;
-  if (EXERCISE_DEFINITIONS[canonical].category === "running") return null;
+  if (isRunningExerciseName(canonical)) return null;
   return new Set(
-    getExerciseMovementPatterns(canonical).map((pattern) => PATTERN_GROUP_BY_MOVEMENT[pattern]),
+    getExerciseMovementPatterns(canonical).flatMap(
+      (pattern) => PATTERN_GROUP_BY_MOVEMENT.get(pattern) ?? [],
+    ),
   );
 }
 
-function zeroGroupCounts(): Record<PatternGroup, number> {
-  return { squat: 0, hinge: 0, push: 0, pull: 0, single_leg: 0, carry: 0, trunk: 0 };
+type GroupCounts = Map<PatternGroup, number>;
+
+function countOf(counts: ReadonlyMap<PatternGroup, number>, group: PatternGroup): number {
+  return counts.get(group) ?? 0;
+}
+
+function addSet(counts: GroupCounts, group: PatternGroup): void {
+  counts.set(group, countOf(counts, group) + 1);
 }
 
 /** Sets per pattern group since `since`, strength patterns only. */
-function countGroupSets(
-  sets: readonly SelectionSet[],
-  since: string,
-): Record<PatternGroup, number> {
-  const counts = zeroGroupCounts();
+function countGroupSets(sets: readonly SelectionSet[], since: string): GroupCounts {
+  const counts: GroupCounts = new Map();
   for (const set of sets) {
     if (!set.date || set.date < since) continue;
-    for (const group of patternGroupsOf(set.exerciseName) ?? []) counts[group] += 1;
+    for (const group of patternGroupsOf(set.exerciseName) ?? []) addSet(counts, group);
   }
   return counts;
 }
@@ -680,14 +648,15 @@ function missingPatternNeed(
   group: PatternGroup,
   lens: GoalLens,
 ): RankedNeed {
-  const why = GROUP_REASONS[lens]?.[group];
+  const why = groupReason(lens, group);
+  const because = why ? ` (${why})` : "";
   return {
     kind: "missing_pattern",
     // As urgent as a critical station gap: four weeks without a whole pattern
     // the goal depends on is a hole in the programme, not a detail.
     priority: 2,
-    reason: `No ${PATTERN_GROUP_LABELS[group]} work in the last 4 weeks${why ? ` (${why})` : ""}`,
-    candidates: rankCandidates(scope, GROUP_POOLS[group]),
+    reason: `No ${PATTERN_GROUP_LABELS.get(group) ?? group} work in the last 4 weeks${because}`,
+    candidates: rankCandidates(scope, groupPool(group)),
   };
 }
 
@@ -718,35 +687,38 @@ function calfNeed(
  */
 function ratioNeeds(
   scope: SelectionScope,
-  counts: Record<PatternGroup, number>,
+  counts: ReadonlyMap<PatternGroup, number>,
   alreadyMissing: ReadonlySet<PatternGroup>,
 ): RankedNeed[] {
-  const total = PATTERN_GROUPS.reduce((sum, group) => sum + counts[group], 0);
+  const total = PATTERN_GROUPS.reduce((sum, group) => sum + countOf(counts, group), 0);
   if (total < MIN_BALANCE_SETS) return [];
+  const [squat, hinge, push, pull, singleLeg] = (
+    ["squat", "hinge", "push", "pull", "single_leg"] as const
+  ).map((group) => countOf(counts, group));
   const needs: RankedNeed[] = [];
-  if (counts.pull > 0 && counts.push >= 8 && counts.pull < counts.push * 0.7) {
+  if (pull > 0 && push >= 8 && pull < push * 0.7) {
     needs.push({
       kind: "balance",
       priority: 3,
-      reason: `Pulling is ${counts.pull} sets vs ${counts.push} pushing sets in the last 4 weeks`,
-      candidates: rankCandidates(scope, GROUP_POOLS.pull),
+      reason: `Pulling is ${pull} sets vs ${push} pushing sets in the last 4 weeks`,
+      candidates: rankCandidates(scope, groupPool("pull")),
     });
   }
-  if (counts.hinge > 0 && counts.squat >= 8 && counts.hinge < counts.squat * 0.5) {
+  if (hinge > 0 && squat >= 8 && hinge < squat * 0.5) {
     needs.push({
       kind: "balance",
       priority: 3,
-      reason: `Hinge / posterior-chain work is ${counts.hinge} sets vs ${counts.squat} squat sets in the last 4 weeks`,
-      candidates: rankCandidates(scope, GROUP_POOLS.hinge),
+      reason: `Hinge / posterior-chain work is ${hinge} sets vs ${squat} squat sets in the last 4 weeks`,
+      candidates: rankCandidates(scope, groupPool("hinge")),
     });
   }
-  const bilateral = counts.squat + counts.hinge;
-  if (!alreadyMissing.has("single_leg") && counts.single_leg === 0 && bilateral >= 10) {
+  const bilateral = squat + hinge;
+  if (!alreadyMissing.has("single_leg") && singleLeg === 0 && bilateral >= 10) {
     needs.push({
       kind: "balance",
       priority: 3,
       reason: `All ${bilateral} lower-body sets in the last 4 weeks were two-legged — no single-leg work`,
-      candidates: rankCandidates(scope, GROUP_POOLS.single_leg),
+      candidates: rankCandidates(scope, groupPool("single_leg")),
     });
   }
   return needs;
@@ -760,7 +732,7 @@ function balanceNeeds(
   coveredByStations: ReadonlySet<PatternGroup>,
 ): RankedNeed[] {
   const counts = countGroupSets(sets, since);
-  const missingGroups = REQUIRED_GROUPS[lens].filter((group) => counts[group] === 0);
+  const missingGroups = requiredGroups(lens).filter((group) => countOf(counts, group) === 0);
   const calves = calfNeed(scope, sets, lens, since);
   return [
     ...missingGroups
@@ -780,7 +752,7 @@ function stationSubstitutions(scope: SelectionScope): StationSubstitution[] {
   const substitutions: StationSubstitution[] = [];
   for (const station of HYROX_STATION_ORDER) {
     if (isExerciseAllowed(station, scope.profile, scope.experience, true)) continue;
-    const substitutes = rankCandidates(scope, STATION_SUBSTITUTES[station]);
+    const substitutes = rankCandidates(scope, STATION_SUBSTITUTES.get(station) ?? []);
     if (substitutes.length > 0) substitutions.push({ station, substitutes });
   }
   return substitutions;
@@ -809,19 +781,21 @@ function describeRaceStandards(
   weightUnit: WeightUnit,
 ): string {
   const div = division === "pro" ? "pro" : "open";
+  const standards = division === "pro" ? STATION_LOADS_KG.pro : STATION_LOADS_KG.open;
+  const women = new Map(Object.entries(standards.female));
+  const men = new Map(Object.entries(standards.male));
   const load = (kg: number | undefined) =>
     kg == null ? "?" : String(roundStoredWeight(convertWeight(kg, "kg", weightUnit), weightUnit));
   if (gender === "male" || gender === "female") {
-    const loads = STATION_LOADS_KG[div][gender];
+    const loads = gender === "male" ? men : women;
     const parts = STANDARD_STATIONS.map(
-      ([station, label]) => `${label} ${load(loads[station])} ${weightUnit}`,
+      ([station, label]) => `${label} ${load(loads.get(station))} ${weightUnit}`,
     );
     return `${div}, ${gender === "male" ? "men" : "women"}: ${parts.join(" · ")}`;
   }
-  const women = STATION_LOADS_KG[div].female;
-  const men = STATION_LOADS_KG[div].male;
   const parts = STANDARD_STATIONS.map(
-    ([station, label]) => `${label} ${load(women[station])} / ${load(men[station])} ${weightUnit}`,
+    ([station, label]) =>
+      `${label} ${load(women.get(station))} / ${load(men.get(station))} ${weightUnit}`,
   );
   return `${div}, women / men (gender not set): ${parts.join(" · ")}`;
 }
@@ -830,12 +804,12 @@ function describeRaceStandards(
 // Upcoming week shape (auto-coach)
 // ---------------------------------------------------------------------------
 
-function tallyDay(day: SelectionUpcomingDay, setsByGroup: Record<PatternGroup, number>): number {
+function tallyDay(day: SelectionUpcomingDay, setsByGroup: GroupCounts): number {
   let heavyLower = 0;
   for (const set of day.sets) {
     const groups = patternGroupsOf(set.exerciseName);
     if (!groups) continue;
-    for (const group of groups) setsByGroup[group] += 1;
+    for (const group of groups) addSet(setsByGroup, group);
     if ((groups.has("squat") || groups.has("hinge")) && (set.weight ?? 0) > 0) heavyLower += 1;
   }
   return heavyLower;
@@ -858,7 +832,7 @@ function buildUpcomingShape(
   const structured = upcoming.filter((day) => day.sets.length > 0);
   if (structured.length < 2) return null;
 
-  const setsByGroup = zeroGroupCounts();
+  const setsByGroup: GroupCounts = new Map(PATTERN_GROUPS.map((group) => [group, 0]));
   const heavyLowerDates = structured
     .filter((day) => tallyDay(day, setsByGroup) >= HEAVY_LOWER_BODY_SETS)
     .map((day) => day.date);
@@ -867,7 +841,7 @@ function buildUpcomingShape(
     structuredDays: structured.length,
     totalDays: upcoming.length,
     setsByGroup,
-    missing: REQUIRED_GROUPS[lens].filter((group) => setsByGroup[group] === 0),
+    missing: requiredGroups(lens).filter((group) => countOf(setsByGroup, group) === 0),
     backToBackLowerBody: consecutivePairs(heavyLowerDates),
   };
 }
@@ -881,11 +855,11 @@ function defaultsFor(
   lens: GoalLens,
   experience: ExperienceLevel,
 ): ExerciseName[] {
-  const defaults = PRIMARY_DEFAULTS[slot];
+  const defaults = PRIMARY_DEFAULTS.get(slot);
   return [
-    ...(experience === "beginner" ? (defaults.beginner ?? []) : []),
-    ...(defaults[lens] ?? []),
-    ...defaults.standard,
+    ...(experience === "beginner" ? (defaults?.beginner ?? []) : []),
+    ...(defaults?.byLens?.get(lens) ?? []),
+    ...(defaults?.standard ?? []),
   ];
 }
 
@@ -895,7 +869,7 @@ function familiarPrimary(
   used: ReadonlySet<string>,
 ): PrimaryLift | null {
   let best: PrimaryLift | null = null;
-  for (const exercise of PRIMARY_ELIGIBLE[slot]) {
+  for (const exercise of PRIMARY_ELIGIBLE.get(slot) ?? []) {
     const sessions = sessionsFor(scope, exercise);
     if (sessions < 2 || used.has(exercise)) continue;
     if (!isExerciseAllowed(exercise, scope.profile, scope.experience, true)) continue;
@@ -914,7 +888,7 @@ function familiarPrimary(
 function choosePrimaryLifts(scope: SelectionScope, lens: GoalLens): PrimaryLift[] {
   const used = new Set<string>();
   const lifts: PrimaryLift[] = [];
-  for (const slot of PRIMARY_SLOTS_BY_LENS[lens]) {
+  for (const slot of PRIMARY_SLOTS_BY_LENS.get(lens) ?? []) {
     const lift = familiarPrimary(scope, slot, used) ?? defaultPrimary(scope, slot, lens, used);
     if (!lift) continue;
     used.add(lift.exercise);
@@ -945,7 +919,12 @@ function rankNeeds(needs: readonly RankedNeed[]): SelectionNeed[] {
     .map((need, order) => ({ need, order }))
     .sort((a, b) => a.need.priority - b.need.priority || a.order - b.order)
     .slice(0, MAX_NEEDS)
-    .map(({ need: { priority: _priority, ...need } }) => need);
+    .map(({ need }) => withoutPriority(need));
+}
+
+function withoutPriority(need: RankedNeed): SelectionNeed {
+  const { kind, reason, candidates, method } = need;
+  return { kind, reason, candidates, ...(method === undefined ? {} : { method }) };
 }
 
 export function buildExerciseSelectionBrief(input: ExerciseSelectionInput): ExerciseSelectionBrief {

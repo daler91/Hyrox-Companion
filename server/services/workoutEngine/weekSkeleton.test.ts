@@ -1,8 +1,7 @@
 import { PLAN_WEEKDAYS } from "@shared/dateUtils";
-import type { ExerciseName } from "@shared/schema/exercises";
 import { describe, expect, it } from "vitest";
 
-import type { GoalLens, PrimarySlot } from "../ai/exerciseKnowledge";
+import type { GoalLens } from "../ai/exerciseKnowledge";
 import { buildWeekSkeleton, type WeekSkeleton, type WeekSkeletonInput } from "./weekSkeleton";
 
 const HYROX_LIFTS: WeekSkeletonInput["primaryLifts"] = [
@@ -32,6 +31,11 @@ function skeleton(overrides: Partial<WeekSkeletonInput> = {}): WeekSkeleton {
 
 function dayIndex(day: string): number {
   return PLAN_WEEKDAYS.indexOf(day as (typeof PLAN_WEEKDAYS)[number]);
+}
+
+/** Days between each session and the next, in week order. */
+function gaps(days: readonly number[]): number[] {
+  return days.slice(1).map((day, index) => day - (days.at(index) ?? day));
 }
 
 function describeWeek(week: WeekSkeleton): string[] {
@@ -64,12 +68,11 @@ describe("buildWeekSkeleton", () => {
 
   it("gives a three-day HYROX week strength, a threshold run and stations, plus a run finisher", () => {
     const week = skeleton({ daysPerWeek: 3 });
-    expect(week.sessions.map((session) => session.kind).sort()).toEqual([
-      "stations",
-      "strength",
-      "threshold_run",
-    ]);
-    const strength = week.sessions.find((session) => session.kind === "strength")!;
+    expect(week.sessions.map((session) => session.kind).sort((a, b) => a.localeCompare(b))).toEqual(
+      ["stations", "strength", "threshold_run"],
+    );
+    const strength = week.sessions.find((session) => session.kind === "strength");
+    if (!strength) throw new Error("expected a strength session");
     // One strength session carries every primary lift.
     expect(strength.lifts.map((lift) => lift.exercise)).toEqual([
       "front_squat",
@@ -126,20 +129,18 @@ describe("buildWeekSkeleton", () => {
   it("keeps strength days and quality runs off consecutive days when the week has room", () => {
     const strength = skeleton({ lens: "strength", daysPerWeek: 3, primaryLifts: STRENGTH_LIFTS });
     const days = strength.sessions.map((session) => dayIndex(session.day));
-    for (let i = 1; i < days.length; i++) expect(days[i] - days[i - 1]).toBeGreaterThan(1);
+    for (const gap of gaps(days)) expect(gap).toBeGreaterThan(1);
 
     const running = skeleton({ lens: "running", daysPerWeek: 5 });
     const quality = running.sessions
       .filter((session) => ["threshold_run", "interval_run", "long_run"].includes(session.kind))
       .map((session) => dayIndex(session.day));
-    for (let i = 1; i < quality.length; i++) {
-      expect(quality[i] - quality[i - 1]).toBeGreaterThan(1);
-    }
+    for (const gap of gaps(quality)) expect(gap).toBeGreaterThan(1);
   });
 
   it("puts the long run on the weekend, and off it only when the weekend is kept free", () => {
-    const long = skeleton().sessions.find((session) => session.kind === "long_run")!;
-    expect(["Saturday", "Sunday"]).toContain(long.day);
+    const long = skeleton().sessions.find((session) => session.kind === "long_run");
+    expect(["Saturday", "Sunday"]).toContain(long?.day);
 
     const noWeekend = skeleton({ restDays: ["Saturday", "Sunday"] });
     expect(noWeekend.sessions.some((session) => session.kind === "long_run")).toBe(true);

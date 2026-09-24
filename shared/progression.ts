@@ -4,7 +4,7 @@
  *
  * Shared because two surfaces must never disagree about it. The workout
  * detail's "Next" chip suggests the target to the athlete as they log, and the
- * workout engine's progression updater (server/services/workoutEngine/progression.ts)
+ * workout engine's adaptation (server/services/workoutEngine/adaptation.ts)
  * writes the same target into the next planned session — a plan that said
  * 102.5 kg while the chip said "repeat 100 kg" would teach the athlete to trust
  * neither.
@@ -48,20 +48,28 @@ export interface NextTarget {
 const EPLEY_MIN_REPS = 2;
 const EPLEY_MAX_REPS = 10;
 
-export const WEIGHT_INCREMENT: Readonly<Record<ProgressionWeightUnit, number>> = { kg: 2.5, lb: 5 };
+interface PlateSteps {
+  /** The standard plate step: 2.5 kg / 5 lb. */
+  readonly standard: number;
+  /**
+   * Fallback step for when the standard one breaks the gain cap: the
+   * fractional plates a commercial gym stocks. Tried ONLY after the standard
+   * step has been rejected, so the ordinary reps-vs-weight crossover is
+   * unchanged and this can only speak where the function used to be silent.
+   *
+   * Without it, a beginner at 3x10 with anything at or under 25 kg got no
+   * suggestion at all, ever — reps are capped at 10, so only the weight step
+   * remained and it always breached the cap (audit L3).
+   */
+  readonly small: number;
+}
 
-// Fallback step for when the standard one above breaks the gain cap: the
-// fractional plates a commercial gym stocks. Tried ONLY after the standard step
-// has been rejected, so the ordinary reps-vs-weight crossover is unchanged and
-// this can only speak where the function used to be silent.
-//
-// Without it, a beginner at 3x10 with anything at or under 25 kg got no
-// suggestion at all, ever — reps are capped at 10, so only the weight step
-// remained and it always breached the cap (audit L3).
-export const SMALL_WEIGHT_INCREMENT: Readonly<Record<ProgressionWeightUnit, number>> = {
-  kg: 1.25,
-  lb: 2.5,
-};
+const KG_STEPS: PlateSteps = { standard: 2.5, small: 1.25 };
+const LB_STEPS: PlateSteps = { standard: 5, small: 2.5 };
+
+function plateSteps(unit: ProgressionWeightUnit): PlateSteps {
+  return unit === "kg" ? KG_STEPS : LB_STEPS;
+}
 
 // A plate jump on a very light implement at the rep ceiling can leap the
 // estimated 1RM by 20%+. Past this fraction the suggestion would be a
@@ -84,10 +92,14 @@ function roundWeight(value: number): number {
 }
 
 /** The value every set shares on a field, or null when they differ or it is missing. */
-function uniformValue(sets: readonly ProgressionSet[], field: "reps" | "weight"): number | null {
-  const first = sets[0]?.[field];
-  if (first == null) return null;
-  return sets.every((set) => set[field] === first) ? first : null;
+function uniformValue(
+  sets: readonly ProgressionSet[],
+  read: (set: ProgressionSet) => number | null | undefined,
+): number | null {
+  const first = sets.at(0);
+  const value = first ? read(first) : null;
+  if (value == null) return null;
+  return sets.every((set) => read(set) === value) ? value : null;
 }
 
 /**
@@ -144,7 +156,7 @@ export function suggestNextTarget(
     // recorded numbers, and two prescriptions that differ at all are a changed
     // plan, not a stall.
     const previousUnmet = args.previousSets ? unmetPrescription(args.previousSets) : null;
-    if (previousUnmet?.reps === unmet.reps && previousUnmet?.weight === unmet.weight) {
+    if (previousUnmet?.reps === unmet.reps && previousUnmet.weight === unmet.weight) {
       const deload = deloadFrom(lastSets.length, unmet, args.weightUnit);
       if (deload) return deload;
     }
@@ -156,8 +168,8 @@ export function suggestNextTarget(
     };
   }
 
-  const weight = uniformValue(lastSets, "weight");
-  const reps = uniformValue(lastSets, "reps");
+  const weight = uniformValue(lastSets, (set) => set.weight);
+  const reps = uniformValue(lastSets, (set) => set.reps);
   if (weight == null || reps == null) return null;
   if (weight <= 0 || reps < EPLEY_MIN_REPS || reps > EPLEY_MAX_REPS) return null;
 
@@ -216,7 +228,8 @@ function deloadFrom(
   weightUnit: ProgressionWeightUnit,
 ): NextTarget | null {
   const reduced = missed.weight * (1 - DELOAD_FRACTION);
-  for (const grid of [WEIGHT_INCREMENT[weightUnit], SMALL_WEIGHT_INCREMENT[weightUnit]]) {
+  const { standard, small } = plateSteps(weightUnit);
+  for (const grid of [standard, small]) {
     const floored = roundWeight(Math.floor(reduced / grid) * grid);
     if (floored > 0) {
       return {
@@ -246,11 +259,11 @@ function progressFrom(
   reps: number,
   weightUnit: ProgressionWeightUnit,
 ): NextTarget | null {
-  const increment = WEIGHT_INCREMENT[weightUnit];
+  const { standard, small } = plateSteps(weightUnit);
   const cap = epley(weight, reps) * MAX_E1RM_GAIN_FRACTION;
 
   const repsGain = reps < EPLEY_MAX_REPS ? weight / 30 : null;
-  const weightGain = increment * (1 + reps / 30);
+  const weightGain = standard * (1 + reps / 30);
 
   if (repsGain != null && repsGain < weightGain) {
     return { setCount, reps: reps + 1, weight, step: { field: "reps", amount: 1 } };
@@ -258,9 +271,7 @@ function progressFrom(
 
   // Standard step first so the reps-vs-weight crossover above is untouched;
   // the smaller step is only ever reached once the standard one is rejected.
-  const step = [increment, SMALL_WEIGHT_INCREMENT[weightUnit]].find(
-    (candidate) => candidate * (1 + reps / 30) <= cap,
-  );
+  const step = [standard, small].find((candidate) => candidate * (1 + reps / 30) <= cap);
   if (step == null) return null;
 
   return {

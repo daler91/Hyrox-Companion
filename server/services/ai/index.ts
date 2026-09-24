@@ -373,6 +373,9 @@ function coachTrainingTargetsField(params: {
     });
     return trainingTargets ? { trainingTargets } : {};
   } catch (err) {
+    // A bug in a pure computation over rows already read: the error carries a
+    // message and stack, never the athlete's records.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err }, "[coach] training targets unavailable; coaching without them");
     return {};
   }
@@ -411,7 +414,7 @@ function coachExerciseSelectionField(params: {
       // same fallback mapUpcomingWorkout makes for the prompt.
       upcoming: params.upcomingDays.map((day) => ({
         date: day.date,
-        sets: (day.exerciseSets ?? []).map((es) => ({
+        sets: day.exerciseSets.map((es) => ({
           exerciseName: es.exerciseName,
           weight: es.weight ?? es.plannedWeight,
         })),
@@ -421,6 +424,8 @@ function coachExerciseSelectionField(params: {
     });
     return { exerciseSelection };
   } catch (err) {
+    // As above: a pure computation, so the error holds no athlete data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err }, "[coach] exercise-selection brief unavailable; coaching without it");
     return {};
   }

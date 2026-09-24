@@ -24,6 +24,12 @@ function estimate(exercise: string, e1rm: number): StrengthEstimate {
   };
 }
 
+/** A week's load; a week the engine left unloaded fails the test. */
+function loadOf(week: LiftWeekTarget | undefined): number {
+  if (week?.load == null) throw new Error(`expected a load in week ${week?.week ?? "?"}`);
+  return week.load;
+}
+
 function program(
   overrides: Partial<LiftProgramInput> & {
     readonly exercise?: string;
@@ -80,15 +86,15 @@ describe("buildLiftPrograms", () => {
     const before = weeks[2];
     const deload = weeks[3];
     expect(deload).toMatchObject({ week: 4, deload: true, sets: 2, reps: before.reps, rpe: 6 });
-    expect(deload.load).toBeLessThanOrEqual(before.load! * 0.9);
-    expect(deload.load).toBeGreaterThan(before.load! * 0.85);
+    expect(deload.load).toBeLessThanOrEqual(loadOf(before) * 0.9);
+    expect(deload.load).toBeGreaterThan(loadOf(before) * 0.85);
   });
 
   it("climbs inside a block and comes back above the pre-deload level in the next", () => {
     const weeks = program({ lens: "strength" });
-    const loads = weeks.map((week) => week.load);
-    expect(loads[0]!).toBeLessThan(loads[2]!);
-    expect(loads[4]!).toBeGreaterThan(loads[2]!);
+    const loads = weeks.map((week) => loadOf(week));
+    expect(loads[0]).toBeLessThan(loads[2]);
+    expect(loads[4]).toBeGreaterThan(loads[2]);
   });
 
   it.each(LENSES.flatMap((lens) => LEVELS.map((level) => [lens, level] as const)))(
@@ -154,6 +160,6 @@ describe("buildLiftPrograms", () => {
 
   it("writes loads in the athlete's unit on that unit's plates", () => {
     const weeks = program({ unit: "lbs", e1rm: 231 });
-    for (const week of weeks) expect(week.load! % 5).toBe(0);
+    for (const week of weeks) expect(loadOf(week) % 5).toBe(0);
   });
 });

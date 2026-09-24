@@ -102,6 +102,9 @@ export async function computePlanAdaptation(
     });
     return { planId: plan.id, result };
   } catch (err) {
+    // Reads and a pure computation: a failed query or a bug reports its
+    // message and stack, never the rows it read. userId stays out (logger S2).
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err }, "[coach] Plan adaptation unavailable; coaching without it.");
     return null;
   }

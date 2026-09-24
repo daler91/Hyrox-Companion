@@ -84,7 +84,7 @@ describe("collectRunEfforts", () => {
   });
 
   it("reads a miles athlete's stored feet as metres", () => {
-    const [only] = collectRunEfforts(
+    const efforts = collectRunEfforts(
       [{ id: "m", date: "2026-09-12", focus: "Tempo" }],
       [
         {
@@ -98,7 +98,7 @@ describe("collectRunEfforts", () => {
       ],
       "miles",
     );
-    expect(only?.meters).toBeCloseTo(5000, -1);
+    expect(efforts.at(0)?.meters).toBeCloseTo(5000, -1);
   });
 });
 
@@ -109,14 +109,15 @@ describe("buildRunPaceZones", () => {
       effort("2026-09-06", 5, 24),
       effort("2026-09-10", 12, 70),
     ]);
-    expect(zones?.basis).toEqual(effort("2026-09-06", 5, 24));
-    expect(zones?.vdot).toBeCloseTo(40.2, 1);
+    if (!zones) throw new Error("expected pace zones from three efforts");
+    expect(zones.basis).toEqual(effort("2026-09-06", 5, 24));
+    expect(zones.vdot).toBeCloseTo(40.2, 1);
     // Easy is slower than steady, steady slower than threshold, and so on.
-    expect(zones!.easy.slow).toBeGreaterThan(zones!.easy.fast);
-    expect(zones!.easy.fast).toBeGreaterThan(zones!.steady);
-    expect(zones!.steady).toBeGreaterThan(zones!.threshold);
-    expect(zones!.threshold).toBeGreaterThan(zones!.interval);
-    expect(zones!.interval).toBeGreaterThan(zones!.repetition);
+    expect(zones.easy.slow).toBeGreaterThan(zones.easy.fast);
+    expect(zones.easy.fast).toBeGreaterThan(zones.steady);
+    expect(zones.steady).toBeGreaterThan(zones.threshold);
+    expect(zones.threshold).toBeGreaterThan(zones.interval);
+    expect(zones.interval).toBeGreaterThan(zones.repetition);
   });
 
   it("ignores a 'best' far above the athlete's typical run", () => {
@@ -186,18 +187,18 @@ describe("buildRunVolumeTargets", () => {
 
   it("grows by at most 8% a loading week, deloads to 75% and tapers to the race", () => {
     const weeks = buildRunVolumeTargets(base);
-    for (let i = 1; i < weeks.length; i++) {
-      const [previous, week] = [weeks[i - 1], weeks[i]];
-      if (!week.deload && !previous.deload) {
+    weeks.slice(1).forEach((week, index) => {
+      const previous = weeks.at(index);
+      if (previous && !week.deload && !previous.deload) {
         expect(week.weeklyKm).toBeLessThanOrEqual(previous.weeklyKm * 1.08 + 0.5);
       }
-    }
+    });
     const deload = weeks[3];
     expect(deload.deload).toBe(true);
     expect(deload.weeklyKm).toBeCloseTo(weeks[2].weeklyKm * 0.75, 0);
-    expect(weeks.at(-2)!.weeklyKm).toBeLessThan(weeks.at(-3)!.weeklyKm);
+    expect(weeks.at(-2)?.weeklyKm).toBeLessThan(weeks.at(-3)?.weeklyKm ?? 0);
     // Race week: the race is the long run.
-    expect(weeks.at(-1)!.longRunKm).toBe(0);
+    expect(weeks.at(-1)?.longRunKm).toBe(0);
   });
 
   it("keeps a long run the athlete already does, even in a low-volume week", () => {

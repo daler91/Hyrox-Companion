@@ -276,20 +276,27 @@ const DOSES: Readonly<Record<TrainingPhase, Readonly<Record<HyroxStation, DoseTe
 };
 
 /** Real implement steps for each loaded station, in kg. */
-const LOAD_STEP_KG: Readonly<Partial<Record<HyroxStation, number>>> = {
-  sled_push: 5,
-  sled_pull: 5,
-  farmers_carry: 2,
-  sandbag_lunges: 5,
-  wall_balls: 1,
-};
-const LOAD_STEP_LBS: Readonly<Partial<Record<HyroxStation, number>>> = {
-  sled_push: 10,
-  sled_pull: 10,
-  farmers_carry: 5,
-  sandbag_lunges: 5,
-  wall_balls: 2,
-};
+const LOAD_STEP_KG: ReadonlyMap<HyroxStation, number> = new Map([
+  ["sled_push", 5],
+  ["sled_pull", 5],
+  ["farmers_carry", 2],
+  ["sandbag_lunges", 5],
+  ["wall_balls", 1],
+]);
+const LOAD_STEP_LBS: ReadonlyMap<HyroxStation, number> = new Map([
+  ["sled_push", 10],
+  ["sled_pull", 10],
+  ["farmers_carry", 5],
+  ["sandbag_lunges", 5],
+  ["wall_balls", 2],
+]);
+
+// The tables above are written as records so the compiler checks every phase
+// and station is covered; lookups by a runtime key read these maps.
+const PHASE_INTENTS: ReadonlyMap<string, string> = new Map(Object.entries(PHASE_INTENT));
+const PHASE_DOSES: ReadonlyMap<string, ReadonlyMap<string, DoseTemplate>> = new Map(
+  Object.entries(DOSES).map(([phase, byStation]) => [phase, new Map(Object.entries(byStation))]),
+);
 
 function stationLoad(
   station: HyroxStation,
@@ -302,7 +309,7 @@ function stationLoad(
   // At race load, the rulebook number itself (152 kg, not the nearest plate
   // below it): the athlete should rehearse exactly what they will race.
   if (fraction === 1) return unit === "lbs" ? Math.round(value) : Math.round(value * 2) / 2;
-  const step = (unit === "lbs" ? LOAD_STEP_LBS : LOAD_STEP_KG)[station] ?? 1;
+  const step = (unit === "lbs" ? LOAD_STEP_LBS : LOAD_STEP_KG).get(station) ?? 1;
   return Math.max(step, Math.round(value / step) * step);
 }
 
@@ -324,17 +331,21 @@ export function buildStationPhasePlan(
   phase: TrainingPhase,
   input: StationPlanInput,
 ): StationPhasePlan {
-  const division = input.division === "pro" ? "pro" : "open";
-  const loads =
-    input.gender === "male" || input.gender === "female"
-      ? STATION_LOADS_KG[division][input.gender]
-      : null;
-  const doses = HYROX_STATION_ORDER.filter((station) => !input.excluded?.has(station)).map(
-    (station): StationDose => {
-      const template = DOSES[phase][station];
-      const load = stationLoad(station, template.loadFraction, loads?.[station], input.unit);
-      return { station, ...template, ...(load == null ? {} : { load }) };
-    },
-  );
-  return { phase, intent: PHASE_INTENT[phase], doses };
+  const loads = raceLoadsKg(input);
+  const templates = PHASE_DOSES.get(phase);
+  const doses = HYROX_STATION_ORDER.flatMap((station): StationDose[] => {
+    const template = templates?.get(station);
+    if (!template || input.excluded?.has(station)) return [];
+    const load = stationLoad(station, template.loadFraction, loads?.get(station), input.unit);
+    return [{ station, ...template, ...(load == null ? {} : { load }) }];
+  });
+  return { phase, intent: PHASE_INTENTS.get(phase) ?? "", doses };
+}
+
+/** The athlete's race loads in kg, or null when their category is not known. */
+function raceLoadsKg(input: StationPlanInput): ReadonlyMap<string, number | undefined> | null {
+  const standards = input.division === "pro" ? STATION_LOADS_KG.pro : STATION_LOADS_KG.open;
+  if (input.gender === "male") return new Map(Object.entries(standards.male));
+  if (input.gender === "female") return new Map(Object.entries(standards.female));
+  return null;
 }

@@ -14,16 +14,55 @@
  * left alone: they were not written against the athlete's VDOT.
  */
 import { paceAtFraction } from "./running";
+import { matchAt } from "./textScan";
 
 const KM_PER_MILE = 1.609344;
 /** The band of VDOT fractions an engine zone can sit at, with margin. */
 const MIN_FRACTION = 0.55;
 const MAX_FRACTION = 1.15;
 
-// "5:04/km", "5:04 /km", "5:04 min/km", "5:04 per mile", and ranges
-// "6:05-6:42/km" where one unit closes both clocks.
-const PACE =
-  /\b(\d{1,2}):([0-5]\d)(?:\s*[-–]\s*(\d{1,2}):([0-5]\d))?\s*(?:min\s*)?(?:\/|per\s+)\s*(km|mi|mile)\b/gi;
+// A pace is a clock closed by a unit — "5:04/km", "5:04 /km", "5:04 min/km",
+// "5:04 per mile" — or a range, "6:05-6:42/km", where one unit closes both
+// clocks. Read a step at a time (textScan.ts) so no pattern backtracks.
+const CLOCK = /\b(\d{1,2}):([0-5]\d)\b/g;
+const RANGE_END = /\s*[-–]\s*(\d{1,2}):([0-5]\d)\b/y;
+const MIN_WORD = /\s*min\b/iy;
+const PER_UNIT = /\s*(?:\/|per)\s*(km|mi|mile)\b/iy;
+
+interface WrittenPace {
+  readonly start: number;
+  readonly end: number;
+  /** One clock, or a range's two, in seconds per unit. */
+  readonly clocks: readonly number[];
+  readonly unit: string;
+  /** Everything after the last clock, as written: " min/km", " per mile". */
+  readonly suffix: string;
+}
+
+function clockSeconds(minutes: string, seconds: string): number {
+  return Number(minutes) * 60 + Number(seconds);
+}
+
+/** The pace written at `clock`, or null when no unit closes it. */
+function paceAt(text: string, clock: RegExpExecArray): WrittenPace | null {
+  const [, minutes, seconds] = clock;
+  const clocks = [clockSeconds(minutes, seconds)];
+  let end = clock.index + clock[0].length;
+  const range = matchAt(RANGE_END, text, end);
+  if (range) {
+    const [, toMinutes, toSeconds] = range;
+    clocks.push(clockSeconds(toMinutes, toSeconds));
+    end += range[0].length;
+  }
+  const suffixStart = end;
+  const minWord = matchAt(MIN_WORD, text, end);
+  if (minWord) end += minWord[0].length;
+  const perUnit = matchAt(PER_UNIT, text, end);
+  if (!perUnit) return null;
+  end += perUnit[0].length;
+  const [, unit] = perUnit;
+  return { start: clock.index, end, clocks, unit, suffix: text.slice(suffixStart, end) };
+}
 
 function vo2AtVelocity(metersPerMin: number): number {
   return -4.6 + 0.182258 * metersPerMin + 0.000104 * metersPerMin * metersPerMin;
@@ -61,30 +100,20 @@ export function rescalePaces(
   fromVdot: number,
   toVdot: number,
 ): { text: string; changed: boolean } {
-  let changed = false;
-  const next = text.replace(
-    PACE,
-    (
-      match,
-      m1: string,
-      s1: string,
-      m2: string | undefined,
-      s2: string | undefined,
-      unit: string,
-    ) => {
-      const first = repace(Number(m1) * 60 + Number(s1), unit, fromVdot, toVdot);
-      if (!first) return match;
-      let second: string | null = null;
-      if (m2 != null && s2 != null) {
-        second = repace(Number(m2) * 60 + Number(s2), unit, fromVdot, toVdot);
-        if (!second) return match;
-      }
-      const suffixStart = match.search(/\s*(?:min\s*)?(?:\/|per\s+)/i);
-      const suffix = match.slice(suffixStart);
-      const rewritten = second ? `${first}-${second}${suffix}` : `${first}${suffix}`;
-      if (rewritten !== match) changed = true;
-      return rewritten;
-    },
-  );
-  return { text: next, changed };
+  let next = "";
+  let copied = 0;
+  let scanned = 0;
+  for (const clock of text.matchAll(CLOCK)) {
+    // A range's second clock belongs to the pace already read.
+    if (clock.index < scanned) continue;
+    const pace = paceAt(text, clock);
+    if (!pace) continue;
+    scanned = pace.end;
+    const moved = pace.clocks.map((seconds) => repace(seconds, pace.unit, fromVdot, toVdot));
+    if (!moved.every((value): value is string => value != null)) continue;
+    next += `${text.slice(copied, pace.start)}${moved.join("-")}${pace.suffix}`;
+    copied = pace.end;
+  }
+  next += text.slice(copied);
+  return { text: next, changed: next !== text };
 }

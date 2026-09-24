@@ -194,8 +194,8 @@ export function collectRunEfforts(
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  const upper = sorted[mid] ?? 0;
-  return sorted.length % 2 === 0 ? ((sorted[mid - 1] ?? upper) + upper) / 2 : upper;
+  const upper = sorted.at(mid) ?? 0;
+  return sorted.length % 2 === 0 ? ((sorted.at(mid - 1) ?? upper) + upper) / 2 : upper;
 }
 
 /**
@@ -211,7 +211,7 @@ export function buildRunPaceZones(efforts: readonly RunEffort[]): RunPaceZones |
 
   const typical = median(scored.map(({ vdot }) => vdot));
   const best = scored
-    .sort((a, b) => b.vdot - a.vdot)
+    .toSorted((a, b) => b.vdot - a.vdot)
     .find(({ vdot }) => vdot <= typical * MAX_BEST_OVER_MEDIAN);
   if (!best) return null;
 
@@ -300,20 +300,19 @@ export interface RunVolumeInput {
 
 type VolumeWeekKind = "grow" | "hold" | "deload" | "taper" | "final";
 
-const VOLUME_FRACTION: Readonly<Record<VolumeWeekKind, number>> = {
-  grow: 1,
-  hold: 1,
-  deload: DELOAD_VOLUME,
-  taper: TAPER_VOLUME,
-  final: FINAL_WEEK_VOLUME,
-};
+/** How far an unloading week's volume drops; loading weeks run the full level. */
+const VOLUME_FRACTION: ReadonlyMap<VolumeWeekKind, number> = new Map([
+  ["deload", DELOAD_VOLUME],
+  ["taper", TAPER_VOLUME],
+  ["final", FINAL_WEEK_VOLUME],
+]);
 
 /** How far the long run shrinks from the last loading week's, by week kind. */
-const LONG_RUN_FRACTION: Readonly<Record<"deload" | "taper" | "final", number>> = {
-  deload: DELOAD_VOLUME,
-  taper: 0.6,
-  final: 0.4,
-};
+const LONG_RUN_FRACTION: ReadonlyMap<VolumeWeekKind, number> = new Map([
+  ["deload", DELOAD_VOLUME],
+  ["taper", 0.6],
+  ["final", 0.4],
+]);
 
 function volumeWeekKind(entry: PlanWeekOutline, isFinal: boolean): VolumeWeekKind {
   if (entry.deload) return "deload";
@@ -358,7 +357,7 @@ function longRunFor(
     return Math.min(ceiling, Math.max(weekly * LONG_RUN_SHARE, limits.floor, grown));
   }
   const reference = lastLoadingLong > 0 ? lastLoadingLong : weekly * LONG_RUN_SHARE;
-  return Math.min(ceiling, reference * LONG_RUN_FRACTION[kind]);
+  return Math.min(ceiling, reference * (LONG_RUN_FRACTION.get(kind) ?? 1));
 }
 
 /**
@@ -398,7 +397,7 @@ export function buildRunVolumeTargets(input: RunVolumeInput): RunWeekTarget[] {
       if (loadingWeeks > 0) level = Math.min(ceiling, level * (1 + WEEKLY_VOLUME_GROWTH));
       loadingWeeks += 1;
     }
-    const weekly = level * VOLUME_FRACTION[kind];
+    const weekly = level * (VOLUME_FRACTION.get(kind) ?? 1);
     const long = longRunFor(kind, weekly, lastLoadingLong, limits);
     if (kind === "grow" || kind === "hold") lastLoadingLong = long;
     targets.push({

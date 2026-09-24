@@ -15,12 +15,13 @@
  * the lighter exposure (same sets and reps at ~90%).
  */
 import { PLAN_WEEKDAYS } from "@shared/dateUtils";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
+import { knownExerciseLabel } from "@shared/schema/exercises";
 import type { WeightUnit } from "@shared/unitConversion";
 
 import type { WorkoutEnginePlan } from "./enginePlan";
 import { roundLoad } from "./loadMath";
 import { type LiftProgram, type LiftWeekTarget, LIGHT_EXPOSURE_FRACTION } from "./strength";
+import { replaceFirstValue } from "./textScan";
 
 export interface RepairableSet {
   setNumber?: number | null;
@@ -119,12 +120,16 @@ function repairSets(
   return true;
 }
 
-const SETS_REPS = /\b\d+\s*[x×]\s*\d+(?:\s*[-–]\s*\d+)?\b/i;
-const AT_LOAD = /@\s*\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*(?:kg|lbs?)\b/i;
-const RPE = /RPE\s*~?\s*\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?/i;
+// Where each number on a lift's line starts ("4x" of "4x6", "@ " of "@ 80 kg",
+// "RPE " of "RPE 7-8"); replaceFirstValue reads the number or range after it.
+const SETS_REPS = /\b\d+\s*[x×]\s*/gi;
+const WORD_END = /\b/y;
+const AT_LOAD = /@\s*/g;
+const LOAD_UNIT = /\s*(?:kg|lbs?)\b/iy;
+const RPE = /RPE[\s~]*/gi;
 
 function exerciseNames(exercise: string): string[] {
-  const label = EXERCISE_DEFINITIONS[exercise as ExerciseName]?.label;
+  const label = knownExerciseLabel(exercise);
   return [label, exercise.replaceAll("_", " ")].filter((name): name is string => Boolean(name));
 }
 
@@ -137,10 +142,8 @@ function rewriteExerciseLine(
   const names = exerciseNames(exercise).map((name) => name.toLowerCase());
   const lines = text.split("\n");
   const index = lines.findIndex((line) => names.some((name) => line.toLowerCase().includes(name)));
-  const line = lines[index];
-  if (index < 0 || line == null) return text;
-  lines[index] = edit(line);
-  return lines.join("\n");
+  if (index < 0) return text;
+  return lines.map((line, at) => (at === index ? edit(line) : line)).join("\n");
 }
 
 /**
@@ -155,9 +158,11 @@ export function rewriteLiftLine(
   unit: WeightUnit,
 ): string {
   return rewriteExerciseLine(text, exercise, (line) => {
-    let rewritten = line.replace(SETS_REPS, `${want.sets}x${want.reps}`);
-    if (want.load != null) rewritten = rewritten.replace(AT_LOAD, `@ ${want.load} ${unit}`);
-    return rewritten.replace(RPE, want.effort);
+    let rewritten = replaceFirstValue(line, SETS_REPS, `${want.sets}x${want.reps}`, WORD_END);
+    if (want.load != null) {
+      rewritten = replaceFirstValue(rewritten, AT_LOAD, `@ ${want.load} ${unit}`, LOAD_UNIT);
+    }
+    return replaceFirstValue(rewritten, RPE, want.effort);
   });
 }
 
@@ -168,7 +173,9 @@ export function rewriteLiftLoad(
   load: number,
   unit: string,
 ): string {
-  return rewriteExerciseLine(text, exercise, (line) => line.replace(AT_LOAD, `@ ${load} ${unit}`));
+  return rewriteExerciseLine(text, exercise, (line) =>
+    replaceFirstValue(line, AT_LOAD, `@ ${load} ${unit}`, LOAD_UNIT),
+  );
 }
 
 function dayOrder(day: RepairableDay): number {
@@ -181,8 +188,8 @@ function repairWeek(
   engine: WorkoutEnginePlan,
   repairs: LiftRepair[],
 ): void {
-  const week = weekDays[0]?.weekNumber;
-  const target = week == null ? undefined : program.weeks[week - 1];
+  const week = weekDays.at(0)?.weekNumber;
+  const target = week == null ? undefined : program.weeks.at(week - 1);
   if (!target) return;
   let exposures = 0;
   for (const day of weekDays) {

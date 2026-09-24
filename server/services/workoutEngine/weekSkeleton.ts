@@ -295,16 +295,16 @@ interface PlannedSession {
   readonly runFinisher: boolean;
 }
 
-const KIND_LABELS: Readonly<Record<Exclude<SessionKind, "strength">, string>> = {
-  threshold_run: "Threshold run",
-  interval_run: "Intervals",
-  long_run: "Long run",
-  easy_run: "Easy run",
-  stations: "Stations — compromised running",
-  simulation: "Race simulation",
-  conditioning: "Conditioning",
-  easy_cardio: "Easy aerobic",
-};
+const KIND_LABELS: ReadonlyMap<SessionKind, string> = new Map([
+  ["threshold_run", "Threshold run"],
+  ["interval_run", "Intervals"],
+  ["long_run", "Long run"],
+  ["easy_run", "Easy run"],
+  ["stations", "Stations — compromised running"],
+  ["simulation", "Race simulation"],
+  ["conditioning", "Conditioning"],
+  ["easy_cardio", "Easy aerobic"],
+]);
 
 /** A HYROX week's long session becomes race-specific once the plan peaks. */
 function kindForPhase(kind: SessionKind, lens: GoalLens, phase: TrainingPhase): SessionKind {
@@ -327,9 +327,9 @@ function planSessions(input: WeekSkeletonInput, count: number): PlannedSession[]
   let strengthIndex = 0;
   return kinds.map((kind): PlannedSession => {
     if (kind !== "strength") {
-      return { kind, label: KIND_LABELS[kind], lifts: [], runFinisher: false };
+      return { kind, label: KIND_LABELS.get(kind) ?? kind, lifts: [], runFinisher: false };
     }
-    const session = strength[strengthIndex] ?? { label: "Strength", lifts: [] };
+    const session = strength.at(strengthIndex) ?? { label: "Strength", lifts: [] };
     strengthIndex += 1;
     return { kind, label: session.label, lifts: session.lifts, runFinisher: needsRunFinisher };
   });
@@ -372,10 +372,10 @@ function adjacencyPenalty(first: PlannedSession, second: PlannedSession): number
 function scoreWeek(week: readonly (PlannedSession | null)[], weekendAvailable: boolean): number {
   let penalty = 0;
   for (let day = 0; day < 7; day++) {
-    const session = week[day];
+    const session = week.at(day);
     // The week repeats, so Sunday is followed by next Monday.
-    const next = week[(day + 1) % 7];
-    const afterNext = week[(day + 2) % 7];
+    const next = week.at((day + 1) % 7);
+    const afterNext = week.at((day + 2) % 7);
     if (!session) {
       // Two rest days together, when the sessions could have been spread out.
       if (!next) penalty += 0.5;
@@ -434,9 +434,7 @@ export interface WeekSkeletonInput {
  */
 export function buildWeekSkeleton(input: WeekSkeletonInput): WeekSkeleton {
   const fixedRest = new Set(input.restDays ?? []);
-  const available = PLAN_WEEKDAYS.map((_, index) => index).filter(
-    (index) => !fixedRest.has(PLAN_WEEKDAYS[index] ?? ""),
-  );
+  const available = PLAN_WEEKDAYS.flatMap((day, index) => (fixedRest.has(day) ? [] : [index]));
   const count = Math.max(0, Math.min(input.daysPerWeek, available.length, 7));
   const sessions = planSessions(input, count);
   const weekendAvailable = available.some((index) => WEEKEND.has(index));
@@ -445,10 +443,8 @@ export function buildWeekSkeleton(input: WeekSkeletonInput): WeekSkeleton {
   let bestScore = Number.POSITIVE_INFINITY;
   for (const days of combinations(available, count)) {
     for (const order of orderings(sessions)) {
-      const week: (PlannedSession | null)[] = Array.from({ length: 7 }, () => null);
-      days.forEach((day, index) => {
-        week[day] = order[index] ?? null;
-      });
+      const byDay = new Map(days.map((day, index) => [day, order.at(index) ?? null]));
+      const week = Array.from({ length: 7 }, (_, day) => byDay.get(day) ?? null);
       const score = scoreWeek(week, weekendAvailable);
       if (score < bestScore) {
         best = week;
@@ -457,11 +453,10 @@ export function buildWeekSkeleton(input: WeekSkeletonInput): WeekSkeleton {
     }
   }
 
-  const week = best ?? Array.from({ length: 7 }, () => null);
   const placed: SkeletonSession[] = [];
   const restDays: Weekday[] = [];
-  week.forEach((session, index) => {
-    const day = PLAN_WEEKDAYS[index];
+  PLAN_WEEKDAYS.forEach((day, index) => {
+    const session = best?.at(index);
     if (session) placed.push({ day, ...session });
     else restDays.push(day);
   });

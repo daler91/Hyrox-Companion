@@ -74,13 +74,20 @@ const IMPLEMENT_OVERRIDES: Readonly<Partial<Record<ExerciseName, Implement>>> = 
   standing_calf_raise: "machine",
 };
 
-/** The smallest jump each implement allows, per unit. */
-const INCREMENTS: Readonly<Record<Exclude<Implement, "bodyweight">, Record<WeightUnit, number>>> = {
-  barbell: { kg: 2.5, lbs: 5 },
-  dumbbell: { kg: 2, lbs: 5 },
-  kettlebell: { kg: 4, lbs: 5 },
-  machine: { kg: 5, lbs: 10 },
-};
+interface ImplementSteps {
+  readonly kg: number;
+  readonly lbs: number;
+}
+
+const BARBELL_STEPS: ImplementSteps = { kg: 2.5, lbs: 5 };
+
+/** The smallest jump each implement allows, per unit. Bodyweight work loads like a barbell. */
+const INCREMENTS: ReadonlyMap<Implement, ImplementSteps> = new Map([
+  ["barbell", BARBELL_STEPS],
+  ["dumbbell", { kg: 2, lbs: 5 }],
+  ["kettlebell", { kg: 4, lbs: 5 }],
+  ["machine", { kg: 5, lbs: 10 }],
+]);
 
 const LOADED_IMPLEMENTS: readonly Exclude<Implement, "bodyweight">[] = [
   "barbell",
@@ -97,8 +104,8 @@ export function implementFor(exercise: string): Implement {
 }
 
 export function loadIncrement(exercise: string, unit: WeightUnit): number {
-  const implement = implementFor(exercise);
-  return INCREMENTS[implement === "bodyweight" ? "barbell" : implement][unit];
+  const steps = INCREMENTS.get(implementFor(exercise)) ?? BARBELL_STEPS;
+  return unit === "kg" ? steps.kg : steps.lbs;
 }
 
 /** Round to the implement's step. `down` for anything a ceiling must hold. */
@@ -207,7 +214,8 @@ export function estimateStrength(
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, RECENT_SESSIONS)
       .sort((a, b) => b.e1rm - a.e1rm);
-    const [best, second] = recent;
+    const best = recent.at(0);
+    const second = recent.at(1);
     if (!best || !second) continue;
     const chosen = best.e1rm > second.e1rm * (1 + OUTLIER_MARGIN) ? second : best;
     estimates.set(exercise, {

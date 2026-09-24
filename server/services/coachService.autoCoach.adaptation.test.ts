@@ -52,7 +52,7 @@ function twoPlannedDays() {
     makeTimelineEntry({ planDayId: "day-1", date: "2026-01-16" }),
     makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
   ]);
-  vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({ id: "updated" } as never);
+  vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({ id: "updated" } as never);
 }
 
 describe("triggerAutoCoach — plan adaptation", () => {
@@ -76,7 +76,7 @@ describe("triggerAutoCoach — plan adaptation", () => {
     const result = await triggerAutoCoach("user-1");
 
     expect(applyPlanAdaptation).toHaveBeenCalledWith(adaptation("day-1"), "user-1", dbMockState.tx);
-    const writtenDays = vi.mocked(storage.plans.updatePlanDay).mock.calls.map((call) => call[0]);
+    const writtenDays = vi.mocked(storage.plans).updatePlanDay.mock.calls.map((call) => call[0]);
     expect(writtenDays).toEqual(["day-2"]);
     // The adapted day carries the engine's note, so the model isn't asked for one.
     const reviewed = vi
@@ -97,7 +97,7 @@ describe("triggerAutoCoach — plan adaptation", () => {
     expect(generateWorkoutSuggestions).not.toHaveBeenCalled();
     expect(applyPlanAdaptation).toHaveBeenCalledTimes(1);
     expect(result.adjusted).toBe(1);
-    expect(storage.users.updateIsAutoCoaching).toHaveBeenLastCalledWith("user-1", false);
+    expect(vi.mocked(storage.users).updateIsAutoCoaching.mock.lastCall).toEqual(["user-1", false]);
   });
 
   it("adapts sessions beyond this week when nothing is planned this week", async () => {

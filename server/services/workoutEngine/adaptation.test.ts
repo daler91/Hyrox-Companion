@@ -84,9 +84,12 @@ function input(overrides: Partial<AdaptationInput> = {}): AdaptationInput {
   };
 }
 
-function weights(result: ReturnType<typeof adaptPlan>, dayId: string): number[] | undefined {
+function weights(
+  result: ReturnType<typeof adaptPlan>,
+  dayId: string,
+): (number | undefined)[] | undefined {
   const day = result.days.find((entry) => entry.planDayId === dayId);
-  return day?.setUpdates.map((update) => update.weight!);
+  return day?.setUpdates.map((update) => update.weight);
 }
 
 describe("adaptPlan — strength", () => {
@@ -97,7 +100,8 @@ describe("adaptPlan — strength", () => {
     expect(weights(result, "a")).toEqual([90, 90, 90, 90]);
     expect(weights(result, "b")).toEqual([92.5, 92.5, 92.5, 92.5]);
     expect(weights(result, "c")).toBeUndefined();
-    const a = result.days.find((day) => day.planDayId === "a")!;
+    const a = result.days.find((day) => day.planDayId === "a");
+    if (!a) throw new Error("expected day a to be adapted");
     expect(a.mainWorkout).toContain("A) Front Squat 4x6 @ 90 kg (RPE 8, rest 2-3 min)");
     expect(a.rationale).toMatch(
       /^Auto-progression: .*4x8 @ 82\.5 kg beat the planned 4x6 @ 82\.5 kg/,
@@ -284,9 +288,10 @@ describe("adaptPlan — returning from a break", () => {
     const sets = history(["2026-08-25", "2026-09-01", "2026-09-08"]);
     const first = adaptPlan(input({ logs: [], sets }));
     const settled = UPCOMING.map((day) => {
-      const update = first.days.find((entry) => entry.planDayId === day.id);
-      if (!update) return day;
-      const weight = update.setUpdates[0].weight!;
+      const weight = first.days
+        .find((entry) => entry.planDayId === day.id)
+        ?.setUpdates.at(0)?.weight;
+      if (weight == null) return day;
       return { ...day, sets: day.sets.map((set) => ({ ...set, weight })) };
     });
     expect(adaptPlan(input({ logs: [], sets, upcoming: settled })).days).toEqual([]);
@@ -332,12 +337,11 @@ describe("adaptPlan — runs", () => {
     );
     const day = result.days[0];
     // 5 km in 22:00 is VDOT ~44.5; one pass moves at most 6%, to 42.4.
-    expect(result.engineState.runVdot).toBe(42.4);
+    expect(result.engineState.runVdot).toBeCloseTo(42.4, 5);
     expect(day.mainWorkout).toMatch(/3 x 8 min @ 4:5\d\/km/);
     expect(day.notes).toBe("Easy pace 5:49-6:24/km");
-    expect(day.setUpdates).toEqual([
-      { setId: "run-1", notes: expect.stringMatching(/^4:5\d\/km · 2 min jog$/) },
-    ]);
+    expect(day.setUpdates.map((update) => update.setId)).toEqual(["run-1"]);
+    expect(day.setUpdates.at(0)?.notes).toMatch(/^4:5\d\/km · 2 min jog$/);
     expect(day.changes).toEqual([
       { exercise: "run_paces", kind: "pace", from: 40, to: 42.4, unit: "vdot" },
     ]);

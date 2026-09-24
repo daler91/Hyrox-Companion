@@ -119,8 +119,8 @@ export function describeProgramBlueprintLines(input: {
   );
 
   const lines = [
-    ``,
-    `PROGRAM BLUEPRINT (identical in every chunk of this plan — follow it exactly, so the whole plan reads as one programme):`,
+    "",
+    "PROGRAM BLUEPRINT (identical in every chunk of this plan — follow it exactly, so the whole plan reads as one programme):",
   ];
   const blocks = describeBlocks(outline);
   if (blocks) lines.push(blocks);
@@ -141,12 +141,12 @@ export function describeProgramBlueprintLines(input: {
   }
   if (chunkWeeks.some((entry) => entry.deload)) {
     lines.push(
-      `- DELOAD week: keep the same exercises and session structure, cut sets by about half, loads ~10% lighter, no max efforts or tests. Program no other deload weeks.`,
+      "- DELOAD week: keep the same exercises and session structure, cut sets by about half, loads ~10% lighter, no max efforts or tests. Program no other deload weeks.",
     );
   }
   if (showPhases && !hasRace && chunkWeeks.some((entry) => entry.week === totalWeeks)) {
     lines.push(
-      `- FINAL WEEK: the in-app coach reviews a plan's last week as a taper, so keep it light — shorter sessions, sharp not tiring; a short benchmark or retest session fits well.`,
+      "- FINAL WEEK: the in-app coach reviews a plan's last week as a taper, so keep it light — shorter sessions, sharp not tiring; a short benchmark or retest session fits well.",
     );
   }
   return lines;

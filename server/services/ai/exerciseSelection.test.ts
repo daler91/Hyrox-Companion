@@ -1,14 +1,23 @@
-import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
+import { HYROX_STATION_ORDER } from "@shared/raceConstants";
+import { EXERCISE_DEFINITIONS, MOVEMENT_PATTERNS } from "@shared/schema/exercises";
 import { describe, expect, it } from "vitest";
 
 import {
   EXERCISE_EQUIPMENT,
+  LENS_SUMMARIES,
   LIFT_VARIATIONS,
   NEED_POOLS,
+  PATTERN_GROUP_BY_MOVEMENT,
+  PATTERN_GROUP_LABELS,
+  PATTERN_GROUPS,
   PRIMARY_DEFAULTS,
   PRIMARY_ELIGIBLE,
+  PRIMARY_SLOT_LABELS,
+  PRIMARY_SLOTS_BY_LENS,
   STATION_BUILDERS,
   STATION_SUBSTITUTES,
+  STRESS_REGION_EXERCISES,
+  STRESS_REGION_LABELS,
 } from "./exerciseKnowledge";
 import {
   buildExerciseSelectionBrief,
@@ -80,20 +89,39 @@ describe("exercise knowledge tables", () => {
     // string in; this is the runtime half of that guarantee.
     const named = [
       ...Object.values(NEED_POOLS).flat(),
-      ...Object.values(STATION_BUILDERS).flat(),
-      ...Object.values(STATION_SUBSTITUTES).flat(),
-      ...Object.values(LIFT_VARIATIONS).flat(),
-      ...Object.values(PRIMARY_ELIGIBLE).flat(),
-      ...Object.values(PRIMARY_DEFAULTS).flatMap((defaults) => Object.values(defaults).flat()),
+      ...[...STATION_BUILDERS.values()].flat(),
+      ...[...STATION_SUBSTITUTES.values()].flat(),
+      ...LIFT_VARIATIONS.keys(),
+      ...[...LIFT_VARIATIONS.values()].flat(),
+      ...[...PRIMARY_ELIGIBLE.values()].flat(),
+      ...[...PRIMARY_DEFAULTS.values()].flatMap((defaults) => [
+        ...defaults.standard,
+        ...(defaults.beginner ?? []),
+        ...[...(defaults.byLens?.values() ?? [])].flat(),
+      ]),
       ...Object.keys(EXERCISE_EQUIPMENT),
     ];
     for (const exercise of named) expect(EXERCISE_DEFINITIONS).toHaveProperty(exercise);
   });
 
-  it("lists every station first among its own builders", () => {
-    for (const [station, builders] of Object.entries(STATION_BUILDERS)) {
-      expect(builders[0]).toBe(station);
-    }
+  it("covers every goal, slot, pattern group, movement pattern and body region", () => {
+    const sorted = (keys: Iterable<string>) => [...keys].sort((a, b) => a.localeCompare(b));
+    const lenses = sorted(Object.keys(LENS_SUMMARIES));
+    const slots = sorted(Object.keys(PRIMARY_SLOT_LABELS));
+    expect(sorted(PRIMARY_SLOTS_BY_LENS.keys())).toEqual(lenses);
+    expect(sorted(PRIMARY_ELIGIBLE.keys())).toEqual(slots);
+    expect(sorted(PRIMARY_DEFAULTS.keys())).toEqual(slots);
+    expect(sorted(PATTERN_GROUP_LABELS.keys())).toEqual(sorted(PATTERN_GROUPS));
+    expect(sorted(PATTERN_GROUP_BY_MOVEMENT.keys())).toEqual(
+      sorted(MOVEMENT_PATTERNS.map((entry) => entry.pattern)),
+    );
+    expect(sorted(STRESS_REGION_EXERCISES.keys())).toEqual(sorted(STRESS_REGION_LABELS.keys()));
+  });
+
+  it("covers every station, and lists each station first among its own builders", () => {
+    expect([...STATION_BUILDERS.keys()]).toEqual([...HYROX_STATION_ORDER]);
+    expect([...STATION_SUBSTITUTES.keys()]).toEqual([...HYROX_STATION_ORDER]);
+    for (const [station, builders] of STATION_BUILDERS) expect(builders.at(0)).toBe(station);
   });
 });
 
@@ -102,8 +130,10 @@ describe("classifyGoalLens", () => {
     ["Sub-90 HYROX in March", "hyrox"],
     ["Hyrox doubles — improve my running", "hyrox"],
     ["Run a half marathon under 1:45", "running"],
+    ["Halfmarathon PB", "running"],
     ["First 10k", "running"],
     ["Squat 140kg and bench bodyweight", "strength"],
+    ["First powerlifting meet", "strength"],
     ["Get stronger and run a sub-20 5k", "hybrid"],
     ["Lose 10kg before summer", "weight_loss"],
     ["Feel fitter", "general"],
@@ -125,7 +155,16 @@ describe("classifyGoalLens", () => {
 describe("parseConstraintProfile", () => {
   it("reads equipment the athlete says they don't have", () => {
     const profile = parseConstraintProfile("No sled at my gym and no rower");
-    expect([...profile.unavailable].sort()).toEqual(["rower", "sled"]);
+    expect([...profile.unavailable].sort((a, b) => a.localeCompare(b))).toEqual(["rower", "sled"]);
+    expect(parseConstraintProfile("I cannot access a barbell").unavailable).toEqual(
+      new Set(["barbell"]),
+    );
+  });
+
+  it("keeps a negation inside its own sentence", () => {
+    expect(parseConstraintProfile("No sled. Barbell work is fine").unavailable).toEqual(
+      new Set(["sled"]),
+    );
   });
 
   it("treats 'only X' as ruling out everything not named", () => {
@@ -135,6 +174,11 @@ describe("parseConstraintProfile", () => {
     expect(profile.unavailable.has("sled")).toBe(true);
     expect(profile.unavailable.has("dumbbell")).toBe(false);
     expect(profile.unavailable.has("pullup_bar")).toBe(false);
+
+    const pair = parseConstraintProfile("barbell and dumbbells only");
+    expect(pair.unavailable.has("machine")).toBe(true);
+    expect(pair.unavailable.has("barbell")).toBe(false);
+    expect(pair.unavailable.has("dumbbell")).toBe(false);
   });
 
   it("needs a limiting word before ruling a movement out", () => {
@@ -144,7 +188,11 @@ describe("parseConstraintProfile", () => {
     expect(
       parseConstraintProfile("can't do burpees (wrist)").excluded.has("burpee_broad_jump"),
     ).toBe(true);
+    expect(parseConstraintProfile("plyometrics aggravate my knee").excluded.has("box_jumps")).toBe(
+      true,
+    );
     expect(parseConstraintProfile("I love lunges").excluded.size).toBe(0);
+    expect(parseConstraintProfile("No rower. Lunges are my favourite").excluded.size).toBe(0);
   });
 
   it("maps body regions to the stress they limit", () => {
@@ -373,7 +421,7 @@ describe("buildExerciseSelectionBrief — needs", () => {
         { station: "sandbag_lunges", daysSince: 40 },
       ],
     });
-    expect(result.needs.length).toBe(7);
+    expect(result.needs).toHaveLength(7);
   });
 
   it("ranks a whole missing pattern above a stalled lift, and caps stale stations at two", () => {
@@ -459,7 +507,15 @@ describe("buildExerciseSelectionBrief — upcoming week shape", () => {
     expect(result.upcomingShape).toEqual({
       structuredDays: 3,
       totalDays: 4,
-      setsByGroup: { squat: 4, hinge: 4, push: 1, pull: 0, single_leg: 0, carry: 0, trunk: 0 },
+      setsByGroup: new Map([
+        ["squat", 4],
+        ["hinge", 4],
+        ["push", 1],
+        ["pull", 0],
+        ["single_leg", 0],
+        ["carry", 0],
+        ["trunk", 0],
+      ]),
       missing: ["single_leg", "carry", "pull"],
       backToBackLowerBody: [["2026-06-16", "2026-06-17"]],
     });

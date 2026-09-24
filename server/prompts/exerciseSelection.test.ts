@@ -43,7 +43,15 @@ function makeBrief(overrides: Partial<ExerciseSelectionBrief> = {}): ExerciseSel
     upcomingShape: {
       structuredDays: 3,
       totalDays: 4,
-      setsByGroup: { squat: 4, hinge: 4, push: 1, pull: 0, single_leg: 0, carry: 0, trunk: 0 },
+      setsByGroup: new Map([
+        ["squat", 4],
+        ["hinge", 4],
+        ["push", 1],
+        ["pull", 0],
+        ["single_leg", 0],
+        ["carry", 0],
+        ["trunk", 0],
+      ]),
       missing: ["pull", "single_leg"],
       backToBackLowerBody: [["2026-06-16", "2026-06-17"]],
     },

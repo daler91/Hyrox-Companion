@@ -67,12 +67,15 @@ export function describePaceZones(zones: RunPaceZones, unit: DistanceUnit): stri
   ].join(" · ");
 }
 
-function zoneOrEffort(
-  ctx: SessionContext,
-  zone: "steady" | "threshold" | "interval" | "repetition",
-  effort: string,
-): string {
-  return ctx.paces ? `@ ${paceText(ctx.paces[zone], ctx.distanceUnit)}` : `@ ${effort}`;
+type QualityZone = "steady" | "threshold" | "interval";
+
+function zonePace(paces: RunPaceZones, zone: QualityZone): number {
+  if (zone === "steady") return paces.steady;
+  return zone === "threshold" ? paces.threshold : paces.interval;
+}
+
+function zoneOrEffort(ctx: SessionContext, zone: QualityZone, effort: string): string {
+  return ctx.paces ? `@ ${paceText(zonePace(ctx.paces, zone), ctx.distanceUnit)}` : `@ ${effort}`;
 }
 
 function easyText(ctx: SessionContext): string {
@@ -113,9 +116,13 @@ const HYROX_INTERVAL_SHAPES: Readonly<Record<TrainingPhase, QualityShape>> = {
   race_week: { reps: 3, amount: 1000, meters: true, recovery: "2 min walk" },
 };
 
-/** Deloads keep a quality run's shape at about half its reps. */
-function deloaded(shape: QualityShape, deload: boolean): QualityShape {
-  return deload ? { ...shape, reps: Math.max(1, Math.ceil(shape.reps / 2)) } : shape;
+/** The phase's quality-run shape; a deload keeps the shape at about half its reps. */
+function qualityShape(
+  shapes: Readonly<Record<TrainingPhase, QualityShape>>,
+  ctx: SessionContext,
+): QualityShape {
+  const shape = shapes[ctx.phase];
+  return ctx.deload ? { ...shape, reps: Math.max(1, Math.ceil(shape.reps / 2)) } : shape;
 }
 
 function workKm(shape: QualityShape, secondsPerKm: number | null): number {
@@ -125,7 +132,7 @@ function workKm(shape: QualityShape, secondsPerKm: number | null): number {
 }
 
 function thresholdSession(ctx: SessionContext): { text: string; km: number } {
-  const shape = deloaded(THRESHOLD_SHAPES[ctx.phase], ctx.deload);
+  const shape = qualityShape(THRESHOLD_SHAPES, ctx);
   const target = zoneOrEffort(ctx, "threshold", "threshold effort (RPE 7-8, comfortably hard)");
   const km = workKm(shape, ctx.paces?.threshold ?? null) + QUALITY_EXTRA_KM;
   return {
@@ -136,7 +143,7 @@ function thresholdSession(ctx: SessionContext): { text: string; km: number } {
 
 function intervalSession(ctx: SessionContext): { text: string; km: number } {
   const hyrox = ctx.lens === "hyrox";
-  const shape = deloaded((hyrox ? HYROX_INTERVAL_SHAPES : INTERVAL_SHAPES)[ctx.phase], ctx.deload);
+  const shape = qualityShape(hyrox ? HYROX_INTERVAL_SHAPES : INTERVAL_SHAPES, ctx);
   const target = hyrox
     ? zoneOrEffort(ctx, "steady", "race-run effort (RPE 7-8)")
     : zoneOrEffort(ctx, "interval", "5K effort (RPE 8-9)");

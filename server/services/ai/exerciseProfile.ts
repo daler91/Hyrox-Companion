@@ -20,8 +20,9 @@ import {
   type GoalLens,
   HIGH_SKILL_EXERCISES,
   LENS_GOAL_PATTERNS,
+  limitedBefore,
   ONLY_EQUIPMENT_KEYWORDS,
-  ONLY_EQUIPMENT_PATTERN,
+  ONLY_EQUIPMENT_PATTERNS,
   STRESS_REGION_EXERCISES,
   STRESS_REGION_PATTERNS,
   type StressRegion,
@@ -70,28 +71,38 @@ export function classifyGoalLens(
 ): GoalLens {
   const text = goal?.trim() ?? "";
   if (!text) return lensFromFocusAreas(focusAreas);
-  if (LENS_GOAL_PATTERNS.hyrox.test(text)) return "hyrox";
-  const running = LENS_GOAL_PATTERNS.running.test(text);
-  const strength = LENS_GOAL_PATTERNS.strength.test(text);
+  if (matchesAny(LENS_GOAL_PATTERNS.hyrox, text)) return "hyrox";
+  const running = matchesAny(LENS_GOAL_PATTERNS.running, text);
+  const strength = matchesAny(LENS_GOAL_PATTERNS.strength, text);
   if (running && strength) return "hybrid";
   if (running) return "running";
   if (strength) return "strength";
-  if (LENS_GOAL_PATTERNS.weight_loss.test(text)) return "weight_loss";
+  if (matchesAny(LENS_GOAL_PATTERNS.weight_loss, text)) return "weight_loss";
   return lensFromFocusAreas(focusAreas);
+}
+
+function matchesAny(patterns: readonly RegExp[], text: string): boolean {
+  return patterns.some((pattern) => pattern.test(text));
 }
 
 // ---------------------------------------------------------------------------
 // Constraint profile
 // ---------------------------------------------------------------------------
 
-const LIMIT_BEFORE = String.raw`(?:no|without|avoid(?:ing)?|can'?t(?: do)?|cannot(?: do)?|unable to do|not allowed)`;
-const LIMIT_AFTER = String.raw`(?:hurts?|hurting|pain(?:ful)?|aggravates?|irritates?|flares?)`;
+// A limiting word on either side of the movement, within ~24 characters of
+// the same clause: "can't do lunges", "lunges hurt my knee".
+const LIMIT_BEFORE =
+  /\b(?:no|without|avoid|avoiding|can'?t|can'?t do|cannot|cannot do|unable to do|not allowed)\b[^.;\n]{0,24}$/i;
+const LIMIT_AFTER =
+  /^[^.;\n]{0,24}?\b(?:hurts?|hurting|pain|painful|aggravates?|irritates?|flares?)\b/i;
 
-function limitedMovement(noun: string): RegExp {
-  return new RegExp(
-    String.raw`\b${LIMIT_BEFORE}\b[^.;\n]{0,24}?\b${noun}\b|\b${noun}\b[^.;\n]{0,24}?\b${LIMIT_AFTER}\b`,
-    "i",
-  );
+/** Whether some match of `noun` (a global pattern) has a limiting word beside it. */
+function limitedMovement(text: string, noun: RegExp): boolean {
+  if (limitedBefore(text, noun, [LIMIT_BEFORE])) return true;
+  for (const match of text.matchAll(noun)) {
+    if (LIMIT_AFTER.test(text.slice(match.index + match[0].length))) return true;
+  }
+  return false;
 }
 
 /**
@@ -102,13 +113,10 @@ function limitedMovement(noun: string): RegExp {
  * lunges") must not count.
  */
 const MOVEMENT_LIMIT_PATTERNS: readonly (readonly [RegExp, readonly ExerciseName[]])[] = [
+  [/\blunges?\b/gi, ["sandbag_lunges", "walking_lunges", "lunges", "reverse_lunge"]],
+  [/\bburpees?\b/gi, ["burpee_broad_jump", "burpees"]],
   [
-    limitedMovement(String.raw`lunges?`),
-    ["sandbag_lunges", "walking_lunges", "lunges", "reverse_lunge"],
-  ],
-  [limitedMovement(String.raw`burpees?`), ["burpee_broad_jump", "burpees"]],
-  [
-    limitedMovement(String.raw`(?:jump(?:s|ing)?|plyos?|plyometrics?)`),
+    /\b(?:jump|jumps|jumping|plyo|plyos|plyometric|plyometrics)\b/gi,
     ["box_jumps", "burpee_broad_jump", "burpees", "jump_rope"],
   ],
 ];
@@ -127,10 +135,10 @@ const EMPTY_PROFILE: ConstraintProfile = {
 
 function unavailableEquipment(text: string): Set<Equipment> {
   const unavailable = new Set<Equipment>();
-  for (const [pattern, equipment] of EQUIPMENT_NEGATION_PATTERNS) {
-    if (pattern.test(text)) unavailable.add(equipment);
+  for (const [noun, equipment] of EQUIPMENT_NEGATION_PATTERNS) {
+    if (limitedBefore(text, noun)) unavailable.add(equipment);
   }
-  if (!ONLY_EQUIPMENT_PATTERN.test(text)) return unavailable;
+  if (!matchesAny(ONLY_EQUIPMENT_PATTERNS, text)) return unavailable;
   // "Just dumbbells and a pull-up bar": everything not named is out.
   const kept = new Set(
     ONLY_EQUIPMENT_KEYWORDS.filter(([pattern]) => pattern.test(text)).map(
@@ -149,8 +157,8 @@ export function parseConstraintProfile(text?: string | null): ConstraintProfile 
   if (!trimmed) return EMPTY_PROFILE;
 
   const excluded = new Set<string>();
-  for (const [pattern, exercises] of MOVEMENT_LIMIT_PATTERNS) {
-    if (!pattern.test(trimmed)) continue;
+  for (const [noun, exercises] of MOVEMENT_LIMIT_PATTERNS) {
+    if (!limitedMovement(trimmed, noun)) continue;
     for (const exercise of exercises) excluded.add(exercise);
   }
 
@@ -177,7 +185,7 @@ export function isExerciseAllowed(
   const equipment = EXERCISE_EQUIPMENT[exercise as ExerciseName];
   if (equipment?.every((item) => profile.unavailable.has(item))) return false;
   for (const region of profile.regions) {
-    if (STRESS_REGION_EXERCISES[region].has(exercise)) return false;
+    if (STRESS_REGION_EXERCISES.get(region)?.has(exercise)) return false;
   }
   return familiar || experience !== "beginner" || !HIGH_SKILL_EXERCISES.has(exercise);
 }

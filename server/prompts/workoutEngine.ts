@@ -43,15 +43,22 @@ function restText(rest: LiftWeekTarget["rest"]): string {
     : `${rest.minSec / 60}-${rest.maxSec / 60} min`;
 }
 
+/** The week's load for this exposure: a light day works below the heavy day's load. */
+function exposureLoad(lift: SkeletonLift, target: LiftWeekTarget, unit: WeightUnit): number | null {
+  if (target.load == null) return null;
+  if (lift.exposure !== "light") return target.load;
+  return roundLoad(target.load * LIGHT_EXPOSURE_FRACTION, lift.exercise, unit, "down");
+}
+
 function liftTarget(lift: SkeletonLift, target: LiftWeekTarget, unit: WeightUnit): string {
-  const light = lift.exposure === "light";
   const perSide = lift.slot === "single_leg" ? " per side" : "";
-  const load =
-    target.load == null
-      ? ""
-      : ` @ ${light ? roundLoad(target.load * LIGHT_EXPOSURE_FRACTION, lift.exercise, unit, "down") : target.load} ${unit}`;
-  const effort = light ? `light day, RPE ~${Math.max(6, target.rpe - 2)}` : `RPE ${target.rpe}`;
-  return `${lift.exercise} ${target.sets}x${target.reps}${perSide}${load} (${effort}, rest ${restText(target.rest)})`;
+  const load = exposureLoad(lift, target, unit);
+  const loadText = load == null ? "" : ` @ ${load} ${unit}`;
+  const effort =
+    lift.exposure === "light"
+      ? `light day, RPE ~${Math.max(6, target.rpe - 2)}`
+      : `RPE ${target.rpe}`;
+  return `${lift.exercise} ${target.sets}x${target.reps}${perSide}${loadText} (${effort}, rest ${restText(target.rest)})`;
 }
 
 function strengthLine(
@@ -61,7 +68,7 @@ function strengthLine(
   unit: WeightUnit,
 ): string {
   const lifts = session.lifts.flatMap((lift) => {
-    const target = programs.get(lift.exercise)?.weeks[week - 1];
+    const target = programs.get(lift.exercise)?.weeks.at(week - 1);
     return target ? [liftTarget(lift, target, unit)] : [];
   });
   const finisher = session.runFinisher ? "; then a 15-20 min easy run" : "";
@@ -84,7 +91,7 @@ function sessionLine(
 }
 
 function weekHeader(engine: WorkoutEnginePlan, week: number): string {
-  const entry = engine.outline[week - 1];
+  const entry = engine.outline.at(week - 1);
   if (!entry) return `Week ${week}:`;
   const isFinal = week === engine.totalWeeks;
   const phase =
@@ -97,7 +104,7 @@ function weekHeader(engine: WorkoutEnginePlan, week: number): string {
  * weeks run half a simulation, so the full one lands two to three weeks out.
  */
 function isLastPeakWeek(engine: WorkoutEnginePlan, week: number): boolean {
-  const entry = engine.outline[week - 1];
+  const entry = engine.outline.at(week - 1);
   if (entry?.phase !== "peak" || entry.deload) return false;
   return !engine.outline.some(
     (later) => later.week > week && later.phase === "peak" && !later.deload,
@@ -107,7 +114,7 @@ function isLastPeakWeek(engine: WorkoutEnginePlan, week: number): boolean {
 /** Race week holds no programme of its own: primers early, then the race. */
 function raceWeekLines(engine: WorkoutEnginePlan, week: number): string[] {
   const primers = engine.lifts.slice(0, 2).flatMap((program) => {
-    const target = program.weeks[week - 1];
+    const target = program.weeks.at(week - 1);
     if (!target) return [];
     const load = target.load == null ? "" : ` @ ${target.load} ${engine.weightUnit}`;
     return [`${program.exercise} ${target.sets}x${target.reps}${load}`];
@@ -116,7 +123,9 @@ function raceWeekLines(engine: WorkoutEnginePlan, week: number): string[] {
     primers.length > 0
       ? `a strength primer (${primers.join(", ")}, RPE 6)`
       : "a short strength primer";
-  const openers = engine.stations.race_week ? " and 2-3 station openers (RACE WEEK doses)" : "";
+  const openers = engine.stations.has("race_week")
+    ? " and 2-3 station openers (RACE WEEK doses)"
+    : "";
   return [
     weekHeader(engine, week),
     `- At most two short sessions early in the week: ${primer}, and a short run with 4 x 1 min at race-run effort${openers}. Rest or a 20 min shakeout the day before; race day is the event.`,
@@ -130,10 +139,10 @@ function weekLines(
   programs: ReadonlyMap<string, LiftProgram>,
 ): string[] {
   if (engine.hasRace && week === engine.totalWeeks) return raceWeekLines(engine, week);
-  const skeleton = engine.weeks[week - 1];
-  const entry = engine.outline[week - 1];
+  const skeleton = engine.weeks.at(week - 1);
+  const entry = engine.outline.at(week - 1);
   if (!skeleton || !entry) return [];
-  const volume = engine.runVolume[week - 1] ?? null;
+  const volume = engine.runVolume.at(week - 1) ?? null;
   const ctx: SessionContext = {
     lens: engine.lens,
     phase: entry.phase,
@@ -154,7 +163,7 @@ function weekLines(
 }
 
 function rhythmLine(engine: WorkoutEnginePlan, week: number): string | null {
-  const skeleton = engine.weeks[week - 1];
+  const skeleton = engine.weeks.at(week - 1);
   if (!skeleton) return null;
   const days = skeleton.sessions.map((session) => `${session.day} = ${session.label}`);
   const rest = skeleton.restDays.length > 0 ? ` · rest: ${skeleton.restDays.join(", ")}` : "";
@@ -184,7 +193,7 @@ function paceLine(engine: WorkoutEnginePlan): string | null {
 }
 
 function doseText(dose: StationDose, unit: WeightUnit): string {
-  const amount = dose.reps == null ? `${dose.distanceMeters} m` : `${dose.reps}`;
+  const amount = dose.reps == null ? `${dose.distanceMeters} m` : String(dose.reps);
   let load = "";
   if (dose.load != null) load = ` @ ${dose.load} ${unit}`;
   else if (dose.loadFraction != null) load = ` @ ${Math.round(dose.loadFraction * 100)}% race load`;
@@ -198,7 +207,7 @@ function stationLines(engine: WorkoutEnginePlan, chunk: EngineChunk): string[] {
       .map((entry) => entry.phase),
   );
   const plans = [...phases]
-    .map((phase) => engine.stations[phase])
+    .map((phase) => engine.stations.get(phase))
     .filter((plan): plan is StationPhasePlan => plan != null && plan.doses.length > 0);
   return plans.map(
     (plan) =>
@@ -216,8 +225,8 @@ export function describeEngineTargetLines(
   if (!engine) return [];
   const programs = new Map(engine.lifts.map((program) => [program.exercise, program]));
   const lines = [
-    ``,
-    `WORKOUT ENGINE TARGETS (computed from the athlete's own logs and this plan's blueprint, identical in every chunk — write these sessions on these days with these numbers; your job is the session write-up, the warm-ups and the accessories around them):`,
+    "",
+    "WORKOUT ENGINE TARGETS (computed from the athlete's own logs and this plan's blueprint, identical in every chunk — write these sessions on these days with these numbers; your job is the session write-up, the warm-ups and the accessories around them):",
   ];
   for (const line of [
     rhythmLine(engine, chunk.startWeek),

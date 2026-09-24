@@ -151,7 +151,9 @@ describe("buildGenerationEngine", () => {
     const constrained = { ...plan, injuries: "no sled at my gym" };
     const brief = buildGenerationSelection(constrained, user(), TODAY, null);
     const engine = buildGenerationEngine(constrained, user(), TODAY, null, brief);
-    expect(engine?.stations.early?.doses.map((dose) => dose.station)).not.toContain("sled_push");
+    const early = engine?.stations.get("early");
+    expect(early?.doses.map((dose) => dose.station)).toContain("wall_balls");
+    expect(early?.doses.map((dose) => dose.station)).not.toContain("sled_push");
   });
 });
 

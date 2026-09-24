@@ -33,7 +33,7 @@ import type { TrainingPhase } from "@shared/nutritionTargets";
 import { computePlanPhase } from "@shared/planPhase";
 import { epley, unmetPrescription } from "@shared/progression";
 import type { CoachNoteInputs, PlanEngineState } from "@shared/schema";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
+import { knownExerciseLabel } from "@shared/schema/exercises";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
 import { ASSUMED_RIR, implementFor, roundLoad } from "./loadMath";
@@ -226,7 +226,7 @@ function toWorkingDay(day: AdaptablePlanDay, input: AdaptationInput): WorkingDay
 }
 
 function exerciseLabel(exercise: string): string {
-  return EXERCISE_DEFINITIONS[exercise as ExerciseName]?.label ?? exercise.replaceAll("_", " ");
+  return knownExerciseLabel(exercise) ?? exercise.replaceAll("_", " ");
 }
 
 function weekdayName(date: string): string {
@@ -283,7 +283,7 @@ function prescriptionOf(
   sets: readonly AdaptationSet[],
   unit: WeightUnit,
 ): { reps: number; weight: number; text: string } | null {
-  const first = sets[0];
+  const first = sets.at(0);
   if (!first || first.plannedReps == null || first.plannedWeight == null) return null;
   const uniform = sets.every(
     (set) => set.plannedReps === first.plannedReps && set.plannedWeight === first.plannedWeight,
@@ -434,7 +434,7 @@ function applyRaise(
     if (!canRise(day)) continue;
     const before = topWeight(day, exercise);
     for (const set of setsOf(day, exercise)) {
-      const weight = day.weights.get(set.id)!;
+      const weight = day.weights.get(set.id) ?? 0;
       const raised = roundLoad(weight * factor, exercise, unit);
       if (raised <= weight) continue;
       day.weights.set(set.id, raised);
@@ -458,7 +458,7 @@ function applyCap(
   decision: Extract<Decision, { kind: "cap" }>,
   unit: WeightUnit,
 ): WorkingDay[] {
-  const first = days[0];
+  const first = days.at(0);
   if (!first) return [];
   const changed: WorkingDay[] = [];
   for (const day of days) {
@@ -544,6 +544,17 @@ interface LiftHistory {
   lastReps: number;
 }
 
+/** A session's heaviest set, the first of equals; undefined for no sets. */
+function heaviestSet(sets: readonly AdaptationSet[], unit: WeightUnit): AdaptationSet | undefined {
+  return sets.reduce<AdaptationSet | undefined>(
+    (best, set) =>
+      best && inUnit(best.weight ?? 0, best, unit) >= inUnit(set.weight ?? 0, set, unit)
+        ? best
+        : set,
+    undefined,
+  );
+}
+
 function liftHistories(sets: readonly AdaptationSet[], unit: WeightUnit): Map<string, LiftHistory> {
   const byExercise = new Map<string, Map<string, AdaptationSet[]>>();
   for (const set of sets) {
@@ -555,11 +566,10 @@ function liftHistories(sets: readonly AdaptationSet[], unit: WeightUnit): Map<st
   }
   const histories = new Map<string, LiftHistory>();
   for (const [exercise, sessions] of byExercise) {
-    const keys = [...sessions.keys()].sort();
-    const last = sessions.get(keys.at(-1)!)!;
-    const top = last.reduce((best, set) =>
-      inUnit(set.weight ?? 0, set, unit) > inUnit(best.weight ?? 0, best, unit) ? set : best,
-    );
+    const keys = [...sessions.keys()].sort((a, b) => a.localeCompare(b));
+    const lastKey = keys.at(-1);
+    const top = heaviestSet((lastKey == null ? undefined : sessions.get(lastKey)) ?? [], unit);
+    if (!top) continue;
     histories.set(exercise, {
       dates: keys.map((key) => key.slice(0, 10)),
       lastLoad: inUnit(top.weight ?? 0, top, unit),
@@ -573,9 +583,9 @@ function liftHistories(sets: readonly AdaptationSet[], unit: WeightUnit): Map<st
 function usualSpacing(dates: readonly string[]): number {
   const gaps = dates
     .slice(1)
-    .map((date, index) => dayDiff(dates[index], date))
+    .map((date, index) => dayDiff(dates.at(index) ?? date, date))
     .sort((a, b) => a - b);
-  return gaps[Math.floor(gaps.length / 2)] ?? BREAK_DAYS;
+  return gaps.at(Math.floor(gaps.length / 2)) ?? BREAK_DAYS;
 }
 
 /**
@@ -596,9 +606,9 @@ function applyReturnFromBreak(
     const targets = working.filter(
       (day) => day.day.date <= horizonEnd && setsOf(day, exercise).length > 0,
     );
-    const first = targets[0];
-    if (!first) continue;
-    const lastDate = history.dates.at(-1)!;
+    const first = targets.at(0);
+    const lastDate = history.dates.at(-1);
+    if (!first || !lastDate) continue;
     const gap = dayDiff(lastDate, first.day.date);
     if (gap < Math.max(BREAK_DAYS, 2 * usualSpacing(history.dates))) continue;
     const weeksOff = Math.floor(gap / 7);
@@ -678,22 +688,25 @@ function decideRunUpdate(
 }
 
 function applyRunUpdate(days: readonly WorkingDay[], update: RunUpdate): void {
+  const rescale = (text: string): string => rescalePaces(text, update.from, update.to).text;
   for (const day of days) {
-    let changed = false;
-    const rescale = (text: string): string => {
-      const result = rescalePaces(text, update.from, update.to);
-      changed ||= result.changed;
-      return result.text;
-    };
-    day.mainWorkout = rescale(day.mainWorkout);
-    if (day.accessory) day.accessory = rescale(day.accessory);
-    if (day.notes) day.notes = rescale(day.notes);
-    for (const set of day.day.sets) {
-      if (!set.notes) continue;
-      const next = rescale(set.notes);
-      if (next !== set.notes) day.setNotes.set(set.id, next);
-    }
+    const mainWorkout = rescale(day.mainWorkout);
+    const accessory = day.accessory ? rescale(day.accessory) : day.accessory;
+    const notes = day.notes ? rescale(day.notes) : day.notes;
+    const setNotes = day.day.sets.flatMap((set): [string, string][] => {
+      const next = set.notes ? rescale(set.notes) : null;
+      return next == null || next === set.notes ? [] : [[set.id, next]];
+    });
+    const changed =
+      mainWorkout !== day.mainWorkout ||
+      accessory !== day.accessory ||
+      notes !== day.notes ||
+      setNotes.length > 0;
     if (!changed) continue;
+    day.mainWorkout = mainWorkout;
+    day.accessory = accessory;
+    day.notes = notes;
+    for (const [setId, next] of setNotes) day.setNotes.set(setId, next);
     day.changes.push({
       exercise: "run_paces",
       kind: "pace",
@@ -718,12 +731,10 @@ function initialState(input: AdaptationInput): PlanEngineState {
 /** Training logs not yet adapted, recent enough to matter, oldest first. */
 function logsToAdapt(input: AdaptationInput, state: PlanEngineState): AdaptationLog[] {
   const seen = new Set(state.adaptedLogIds);
-  const earliest = [
-    input.plan.startDate ?? "",
-    addDaysToISODate(input.today, -ADAPTATION_WINDOW_DAYS),
-  ]
-    .sort()
-    .at(-1)!;
+  const windowStart = addDaysToISODate(input.today, -ADAPTATION_WINDOW_DAYS);
+  const planStart = input.plan.startDate ?? "";
+  // Whichever is later: nothing from before the plan, nothing too old to matter.
+  const earliest = planStart > windowStart ? planStart : windowStart;
   return input.logs
     .filter(
       (log) =>
@@ -758,7 +769,7 @@ function sessionsOf(
     );
     const lastDate = earlier
       .map((set) => set.date)
-      .sort()
+      .sort((a, b) => a.localeCompare(b))
       .at(-1);
     const lastLog = earlier.find((set) => set.date === lastDate)?.workoutLogId;
     const previous = lastLog ? earlier.filter((set) => set.workoutLogId === lastLog) : null;
