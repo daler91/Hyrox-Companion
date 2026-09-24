@@ -3,29 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../db", () => ({ db: {} }));
 
 import { db } from "../db";
+import { makeQueryBuilderMock } from "./__tests__/queryBuilderMock";
 import { MAX_PUSH_SUBSCRIPTIONS_PER_USER, PushStorage } from "./push";
 
-/**
- * Program-order query-builder mock (mirrors recycleBinCapture.test.ts): every
- * chain method returns the mock itself, which is a thenable resolving the
- * next queued result, so a query can end on `where`, `orderBy`, `limit` or
- * `onConflictDoUpdate` alike. Queue results in the order the code awaits them.
- */
-function makeDb() {
-  const results: unknown[] = [];
-  const mock: Record<string, ReturnType<typeof vi.fn>> & { queue: (...next: unknown[]) => void } = {
-    queue: (...next: unknown[]) => {
-      results.push(...next);
-    },
-  } as never;
-  for (const method of ["select", "from", "where", "orderBy", "limit", "insert", "values", "onConflictDoUpdate", "delete"]) {
-    mock[method] = vi.fn().mockReturnValue(mock);
-  }
-  mock.then = vi.fn((resolve: (value: unknown) => unknown) =>
-    Promise.resolve(results.shift()).then(resolve),
-  );
-  return mock;
-}
+const makeDb = () =>
+  makeQueryBuilderMock(["select", "from", "where", "orderBy", "limit", "insert", "values", "onConflictDoUpdate", "delete"]);
 
 describe("PushStorage.saveSubscription eviction", () => {
   const storage = new PushStorage();

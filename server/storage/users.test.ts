@@ -463,22 +463,25 @@ describe('UserStorage', () => {
     });
   });
 
-  describe('claimWeeklyReviewReminder', () => {
-    it('wins the claim and stamps lastWeeklyReviewReminderAt when the row updates', async () => {
-      const now = new Date('2026-08-06T20:00:00Z');
+  describe.each([
+    { method: 'claimWeeklyReviewReminder', field: 'lastWeeklyReviewReminderAt', now: new Date('2026-08-06T20:00:00Z') },
+    { method: 'claimTodaySession', field: 'lastTodaySessionAt', now: new Date('2026-08-06T06:00:00Z') },
+    { method: 'claimAnalysisDigest', field: 'lastAnalysisDigestAt', now: new Date('2026-08-06T21:00:00Z') },
+  ] as const)('$method', ({ method, field, now }) => {
+    it(`wins the claim and stamps ${field} when the row updates`, async () => {
       const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
       const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
       const setMock = vi.fn().mockReturnValue({ where: whereMock });
       vi.mocked(db.update).mockReturnValue({ set: setMock });
 
-      const result = await userStorage.claimWeeklyReviewReminder(
+      const result = await userStorage[method](
         'user-1',
         new Date('2026-08-06T00:00:00Z'),
         now,
       );
 
       expect(result).toBe(true);
-      expect(setMock).toHaveBeenCalledWith({ lastWeeklyReviewReminderAt: now });
+      expect(setMock).toHaveBeenCalledWith({ [field]: now });
     });
 
     it('loses the claim when no row matched (already claimed within the window)', async () => {
@@ -487,73 +490,7 @@ describe('UserStorage', () => {
       const setMock = vi.fn().mockReturnValue({ where: whereMock });
       vi.mocked(db.update).mockReturnValue({ set: setMock });
 
-      const result = await userStorage.claimWeeklyReviewReminder(
-        'user-1',
-        new Date('2026-08-06T00:00:00Z'),
-      );
-
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('claimTodaySession', () => {
-    it('wins the claim and stamps lastTodaySessionAt when the row updates', async () => {
-      const now = new Date('2026-08-06T06:00:00Z');
-      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
-
-      const result = await userStorage.claimTodaySession(
-        'user-1',
-        new Date('2026-08-06T00:00:00Z'),
-        now,
-      );
-
-      expect(result).toBe(true);
-      expect(setMock).toHaveBeenCalledWith({ lastTodaySessionAt: now });
-    });
-
-    it('loses the claim when no row matched (already claimed within the window)', async () => {
-      const returningMock = vi.fn().mockResolvedValue([]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
-
-      const result = await userStorage.claimTodaySession(
-        'user-1',
-        new Date('2026-08-06T00:00:00Z'),
-      );
-
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('claimAnalysisDigest', () => {
-    it('wins the claim and stamps lastAnalysisDigestAt when the row updates', async () => {
-      const now = new Date('2026-08-06T21:00:00Z');
-      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
-
-      const result = await userStorage.claimAnalysisDigest(
-        'user-1',
-        new Date('2026-08-06T00:00:00Z'),
-        now,
-      );
-
-      expect(result).toBe(true);
-      expect(setMock).toHaveBeenCalledWith({ lastAnalysisDigestAt: now });
-    });
-
-    it('loses the claim when no row matched (already claimed within the window)', async () => {
-      const returningMock = vi.fn().mockResolvedValue([]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
-
-      const result = await userStorage.claimAnalysisDigest(
+      const result = await userStorage[method](
         'user-1',
         new Date('2026-08-06T00:00:00Z'),
       );

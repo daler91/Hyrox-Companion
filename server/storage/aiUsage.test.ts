@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../db", () => ({ db: {} }));
 
 import { db } from "../db";
+import { makeQueryBuilderMock } from "./__tests__/queryBuilderMock";
 import { AiUsageStorage } from "./aiUsage";
 
 /**
@@ -19,22 +20,7 @@ function sqlContains(node: unknown, predicate: (value: unknown) => boolean, seen
   return values.some((value) => sqlContains(value, predicate, seen));
 }
 
-/** Program-order query-builder mock (mirrors recycleBinCapture.test.ts). */
-function makeDb() {
-  const results: unknown[] = [];
-  const mock: Record<string, ReturnType<typeof vi.fn>> & { queue: (...next: unknown[]) => void } = {
-    queue: (...next: unknown[]) => {
-      results.push(...next);
-    },
-  } as never;
-  for (const method of ["select", "from", "where"]) {
-    mock[method] = vi.fn().mockReturnValue(mock);
-  }
-  mock.then = vi.fn((resolve: (value: unknown) => unknown) =>
-    Promise.resolve(results.shift()).then(resolve),
-  );
-  return mock;
-}
+const makeDb = () => makeQueryBuilderMock(["select", "from", "where"]);
 
 describe("AiUsageStorage daily totals", () => {
   const storage = new AiUsageStorage();
