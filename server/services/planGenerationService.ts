@@ -12,7 +12,6 @@ import {
   type GeneratePlanInput,
   type InsertExerciseSet,
   type ParsedExercise,
-  type TrainingLoadOverview,
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { convertWeight, getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences, type WeightUnit } from "@shared/unitConversion";
@@ -26,12 +25,18 @@ import { AppError, ErrorCode } from "../errors";
 import { sanitizeLabel } from "../gemini/exerciseParser/mapping";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
+import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
-import { buildLoadAnchors, describeLoadAnchorLines, type LoadAnchor } from "./loadAnchors";
-import { calculateTrainingLoad } from "./trainingLoadService";
+import { describeLoadAnchorLines } from "./loadAnchors";
+import { describeProgramBlueprintLines } from "./planBlueprint";
+import { computeGenerationCalibration, type GenerationCalibration } from "./planGenerationCalibration";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
+
+// Calibration moved to its own module; these stay importable from here, where
+// they were exported before the split.
+export { describeStartLoadPosture, type GenerationCalibration } from "./planGenerationCalibration";
 
 const PLAN_GENERATION_CHUNK_WEEKS = 2;
 /**
@@ -40,9 +45,6 @@ const PLAN_GENERATION_CHUNK_WEEKS = 2;
  * calls in flight from one generation regardless of plan length.
  */
 const PLAN_CHUNK_CONCURRENCY = 3;
-// Look-back window for the athlete's current training-load posture, matching the
-// coach/analytics load context.
-const LOAD_WINDOW_DAYS = 70;
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 // Structured exercises the model must include for non-rest generated days.
@@ -183,14 +185,6 @@ export function buildGenerationAbsences(
     });
 }
 
-/** What generation knows about the athlete's current loads. `startLoadPosture`
- *  calibrates only the opening week; `loadAnchors` go to EVERY chunk — they are
- *  the shared state that makes parallel chunks agree (audit H17/M7). */
-export interface GenerationCalibration {
-  readonly startLoadPosture: string | null;
-  readonly loadAnchors: readonly LoadAnchor[];
-}
-
 export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>, calibration?: GenerationCalibration | null, absences?: readonly GenerationAbsence[]): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
@@ -270,6 +264,24 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
       ...describeLoadAnchorLines(calibration.loadAnchors, standardizeWeightUnit(unitPreferences.weightUnit)),
     );
   }
+
+  // Like the anchors, the brief and the blueprint go to EVERY chunk: they are
+  // what makes parallel calls choose the same exercises for the same reasons
+  // and put phases and deloads in the same weeks. The blueprint is derived
+  // from the plan's length alone, so it is sent even when the athlete's
+  // history could not be read.
+  const selection = calibration?.exerciseSelection;
+  if (selection) {
+    lines.push(``, formatExerciseSelectionBrief(selection, "plan"));
+  }
+  lines.push(
+    ...describeProgramBlueprintLines({
+      totalWeeks: input.totalWeeks,
+      range,
+      hasRace: Boolean(input.raceDate),
+      primaryLifts: selection?.primaryLifts ?? [],
+    }),
+  );
 
   // Include rest days in the total
   const restDaysPerWeek = 7 - input.daysPerWeek;
@@ -838,70 +850,6 @@ export async function createPendingPlan(
 }
 
 /**
- * Turn the athlete's current training-load posture into one line of opening-week
- * calibration guidance for the generator, or null when no special handling is
- * warranted (sweet spot / not enough history). Exported for testing.
- */
-export function describeStartLoadPosture(overview: TrainingLoadOverview): string | null {
-  const acwr = overview.acwr != null ? ` (ACWR ${overview.acwr.toFixed(2)})` : "";
-  switch (overview.zone) {
-    case "danger":
-      return `The athlete is carrying high recent load${acwr} and is currently fatigued. Start week 1 conservatively — moderate volume and intensity, no peak or simulation sessions in the first few days — and let them absorb load before ramping.`;
-    case "yellow":
-      return `The athlete's recent load is elevated${acwr}. Ease into week 1 (trim volume on the hardest sessions) before progressing normally.`;
-    case "undertraining":
-      return `The athlete is currently detrained / below their 28-day baseline${acwr}. Ramp volume gently across the first 1-2 weeks instead of starting at full prescription.`;
-    default:
-      return null; // sweet_spot / insufficient_data ⇒ no special calibration
-  }
-}
-
-// Compute the athlete's generation calibration from recent history: the
-// qualitative posture line for week 1, and the per-exercise load anchors every
-// chunk receives (audit H17/M7 — the sets were already being fetched here and
-// used only for the posture sentence). Degrades to null (plan generated
-// without calibration) on any failure — never blocks plan generation.
-async function computeGenerationCalibration(
-  userId: string,
-  user: Awaited<ReturnType<typeof storage.users.getUser>>,
-): Promise<GenerationCalibration | null> {
-  try {
-    // The athlete's calendar date, not the server's: a UTC "today" put the
-    // load window a day off for everyone west of Greenwich, so the posture and
-    // anchors the plan was calibrated from lagged the schedule it was written
-    // against (resolveUserTodayForPlan makes the same call for the schedule).
-    const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
-    const from = addDaysToISODate(today, -LOAD_WINDOW_DAYS);
-    const [workoutLogs, loadExerciseSets, loadTags] = await Promise.all([
-      storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
-      storage.analytics.getAllExerciseSetsWithDates(userId, from, today),
-      storage.analytics.getExerciseLoadTags(),
-    ]);
-    const { overview } = calculateTrainingLoad(workoutLogs, loadExerciseSets, loadTags, {
-      currentDate: today,
-      weightUnit: user?.weightUnit || "kg",
-      distanceUnit: user?.distanceUnit || "km",
-      athlete: {
-        age: user?.age ?? null,
-        gender: user?.gender ?? null,
-        restingHr: user?.restingHr ?? null,
-        // Scales unweighted-rep tonnage with the body being moved (audit M2).
-        bodyweightKg: user?.bodyweightKg ?? null,
-        maxHr: user?.maxHr ?? null,
-        ftp: user?.ftp ?? null,
-      },
-    });
-    return {
-      startLoadPosture: describeStartLoadPosture(overview),
-      loadAnchors: buildLoadAnchors(loadExerciseSets, standardizeWeightUnit(user?.weightUnit)),
-    };
-  } catch {
-    logger.warn("[planGen] load calibration unavailable; generating without it.");
-    return null;
-  }
-}
-
-/**
  * The athlete's own calendar date. A UTC "today" would retire a plan a day early
  * for anyone west of Greenwich — the same reasoning as PlanStorage.resolveUserToday.
  */
@@ -930,7 +878,7 @@ export async function executePlanGeneration(
       weightUnit: standardizeWeightUnit(user?.weightUnit),
       distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
     };
-    const calibration = await computeGenerationCalibration(userId, user);
+    const calibration = await computeGenerationCalibration(userId, user, normalized);
     // Declared absences inside the plan window, so the generator schedules
     // around a booked travel week instead of programming straight over it.
     // startDate is absent only for a legacy queued job (same guard as

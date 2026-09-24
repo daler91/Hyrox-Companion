@@ -9,6 +9,7 @@ import { SUGGESTIONS_PROMPT } from "../prompts";
 import { formatAthleteConstraints } from "../prompts/athleteConstraints";
 import { formatCoachingAnalysis } from "../prompts/coachingAnalysis";
 import { relativeDayLabel } from "../prompts/coachingContext";
+import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import {
   formatExerciseSetsForPrompt,
   type PromptExerciseSet,
@@ -308,6 +309,11 @@ export function buildPromptDataSections(
     sections.push(formatCoachingAnalysis(trainingContext.coachingInsights, planGoal));
   }
 
+  // After the analysis on purpose: the analysis says whether and how much to
+  // change a session, the brief says which exercise to change it to.
+  const selectionSection = formatExerciseSelectionBrief(trainingContext.exerciseSelection, "coach");
+  if (selectionSection) sections.push(selectionSection);
+
   const nutritionSection = buildNutritionSection(trainingContext);
   if (nutritionSection) sections.push(nutritionSection);
 
@@ -375,7 +381,7 @@ export type ReviewNote = z.infer<typeof reviewNoteSchema>;
 
 const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite functional fitness coach with deep knowledge of hyrox-style racing, running, and strength training. Write short reassurance notes to the athlete for upcoming workouts you reviewed but decided to leave as-is.
 
-Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, training state, load governor / Form / monotony, race readiness, recent personal records, plan compliance, coverage gaps, recent workouts, plan goal, or coaching materials). Do not prescribe a new workout — these are review notes only.
+Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, training state, load governor / Form / monotony, race readiness, recent personal records, plan compliance, coverage gaps, the exercise selection brief, recent workouts, plan goal, or coaching materials). When the session already serves one of the brief's needs or progresses one of the athlete's familiar lifts, say which — "this keeps your back squat moving from last week's 100 kg" beats "this session builds strength". Do not prescribe a new workout — these are review notes only.
 
 Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
 

@@ -48,6 +48,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 - **Photo-to-workout parsing** - Upload an image of a whiteboard, plan sheet, or coach notes and extract workout structure with Gemini vision.
 - **Streaming coach chat** - Ask context-aware questions over Server-Sent Events with recent training, plan status, and coaching materials in scope.
 - **Auto-coach and suggestions** - Evaluate completed workouts, fatigue signals, plan phase, station gaps, and RAG materials to propose targeted updates.
+- **Personalised exercise selection** - AI plan generation, the auto-coach, and chat choose exercises from a brief computed from the athlete's own logs: their familiar lifts, ranked weak links (stalled lifts, push/pull and single-leg balance, stale HYROX stations, patterns the coming week never touches) with candidate exercises already filtered for their goal, equipment, stated limitations, and experience, plus their race-standard station loads. Generated plans keep the same primary lifts and block structure across every week, and prescriptions spell out effort (RPE or reps in reserve), rest, tempo, pace targets, and per-set cues.
 
 ### RAG-Powered Coaching
 

@@ -104,6 +104,7 @@ flowchart LR
         D7["Progression flags"]
         D8["Training state decision tree"]
         D9["Load governor overview<br/>UTSS, ACWR, restrictions"]
+        D10["Exercise selection brief<br/>familiar lifts, needs + candidates,<br/>substitutes, week shape"]
     end
 
     subgraph Context["TrainingContext"]
@@ -113,6 +114,7 @@ flowchart LR
         C4["Recent completed workouts"]
         C5["Structured exercise rows"]
         C6["coachingInsights"]
+        C7["exerciseSelection"]
     end
 
     T1 --> D1
@@ -127,6 +129,11 @@ flowchart LR
     T5 --> D9
     T6 --> D9
     T7 --> D9
+    T2 --> D10
+    T3 --> D10
+    T4 --> D10
+    T6 --> D10
+    D4 --> D10
 
     D1 --> C4
     D2 --> C5
@@ -137,6 +144,7 @@ flowchart LR
     D7 --> C6
     D8 --> C6
     D9 --> C6
+    D10 --> C7
 
     T1 --> C1
     T2 --> C2
@@ -246,6 +254,7 @@ sequenceDiagram
 | Auto-coach orchestration | `server/services/coachService.ts` |
 | Shared training context | `server/services/ai/index.ts`, `server/gemini/types.ts` |
 | Provider suggestion prompt | `server/gemini/suggestionService.ts` |
+| Exercise selection brief (which exercise to choose or swap to) | `server/services/ai/exerciseSelection.ts`, `server/prompts/exerciseSelection.ts` |
 | Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` |
 | Load-governor suggestion builder (`buildLoadGovernorSuggestions`) | `server/services/trainingLoadGovernor.ts` |
 | Exercise load tag schema | `shared/schema/tables.ts`, `migrations/0049_exercise_load_tags.sql` |

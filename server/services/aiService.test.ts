@@ -87,6 +87,14 @@ describe("buildTrainingContext", () => {
         undertrainingFlag: false,
         progressionFlags: [],
       }),
+      // Even with nothing logged the brief carries the goal lens and the
+      // beginner-friendly defaults; it just has no history to draw needs from.
+      exerciseSelection: expect.objectContaining({
+        lens: "general",
+        experienceLevel: "beginner",
+        staples: [],
+        needs: [],
+      }),
     });
   });
 

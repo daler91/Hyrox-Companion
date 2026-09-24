@@ -26,6 +26,12 @@ import {
   computeRpeTrend,
   computeWeeklyVolume,
 } from "./coachingInsights";
+import {
+  buildExerciseSelectionBrief,
+  type ExerciseSelectionBrief,
+  type ExperienceLevel,
+  type SelectionSet,
+} from "./exerciseSelection";
 import { summarizeMafTrend } from "./mafTrend";
 import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
@@ -147,7 +153,7 @@ function mapTestTrendDirection(
   return trendDirectionMap[trend];
 }
 
-function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermediate" | "advanced" {
+function classifyExperienceLevel(totalWorkouts: number): ExperienceLevel {
   if (totalWorkouts < 20) return "beginner";
   if (totalWorkouts < 80) return "intermediate";
   return "advanced";
@@ -341,6 +347,54 @@ function mapUpcomingWorkout(
   };
 }
 
+/**
+ * The exercise-selection brief for the coach, from reads buildTrainingContext
+ * has already made — no extra IO — as a field to spread into the context.
+ * Never allowed to take the context down with it: a coach without the brief
+ * is the coach this app had before it existed.
+ */
+function coachExerciseSelectionField(params: {
+  readonly plan: { readonly goal?: string | null } | null | undefined;
+  readonly experienceLevel: ExperienceLevel;
+  readonly constraints: string | null;
+  readonly today: string;
+  readonly user: { weightUnit?: string | null; distanceUnit?: string | null; division?: string | null; gender?: string | null } | undefined;
+  readonly sets: readonly SelectionSet[];
+  readonly stationGaps: readonly { station: string; daysSinceLastTrained: number | null }[] | undefined;
+  readonly upcomingDays: readonly UpcomingPlannedDay[];
+}): { exerciseSelection?: ExerciseSelectionBrief } {
+  try {
+    const exerciseSelection = buildExerciseSelectionBrief({
+      goal: params.plan?.goal,
+      experienceLevel: params.experienceLevel,
+      constraints: params.constraints,
+      today: params.today,
+      weightUnit: params.user?.weightUnit,
+      distanceUnit: params.user?.distanceUnit,
+      sets: params.sets,
+      stationGaps: (params.stationGaps ?? []).map((gap) => ({
+        station: gap.station,
+        daysSince: gap.daysSinceLastTrained,
+      })),
+      // Planned sets carry their prescription in planned* until logged — the
+      // same fallback mapUpcomingWorkout makes for the prompt.
+      upcoming: params.upcomingDays.map((day) => ({
+        date: day.date,
+        sets: (day.exerciseSets ?? []).map((es) => ({
+          exerciseName: es.exerciseName,
+          weight: es.weight ?? es.plannedWeight,
+        })),
+      })),
+      division: params.user?.division,
+      gender: params.user?.gender,
+    });
+    return { exerciseSelection };
+  } catch (err) {
+    logger.warn({ err }, "[coach] exercise-selection brief unavailable; coaching without it");
+    return {};
+  }
+}
+
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   // Resolve the athlete before anything that needs a date. "Today" is theirs,
   // not the server's, and it must be ONE value: the coach's narrative date was
@@ -516,6 +570,17 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     today,
   });
 
+  const exerciseSelectionField = coachExerciseSelectionField({
+    plan: activePlanRecord,
+    experienceLevel,
+    constraints: trainingConstraints,
+    today,
+    user,
+    sets: trainingSets,
+    stationGaps,
+    upcomingDays,
+  });
+
   const coachingInsights: TrainingContext["coachingInsights"] = {
     ...rpeTrend,
     stationGaps,
@@ -608,6 +673,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     ...(nutrition ? { nutrition } : {}),
+    ...exerciseSelectionField,
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map(mapUpcomingWorkout),
     exerciseBreakdown,

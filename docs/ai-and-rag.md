@@ -31,6 +31,7 @@ require `GEMINI_API_KEY`.
 - [AI Plan Generation](#ai-plan-generation)
 - [Prompt Templates](#prompt-templates)
 - [Context Building](#context-building)
+- [Exercise Selection Brief](#exercise-selection-brief)
 - [Security](#security)
 - [Configuration](#configuration)
 
@@ -362,8 +363,8 @@ Generates structured multi-week training plans via the configured text provider.
 
 Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-flight generation for the same athlete (409 `PLAN_GENERATION_IN_PROGRESS`), creates the plan row with `generationStatus: "pending"` (`createPendingPlan()`), enqueues a `plan-generation` pg-boss job (no retries; see [Integrations → Job Types](integrations.md#job-types)), and returns `202` with that stub. The client polls `GET /api/v1/plans/:id/generation-status`. The worker runs `executePlanGeneration()`:
 
-1. Marks the plan `generating` and gathers calibration: the athlete's current training-load posture (for the opening week) and per-exercise load anchors from the last 70 days, plus declared absences inside the plan window. If calibration fails, the plan is generated without it.
-2. Splits the plan into 2-week chunks (`PLAN_GENERATION_CHUNK_WEEKS`) and generates them in parallel, at most 3 at a time (`pLimit(PLAN_CHUNK_CONCURRENCY)`). Each chunk is one JSON-mode request to the reasoning model with the prompt from `buildGenerationPrompt()` for its week range, and a 5-minute timeout (`PLAN_GENERATION_AI_TIMEOUT_MS`).
+1. Marks the plan `generating` and gathers calibration (`server/services/planGenerationCalibration.ts`) from one read of the last 70 days: the athlete's current training-load posture (for the opening week), per-exercise load anchors, and the [exercise selection brief](#exercise-selection-brief) (goal lens, familiar exercises, ranked needs with candidate exercises, constraint substitutes, race standards, primary lifts), plus declared absences inside the plan window. Each piece degrades on its own: an unreadable history drops the posture and anchors, but the brief is still built from the goal, focus areas, constraints and experience level.
+2. Splits the plan into 2-week chunks (`PLAN_GENERATION_CHUNK_WEEKS`) and generates them in parallel, at most 3 at a time (`pLimit(PLAN_CHUNK_CONCURRENCY)`). Each chunk is one JSON-mode request to the reasoning model with the prompt from `buildGenerationPrompt()` for its week range, and a 5-minute timeout (`PLAN_GENERATION_AI_TIMEOUT_MS`). Because the chunks cannot see each other, every chunk receives the same shared state: the load anchors, the exercise selection brief, and a **program blueprint** (`server/services/planBlueprint.ts`) — the primary lifts for the whole plan, the training blocks, the deload weeks (one at ~50% for plans of 6-11 weeks, every 4th week for longer plans, never in the final three weeks), and each week's phase from `computePlanPhase()`, the same rule the auto-coach later reviews those weeks by.
 3. Each response is validated against `generatedDaySchema` (Zod); invalid days and exercises are dropped with a warning, and `&` is rewritten to `and` in day text and exercise labels.
 4. The combined days must cover every week with all seven days exactly once, and every non-rest day must carry exercise-table rows, or the generation fails (502 `AI_ERROR`). An exercise whose heaviest weight rises more than 8% week over week (`MAX_WEEKLY_WEIGHT_INCREASE_PCT`) is clamped to that ceiling.
 5. Plan days and their exercise sets are written in one transaction, and the plan is scheduled from `startDate` (week 1 aligned to that week's Monday; no session is placed before `startDate`). For a midweek start, the prompt for the chunk holding week 1 carries a `PLAN START` block naming the week-1 days before the start, so the model keeps them as rest instead of losing sessions to them.
@@ -377,7 +378,7 @@ Generation is asynchronous. `POST /api/v1/plans/generate` refuses a second in-fl
 
 ## Prompt Templates
 
-**Files:** `server/prompts.ts` (prompt strings + `buildSystemPrompt`), `server/prompts/` (`coachingContext.ts` for training-data sections, `materialsBuilder.ts` for coaching-material/RAG-chunk sections, `exerciseSetFormatter.ts` for structured exercise-set formatting)
+**Files:** `server/prompts.ts` (prompt strings + `buildSystemPrompt`), `server/prompts/` (`coachingContext.ts` for training-data sections, `materialsBuilder.ts` for coaching-material/RAG-chunk sections, `exerciseSetFormatter.ts` for structured exercise-set formatting, `exerciseSelection.ts` for the exercise selection brief and the plan generator's grouped exercise menu)
 
 ### BASE_SYSTEM_PROMPT
 
@@ -396,6 +397,9 @@ Detailed instructions for the auto-coach. Includes:
 - Hyrox-specific coaching (grip fatigue, transitions, station substitutes)
 - Running-focused coaching (periodization, easy/tempo/interval balance)
 - Modification priority hierarchy (adjust intensity > swap exercises > rewrite > add accessory > coaching cues)
+- Exercise selection rules: choose from the exercise selection brief (familiar exercises first), give every exercise a job for this athlete, keep familiar main lifts and progress them rather than swapping for look-alikes, swap like for like, fix the week's pattern balance, and raise specificity toward the goal date
+- Prescription detail: sets x reps @ load with effort (RPE or reps in reserve) and rest in parentheses, pace or effort targets for runs and ergs, station loads relative to race standards, and a rationale addressed to the athlete that names the data point behind the change
+- HYROX station gaps are acted on only when the goal involves functional fitness/HYROX or the plan already includes station work
 
 ### PARSE_EXERCISES_PROMPT
 
@@ -473,7 +477,12 @@ CONFIDENCE SCORING:
 
 ### PLAN_GENERATION_PROMPT
 
-Instructions for generating multi-week training plans with day-by-day structure.
+Instructions for generating multi-week training plans with day-by-day structure. Covers:
+- The exercise keys, grouped by what they train (HYROX stations, running, squat, hinge, single-leg, horizontal/vertical push and pull, carries, trunk, power, conditioning, engines, lower-leg and hip durability) — built by `buildExerciseMenu()`, and a superset of the flat list it replaced
+- How to read the request's exercise selection brief and program blueprint, and that the blueprint's phases and deload weeks are authoritative
+- Exercise selection principles: every exercise has a job for this athlete, primary lifts stay fixed so load can progress, the brief's top needs get recurring slots, session anatomy (warm-up, power/skill, primary lift, secondary lifts, accessories for needs, optional finisher), weekly pattern balance, rising specificity, and accessory rotation only at block boundaries
+- Prescription detail: `mainWorkout` one line per block with sets x reps @ load, effort, rest and tempo where it serves the intent; runs with warm-up, a paced or effort-based main set, recoveries and cool-down; stations relative to race standard; `notes` with the session's intent, the key technique cue, and an adjustment rule
+- The JSON contract: working sets only in `exercises` (warm-ups and cool-downs stay in the text), null fields omitted, and a short per-set target in the first set's `notes` (e.g. `RPE 7 · rest 2 min · 3-1-1 tempo`)
 
 ### Helper Functions
 
@@ -513,6 +522,7 @@ The context carries:
 - Structured exercise stats (max weight, max distance, best time per exercise)
 - Active plan info (name, weeks, current week, goal)
 - **Coaching insights:** RPE trends, fatigue/undertraining flags, station gaps, recent skips with their reasons (`recentSkips`, up to 5), plan phase, weekly volume trends, progression flags per exercise, the training-load governor overview (`loadGovernor`, from `calculateTrainingLoad()` over the last 70 days), and the rule-based training-state decision (`decisionTree` from `decideTrainingState()`: phase, allowed workout types, whether intensity is permitted, rationale codes). When the data supports them, it also carries personal records, PRs this week, plan compliance, neglected movement patterns and muscle groups, and race readiness.
+- **Exercise selection brief** (`exerciseSelection`): built from the same 70-day training sets, the active plan's goal, the athlete's standing constraints, the station gaps and the upcoming planned days — see [Exercise Selection Brief](#exercise-selection-brief). Rendered after the COACHING ANALYSIS block in the auto-coach, review-note, chat plan-edit and chat prompts; a failure to build it is logged and leaves the context without it.
 
 ---
 
@@ -591,6 +601,27 @@ The checks run in order (weight, then pace, then time) and the first that produc
 ### Current Week
 
 Calculated from the active plan's `startDate` to the athlete-local `today` that `buildTrainingContext()` passes in: `max(1, ceil((daysSinceStart + 1) / 7))` (`computeCurrentWeek()` in `shared/planPhase.ts`). It is not clamped to `totalWeeks`. Once the plan has ended, the week runs past `totalWeeks` and [Plan Phase](#plan-phase) returns `undefined`. A plan with no `startDate`, or one that has not started yet, reads as week 1.
+
+---
+
+## Exercise Selection Brief
+
+**Files:** `server/services/ai/exerciseSelection.ts` (builder), `server/services/ai/exerciseProfile.ts` (goal lens and constraint reading), `server/services/ai/exerciseKnowledge.ts` (curated tables), `server/prompts/exerciseSelection.ts` (renderer), `server/services/planBlueprint.ts` (plan skeleton)
+
+The COACHING ANALYSIS decides whether and how much to change a session; the brief decides **which exercise**. Without it the plan generator chose from a flat list of keys and the auto-coach was told to "swap in a neglected exercise" with nothing to choose from, so both defaulted to the most average exercise for the goal. `buildExerciseSelectionBrief()` is a pure function of data both callers already hold, so plan generation and every coaching surface read the same conclusions.
+
+| Part | What it holds |
+|------|---------------|
+| Goal lens | `hyrox`, `running`, `strength`, `hybrid` (running + strength), `weight_loss` or `general`, classified from the goal text (word-bounded, so "10kg" is not a 10K), falling back to the plan wizard's focus areas. Each lens states what exercise choice is for — a runner's strength work is for durability, a HYROX athlete's makes the stations cheaper. |
+| Familiar exercises | Up to 8 exercises the athlete logged in 2+ sessions, most-practised first, with the last session ("4 sets, top 100 kg x 5", read through each set's own unit stamp) and days since. |
+| Needs | Up to 7, ranked: plan-wizard focus areas first; then HYROX station gaps of 14+ days or with no recent session (at most 2 — only for HYROX goals or station focus areas, "no recent session" only once there are 6+ sessions of history, and never for a station the constraints rule out) alongside whole patterns the goal needs that the last 4 weeks never touched (at most 3 — e.g. single-leg, hinge and trunk work for a runner; skipped when a listed station gap already stands for the pattern, as farmers carry does for carries); then lifts stalled at the same top load for 3 sessions without a rep gain (at most 2), with same-pattern variations and a method alternative (tempo, pauses, rep-range shift), and lopsided ratios once 20+ sets are logged (pulling under 70% of pushing, hinging under half of squatting, no single-leg work); then 10-13 day station gaps and missing calf/foot work for runners. |
+| Candidates | Up to 4 per need, from curated pools, familiar ones first (push and pull pools alternate horizontal and vertical options, so a cut offers both). Filtered by the athlete's constraints text: equipment they say they lack ("no sled", "just dumbbells and a pull-up bar"), movements they say they can't do (needs a limiting word — "lunges hurt", not "I love lunges"), and body regions (knee/ankle/achilles → no jumps or sprints, shoulder → no overhead pressing, lower back → no heavy unsupported hinging), plus high-skill lifts for beginners they haven't logged. The constraints text itself still reaches the model, which decides anything this reading misses. |
+| Station substitutes | For a HYROX athlete whose constraints rule a station out, what trains the same demand (sled push → leg press, walking lunges, box step-overs). A ruled-out station appears here only, never as a gap to close. |
+| Race standards | The athlete's division and gender loads from `STATION_LOADS_KG`, in their weight unit; both categories when gender is unset. |
+| Upcoming week shape | Coach only: planned sets per pattern across the next 7 days, the patterns the goal needs that the week never touches, and heavy squat/hinge days that land back to back. |
+| Primary lifts | Plan generation only: one backbone lift per slot for the goal (e.g. squat, hinge, vertical push, pull, single-leg for HYROX), the athlete's most-practised eligible lift when they have one, otherwise the first default their constraints, equipment and experience allow. |
+
+The renderer names exercises by display name for the coach (its rationale is athlete-facing) and by exact key for plan generation (its `exerciseName` must be a key), and sanitizes athlete-named custom exercises like every other free-text field.
 
 ---
 
@@ -704,6 +735,10 @@ assumes every athlete maxes out their $2, which none will.
 | `server/services/ragRetrieval.ts` | Vector search and fallback retrieval logic |
 | `server/services/coachService.ts` | Auto-coach pipeline |
 | `server/services/planGenerationService.ts` | AI training plan generation |
+| `server/services/planGenerationCalibration.ts` | Plan-generation calibration: load posture, load anchors, and the exercise selection brief |
+| `server/services/planBlueprint.ts` | Shared plan skeleton for parallel chunks: phases, deload weeks, blocks, primary lifts |
+| `server/services/ai/exerciseSelection.ts` + `exerciseProfile.ts` + `exerciseKnowledge.ts` | Exercise selection brief, the goal-lens and constraint reading it starts from, and the curated tables behind it |
+| `server/prompts/exerciseSelection.ts` | Brief renderer and the plan generator's grouped exercise menu |
 | `server/services/chatIntentService.ts` + `server/services/planAdjustmentService.ts` | Chat plan-edit intent gate and plan-adjustment proposals |
 | `server/middleware/aiConsent.ts` | `aiCoachEnabled` consent gate (403 `AI_COACH_DISABLED`) |
 | `server/middleware/aibudget.ts` | AI kill switch + rolling 24h budget enforcement |

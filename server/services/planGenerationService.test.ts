@@ -481,6 +481,63 @@ describe("executePlanGeneration", () => {
     expect(prompt).toContain("Travel, 2026-01-07 to 2026-01-08 (plan week 1 Wednesday through week 1 Thursday)");
   });
 
+  it("gives every chunk the same exercise-selection brief and blueprint, built from the athlete's history", async () => {
+    // 4 weeks → two parallel chunks. Neither can see the other, so both must
+    // be handed the same familiar lifts and the same primary lifts.
+    const input = { ...baseInput, endDate: "2026-02-02" } as const;
+    const sortedDays = makeGeneratedWeeks(1, 4);
+    setupPlanStorage(input, createPlanDaysFromGenerated(sortedDays));
+    mockAiChunks(makeGeneratedWeeks(1, 2), makeGeneratedWeeks(3, 4));
+    const sessionDates = ["2025-12-15", "2025-12-19", "2025-12-23", "2025-12-29"];
+    mocks.analytics.getWorkoutLogsByDateRange.mockResolvedValue(
+      sessionDates.map((date) => ({ id: `log-${date}`, date, focus: "Strength", countsAsTraining: true })),
+    );
+    mocks.analytics.getAllExerciseSetsWithDates.mockResolvedValue(
+      sessionDates.flatMap((date) =>
+        [1, 2, 3].map((setNumber) => ({
+          workoutLogId: `log-${date}`,
+          date,
+          exerciseName: "front_squat",
+          customLabel: null,
+          setNumber,
+          reps: 5,
+          weight: 80,
+          weightUnit: "kg",
+        })),
+      ),
+    );
+
+    await executePlanGeneration("plan-1", input, "user-1");
+
+    const prompts = mocks.generateContent.mock.calls.map(getPromptText);
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      expect(prompt).toContain("EXERCISE SELECTION BRIEF");
+      expect(prompt).toContain("GOAL LENS: HYROX");
+      expect(prompt).toContain("- front_squat: 4 sessions, last 3 sets, top 80 kg x 5");
+      expect(prompt).toContain("PROGRAM BLUEPRINT");
+      expect(prompt).toContain("squat: front_squat (athlete's own, 4 sessions)");
+    }
+    expect(prompts[0]).toContain("week 1 = EARLY (block 1); week 2 = BUILD (block 1)");
+    expect(prompts[1]).toContain("week 3 = TAPER (block 1); week 4 = RACE WEEK (block 1)");
+  });
+
+  it("still sends the goal lens and blueprint when the athlete's history can't be read", async () => {
+    const sortedDays = makeGeneratedWeeks(1, 1);
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(sortedDays));
+    mockAiChunks(sortedDays);
+    mocks.analytics.getAllExerciseSetsWithDates.mockRejectedValue(new Error("db down"));
+
+    await executePlanGeneration("plan-1", { ...baseInput, focusAreas: ["wall_balls"] }, "user-1");
+
+    const prompt = getPromptText(mocks.generateContent.mock.calls[0]);
+    expect(prompt).toContain("GOAL LENS: HYROX");
+    expect(prompt).toContain("Wall Balls: the athlete chose this as a focus area");
+    expect(prompt).toContain("PROGRAM BLUEPRINT");
+    expect(prompt).not.toContain("RECENT WORKING WEIGHTS (median top set");
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenLastCalledWith("plan-1", "ready", null, mocks.tx);
+  });
+
   it("persists generated plan notes and plan-day exercise rows", async () => {
     const generatedDays = makeGeneratedWeek(1, {
       notes: "Keep bracing tight",
