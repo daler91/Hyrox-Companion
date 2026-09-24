@@ -13,7 +13,7 @@ function mockResponse(text = "[]") {
   vi.mocked(generateJsonText).mockResolvedValue({ text } as Awaited<ReturnType<typeof generateJsonText>>);
 }
 
-function systemInstructionOf(call: number = 0): string {
+function systemInstructionOf(call = 0): string {
   const instruction = vi.mocked(generateJsonText).mock.calls[call][0].systemInstruction;
   if (!instruction) throw new Error("expected a systemInstruction on this call");
   return instruction;

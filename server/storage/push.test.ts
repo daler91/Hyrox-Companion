@@ -36,7 +36,6 @@ describe("PushStorage.saveSubscription eviction", () => {
       undefined, // insert
       [{ total: MAX_PUSH_SUBSCRIPTIONS_PER_USER + 1 }], // one over the cap
       staleRows, // select id ... orderBy(createdAt asc) limit(1)
-      undefined, // delete
     );
     Object.assign(db, mock);
 

@@ -463,37 +463,34 @@ describe('UserStorage', () => {
     });
   });
 
+  // Wires db.update().set().where().returning() to resolve `rows` and
+  // returns the setMock, so a claim/update test is one arrange line.
+  function mockUpdateReturning(rows: unknown[]) {
+    const returningMock = vi.fn().mockResolvedValue(rows);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockReturnValue({ where: whereMock });
+    vi.mocked(db.update).mockReturnValue({ set: setMock });
+    return setMock;
+  }
+
   describe.each([
     { method: 'claimWeeklyReviewReminder', field: 'lastWeeklyReviewReminderAt', now: new Date('2026-08-06T20:00:00Z') },
     { method: 'claimTodaySession', field: 'lastTodaySessionAt', now: new Date('2026-08-06T06:00:00Z') },
     { method: 'claimAnalysisDigest', field: 'lastAnalysisDigestAt', now: new Date('2026-08-06T21:00:00Z') },
   ] as const)('$method', ({ method, field, now }) => {
     it(`wins the claim and stamps ${field} when the row updates`, async () => {
-      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
+      const setMock = mockUpdateReturning([{ id: 'user-1' }]);
 
-      const result = await userStorage[method](
-        'user-1',
-        new Date('2026-08-06T00:00:00Z'),
-        now,
-      );
+      const result = await userStorage[method]('user-1', new Date('2026-08-06T00:00:00Z'), now);
 
       expect(result).toBe(true);
       expect(setMock).toHaveBeenCalledWith({ [field]: now });
     });
 
     it('loses the claim when no row matched (already claimed within the window)', async () => {
-      const returningMock = vi.fn().mockResolvedValue([]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
+      mockUpdateReturning([]);
 
-      const result = await userStorage[method](
-        'user-1',
-        new Date('2026-08-06T00:00:00Z'),
-      );
+      const result = await userStorage[method]('user-1', new Date('2026-08-06T00:00:00Z'));
 
       expect(result).toBe(false);
     });
@@ -501,10 +498,7 @@ describe('UserStorage', () => {
 
   describe('disableEmailNotifications', () => {
     it('turns the master email flag off and returns true for an existing user', async () => {
-      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
+      const setMock = mockUpdateReturning([{ id: 'user-1' }]);
 
       const result = await userStorage.disableEmailNotifications('user-1');
 
@@ -515,10 +509,7 @@ describe('UserStorage', () => {
     });
 
     it('returns false when no such user exists', async () => {
-      const returningMock = vi.fn().mockResolvedValue([]);
-      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-      const setMock = vi.fn().mockReturnValue({ where: whereMock });
-      vi.mocked(db.update).mockReturnValue({ set: setMock });
+      mockUpdateReturning([]);
 
       const result = await userStorage.disableEmailNotifications('nonexistent');
 
