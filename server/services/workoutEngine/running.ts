@@ -274,14 +274,13 @@ const MAX_LONG_RUN_SHARE = 0.5;
 const MAX_START_OVER_BASELINE = 1.3;
 
 /** The longest long run each goal needs; a marathon plan needs its 30 km runs. */
-function longRunCapKm(lens: GoalLens, goal: string | null | undefined): number {
+function longRunCapKm(lens: GoalLens, goal: string): number {
   if (lens === "hyrox") return 14;
   if (lens === "hybrid") return 16;
-  const text = goal ?? "";
-  if (/half[\s-]?marathon|\b21(?:\.1)?\s?k\b/i.test(text)) return 21;
-  if (/marathon|\b42(?:\.2)?\s?k\b/i.test(text)) return 32;
-  if (/\b10\s?k\b|10,?000\s?m/i.test(text)) return 16;
-  if (/\b5\s?k\b|5,?000\s?m|parkrun/i.test(text)) return 12;
+  if (/half[\s-]?marathon|\b21(?:\.1)?\s?k\b/i.test(goal)) return 21;
+  if (/marathon|\b42(?:\.2)?\s?k\b/i.test(goal)) return 32;
+  if (/\b10\s?k\b|10,?000\s?m/i.test(goal)) return 16;
+  if (/\b5\s?k\b|5,?000\s?m|parkrun/i.test(goal)) return 12;
   return 20;
 }
 
@@ -378,7 +377,7 @@ export function buildRunVolumeTargets(input: RunVolumeInput): RunWeekTarget[] {
 
   const start = startingVolume(input.baseline, defaults[input.experience]);
   const ceiling = Math.max(start, Math.min(peaks[input.experience], start * MAX_VOLUME_MULTIPLE));
-  const cap = longRunCapKm(input.lens, input.goal);
+  const cap = longRunCapKm(input.lens, input.goal ?? "");
   const limits: LongRunLimits = {
     cap,
     floor: Math.min(cap, (input.baseline?.longestRunKm ?? 0) * 0.9),

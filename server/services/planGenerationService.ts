@@ -277,6 +277,9 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
   if (selection) {
     lines.push("", formatExerciseSelectionBrief(selection, "plan"));
   }
+  // Then the engine's slice for these weeks: rhythm, lift numbers, paces,
+  // station doses. Shared state of the same kind as the blueprint, and the
+  // numbers the repair pass enforces after the model has written the sessions.
   lines.push(
     ...describeProgramBlueprintLines({
       totalWeeks: input.totalWeeks,
@@ -285,11 +288,8 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
       primaryLifts: selection?.primaryLifts ?? [],
       hasEngineTargets: Boolean(calibration?.engine),
     }),
+    ...describeEngineTargetLines(calibration?.engine, { ...range, daysBeforeStart }),
   );
-  // The engine's slice for these weeks: rhythm, lift numbers, paces, station
-  // doses. Shared state of the same kind as the blueprint, and the numbers the
-  // repair pass enforces after the model has written the sessions.
-  lines.push(...describeEngineTargetLines(calibration?.engine, { ...range, daysBeforeStart }));
 
   // Include rest days in the total
   const restDaysPerWeek = 7 - input.daysPerWeek;

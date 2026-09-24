@@ -284,7 +284,7 @@ function prescriptionOf(
   unit: WeightUnit,
 ): { reps: number; weight: number; text: string } | null {
   const first = sets.at(0);
-  if (!first || first.plannedReps == null || first.plannedWeight == null) return null;
+  if (first?.plannedReps == null || first.plannedWeight == null) return null;
   const uniform = sets.every(
     (set) => set.plannedReps === first.plannedReps && set.plannedWeight === first.plannedWeight,
   );

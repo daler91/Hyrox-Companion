@@ -17,6 +17,8 @@ import type { SessionKind, SkeletonSession } from "./weekSkeleton";
 const KM_PER_MILE = 1.609344;
 /** Warm-up plus cool-down around a quality session, in km. */
 const QUALITY_EXTRA_KM = 3;
+/** The pace a timed rep is costed at when the athlete has no paces: 5:30/km. */
+const DEFAULT_WORK_SEC_PER_KM = 330;
 const MIN_EASY_RUN_KM = 3;
 
 export interface SessionContext {
@@ -125,16 +127,15 @@ function qualityShape(
   return ctx.deload ? { ...shape, reps: Math.max(1, Math.ceil(shape.reps / 2)) } : shape;
 }
 
-function workKm(shape: QualityShape, secondsPerKm: number | null): number {
+function workKm(shape: QualityShape, secondsPerKm = DEFAULT_WORK_SEC_PER_KM): number {
   if (shape.meters) return (shape.reps * shape.amount) / 1000;
-  const pace = secondsPerKm ?? 330;
-  return (shape.reps * shape.amount * 60) / pace;
+  return (shape.reps * shape.amount * 60) / secondsPerKm;
 }
 
 function thresholdSession(ctx: SessionContext): { text: string; km: number } {
   const shape = qualityShape(THRESHOLD_SHAPES, ctx);
   const target = zoneOrEffort(ctx, "threshold", "threshold effort (RPE 7-8, comfortably hard)");
-  const km = workKm(shape, ctx.paces?.threshold ?? null) + QUALITY_EXTRA_KM;
+  const km = workKm(shape, ctx.paces?.threshold) + QUALITY_EXTRA_KM;
   return {
     text: `15 min easy, ${shape.reps} x ${shape.amount} min ${target} with ${shape.recovery}, 10 min easy (~${distanceText(km, ctx.distanceUnit)})`,
     km,
@@ -147,7 +148,7 @@ function intervalSession(ctx: SessionContext): { text: string; km: number } {
   const target = hyrox
     ? zoneOrEffort(ctx, "steady", "race-run effort (RPE 7-8)")
     : zoneOrEffort(ctx, "interval", "5K effort (RPE 8-9)");
-  const km = workKm(shape, null) + QUALITY_EXTRA_KM;
+  const km = workKm(shape) + QUALITY_EXTRA_KM;
   return {
     text: `15 min easy, ${shape.reps} x ${shape.amount} m ${target} with ${shape.recovery}, 10 min easy (~${distanceText(km, ctx.distanceUnit)})`,
     km,
