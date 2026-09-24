@@ -729,6 +729,13 @@
       "when": 1790214729418,
       "tag": "0103_training_plans_engine_state",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1790258803917,
+      "tag": "0104_drop_redundant_plan_days_plan_id_index",
+      "breakpoints": true
     }
   ]
 }

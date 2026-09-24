@@ -457,7 +457,6 @@ export const planDays = pgTable(
       "plan_days_time_of_day_check",
       sql`planned_time_of_day_min IS NULL OR (planned_time_of_day_min BETWEEN 0 AND 1439)`,
     ),
-    index("idx_plan_days_plan_id").on(table.planId),
     index("idx_plan_days_scheduled_date").on(table.scheduledDate),
     index("idx_plan_days_status").on(table.status),
     index("idx_plan_days_plan_week").on(table.planId, table.weekNumber),
