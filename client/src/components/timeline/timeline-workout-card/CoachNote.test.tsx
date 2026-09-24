@@ -77,7 +77,8 @@ describe("CoachNote", () => {
   });
 
   it("lists every change, even the same lift moving the same way twice", () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Spied, not silenced: if React does warn, the warning prints beside the failure.
+    const consoleError = vi.spyOn(console, "error");
     render(
       <CoachNote
         {...baseProps}
