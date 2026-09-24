@@ -1,0 +1,1 @@
+DROP INDEX "idx_plan_days_plan_id";

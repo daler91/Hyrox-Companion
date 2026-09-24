@@ -36,7 +36,6 @@ const EXPECTED_TABLES = [
 
 const EXPECTED_INDEXES = [
   "idx_training_plans_user_id",
-  "idx_plan_days_plan_id",
   "idx_plan_days_scheduled_date",
   "idx_plan_days_status",
   "idx_plan_days_plan_week",

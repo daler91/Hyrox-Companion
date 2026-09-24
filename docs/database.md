@@ -254,12 +254,12 @@ Individual workout days within a training plan.
 - `plan_days_time_of_day_check`: `planned_time_of_day_min IS NULL OR (planned_time_of_day_min BETWEEN 0 AND 1439)`
 
 **Indexes:**
-- `idx_plan_days_plan_id` on (`plan_id`)
 - `idx_plan_days_scheduled_date` on (`scheduled_date`)
 - `idx_plan_days_status` on (`status`)
 - `idx_plan_days_plan_week` on (`plan_id`, `week_number`) -- composite
 - `idx_plan_days_plan_status` on (`plan_id`, `status`) -- composite
 - `idx_plan_days_plan_scheduled` on (`plan_id`, `scheduled_date`) -- composite, added in migration `0054`
+- `idx_plan_days_plan_id` dropped in migration `0104` -- fully shadowed by the three composite indexes above, which all lead with `plan_id`; every caller filters `plan_id` alone or `plan_id` plus one of `week_number`/`status`/`scheduled_date`
 
 ---
 
