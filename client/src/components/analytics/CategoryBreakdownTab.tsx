@@ -257,7 +257,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     return (
       <div className="flex items-center justify-center py-12 text-center bg-muted/20 rounded-lg border border-dashed">
         <div className="space-y-3">
-          <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40" />
+          <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
             Your training mix and coverage insights appear here once you&apos;ve logged a handful of workouts across different categories.
           </p>

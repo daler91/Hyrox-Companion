@@ -68,7 +68,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
   const loadedContent =
     availableExercises.length === 0 ? (
       <div className="text-center py-8 space-y-3" data-testid="text-no-progression">
-        <Activity className="h-10 w-10 mx-auto text-muted-foreground/40" />
+        <Activity className="h-10 w-10 mx-auto text-muted-foreground/40" aria-hidden="true" />
         <p className="text-sm text-muted-foreground">
           Your exercise progression lines appear here once you&apos;ve logged a few structured
           workouts — weights, reps, and times across sessions.
@@ -114,7 +114,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     <Card data-testid="card-exercise-progression">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
+          <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
           <CardTitle as="h2">Exercise Progression</CardTitle>
         </div>
         <CardDescription>

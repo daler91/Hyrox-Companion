@@ -46,7 +46,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     return (
       <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
         <div>
-          <BarChart3 className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <BarChart3 className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" aria-hidden="true" />
           <p>No workout data yet. Log some workouts to see your training overview.</p>
         </div>
       </div>

@@ -142,7 +142,7 @@ export function ExerciseProgressionCharts({
     return (
       <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
         <div>
-          <TrendingUp className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <TrendingUp className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" aria-hidden="true" />
           <p>Select an exercise from the dropdown above to view its progression.</p>
         </div>
       </div>

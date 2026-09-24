@@ -85,7 +85,7 @@ export function CoachInsightsTab() {
       <CardHeader>
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
             <CardTitle as="h2">Coach Insights</CardTitle>
           </div>
           <div className="ml-auto flex flex-col items-end gap-1">
@@ -155,7 +155,7 @@ export function CoachInsightsTab() {
           if (!hasInsights) {
             return (
               <div className="text-center py-8 space-y-3 bg-muted/20 rounded-lg border border-dashed">
-                <Sparkles className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                <Sparkles className="h-10 w-10 mx-auto text-muted-foreground/40" aria-hidden="true" />
                 <div className="space-y-1 px-4">
                   <p className="text-sm text-muted-foreground">
                     Generate a personalized analysis of your progress toward your goal, what&rsquo;s
