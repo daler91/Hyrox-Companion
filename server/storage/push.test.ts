@@ -9,6 +9,10 @@ import { MAX_PUSH_SUBSCRIPTIONS_PER_USER, PushStorage } from "./push";
 const makeDb = () =>
   makeQueryBuilderMock(["select", "from", "where", "orderBy", "limit", "insert", "values", "onConflictDoUpdate", "delete"]);
 
+// Fake Web Push subscription keys, matching the placeholder convention
+// pushNotifications.test.ts already uses for this exact shape.
+const subscription = (endpoint: string) => ({ endpoint, p256dh: "p256dh", auth: "auth" });
+
 describe("PushStorage.saveSubscription eviction", () => {
   const storage = new PushStorage();
 
@@ -24,7 +28,7 @@ describe("PushStorage.saveSubscription eviction", () => {
     );
     Object.assign(db, mock);
 
-    await storage.saveSubscription("u1", { endpoint: "https://push.example/e1", p256dh: "k", auth: "a" });
+    await storage.saveSubscription("u1", subscription("https://push.example/e1"));
 
     expect(mock.delete).not.toHaveBeenCalled();
   });
@@ -39,7 +43,7 @@ describe("PushStorage.saveSubscription eviction", () => {
     );
     Object.assign(db, mock);
 
-    await storage.saveSubscription("u1", { endpoint: "https://push.example/e2", p256dh: "k", auth: "a" });
+    await storage.saveSubscription("u1", subscription("https://push.example/e2"));
 
     expect(mock.limit).toHaveBeenCalledWith(1);
     expect(mock.delete).toHaveBeenCalledTimes(1);
@@ -54,7 +58,7 @@ describe("PushStorage.saveSubscription eviction", () => {
     );
     Object.assign(db, mock);
 
-    await storage.saveSubscription("u1", { endpoint: "https://push.example/e3", p256dh: "k", auth: "a" });
+    await storage.saveSubscription("u1", subscription("https://push.example/e3"));
 
     expect(mock.delete).not.toHaveBeenCalled();
   });
