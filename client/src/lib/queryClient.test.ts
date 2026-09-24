@@ -10,6 +10,10 @@ describe("queryClient", () => {
   beforeEach(() => {
     globalThis.fetch = fetchMock;
     fetchMock.mockReset();
+    // queryClient.ts caches the CSRF token at module level, so one test's POST
+    // would let a later test skip the csrf-token fetch. Start every test with
+    // an empty cache, whatever order the tests run in (issue #2048).
+    resetCsrfToken();
   });
 
   afterEach(() => {
@@ -97,8 +101,6 @@ describe("queryClient", () => {
         });
       }
       const mutationCalls = () => fetchMock.mock.calls.filter(([url]) => url === "/api/test");
-
-      beforeEach(() => resetCsrfToken());
 
       it("retries once with a fresh token when the server rejects the CSRF token", async () => {
         routeFetch(forbidden(JSON.stringify({ error: "invalid csrf token", code: "EBADCSRFTOKEN" })));
