@@ -705,7 +705,7 @@ pnpm exec vitest watch server/services/workoutService.test.ts
 
 ### Common CI vs Local Mismatches
 
-- **Timezone issues**: CI runs in UTC. Use `toDateStr()` helper instead of `new Date().toISOString()` for date comparisons.
+- **Timezone issues**: CI runs in UTC. Use `toIsoDateUtc()` from `@shared/dateUtils` instead of `new Date().toISOString()` for date comparisons.
 - **Rate limiting**: Tests that hit the same endpoint rapidly may trigger rate limits. Use `clearRateLimitBuckets()` from `server/routeUtils.ts` in `beforeEach`.
 - **Database state**: Integration tests share a real database. Always use `clearDatabase()` in setup. Check for leaked state from parallel test runs.
 - **Missing env vars**: CI may not have all optional env vars. Tests that depend on `GEMINI_API_KEY` should be conditional or mocked.
