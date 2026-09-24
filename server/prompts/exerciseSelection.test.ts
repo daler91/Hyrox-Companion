@@ -16,7 +16,7 @@ function makeBrief(overrides: Partial<ExerciseSelectionBrief> = {}): ExerciseSel
     experienceLevel: "intermediate",
     staples: [
       { exercise: "back_squat", sessions: 9, daysSince: 3, lastSession: "4 sets, top 100 kg x 5" },
-      { exercise: "custom:Hyrox <b>Class</b>", sessions: 4, daysSince: 1, lastSession: null },
+      { exercise: 'custom:Hyrox Class <3 & "more"', sessions: 4, daysSince: 1, lastSession: null },
     ],
     needs: [
       {
@@ -87,10 +87,14 @@ describe("formatExerciseSelectionBrief", () => {
     expect(text).toContain("→ seated_cable_row (logged 3x), pull_up");
   });
 
-  it("sanitizes the athlete's own exercise names", () => {
+  it("escapes the athlete's own exercise names", () => {
+    // Angle brackets, ampersands and quotes are what a name could use to break
+    // out of the prompt's delimiters; all of them arrive escaped.
+    const escaped = "Hyrox Class &lt;3 &amp; &quot;more&quot;";
     const coach = formatExerciseSelectionBrief(makeBrief(), "coach");
-    expect(coach).not.toContain("<b>");
-    expect(formatExerciseSelectionBrief(makeBrief(), "plan")).toMatch(/custom "Hyrox .*Class.*"/);
+    expect(coach).toContain(escaped);
+    expect(coach).not.toContain("<3");
+    expect(formatExerciseSelectionBrief(makeBrief(), "plan")).toContain(`custom "${escaped}"`);
   });
 
   it("states the goal lens, constraints reading, and race standards", () => {
