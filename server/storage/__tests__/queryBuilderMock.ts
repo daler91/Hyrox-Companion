@@ -9,13 +9,15 @@ import { vi } from "vitest";
  */
 export function makeQueryBuilderMock(methods: readonly string[]) {
   const results: unknown[] = [];
+  const chainMethods = Object.fromEntries(methods.map((method) => [method, vi.fn()]));
   const mock: Record<string, ReturnType<typeof vi.fn>> & { queue: (...next: unknown[]) => void } = {
+    ...chainMethods,
     queue: (...next: unknown[]) => {
       results.push(...next);
     },
   } as never;
-  for (const method of methods) {
-    mock[method] = vi.fn().mockReturnValue(mock);
+  for (const fn of Object.values(chainMethods)) {
+    fn.mockReturnValue(mock);
   }
   mock.then = vi.fn((resolve: (value: unknown) => unknown) =>
     Promise.resolve(results.shift()).then(resolve),
