@@ -15,7 +15,7 @@ export function makeQueryBuilderMock(methods: readonly string[]) {
     queue: (...next: unknown[]) => {
       results.push(...next);
     },
-  } as never;
+  } as never; // NOSONAR partial Drizzle query-builder mock
   for (const fn of Object.values(chainMethods)) {
     fn.mockReturnValue(mock);
   }
