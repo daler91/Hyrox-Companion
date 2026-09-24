@@ -463,6 +463,132 @@ describe('UserStorage', () => {
     });
   });
 
+  describe('claimWeeklyReviewReminder', () => {
+    it('wins the claim and stamps lastWeeklyReviewReminderAt when the row updates', async () => {
+      const now = new Date('2026-08-06T20:00:00Z');
+      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimWeeklyReviewReminder(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+        now,
+      );
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith({ lastWeeklyReviewReminderAt: now });
+    });
+
+    it('loses the claim when no row matched (already claimed within the window)', async () => {
+      const returningMock = vi.fn().mockResolvedValue([]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimWeeklyReviewReminder(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('claimTodaySession', () => {
+    it('wins the claim and stamps lastTodaySessionAt when the row updates', async () => {
+      const now = new Date('2026-08-06T06:00:00Z');
+      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimTodaySession(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+        now,
+      );
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith({ lastTodaySessionAt: now });
+    });
+
+    it('loses the claim when no row matched (already claimed within the window)', async () => {
+      const returningMock = vi.fn().mockResolvedValue([]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimTodaySession(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('claimAnalysisDigest', () => {
+    it('wins the claim and stamps lastAnalysisDigestAt when the row updates', async () => {
+      const now = new Date('2026-08-06T21:00:00Z');
+      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimAnalysisDigest(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+        now,
+      );
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith({ lastAnalysisDigestAt: now });
+    });
+
+    it('loses the claim when no row matched (already claimed within the window)', async () => {
+      const returningMock = vi.fn().mockResolvedValue([]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimAnalysisDigest(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('disableEmailNotifications', () => {
+    it('turns the master email flag off and returns true for an existing user', async () => {
+      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.disableEmailNotifications('user-1');
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ emailNotifications: false }),
+      );
+    });
+
+    it('returns false when no such user exists', async () => {
+      const returningMock = vi.fn().mockResolvedValue([]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.disableEmailNotifications('nonexistent');
+
+      expect(result).toBe(false);
+    });
+  });
+
   describe('getUsersWithNutritionPushReminders', () => {
     it('returns users opted into either nutrition push reminder', async () => {
       const optedInUsers = [{ id: 'user-1' }, { id: 'user-2' }];
