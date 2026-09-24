@@ -62,11 +62,19 @@ function getTodayEntry(
   entries: readonly TimelineEntry[],
   todayStr: string,
 ): TimelineEntry | undefined {
-  return (
-    entries.find((entry) => entry.date === todayStr && entry.status === "planned") ??
-    entries.find((entry) => entry.date === todayStr && entry.status === "completed") ??
-    entries.find((entry) => entry.date === todayStr)
-  );
+  // ⚡ Bolt: Replace multiple chained .find() calls with a single for...of loop
+  // to avoid iterating the entries array 3 times for prioritizing entry status.
+  let match: TimelineEntry | undefined;
+  for (const entry of entries) {
+    if (entry.date !== todayStr) continue;
+    if (entry.status === "planned") return entry;
+    if (entry.status === "completed" && match?.status !== "completed") {
+      match = entry;
+    } else if (!match) {
+      match = entry;
+    }
+  }
+  return match;
 }
 
 // The athlete's race day. Prefer the explicit raceDate; fall back to endDate for
