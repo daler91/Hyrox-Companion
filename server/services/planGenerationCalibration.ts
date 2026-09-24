@@ -104,8 +104,11 @@ async function loadGenerationHistory(
       storage.analytics.getExerciseLoadTags(),
     ]);
     return { workoutLogs, sets, loadTags };
-  } catch {
-    logger.warn("[planGen] training history unavailable; generating without it.");
+  } catch (err) {
+    // Three reads: a failed query reports its message and stack, never the
+    // rows it read. userId stays out (logger S2).
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[planGen] training history unavailable; generating without it.");
     return null;
   }
 }
@@ -144,8 +147,10 @@ function describeLoadCalibration(
       startLoadPosture: describeStartLoadPosture(overview),
       loadAnchors: buildLoadAnchors(history.sets, standardizeWeightUnit(user?.weightUnit)),
     };
-  } catch {
-    logger.warn("[planGen] load calibration unavailable; generating without it.");
+  } catch (err) {
+    // A pure computation over rows already read: the error holds no athlete data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[planGen] load calibration unavailable; generating without it.");
     return { startLoadPosture: null, loadAnchors: [] };
   }
 }

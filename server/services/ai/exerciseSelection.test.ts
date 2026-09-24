@@ -1,9 +1,9 @@
+import { EXERCISE_EQUIPMENT } from "@shared/exerciseEquipment";
 import { HYROX_STATION_ORDER } from "@shared/raceConstants";
 import { EXERCISE_DEFINITIONS, MOVEMENT_PATTERNS } from "@shared/schema/exercises";
 import { describe, expect, it } from "vitest";
 
 import {
-  EXERCISE_EQUIPMENT,
   LENS_SUMMARIES,
   LIFT_VARIATIONS,
   NEED_POOLS,

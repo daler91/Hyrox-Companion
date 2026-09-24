@@ -17,6 +17,7 @@
  * plan edits all read the same brief, and it tests without mocks.
  */
 import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
+import type { Equipment } from "@shared/exerciseEquipment";
 import { HYROX_STATION_ORDER, type HyroxStation, STATION_LOADS_KG } from "@shared/raceConstants";
 import {
   type ExerciseName,
@@ -38,7 +39,6 @@ import { formatMinutes, minutes } from "@shared/units";
 
 import {
   BALANCE_EXCLUDED,
-  type Equipment,
   type ExperienceLevel,
   type GoalLens,
   groupPool,
@@ -70,7 +70,6 @@ import {
 } from "./exerciseProfile";
 
 export type {
-  Equipment,
   ExperienceLevel,
   GoalLens,
   PatternGroup,
@@ -82,6 +81,7 @@ export {
   type ConstraintProfile,
   parseConstraintProfile,
 } from "./exerciseProfile";
+export type { Equipment } from "@shared/exerciseEquipment";
 
 // ---------------------------------------------------------------------------
 // Inputs and outputs

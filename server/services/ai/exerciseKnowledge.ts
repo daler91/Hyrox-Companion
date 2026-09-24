@@ -12,6 +12,7 @@
  * Every table is keyed and valued by canonical `ExerciseName`, so a typo is a
  * type error rather than a candidate that silently never appears.
  */
+import type { Equipment } from "@shared/exerciseEquipment";
 import type { HyroxStation } from "@shared/raceConstants";
 import type { ExerciseName, MovementPattern } from "@shared/schema/exercises";
 
@@ -551,103 +552,6 @@ export const PRIMARY_DEFAULTS: ReadonlyMap<PrimarySlot, SlotDefaults> = new Map<
 // ---------------------------------------------------------------------------
 // Equipment, skill, and joint-stress tags
 // ---------------------------------------------------------------------------
-
-export type Equipment =
-  | "barbell"
-  | "dumbbell"
-  | "kettlebell"
-  | "machine"
-  | "pullup_bar"
-  | "sled"
-  | "rower"
-  | "skierg"
-  | "bike"
-  | "med_ball"
-  | "sandbag"
-  | "box";
-
-/**
- * Equipment an exercise needs — ANY ONE of the listed items is enough (a
- * goblet squat works with a dumbbell or a kettlebell). An exercise absent from
- * this table needs nothing the constraint filter can rule out: bodyweight, or
- * a load the athlete can improvise (walking lunges holding anything).
- */
-export const EXERCISE_EQUIPMENT: Readonly<Partial<Record<ExerciseName, readonly Equipment[]>>> = {
-  back_squat: ["barbell"],
-  front_squat: ["barbell"],
-  box_squat: ["barbell"],
-  zercher_squat: ["barbell"],
-  deadlift: ["barbell"],
-  sumo_deadlift: ["barbell"],
-  deficit_deadlift: ["barbell"],
-  rack_pull: ["barbell"],
-  good_morning: ["barbell"],
-  trap_bar_deadlift: ["barbell"],
-  romanian_deadlift: ["barbell", "dumbbell", "kettlebell"],
-  stiff_leg_deadlift: ["barbell", "dumbbell"],
-  hip_thrust: ["barbell", "dumbbell", "machine"],
-  bench_press: ["barbell"],
-  close_grip_bench_press: ["barbell"],
-  incline_bench_press: ["barbell"],
-  floor_press: ["barbell", "dumbbell"],
-  overhead_press: ["barbell"],
-  push_press: ["barbell", "dumbbell"],
-  landmine_press: ["barbell"],
-  bent_over_row: ["barbell", "dumbbell"],
-  pendlay_row: ["barbell"],
-  t_bar_row: ["barbell", "machine"],
-  barbell_thruster: ["barbell"],
-  dumbbell_bench_press: ["dumbbell"],
-  incline_dumbbell_bench_press: ["dumbbell"],
-  seated_dumbbell_press: ["dumbbell"],
-  arnold_press: ["dumbbell"],
-  single_arm_dumbbell_row: ["dumbbell", "kettlebell"],
-  goblet_squat: ["dumbbell", "kettlebell"],
-  dumbbell_thruster: ["dumbbell"],
-  kettlebell_thruster: ["kettlebell"],
-  kettlebell_swings: ["kettlebell"],
-  kettlebell_clean: ["kettlebell"],
-  kettlebell_press: ["kettlebell"],
-  single_leg_rdl: ["dumbbell", "kettlebell"],
-  farmers_carry: ["dumbbell", "kettlebell"],
-  suitcase_carry: ["dumbbell", "kettlebell"],
-  front_rack_carry: ["kettlebell", "dumbbell"],
-  chest_supported_row: ["machine", "dumbbell"],
-  leg_press: ["machine"],
-  hack_squat: ["machine"],
-  belt_squat: ["machine"],
-  lat_pulldown: ["machine"],
-  straight_arm_pulldown: ["machine"],
-  seated_cable_row: ["machine"],
-  single_arm_cable_row: ["machine"],
-  face_pull: ["machine"],
-  pallof_press: ["machine"],
-  cable_pull_through: ["machine"],
-  hip_abduction_machine: ["machine"],
-  seated_calf_raise: ["machine", "dumbbell"],
-  back_extension: ["machine"],
-  stair_climber: ["machine"],
-  elliptical: ["machine"],
-  pull_up: ["pullup_bar"],
-  chin_up: ["pullup_bar"],
-  assisted_pull_up: ["pullup_bar", "machine"],
-  hanging_leg_raise: ["pullup_bar"],
-  inverted_row: ["pullup_bar", "barbell"],
-  sled_push: ["sled"],
-  sled_pull: ["sled"],
-  rowing: ["rower"],
-  rowing_intervals: ["rower"],
-  skierg: ["skierg"],
-  ski_erg_intervals: ["skierg"],
-  assault_bike: ["bike"],
-  echo_bike: ["bike"],
-  bike_erg: ["bike"],
-  wall_balls: ["med_ball"],
-  sandbag_lunges: ["sandbag"],
-  sandbag_carry: ["sandbag"],
-  box_jumps: ["box"],
-  box_step_over: ["box"],
-};
 
 /** Lifts whose skill demand makes them a poor first choice for a beginner. */
 export const HIGH_SKILL_EXERCISES: ReadonlySet<string> = new Set<ExerciseName>([

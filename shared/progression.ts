@@ -9,10 +9,15 @@
  * 102.5 kg while the chip said "repeat 100 kg" would teach the athlete to trust
  * neither.
  *
+ * The weight steps come from the implement table the engine loads plans with
+ * (shared/exerciseEquipment.ts), so the two also agree that a dumbbell moves
+ * 2 kg at a time, not 2.5.
+ *
  * Kept free of the schema barrel so it ships to the browser: the rules read a
  * minimal structural set, which the client's ExerciseSet and the server's
  * logged rows both satisfy.
  */
+import { implementFor, loadIncrement } from "./exerciseEquipment";
 
 /** The fields of a logged set these rules read. Weights in the athlete's unit. */
 export interface ProgressionSet {
@@ -48,27 +53,41 @@ export interface NextTarget {
 const EPLEY_MIN_REPS = 2;
 const EPLEY_MAX_REPS = 10;
 
-interface PlateSteps {
-  /** The standard plate step: 2.5 kg / 5 lb. */
+interface WeightSteps {
+  /**
+   * The implement's own step, from the table the workout engine loads plans
+   * with (shared/exerciseEquipment.ts): 2.5 kg / 5 lb plates on a barbell,
+   * 2 kg dumbbells, 4 kg kettlebells, a 5 kg machine pin. An exercise the
+   * table doesn't know, or no exercise at all, gets barbell plates.
+   */
   readonly standard: number;
   /**
    * Fallback step for when the standard one breaks the gain cap: the
-   * fractional plates a commercial gym stocks. Tried ONLY after the standard
-   * step has been rejected, so the ordinary reps-vs-weight crossover is
-   * unchanged and this can only speak where the function used to be silent.
+   * fractional plates a commercial gym stocks, half a standard plate. Tried
+   * ONLY after the standard step has been rejected, so the ordinary
+   * reps-vs-weight crossover is unchanged and this can only speak where the
+   * function used to be silent.
    *
    * Without it, a beginner at 3x10 with anything at or under 25 kg got no
    * suggestion at all, ever — reps are capped at 10, so only the weight step
    * remained and it always breached the cap (audit L3).
+   *
+   * Plate-loaded work only (a barbell, or load added to a bodyweight lift): a
+   * dumbbell rack, a kettlebell or a pin stack has no half steps.
    */
-  readonly small: number;
+  readonly small: number | null;
 }
 
-const KG_STEPS: PlateSteps = { standard: 2.5, small: 1.25 };
-const LB_STEPS: PlateSteps = { standard: 5, small: 2.5 };
+function weightSteps(unit: ProgressionWeightUnit, exerciseName = ""): WeightSteps {
+  const standard = loadIncrement(exerciseName, unit === "kg" ? "kg" : "lbs");
+  const implement = implementFor(exerciseName);
+  const plateLoaded = implement === "barbell" || implement === "bodyweight";
+  return { standard, small: plateLoaded ? standard / 2 : null };
+}
 
-function plateSteps(unit: ProgressionWeightUnit): PlateSteps {
-  return unit === "kg" ? KG_STEPS : LB_STEPS;
+/** The steps to try, the implement's own first. */
+function stepsToTry({ standard, small }: WeightSteps): number[] {
+  return small == null ? [standard] : [standard, small];
 }
 
 // A plate jump on a very light implement at the rep ceiling can leap the
@@ -108,7 +127,8 @@ function uniformValue(
  * "Last time and stop" leaves the actual decision — what to put on the bar —
  * entirely to the athlete. This closes that gap with the gentlest overload
  * that still beats last session's estimated 1RM: +1 rep at the same weight,
- * or +one plate step (2.5 kg / 5 lb) at the same reps, whichever raises the
+ * or +one step of the implement (2.5 kg / 5 lb plates on a barbell, the next
+ * dumbbell or kettlebell up) at the same reps, whichever raises the
  * Epley estimate less. Light work therefore progresses by reps and heavy work
  * by plates, with the crossover decided by the same 1RM math the PR tracker
  * already uses. At the 10-rep ceiling only the plate step remains, so reps
@@ -140,8 +160,11 @@ export function suggestNextTarget(
     /** The session before last, for the missed-twice deload. Optional: without
      *  it a miss repeats, exactly as before this argument existed. */
     readonly previousSets?: readonly ProgressionSet[];
+    /** The exercise, for its implement's steps. Optional: without it, barbell plates. */
+    readonly exerciseName?: string;
   },
 ): NextTarget | null {
+  const steps = weightSteps(args.weightUnit, args.exerciseName);
   if (args.category !== "strength") return null;
 
   // Before the uniformity gate below, deliberately. The commonest way to miss a
@@ -157,7 +180,7 @@ export function suggestNextTarget(
     // plan, not a stall.
     const previousUnmet = args.previousSets ? unmetPrescription(args.previousSets) : null;
     if (previousUnmet?.reps === unmet.reps && previousUnmet.weight === unmet.weight) {
-      const deload = deloadFrom(lastSets.length, unmet, args.weightUnit);
+      const deload = deloadFrom(lastSets.length, unmet, steps);
       if (deload) return deload;
     }
     return {
@@ -173,7 +196,7 @@ export function suggestNextTarget(
   if (weight == null || reps == null) return null;
   if (weight <= 0 || reps < EPLEY_MIN_REPS || reps > EPLEY_MAX_REPS) return null;
 
-  return progressFrom(lastSets.length, weight, reps, args.weightUnit);
+  return progressFrom(lastSets.length, weight, reps, steps);
 }
 
 /**
@@ -225,11 +248,10 @@ export function unmetPrescription(
 function deloadFrom(
   setCount: number,
   missed: { readonly reps: number; readonly weight: number },
-  weightUnit: ProgressionWeightUnit,
+  steps: WeightSteps,
 ): NextTarget | null {
   const reduced = missed.weight * (1 - DELOAD_FRACTION);
-  const { standard, small } = plateSteps(weightUnit);
-  for (const grid of [standard, small]) {
+  for (const grid of stepsToTry(steps)) {
     const floored = roundWeight(Math.floor(reduced / grid) * grid);
     if (floored > 0) {
       return {
@@ -257,13 +279,12 @@ function progressFrom(
   setCount: number,
   weight: number,
   reps: number,
-  weightUnit: ProgressionWeightUnit,
+  steps: WeightSteps,
 ): NextTarget | null {
-  const { standard, small } = plateSteps(weightUnit);
   const cap = epley(weight, reps) * MAX_E1RM_GAIN_FRACTION;
 
   const repsGain = reps < EPLEY_MAX_REPS ? weight / 30 : null;
-  const weightGain = standard * (1 + reps / 30);
+  const weightGain = steps.standard * (1 + reps / 30);
 
   if (repsGain != null && repsGain < weightGain) {
     return { setCount, reps: reps + 1, weight, step: { field: "reps", amount: 1 } };
@@ -271,7 +292,7 @@ function progressFrom(
 
   // Standard step first so the reps-vs-weight crossover above is untouched;
   // the smaller step is only ever reached once the standard one is rejected.
-  const step = [standard, small].find((candidate) => candidate * (1 + reps / 30) <= cap);
+  const step = stepsToTry(steps).find((candidate) => candidate * (1 + reps / 30) <= cap);
   if (step == null) return null;
 
   return {

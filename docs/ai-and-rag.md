@@ -630,7 +630,7 @@ The renderer names exercises by display name for the coach (its rationale is ath
 
 ## Workout Engine
 
-**Files:** `server/services/workoutEngine/` — `loadMath.ts`, `strength.ts`, `running.ts`, `stations.ts`, `weekSkeleton.ts`, `sessions.ts`, `enginePlan.ts` (plan-wide targets), `planRepair.ts` (post-generation repair), `adaptation.ts` and `paceRewrite.ts` (adapting to logged sessions), `trainingTargets.ts` (coach and chat numbers); `server/prompts/workoutEngine.ts` (renderers); `server/services/planAdaptationService.ts` (auto-coach stage); `shared/progression.ts` (session-to-session rules shared with the workout detail's "Next" chip).
+**Files:** `server/services/workoutEngine/` — `loadMath.ts`, `strength.ts`, `running.ts`, `stations.ts`, `weekSkeleton.ts`, `sessions.ts`, `enginePlan.ts` (plan-wide targets), `planRepair.ts` (post-generation repair), `adaptation.ts` and `paceRewrite.ts` (adapting to logged sessions), `trainingTargets.ts` (coach and chat numbers); `server/prompts/workoutEngine.ts` (renderers); `server/services/planAdaptationService.ts` (auto-coach stage); `shared/progression.ts` (session-to-session rules shared with the workout detail's "Next" chip); `shared/exerciseEquipment.ts` (equipment tags and each implement's load step — 2.5 kg plates, 2 kg dumbbells, 4 kg kettlebells, 5 kg machine pins — read by the engine and the chip alike).
 
 The brief decides which exercises; the engine decides the numbers and the week. It is deterministic and pure (history arrives as data), so every parallel generation chunk renders the same plan, and it adapts that plan as the athlete logs.
 

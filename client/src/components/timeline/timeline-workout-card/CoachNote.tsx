@@ -107,6 +107,23 @@ function describeProgressionChange(change: ProgressionChangeRecord): string {
   return `${label}: ${change.from} → ${change.to} ${change.unit}`;
 }
 
+/**
+ * Each change with a key unique within the list. One day can carry the same
+ * exercise and kind more than once — two logged sessions each raising the
+ * squat — so the change's own fields are not enough on their own.
+ */
+function keyedProgressionChanges(
+  changes: readonly ProgressionChangeRecord[],
+): { key: string; change: ProgressionChangeRecord }[] {
+  const seen = new Map<string, number>();
+  return changes.map((change) => {
+    const base = `${change.exercise}-${change.kind}-${change.from}-${change.to}`;
+    const repeat = seen.get(base) ?? 0;
+    seen.set(base, repeat + 1);
+    return { key: repeat === 0 ? base : `${base}-${repeat}`, change };
+  });
+}
+
 function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
   if (!inputs) return [];
   const candidates: Array<string | null | undefined> = [
@@ -197,8 +214,8 @@ export function CoachNote({
               className="space-y-0.5 text-xs text-foreground/80"
               data-testid={`coach-note-progression-${entryId}`}
             >
-              {inputsUsed.progressionChanges.map((change) => (
-                <li key={`${change.exercise}-${change.kind}`}>{describeProgressionChange(change)}</li>
+              {keyedProgressionChanges(inputsUsed.progressionChanges).map(({ key, change }) => (
+                <li key={key}>{describeProgressionChange(change)}</li>
               ))}
             </ul>
           )}

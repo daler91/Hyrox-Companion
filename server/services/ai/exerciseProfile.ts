@@ -9,13 +9,12 @@
  * decides what the brief may NOMINATE; the athlete's words themselves still
  * reach the model, which decides anything this reading misses.
  */
+import { type Equipment, EXERCISE_EQUIPMENT } from "@shared/exerciseEquipment";
 import { HYROX_STATION_ORDER } from "@shared/raceConstants";
 import type { ExerciseName } from "@shared/schema/exercises";
 
 import {
-  type Equipment,
   EQUIPMENT_NEGATION_PATTERNS,
-  EXERCISE_EQUIPMENT,
   type ExperienceLevel,
   type GoalLens,
   HIGH_SKILL_EXERCISES,

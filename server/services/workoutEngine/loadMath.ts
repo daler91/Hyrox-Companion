@@ -9,11 +9,14 @@
  * engine writes into a plan and a target the chip suggests while logging sit
  * on the same scale.
  */
+import { implementFor, loadIncrement } from "@shared/exerciseEquipment";
 import { epley } from "@shared/progression";
-import type { ExerciseName } from "@shared/schema/exercises";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
-import { EXERCISE_EQUIPMENT } from "../ai/exerciseKnowledge";
+// The implement table and its steps live in shared/, where the workout
+// detail's "Next" chip reads them too; the engine's callers keep this import.
+export type { Implement } from "@shared/exerciseEquipment";
+export { implementFor, loadIncrement };
 
 /** The fields of a logged set the engine reads; `LoggedExerciseSetWithDate` satisfies it. */
 export interface EngineSet {
@@ -46,67 +49,6 @@ const MIN_SESSIONS = 2;
 const RECENT_SESSIONS = 4;
 /** A best session further than this above the next is treated as an outlier. */
 const OUTLIER_MARGIN = 0.1;
-
-export type Implement = "barbell" | "dumbbell" | "kettlebell" | "machine" | "bodyweight";
-
-/**
- * Where the equipment table can't say how an exercise is loaded: bodyweight
- * lifts (a logged weight there is added load, which Epley cannot read), and
- * lunge-family work the table leaves open because it can be done holding
- * anything — logged with dumbbells far more often than not.
- */
-const IMPLEMENT_OVERRIDES: Readonly<Partial<Record<ExerciseName, Implement>>> = {
-  pull_up: "bodyweight",
-  chin_up: "bodyweight",
-  push_up: "bodyweight",
-  dip: "bodyweight",
-  ring_dip: "bodyweight",
-  inverted_row: "bodyweight",
-  pistol_squat: "bodyweight",
-  tibialis_raise: "bodyweight",
-  walking_lunges: "dumbbell",
-  reverse_lunge: "dumbbell",
-  lunges: "dumbbell",
-  split_squat: "dumbbell",
-  bulgarian_split_squat: "dumbbell",
-  step_ups: "dumbbell",
-  calf_raise: "dumbbell",
-  standing_calf_raise: "machine",
-};
-
-interface ImplementSteps {
-  readonly kg: number;
-  readonly lbs: number;
-}
-
-const BARBELL_STEPS: ImplementSteps = { kg: 2.5, lbs: 5 };
-
-/** The smallest jump each implement allows, per unit. Bodyweight work loads like a barbell. */
-const INCREMENTS: ReadonlyMap<Implement, ImplementSteps> = new Map([
-  ["barbell", BARBELL_STEPS],
-  ["dumbbell", { kg: 2, lbs: 5 }],
-  ["kettlebell", { kg: 4, lbs: 5 }],
-  ["machine", { kg: 5, lbs: 10 }],
-]);
-
-const LOADED_IMPLEMENTS: readonly Exclude<Implement, "bodyweight">[] = [
-  "barbell",
-  "dumbbell",
-  "kettlebell",
-  "machine",
-];
-
-export function implementFor(exercise: string): Implement {
-  const override = IMPLEMENT_OVERRIDES[exercise as ExerciseName];
-  if (override) return override;
-  const equipment = EXERCISE_EQUIPMENT[exercise as ExerciseName] ?? [];
-  return LOADED_IMPLEMENTS.find((implement) => equipment.includes(implement)) ?? "barbell";
-}
-
-export function loadIncrement(exercise: string, unit: WeightUnit): number {
-  const steps = INCREMENTS.get(implementFor(exercise)) ?? BARBELL_STEPS;
-  return unit === "kg" ? steps.kg : steps.lbs;
-}
 
 /** Round to the implement's step. `down` for anything a ceiling must hold. */
 export function roundLoad(
