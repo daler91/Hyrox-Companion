@@ -223,6 +223,15 @@ export const EXERCISE_DEFINITIONS = {
 export type ExerciseName = keyof typeof EXERCISE_DEFINITIONS;
 export const exerciseNames = Object.keys(EXERCISE_DEFINITIONS) as ExerciseName[];
 
+const EXERCISE_LABELS: ReadonlyMap<string, string> = new Map(
+  Object.entries(EXERCISE_DEFINITIONS).map(([name, definition]) => [name, definition.label]),
+);
+
+/** A known exercise's display label; undefined for a custom or unrecognised name. */
+export function knownExerciseLabel(exerciseName: string): string | undefined {
+  return EXERCISE_LABELS.get(exerciseName);
+}
+
 export const MOVEMENT_PATTERNS = [
   { pattern: "squat", label: "Squat pattern" },
   { pattern: "hinge", label: "Hinge pattern" },

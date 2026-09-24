@@ -1,9 +1,12 @@
 import { addDaysToISODate, planWeekOneMonday } from "@shared/dateUtils";
 import {
+  type ExerciseSet,
+  exerciseSets,
   type InsertPlanDay,
   type InsertTrainingPlan,
   type PlanDay,
   planDays,
+  type PlanEngineState,
   type TrainingPlan,
   trainingPlans,
   type TrainingPlanWithDays,
@@ -150,6 +153,20 @@ export class PlanStorage {
       .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)))
       .returning();
     return updated;
+  }
+
+  /** Record the workout engine's memory of a plan (see workoutEngine/adaptation.ts). */
+  async updateEngineState(
+    planId: string,
+    userId: string,
+    engineState: PlanEngineState,
+    tx?: DbExecutor,
+  ): Promise<void> {
+    const executor = tx ?? db;
+    await executor
+      .update(trainingPlans)
+      .set({ engineState })
+      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
   }
 
   async updateTrainingPlanGoal(
@@ -330,6 +347,72 @@ export class PlanStorage {
       .where(eq(planDays.id, dayId))
       .returning();
     return updatedDay;
+  }
+
+  /**
+   * The plan's still-planned days from `fromDate` on, soonest first, with their
+   * prescribed sets — what the workout engine adapts after a logged session.
+   */
+  async getPlanDaysForAdaptation(
+    planId: string,
+    fromDate: string,
+  ): Promise<Array<PlanDay & { sets: ExerciseSet[] }>> {
+    const days = await db
+      .select()
+      .from(planDays)
+      .where(
+        and(
+          eq(planDays.planId, planId),
+          eq(planDays.status, "planned"),
+          isNotNull(planDays.scheduledDate),
+          gte(planDays.scheduledDate, fromDate),
+        ),
+      )
+      .orderBy(asc(planDays.scheduledDate));
+    if (days.length === 0) return [];
+    const sets = await db
+      .select()
+      .from(exerciseSets)
+      .where(
+        inArray(
+          exerciseSets.planDayId,
+          days.map((day) => day.id),
+        ),
+      )
+      .orderBy(asc(exerciseSets.sortOrder));
+    const byDay = new Map<string, ExerciseSet[]>();
+    for (const set of sets) {
+      if (!set.planDayId) continue;
+      const list = byDay.get(set.planDayId) ?? [];
+      list.push(set);
+      byDay.set(set.planDayId, list);
+    }
+    return days.map((day) => ({ ...day, sets: byDay.get(day.id) ?? [] }));
+  }
+
+  /**
+   * Change prescribed sets of one plan day in place: loads the engine moved,
+   * notes whose paces it moved. Scoped to the day, so a set id from anywhere
+   * else is a no-op; the caller checks the day belongs to the athlete first.
+   */
+  async updatePlanDaySets(
+    planDayId: string,
+    updates: ReadonlyArray<{
+      readonly setId: string;
+      readonly weight?: number;
+      readonly weightUnit?: string;
+      readonly notes?: string;
+    }>,
+    tx?: DbExecutor,
+  ): Promise<void> {
+    const executor = tx ?? db;
+    for (const { setId, ...fields } of updates) {
+      if (Object.keys(fields).length === 0) continue;
+      await executor
+        .update(exerciseSets)
+        .set({ ...fields, version: sql`${exerciseSets.version} + 1` })
+        .where(and(eq(exerciseSets.id, setId), eq(exerciseSets.planDayId, planDayId)));
+    }
   }
 
   async getPlanDay(

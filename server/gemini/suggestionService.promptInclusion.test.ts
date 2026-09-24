@@ -34,6 +34,24 @@ function kitchenSinkContext(): TrainingContext {
       complianceTrend: "improving",
     },
     trainingConstraints: "FINGERPRINT_STANDING_CONSTRAINT",
+    exerciseSelection: {
+      lens: "hyrox",
+      experienceLevel: "intermediate",
+      staples: [{ exercise: "custom:FINGERPRINT_STAPLE", sessions: 5, daysSince: 2, lastSession: null }],
+      needs: [
+        {
+          kind: "balance",
+          reason: "FINGERPRINT_SELECTION_NEED",
+          candidates: [{ exercise: "seated_cable_row", sessions: 3 }],
+        },
+      ],
+      stationSubstitutions: [],
+      limitedRegions: [],
+      unavailableEquipment: [],
+      raceStandards: null,
+      upcomingShape: null,
+      primaryLifts: [],
+    },
     absences: [
       {
         startDate: "2026-04-18",
@@ -185,6 +203,11 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       "FINGERPRINT_ATHLETE_NOTE",
       "RPE: 8",
       "Duration: 62min",
+
+      // Exercise selection brief — which exercises, for this athlete.
+      "EXERCISE SELECTION BRIEF",
+      "FINGERPRINT_STAPLE",
+      "FINGERPRINT_SELECTION_NEED → Seated Cable Row (logged 3x)",
 
       // Coaching analysis block
       "RPE TREND: RISING",
@@ -486,7 +509,10 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     // changes how every number after it should be read.
     expect(idx("ATHLETE CONSTRAINTS")).toBeGreaterThan(idx("ATHLETE'S TRAINING DATA"));
     expect(idx("COACHING ANALYSIS")).toBeGreaterThan(idx("ATHLETE CONSTRAINTS"));
-    expect(idx("UPCOMING WORKOUTS")).toBeGreaterThan(idx("COACHING ANALYSIS"));
+    // The analysis decides whether and how much to change; the brief, right
+    // after it, decides which exercise.
+    expect(idx("EXERCISE SELECTION BRIEF")).toBeGreaterThan(idx("END COACHING ANALYSIS"));
+    expect(idx("UPCOMING WORKOUTS")).toBeGreaterThan(idx("EXERCISE SELECTION BRIEF"));
     expect(idx("FINGERPRINT_RAG_CHUNK")).toBeGreaterThan(idx("UPCOMING WORKOUTS"));
     expect(idx("Analyze the coaching analysis")).toBeGreaterThan(idx("FINGERPRINT_RAG_CHUNK"));
   });

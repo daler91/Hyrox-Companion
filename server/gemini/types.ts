@@ -7,6 +7,8 @@ import type {
 } from "@shared/schema";
 
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
+import type { ExerciseSelectionBrief } from "../services/ai/exerciseSelection";
+import type { TrainingTargets } from "../services/workoutEngine/trainingTargets";
 
 /**
  * A dated absence the athlete declared on their timeline, near enough to the
@@ -124,6 +126,18 @@ export interface TrainingContext {
   distanceUnit?: string;
   /** Recent fuelling vs training load + targets; present only when the nutrition feature is on and the athlete has logged food or set a target. */
   nutrition?: NutritionCoachContext;
+  /**
+   * What the athlete's own history says about exercise choice — familiar
+   * lifts, ranked needs with candidate exercises, constraint substitutes, and
+   * the shape of the coming week. Built by buildTrainingContext from data it
+   * already loads; see server/services/ai/exerciseSelection.ts.
+   */
+  exerciseSelection?: ExerciseSelectionBrief;
+  /**
+   * The athlete's current estimated 1RMs and run paces, from the workout
+   * engine (server/services/workoutEngine/trainingTargets.ts).
+   */
+  trainingTargets?: TrainingTargets;
   recentWorkouts: Array<{
     date: string;
     focus: string;
@@ -142,7 +156,7 @@ export interface TrainingContext {
     accessory?: string | null;
     notes?: string | null;
     exerciseDetails?: PromptExerciseSet[];
-    aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
+    aiSource?: "rag" | "legacy" | "review" | "load_governor" | "progression" | null;
     aiRationale?: string | null;
     aiNoteUpdatedAt?: string | Date | null;
     aiInputsUsed?: CoachNoteInputs | null;

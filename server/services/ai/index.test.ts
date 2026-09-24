@@ -482,6 +482,56 @@ describe("buildTrainingContext", () => {
     ]);
   });
 
+  it("builds the exercise-selection brief from the plan goal, training sets and upcoming days", async () => {
+    vi.mocked(storage.plans).getActivePlan.mockResolvedValue({
+      name: "Strength block",
+      totalWeeks: 8,
+      startDate: "2026-06-01",
+      goal: "Get stronger",
+    } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue(
+      makeUser({ trainingConstraints: "no barbell at home", weightUnit: "kg" }),
+    );
+    // A walk is load, not an exercise habit: its sets must not become a staple.
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([
+      { id: "log-a", date: "2026-06-05", countsAsTraining: true },
+      { id: "log-b", date: "2026-06-10", countsAsTraining: true },
+      { id: "log-walk", date: "2026-06-11", countsAsTraining: false },
+      { id: "log-walk-2", date: "2026-06-12", countsAsTraining: false },
+    ] as never);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([
+      { workoutLogId: "log-a", date: "2026-06-05", exerciseName: "goblet_squat", reps: 10, weight: 24, weightUnit: "kg" },
+      { workoutLogId: "log-b", date: "2026-06-10", exerciseName: "goblet_squat", reps: 10, weight: 26, weightUnit: "kg" },
+      { workoutLogId: "log-walk", date: "2026-06-11", exerciseName: "walking", distance: 3000, distanceUnit: "m" },
+      { workoutLogId: "log-walk-2", date: "2026-06-12", exerciseName: "walking", distance: 3000, distanceUnit: "m" },
+    ] as never);
+    vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([
+      { planDayId: "pd-1", date: "2026-06-16", focus: "Legs", mainWorkout: "", exerciseSets: [{ exerciseName: "goblet_squat", plannedWeight: 26 }] },
+      { planDayId: "pd-2", date: "2026-06-18", focus: "Push", mainWorkout: "", exerciseSets: [{ exerciseName: "push_up" }] },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    const brief = ctx.exerciseSelection;
+    expect(brief?.lens).toBe("strength");
+    expect(brief?.staples.map((staple) => staple.exercise)).toEqual(["goblet_squat"]);
+    expect(brief?.unavailableEquipment).toEqual(["barbell"]);
+    // The athlete's own squat carries the slot; the barbell defaults for the
+    // rest give way to what their constraints allow, and with no completed
+    // workouts on record they are coached as a beginner (lat pulldown, not
+    // pull-ups).
+    expect(brief?.experienceLevel).toBe("beginner");
+    expect(brief?.primaryLifts.map((lift) => lift.exercise)).toEqual([
+      "goblet_squat",
+      "romanian_deadlift",
+      "dumbbell_bench_press",
+      "seated_dumbbell_press",
+      "lat_pulldown",
+    ]);
+    expect(brief?.upcomingShape?.setsByGroup.get("squat")).toBe(1);
+    expect(brief?.upcomingShape?.setsByGroup.get("push")).toBe(1);
+  });
+
   it("falls back to the planned prescription in upcoming exercise details", async () => {
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {

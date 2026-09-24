@@ -28,6 +28,7 @@ function makePlan(overrides: Partial<TrainingPlan> = {}): TrainingPlan {
     generationError: null,
     retiredOn: null,
     generationStartedAt: null,
+    engineState: null,
     ...overrides,
   };
 }

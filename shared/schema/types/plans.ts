@@ -35,6 +35,20 @@ export const updateTrainingPlanRetirementSchema = z.object({
   retiredOn: dateStringSchema.nullable(),
 });
 
+/**
+ * `training_plans.engine_state`: what the workout engine remembers about a
+ * plan between adaptation passes. Server-managed — no client schema accepts it.
+ */
+export const planEngineStateSchema = z.object({
+  version: z.literal(1),
+  /** The run fitness (VDOT) the plan's paces are written against; null = paces by effort. */
+  runVdot: z.number().positive().nullable(),
+  /** Workout logs already adapted into the plan, oldest first and bounded, so each counts once. */
+  adaptedLogIds: z.array(z.string().max(255)).max(200),
+  updatedAt: z.string(),
+});
+export type PlanEngineState = z.infer<typeof planEngineStateSchema>;
+
 export type UpdateTrainingPlanGoal = z.infer<typeof updateTrainingPlanGoalSchema>;
 export type CreateSamplePlanInput = z.infer<typeof createSamplePlanSchema>;
 export type UpdateTrainingPlanRetirement = z.infer<typeof updateTrainingPlanRetirementSchema>;
@@ -87,7 +101,21 @@ export type PlanDay = typeof planDays.$inferSelect;
 export const coachModificationKindSchema = z.enum([
   "fatigue_volume_reduction",
   "workload_adjustment",
+  // The workout engine moved the day's loads or paces to follow a logged
+  // session (server/services/workoutEngine/adaptation.ts).
+  "auto_progression",
 ]);
+
+/** One load or pace the workout engine moved, for the coach note's detail. */
+export const progressionChangeSchema = z.object({
+  exercise: z.string().max(100),
+  kind: z.enum(["raise", "hold", "deload", "pace"]),
+  from: z.number(),
+  to: z.number(),
+  /** The athlete's weight unit, or "vdot" for a pace change. */
+  unit: z.string().max(16),
+});
+export type ProgressionChangeRecord = z.infer<typeof progressionChangeSchema>;
 
 const loadGovernorAcwrZoneSchema = z.enum([
   "insufficient_data",
@@ -148,6 +176,8 @@ export const coachNoteInputsSchema = z.object({
     })
     .optional(),
   lastModification: coachModificationMetadataSchema.optional(),
+  // What an auto-progression changed on this day, when that is what the note is.
+  progressionChanges: z.array(progressionChangeSchema).max(10).optional(),
   lastFatigueReduction: coachFatigueReductionMetadataSchema.optional(),
   // Snapshot of the prescription that was swapped out when the coach converted
   // this day to a different session (e.g. a strength day downshifted to a

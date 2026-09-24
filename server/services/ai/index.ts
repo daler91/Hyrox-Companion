@@ -1,6 +1,6 @@
 import { addDaysToISODate as addDays, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
-import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { getStoredDistanceUnit, standardizeWeightUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
@@ -18,6 +18,9 @@ import {
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
 import { calculateTrainingLoad } from "../trainingLoadService";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
+import type { EngineSet } from "../workoutEngine/loadMath";
+import type { EngineRunLog } from "../workoutEngine/running";
+import { buildTrainingTargets, type TrainingTargets } from "../workoutEngine/trainingTargets";
 import {
   computeCurrentWeek,
   computeExerciseGaps,
@@ -26,6 +29,12 @@ import {
   computeRpeTrend,
   computeWeeklyVolume,
 } from "./coachingInsights";
+import {
+  buildExerciseSelectionBrief,
+  type ExerciseSelectionBrief,
+  type ExperienceLevel,
+  type SelectionSet,
+} from "./exerciseSelection";
 import { summarizeMafTrend } from "./mafTrend";
 import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
@@ -147,7 +156,7 @@ function mapTestTrendDirection(
   return trendDirectionMap[trend];
 }
 
-function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermediate" | "advanced" {
+function classifyExperienceLevel(totalWorkouts: number): ExperienceLevel {
   if (totalWorkouts < 20) return "beginner";
   if (totalWorkouts < 80) return "intermediate";
   return "advanced";
@@ -341,6 +350,87 @@ function mapUpcomingWorkout(
   };
 }
 
+/**
+ * The athlete's current estimated 1RMs and run paces for the coach, from the
+ * reads buildTrainingContext already made. Same failure rule as the brief: a
+ * coach without them is the coach this app had before they existed.
+ */
+function coachTrainingTargetsField(params: {
+  readonly sets: readonly EngineSet[];
+  readonly logs: readonly EngineRunLog[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  /** Its primary lifts are listed first: they are the plan's backbone. */
+  readonly brief: ExerciseSelectionBrief | undefined;
+}): { trainingTargets?: TrainingTargets } {
+  try {
+    const trainingTargets = buildTrainingTargets({
+      sets: params.sets,
+      logs: params.logs,
+      weightUnit: standardizeWeightUnit(params.weightUnit),
+      distanceUnit: params.distanceUnit,
+      priority: params.brief?.primaryLifts.map((lift) => lift.exercise) ?? [],
+    });
+    return trainingTargets ? { trainingTargets } : {};
+  } catch (err) {
+    // A bug in a pure computation over rows already read: the error carries a
+    // message and stack, never the athlete's records.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[coach] training targets unavailable; coaching without them");
+    return {};
+  }
+}
+
+/**
+ * The exercise-selection brief for the coach, from reads buildTrainingContext
+ * has already made — no extra IO — as a field to spread into the context.
+ * Never allowed to take the context down with it: a coach without the brief
+ * is the coach this app had before it existed.
+ */
+function coachExerciseSelectionField(params: {
+  readonly plan: { readonly goal?: string | null } | null | undefined;
+  readonly experienceLevel: ExperienceLevel;
+  readonly constraints: string | null;
+  readonly today: string;
+  readonly user: { weightUnit?: string | null; distanceUnit?: string | null; division?: string | null; gender?: string | null } | undefined;
+  readonly sets: readonly SelectionSet[];
+  readonly stationGaps: readonly { station: string; daysSinceLastTrained: number | null }[] | undefined;
+  readonly upcomingDays: readonly UpcomingPlannedDay[];
+}): { exerciseSelection?: ExerciseSelectionBrief } {
+  try {
+    const exerciseSelection = buildExerciseSelectionBrief({
+      goal: params.plan?.goal,
+      experienceLevel: params.experienceLevel,
+      constraints: params.constraints,
+      today: params.today,
+      weightUnit: params.user?.weightUnit,
+      distanceUnit: params.user?.distanceUnit,
+      sets: params.sets,
+      stationGaps: (params.stationGaps ?? []).map((gap) => ({
+        station: gap.station,
+        daysSince: gap.daysSinceLastTrained,
+      })),
+      // Planned sets carry their prescription in planned* until logged — the
+      // same fallback mapUpcomingWorkout makes for the prompt.
+      upcoming: params.upcomingDays.map((day) => ({
+        date: day.date,
+        sets: day.exerciseSets.map((es) => ({
+          exerciseName: es.exerciseName,
+          weight: es.weight ?? es.plannedWeight,
+        })),
+      })),
+      division: params.user?.division,
+      gender: params.user?.gender,
+    });
+    return { exerciseSelection };
+  } catch (err) {
+    // As above: a pure computation, so the error holds no athlete data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[coach] exercise-selection brief unavailable; coaching without it");
+    return {};
+  }
+}
+
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   // Resolve the athlete before anything that needs a date. "Today" is theirs,
   // not the server's, and it must be ONE value: the coach's narrative date was
@@ -516,6 +606,25 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     today,
   });
 
+  const exerciseSelectionField = coachExerciseSelectionField({
+    plan: activePlanRecord,
+    experienceLevel,
+    constraints: trainingConstraints,
+    today,
+    user,
+    sets: trainingSets,
+    stationGaps,
+    upcomingDays,
+  });
+
+  const trainingTargetsField = coachTrainingTargetsField({
+    sets: trainingSets,
+    logs: trainingLogs,
+    weightUnit,
+    distanceUnit,
+    brief: exerciseSelectionField.exerciseSelection,
+  });
+
   const coachingInsights: TrainingContext["coachingInsights"] = {
     ...rpeTrend,
     stationGaps,
@@ -608,6 +717,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     ...(nutrition ? { nutrition } : {}),
+    ...exerciseSelectionField,
+    ...trainingTargetsField,
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map(mapUpcomingWorkout),
     exerciseBreakdown,

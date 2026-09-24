@@ -25,7 +25,12 @@ import {
   recycleBinEntityTypeEnum,
   workoutStatusEnum,
 } from "./enums";
-import type { CoachNoteInputs, PlanAdjustmentProposalPayload, RecycleBinPayload } from "./types";
+import type {
+  CoachNoteInputs,
+  PlanAdjustmentProposalPayload,
+  PlanEngineState,
+  RecycleBinPayload,
+} from "./types";
 
 /**
  * Render a TS value list as the quoted literal list inside a CHECK constraint's
@@ -371,6 +376,12 @@ export const trainingPlans = pgTable(
     // backfills existing rows harmlessly — only stuck pending/generating rows are
     // ever swept, and those are all newly created.
     generationStartedAt: timestamp("generation_started_at").defaultNow(),
+    // The workout engine's memory of this plan: the run fitness its paces were
+    // written against and the logged workouts it has already adapted the plan
+    // to (server/services/workoutEngine/adaptation.ts). Server-managed. NULL for
+    // plans made before the engine existed or imported by hand — the first
+    // adaptation pass initialises it.
+    engineState: jsonb("engine_state").$type<PlanEngineState>(),
   },
   (table) => [
     index("idx_training_plans_user_id").on(table.userId),

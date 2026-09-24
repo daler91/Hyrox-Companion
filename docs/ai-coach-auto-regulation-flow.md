@@ -2,12 +2,13 @@
 
 [Back to README](../README.md)
 
-This document shows how the auto-coach updates workouts after new training evidence arrives. The current flow has two decision layers:
+This document shows how the auto-coach updates workouts after new training evidence arrives. The current flow has three decision layers:
 
 - **Load governor:** deterministic UTSS, ACWR, and biomechanical-overlap rules.
+- **Plan adaptation:** the workout engine moves upcoming loads and paces to follow what the athlete actually logged (beat, met, missed, missed twice, returning from a break, a new best run). See [Workout Engine → Adapting the plan](ai-and-rag.md#adapting-the-plan-to-logged-sessions).
 - **Provider coach:** AI-generated suggestions and review notes using the same training context, RAG materials, and training-style prompt rules.
 
-The load governor runs first. If it modifies an upcoming workout, provider suggestions for that same workout are filtered out so deterministic safety edits are not overwritten by the model.
+The two rule-based layers run first, in that order: the adaptation skips any day the governor rewrote, and provider suggestions and review notes are filtered out for every day either rewrote, so deterministic edits from the athlete's own data are not overwritten by the model. The AI budget gates the provider layer only.
 
 ---
 
@@ -39,29 +40,28 @@ flowchart TD
 
     D --> E{"AI coach enabled?"}
     E -- "No" --> Z1["Return adjusted: 0"]
-    E -- "Yes" --> F{"AI budget allowed?"}
-    F -- "No" --> Z2["Skip background coaching"]
-    F -- "Yes" --> G["Set users.isAutoCoaching = true"]
+    E -- "Yes" --> F["Check AI budget<br/>(gates the provider layer only)"]
+    F --> G["Set users.isAutoCoaching = true"]
 
     G --> H["buildTrainingContext(userId)<br/>server/services/ai/index.ts"]
     H --> I["Build upcoming workout inputs<br/>next 7 planned days"]
-    I --> NU{"Any upcoming planned workouts?"}
-    NU -- "No" --> Z3["Return adjusted: 0"]
+    I --> L["Build deterministic load-governor suggestions<br/>buildLoadGovernorSuggestions(...)"]
+    L --> M["Collect workout IDs modified by governor"]
+    M --> AD["Adapt the plan to new logs<br/>computePlanAdaptation → adaptPlan<br/>(skips governor days)"]
+    AD --> NU{"Budget allowed and<br/>workouts planned this week?"}
+    NU -- "No" --> Z3["Apply governor + adaptation only"]
     NU -- "Yes" --> J["Resolve training style<br/>and retrieve RAG coaching materials"]
     J --> J2["Build CoachNoteInputs audit metadata"]
     J2 --> K["Analyze safety signals"]
 
-    K --> L["Build deterministic load-governor suggestions<br/>buildLoadGovernorSuggestions(...)"]
-    L --> M["Collect workout IDs modified by governor"]
-
-    M --> N["Generate provider workout suggestions<br/>Gemini / configured text provider"]
+    K --> N["Generate provider workout suggestions<br/>Gemini / configured text provider"]
     N --> O["Apply safety layer and repeat-suppression filters"]
-    O --> P["Drop provider suggestions for governor-modified workouts"]
+    O --> P["Drop provider suggestions for governor- or adaptation-modified workouts"]
 
     P --> Q["Prepare structured suggestions<br/>parse rows when workout has exercise table"]
     Q --> R["Merge governor suggestions first, then provider suggestions"]
     R --> S["Generate review notes for unchanged workouts"]
-    S --> T["Apply all changes in DB transaction"]
+    S --> T["Apply all changes in DB transaction<br/>(adaptation: set loads, text, note,<br/>then training_plans.engine_state)"]
 
     T --> U{"Workout has structured exercise rows?"}
     U -- "Yes" --> V["Replace or append exercise_sets rows<br/>table-first write"]
@@ -72,7 +72,6 @@ flowchart TD
     X --> Y["Timeline shows coach note, source badge, and input chips"]
     Y --> AA["Finally reset users.isAutoCoaching = false"]
     Z1 --> AA
-    Z2 --> AA
     Z3 --> AA
 ```
 
@@ -104,6 +103,7 @@ flowchart LR
         D7["Progression flags"]
         D8["Training state decision tree"]
         D9["Load governor overview<br/>UTSS, ACWR, restrictions"]
+        D10["Exercise selection brief<br/>familiar lifts, needs + candidates,<br/>substitutes, week shape"]
     end
 
     subgraph Context["TrainingContext"]
@@ -113,6 +113,7 @@ flowchart LR
         C4["Recent completed workouts"]
         C5["Structured exercise rows"]
         C6["coachingInsights"]
+        C7["exerciseSelection"]
     end
 
     T1 --> D1
@@ -127,6 +128,11 @@ flowchart LR
     T5 --> D9
     T6 --> D9
     T7 --> D9
+    T2 --> D10
+    T3 --> D10
+    T4 --> D10
+    T6 --> D10
+    D4 --> D10
 
     D1 --> C4
     D2 --> C5
@@ -137,6 +143,7 @@ flowchart LR
     D7 --> C6
     D8 --> C6
     D9 --> C6
+    D10 --> C7
 
     T1 --> C1
     T2 --> C2
@@ -236,6 +243,36 @@ sequenceDiagram
 
 ---
 
+## Plan Adaptation
+
+`server/services/planAdaptationService.ts` reads the active plan (with `engine_state`), its remaining planned days and their exercise rows, and the athlete's last 70 days of logs and sets, and hands them to `adaptPlan()` (`server/services/workoutEngine/adaptation.ts`), which is pure. The result is written inside the same transaction as everything else:
+
+```mermaid
+flowchart TD
+    A["New training logs from the last 10 days<br/>not in engine_state.adaptedLogIds"] --> B["Per lift in each log:<br/>compare with plannedReps / plannedWeight"]
+    B --> C{"Outcome"}
+    C -- "Beat it" --> R1["Raise upcoming loads<br/>by the surplus, ≤ 5%"]
+    C -- "Met, RPE ≤ 6" --> R2["Raise one step, +2.5%"]
+    C -- "Met, RPE ≥ 9" --> H1["Hold next session at the load"]
+    C -- "Missed" --> H2["Hold at the missed load"]
+    C -- "Missed same prescription twice" --> D1["Deload 10%"]
+    C -- "Ad-hoc, stronger than plan" --> R3["Catch up, ≤ 5%"]
+    R1 & R2 & R3 --> G{"Fatigued, taper<br/>or race week?"}
+    G -- "Yes" --> N1["No raise"]
+    G -- "No" --> W["Rewrite loads in exercise_sets<br/>and the lift's text line"]
+    H1 & H2 & D1 --> W2["Cap next session; later ones resume +2.5%/week"]
+    W2 --> W
+    A --> BR["Lifts not trained for 2+ weeks:<br/>ease back in below the last load"]
+    BR --> W2
+    A --> RUN{"New best run effort?"}
+    RUN -- "Yes, not fatigued" --> P["Rescale every written pace<br/>in the remaining plan"]
+    W --> Z["plan_days: aiSource progression,<br/>aiRationale, progressionChanges"]
+    P --> Z
+    Z --> S["engine_state: adaptedLogIds, runVdot"]
+```
+
+---
+
 ## Source Map
 
 | Area | Primary files |
@@ -246,8 +283,12 @@ sequenceDiagram
 | Auto-coach orchestration | `server/services/coachService.ts` |
 | Shared training context | `server/services/ai/index.ts`, `server/gemini/types.ts` |
 | Provider suggestion prompt | `server/gemini/suggestionService.ts` |
+| Exercise selection brief (which exercise to choose or swap to) | `server/services/ai/exerciseSelection.ts`, `server/prompts/exerciseSelection.ts` |
 | Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` |
 | Load-governor suggestion builder (`buildLoadGovernorSuggestions`) | `server/services/trainingLoadGovernor.ts` |
+| Plan adaptation stage (reads, writes) | `server/services/planAdaptationService.ts` |
+| Plan adaptation rules (pure) | `server/services/workoutEngine/adaptation.ts`, `server/services/workoutEngine/paceRewrite.ts`, `shared/progression.ts` |
+| Plan engine state (`training_plans.engine_state`) | `shared/schema/tables.ts`, `shared/schema/types/plans.ts`, `migrations/0103_training_plans_engine_state.sql` |
 | Exercise load tag schema | `shared/schema/tables.ts`, `migrations/0049_exercise_load_tags.sql` |
 | Coach-note metadata type | `shared/schema/types/plans.ts` |
 | Timeline coach note UI | `client/src/components/timeline/timeline-workout-card/CoachNote.tsx` |
@@ -262,6 +303,10 @@ sequenceDiagram
 - Load-governor edits stay table-first on structured workouts; if a structured governor write cannot be prepared, it does not silently fall back to text.
 - Provider suggestions prefer structured `exercise_sets` writes when rows exist, but can still use the existing text fallback when parsing structured rows is unavailable.
 - Deterministic governor writes use `aiSource: "load_governor"`.
+- The plan adaptation runs after the governor and never touches a day the governor rewrote; its writes use `aiSource: "progression"` with `lastModification.kind: "auto_progression"`, and provider suggestions and review notes skip those days.
+- The AI budget gates only the provider layer: over budget, the governor and the adaptation still apply.
+- Each logged workout is adapted into the plan once (`engine_state.adaptedLogIds`); a plan's own recent history is marked as already reflected when it is generated.
+- The adaptation never raises a load while the governor reports yellow/danger load or the RPE trend flags fatigue, nor inside a taper or race week, and one session moves loads by at most +5% / -10%.
 - ACWR yellow now creates a medium-priority, short-window soft downshift for high-intensity sessions instead of only surfacing passive metadata.
 - The visible timeline note keeps the rationale and input audit metadata on `plan_days.aiRationale` and `plan_days.aiInputsUsed`.
 - Users can still manually edit any downshifted workout afterward.

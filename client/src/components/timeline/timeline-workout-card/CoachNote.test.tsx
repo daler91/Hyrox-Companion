@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { CoachNote } from "./CoachNote";
@@ -50,6 +50,56 @@ describe("CoachNote", () => {
     render(<CoachNote {...baseProps} source="review" />);
     fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
     expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Review");
+  });
+
+  it("labels auto-progression notes and lists exactly what moved", () => {
+    render(
+      <CoachNote
+        {...baseProps}
+        rationale="Auto-progression: Tuesday's 4x8 @ 82.5 kg beat the planned 4x6 @ 82.5 kg."
+        source="progression"
+        inputsUsed={{
+          planPhase: "build",
+          lastModification: { kind: "auto_progression" },
+          progressionChanges: [
+            { exercise: "front_squat", kind: "raise", from: 85, to: 90, unit: "kg" },
+            { exercise: "run_paces", kind: "pace", from: 40, to: 42.4, unit: "vdot" },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Auto-progression");
+    const changes = screen.getByTestId("coach-note-progression-plan-day-1");
+    expect(changes).toHaveTextContent("Front Squat: 85 → 90 kg");
+    expect(changes).toHaveTextContent("Run paces: fitness 40 → 42.4 (VDOT)");
+    expect(screen.getByText("Your logged sessions")).toBeInTheDocument();
+  });
+
+  it("lists every change, even the same lift moving the same way twice", () => {
+    // Spied, not silenced: if React does warn, the warning prints beside the failure.
+    const consoleError = vi.spyOn(console, "error");
+    render(
+      <CoachNote
+        {...baseProps}
+        rationale="Auto-progression: two sessions moved the squat."
+        source="progression"
+        inputsUsed={{
+          lastModification: { kind: "auto_progression" },
+          progressionChanges: [
+            { exercise: "front_squat", kind: "raise", from: 85, to: 87.5, unit: "kg" },
+            { exercise: "front_squat", kind: "hold", from: 87.5, to: 85, unit: "kg" },
+            { exercise: "front_squat", kind: "raise", from: 85, to: 87.5, unit: "kg" },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    const changes = screen.getByTestId("coach-note-progression-plan-day-1");
+    expect(within(changes).getAllByRole("listitem")).toHaveLength(3);
+    // React reports a duplicate key through console.error.
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it("labels load-governor notes and renders mechanical risk chips", () => {

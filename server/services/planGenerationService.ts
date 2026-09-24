@@ -12,7 +12,6 @@ import {
   type GeneratePlanInput,
   type InsertExerciseSet,
   type ParsedExercise,
-  type TrainingLoadOverview,
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { convertWeight, getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences, type WeightUnit } from "@shared/unitConversion";
@@ -26,12 +25,21 @@ import { AppError, ErrorCode } from "../errors";
 import { sanitizeLabel } from "../gemini/exerciseParser/mapping";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
+import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
+import { describeEngineTargetLines } from "../prompts/workoutEngine";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
-import { buildLoadAnchors, describeLoadAnchorLines, type LoadAnchor } from "./loadAnchors";
-import { calculateTrainingLoad } from "./trainingLoadService";
+import { describeLoadAnchorLines } from "./loadAnchors";
+import { describeProgramBlueprintLines, planDeloadWeeks } from "./planBlueprint";
+import { computeGenerationCalibration, type GenerationCalibration } from "./planGenerationCalibration";
+import { loadIncrement } from "./workoutEngine/loadMath";
+import { repairPrimaryLifts } from "./workoutEngine/planRepair";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
+
+// Calibration moved to its own module; these stay importable from here, where
+// they were exported before the split.
+export { describeStartLoadPosture, type GenerationCalibration } from "./planGenerationCalibration";
 
 const PLAN_GENERATION_CHUNK_WEEKS = 2;
 /**
@@ -40,9 +48,6 @@ const PLAN_GENERATION_CHUNK_WEEKS = 2;
  * calls in flight from one generation regardless of plan length.
  */
 const PLAN_CHUNK_CONCURRENCY = 3;
-// Look-back window for the athlete's current training-load posture, matching the
-// coach/analytics load context.
-const LOAD_WINDOW_DAYS = 70;
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 // Structured exercises the model must include for non-rest generated days.
@@ -183,14 +188,6 @@ export function buildGenerationAbsences(
     });
 }
 
-/** What generation knows about the athlete's current loads. `startLoadPosture`
- *  calibrates only the opening week; `loadAnchors` go to EVERY chunk — they are
- *  the shared state that makes parallel chunks agree (audit H17/M7). */
-export interface GenerationCalibration {
-  readonly startLoadPosture: string | null;
-  readonly loadAnchors: readonly LoadAnchor[];
-}
-
 export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>, calibration?: GenerationCalibration | null, absences?: readonly GenerationAbsence[]): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
@@ -270,6 +267,29 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
       ...describeLoadAnchorLines(calibration.loadAnchors, standardizeWeightUnit(unitPreferences.weightUnit)),
     );
   }
+
+  // Like the anchors, the brief and the blueprint go to EVERY chunk: they are
+  // what makes parallel calls choose the same exercises for the same reasons
+  // and put phases and deloads in the same weeks. The blueprint is derived
+  // from the plan's length alone, so it is sent even when the athlete's
+  // history could not be read.
+  const selection = calibration?.exerciseSelection;
+  if (selection) {
+    lines.push("", formatExerciseSelectionBrief(selection, "plan"));
+  }
+  // Then the engine's slice for these weeks: rhythm, lift numbers, paces,
+  // station doses. Shared state of the same kind as the blueprint, and the
+  // numbers the repair pass enforces after the model has written the sessions.
+  lines.push(
+    ...describeProgramBlueprintLines({
+      totalWeeks: input.totalWeeks,
+      range,
+      hasRace: Boolean(input.raceDate),
+      primaryLifts: selection?.primaryLifts ?? [],
+      hasEngineTargets: Boolean(calibration?.engine),
+    }),
+    ...describeEngineTargetLines(calibration?.engine, { ...range, daysBeforeStart }),
+  );
 
   // Include rest days in the total
   const restDaysPerWeek = 7 - input.daysPerWeek;
@@ -477,38 +497,74 @@ function collectHeaviestWeightsByWeek(
   return byExercise;
 }
 
+/** What the ceiling reads beyond the percentage. */
+export interface OverloadCeilingOptions {
+  /** The blueprint's deload weeks: the week after one is measured against the week before it. */
+  readonly deloadWeeks?: ReadonlySet<number>;
+}
+
+/**
+ * The week a week's load is measured against: the one before it — or, coming
+ * out of a deload, the loading week before the deload. Measured against the
+ * deload itself, every return to normal loads read as a 10%+ jump and was
+ * clamped back to deload x 1.08, so each deload the prompt asked for quietly
+ * cost the athlete the progress made before it.
+ */
+function basisWeek(weekNumber: number, deloadWeeks: ReadonlySet<number>): number {
+  return deloadWeeks.has(weekNumber - 1) && !deloadWeeks.has(weekNumber)
+    ? weekNumber - 2
+    : weekNumber - 1;
+}
+
+/**
+ * The heaviest a week may prescribe, in kg: the percentage ceiling, or one real
+ * plate step on the exercise's implement when that is larger. On a 20 kg
+ * dumbbell the smallest possible increase is 10%, and holding it to 8% clamped
+ * every dumbbell progression to a weight no gym stocks (21.6 kg).
+ */
+function weeklyCeilingKg(
+  basisKg: number,
+  exerciseName: string,
+  maxIncreasePct: number,
+  defaultUnit: WeightUnit,
+): number {
+  const stepKg = convertWeight(loadIncrement(exerciseName, defaultUnit), defaultUnit, "kg");
+  return Math.max(basisKg * (1 + maxIncreasePct / 100), basisKg + stepKg);
+}
+
 /**
  * Week-over-week weight jumps that exceed the ceiling, per exercise.
  *
- * Compares each exercise's heaviest prescribed set in consecutive weeks that
- * BOTH prescribe it. A week that drops weight is never a violation — that is a
- * deload, which the same prompt asks for.
+ * Compares each exercise's heaviest prescribed set against its basis week (the
+ * week before, or the week before a deload) when BOTH prescribe it. A week that
+ * drops weight is never a violation — that is a deload, which the same prompt
+ * asks for.
  */
 export function findProgressiveOverloadViolations(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
   defaultUnit: WeightUnit = "kg",
+  options: OverloadCeilingOptions = {},
 ): ProgressiveOverloadViolation[] {
+  const deloadWeeks = options.deloadWeeks ?? new Set<number>();
   const byExercise = collectHeaviestWeightsByWeek(days, defaultUnit);
   const violations: ProgressiveOverloadViolation[] = [];
   for (const [exerciseName, weeks] of byExercise) {
-    const ordered = [...weeks.keys()].sort((a, b) => a - b);
-    for (let i = 1; i < ordered.length; i++) {
-      const fromWeek = ordered[i - 1];
-      const toWeek = ordered[i];
-      // Only adjacent weeks: a gap means the exercise was not prescribed in
+    for (const toWeek of [...weeks.keys()].sort((a, b) => a - b)) {
+      // Only the basis week: a gap means the exercise was not prescribed in
       // between, and a jump across a rest period is not a weekly increase.
-      if (toWeek !== fromWeek + 1) continue;
-      const fromWeight = weeks.get(fromWeek)!;
+      const fromWeek = basisWeek(toWeek, deloadWeeks);
+      const fromWeight = weeks.get(fromWeek);
       const toWeight = weeks.get(toWeek)!;
-      if (toWeight <= fromWeight) continue;
+      if (fromWeight == null || toWeight <= fromWeight) continue;
       const increasePct = ((toWeight - fromWeight) / fromWeight) * 100;
-      // Epsilon because increasePct is a ratio of differences and carries float
-      // noise: a weight sitting EXACTLY on the ceiling measures 8.000000000000002
-      // against a ceiling of 8 and was flagged as a violation of itself. The
-      // ceiling is inclusive — "increase weights up to 8%" permits 8% — so the
-      // boundary must not be decided by representation (same class as audit L2).
-      if (increasePct > maxIncreasePct + PCT_COMPARISON_EPSILON) {
+      const ceiling = weeklyCeilingKg(fromWeight, exerciseName, maxIncreasePct, defaultUnit);
+      // Epsilon because the comparison is of computed floats: a weight sitting
+      // EXACTLY on the ceiling measured 8.000000000000002% against a ceiling of
+      // 8 and was flagged as a violation of itself. The ceiling is inclusive —
+      // "increase weights up to 8%" permits 8% — so the boundary must not be
+      // decided by representation (same class as audit L2).
+      if (toWeight > ceiling * (1 + PCT_COMPARISON_EPSILON)) {
         violations.push({
           exerciseName,
           fromWeek,
@@ -550,28 +606,25 @@ export function clampProgressiveOverload(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
   defaultUnit: WeightUnit = "kg",
+  options: OverloadCeilingOptions = {},
 ): ProgressiveOverloadClamp[] {
+  const deloadWeeks = options.deloadWeeks ?? new Set<number>();
   const clamps: ProgressiveOverloadClamp[] = [];
   const weeksByExercise = collectHeaviestWeightsByWeek(days, defaultUnit);
 
   for (const [exerciseName, weeks] of weeksByExercise) {
-    let previousWeek: number | null = null;
-    let previousMax: number | null = null;
-
+    // Walked in order, each week's CLAMPED weight written back before a later
+    // week is measured against it.
     for (const weekNumber of [...weeks.keys()].sort((a, b) => a - b)) {
-      let heaviest = weeks.get(weekNumber)!;
-
-      if (previousMax != null && previousWeek != null && weekNumber === previousWeek + 1) {
-        const ceiling = Math.floor(previousMax * (1 + maxIncreasePct / 100) * 10) / 10;
-        if (heaviest > ceiling) {
-          clamps.push({ exerciseName, weekNumber, fromWeight: heaviest, toWeight: ceiling, ceiling });
-          applyWeightCeiling(days, exerciseName, weekNumber, ceiling, defaultUnit);
-          heaviest = ceiling;
-        }
-      }
-
-      previousWeek = weekNumber;
-      previousMax = heaviest;
+      const basis = weeks.get(basisWeek(weekNumber, deloadWeeks));
+      const heaviest = weeks.get(weekNumber);
+      if (basis == null || heaviest == null) continue;
+      const ceiling =
+        Math.floor(weeklyCeilingKg(basis, exerciseName, maxIncreasePct, defaultUnit) * 10) / 10;
+      if (heaviest <= ceiling) continue;
+      clamps.push({ exerciseName, weekNumber, fromWeight: heaviest, toWeight: ceiling, ceiling });
+      applyWeightCeiling(days, exerciseName, weekNumber, ceiling, defaultUnit);
+      weeks.set(weekNumber, ceiling);
     }
   }
 
@@ -720,6 +773,19 @@ async function generatePlanDays(
   }
   assertTableFirstGeneratedDays(days);
 
+  // The engine's primary-lift targets are enforced before the clamp runs, so
+  // the clamp sees the numbers the athlete will actually be given; a target
+  // never steps more than 7.5% or one plate, so the clamp has nothing to undo
+  // in it and stays the guarantee for everything else the model wrote.
+  const liftRepairs = repairPrimaryLifts(days, calibration?.engine);
+  if (liftRepairs.length > 0) {
+    logger.debug(
+      { context: "plan-generation", repairedLiftDays: liftRepairs.length },
+      "[planGen] Snapped primary lifts to the workout engine's targets",
+    );
+  }
+  const overloadOptions = { deloadWeeks: new Set(planDeloadWeeks(input.totalWeeks)) };
+
   // The progressive-overload ceiling is ENFORCED BY CLAMPING (audit H17, M7).
   // Rejecting would make the athlete wait out another model round-trip for a
   // fault that is not theirs, and a persistent violation could loop; logging
@@ -729,11 +795,18 @@ async function generatePlanDays(
   // The trade-off, recorded because it is real: the numbers no longer match what
   // the model wrote, so a coaching rationale referring to a specific load can
   // disagree with the set it describes. Everything clamped is logged.
-  const overloadViolations = findProgressiveOverloadViolations(days);
+  const athleteWeightUnit = standardizeWeightUnit(unitPreferences.weightUnit);
+  const overloadViolations = findProgressiveOverloadViolations(
+    days,
+    MAX_WEEKLY_WEIGHT_INCREASE_PCT,
+    athleteWeightUnit,
+    overloadOptions,
+  );
   const overloadClamps = clampProgressiveOverload(
     days,
     MAX_WEEKLY_WEIGHT_INCREASE_PCT,
-    standardizeWeightUnit(unitPreferences.weightUnit),
+    athleteWeightUnit,
+    overloadOptions,
   );
   if (overloadViolations.length > 0) {
     // Carries neither the athlete's id nor their prescribed loads. The logger
@@ -838,70 +911,6 @@ export async function createPendingPlan(
 }
 
 /**
- * Turn the athlete's current training-load posture into one line of opening-week
- * calibration guidance for the generator, or null when no special handling is
- * warranted (sweet spot / not enough history). Exported for testing.
- */
-export function describeStartLoadPosture(overview: TrainingLoadOverview): string | null {
-  const acwr = overview.acwr != null ? ` (ACWR ${overview.acwr.toFixed(2)})` : "";
-  switch (overview.zone) {
-    case "danger":
-      return `The athlete is carrying high recent load${acwr} and is currently fatigued. Start week 1 conservatively — moderate volume and intensity, no peak or simulation sessions in the first few days — and let them absorb load before ramping.`;
-    case "yellow":
-      return `The athlete's recent load is elevated${acwr}. Ease into week 1 (trim volume on the hardest sessions) before progressing normally.`;
-    case "undertraining":
-      return `The athlete is currently detrained / below their 28-day baseline${acwr}. Ramp volume gently across the first 1-2 weeks instead of starting at full prescription.`;
-    default:
-      return null; // sweet_spot / insufficient_data ⇒ no special calibration
-  }
-}
-
-// Compute the athlete's generation calibration from recent history: the
-// qualitative posture line for week 1, and the per-exercise load anchors every
-// chunk receives (audit H17/M7 — the sets were already being fetched here and
-// used only for the posture sentence). Degrades to null (plan generated
-// without calibration) on any failure — never blocks plan generation.
-async function computeGenerationCalibration(
-  userId: string,
-  user: Awaited<ReturnType<typeof storage.users.getUser>>,
-): Promise<GenerationCalibration | null> {
-  try {
-    // The athlete's calendar date, not the server's: a UTC "today" put the
-    // load window a day off for everyone west of Greenwich, so the posture and
-    // anchors the plan was calibrated from lagged the schedule it was written
-    // against (resolveUserTodayForPlan makes the same call for the schedule).
-    const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
-    const from = addDaysToISODate(today, -LOAD_WINDOW_DAYS);
-    const [workoutLogs, loadExerciseSets, loadTags] = await Promise.all([
-      storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
-      storage.analytics.getAllExerciseSetsWithDates(userId, from, today),
-      storage.analytics.getExerciseLoadTags(),
-    ]);
-    const { overview } = calculateTrainingLoad(workoutLogs, loadExerciseSets, loadTags, {
-      currentDate: today,
-      weightUnit: user?.weightUnit || "kg",
-      distanceUnit: user?.distanceUnit || "km",
-      athlete: {
-        age: user?.age ?? null,
-        gender: user?.gender ?? null,
-        restingHr: user?.restingHr ?? null,
-        // Scales unweighted-rep tonnage with the body being moved (audit M2).
-        bodyweightKg: user?.bodyweightKg ?? null,
-        maxHr: user?.maxHr ?? null,
-        ftp: user?.ftp ?? null,
-      },
-    });
-    return {
-      startLoadPosture: describeStartLoadPosture(overview),
-      loadAnchors: buildLoadAnchors(loadExerciseSets, standardizeWeightUnit(user?.weightUnit)),
-    };
-  } catch {
-    logger.warn("[planGen] load calibration unavailable; generating without it.");
-    return null;
-  }
-}
-
-/**
  * The athlete's own calendar date. A UTC "today" would retire a plan a day early
  * for anyone west of Greenwich — the same reasoning as PlanStorage.resolveUserToday.
  */
@@ -930,7 +939,7 @@ export async function executePlanGeneration(
       weightUnit: standardizeWeightUnit(user?.weightUnit),
       distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
     };
-    const calibration = await computeGenerationCalibration(userId, user);
+    const calibration = await computeGenerationCalibration(userId, user, normalized);
     // Declared absences inside the plan window, so the generator schedules
     // around a booked travel week instead of programming straight over it.
     // startDate is absent only for a legacy queued job (same guard as
@@ -1036,6 +1045,19 @@ export async function executePlanGeneration(
           "[planGen] Retired superseded plans",
         );
       }
+      // What the plan's paces were written against, so the auto-coach can move
+      // them when the athlete runs faster (workoutEngine/adaptation.ts).
+      await storage.plans.updateEngineState(
+        planId,
+        userId,
+        {
+          version: 1,
+          runVdot: calibration.engine?.paces?.vdot ?? null,
+          adaptedLogIds: [...(calibration.reflectedLogIds ?? [])],
+          updatedAt: new Date().toISOString(),
+        },
+        tx,
+      );
       await storage.plans.updateGenerationStatus(planId, "ready", null, tx);
     });
 
