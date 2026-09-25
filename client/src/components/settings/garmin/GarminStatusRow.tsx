@@ -68,23 +68,22 @@ export function GarminStatusRow({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={isDisconnecting ? 0 : -1}> {/* NOSONAR */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onDisconnect}
-                    disabled={isDisconnecting}
-                    aria-label={isDisconnecting ? "Disconnecting Garmin…" : "Disconnect Garmin"}
-                    aria-busy={isDisconnecting}
-                    data-testid="button-disconnect-garmin"
-                  >
-                    {isDisconnecting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Unlink className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </Button>
-                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                  onClick={() => { if (!isDisconnecting) onDisconnect(); }}
+                  aria-disabled={isDisconnecting || undefined}
+                  aria-label={isDisconnecting ? "Disconnecting Garmin…" : "Disconnect Garmin"}
+                  aria-busy={isDisconnecting}
+                  data-testid="button-disconnect-garmin"
+                >
+                  {isDisconnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Unlink className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </Button>
               </TooltipTrigger>
               <TooltipContent>Disconnect Garmin</TooltipContent>
             </Tooltip>
