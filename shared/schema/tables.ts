@@ -1106,7 +1106,10 @@ export const timelineAnnotations = pgTable(
   (table) => [
     check("timeline_annotation_type_check", sql`type IN ('injury', 'illness', 'travel', 'rest')`),
     check("timeline_annotation_range_check", sql`end_date >= start_date`),
-    index("idx_timeline_annotations_user_id").on(table.userId),
+    // idx_timeline_annotations_user_id dropped: fully shadowed by the
+    // composite index below, which leads with the same column (see
+    // .jules/bolt.md 2026-09-25). Every caller filters on userId either
+    // bare or ANDed with startDate/endDate, both servable by this index.
     index("idx_timeline_annotations_user_range").on(table.userId, table.startDate, table.endDate),
   ],
 );
