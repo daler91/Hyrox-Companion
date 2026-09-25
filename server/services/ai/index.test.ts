@@ -711,6 +711,28 @@ describe("buildTrainingContext", () => {
     expect(ctx.coachingInsights?.neglectedPatterns).toBeUndefined();
     expect(ctx.coachingInsights?.neglectedMuscles).toBeUndefined();
   });
+
+  it("attaches load by body system from the training sessions, as the Analytics card does", async () => {
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+      { id: "run", date: "2026-06-14", focus: "Run", mainWorkout: "", duration: 30, rpe: 5, countsAsTraining: true },
+      // A walk the athlete does not count as training stays out, like the card.
+      { id: "walk", date: "2026-06-14", focus: "Walk", mainWorkout: "", duration: 60, rpe: 2, countsAsTraining: false },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    const bodySystems = ctx.coachingInsights?.bodySystemLoad;
+    expect(bodySystems?.asOf).toBe(TODAY);
+    expect(bodySystems?.sessionCount).toBe(1);
+    // The run alone: 30 min × RPE 5 on the heart and lungs.
+    expect(bodySystems?.systems[0]).toMatchObject({ system: "aerobic", current: 150 });
+  });
+
+  it("omits load by body system when no system carries any load", async () => {
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.bodySystemLoad).toBeUndefined();
+  });
 });
 
 describe("buildTrainingContext declared absences", () => {

@@ -1078,11 +1078,19 @@ Calculate weekly training summaries, category totals, station coverage, and week
       avgDuration: number,
       avgRpe: number | null,
     },
+    // UTSS, ACWR, Form, monotony and the governor's restrictions over the
+    // trailing 70-day load window ending on `to` (or today).
+    trainingLoad: TrainingLoadOverview,
+    // The same window's sessions split by body system: session RPE × minutes
+    // spread across aerobic, running impact, leg muscle and upper-body pull,
+    // six rolling 7-day blocks per system, each against its own usual week.
+    bodySystemLoad: BodySystemLoadOverview,
   }
   ```
 
 - **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
 - The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the six stat cards.
+- **Load by body system (`bodySystemLoad`):** each session's load is its RPE × minutes (Foster session-RPE). A session with no RPE uses its heart-rate equivalent, then the default effort of what was logged; one with no duration uses an estimate from its sets; both are counted in `estimatedSessions`. The load is split by each exercise's profile, weighted by its share of the session's time, and each system is compared with the mean of the up-to-four full weeks before this one (`ratio` bands 0.8 / 1.3 / 1.5). `sixWeekHigh` needs six weeks of history and a week at least 20% above the usual one. A parallel model: it never feeds UTSS or the governor. Types in `shared/schema/types/analytics.ts`; model in `server/services/trainingLoad/bodySystemLoad.ts`.
 
 ### GET /api/v1/weekly-review
 

@@ -1,3 +1,4 @@
+import { hasBodySystemLoadData } from "@shared/bodySystemLoad";
 import { addDaysToISODate as addDays, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
 import { getStoredDistanceUnit, standardizeWeightUnit } from "@shared/unitConversion";
@@ -16,7 +17,8 @@ import {
   countPersonalRecordsInRange,
 } from "../analyticsService";
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
-import { calculateTrainingLoad } from "../trainingLoadService";
+import { calculateBodySystemLoad } from "../trainingLoad/bodySystemLoad";
+import { type AthleteLoadContext, calculateTrainingLoad } from "../trainingLoadService";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { EngineSet } from "../workoutEngine/loadMath";
 import type { EngineRunLog } from "../workoutEngine/running";
@@ -241,10 +243,10 @@ type LoadWorkoutLogs = Awaited<ReturnType<typeof storage.analytics.getWorkoutLog
 /**
  * Derive the supplementary coaching signals that were added after the original
  * coach context: recent personal records / e1RM, PRs-this-week, plan
- * compliance, movement/muscle coverage gaps, and deterministic race readiness.
- * All reuse data already loaded by buildTrainingContext (no extra IO) and every
- * field self-suppresses when its signal is absent. Extracted to keep
- * buildTrainingContext's complexity bounded.
+ * compliance, movement/muscle coverage gaps, deterministic race readiness and
+ * load by body system. All reuse data already loaded by buildTrainingContext
+ * (no extra IO) and every field self-suppresses when its signal is absent.
+ * Extracted to keep buildTrainingContext's complexity bounded.
  */
 function buildSupplementaryInsights(params: {
   loadExerciseSets: LoadExerciseSets;
@@ -255,9 +257,19 @@ function buildSupplementaryInsights(params: {
   distanceUnit: string;
   userTimezone: string | null | undefined;
   today: string;
+  athlete: AthleteLoadContext;
 }): Partial<NonNullable<TrainingContext["coachingInsights"]>> {
-  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, userTimezone, today } =
-    params;
+  const {
+    loadExerciseSets,
+    loadWorkoutLogs,
+    loadGovernor,
+    totalWorkouts,
+    weightUnit,
+    distanceUnit,
+    userTimezone,
+    today,
+    athlete,
+  } = params;
 
   // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
   const personalRecordMap = calculatePersonalRecords(loadExerciseSets, { weightUnit, distanceUnit });
@@ -298,6 +310,15 @@ function buildSupplementaryInsights(params: {
   // Deterministic race-day form readiness from TSB — free (no AI call).
   const raceReadiness = computeRaceReadiness(loadGovernor.tsb, loadGovernor.acuteAvg);
 
+  // Where this week's load landed, from the TRAINING sessions — the same
+  // subset the Analytics card reads, so the coach and the chart describe the
+  // same numbers.
+  const bodySystemLoad = calculateBodySystemLoad(loadWorkoutLogs, loadExerciseSets, {
+    currentDate: today,
+    distanceUnit,
+    athlete,
+  });
+
   return {
     ...(personalRecords.length > 0 ? { personalRecords } : {}),
     ...(prsThisWeek > 0 ? { prsThisWeek } : {}),
@@ -305,6 +326,7 @@ function buildSupplementaryInsights(params: {
     ...(neglectedPatterns.length > 0 ? { neglectedPatterns } : {}),
     ...(neglectedMuscles.length > 0 ? { neglectedMuscles } : {}),
     ...(raceReadiness.status !== "insufficient_data" ? { raceReadiness } : {}),
+    ...(hasBodySystemLoadData(bodySystemLoad) ? { bodySystemLoad } : {}),
   };
 }
 
@@ -515,19 +537,20 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
   const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const progressionFlags = computeProgressionFlags(timeline, weightUnit, distanceUnit);
+  const athlete: AthleteLoadContext = {
+    age: user?.age ?? null,
+    gender: user?.gender ?? null,
+    restingHr: user?.restingHr ?? null,
+    // Scales unweighted-rep tonnage with the body being moved (audit M2).
+    bodyweightKg: user?.bodyweightKg ?? null,
+    maxHr: user?.maxHr ?? null,
+    ftp: user?.ftp ?? null,
+  };
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
     weightUnit,
     distanceUnit,
-    athlete: {
-      age: user?.age ?? null,
-      gender: user?.gender ?? null,
-      restingHr: user?.restingHr ?? null,
-      // Scales unweighted-rep tonnage with the body being moved (audit M2).
-      bodyweightKg: user?.bodyweightKg ?? null,
-      maxHr: user?.maxHr ?? null,
-      ftp: user?.ftp ?? null,
-    },
+    athlete,
   }).overview;
   const completedLast7d = recentWorkouts.filter((w) => {
     // ⚡ Bolt Performance Optimization:
@@ -592,9 +615,10 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   );
   const trainingSets = loadExerciseSets.filter((set) => !nonTrainingLogIds.has(set.workoutLogId));
 
-  // Supplementary signals (PRs/e1RM, compliance, coverage gaps, race readiness)
-  // derived from data already loaded above — no extra IO. Each self-suppresses
-  // when absent. Extracted to keep this function's complexity bounded.
+  // Supplementary signals (PRs/e1RM, compliance, coverage gaps, race readiness,
+  // load by body system) derived from data already loaded above — no extra IO.
+  // Each self-suppresses when absent. Extracted to keep this function's
+  // complexity bounded.
   const supplementaryInsights = buildSupplementaryInsights({
     loadExerciseSets: trainingSets,
     loadWorkoutLogs: trainingLogs,
@@ -604,6 +628,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     distanceUnit,
     userTimezone,
     today,
+    athlete,
   });
 
   const exerciseSelectionField = coachExerciseSelectionField({

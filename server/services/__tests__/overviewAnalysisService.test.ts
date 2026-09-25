@@ -1,3 +1,4 @@
+import { bodySystemOverview, legSpikeOverview } from "@shared/bodySystemLoadTestFixtures";
 import type {
   TrainingLoadOverview,
   TrainingLoadTrendPoint,
@@ -139,6 +140,35 @@ describe("buildOverviewChartFacts", () => {
     expect(facts.trainingLoad).toBeUndefined();
     expect(facts.weeklyWorkouts).toBeDefined();
     expect(facts.consistency).toBeDefined();
+  });
+});
+
+describe("buildOverviewChartFacts — load by body system", () => {
+  it("explains the body-system card with each system against its own usual week", () => {
+    const facts = buildOverviewChartFacts(overview({ bodySystemLoad: legSpikeOverview({ estimatedSessions: 3 }) }));
+
+    expect(facts.bodySystems?.title).toBe("Load by body system");
+    expect(facts.bodySystems?.facts.divergence).toBe(
+      "Leg muscle load is at a six-week high (100% above your usual week), while aerobic and running impact loads are normal.",
+    );
+    expect(facts.bodySystems?.facts.systems).toContainEqual(
+      expect.objectContaining({ system: "Leg muscle", thisWeek: 1080, usualWeek: 540, status: "very_high", sixWeekHigh: true }),
+    );
+    expect(facts.bodySystems?.facts.estimatedSessions).toBe(3);
+  });
+
+  it("omits the section when the card has nothing to render", () => {
+    const empty = { current: 0, baseline: null, ratio: null, previousPeak: null, weekly: [null, null, null, null, null, 0] };
+    const idle = bodySystemOverview({ aerobic: empty, running_impact: empty, leg_muscle: empty, upper_pull: empty });
+
+    expect(buildOverviewChartFacts(overview({ bodySystemLoad: idle })).bodySystems).toBeUndefined();
+    // A response cached before the field existed has none at all.
+    expect(buildOverviewChartFacts(overview()).bodySystems).toBeUndefined();
+  });
+
+  it("tells the model the systems are not comparable with each other or with UTSS", () => {
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toContain("never compare one system's number with another's");
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toContain("UTSS and body-system load are different models");
   });
 });
 

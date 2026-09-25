@@ -139,6 +139,91 @@ export interface TrainingLoadOverview {
   trend: TrainingLoadTrendPoint[];
 }
 
+// Load by body system.
+//
+// UTSS answers "how much training?" with one number, and one number cannot say
+// WHERE the load landed: a week of heavy sleds and lunges can hold UTSS flat
+// while the legs take a six-week high. This model starts from the session's
+// own effort, session RPE × minutes (Foster's sRPE, in arbitrary units),
+// splits it across four systems by what the session contained, and compares
+// each system only with its own history. It is a parallel view and never feeds
+// UTSS or the governor. See server/services/trainingLoad/bodySystemLoad.ts.
+
+export type BodySystem = "aerobic" | "running_impact" | "leg_muscle" | "upper_pull";
+
+/**
+ * How this week's load in one system compares with the athlete's usual week
+ * for that system (the mean of the up-to-four full weeks before it).
+ *
+ * The ratio bands are the sRPE ACWR bands the load governor also reads
+ * (0.8 / 1.3 / 1.5), which were first derived on session-RPE loads.
+ */
+export type BodySystemLoadStatus =
+  /** Fewer than two full weeks of history before this one: no usual week yet. */
+  | "insufficient_data"
+  /** Too little load in this system, this week and usually, to compare. */
+  | "minimal"
+  /** A real week of load against almost none in the previous four weeks. */
+  | "new"
+  /** Under 0.8× the usual week. */
+  | "low"
+  /** 0.8–1.3× the usual week. */
+  | "normal"
+  /** 1.3–1.5× the usual week. */
+  | "high"
+  /** Over 1.5× the usual week. */
+  | "very_high";
+
+/** One rolling 7-day block. The newest ends on the overview's `asOf` date. */
+export interface BodySystemWeek {
+  /** First day of the block, YYYY-MM-DD. */
+  start: string;
+  /** Last day of the block, inclusive. */
+  end: string;
+}
+
+export interface BodySystemLoadSummary {
+  system: BodySystem;
+  /** Load over the newest block (the last 7 days), in RPE × minutes. */
+  current: number;
+  /** The usual week: mean of the full blocks among the four before the newest. Null until two exist. */
+  baseline: number | null;
+  /** current ÷ baseline. Null without a baseline, or when the baseline is too small to divide by. */
+  ratio: number | null;
+  status: BodySystemLoadStatus;
+  /**
+   * The newest block is heavier than each of the five before it, and at least
+   * 20% above the usual week. Needs all six blocks inside the athlete's history.
+   */
+  sixWeekHigh: boolean;
+  /** Heaviest of the five blocks before the newest. Null until all six lie inside the athlete's history. */
+  previousPeak: number | null;
+  /**
+   * One total per block in `BodySystemLoadOverview.weeks`, oldest first. Null
+   * for a block that ends before the athlete's first logged session. A block
+   * the first session falls inside is a real but partial week: it is shown,
+   * and left out of the baseline and the six-week comparison.
+   */
+  weekly: Array<number | null>;
+}
+
+export interface BodySystemLoadOverview {
+  /** The date the newest block ends on. */
+  asOf: string;
+  /** The six rolling 7-day blocks, oldest first. */
+  weeks: BodySystemWeek[];
+  /** Always all four systems, in BODY_SYSTEMS order. */
+  systems: BodySystemLoadSummary[];
+  /** Sessions logged across the six blocks. */
+  sessionCount: number;
+  /** Of those, sessions whose effort (no RPE) or duration was estimated rather than logged. */
+  estimatedSessions: number;
+  /** Sessions whose load could not be placed on any system (nothing recognisable was logged). */
+  unattributedSessions: number;
+  /** Sessions with neither a duration nor any exercises, so no load could be computed at all. */
+  unscoredSessions: number;
+}
+
 export interface MovementPatternCoverage {
   pattern: MovementPattern;
   label: string;
@@ -204,6 +289,12 @@ export interface TrainingOverview {
    */
   previousStats?: OverviewStats;
   trainingLoad: TrainingLoadOverview;
+  /**
+   * Load by body system over the same trailing window as `trainingLoad`.
+   * Optional because a response cached by the PWA before this field existed
+   * can still be served; the server always sends it.
+   */
+  bodySystemLoad?: BodySystemLoadOverview;
 }
 
 /**
@@ -232,6 +323,7 @@ export interface TrainingSummary {
 /** One key per explainable chart card on the Analytics → Overview tab. */
 export type OverviewChartKey =
   | "trainingLoad"
+  | "bodySystems"
   | "formMonotony"
   | "objectiveLoad"
   | "weeklyWorkouts"
