@@ -36,7 +36,7 @@ describe("formatLoadChange", () => {
 
 describe("hasBodySystemLoadData", () => {
   it("is false with nothing to show", () => {
-    expect(hasBodySystemLoadData(undefined)).toBe(false);
+    expect(hasBodySystemLoadData(null)).toBe(false);
     expect(hasBodySystemLoadData(emptyBodySystemOverview())).toBe(false);
   });
 

@@ -133,6 +133,57 @@ function Chip({
   );
 }
 
+/** A column's fill: a sliver for a zero week, so it reads as "none", not "missing". */
+function BarFill({
+  value,
+  isCurrent,
+  scale,
+  testId,
+}: Readonly<{ value: number | null; isCurrent: boolean; scale: number; testId?: string }>) {
+  if (value == null) return <div className="h-px w-full bg-border" />;
+  const height = value > 0 ? `max(${(value / scale) * 100}%, 3px)` : "2px";
+  return (
+    <div
+      className={cn(
+        "w-full",
+        value > 0 && "rounded-t",
+        isCurrent ? "bg-chart-1" : "bg-neutral-400 dark:bg-neutral-600",
+      )}
+      style={{ height }}
+      data-testid={testId}
+    />
+  );
+}
+
+/** One week's column, with its value on hover. */
+function WeekBar({
+  value,
+  label,
+  isCurrent,
+  scale,
+  testId,
+}: Readonly<{
+  value: number | null;
+  label: string;
+  isCurrent: boolean;
+  scale: number;
+  testId?: string;
+}>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex h-full max-w-6 flex-1 items-end">
+          <BarFill value={value} isCurrent={isCurrent} scale={scale} testId={testId} />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="font-semibold">{value == null ? "No history yet" : formatLoad(value)}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * Six rolling weeks as thin columns: this week in the accent, the five before
  * it recessive, and the usual week as a dashed rule. Each tile has its own
@@ -144,9 +195,10 @@ function WeeklyBars({
   weeks,
 }: Readonly<{ summary: BodySystemLoadSummary; weeks: readonly BodySystemWeek[] }>) {
   const label = BODY_SYSTEM_META[summary.system].label;
-  let max = summary.baseline ?? 0;
-  for (const value of summary.weekly) if (value != null && value > max) max = value;
-  const scale = max > 0 ? max : 1;
+  // Loads are whole numbers, so a floor of 1 only matters for an all-zero tile.
+  const scale = Math.max(1, summary.baseline ?? 0, ...summary.weekly.map((value) => value ?? 0));
+  const newest = summary.weekly.length - 1;
+  const first = weeks.at(0);
   const described = summary.weekly
     .map(
       (value, index) =>
@@ -170,46 +222,50 @@ function WeeklyBars({
             data-testid={`body-system-usual-${summary.system}`}
           />
         )}
-        {summary.weekly.map((value, index) => {
-          const week = weeks.at(index);
-          const isCurrent = index === summary.weekly.length - 1;
-          return (
-            <Tooltip key={week?.start ?? index}>
-              <TooltipTrigger asChild>
-                <div className="flex h-full max-w-6 flex-1 items-end">
-                  {value == null ? (
-                    <div className="h-px w-full bg-border" />
-                  ) : (
-                    <div
-                      className={cn(
-                        "w-full",
-                        value > 0 ? "rounded-t" : "",
-                        isCurrent ? "bg-chart-1" : "bg-neutral-400 dark:bg-neutral-600",
-                      )}
-                      // A zero week still shows a sliver, so it reads as "none", not "missing".
-                      style={{ height: value > 0 ? `max(${(value / scale) * 100}%, 3px)` : "2px" }}
-                      data-testid={isCurrent ? `body-system-current-${summary.system}` : undefined}
-                    />
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="font-semibold">
-                  {value == null ? "No history yet" : formatLoad(value)}
-                </p>
-                <p className="text-xs text-muted-foreground">{weekLabel(weeks, index)}</p>
-              </TooltipContent>
-            </Tooltip>
-          );
-        })}
+        {summary.weekly.map((value, index) => (
+          <WeekBar
+            key={weeks.at(index)?.start ?? index}
+            value={value}
+            label={weekLabel(weeks, index)}
+            isCurrent={index === newest}
+            scale={scale}
+            testId={index === newest ? `body-system-current-${summary.system}` : undefined}
+          />
+        ))}
       </div>
       <div
         className="mt-1 flex justify-between text-[11px] text-muted-foreground"
         aria-hidden="true"
       >
-        <span>{weeks[0] ? formatChartDate(weeks[0].start) : ""}</span>
+        <span>{first ? formatChartDate(first.start) : ""}</span>
         <span>This week</span>
       </div>
+    </div>
+  );
+}
+
+/** A tile's numbers: this week's load, its status, and how it compares. */
+function SystemTileSummary({ summary }: Readonly<{ summary: BodySystemLoadSummary }>) {
+  return (
+    <div className="min-w-0 flex-1 space-y-2">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <p className="text-2xl font-bold" data-testid={`body-system-value-${summary.system}`}>
+          {formatLoad(summary.current)}
+        </p>
+        <p className="text-xs text-muted-foreground">this week</p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <Chip {...STATUS_CHIPS[summary.status]} />
+        {summary.sixWeekHigh && (
+          <Chip label="6-week high" icon={ArrowUpToLine} className={AMBER_CHIP} />
+        )}
+      </div>
+      <p
+        className="text-xs text-muted-foreground sm:min-h-8"
+        data-testid={`body-system-detail-${summary.system}`}
+      >
+        {detailText(summary)}
+      </p>
     </div>
   );
 }
@@ -220,7 +276,6 @@ function SystemTile({
 }: Readonly<{ summary: BodySystemLoadSummary; weeks: readonly BodySystemWeek[] }>) {
   const meta = BODY_SYSTEM_META[summary.system];
   const Icon = SYSTEM_ICONS[summary.system];
-  const chip = STATUS_CHIPS[summary.status];
   // Phones: the bars sit beside the numbers, so all four systems fit on a
   // screen and the divergence reads at a glance. Wider: stacked tiles, with
   // the detail line held to two lines so the bars align across a row.
@@ -235,26 +290,7 @@ function SystemTile({
         <ExplanationTooltip explanation={meta.description} subject={meta.label} />
       </div>
       <div className="flex items-end gap-3 sm:flex-col sm:items-stretch sm:gap-2">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <p className="text-2xl font-bold" data-testid={`body-system-value-${summary.system}`}>
-              {formatLoad(summary.current)}
-            </p>
-            <p className="text-xs text-muted-foreground">this week</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Chip {...chip} />
-            {summary.sixWeekHigh && (
-              <Chip label="6-week high" icon={ArrowUpToLine} className={AMBER_CHIP} />
-            )}
-          </div>
-          <p
-            className="text-xs text-muted-foreground sm:min-h-8"
-            data-testid={`body-system-detail-${summary.system}`}
-          >
-            {detailText(summary)}
-          </p>
-        </div>
+        <SystemTileSummary summary={summary} />
         <div className="w-32 shrink-0 sm:w-full">
           <WeeklyBars summary={summary} weeks={weeks} />
         </div>
@@ -263,51 +299,66 @@ function SystemTile({
   );
 }
 
+const TABLE_CELL = "py-1.5 pr-3 text-right tabular-nums";
+const TABLE_HEADING = "py-1.5 pr-3 text-right font-medium";
+
+function LoadTableHead({ weeks }: Readonly<{ weeks: readonly BodySystemWeek[] }>) {
+  return (
+    <thead>
+      <tr className="border-b text-left text-muted-foreground">
+        <th scope="col" className="py-1.5 pr-3 font-medium">
+          System
+        </th>
+        {weeks.map((week, index) => (
+          <th key={week.start} scope="col" className={TABLE_HEADING}>
+            {index === weeks.length - 1 ? "This week" : formatChartDate(week.start)}
+          </th>
+        ))}
+        <th scope="col" className={TABLE_HEADING}>
+          Usual week
+        </th>
+        <th scope="col" className="py-1.5 font-medium">
+          Status
+        </th>
+      </tr>
+    </thead>
+  );
+}
+
+function LoadTableRow({
+  summary,
+  weeks,
+}: Readonly<{ summary: BodySystemLoadSummary; weeks: readonly BodySystemWeek[] }>) {
+  return (
+    <tr className="border-b last:border-0">
+      <th scope="row" className="py-1.5 pr-3 text-left font-medium">
+        {BODY_SYSTEM_META[summary.system].label}
+      </th>
+      {summary.weekly.map((value, index) => (
+        <td key={weeks.at(index)?.start ?? index} className={TABLE_CELL}>
+          {value == null ? "—" : formatLoad(value)}
+        </td>
+      ))}
+      <td className={TABLE_CELL}>
+        {summary.baseline == null ? "—" : formatLoad(summary.baseline)}
+      </td>
+      <td className="py-1.5">
+        {STATUS_CHIPS[summary.status].label}
+        {summary.sixWeekHigh ? ", 6-week high" : ""}
+      </td>
+    </tr>
+  );
+}
+
 function LoadTable({ overview, id }: Readonly<{ overview: BodySystemLoadOverview; id: string }>) {
   return (
     <div id={id} className="overflow-x-auto" data-testid="body-system-table">
       <table className="w-full text-xs">
         <caption className="sr-only">Weekly load by body system, in session RPE × minutes</caption>
-        <thead>
-          <tr className="border-b text-left text-muted-foreground">
-            <th scope="col" className="py-1.5 pr-3 font-medium">
-              System
-            </th>
-            {overview.weeks.map((week, index) => (
-              <th key={week.start} scope="col" className="py-1.5 pr-3 text-right font-medium">
-                {index === overview.weeks.length - 1 ? "This week" : formatChartDate(week.start)}
-              </th>
-            ))}
-            <th scope="col" className="py-1.5 pr-3 text-right font-medium">
-              Usual week
-            </th>
-            <th scope="col" className="py-1.5 font-medium">
-              Status
-            </th>
-          </tr>
-        </thead>
+        <LoadTableHead weeks={overview.weeks} />
         <tbody>
           {overview.systems.map((summary) => (
-            <tr key={summary.system} className="border-b last:border-0">
-              <th scope="row" className="py-1.5 pr-3 text-left font-medium">
-                {BODY_SYSTEM_META[summary.system].label}
-              </th>
-              {summary.weekly.map((value, index) => (
-                <td
-                  key={overview.weeks.at(index)?.start ?? index}
-                  className="py-1.5 pr-3 text-right tabular-nums"
-                >
-                  {value == null ? "—" : formatLoad(value)}
-                </td>
-              ))}
-              <td className="py-1.5 pr-3 text-right tabular-nums">
-                {summary.baseline == null ? "—" : formatLoad(summary.baseline)}
-              </td>
-              <td className="py-1.5">
-                {STATUS_CHIPS[summary.status].label}
-                {summary.sixWeekHigh ? ", 6-week high" : ""}
-              </td>
-            </tr>
+            <LoadTableRow key={summary.system} summary={summary} weeks={overview.weeks} />
           ))}
         </tbody>
       </table>

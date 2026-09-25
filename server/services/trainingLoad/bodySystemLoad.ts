@@ -181,20 +181,26 @@ interface ScoredSession {
   attributed: boolean;
 }
 
-/** A logged set in the shape the shared session estimator reads. */
-function toEstimateSet(set: BodySystemSet, distanceUnit: string | undefined): PlannedSessionSet {
+/** A custom set's label is the better guess at its pace and effort. */
+function estimateName(set: BodySystemSet): string {
+  return set.exerciseName === "custom" && set.customLabel ? set.customLabel : set.exerciseName;
+}
+
+/** The set's distance in metres, from the row's own unit stamp. */
+function distanceInMetres(set: BodySystemSet, distanceUnit: string | undefined): number | null {
   const rawDistance = set.distance ?? set.plannedDistance;
+  return rawDistance == null
+    ? null
+    : storedDistanceToMetersStamped(rawDistance, set, { distanceUnit });
+}
+
+/** A logged set in the shape the shared session estimator reads. Actuals win: this is what was done. */
+function toEstimateSet(set: BodySystemSet, distanceUnit: string | undefined): PlannedSessionSet {
   return {
-    // A custom set's label is the better guess at its pace and effort.
-    exerciseName:
-      set.exerciseName === "custom" && set.customLabel ? set.customLabel : set.exerciseName,
-    // Actuals win: this is what was done, not what was prescribed.
+    exerciseName: estimateName(set),
     time: set.time ?? set.plannedTime,
     reps: set.reps ?? set.plannedReps,
-    distance:
-      rawDistance == null
-        ? null
-        : storedDistanceToMetersStamped(rawDistance, set, { distanceUnit }),
+    distance: distanceInMetres(set, distanceUnit),
   };
 }
 
@@ -258,31 +264,56 @@ function sessionMix(components: readonly SessionComponent[]): SystemLoads {
   return mix;
 }
 
+interface LoggedSet {
+  set: BodySystemSet;
+  estimate: PlannedSessionSet;
+}
+
+interface SessionParts {
+  components: SessionComponent[];
+  /** What the session's default effort is read from when nothing better exists. */
+  effortSets: readonly PlannedSessionSet[];
+}
+
+/**
+ * What the session contained: its logged sets, each weighted by its time, or
+ * — with no sets at all (a free-text log, or an import without one) — the one
+ * sport its title names, which is all there is to go on.
+ */
+function sessionParts(log: BodySystemLog, logged: readonly LoggedSet[]): SessionParts {
+  if (logged.length > 0) {
+    return {
+      components: logged.map(({ set, estimate }) => ({
+        profile: bodySystemProfileForSet(set),
+        minutes: estimateSetMinutes(estimate, METRIC_PREFERENCE),
+      })),
+      effortSets: logged.map(({ estimate }) => estimate),
+    };
+  }
+  const inferred = inferExerciseFromTitle(log);
+  if (!inferred) return { components: [], effortSets: [] };
+  return {
+    components: [{ profile: catalogueBodySystemProfile(inferred), minutes: 1 }],
+    effortSets: [{ exerciseName: inferred }],
+  };
+}
+
+const UNSCORED: ScoredSession = { loads: null, estimated: false, attributed: false };
+
+/** One session's load on each system: RPE × minutes, split by what it contained. */
 function scoreSession(
   log: BodySystemLog,
   sets: readonly BodySystemSet[],
   options: BodySystemLoadOptions,
 ): ScoredSession {
   const logged = sets.map((set) => ({ set, estimate: toEstimateSet(set, options.distanceUnit) }));
-  const loggedSets = logged.map(({ estimate }) => estimate);
-  const duration = resolveDuration(log, loggedSets);
-  if (!duration) return { loads: null, estimated: false, attributed: false };
+  const duration = resolveDuration(
+    log,
+    logged.map(({ estimate }) => estimate),
+  );
+  if (!duration) return UNSCORED;
 
-  let components: SessionComponent[];
-  let effortSets: readonly PlannedSessionSet[] = loggedSets;
-  if (logged.length > 0) {
-    components = logged.map(({ set, estimate }) => ({
-      profile: bodySystemProfileForSet(set),
-      minutes: estimateSetMinutes(estimate, METRIC_PREFERENCE),
-    }));
-  } else {
-    // No sets (a free-text log, or an import without one): the title is all
-    // there is to go on.
-    const inferred = inferExerciseFromTitle(log);
-    components = inferred ? [{ profile: catalogueBodySystemProfile(inferred), minutes: 1 }] : [];
-    effortSets = inferred ? [{ exerciseName: inferred }] : [];
-  }
-
+  const { components, effortSets } = sessionParts(log, logged);
   const effort = resolveEffort(log, effortSets, options.athlete);
   const mix = sessionMix(components);
   return {
@@ -343,57 +374,88 @@ function classify(
 }
 
 /**
- * One system's summary. A block counts toward the usual week and the six-week
- * comparison only when it lies wholly inside the athlete's history (it starts
- * on or after their first logged session): a block the first session falls
- * inside is a real but partial week, and comparing against it would call
- * every new athlete's second week a spike.
+ * One block's loads, and where it sits against the athlete's history.
  *
- * Every comparison runs on the rounded totals, so the flags always agree with
- * the numbers on screen.
+ * `full`: the block lies wholly inside the history (it starts on or after the
+ * first logged session), so it counts toward the usual week and the six-week
+ * comparison. A block the first session falls inside is a real but partial
+ * week; comparing against it would call every new athlete's second week a
+ * spike. `visible`: the block has any history in it at all, so it is shown.
  */
-function summarise(
-  system: BodySystem,
-  weeks: readonly BodySystemWeek[],
-  loadsByWeek: readonly SystemLoads[],
+interface WeekBlock {
+  loads: SystemLoads;
+  full: boolean;
+  visible: boolean;
+}
+
+/** One system's rounded total for a block, carrying the block's history flags. */
+interface SystemWeekTotal {
+  total: number;
+  full: boolean;
+  visible: boolean;
+}
+
+function weekBlock(
+  daily: ReadonlyMap<string, SystemLoads>,
+  week: BodySystemWeek,
   firstLogDate: string | null,
-): BodySystemLoadSummary {
-  const totals = loadsByWeek.map((loads) => Math.round(loadFor(loads, system)));
-  const newest = weeks.length - 1;
-  const current = totals.at(newest) ?? 0;
-  const isFull = (index: number): boolean => {
-    // Guarded because .at() wraps a negative index round to the newest block.
-    const week = index >= 0 ? weeks.at(index) : undefined;
-    return firstLogDate != null && week != null && week.start >= firstLogDate;
+): WeekBlock {
+  return {
+    loads: weekLoads(daily, week),
+    full: firstLogDate != null && week.start >= firstLogDate,
+    visible: firstLogDate != null && week.end >= firstLogDate,
   };
+}
 
-  const baselineWeeks: number[] = [];
-  for (let back = 1; back <= BASELINE_WEEKS; back++) {
-    if (isFull(newest - back)) baselineWeeks.push(totals.at(newest - back) ?? 0);
-  }
-  const baseline =
-    baselineWeeks.length >= MIN_BASELINE_WEEKS ? Math.round(mean(baselineWeeks)) : null;
-  const { status, ratio } = classify(current, baseline);
+/** The usual week: the mean of the full blocks given, once there are enough of them. */
+function usualWeek(blocks: readonly SystemWeekTotal[]): number | null {
+  const counted = blocks.filter((block) => block.full).map((block) => block.total);
+  return counted.length >= MIN_BASELINE_WEEKS ? Math.round(mean(counted)) : null;
+}
 
-  const previous = totals.slice(0, newest);
-  const previousPeak = previous.every((_, index) => isFull(index)) ? Math.max(...previous) : null;
-  const sixWeekHigh =
+/** The heaviest of the blocks given, or null unless every one is a full week. */
+function peakOf(blocks: readonly SystemWeekTotal[]): number | null {
+  if (blocks.length === 0 || !blocks.every((block) => block.full)) return null;
+  return Math.max(...blocks.map((block) => block.total));
+}
+
+function isSixWeekHigh(
+  current: number,
+  ratio: number | null,
+  previousPeak: number | null,
+): boolean {
+  return (
     previousPeak != null &&
     ratio != null &&
     ratio >= SIX_WEEK_HIGH_MIN_RATIO &&
-    current > previousPeak;
+    current > previousPeak
+  );
+}
 
+/**
+ * One system's summary over the blocks, oldest first. Every comparison runs
+ * on the rounded totals, so the flags always agree with the numbers on screen.
+ */
+function summarise(system: BodySystem, blocks: readonly WeekBlock[]): BodySystemLoadSummary {
+  const totals = blocks.map((block) => ({
+    total: Math.round(loadFor(block.loads, system)),
+    full: block.full,
+    visible: block.visible,
+  }));
+  const current = totals.at(-1)?.total ?? 0;
+  const previous = totals.slice(0, -1);
+  const baseline = usualWeek(previous.slice(-BASELINE_WEEKS));
+  const { status, ratio } = classify(current, baseline);
+  const previousPeak = peakOf(previous);
   return {
     system,
     current,
     baseline,
     ratio,
     status,
-    sixWeekHigh,
+    sixWeekHigh: isSixWeekHigh(current, ratio, previousPeak),
     previousPeak,
-    weekly: weeks.map((week, index) =>
-      firstLogDate == null || week.end < firstLogDate ? null : (totals.at(index) ?? 0),
-    ),
+    weekly: totals.map((week) => (week.visible ? week.total : null)),
   };
 }
 
@@ -405,6 +467,60 @@ function groupSetsByLog(sets: readonly BodySystemSet[]): Map<string, BodySystemS
     else byLog.set(set.workoutLogId, [set]);
   }
   return byLog;
+}
+
+/** The earliest session on or before `currentDate`: where the athlete's history starts. */
+function earliestLogDate(logs: readonly BodySystemLog[], currentDate: string): string | null {
+  let earliest: string | null = null;
+  for (const log of logs) {
+    if (log.date <= currentDate && (earliest == null || log.date < earliest)) earliest = log.date;
+  }
+  return earliest;
+}
+
+interface SessionTally {
+  /** Attributed load per date. */
+  daily: Map<string, SystemLoads>;
+  sessionCount: number;
+  estimatedSessions: number;
+  unattributedSessions: number;
+  unscoredSessions: number;
+}
+
+function recordSession(tally: SessionTally, date: string, session: ScoredSession): void {
+  tally.sessionCount++;
+  if (!session.loads) {
+    tally.unscoredSessions++;
+    return;
+  }
+  if (session.estimated) tally.estimatedSessions++;
+  if (!session.attributed) {
+    tally.unattributedSessions++;
+    return;
+  }
+  tally.daily.set(date, summed(tally.daily.get(date) ?? emptyLoads(), session.loads));
+}
+
+/** Score every session inside [windowStart, currentDate] and tally what came of it. */
+function tallySessions(
+  logs: readonly BodySystemLog[],
+  sets: readonly BodySystemSet[],
+  windowStart: string,
+  options: BodySystemLoadOptions,
+): SessionTally {
+  const setsByLog = groupSetsByLog(sets);
+  const tally: SessionTally = {
+    daily: new Map(),
+    sessionCount: 0,
+    estimatedSessions: 0,
+    unattributedSessions: 0,
+    unscoredSessions: 0,
+  };
+  for (const log of logs) {
+    if (log.date < windowStart || log.date > options.currentDate) continue;
+    recordSession(tally, log.date, scoreSession(log, setsByLog.get(log.id) ?? [], options));
+  }
+  return tally;
 }
 
 /**
@@ -422,42 +538,18 @@ export function calculateBodySystemLoad(
 ): BodySystemLoadOverview {
   const { currentDate } = options;
   const weeks = buildWeeks(currentDate);
-  const windowStart = weeks[0]?.start ?? currentDate;
-  const setsByLog = groupSetsByLog(exerciseSets);
-  const daily = new Map<string, SystemLoads>();
-  let firstLogDate: string | null = null;
-  let sessionCount = 0;
-  let estimatedSessions = 0;
-  let unattributedSessions = 0;
-  let unscoredSessions = 0;
-
-  for (const log of workoutLogs) {
-    if (log.date > currentDate) continue;
-    if (firstLogDate == null || log.date < firstLogDate) firstLogDate = log.date;
-    if (log.date < windowStart) continue;
-
-    sessionCount++;
-    const session = scoreSession(log, setsByLog.get(log.id) ?? [], options);
-    if (!session.loads) {
-      unscoredSessions++;
-      continue;
-    }
-    if (session.estimated) estimatedSessions++;
-    if (!session.attributed) {
-      unattributedSessions++;
-      continue;
-    }
-    daily.set(log.date, summed(daily.get(log.date) ?? emptyLoads(), session.loads));
-  }
-
-  const loadsByWeek = weeks.map((week) => weekLoads(daily, week));
+  const firstLogDate = earliestLogDate(workoutLogs, currentDate);
+  const { daily, ...counts } = tallySessions(
+    workoutLogs,
+    exerciseSets,
+    weeks[0]?.start ?? currentDate,
+    options,
+  );
+  const blocks = weeks.map((week) => weekBlock(daily, week, firstLogDate));
   return {
     asOf: currentDate,
     weeks,
-    systems: BODY_SYSTEMS.map((system) => summarise(system, weeks, loadsByWeek, firstLogDate)),
-    sessionCount,
-    estimatedSessions,
-    unattributedSessions,
-    unscoredSessions,
+    systems: BODY_SYSTEMS.map((system) => summarise(system, blocks)),
+    ...counts,
   };
 }

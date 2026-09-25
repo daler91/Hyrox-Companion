@@ -79,10 +79,10 @@ function system(overview: BodySystemLoadOverview, name: BodySystem): BodySystemL
 
 /**
  * The same three easy runs every week for six weeks, one leg session a week
- * before this one, and three this week. An older run, before the window, puts
- * all six blocks inside the athlete's history.
+ * before this one, and `legDaysThisWeek` (up to three) this week. An older run,
+ * before the window, puts all six blocks inside the athlete's history.
  */
-function legHeavyWeek(): Session[] {
+function runsAndLegDays(legDaysThisWeek: number): Session[] {
   const sessions: Session[] = [easyRun(day(7))];
   for (let weeksBack = 0; weeksBack <= 5; weeksBack++) {
     sessions.push(
@@ -92,8 +92,13 @@ function legHeavyWeek(): Session[] {
     );
     if (weeksBack > 0) sessions.push(legDay(day(weeksBack, 5)));
   }
-  sessions.push(legDay(day(0, 1)), legDay(day(0, 3)), legDay(day(0, 5)));
+  for (const offset of [1, 3, 5].slice(0, legDaysThisWeek)) sessions.push(legDay(day(0, offset)));
   return sessions;
+}
+
+/** Three leg sessions this week against one a week before it. */
+function legHeavyWeek(): Session[] {
+  return runsAndLegDays(3);
 }
 
 describe("calculateBodySystemLoad", () => {
@@ -193,16 +198,7 @@ describe("calculateBodySystemLoad", () => {
   });
 
   it("reads a week off a system as low", () => {
-    const sessions: Session[] = [easyRun(day(7))];
-    for (let weeksBack = 0; weeksBack <= 5; weeksBack++) {
-      sessions.push(
-        easyRun(day(weeksBack, 0)),
-        easyRun(day(weeksBack, 2)),
-        easyRun(day(weeksBack, 4)),
-      );
-      if (weeksBack > 0) sessions.push(legDay(day(weeksBack, 5)));
-    }
-    expect(system(run(sessions), "leg_muscle")).toMatchObject({
+    expect(system(run(runsAndLegDays(0)), "leg_muscle")).toMatchObject({
       current: 270,
       baseline: 540,
       ratio: 0.5,
