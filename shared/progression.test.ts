@@ -59,8 +59,12 @@ describe("unmetPrescription", () => {
     expect(unmetPrescription(sets)).toBeNull();
   });
 
-  it("is null for a non-positive planned weight", () => {
-    const sets: ProgressionSet[] = [{ reps: 3, weight: 0, plannedReps: 5, plannedWeight: 0 }];
-    expect(unmetPrescription(sets)).toBeNull();
-  });
+  // NOT tested: a fallen-short prescription at plannedWeight <= 0 (a
+  // bodyweight-only exercise prescribed with no added load). The source
+  // returns null there unconditionally, which also suppresses a genuine
+  // rep-count miss that doesn't depend on weight at all — the callers
+  // (suggestNextTarget's "repeat" path) don't need weight math to repeat a
+  // missed rep target, so this reads as an oversight rather than intended
+  // behavior. Flagged in the PR instead of pinned as correct: see "Suspected
+  // bugs".
 });
