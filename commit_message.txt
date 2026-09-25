@@ -1,0 +1,11 @@
+💡 What
+Replaced chained `.find()` calls in `getTodayEntry` (within `TimelineSummaryCard.tsx`) with a single `for...of` loop.
+
+🎯 Why
+The original implementation sequentially evaluated up to three `.find()` conditions (`"planned"`, `"completed"`, or any entry) over the `entries` array. This resulted in iterating over the same dataset up to three times in the worst-case scenario.
+
+📊 Impact
+Reduces time complexity of determining the day's timeline entry from O(3N) to O(N). While the array is typically small, this optimization avoids unnecessary repeated iterations and scales better, slightly reducing blocking time on the main thread during render.
+
+🔬 Measurement
+Verify the logic remains correct by ensuring the `TimelineSummaryCard` component correctly renders today's active entry, and that the Vitest test suite (`TimelineSummaryCard.test.tsx`) continues to pass.
