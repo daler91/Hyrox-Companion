@@ -457,21 +457,21 @@ export const BodySystemLoadCard = memo(function BodySystemLoadCard({
           >
             <li className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-chart-1" aria-hidden="true" />
-              This week
+              <span>This week</span>
             </li>
             <li className="flex items-center gap-1.5">
               <span
                 className="h-2.5 w-2.5 rounded-sm bg-neutral-400 dark:bg-neutral-600"
                 aria-hidden="true"
               />
-              Previous weeks
+              <span>Previous weeks</span>
             </li>
             <li className="flex items-center gap-1.5">
               <span
                 className="w-3 border-t border-dashed border-muted-foreground"
                 aria-hidden="true"
               />
-              Your usual week (average of the four before this one)
+              <span>Your usual week (average of the four before this one)</span>
             </li>
           </ul>
         </TooltipProvider>
