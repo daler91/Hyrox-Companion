@@ -145,7 +145,7 @@ function groupClause(systems: readonly BodySystemLoadSummary[], state: string): 
 export function describeBodySystemDivergence(
   overview: Pick<BodySystemLoadOverview, "systems">,
 ): string | null {
-  const notable = overview.systems.filter((s) => isNotableBodySystem(s));
+  const notable = overview.systems.filter(isNotableBodySystem);
   if (notable.length === 0) return null;
 
   const calm = overview.systems.filter((s) => !isNotableBodySystem(s));
@@ -157,7 +157,7 @@ export function describeBodySystemDivergence(
   ];
 
   const sentence =
-    joinWithAnd(notable.map((s) => notablePhrase(s))) +
+    joinWithAnd(notable.map(notablePhrase)) +
     (contrast.length > 0 ? `, while ${joinWithAnd(contrast)}` : "");
   return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
 }

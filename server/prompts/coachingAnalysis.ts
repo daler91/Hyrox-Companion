@@ -230,7 +230,7 @@ function formatBodySystemLoad(bsl: BodySystemLoadOverview | undefined): string |
     .map((s) => `${BODY_SYSTEM_META[s.system].noun}: ${BODY_SYSTEM_EASING[s.system]}`);
   const lines = [
     "LOAD BY BODY SYSTEM (session RPE × minutes, split by what each session trained; each system against its own usual week, the mean of the four weeks before this one):",
-    ...bsl.systems.map((s) => formatBodySystemLine(s)),
+    ...bsl.systems.map(formatBodySystemLine),
     `- Summary: ${divergence}`,
     `- The single overall load number hides this split. When adjusting upcoming sessions, do not add load to a flagged system this week — ${easing.join("; ")}. Never compare one system's number with another's; each is on its own scale.`,
   ];
