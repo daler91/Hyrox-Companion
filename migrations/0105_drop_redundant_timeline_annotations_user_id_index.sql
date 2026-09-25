@@ -1,0 +1,1 @@
+DROP INDEX "idx_timeline_annotations_user_id";

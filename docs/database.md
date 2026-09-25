@@ -734,8 +734,7 @@ User-authored bands that mark date ranges as injury, illness, travel, or rest so
 - `timeline_annotation_range_check`: `end_date >= start_date`
 
 **Indexes:**
-- `idx_timeline_annotations_user_id` on (`user_id`)
-- `idx_timeline_annotations_user_range` on (`user_id`, `start_date`, `end_date`) -- composite, used for overlap queries against the visible timeline window
+- `idx_timeline_annotations_user_range` on (`user_id`, `start_date`, `end_date`) -- composite, used for overlap queries against the visible timeline window and, since `user_id` is its leading column, also serves bare `user_id` lookups
 
 ---
 
