@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   type EngineSet,
   estimateStrength,
-  implementFor,
   impliedRpe,
   loadForReps,
   loadIncrement,
@@ -33,15 +32,9 @@ describe("loadForReps / impliedRpe", () => {
 });
 
 describe("implements and rounding", () => {
-  it("knows how each primary lift is loaded", () => {
-    expect(implementFor("back_squat")).toBe("barbell");
-    expect(implementFor("goblet_squat")).toBe("dumbbell");
-    expect(implementFor("kettlebell_swings")).toBe("kettlebell");
-    expect(implementFor("leg_press")).toBe("machine");
-    expect(implementFor("pull_up")).toBe("bodyweight");
-    expect(implementFor("bulgarian_split_squat")).toBe("dumbbell");
-  });
-
+  // implementFor's own resolution rules (override table, equipment lookup,
+  // barbell default) are covered directly in shared/exerciseEquipment.test.ts;
+  // this file only needs enough of it to show roundLoad picking the right step.
   it("rounds to the implement's real step, in the athlete's unit", () => {
     expect(loadIncrement("back_squat", "kg")).toBe(2.5);
     expect(loadIncrement("back_squat", "lbs")).toBe(5);
