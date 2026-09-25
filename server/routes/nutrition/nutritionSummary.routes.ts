@@ -17,6 +17,7 @@ import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
+import { aiConsentCheck } from "../../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateQuery } from "../../routeUtils";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
 import { fetchDailyTraining, fetchDailyUtss, fetchTrainingLoadWindow } from "../../services/nutrition/dailyLoad";
@@ -282,6 +283,9 @@ function registerPlannedSessionEstimateRoute(router: Router): void {
   router.get(
     "/api/v1/nutrition/planned-session-estimate/:planDayId",
     isAuthenticated,
+    // 🛡️ Sentinel: Enforce AI consent to prevent sending athlete focus text
+    // and exercises to the AI provider for users who opted out.
+    aiConsentCheck,
     rateLimiter("nutritionRead", 60),
     asyncHandler(handlePlannedSessionEstimate),
   );
