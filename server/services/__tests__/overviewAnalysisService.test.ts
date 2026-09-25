@@ -1,4 +1,4 @@
-import { bodySystemOverview, legSpikeOverview } from "@shared/bodySystemLoadTestFixtures";
+import { emptyBodySystemOverview, legSpikeOverview } from "@shared/bodySystemLoadTestFixtures";
 import type {
   TrainingLoadOverview,
   TrainingLoadTrendPoint,
@@ -158,10 +158,9 @@ describe("buildOverviewChartFacts — load by body system", () => {
   });
 
   it("omits the section when the card has nothing to render", () => {
-    const empty = { current: 0, baseline: null, ratio: null, previousPeak: null, weekly: [null, null, null, null, null, 0] };
-    const idle = bodySystemOverview({ aerobic: empty, running_impact: empty, leg_muscle: empty, upper_pull: empty });
-
-    expect(buildOverviewChartFacts(overview({ bodySystemLoad: idle })).bodySystems).toBeUndefined();
+    expect(
+      buildOverviewChartFacts(overview({ bodySystemLoad: emptyBodySystemOverview() })).bodySystems,
+    ).toBeUndefined();
     // A response cached before the field existed has none at all.
     expect(buildOverviewChartFacts(overview()).bodySystems).toBeUndefined();
   });

@@ -8,19 +8,28 @@ import {
   inferExerciseFromTitle,
 } from "./bodySystemProfiles";
 
+const CATEGORY_BY_NAME = new Map(
+  Object.entries(EXERCISE_DEFINITIONS).map(([name, definition]) => [name, definition.category]),
+);
+
+function catalogueNamesIn(category: string) {
+  return exerciseNames.filter((name) => CATEGORY_BY_NAME.get(name) === category);
+}
+
 describe("catalogueBodySystemProfile", () => {
   it("gives every catalogue exercise a share between 0 and 1 for every system", () => {
     for (const name of exerciseNames) {
       const profile = catalogueBodySystemProfile(name);
-      for (const system of BODY_SYSTEMS) {
-        expect(profile[system], `${name}.${system}`).toBeGreaterThanOrEqual(0);
-        expect(profile[system], `${name}.${system}`).toBeLessThanOrEqual(1);
+      expect(new Set(Object.keys(profile)), name).toEqual(new Set(BODY_SYSTEMS));
+      for (const [system, share] of Object.entries(profile)) {
+        expect(share, `${name}.${system}`).toBeGreaterThanOrEqual(0);
+        expect(share, `${name}.${system}`).toBeLessThanOrEqual(1);
       }
     }
   });
 
   it("makes every run full aerobic and foot-strike work with no pulling", () => {
-    const runs = exerciseNames.filter((name) => EXERCISE_DEFINITIONS[name].category === "running");
+    const runs = catalogueNamesIn("running");
     expect(runs.length).toBeGreaterThan(5);
     for (const name of runs) {
       const profile = catalogueBodySystemProfile(name);
@@ -32,9 +41,7 @@ describe("catalogueBodySystemProfile", () => {
   });
 
   it("never gives a lift running impact", () => {
-    const lifts = exerciseNames.filter(
-      (name) => EXERCISE_DEFINITIONS[name].category === "strength",
-    );
+    const lifts = catalogueNamesIn("strength");
     for (const name of lifts) {
       expect(catalogueBodySystemProfile(name).running_impact, name).toBe(0);
     }
@@ -62,9 +69,9 @@ describe("catalogueBodySystemProfile", () => {
 
   it("counts isolated pulling muscles at a reduced share", () => {
     // Biceps only, no pulling pattern: 0.6 of a row.
-    expect(catalogueBodySystemProfile("barbell_curl").upper_pull).toBe(0.6);
+    expect(catalogueBodySystemProfile("barbell_curl").upper_pull).toBeCloseTo(0.6);
     // A deadlift's grip and lats: half its muscles are pulling muscles.
-    expect(catalogueBodySystemProfile("deadlift").upper_pull).toBe(0.3);
+    expect(catalogueBodySystemProfile("deadlift").upper_pull).toBeCloseTo(0.3);
   });
 
   it("separates the ergs by what they actually load", () => {

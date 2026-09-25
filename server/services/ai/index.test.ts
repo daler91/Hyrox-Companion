@@ -713,7 +713,7 @@ describe("buildTrainingContext", () => {
   });
 
   it("attaches load by body system from the training sessions, as the Analytics card does", async () => {
-    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([
       { id: "run", date: "2026-06-14", focus: "Run", mainWorkout: "", duration: 30, rpe: 5, countsAsTraining: true },
       // A walk the athlete does not count as training stays out, like the card.
       { id: "walk", date: "2026-06-14", focus: "Walk", mainWorkout: "", duration: 60, rpe: 2, countsAsTraining: false },

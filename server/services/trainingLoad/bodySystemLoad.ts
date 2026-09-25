@@ -136,6 +136,39 @@ function emptyLoads(): SystemLoads {
   return { aerobic: 0, running_impact: 0, leg_muscle: 0, upper_pull: 0 };
 }
 
+// The load arithmetic names every system rather than indexing by a runtime
+// key, so the four fields stay visibly in step.
+function scaled(loads: Readonly<SystemLoads>, factor: number): SystemLoads {
+  return {
+    aerobic: loads.aerobic * factor,
+    running_impact: loads.running_impact * factor,
+    leg_muscle: loads.leg_muscle * factor,
+    upper_pull: loads.upper_pull * factor,
+  };
+}
+
+function summed(a: Readonly<SystemLoads>, b: Readonly<SystemLoads>): SystemLoads {
+  return {
+    aerobic: a.aerobic + b.aerobic,
+    running_impact: a.running_impact + b.running_impact,
+    leg_muscle: a.leg_muscle + b.leg_muscle,
+    upper_pull: a.upper_pull + b.upper_pull,
+  };
+}
+
+function loadFor(loads: Readonly<SystemLoads>, system: BodySystem): number {
+  switch (system) {
+    case "aerobic":
+      return loads.aerobic;
+    case "running_impact":
+      return loads.running_impact;
+    case "leg_muscle":
+      return loads.leg_muscle;
+    case "upper_pull":
+      return loads.upper_pull;
+  }
+}
+
 interface SessionComponent {
   profile: BodySystemProfile | null;
   minutes: number;
@@ -215,13 +248,12 @@ function resolveDuration(
  * unattributed instead of being spread over the parts that are.
  */
 function sessionMix(components: readonly SessionComponent[]): SystemLoads {
-  const mix = emptyLoads();
+  let mix = emptyLoads();
   let totalMinutes = 0;
   for (const component of components) totalMinutes += component.minutes;
   if (totalMinutes <= 0) return mix;
   for (const { profile, minutes } of components) {
-    if (!profile) continue;
-    for (const system of BODY_SYSTEMS) mix[system] += (minutes / totalMinutes) * profile[system];
+    if (profile) mix = summed(mix, scaled(profile, minutes / totalMinutes));
   }
   return mix;
 }
@@ -231,16 +263,17 @@ function scoreSession(
   sets: readonly BodySystemSet[],
   options: BodySystemLoadOptions,
 ): ScoredSession {
-  const loggedSets = sets.map((set) => toEstimateSet(set, options.distanceUnit));
+  const logged = sets.map((set) => ({ set, estimate: toEstimateSet(set, options.distanceUnit) }));
+  const loggedSets = logged.map(({ estimate }) => estimate);
   const duration = resolveDuration(log, loggedSets);
   if (!duration) return { loads: null, estimated: false, attributed: false };
 
   let components: SessionComponent[];
   let effortSets: readonly PlannedSessionSet[] = loggedSets;
-  if (sets.length > 0) {
-    components = sets.map((set, index) => ({
+  if (logged.length > 0) {
+    components = logged.map(({ set, estimate }) => ({
       profile: bodySystemProfileForSet(set),
-      minutes: estimateSetMinutes(loggedSets[index] ?? {}, METRIC_PREFERENCE),
+      minutes: estimateSetMinutes(estimate, METRIC_PREFERENCE),
     }));
   } else {
     // No sets (a free-text log, or an import without one): the title is all
@@ -251,14 +284,11 @@ function scoreSession(
   }
 
   const effort = resolveEffort(log, effortSets, options.athlete);
-  const sessionLoad = effort.rpe * duration.minutes;
   const mix = sessionMix(components);
-  const loads = emptyLoads();
-  for (const system of BODY_SYSTEMS) loads[system] = sessionLoad * mix[system];
   return {
-    loads,
+    loads: scaled(mix, effort.rpe * duration.minutes),
     estimated: effort.estimated || duration.estimated,
-    attributed: BODY_SYSTEMS.some((system) => mix[system] > 0),
+    attributed: Object.values(mix).some((share) => share > 0),
   };
 }
 
@@ -272,14 +302,12 @@ function buildWeeks(currentDate: string): BodySystemWeek[] {
   return weeks;
 }
 
-function weekTotal(
-  daily: ReadonlyMap<string, SystemLoads>,
-  week: BodySystemWeek,
-  system: BodySystem,
-): number {
-  let total = 0;
+/** Every system's load summed over one block. */
+function weekLoads(daily: ReadonlyMap<string, SystemLoads>, week: BodySystemWeek): SystemLoads {
+  let total = emptyLoads();
   for (let date = week.start; date <= week.end; date = addDays(date, 1)) {
-    total += daily.get(date)?.[system] ?? 0;
+    const day = daily.get(date);
+    if (day) total = summed(total, day);
   }
   return total;
 }
@@ -327,20 +355,21 @@ function classify(
 function summarise(
   system: BodySystem,
   weeks: readonly BodySystemWeek[],
-  daily: ReadonlyMap<string, SystemLoads>,
+  loadsByWeek: readonly SystemLoads[],
   firstLogDate: string | null,
 ): BodySystemLoadSummary {
-  const totals = weeks.map((week) => Math.round(weekTotal(daily, week, system)));
+  const totals = loadsByWeek.map((loads) => Math.round(loadFor(loads, system)));
   const newest = weeks.length - 1;
-  const current = totals[newest] ?? 0;
+  const current = totals.at(newest) ?? 0;
   const isFull = (index: number): boolean => {
-    const week = weeks[index];
+    // Guarded because .at() wraps a negative index round to the newest block.
+    const week = index >= 0 ? weeks.at(index) : undefined;
     return firstLogDate != null && week != null && week.start >= firstLogDate;
   };
 
   const baselineWeeks: number[] = [];
   for (let back = 1; back <= BASELINE_WEEKS; back++) {
-    if (isFull(newest - back)) baselineWeeks.push(totals[newest - back] ?? 0);
+    if (isFull(newest - back)) baselineWeeks.push(totals.at(newest - back) ?? 0);
   }
   const baseline =
     baselineWeeks.length >= MIN_BASELINE_WEEKS ? Math.round(mean(baselineWeeks)) : null;
@@ -363,7 +392,7 @@ function summarise(
     sixWeekHigh,
     previousPeak,
     weekly: weeks.map((week, index) =>
-      firstLogDate == null || week.end < firstLogDate ? null : (totals[index] ?? 0),
+      firstLogDate == null || week.end < firstLogDate ? null : (totals.at(index) ?? 0),
     ),
   };
 }
@@ -418,15 +447,14 @@ export function calculateBodySystemLoad(
       unattributedSessions++;
       continue;
     }
-    const day = daily.get(log.date) ?? emptyLoads();
-    for (const system of BODY_SYSTEMS) day[system] += session.loads[system];
-    daily.set(log.date, day);
+    daily.set(log.date, summed(daily.get(log.date) ?? emptyLoads(), session.loads));
   }
 
+  const loadsByWeek = weeks.map((week) => weekLoads(daily, week));
   return {
     asOf: currentDate,
     weeks,
-    systems: BODY_SYSTEMS.map((system) => summarise(system, weeks, daily, firstLogDate)),
+    systems: BODY_SYSTEMS.map((system) => summarise(system, weeks, loadsByWeek, firstLogDate)),
     sessionCount,
     estimatedSessions,
     unattributedSessions,

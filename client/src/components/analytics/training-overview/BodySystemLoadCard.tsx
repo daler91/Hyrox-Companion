@@ -86,7 +86,7 @@ function formatLoad(value: number): string {
 /** "This week" for the newest block, else its date range. */
 function weekLabel(weeks: readonly BodySystemWeek[], index: number): string {
   if (index === weeks.length - 1) return "This week";
-  const week = weeks[index];
+  const week = weeks.at(index);
   return week ? `${formatChartDate(week.start)} – ${formatChartDate(week.end)}` : "";
 }
 
@@ -171,7 +171,7 @@ function WeeklyBars({
           />
         )}
         {summary.weekly.map((value, index) => {
-          const week = weeks[index];
+          const week = weeks.at(index);
           const isCurrent = index === summary.weekly.length - 1;
           return (
             <Tooltip key={week?.start ?? index}>
@@ -294,7 +294,7 @@ function LoadTable({ overview, id }: Readonly<{ overview: BodySystemLoadOverview
               </th>
               {summary.weekly.map((value, index) => (
                 <td
-                  key={overview.weeks[index]?.start ?? index}
+                  key={overview.weeks.at(index)?.start ?? index}
                   className="py-1.5 pr-3 text-right tabular-nums"
                 >
                   {value == null ? "—" : formatLoad(value)}
@@ -366,7 +366,9 @@ export const BodySystemLoadCard = memo(function BodySystemLoadCard({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => setShowTable((open) => !open)}
+          onClick={() => {
+            setShowTable((open) => !open);
+          }}
           aria-expanded={showTable}
           aria-controls={showTable ? tableId : undefined}
           data-testid="body-system-table-toggle"

@@ -102,7 +102,7 @@ export function formatLoadChange(ratio: number): string {
 
 /** "a", "a and b", "a, b and c". */
 function joinWithAnd(items: readonly string[]): string {
-  const last = items[items.length - 1] ?? "";
+  const last = items.at(-1) ?? "";
   if (items.length <= 1) return last;
   return `${items.slice(0, -1).join(", ")} and ${last}`;
 }
@@ -120,7 +120,10 @@ function notablePhrase(summary: BodySystemLoadSummary): string {
     return `${noun} load jumped from almost none in the previous four weeks`;
   }
   const above = aboveUsual(summary.ratio);
-  if (summary.sixWeekHigh) return `${noun} load is at a six-week high${above ? ` (${above})` : ""}`;
+  if (summary.sixWeekHigh) {
+    const detail = above ? ` (${above})` : "";
+    return `${noun} load is at a six-week high${detail}`;
+  }
   return `${noun} load is ${above ?? "above your usual week"}`;
 }
 

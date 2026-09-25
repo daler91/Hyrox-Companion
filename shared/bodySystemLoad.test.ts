@@ -11,15 +11,17 @@ import {
 import {
   bodySystemOverview,
   bodySystemSummary,
+  emptyBodySystemOverview,
   legSpikeOverview,
 } from "./bodySystemLoadTestFixtures";
 
 describe("BODY_SYSTEM_META", () => {
   it("names and describes every system", () => {
-    for (const system of BODY_SYSTEMS) {
-      expect(BODY_SYSTEM_META[system].label).not.toBe("");
-      expect(BODY_SYSTEM_META[system].noun).toBe(BODY_SYSTEM_META[system].noun.toLowerCase());
-      expect(BODY_SYSTEM_META[system].description.length).toBeGreaterThan(20);
+    expect(new Set(Object.keys(BODY_SYSTEM_META))).toEqual(new Set(BODY_SYSTEMS));
+    for (const meta of Object.values(BODY_SYSTEM_META)) {
+      expect(meta.label).not.toBe("");
+      expect(meta.noun).toBe(meta.noun.toLowerCase());
+      expect(meta.description.length).toBeGreaterThan(20);
     }
   });
 });
@@ -35,22 +37,7 @@ describe("formatLoadChange", () => {
 describe("hasBodySystemLoadData", () => {
   it("is false with nothing to show", () => {
     expect(hasBodySystemLoadData(undefined)).toBe(false);
-    const empty = {
-      current: 0,
-      baseline: null,
-      ratio: null,
-      weekly: [null, null, null, null, 0, 0],
-    };
-    expect(
-      hasBodySystemLoadData(
-        bodySystemOverview({
-          aerobic: empty,
-          running_impact: empty,
-          leg_muscle: empty,
-          upper_pull: empty,
-        }),
-      ),
-    ).toBe(false);
+    expect(hasBodySystemLoadData(emptyBodySystemOverview())).toBe(false);
   });
 
   it("is true once any system carried any load in the six weeks", () => {

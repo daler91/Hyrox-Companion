@@ -35,6 +35,7 @@ export function bodySystemOverview(
   systems: Partial<Record<BodySystem, Partial<BodySystemLoadSummary>>> = {},
   overrides: Partial<Omit<BodySystemLoadOverview, "systems">> = {},
 ): BodySystemLoadOverview {
+  const overridesBySystem = new Map(Object.entries(systems));
   return {
     asOf: "2026-09-25",
     weeks: [
@@ -45,7 +46,7 @@ export function bodySystemOverview(
       { start: "2026-09-12", end: "2026-09-18" },
       { start: "2026-09-19", end: "2026-09-25" },
     ],
-    systems: BODY_SYSTEMS.map((system) => bodySystemSummary(system, systems[system])),
+    systems: BODY_SYSTEMS.map((system) => bodySystemSummary(system, overridesBySystem.get(system))),
     sessionCount: 24,
     estimatedSessions: 0,
     unattributedSessions: 0,
@@ -80,4 +81,22 @@ export function legSpikeOverview(
     },
     overrides,
   );
+}
+
+/** Nothing logged in any system across the six weeks: the card has nothing to draw. */
+export function emptyBodySystemOverview(): BodySystemLoadOverview {
+  const empty: Partial<BodySystemLoadSummary> = {
+    current: 0,
+    baseline: null,
+    ratio: null,
+    status: "insufficient_data",
+    previousPeak: null,
+    weekly: [null, null, null, null, null, 0],
+  };
+  return bodySystemOverview({
+    aerobic: empty,
+    running_impact: empty,
+    leg_muscle: empty,
+    upper_pull: empty,
+  });
 }

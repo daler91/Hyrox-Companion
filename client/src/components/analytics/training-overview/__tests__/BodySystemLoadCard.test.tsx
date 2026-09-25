@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 
-import { bodySystemOverview, legSpikeOverview } from "@shared/bodySystemLoadTestFixtures";
+import {
+  bodySystemOverview,
+  emptyBodySystemOverview,
+  legSpikeOverview,
+} from "@shared/bodySystemLoadTestFixtures";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
@@ -109,23 +113,7 @@ describe("BodySystemLoadCard", () => {
   });
 
   it("renders nothing until some system carries load", () => {
-    const empty = {
-      current: 0,
-      baseline: null,
-      ratio: null,
-      previousPeak: null,
-      weekly: [null, null, null, null, null, 0],
-    };
-    const { container } = render(
-      <BodySystemLoadCard
-        bodySystemLoad={bodySystemOverview({
-          aerobic: empty,
-          running_impact: empty,
-          leg_muscle: empty,
-          upper_pull: empty,
-        })}
-      />,
-    );
+    const { container } = render(<BodySystemLoadCard bodySystemLoad={emptyBodySystemOverview()} />);
 
     expect(container).toBeEmptyDOMElement();
   });

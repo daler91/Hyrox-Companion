@@ -70,7 +70,7 @@ const RUN: ProfileValues = [1, 1, 0.5, 0];
  * Olympic lifts, thrusters and hanging core work). Values are
  * [aerobic, running impact, leg muscle, upper-body pull].
  */
-const EXPLICIT_PROFILES: Partial<Record<ExerciseName, ProfileValues>> = {
+const EXPLICIT_PROFILE_TABLE = {
   // Running. Pace and intensity are already in the session's RPE, so the
   // profile only changes where the mechanics do.
   run: RUN,
@@ -160,7 +160,16 @@ const EXPLICIT_PROFILES: Partial<Record<ExerciseName, ProfileValues>> = {
   // Hanging work loads grip and lats as well as the trunk.
   toes_to_bar: [0.3, 0, 0, 0.4],
   hanging_leg_raise: [0.15, 0, 0, 0.3],
-};
+} satisfies Partial<Record<ExerciseName, ProfileValues>>;
+
+// Looked up by a runtime name, so read through a Map rather than by indexing
+// the object — the same reason the catalogue categories below are.
+const EXPLICIT_PROFILES: ReadonlyMap<string, ProfileValues> = new Map(
+  Object.entries(EXPLICIT_PROFILE_TABLE),
+);
+const CATALOGUE_CATEGORIES: ReadonlyMap<string, string> = new Map(
+  Object.entries(EXERCISE_DEFINITIONS).map(([name, definition]) => [name, definition.category]),
+);
 
 // What the derived rule reads from the catalogue. Hip flexors are left out of
 // the legs so core work (leg raises, flutter kicks) does not count as leg load.
@@ -194,11 +203,16 @@ const PULL_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
 // Per category: the aerobic share, and how hard the category's muscular work
 // is on the muscles it names. Lifting is felt mostly in the working muscles
 // (hence the small aerobic share); conditioning the other way round.
-const CATEGORY_WEIGHTS: Readonly<Record<string, { aerobic: number; muscular: number }>> = {
-  strength: { aerobic: 0.15, muscular: 1 },
-  functional: { aerobic: 0.6, muscular: 0.8 },
-  conditioning: { aerobic: 0.9, muscular: 0.6 },
-};
+interface CategoryWeights {
+  aerobic: number;
+  muscular: number;
+}
+const STRENGTH_WEIGHTS: CategoryWeights = { aerobic: 0.15, muscular: 1 };
+const CATEGORY_WEIGHTS: ReadonlyMap<string, CategoryWeights> = new Map([
+  ["strength", STRENGTH_WEIGHTS],
+  ["functional", { aerobic: 0.6, muscular: 0.8 }],
+  ["conditioning", { aerobic: 0.9, muscular: 0.6 }],
+]);
 
 // A pulling muscle worked without a pulling pattern (a curl, a shrug, a
 // deadlift's grip and lats) counts at this fraction of a row or a pull-up.
@@ -209,12 +223,12 @@ const ISOLATED_PULL_SCALE = 0.6;
  * category. Only the aerobic share is attributed — which muscles a custom
  * "Zottman curl" or "partner drill" hit is not something to guess.
  */
-const CATEGORY_FALLBACK: Readonly<Record<string, ProfileValues>> = {
-  running: RUN,
-  conditioning: [0.9, 0, 0, 0],
-  functional: [0.6, 0, 0, 0],
-  strength: [0.15, 0, 0, 0],
-};
+const CATEGORY_FALLBACK: ReadonlyMap<string, ProfileValues> = new Map<string, ProfileValues>([
+  ["running", RUN],
+  ["conditioning", [0.9, 0, 0, 0]],
+  ["functional", [0.6, 0, 0, 0]],
+  ["strength", [0.15, 0, 0, 0]],
+]);
 
 function share(muscles: readonly HeatMapMuscle[], group: ReadonlySet<HeatMapMuscle>): number {
   if (muscles.length === 0) return 0;
@@ -230,9 +244,9 @@ function share(muscles: readonly HeatMapMuscle[], group: ReadonlySet<HeatMapMusc
  * otherwise a reduced share for pulling muscles worked in isolation.
  */
 function deriveProfile(name: ExerciseName): BodySystemProfile {
-  const { category } = EXERCISE_DEFINITIONS[name];
+  const category = CATALOGUE_CATEGORIES.get(name);
   if (category === "running") return toProfile(RUN);
-  const weights = CATEGORY_WEIGHTS[category] ?? CATEGORY_WEIGHTS.strength;
+  const weights = CATEGORY_WEIGHTS.get(category ?? "strength") ?? STRENGTH_WEIGHTS;
   const patterns = getExerciseMovementPatterns(name);
   const muscles = getExerciseHeatMapMuscles(name);
   const legs = patterns.some((p) => LEG_PATTERNS.has(p)) ? 1 : share(muscles, LEG_MUSCLES);
@@ -254,7 +268,7 @@ const catalogueProfileCache = new Map<ExerciseName, BodySystemProfile>();
 export function catalogueBodySystemProfile(name: ExerciseName): BodySystemProfile {
   const cached = catalogueProfileCache.get(name);
   if (cached) return cached;
-  const explicit = EXPLICIT_PROFILES[name];
+  const explicit = EXPLICIT_PROFILES.get(name);
   const profile = explicit ? toProfile(explicit) : deriveProfile(name);
   catalogueProfileCache.set(name, profile);
   return profile;
@@ -276,7 +290,7 @@ export function bodySystemProfileForSet(set: {
   if (canonical && canonical !== "custom") return catalogueBodySystemProfile(canonical);
   const fromLabel = set.customLabel ? normalizeExerciseName(set.customLabel) : null;
   if (fromLabel && fromLabel !== "custom") return catalogueBodySystemProfile(fromLabel);
-  const fallback = set.category ? CATEGORY_FALLBACK[set.category] : undefined;
+  const fallback = set.category ? CATEGORY_FALLBACK.get(set.category) : undefined;
   return fallback ? toProfile(fallback) : null;
 }
 
