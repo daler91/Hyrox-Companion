@@ -166,6 +166,10 @@ function loadFor(loads: Readonly<SystemLoads>, system: BodySystem): number {
       return loads.leg_muscle;
     case "upper_pull":
       return loads.upper_pull;
+    default: {
+      const exhaustive: never = system;
+      throw new Error(`Unknown body system: ${String(exhaustive)}`);
+    }
   }
 }
 
