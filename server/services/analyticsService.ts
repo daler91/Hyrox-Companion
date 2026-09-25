@@ -30,6 +30,7 @@ import {
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storage/shared";
 import { getLocalDateStrSafe } from "../timezone";
+import { calculateBodySystemLoad } from "./trainingLoad/bodySystemLoad";
 import { type AthleteLoadContext, calculateTrainingLoad } from "./trainingLoadService";
 import { getMondayWeekBoundaries } from "./weeklyProgress";
 
@@ -819,9 +820,11 @@ export function calculateTrainingOverview(
   const stationCoverage = buildStationCoverage(buildCoverageSources(workoutLogs, exerciseSets), todayStr);
   const movementPatternCoverage = buildMovementPatternCoverage(exerciseSets, todayStr);
   const muscleGroupCoverage = buildMuscleGroupCoverage(exerciseSets, todayStr);
+  const loadWorkoutLogs = trainingLoadInput?.workoutLogs ?? workoutLogs;
+  const loadExerciseSets = trainingLoadInput?.exerciseSets ?? exerciseSets;
   const trainingLoad = calculateTrainingLoad(
-    trainingLoadInput?.workoutLogs ?? workoutLogs,
-    trainingLoadInput?.exerciseSets ?? exerciseSets,
+    loadWorkoutLogs,
+    loadExerciseSets,
     loadTags,
     {
       ...(trainingLoadInput?.currentDate ? { currentDate: trainingLoadInput.currentDate } : {}),
@@ -830,6 +833,13 @@ export function calculateTrainingOverview(
       ...(athlete ? { athlete } : {}),
     },
   ).overview;
+  // The same sessions, split by where the load landed. A parallel model on the
+  // session-RPE scale: it reads nothing from UTSS and feeds nothing back.
+  const bodySystemLoad = calculateBodySystemLoad(loadWorkoutLogs, loadExerciseSets, {
+    currentDate: trainingLoadInput?.currentDate ?? todayStr,
+    ...(distanceUnit ? { distanceUnit } : {}),
+    ...(athlete ? { athlete } : {}),
+  });
   const currentStats = computeOverviewStats(weeklySummaries);
   const completedDates = new Set(workoutLogs.map((log) => log.date));
   // The athlete's week, not the server's: a UTC-8 athlete's weekly count used
@@ -879,5 +889,6 @@ export function calculateTrainingOverview(
     weeklyCompletedWorkouts,
     weeklyGoal,
     trainingLoad,
+    bodySystemLoad,
   };
 }

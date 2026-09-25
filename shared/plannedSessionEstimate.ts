@@ -296,11 +296,18 @@ function resolveRpe(exerciseName: string | null | undefined): number | null {
   return EXERCISE_RPE[key] ?? CATEGORY_RPE[EXERCISE_DEFINITIONS[key].category] ?? FALLBACK_RPE;
 }
 
-/** Estimate one set's wall-clock minutes: explicit time → distance-derived → per-set floor. */
-function setMinutes(
+/**
+ * Estimate one set's wall-clock minutes: explicit time → distance-derived → per-set floor.
+ *
+ * Exported for the body-system load split (server/services/trainingLoad/
+ * bodySystemLoad.ts), which weights each exercise in a logged session by its
+ * share of the session's time. `runPaceRatio` must already be normalised; the
+ * default is the generic pace.
+ */
+export function estimateSetMinutes(
   set: PlannedSessionSet,
   distanceUnit: string | null | undefined,
-  runPaceRatio: number,
+  runPaceRatio = 1,
 ): number {
   // 1. Explicit prescribed/actual time wins. Stored in MINUTES (app-wide convention).
   const explicitMin = firstPositive(set.plannedTime, set.time);
@@ -366,7 +373,7 @@ function estimateDuration(
   const countable = blockTotal > 0 && setsAreLinked ? sets.filter((s) => s.blockId == null) : [];
   const contributing = blockTotal > 0 ? countable : sets;
   let setTotal = 0;
-  for (const s of contributing) setTotal += setMinutes(s, distanceUnit, runPaceRatio);
+  for (const s of contributing) setTotal += estimateSetMinutes(s, distanceUnit, runPaceRatio);
 
   const total = blockTotal + setTotal;
   if (total <= 0) return { durationMin: null, source: "none", clamped: false };

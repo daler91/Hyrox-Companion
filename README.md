@@ -76,6 +76,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 - **Training overview** - Track volume, duration, average workouts per week, completion rate, streaks, and week-over-week changes.
 - **Exercise progression** - See personal records, set history, category breakdowns, and progression trends.
+- **Load by body system** - One training-load number hides where the load landed, so each session's effort (RPE × minutes) is also split into aerobic, running impact, leg muscle, and upper-body pull load by what the session contained. Each system is tracked in rolling weeks against its own usual week, which catches things like leg load at a six-week high while aerobic load is normal, and the AI coach sees the same split when it adjusts upcoming sessions.
 - **Coach insights** - Surface RPE trends, plan phase, weekly volume, station gaps, fatigue flags, and progression flags. Results are persisted server-side and paint instantly on open, with an automatic refresh at local midnight when newer workouts are logged.
 - **Race predictor** - Estimate your HYROX finish time from logged history, with the same stored-first instant paint and a manual refresh.
 - **MAF Trend** - For MAF Method athletes, chart per-test compliance and pace-at-ceiling progression with classification badges across tagged MAF tests.

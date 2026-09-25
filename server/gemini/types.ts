@@ -1,4 +1,5 @@
 import type {
+  BodySystemLoadOverview,
   CoachNoteInputs,
   PlanDaySkipReason,
   RaceReadiness,
@@ -216,6 +217,14 @@ export interface TrainingContext {
     // direct reference so the coaching prompt context never drifts from the
     // source-of-truth shape in shared/schema.
     loadGovernor?: TrainingLoadOverview;
+    /**
+     * Load by body system: session RPE × minutes split into aerobic, running
+     * impact, leg muscle and upper-body pull, each against its own usual week.
+     * The same model the Analytics card renders, over the same training
+     * sessions. Present when any system carries load; the prompt block
+     * self-suppresses unless one stands out.
+     */
+    bodySystemLoad?: BodySystemLoadOverview;
     progressionFlags: Array<{
       exercise: string;
       flag: "plateau" | "progressing" | "regressing" | "new";
