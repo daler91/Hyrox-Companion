@@ -51,11 +51,10 @@ export interface OverviewAnalysisResponse {
 
 export const analytics = {
   /** "Did the session do its job?" for a plan (the active one by default). */
-  getSessionGrades: (planId?: string) =>
-    typedRequest<SessionGradesResponse>(
-      "GET",
-      `/api/v1/session-grades${planId ? `?planId=${encodeURIComponent(planId)}` : ""}`,
-    ),
+  getSessionGrades: (planId?: string) => {
+    const query = planId ? `?planId=${encodeURIComponent(planId)}` : "";
+    return typedRequest<SessionGradesResponse>("GET", `/api/v1/session-grades${query}`);
+  },
 
   getWorkoutSessionGrade: (workoutId: string) =>
     typedRequest<WorkoutSessionGradeResponse>(

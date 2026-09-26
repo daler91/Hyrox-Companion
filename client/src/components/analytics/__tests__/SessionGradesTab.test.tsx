@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { QUERY_KEYS } from "@/lib/api";
+
 import { createMockSessionGrade } from "../../../../../test/factories";
 import { toGradeChartRow } from "../session-grades/gradeChartData";
 import { SessionGradesTab } from "../SessionGradesTab";
@@ -148,7 +150,7 @@ const LOADED: SessionGradesResponse = {
 
 function renderTab() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient.setQueryData(["/api/v1/plans"], []);
+  queryClient.setQueryData(QUERY_KEYS.plans, []);
   return render(
     <QueryClientProvider client={queryClient}>
       <SessionGradesTab />

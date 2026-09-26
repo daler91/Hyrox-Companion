@@ -107,79 +107,111 @@ function heartRateVerdict(
   return { verdict: "on_target", byDrift: false };
 }
 
+/** What the HR and pace graders of one recording share. */
+interface EasyStreamRun {
+  samples: SessionStreamSamples;
+  /** Moving buckets, less any planned harder finish. */
+  analysed: number[];
+  ctx: GradeContext;
+  metrics: EasyGradeMetrics;
+  pace: number | null;
+  excludedNote: string | null;
+}
+
+/** A quick pace at an easy HR means the easy range is conservative, not that the run was hard. */
+function quickPaceNote(verdict: EasyVerdict, pace: number | null, ctx: GradeContext): string | null {
+  const easyPace = ctx.targets.easyPace;
+  if (verdict !== "on_target" || pace === null || !easyPace) return null;
+  if (pace >= easyPace.fast * (1 - EASY_PACE_FAST_TOLERANCE)) return null;
+  return `Pace (${fmtPace(pace, ctx.distanceUnit)}) was quicker than your easy range at an easy heart rate — your easy paces may be conservative.`;
+}
+
+function gradeEasyOnHr(run: EasyStreamRun, avgHr: number, ceiling: number): GradeOutcome {
+  const { samples, analysed, ctx, metrics } = run;
+  const above = hrShare(samples, analysed, (value) => value > ceiling);
+  const drift = hrDrift(samples, analysed);
+  metrics.avgHr = roundTo(avgHr);
+  metrics.pctAboveCeiling = pct(above.matched, above.total);
+  metrics.firstThirdHr = drift ? roundTo(drift.first) : null;
+  metrics.lastThirdHr = drift ? roundTo(drift.last) : null;
+  metrics.hrDriftPct = drift?.pct ?? null;
+  const aboveShare = above.total > 0 ? above.matched / above.total : 0;
+  const { verdict, byDrift } = heartRateVerdict(avgHr, ceiling, aboveShare, drift);
+
+  const lead =
+    verdict === "on_target"
+      ? `HR averaged ${bpm(avgHr)}, under your easy ceiling of ${bpm(ceiling)}.`
+      : `HR averaged ${bpm(avgHr)} against an easy ceiling of ${bpm(ceiling)}.`;
+  const pctAbove = metrics.pctAboveCeiling ?? 0;
+  const share = pctAbove > 0 ? `${pctAbove}% of the run was above ${bpm(ceiling)}.` : null;
+  const driftLine =
+    drift && byDrift
+      ? `HR climbed from ${bpm(drift.first)} to ${bpm(drift.last)} over the run, finishing above easy.`
+      : null;
+  return {
+    verdict,
+    evidence: pickEvidence([
+      lead,
+      driftLine,
+      share,
+      quickPaceNote(verdict, run.pace, ctx),
+      run.excludedNote,
+      hrBasisNote(ctx.targets),
+    ]),
+    confidence: ctx.targets.hrBasis === "age_estimated" ? "medium" : "high",
+    dataSource: "stream",
+    ungradeableReason: null,
+    easy: metrics,
+    threshold: null,
+  };
+}
+
+/** No HR in the recording: the same bands, applied to time quicker than easy pace. */
+function gradeEasyOnPace(run: EasyStreamRun, easyPace: { fast: number; slow: number }, pace: number): GradeOutcome {
+  const { samples, analysed, ctx, metrics } = run;
+  const faster = fasterThanShare(samples, analysed, easyPace.fast * (1 - EASY_PACE_FAST_TOLERANCE));
+  const share = faster.total > 0 ? faster.matched / faster.total : 0;
+  metrics.pctFasterThanEasy = pct(faster.matched, faster.total);
+  return {
+    verdict: bandVerdict(share),
+    evidence: pickEvidence([
+      `${metrics.pctFasterThanEasy ?? 0}% of the run was quicker than your easy pace (${fmtPaceRange(easyPace, ctx.distanceUnit)}); average ${fmtPace(pace, ctx.distanceUnit)}.`,
+      "No heart rate in this recording, so it is graded on pace.",
+      run.excludedNote,
+    ]),
+    confidence: ctx.targets.paceSource === "history" ? "low" : "medium",
+    dataSource: "stream",
+    ungradeableReason: null,
+    easy: metrics,
+    threshold: null,
+  };
+}
+
 export function gradeEasyStream(samples: SessionStreamSamples, ctx: GradeContext): GradeOutcome {
-  const { targets } = ctx;
   const analysed = withoutFinish(samples, movingBuckets(samples), ctx.hardFinishMinutes);
   const seconds = movingSeconds(samples, analysed);
   if (seconds < MIN_EASY_RUN_S) {
     return ungradeable("too_short", ["Too little running in this recording to judge."], "stream");
   }
-  const metrics = emptyMetrics(roundTo(seconds / 60), ctx.hardFinishMinutes);
   const pace = ctx.speedTrusted ? paceOver(samples, analysed) : null;
+  const metrics = emptyMetrics(roundTo(seconds / 60), ctx.hardFinishMinutes);
   metrics.avgPaceSecPerKm = pace === null ? null : roundTo(pace);
-  const excludedNote = ctx.hardFinishMinutes
-    ? `The last ${ctx.hardFinishMinutes} min (the planned harder finish) is left out.`
-    : null;
+  const run: EasyStreamRun = {
+    samples,
+    analysed,
+    ctx,
+    metrics,
+    pace,
+    excludedNote: ctx.hardFinishMinutes
+      ? `The last ${ctx.hardFinishMinutes} min (the planned harder finish) is left out.`
+      : null,
+  };
 
-  const hr = hrOver(samples, analysed);
-  const ceiling = targets.easyCeilingHr;
-  if (hr.avg !== null && ceiling !== null) {
-    const above = hrShare(samples, analysed, (value) => value > ceiling);
-    const aboveShare = above.total > 0 ? above.matched / above.total : 0;
-    const drift = hrDrift(samples, analysed);
-    metrics.avgHr = roundTo(hr.avg);
-    metrics.pctAboveCeiling = pct(above.matched, above.total);
-    metrics.firstThirdHr = drift ? roundTo(drift.first) : null;
-    metrics.lastThirdHr = drift ? roundTo(drift.last) : null;
-    metrics.hrDriftPct = drift?.pct ?? null;
-    const { verdict, byDrift } = heartRateVerdict(hr.avg, ceiling, aboveShare, drift);
-
-    const lead =
-      verdict === "on_target"
-        ? `HR averaged ${bpm(hr.avg)}, under your easy ceiling of ${bpm(ceiling)}.`
-        : `HR averaged ${bpm(hr.avg)} against an easy ceiling of ${bpm(ceiling)}.`;
-    const share =
-      (metrics.pctAboveCeiling ?? 0) > 0 ? `${metrics.pctAboveCeiling}% of the run was above ${bpm(ceiling)}.` : null;
-    const driftLine =
-      drift && byDrift
-        ? `HR climbed from ${bpm(drift.first)} to ${bpm(drift.last)} over the run, finishing above easy.`
-        : null;
-    const quick =
-      verdict === "on_target" && pace !== null && targets.easyPace && pace < targets.easyPace.fast * (1 - EASY_PACE_FAST_TOLERANCE)
-        ? `Pace (${fmtPace(pace, ctx.distanceUnit)}) was quicker than your easy range at an easy heart rate — your easy paces may be conservative.`
-        : null;
-    return {
-      verdict,
-      evidence: pickEvidence([lead, driftLine, share, quick, excludedNote, hrBasisNote(targets)]),
-      confidence: targets.hrBasis === "age_estimated" ? "medium" : "high",
-      dataSource: "stream",
-      ungradeableReason: null,
-      easy: metrics,
-      threshold: null,
-    };
-  }
-
-  const easyPace = targets.easyPace;
-  if (easyPace && pace !== null) {
-    const faster = fasterThanShare(samples, analysed, easyPace.fast * (1 - EASY_PACE_FAST_TOLERANCE));
-    const share = faster.total > 0 ? faster.matched / faster.total : 0;
-    metrics.pctFasterThanEasy = pct(faster.matched, faster.total);
-    const verdict = bandVerdict(share);
-    return {
-      verdict,
-      evidence: pickEvidence([
-        `${metrics.pctFasterThanEasy ?? 0}% of the run was quicker than your easy pace (${fmtPaceRange(easyPace, ctx.distanceUnit)}); average ${fmtPace(pace, ctx.distanceUnit)}.`,
-        "No heart rate in this recording, so it is graded on pace.",
-        excludedNote,
-      ]),
-      confidence: targets.paceSource === "history" ? "low" : "medium",
-      dataSource: "stream",
-      ungradeableReason: null,
-      easy: metrics,
-      threshold: null,
-    };
-  }
-
+  const avgHr = hrOver(samples, analysed).avg;
+  const ceiling = ctx.targets.easyCeilingHr;
+  if (avgHr !== null && ceiling !== null) return gradeEasyOnHr(run, avgHr, ceiling);
+  const easyPace = ctx.targets.easyPace;
+  if (easyPace && pace !== null) return gradeEasyOnPace(run, easyPace, pace);
   return ungradeable(
     "no_data",
     ["This recording has no heart rate, and no GPS pace to grade against your easy pace."],

@@ -105,28 +105,26 @@ function separated(signal: SegmentSignal, low: number[], high: number[], total: 
     : highMean - lowMean >= MIN_SEPARATION_HR_BPM;
 }
 
+function indexRange(from: number, to: number): number[] {
+  return Array.from({ length: to - from + 1 }, (_, k) => from + k);
+}
+
 /** Stretches of `high` buckets, bridging dips of up to MAX_DIP_BUCKETS (a crossing, a turn). */
 function stretches(high: readonly boolean[]): number[][] {
   const runs: number[][] = [];
-  let current: number[] | null = null;
-  let gap = 0;
+  let start = -1;
+  let lastHigh = -1;
   for (const [i, isHigh] of high.entries()) {
-    if (isHigh) {
-      if (current && gap > 0) for (let j = i - gap; j < i; j++) current.push(j);
-      current ??= [];
-      current.push(i);
-      gap = 0;
-      continue;
+    if (!isHigh) continue;
+    if (start < 0) {
+      start = i;
+    } else if (i - lastHigh - 1 > MAX_DIP_BUCKETS) {
+      runs.push(indexRange(start, lastHigh));
+      start = i;
     }
-    if (!current) continue;
-    gap += 1;
-    if (gap > MAX_DIP_BUCKETS) {
-      runs.push(current);
-      current = null;
-      gap = 0;
-    }
+    lastHigh = i;
   }
-  if (current) runs.push(current);
+  if (start >= 0) runs.push(indexRange(start, lastHigh));
   return runs;
 }
 

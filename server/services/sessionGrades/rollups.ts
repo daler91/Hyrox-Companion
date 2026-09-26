@@ -140,6 +140,41 @@ function planOutline(totalWeeks: number, textDeloads: ReadonlySet<number>): Plan
   });
 }
 
+/** Planned gradeable days and the counted grades, each into its plan week. */
+function countIntoWeeks(input: RollupInput, weekAt: (weekNumber: number | null) => SessionGradeWeek | undefined): void {
+  for (const day of input.days) {
+    const week = weekAt(day.weekNumber);
+    if (week && day.gradeable) week.counts.plannedGradeable += 1;
+  }
+  for (const grade of input.grades) {
+    const week = grade.countsInRollup ? weekAt(grade.weekNumber) : undefined;
+    if (week) addGrade(week.counts, grade);
+  }
+}
+
+/** Weeks folded into their training blocks, and into the plan's totals. */
+function rollUpBlocks(weeks: readonly SessionGradeWeek[]): Pick<SessionGradeRollups, "blocks" | "totals"> {
+  const blocks = new Map<number, SessionGradeBlock>();
+  const totals = emptyRollupCounts();
+  for (const week of weeks) {
+    const block = blocks.get(week.block) ?? {
+      block: week.block,
+      firstWeek: week.weekNumber,
+      lastWeek: week.weekNumber,
+      phases: [],
+      includesDeload: false,
+      counts: emptyRollupCounts(),
+    };
+    blocks.set(week.block, block);
+    block.lastWeek = week.weekNumber;
+    if (week.phase && !block.phases.includes(week.phase)) block.phases.push(week.phase);
+    block.includesDeload ||= week.deload;
+    mergeCounts(block.counts, week.counts);
+    mergeCounts(totals, week.counts);
+  }
+  return { blocks: [...blocks.values()], totals };
+}
+
 export function buildSessionGradeRollups(input: RollupInput): SessionGradeRollups {
   // Plan weeks are numbered however the plan was written (CSV imports can
   // start at 0); the outline counts from 1.
@@ -163,37 +198,6 @@ export function buildSessionGradeRollups(input: RollupInput): SessionGradeRollup
   const weekAt = (weekNumber: number | null) =>
     weekNumber === null ? undefined : weeks[toIndex(weekNumber) - 1];
 
-  for (const day of input.days) {
-    const week = weekAt(day.weekNumber);
-    if (week && day.gradeable) week.counts.plannedGradeable += 1;
-  }
-  for (const grade of input.grades) {
-    if (!grade.countsInRollup) continue;
-    const week = weekAt(grade.weekNumber);
-    if (week) addGrade(week.counts, grade);
-  }
-
-  const blocks = new Map<number, SessionGradeBlock>();
-  const totals = emptyRollupCounts();
-  for (const week of weeks) {
-    let block = blocks.get(week.block);
-    if (!block) {
-      block = {
-        block: week.block,
-        firstWeek: week.weekNumber,
-        lastWeek: week.weekNumber,
-        phases: [],
-        includesDeload: false,
-        counts: emptyRollupCounts(),
-      };
-      blocks.set(week.block, block);
-    }
-    block.lastWeek = week.weekNumber;
-    if (week.phase && !block.phases.includes(week.phase)) block.phases.push(week.phase);
-    block.includesDeload ||= week.deload;
-    mergeCounts(block.counts, week.counts);
-    mergeCounts(totals, week.counts);
-  }
-
-  return { weeks, blocks: [...blocks.values()], totals };
+  countIntoWeeks(input, weekAt);
+  return { weeks, ...rollUpBlocks(weeks) };
 }

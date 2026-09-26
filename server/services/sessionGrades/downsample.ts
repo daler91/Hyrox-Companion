@@ -93,7 +93,7 @@ export function parseStravaStreamResponse(body: unknown): StravaStreamSet {
 
 /** A series is only trusted when it lines up sample for sample with `time`. */
 function aligned<T>(series: T[] | undefined, length: number): T[] | undefined {
-  return series && series.length === length ? series : undefined;
+  return series?.length === length ? series : undefined;
 }
 
 /** One bucket's running sums. */

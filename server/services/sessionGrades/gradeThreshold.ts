@@ -114,41 +114,46 @@ function decide(m: ThresholdGradeMetrics, targets: SessionGradeTargets): Verdict
 }
 
 function workLine(m: ThresholdGradeMetrics, targets: SessionGradeTargets, unit: string): string {
+  const reps = m.repCount === 1 ? "rep" : "reps";
   const what =
     m.segmentation === "reps"
-      ? `Found ${m.repCount} ${m.repCount === 1 ? "rep" : "reps"}, ${m.workMinutes} min of work`
+      ? `Found ${m.repCount} ${reps}, ${m.workMinutes} min of work`
       : `No clear reps, so the middle ${m.workMinutes} min was graded as one block`;
   if (m.workAvgPaceSecPerKm === null) return `${what}.`;
   const target = targets.thresholdPace ? ` vs ${fmtPace(targets.thresholdPace, unit)} threshold` : "";
   return `${what} at ${fmtPace(m.workAvgPaceSecPerKm, unit)}${target}.`;
 }
 
-function reasonLines(m: ThresholdGradeMetrics, r: VerdictReasons, targets: SessionGradeTargets): (string | null)[] {
-  const z4 = targets.thresholdHr;
-  const z5 = targets.z5FloorHr;
-  if (r.verdict === "drifted_harder") {
-    return [
-      r.climbedIntoZ5 && m.firstRepHr !== null && m.lastRepHr !== null
-        ? `HR climbed from ${bpm(m.firstRepHr)} on the first rep to ${bpm(m.lastRepHr)} on the last, into Z5.`
-        : null,
-      r.z5Share && z5 !== null ? `${m.pctWorkZ5}% of the work was in Z5 (${bpm(z5)} and up).` : null,
-      r.tooFast && m.paceDeltaPct !== null ? `That is ${Math.abs(m.paceDeltaPct)}% faster than threshold pace.` : null,
-    ];
-  }
-  const hrLine =
-    m.workAvgHr !== null && z4
-      ? `Work HR averaged ${bpm(m.workAvgHr)}; your Z4 is ${z4.min}–${z4.max} bpm.`
+function driftedLines(m: ThresholdGradeMetrics, r: VerdictReasons, z5: number | null): (string | null)[] {
+  const climbed =
+    r.climbedIntoZ5 && m.firstRepHr !== null && m.lastRepHr !== null
+      ? `HR climbed from ${bpm(m.firstRepHr)} on the first rep to ${bpm(m.lastRepHr)} on the last, into Z5.`
       : null;
-  const paceOnTarget = m.paceDeltaPct !== null && Math.abs(m.paceDeltaPct) <= SLOW_PCT;
-  const hrBelow = m.workAvgHr !== null && z4 !== null && m.workAvgHr < z4.min;
-  const hrInZ4 = m.workAvgHr !== null && z4 !== null && m.workAvgHr >= z4.min;
-  let disagreement: string | null = null;
-  if (r.verdict === "on_target" && paceOnTarget && hrBelow) {
-    disagreement = "Pace was on target but HR stayed under Z4 — if that is usual for you, your max HR may be set high.";
-  } else if (r.verdict === "on_target" && hrInZ4 && (m.paceDeltaPct ?? 0) > SLOW_PCT) {
-    disagreement = "HR was at threshold though the pace was slow — heat, hills or fatigue can do that.";
+  const inZ5 = r.z5Share && z5 !== null ? `${m.pctWorkZ5}% of the work was in Z5 (${bpm(z5)} and up).` : null;
+  const fast =
+    r.tooFast && m.paceDeltaPct !== null ? `That is ${Math.abs(m.paceDeltaPct)}% faster than threshold pace.` : null;
+  return [climbed, inZ5, fast];
+}
+
+/** When an on-target grade rests on pace and HR that tell different stories, say so. */
+function disagreementLine(m: ThresholdGradeMetrics, z4: SessionGradeTargets["thresholdHr"]): string | null {
+  if (m.workAvgHr === null || z4 === null) return null;
+  const hrBelow = m.workAvgHr < z4.min;
+  if (hrBelow && m.paceDeltaPct !== null && Math.abs(m.paceDeltaPct) <= SLOW_PCT) {
+    return "Pace was on target but HR stayed under Z4 — if that is usual for you, your max HR may be set high.";
   }
-  return [hrLine, disagreement];
+  if (!hrBelow && (m.paceDeltaPct ?? 0) > SLOW_PCT) {
+    return "HR was at threshold though the pace was slow — heat, hills or fatigue can do that.";
+  }
+  return null;
+}
+
+function reasonLines(m: ThresholdGradeMetrics, r: VerdictReasons, targets: SessionGradeTargets): (string | null)[] {
+  if (r.verdict === "drifted_harder") return driftedLines(m, r, targets.z5FloorHr);
+  const z4 = targets.thresholdHr;
+  const hrLine =
+    m.workAvgHr !== null && z4 ? `Work HR averaged ${bpm(m.workAvgHr)}; your Z4 is ${z4.min}–${z4.max} bpm.` : null;
+  return [hrLine, r.verdict === "on_target" ? disagreementLine(m, z4) : null];
 }
 
 export function gradeThresholdStream(samples: SessionStreamSamples, ctx: GradeContext): GradeOutcome {
@@ -204,21 +209,20 @@ export function gradeThresholdStream(samples: SessionStreamSamples, ctx: GradeCo
  * diluted, it averaged Z5 or faster than threshold) but can never confirm it
  * held threshold — that needs the stream.
  */
-export function gradeThresholdSummary(summary: SummaryMetrics, ctx: GradeContext): GradeOutcome {
-  const { targets } = ctx;
-  const pace = ctx.speedTrusted && summary.avgSpeed && summary.avgSpeed > 0 ? 1000 / summary.avgSpeed : null;
-  if (summary.avgHr === null && pace === null) {
-    return ungradeable("no_data", ["This session has no heart rate or pace to grade. Link a Strava recording to grade it."], "summary");
-  }
-  const metrics: ThresholdGradeMetrics = {
+function summaryPace(summary: SummaryMetrics, ctx: GradeContext): number | null {
+  if (!ctx.speedTrusted || !summary.avgSpeed || summary.avgSpeed <= 0) return null;
+  return 1000 / summary.avgSpeed;
+}
+
+function summaryMetrics(summary: SummaryMetrics, pace: number | null, thresholdPace: number | null): ThresholdGradeMetrics {
+  const paceDeltaPct =
+    pace !== null && thresholdPace ? roundTo(((pace - thresholdPace) / thresholdPace) * 100, 1) : null;
+  return {
     segmentation: "whole_run",
     workMinutes: roundTo(summary.durationMin ?? 0),
     repCount: 0,
     workAvgPaceSecPerKm: pace === null ? null : roundTo(pace),
-    paceDeltaPct:
-      pace !== null && targets.thresholdPace
-        ? roundTo(((pace - targets.thresholdPace) / targets.thresholdPace) * 100, 1)
-        : null,
+    paceDeltaPct,
     workAvgHr: summary.avgHr === null ? null : roundTo(summary.avgHr),
     pctWorkZ4: null,
     pctWorkZ5: null,
@@ -226,33 +230,48 @@ export function gradeThresholdSummary(summary: SummaryMetrics, ctx: GradeContext
     lastRepHr: null,
     decouplingPct: null,
   };
-  const z5 = targets.z5FloorHr;
-  const hrInZ5 = summary.avgHr !== null && z5 !== null && summary.avgHr >= z5;
-  const fasterThanThreshold = metrics.paceDeltaPct !== null && metrics.paceDeltaPct < 0;
-  const averagesLine = "These are whole-run averages with the warm-up and cool-down in them.";
-  if (hrInZ5 || fasterThanThreshold) {
-    return {
-      verdict: "drifted_harder",
-      evidence: pickEvidence([
-        hrInZ5 && summary.avgHr !== null && z5 !== null
-          ? `Even averaged over the whole run, HR was ${bpm(summary.avgHr)} — Z5 starts at ${bpm(z5)}.`
-          : null,
-        fasterThanThreshold && pace !== null && targets.thresholdPace
-          ? `Even averaged over the whole run, pace was ${fmtPace(pace, ctx.distanceUnit)}, faster than ${fmtPace(targets.thresholdPace, ctx.distanceUnit)} threshold.`
-          : null,
-        averagesLine,
-      ]),
-      confidence: "low",
-      dataSource: "summary",
-      ungradeableReason: null,
-      easy: null,
-      threshold: metrics,
-    };
+}
+
+/** Whole-run HR already in Z5, or whole-run pace already under threshold: harder than planned even diluted. */
+function summaryHarderLines(
+  summary: SummaryMetrics,
+  pace: number | null,
+  metrics: ThresholdGradeMetrics,
+  ctx: GradeContext,
+): (string | null)[] {
+  const { z5FloorHr: z5, thresholdPace } = ctx.targets;
+  const hrLine =
+    summary.avgHr !== null && z5 !== null && summary.avgHr >= z5
+      ? `Even averaged over the whole run, HR was ${bpm(summary.avgHr)} — Z5 starts at ${bpm(z5)}.`
+      : null;
+  const paceLine =
+    pace !== null && thresholdPace && metrics.paceDeltaPct !== null && metrics.paceDeltaPct < 0
+      ? `Even averaged over the whole run, pace was ${fmtPace(pace, ctx.distanceUnit)}, faster than ${fmtPace(thresholdPace, ctx.distanceUnit)} threshold.`
+      : null;
+  return [hrLine, paceLine];
+}
+
+/**
+ * Whole-run averages include the warm-up and cool-down, which pull both HR and
+ * pace toward easy. So the summary can confirm a session went too hard (even
+ * diluted, it averaged Z5 or faster than threshold) but can never confirm it
+ * held threshold — that needs the stream.
+ */
+export function gradeThresholdSummary(summary: SummaryMetrics, ctx: GradeContext): GradeOutcome {
+  const pace = summaryPace(summary, ctx);
+  if (summary.avgHr === null && pace === null) {
+    return ungradeable("no_data", ["This session has no heart rate or pace to grade. Link a Strava recording to grade it."], "summary");
   }
+  const metrics = summaryMetrics(summary, pace, ctx.targets.thresholdPace);
+  const harder = summaryHarderLines(summary, pace, metrics, ctx);
+  const averagesLine = "These are whole-run averages with the warm-up and cool-down in them.";
+  const drifted = harder.some((line) => line !== null);
   return {
-    verdict: "inconclusive",
-    evidence: [averagesLine, "The heart-rate and pace stream is needed to see the reps; it is fetched from Strava shortly after sync."],
-    confidence: null,
+    verdict: drifted ? "drifted_harder" : "inconclusive",
+    evidence: drifted
+      ? pickEvidence([...harder, averagesLine])
+      : [averagesLine, "The heart-rate and pace stream is needed to see the reps; it is fetched from Strava shortly after sync."],
+    confidence: drifted ? "low" : null,
     dataSource: "summary",
     ungradeableReason: null,
     easy: null,
