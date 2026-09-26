@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   candidateDates,
   dayLabel,
-  formatDuration,
   planMissedSessionRecovery,
   type PlannerInput,
   type PlannerMissedSession,
@@ -434,11 +433,5 @@ describe("labels", () => {
     expect(dayLabel("2026-09-21", TODAY)).toBe("Monday");
     expect(dayLabel("2026-09-19", TODAY)).toBe("last Saturday");
     expect(dayLabel("2026-10-06", TODAY)).toBe("Tue 6 Oct");
-  });
-
-  it("formats durations", () => {
-    expect(formatDuration(45)).toBe("45 min");
-    expect(formatDuration(60)).toBe("1h");
-    expect(formatDuration(95)).toBe("1h 35m");
   });
 });

@@ -471,6 +471,31 @@ async function userDistanceUnit(userId: string): Promise<DistanceUnit> {
   return (user?.distanceUnit || "km") as DistanceUnit;
 }
 
+/** `updatePlanDayStatus` without a status: a date-only move, folding a missed session moved forward. */
+async function reschedulePlanDay(dayId: string, scheduledDate: string | null | undefined, userId: string) {
+  const updates: Record<string, string | null> = {};
+  const reschedule = scheduledDate === undefined ? null : { nextDate: scheduledDate ?? null };
+  if (reschedule) {
+    updates.scheduledDate = reschedule.nextDate;
+  }
+  // Snapshot the current date so we only enqueue the coach when the move
+  // actually changes the scheduled date. A no-op patch (same date) leaves
+  // the coach alone.
+  const existing = reschedule ? await storage.plans.getPlanDay(dayId, userId) : null;
+  const moveFields =
+    existing && reschedule ? await missedSessionMoveFields(existing, reschedule.nextDate, userId) : {};
+  const result = await writeReschedule(dayId, updates, userId, existing, moveFields);
+  if (
+    result &&
+    existing &&
+    reschedule &&
+    reschedule.nextDate !== (existing.scheduledDate ?? null)
+  ) {
+    enqueueAutoCoachForReschedule(userId);
+  }
+  return result;
+}
+
 export async function updatePlanDayStatus(
   dayId: string,
   {
@@ -481,29 +506,7 @@ export async function updatePlanDayStatus(
   userId: string,
 ) {
   // Date-only update: no transition check needed.
-  if (!status) {
-    const updates: Record<string, string | null> = {};
-    const reschedule = scheduledDate === undefined ? null : { nextDate: scheduledDate ?? null };
-    if (reschedule) {
-      updates.scheduledDate = reschedule.nextDate;
-    }
-    // Snapshot the current date so we only enqueue the coach when the move
-    // actually changes the scheduled date. A no-op patch (same date) leaves
-    // the coach alone.
-    const existing = reschedule ? await storage.plans.getPlanDay(dayId, userId) : null;
-    const moveFields =
-      existing && reschedule ? await missedSessionMoveFields(existing, reschedule.nextDate, userId) : {};
-    const result = await writeReschedule(dayId, updates, userId, existing, moveFields);
-    if (
-      result &&
-      existing &&
-      reschedule &&
-      reschedule.nextDate !== (existing.scheduledDate ?? null)
-    ) {
-      enqueueAutoCoachForReschedule(userId);
-    }
-    return result;
-  }
+  if (!status) return reschedulePlanDay(dayId, scheduledDate, userId);
 
   // Transition path: do the read, transition check, optional log cleanup,
   // and write inside a single transaction so a concurrent cron or workout

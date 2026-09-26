@@ -1,4 +1,4 @@
-import { timelineAnnotations, workoutLogs } from "@shared/schema";
+import { timelineAnnotations, type TimelineEntry, workoutLogs } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
@@ -469,6 +469,13 @@ describe("TimelineStorage declared absences", () => {
   });
 });
 
+/** The entry for a plan day, failing the test by name when it is missing. */
+function entryFor(entries: TimelineEntry[], planDayId: string): TimelineEntry {
+  const found = entries.find((entry) => entry.planDayId === planDayId);
+  if (!found) throw new Error(`no timeline entry for plan day ${planDayId}`);
+  return found;
+}
+
 describe("TimelineStorage priority tiers and missed-session recovery", () => {
   let storage: TimelineStorage;
 
@@ -492,7 +499,7 @@ describe("TimelineStorage priority tiers and missed-session recovery", () => {
     ] as never);
 
     const entries = await storage.getTimeline("user-1");
-    const byId = (id: string) => entries.find((e) => e.planDayId === id)!;
+    const byId = (id: string) => entryFor(entries, id);
 
     expect(byId("d-marked").priority).toBe("key");
     expect(byId("d-tempo").priority).toBe("key");
@@ -513,7 +520,7 @@ describe("TimelineStorage priority tiers and missed-session recovery", () => {
     ] as never);
 
     const entries = await storage.getTimeline("user-1");
-    const byId = (id: string) => entries.find((e) => e.planDayId === id)!;
+    const byId = (id: string) => entryFor(entries, id);
 
     expect(byId("d-let-go")).toMatchObject({ status: "missed", recovery: "let_go" });
     expect(byId("d-stale").recovery).toBeUndefined();
@@ -546,7 +553,7 @@ describe("TimelineStorage priority tiers and missed-session recovery", () => {
     ] as never);
 
     const entries = await storage.getTimeline("user-1");
-    const byId = (id: string) => entries.find((e) => e.planDayId === id)!;
+    const byId = (id: string) => entryFor(entries, id);
 
     expect(byId("d-recent").recoverable).toBe(true);
     expect(byId("d-unswept")).toMatchObject({ status: "missed", recoverable: true });

@@ -193,6 +193,83 @@ function scaleSingleSet(
   return null;
 }
 
+/** The sets outside timed blocks, grouped by exercise; the blocks' own sets stay as written. */
+function groupUnblockedSets(sets: readonly ShortenableSet[]): {
+  groups: Map<string, ShortenableSet[]>;
+  blocked: ShortenableSet[];
+} {
+  const groups = new Map<string, ShortenableSet[]>();
+  const blocked: ShortenableSet[] = [];
+  for (const set of sets) {
+    if (set.blockId !== null) {
+      blocked.push(set);
+      continue;
+    }
+    const key = groupKey(set);
+    const list = groups.get(key);
+    if (list) list.push(set);
+    else groups.set(key, [set]);
+  }
+  return { groups, blocked };
+}
+
+interface GroupCut {
+  readonly deleteSetIds: readonly string[];
+  readonly setUpdates: readonly ShortenedSetUpdate[];
+  readonly changes: readonly RecoveryShortenChange[];
+  readonly remaining: readonly ShortenableSet[];
+}
+
+/** One exercise's cut: its last sets dropped, or — a single continuous effort — the effort scaled down. */
+function cutGroup(group: readonly ShortenableSet[], keep: number, distanceUnit: string): GroupCut {
+  const ordered = [...group].sort(bySetOrder);
+  const first = ordered[0];
+  if (!first) return { deleteSetIds: [], setUpdates: [], changes: [], remaining: [] };
+
+  if (ordered.length === 1) {
+    const scaled = scaleSingleSet(first, keep, distanceUnit);
+    if (!scaled) return { deleteSetIds: [], setUpdates: [], changes: [], remaining: [first] };
+    return { deleteSetIds: [], setUpdates: [scaled.update], changes: [scaled.change], remaining: [scaled.remaining] };
+  }
+
+  const keepCount = Math.max(1, Math.round(ordered.length * keep));
+  const dropped = ordered.slice(keepCount);
+  const change: RecoveryShortenChange = {
+    label: exerciseLabel(first),
+    from: `${ordered.length} sets`,
+    to: `${keepCount} ${keepCount === 1 ? "set" : "sets"}`,
+  };
+  return {
+    deleteSetIds: dropped.map((set) => set.id),
+    setUpdates: [],
+    changes: dropped.length > 0 ? [change] : [],
+    remaining: ordered.slice(0, keepCount),
+  };
+}
+
+/** Why part of the session could not be cut in the table. */
+function shortenNotes(blockCount: number, hasUnblockedSets: boolean, percent: number): RecoveryNote[] {
+  if (blockCount > 0) {
+    return [
+      {
+        code: "blocks_not_trimmed",
+        tone: "info",
+        message: `Timed blocks stay as written — stop after about ${percent}% of the rounds.`,
+      },
+    ];
+  }
+  if (!hasUnblockedSets) {
+    return [
+      {
+        code: "not_trimmable",
+        tone: "info",
+        message: `There is no exercise table to cut, so the session keeps its text — do about ${percent}% of it.`,
+      },
+    ];
+  }
+  return [];
+}
+
 /**
  * Plan the cut. `blockCount` is how many structure blocks the day carries: their
  * sets are untouched, and the athlete is told to stop at about the same share.
@@ -202,73 +279,18 @@ export function planShortenedPrescription(
   options: { readonly blockCount: number; readonly distanceUnit: string; readonly keep?: number },
 ): ShortenPlan {
   const keep = options.keep ?? SHORTEN_KEEP_FRACTION;
-  const percent = Math.round(keep * 100);
-  const deleteSetIds: string[] = [];
-  const setUpdates: ShortenedSetUpdate[] = [];
-  const changes: RecoveryShortenChange[] = [];
-  const remainingSets: ShortenableSet[] = [];
-
-  const groups = new Map<string, ShortenableSet[]>();
-  for (const set of sets) {
-    if (set.blockId !== null) {
-      remainingSets.push(set);
-      continue;
-    }
-    const list = groups.get(groupKey(set));
-    if (list) list.push(set);
-    else groups.set(groupKey(set), [set]);
-  }
-
-  for (const group of groups.values()) {
-    const ordered = [...group].sort(bySetOrder);
-    const first = ordered[0];
-    if (!first) continue;
-    if (ordered.length === 1) {
-      const scaled = scaleSingleSet(first, keep, options.distanceUnit);
-      if (scaled) {
-        setUpdates.push(scaled.update);
-        changes.push(scaled.change);
-        remainingSets.push(scaled.remaining);
-      } else {
-        remainingSets.push(first);
-      }
-      continue;
-    }
-    const keepCount = Math.max(1, Math.round(ordered.length * keep));
-    remainingSets.push(...ordered.slice(0, keepCount));
-    if (keepCount < ordered.length) {
-      deleteSetIds.push(...ordered.slice(keepCount).map((set) => set.id));
-      changes.push({
-        label: exerciseLabel(first),
-        from: `${ordered.length} sets`,
-        to: `${keepCount} ${keepCount === 1 ? "set" : "sets"}`,
-      });
-    }
-  }
-
-  const notes: RecoveryNote[] = [];
+  const { groups, blocked } = groupUnblockedSets(sets);
+  const cuts = [...groups.values()].map((group) => cutGroup(group, keep, options.distanceUnit));
+  const changes = cuts.flatMap((cut) => cut.changes);
   const hasUnblockedSets = groups.size > 0;
-  if (options.blockCount > 0) {
-    notes.push({
-      code: "blocks_not_trimmed",
-      tone: "info",
-      message: `Timed blocks stay as written — stop after about ${percent}% of the rounds.`,
-    });
-  } else if (!hasUnblockedSets) {
-    notes.push({
-      code: "not_trimmable",
-      tone: "info",
-      message: `There is no exercise table to cut, so the session keeps its text — do about ${percent}% of it.`,
-    });
-  }
 
   return {
     keepFraction: keep,
-    deleteSetIds,
-    setUpdates,
+    deleteSetIds: cuts.flatMap((cut) => cut.deleteSetIds),
+    setUpdates: cuts.flatMap((cut) => cut.setUpdates),
     changes,
-    remainingSets,
-    notes,
+    remainingSets: [...blocked, ...cuts.flatMap((cut) => cut.remaining)],
+    notes: shortenNotes(options.blockCount, hasUnblockedSets, Math.round(keep * 100)),
     needsInstruction: options.blockCount > 0 || !hasUnblockedSets || changes.length === 0,
   };
 }

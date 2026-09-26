@@ -27,7 +27,7 @@ const missed = {
 
 function renderCard(overrides: Partial<TimelineEntry> = {}, props: { isBulkSelectMode?: boolean } = {}) {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, queryFn: async () => ({ weightUnit: "kg", distanceUnit: "km" }) } },
+    defaultOptions: { queries: { retry: false, queryFn: () => Promise.resolve({ weightUnit: "kg", distanceUnit: "km" }) } },
   });
   queryClient.setQueryData(["/api/v1/preferences"], { weightUnit: "kg", distanceUnit: "km" });
   const onClick = vi.fn();

@@ -6,7 +6,7 @@ import {
   planWeekOneMonday,
   weekdayIndex,
 } from "@shared/dateUtils";
-import { RECOVERABLE_WITHIN_DAYS, RECOVERY_WINDOW_DAYS } from "@shared/missedRecovery";
+import { formatSessionLength, RECOVERABLE_WITHIN_DAYS, RECOVERY_WINDOW_DAYS } from "@shared/missedRecovery";
 import type {
   MissedRecoveryOption,
   MissedSessionRecoveryPreview,
@@ -138,16 +138,7 @@ export function dayLabel(date: string, today: string): string {
 }
 
 function capitalise(text: string): string {
-  return text.length === 0 ? text : `${text[0]?.toUpperCase() ?? ""}${text.slice(1)}`;
-}
-
-/** "45 min", "1h 35m". */
-export function formatDuration(minutes: number): string {
-  const rounded = Math.round(minutes);
-  if (rounded < 60) return `${rounded} min`;
-  const hours = Math.floor(rounded / 60);
-  const rest = rounded % 60;
-  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
 function listFocuses(sessions: readonly PlannerSession[]): string {
@@ -182,44 +173,64 @@ interface Move {
  * decision. `move` is where the option puts the session, or null to let it go.
  */
 export function weekImpact(input: PlannerInput, weekStart: string, move: Move | null): RecoveryWeekImpact {
-  const weekEnd = addDaysToISODate(weekStart, 6);
-  let minutes = 0;
-  let load = 0;
-  let keyLive = 0;
-  let keyScheduled = 0;
-  for (const session of input.sessions) {
-    if (session.date < weekStart || session.date > weekEnd) continue;
-    if (session.priority === "key") keyScheduled += 1;
-    if (session.state === "not_happening") continue;
-    minutes += session.durationMin;
-    load += sessionLoad(session.durationMin, session.rpe);
-    if (session.priority === "key") keyLive += 1;
-  }
-
+  const { live, keyScheduled } = weekSessions(input, weekStart);
   const { missed } = input;
   const missedHere = weekOf(missed.date) === weekStart;
-  const missedKey = missed.priority === "key";
   const moveHere = move !== null && weekOf(move.date) === weekStart;
+  const before = contribution(missedHere, missed.durationMin, missed.rpe, missed.priority === "key");
+  const after = move ? contribution(moveHere, move.minutes, move.rpe, move.key) : NOTHING;
   // A key session moved in from another week counts among this week's scheduled
   // ones too, so "after" never reads as more key sessions than there are.
-  const movedInKey = moveHere && move.key && !missedHere;
+  const movedInKey = missedHere ? 0 : after.key;
 
   return {
     weekStart,
-    minutesBefore: Math.round(minutes + (missedHere ? missed.durationMin : 0)),
-    minutesAfter: Math.round(minutes + (moveHere ? move.minutes : 0)),
-    loadBefore: Math.round(load + (missedHere ? sessionLoad(missed.durationMin, missed.rpe) : 0)),
-    loadAfter: Math.round(load + (moveHere ? sessionLoad(move.minutes, move.rpe) : 0)),
-    keyBefore: keyLive + (missedHere && missedKey ? 1 : 0),
-    keyAfter: keyLive + (moveHere && move.key ? 1 : 0),
-    keyScheduled: keyScheduled + (missedHere && missedKey ? 1 : 0) + (movedInKey ? 1 : 0),
+    minutesBefore: Math.round(live.minutes + before.minutes),
+    minutesAfter: Math.round(live.minutes + after.minutes),
+    loadBefore: Math.round(live.load + before.load),
+    loadAfter: Math.round(live.load + after.load),
+    keyBefore: live.key + before.key,
+    keyAfter: live.key + after.key,
+    keyScheduled: keyScheduled + before.key + movedInKey,
+  };
+}
+
+interface WeekTotals {
+  readonly minutes: number;
+  readonly load: number;
+  readonly key: number;
+}
+
+const NOTHING: WeekTotals = { minutes: 0, load: 0, key: 0 };
+
+/** One session's share of a week, or nothing when it isn't in that week. */
+function contribution(inWeek: boolean, minutes: number, rpe: number, key: boolean): WeekTotals {
+  if (!inWeek) return NOTHING;
+  return { minutes, load: sessionLoad(minutes, rpe), key: key ? 1 : 0 };
+}
+
+/**
+ * The week's other sessions: the ones still happening (done or planned), and
+ * how many key sessions the week was planned with, whatever became of them.
+ */
+function weekSessions(input: PlannerInput, weekStart: string): { live: WeekTotals; keyScheduled: number } {
+  const weekEnd = addDaysToISODate(weekStart, 6);
+  const inWeek = input.sessions.filter((session) => session.date >= weekStart && session.date <= weekEnd);
+  const live = inWeek.filter((session) => session.state !== "not_happening");
+  return {
+    live: {
+      minutes: live.reduce((sum, session) => sum + session.durationMin, 0),
+      load: live.reduce((sum, session) => sum + sessionLoad(session.durationMin, session.rpe), 0),
+      key: live.filter((session) => session.priority === "key").length,
+    },
+    keyScheduled: inWeek.filter((session) => session.priority === "key").length,
   };
 }
 
 function affectedWeeks(input: PlannerInput, move: Move | null): RecoveryWeekImpact[] {
   const starts = new Set([weekOf(input.missed.date)]);
   if (move) starts.add(weekOf(move.date));
-  return [...starts].sort().map((start) => weekImpact(input, start, move));
+  return [...starts].sort((a, b) => a.localeCompare(b)).map((start) => weekImpact(input, start, move));
 }
 
 // ---------------------------------------------------------------------------
@@ -290,6 +301,54 @@ function neighbourNote(input: PlannerInput, date: string, move: Move): RecoveryN
   );
 }
 
+function stackedKeyNote(label: string, onDay: readonly PlannerSession[], move: Move): RecoveryNote | null {
+  const otherKey = move.key ? onDay.find((session) => session.priority === "key") : undefined;
+  if (!otherKey) return null;
+  return warning("stacked_key", `${capitalise(label)} already has a key session, ${otherKey.focus} — two in one day is a lot.`);
+}
+
+function longDayNote(label: string, onDay: readonly PlannerSession[], move: Move): RecoveryNote | null {
+  const dayMinutes = onDay.reduce((sum, session) => sum + session.durationMin, 0) + move.minutes;
+  if (onDay.length === 0 || dayMinutes <= LONG_DAY_MIN) return null;
+  return warning("long_day", `${capitalise(label)} becomes about ${formatSessionLength(dayMinutes)} of training.`);
+}
+
+function raceCloseNote(input: PlannerInput, date: string, move: Move): RecoveryNote | null {
+  if (input.raceDate === null || !isHard(input.missed.priority, move.rpe)) return null;
+  const daysToRace = dayDiff(date, input.raceDate);
+  if (daysToRace <= 0 || daysToRace > RACE_TAPER_DAYS) return null;
+  return warning(
+    "race_close",
+    daysToRace === 1
+      ? "It's the day before race day — keep the legs fresh."
+      : `It's ${daysToRace} days before race day — keep the legs fresh.`,
+  );
+}
+
+/** A week other than the missed one that the move makes noticeably heavier. */
+function weekJumpNotes(input: PlannerInput, weeks: readonly RecoveryWeekImpact[]): RecoveryNote[] {
+  const missedWeek = weekOf(input.missed.date);
+  return weeks.flatMap((week) => {
+    if (week.weekStart === missedWeek || week.loadBefore <= 0) return [];
+    const growth = (week.loadAfter - week.loadBefore) / week.loadBefore;
+    if (growth <= WEEK_JUMP) return [];
+    return [
+      warning("week_jump", `It adds ${Math.round(growth * 100)}% to the load of the week of ${shortDate(week.weekStart)}.`),
+    ];
+  });
+}
+
+function optionalOnDayNote(label: string, onDay: readonly PlannerSession[]): RecoveryNote | null {
+  const optional = onDay.find((session) => session.priority === "optional" && session.state === "planned");
+  if (!optional) return null;
+  return info("optional_on_day", `${capitalise(label)}'s ${optional.focus} is optional — drop it if the day feels full.`);
+}
+
+function isNote(note: RecoveryNote | null): note is RecoveryNote {
+  return note !== null;
+}
+
+/** The cautions for moving the session onto `date`, then the tips. */
 function moveNotes(
   input: PlannerInput,
   date: string,
@@ -297,59 +356,15 @@ function moveNotes(
   move: Move,
   weeks: readonly RecoveryWeekImpact[],
 ): RecoveryNote[] {
-  const notes: RecoveryNote[] = [];
   const label = dayLabel(date, input.today);
-  const missedWeek = weekOf(input.missed.date);
-
-  const otherKey = move.key ? onDay.find((session) => session.priority === "key") : undefined;
-  if (otherKey) {
-    notes.push(
-      warning("stacked_key", `${capitalise(label)} already has a key session, ${otherKey.focus} — two in one day is a lot.`),
-    );
-  }
-
-  const neighbour = neighbourNote(input, date, move);
-  if (neighbour) notes.push(neighbour);
-
-  const dayMinutes = onDay.reduce((sum, session) => sum + session.durationMin, 0) + move.minutes;
-  if (onDay.length > 0 && dayMinutes > LONG_DAY_MIN) {
-    notes.push(warning("long_day", `${capitalise(label)} becomes about ${formatDuration(dayMinutes)} of training.`));
-  }
-
-  if (input.raceDate !== null && isHard(input.missed.priority, move.rpe)) {
-    const daysToRace = dayDiff(date, input.raceDate);
-    if (daysToRace > 0 && daysToRace <= RACE_TAPER_DAYS) {
-      notes.push(
-        warning(
-          "race_close",
-          daysToRace === 1
-            ? "It's the day before race day — keep the legs fresh."
-            : `It's ${daysToRace} days before race day — keep the legs fresh.`,
-        ),
-      );
-    }
-  }
-
-  for (const week of weeks) {
-    if (week.weekStart === missedWeek || week.loadBefore <= 0) continue;
-    const growth = (week.loadAfter - week.loadBefore) / week.loadBefore;
-    if (growth > WEEK_JUMP) {
-      notes.push(
-        warning(
-          "week_jump",
-          `It adds ${Math.round(growth * 100)}% to the load of the week of ${shortDate(week.weekStart)}.`,
-        ),
-      );
-    }
-  }
-
-  const optional = onDay.find((session) => session.priority === "optional" && session.state === "planned");
-  if (optional) {
-    notes.push(
-      info("optional_on_day", `${capitalise(label)}'s ${optional.focus} is optional — drop it if the day feels full.`),
-    );
-  }
-  return notes;
+  return [
+    stackedKeyNote(label, onDay, move),
+    neighbourNote(input, date, move),
+    longDayNote(label, onDay, move),
+    raceCloseNote(input, date, move),
+    ...weekJumpNotes(input, weeks),
+    optionalOnDayNote(label, onDay),
+  ].filter(isNote);
 }
 
 function moveSummary(
@@ -364,10 +379,10 @@ function moveSummary(
   const total = onDay.reduce((sum, session) => sum + session.durationMin, 0) + minutes;
   const what =
     option === "fold"
-      ? `the full ${missed.focus} (${formatDuration(minutes)})`
-      : `a ${formatDuration(minutes)} version of ${missed.focus} (instead of ${formatDuration(missed.durationMin)})`;
+      ? `the full ${missed.focus} (${formatSessionLength(minutes)})`
+      : `a ${formatSessionLength(minutes)} version of ${missed.focus} (instead of ${formatSessionLength(missed.durationMin)})`;
   if (onDay.length === 0) return `${capitalise(label)} gets ${what}.`;
-  return `${capitalise(label)} gets ${what} alongside ${listFocuses(onDay)} — about ${formatDuration(total)} in all.`;
+  return `${capitalise(label)} gets ${what} alongside ${listFocuses(onDay)} — about ${formatSessionLength(total)} in all.`;
 }
 
 function buildTarget(

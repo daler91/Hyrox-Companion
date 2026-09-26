@@ -90,10 +90,11 @@ function storedRecovery(day: PlanDay): PlanDayRecovery | null {
 
 /** The last day a session of `plan` may move to: its final session, or the day before it was retired. */
 function lastMoveDate(plan: TrainingPlan | undefined): string | null {
-  const bounds = [plan?.endDate, plan?.retiredOn ? addDaysToISODate(plan.retiredOn, -1) : null].filter(
-    (date): date is string => Boolean(date),
-  );
-  return bounds.sort()[0] ?? null;
+  const end = plan?.endDate ?? null;
+  const dayBeforeRetirement = plan?.retiredOn ? addDaysToISODate(plan.retiredOn, -1) : null;
+  if (end === null || dayBeforeRetirement === null) return end ?? dayBeforeRetirement;
+  // ISO dates: the lexically smaller one is the earlier.
+  return dayBeforeRetirement < end ? dayBeforeRetirement : end;
 }
 
 interface SessionSize {

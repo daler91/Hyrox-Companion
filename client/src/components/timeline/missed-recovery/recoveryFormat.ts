@@ -1,3 +1,4 @@
+import { formatSessionLength } from "@shared/missedRecovery";
 import type { PlanDayPriority, RecoveryDaySession, RecoveryWeekImpact } from "@shared/schema";
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
 
@@ -6,14 +7,8 @@ import { differenceInCalendarDays, format, parseISO } from "date-fns";
  * athlete reads can be tested without rendering anything.
  */
 
-/** "45 min", "1h 35m", "2h". */
-export function formatMinutes(minutes: number): string {
-  const rounded = Math.round(minutes);
-  if (rounded < 60) return `${rounded} min`;
-  const hours = Math.floor(rounded / 60);
-  const rest = rounded % 60;
-  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
-}
+/** "45 min", "1h 35m", "2h" — the same format the server's summaries use. */
+export const formatMinutes = formatSessionLength;
 
 /** "Today", "Tomorrow", "Thu 25 Sep" — relative to the athlete's own `today`. */
 export function formatDayChip(date: string, today: string): string {
