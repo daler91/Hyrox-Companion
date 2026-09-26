@@ -24,7 +24,10 @@ const MAX_READ_MIN = 300;
 /*
  * Every pattern that starts at a number starts with `(?<![\d.])`: it can only
  * begin where a number does, never part-way through one. Without it, a run of
- * digits that fails to match is retried from each of its digits in turn.
+ * digits that fails to match is retried from each of its digits in turn. A
+ * decimal is `\d[\d.]*` rather than `\d+(?:\.\d+)?`, whose quantifier nested
+ * in a quantified group is the classic shape of catastrophic backtracking;
+ * `Number()` reads the rare "1.2.3" as NaN, which fails the plausibility check.
  */
 
 /** Numbers that are not amounts of work: paces, targets, loads, labels. */
@@ -32,26 +35,27 @@ const NOT_WORK: readonly RegExp[] = [
   // Paces: "5:04/km", "2:05 /500m", "4:30 per km".
   /(?<![\d.:])\d+:\d\d ?(?:\/|per) ?(?:k|km|mi|miles?|\d+ ?m)\b/g,
   // "7 min/mile", "6 min per km".
-  /(?<![\d.])\d+ ?(?:mins?|minutes)? ?(?:\/|per) ?(?:k|km|mi|miles?)\b/g,
+  /(?<![\d.])\d+ ?(?:min|mins|minutes)? ?(?:\/|per) ?(?:k|km|mi|miles?)\b/g,
   // Race-pace references: "5k pace", "10 km race effort".
-  /(?<![\d.])\d+(?:\.\d+)? ?(?:k|km|mi|miles?)[ -]?(?:race )?(?:pace|effort)/g,
+  /(?<![\d.])\d[\d.]* ?(?:k|km|mi|miles?)[ -]?(?:race )?(?:pace|effort)/g,
   /\b(?:z|zone ?)\d\b/g,
-  /\brpe ?\d+(?:\.\d+)?(?: ?- ?\d+(?:\.\d+)?)?/g,
-  /(?<![\d.])\d+(?:\.\d+)? ?\/ ?10\b/g,
-  /(?<![\d.])\d+(?:\.\d+)? ?%/g,
+  /\brpe ?\d[\d.]* ?- ?\d[\d.]*/g,
+  /\brpe ?\d[\d.]*/g,
+  /(?<![\d.])\d[\d.]* ?\/ ?10\b/g,
+  /(?<![\d.])\d[\d.]* ?%/g,
   /(?<![\d.])\d+ ?(?:bpm|spm|w|watts|rpm|kcal|cals?)\b/g,
-  /(?<![\d.])\d+(?:\.\d+)? ?(?:kg|kgs|lbs?)\b/g,
+  /(?<![\d.])\d[\d.]* ?(?:kg|kgs|lbs?)\b/g,
   /\b(?:week|wk|day|phase|block) ?\d+/g,
 ];
 
 /** "45-60", "45 to 60": a range, read as its middle before any unit is. */
-const RANGE = /(?<![\d.])(\d+(?:\.\d+)?) ?(?:-|to) ?(\d+(?:\.\d+)?)(?![\d.])/g;
+const RANGE = /(?<![\d.])(\d[\d.]*) ?(?:-|to) ?(\d[\d.]*)(?![\d.])/g;
 
 /** Timed formats: their clock is the session's length whatever is inside. */
 const TIMED_FORMAT = /\b(?:amrap|emom|e\d+mom|for time|time cap|tabata|every)\b/;
 
 /** "Every 2 min": the interval of an EMOM-style block, not a length on its own. */
-const EVERY_INTERVAL = /\bevery (\d+(?:\.\d+)?) ?(mins?|minutes?|s|secs?|seconds?)\b/;
+const EVERY_INTERVAL = /\bevery (\d[\d.]*) ?(mins?|minutes?|s|secs?|seconds?)\b/;
 
 /** "1:30:00" (h:mm:ss). */
 const CLOCK_HMS = /(?<![\d:])(\d{1,2}):(\d\d):(\d\d)(?![\d:])/g;
@@ -62,11 +66,11 @@ const HOURS_THEN_MINUTES = /(?<![\d.])(\d+) ?(?:h|hrs?|hours?)(\d\d)\b/g;
 /** "1 h 30 min", "1 hour 15 minutes". */
 const HOURS_SPACE_MINUTES = /(?<![\d.])(\d+) ?(?:h|hrs?|hours?) (\d{1,2}) ?(?:m|mins?|minutes?)\b/g;
 /** "1h", "1.5 hours". */
-const HOURS = /(?<![\d.])(\d+(?:\.\d+)?) ?(?:h|hrs?|hours?)\b/g;
+const HOURS = /(?<![\d.])(\d[\d.]*) ?(?:h|hrs?|hours?)\b/g;
 /** "40 min", "40min", "40 minutes", "40'". Never a bare "m": that is metres. */
-const MINUTES = /(?<![\d.])(\d+(?:\.\d+)?) ?(?:(?:mins?|minutes?)\b|')/g;
+const MINUTES = /(?<![\d.])(\d[\d.]*) ?(?:(?:mins?|minutes?)\b|')/g;
 /** "90s", "30 sec", "20 seconds", '30"'. */
-const SECONDS = /(?<![\d.])(\d+(?:\.\d+)?) ?(?:(?:s|secs?|seconds?)\b|")/g;
+const SECONDS = /(?<![\d.])(\d[\d.]*) ?(?:(?:s|secs?|seconds?)\b|")/g;
 
 /** "3 x", "3x", "3 rounds", "4 sets", "6 repeats". */
 const REPEAT = /(?<![\d.])(\d+) ?(?:x|rounds?|sets?|repeats?|times)(?![a-z])/;
