@@ -209,9 +209,16 @@ export function MealSection({
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                           aria-label={`Log ${e.name} again today`}
-                          onClick={() => onLogAgain(e)}
-                          disabled={logAgainPending}
+                          aria-disabled={logAgainPending}
+                          onClick={(evt) => {
+                            if (logAgainPending) {
+                              evt.preventDefault();
+                            } else {
+                              onLogAgain(e);
+                            }
+                          }}
                           data-testid={`button-log-again-${e.id}`}
                         >
                           {logAgainPending ? (
