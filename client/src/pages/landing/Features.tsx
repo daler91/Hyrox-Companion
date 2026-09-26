@@ -181,25 +181,23 @@ function FeatureCard({ feature, wide }: Readonly<{ feature: Feature; wide: boole
         wide && "md:col-span-2",
       )}
     >
-      <CardContent className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-            <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
-          </div>
-          <div>
-            <h3 className="font-heading font-semibold text-lg mb-2 flex flex-wrap items-center gap-2">
-              {feature.title}
-              {feature.isNew ? (
-                <Badge className="text-[10px] px-1.5 py-0 bg-primary/15 text-primary border-0">
-                  New
-                </Badge>
-              ) : null}
-            </h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-            <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-              <HighlightIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              {feature.highlight}
-            </div>
+      <CardContent className="p-6 flex items-start gap-4">
+        <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
+          <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
+        </div>
+        <div>
+          <h3 className="font-heading font-semibold text-lg mb-2 flex flex-wrap items-center gap-2">
+            {feature.title}
+            {feature.isNew ? (
+              <Badge className="text-[10px] px-1.5 py-0 bg-primary/15 text-primary border-0">
+                New
+              </Badge>
+            ) : null}
+          </h3>
+          <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+          <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
+            <HighlightIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            {feature.highlight}
           </div>
         </div>
       </CardContent>

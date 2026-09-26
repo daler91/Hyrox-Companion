@@ -4,21 +4,19 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/react", () => ({
-  SignInButton: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SignInButton: ({ children }: { children: ReactNode }) => children,
 }));
 
 import Landing from "../Landing";
 
 const AXE_TIMEOUT_MS = 10_000;
 
-// jsdom has no IntersectionObserver; the fade-in hook only needs the constructor.
+// jsdom has no IntersectionObserver; the fade-in hook only observes and disconnects.
 vi.stubGlobal(
   "IntersectionObserver",
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
+  vi.fn(function IntersectionObserverStub() {
+    return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+  }),
 );
 
 describe("Landing", () => {
