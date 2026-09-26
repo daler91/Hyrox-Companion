@@ -9,6 +9,7 @@ import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
 } from "./ReadOnlyWorkoutDetailSheet";
+import { SessionPriorityControl } from "./SessionPriorityControl";
 import type { WorkoutCoachChatProps } from "./WorkoutCoachPanel";
 
 interface PreviewSheetProps extends WorkoutCoachChatProps {
@@ -74,8 +75,15 @@ export function PreviewSheet({
         />
       )}
       renderPanels={
-        featureFlags.nutritionEnabled && entry.planDayId
-          ? () => <FuellingPlanPanel entry={entry} />
+        entry.planDayId
+          ? () => (
+              <>
+                {/* Upcoming is when the tier matters: it decides what the
+                    recovery sheet recommends if this session is missed. */}
+                <SessionPriorityControl key={entry.id} entry={entry} />
+                {featureFlags.nutritionEnabled ? <FuellingPlanPanel entry={entry} /> : null}
+              </>
+            )
           : undefined
       }
     />

@@ -1,6 +1,7 @@
 import type {
   BodySystemLoadOverview,
   CoachNoteInputs,
+  PlanDayPriority,
   PlanDaySkipReason,
   RaceReadiness,
   TimelineAnnotationType,
@@ -161,6 +162,8 @@ export interface TrainingContext {
     aiRationale?: string | null;
     aiNoteUpdatedAt?: string | Date | null;
     aiInputsUsed?: CoachNoteInputs | null;
+    /** Key, supporting or optional — how much the session matters to the plan. */
+    priority?: PlanDayPriority | null;
   }>;
   exerciseBreakdown: Record<string, number>;
   structuredExerciseStats?: Record<
@@ -212,6 +215,17 @@ export interface TrainingContext {
       date: string;
       focus: string;
       reason: PlanDaySkipReason;
+    }>;
+    /**
+     * Recent missed sessions that mattered (key or supporting), newest first,
+     * capped, with what the athlete decided about each — let it go, or not
+     * decided yet. Folded and shortened ones have moved and are upcoming.
+     */
+    recentMisses?: Array<{
+      date: string;
+      focus: string;
+      priority: PlanDayPriority;
+      decision: "let_go" | "undecided";
     }>;
     // Canonical training-load summary (shared with the analytics tab). Kept as a
     // direct reference so the coaching prompt context never drifts from the

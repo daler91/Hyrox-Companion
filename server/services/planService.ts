@@ -1,4 +1,4 @@
-import type { InsertPlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
+import type { InsertPlanDay, PlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import type { DistanceUnit } from "@shared/unitConversion";
 import { parse } from "csv-parse/sync";
@@ -9,6 +9,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
 import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
 
@@ -258,6 +259,29 @@ export async function createSamplePlan(
   return addDaysAndReadBack(plan.id, userId, days);
 }
 
+/**
+ * Moving a missed session to today or later is recovering it — a fold —
+ * whichever control did it: the recovery sheet, dragging the card, or "Move
+ * to…". Left alone the day kept reading "Missed" on its new, future date,
+ * because a stored `missed` outranks the date at read time and the nightly
+ * sweep only ever touches planned days. A past day the sweep has not reached
+ * yet reads as missed too, so it counts the same.
+ */
+async function missedSessionMoveFields(
+  existing: PlanDay,
+  nextDate: string | null,
+  userId: string,
+): Promise<Pick<UpdatePlanDay, "status" | "recovery" | "missedOn">> {
+  const from = existing.scheduledDate;
+  if (!nextDate || !from || nextDate === from) return {};
+  if (existing.status !== "missed" && existing.status !== "planned") return {};
+  const user = await storage.users.getUser(userId);
+  const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  const wasMissed = existing.status === "missed" || from < today;
+  if (!wasMissed || nextDate < today) return {};
+  return { status: "planned", recovery: "folded", missedOn: from };
+}
+
 export async function updatePlanDayWithCleanup(
   dayId: string,
   updates: UpdatePlanDay,
@@ -275,7 +299,11 @@ export async function updatePlanDayWithCleanup(
   const reschedulePending =
     updates.scheduledDate === undefined ? null : { nextDate: updates.scheduledDate ?? null };
   const existing = reschedulePending ? await storage.plans.getPlanDay(dayId, userId) : null;
-  const result = await storage.plans.updatePlanDay(dayId, updates, userId);
+  const moveFields =
+    existing && reschedulePending
+      ? await missedSessionMoveFields(existing, reschedulePending.nextDate, userId)
+      : {};
+  const result = await storage.plans.updatePlanDay(dayId, { ...updates, ...moveFields }, userId);
 
   if (result && existing && reschedulePending) {
     const oldDate = existing.scheduledDate ?? null;
@@ -437,7 +465,9 @@ export async function updatePlanDayStatus(
     // actually changes the scheduled date. A no-op patch (same date) leaves
     // the coach alone.
     const existing = reschedule ? await storage.plans.getPlanDay(dayId, userId) : null;
-    const result = await storage.plans.updatePlanDay(dayId, updates, userId);
+    const moveFields =
+      existing && reschedule ? await missedSessionMoveFields(existing, reschedule.nextDate, userId) : {};
+    const result = await storage.plans.updatePlanDay(dayId, { ...updates, ...moveFields }, userId);
     if (
       result &&
       existing &&
@@ -454,7 +484,11 @@ export async function updatePlanDayStatus(
   // mutation can't race the check and sneak through a forbidden from-state.
   const { updatedDay, dateChanged } = await db.transaction(async (tx) => {
     const [current] = await tx
-      .select({ status: planDays.status, scheduledDate: planDays.scheduledDate })
+      .select({
+        status: planDays.status,
+        scheduledDate: planDays.scheduledDate,
+        recovery: planDays.recovery,
+      })
       .from(planDays)
       .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
       .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)))
@@ -483,6 +517,12 @@ export async function updatePlanDayStatus(
       updates.skipReason = null;
     } else if (skipReason !== undefined) {
       updates.skipReason = skipReason ?? null;
+    }
+    // Likewise a let-go belongs to the miss: logged late, the day is no longer
+    // something the athlete let go of. A fold or shorten stays — it is where
+    // the session came from.
+    if (status !== "missed" && current.recovery === "let_go") {
+      updates.recovery = null;
     }
 
     // Only clean up the linked workout log when actually leaving "completed".

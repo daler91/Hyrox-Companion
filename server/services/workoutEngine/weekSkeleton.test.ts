@@ -164,4 +164,27 @@ describe("buildWeekSkeleton", () => {
     );
     expect(exercises).toContain("standing_calf_raise");
   });
+
+  it("marks the goal's first three sessions key, easy work optional, the rest supporting", () => {
+    const tiers = (week: WeekSkeleton) =>
+      Object.fromEntries(week.sessions.map((session) => [session.label, session.priority]));
+
+    // A three-day HYROX week is nothing but what the goal cannot do without.
+    expect(Object.values(tiers(skeleton({ daysPerWeek: 3 })))).toEqual(["key", "key", "key"]);
+
+    // Six days adds the long run, a second strength day and intervals around them.
+    const six = skeleton({ daysPerWeek: 6 });
+    expect(six.sessions.filter((session) => session.priority === "key").map((session) => session.kind).sort()).toEqual(
+      ["stations", "strength", "threshold_run"],
+    );
+    expect(six.sessions.filter((session) => session.priority === "supporting").map((session) => session.kind).sort()).toEqual(
+      ["interval_run", "long_run", "strength"],
+    );
+
+    // A runner's easy runs are the optional part of the week.
+    const runner = skeleton({ lens: "running", daysPerWeek: 5, primaryLifts: STRENGTH_LIFTS });
+    expect(runner.sessions.filter((session) => session.kind === "easy_run").map((session) => session.priority)).toEqual([
+      "optional",
+    ]);
+  });
 });

@@ -24,6 +24,9 @@ import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
 
+/** `recovery` with a let-go dropped and a fold or shorten kept, for the missed-day sweep. */
+const STALE_LET_GO_CLEARED = sql<string | null>`CASE WHEN ${planDays.recovery} = 'let_go' THEN NULL ELSE ${planDays.recovery} END`;
+
 // A day the athlete already acted on (completed, skipped, or with a logged
 // workout) keeps its date wherever it falls, so their history stays visible.
 function isActedOn(day: PlanDay, loggedDayIds: ReadonlySet<string>): boolean {
@@ -41,6 +44,39 @@ function needsStatusReset(day: PlanDay, dateStr: string, today: string): boolean
   const dateChanged = dateStr !== day.scheduledDate;
   return dateChanged && (day.status === "missed" || day.status === "skipped") && dateStr >= today;
 }
+
+/** The state a recovery was planned against, re-checked under the row lock. */
+export interface PlanDayRecoveryGuard {
+  readonly statuses: readonly string[];
+  readonly scheduledDate: string | null;
+  readonly recovery: string | null;
+}
+
+/** A prescribed set made smaller by shortening. Only the changed fields are present. */
+export interface PlanDayRecoverySetUpdate {
+  readonly id: string;
+  readonly reps?: number;
+  readonly plannedReps?: number;
+  readonly distance?: number;
+  readonly plannedDistance?: number;
+  readonly time?: number;
+  readonly plannedTime?: number;
+}
+
+export interface PlanDayRecoveryWrite {
+  readonly guard: PlanDayRecoveryGuard;
+  readonly update: Pick<
+    UpdatePlanDay,
+    "scheduledDate" | "status" | "recovery" | "missedOn" | "skipReason" | "expectedDurationMin" | "notes"
+  >;
+  readonly deleteSetIds?: readonly string[];
+  readonly setUpdates?: readonly PlanDayRecoverySetUpdate[];
+}
+
+export type PlanDayRecoveryOutcome =
+  | { readonly outcome: "applied"; readonly day: PlanDay }
+  | { readonly outcome: "not_found" }
+  | { readonly outcome: "conflict" };
 
 /** The ids among `dayIds` that a workout log is linked to. */
 async function getPlanDayIdsWithWorkouts(dayIds: readonly string[]): Promise<Set<string>> {
@@ -415,6 +451,60 @@ export class PlanStorage {
     }
   }
 
+  /**
+   * Write a missed-session recovery decision (services/missedRecovery): the
+   * day's new date, status and recovery columns, plus — for a shortened
+   * session — the prescribed sets it drops or scales down.
+   *
+   * One transaction, with the plan-day row locked and `guard` re-checked under
+   * the lock: the decision was made against a preview, and a log, a sync or a
+   * second tab landing in between (the day completed, already moved, let go)
+   * must turn into a conflict rather than be overwritten. Set edits are scoped
+   * to this day's own rows, so an id from anywhere else is a no-op.
+   */
+  async applyPlanDayRecovery(
+    dayId: string,
+    userId: string,
+    write: PlanDayRecoveryWrite,
+  ): Promise<PlanDayRecoveryOutcome> {
+    return await db.transaction(async (tx): Promise<PlanDayRecoveryOutcome> => {
+      const [current] = await tx
+        .select({
+          status: planDays.status,
+          scheduledDate: planDays.scheduledDate,
+          recovery: planDays.recovery,
+        })
+        .from(planDays)
+        .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+        .where(and(eq(planDays.id, dayId), eq(trainingPlans.userId, userId)))
+        .for("update", { of: planDays });
+      if (!current) return { outcome: "not_found" };
+
+      const { guard } = write;
+      const unchanged =
+        guard.statuses.includes(current.status ?? "planned") &&
+        (current.scheduledDate ?? null) === guard.scheduledDate &&
+        (current.recovery ?? null) === guard.recovery;
+      if (!unchanged) return { outcome: "conflict" };
+
+      if (write.deleteSetIds && write.deleteSetIds.length > 0) {
+        await tx
+          .delete(exerciseSets)
+          .where(and(eq(exerciseSets.planDayId, dayId), inArray(exerciseSets.id, [...write.deleteSetIds])));
+      }
+      for (const { id, ...fields } of write.setUpdates ?? []) {
+        if (Object.keys(fields).length === 0) continue;
+        await tx
+          .update(exerciseSets)
+          .set({ ...fields, version: sql`${exerciseSets.version} + 1` })
+          .where(and(eq(exerciseSets.id, id), eq(exerciseSets.planDayId, dayId)));
+      }
+
+      const [day] = await tx.update(planDays).set(write.update).where(eq(planDays.id, dayId)).returning();
+      return day ? { outcome: "applied", day } : { outcome: "not_found" };
+    });
+  }
+
   async getPlanDay(
     dayId: string,
     userId: string,
@@ -753,7 +843,12 @@ export class PlanStorage {
 
       const result = await db
         .update(planDays)
-        .set({ status: "missed" })
+        // A let-go left behind on a planned day (logged, then the log deleted)
+        // is not a decision about this miss, so the sweep clears it rather
+        // than let the day arrive already "let go". A fold or shorten stays:
+        // it is where the session came from, and the recovery sheet reads it
+        // to stop chasing a session that has already been moved once.
+        .set({ status: "missed", recovery: STALE_LET_GO_CLEARED })
         .where(
           and(
             eq(planDays.status, "planned"),

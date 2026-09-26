@@ -1,5 +1,5 @@
 ﻿// Analytics — Training Overview types
-import type { PlanDaySkipReason } from "../enums";
+import type { PlanDayPriority, PlanDayRecovery, PlanDaySkipReason } from "../enums";
 import type { HeatMapMuscle, MovementPattern, MuscleHeatMapBodyRegion } from "../exercises";
 import type { RagInfo } from "./ai";
 import type { PersonalRecordMetric } from "./workouts";
@@ -465,6 +465,14 @@ export interface WeeklyReviewPlannedDay {
   status: "planned" | "missed" | "skipped";
   /** Why it was skipped, when the athlete volunteered it. */
   skipReason: PlanDaySkipReason | null;
+  /** Key, supporting or optional; null for a rest day. */
+  priority: PlanDayPriority | null;
+  /**
+   * `let_go` when the athlete decided to let this missed session go — the
+   * row reads "Let go" instead of "Missed". Null otherwise; a session that was
+   * folded or shortened has moved, so it is listed on its new day.
+   */
+  recovery: PlanDayRecovery | null;
   planName: string | null;
   /**
    * The day sits inside a declared absence (injury/illness/travel/rest) that

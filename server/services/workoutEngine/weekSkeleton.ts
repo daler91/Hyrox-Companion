@@ -24,6 +24,7 @@
  */
 import { PLAN_WEEKDAYS } from "@shared/dateUtils";
 import type { TrainingPhase } from "@shared/nutritionTargets";
+import type { PlanDayPriority } from "@shared/schema";
 import type { ExerciseName } from "@shared/schema/exercises";
 
 import type { GoalLens, PrimarySlot } from "../ai/exerciseKnowledge";
@@ -55,6 +56,12 @@ export interface SkeletonSession {
   readonly lifts: readonly SkeletonLift[];
   /** A short easy run to finish a strength session, when the week needs the running. */
   readonly runFinisher: boolean;
+  /**
+   * The session's tier, stamped onto the generated plan day: the first
+   * {@link KEY_SESSION_RANKS} of the goal's priority list are key, easy work is
+   * optional, the rest supporting.
+   */
+  readonly priority: PlanDayPriority;
 }
 
 export interface WeekSkeleton {
@@ -138,6 +145,18 @@ const KEY_KINDS: ReadonlySet<SessionKind> = new Set([
   "simulation",
 ]);
 const EASY_KINDS: ReadonlySet<SessionKind> = new Set(["easy_run", "easy_cardio"]);
+/**
+ * How many of a goal's sessions, in {@link SESSION_PRIORITY} order, are key:
+ * the list opens with what the goal cannot do without (see the note at the top
+ * of this file), so a three-day week is all key and a six-day week adds three
+ * supporting sessions around the same three.
+ */
+const KEY_SESSION_RANKS = 3;
+
+function sessionPriority(kind: SessionKind, rank: number): PlanDayPriority {
+  if (EASY_KINDS.has(kind)) return "optional";
+  return rank < KEY_SESSION_RANKS ? "key" : "supporting";
+}
 /** HYROX asks for three runs a week; a station session is run-heavy by design. */
 const MIN_HYROX_RUNS = 3;
 
@@ -293,6 +312,7 @@ interface PlannedSession {
   readonly label: string;
   readonly lifts: readonly SkeletonLift[];
   readonly runFinisher: boolean;
+  readonly priority: PlanDayPriority;
 }
 
 const KIND_LABELS: ReadonlyMap<SessionKind, string> = new Map([
@@ -325,13 +345,14 @@ function planSessions(input: WeekSkeletonInput, count: number): PlannedSession[]
   const needsRunFinisher = input.lens === "hyrox" && runs < MIN_HYROX_RUNS;
 
   let strengthIndex = 0;
-  return kinds.map((kind): PlannedSession => {
+  return kinds.map((kind, rank): PlannedSession => {
+    const priority = sessionPriority(kind, rank);
     if (kind !== "strength") {
-      return { kind, label: KIND_LABELS.get(kind) ?? kind, lifts: [], runFinisher: false };
+      return { kind, label: KIND_LABELS.get(kind) ?? kind, lifts: [], runFinisher: false, priority };
     }
     const session = strength.at(strengthIndex) ?? { label: "Strength", lifts: [] };
     strengthIndex += 1;
-    return { kind, label: session.label, lifts: session.lifts, runFinisher: needsRunFinisher };
+    return { kind, label: session.label, lifts: session.lifts, runFinisher: needsRunFinisher, priority };
   });
 }
 

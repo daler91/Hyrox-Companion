@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
 import {
   calculateTrainingStats,
+  collectRecentMisses,
   collectRecentSkips,
   collectRecentWorkouts,
   getExerciseBreakdown,
@@ -405,5 +406,24 @@ describe("collectRecentSkips", () => {
   it("is empty when nothing was skipped with a reason", () => {
     expect(collectRecentSkips([makeEntry({ status: COMPLETED, date: "2026-01-10" })])).toEqual([]);
     expect(collectRecentSkips([])).toEqual([]);
+  });
+});
+
+describe("collectRecentMisses", () => {
+  it("collects missed key and supporting sessions with the athlete's decision, newest first", () => {
+    const misses = collectRecentMisses([
+      makeEntry({ status: MISSED, date: "2026-01-10", focus: "Threshold run", priority: "key", recovery: "let_go" }),
+      makeEntry({ status: MISSED, date: "2026-01-12", focus: "Strength B", priority: "supporting" }),
+      // Optional misses and rest days (no tier) are not coaching signal.
+      makeEntry({ status: MISSED, date: "2026-01-13", focus: "Easy run", priority: "optional" }),
+      makeEntry({ status: MISSED, date: "2026-01-14", focus: "Rest" }),
+      // Folded: it moved and is planned again.
+      makeEntry({ status: "planned", date: "2026-01-15", focus: "Long run", priority: "key", recovery: "folded" }),
+    ]);
+
+    expect(misses).toEqual([
+      { date: "2026-01-12", focus: "Strength B", priority: "supporting", decision: "undecided" },
+      { date: "2026-01-10", focus: "Threshold run", priority: "key", decision: "let_go" },
+    ]);
   });
 });

@@ -93,6 +93,7 @@ The home page and primary view. Displays a chronological timeline of training pl
 - **Timeline filtering** -- Filter by plan and by workout status (completed, planned, missed, skipped; deep-linkable as `?status=`). Collapsible past/future groups with "show more" buttons.
 - **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting. Every start-date picker (this dialog, the onboarding `ScheduleStep` and the AI generator) defaults to the next Monday, or today on a Monday, via `defaultPlanStartDate()` in `lib/planStart.ts`, and a midweek pick explains which week-1 sessions it leaves off the calendar.
 - **Workout actions** -- Mark complete, change status, skip with confirmation (`SkipConfirmDialog`), open the sheet-based planned/logged/skipped workout surfaces, edit workout titles inline from sheet headers, delete, and combine workouts (`CombineWorkoutsDialog`).
+- **Priority tiers and missed-session recovery** -- Cards badge key and optional sessions (supporting ones stay unmarked), and the planned-session sheets carry a `SessionPriorityControl` to change the tier. A missed session's card asks what to do with it instead of showing a bare "Missed" badge: fold it into another day, shorten it, or let it go (`missed-recovery/MissedRecoveryPrompt`, ordered by tier). Folding or shortening opens `MissedRecoveryDialog`, which loads the server's preview (`useMissedRecoveryPreview`) and shows, per candidate day, what the choice does to that day and its week, with the server's recommendation marked "Best fit". A let-go card reads quietly with an undo; a recovered session carries a "Moved from …" / "Shortened · missed …" badge. `useMissedRecoveryFlow` (`pages/timeline/`) owns the sheet's state. Dragging a missed card to today or later folds it too (`useMoveTimelineEntry`).
 - **Floating action button** -- Toggles the coach panel.
 
 State management is centralized in the `useTimelineState` custom hook, with `TimelineWorkoutSurfaces` wiring the log/review/preview/skipped workout sheets.
@@ -251,7 +252,8 @@ The largest component group, further subdivided:
 - **Annotations**: `AnnotationsDialog`, `TimelineAnnotationCard`, `AnnotationTypeIcon` — inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
 - **Dialogs and surfaces**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, and `ConfirmDialog`. `TimelineWorkoutSurfaces`, which wires the workout-detail sheet surfaces from `workout-detail/`, lives beside the page in `client/src/pages/timeline/` rather than in this directory.
 - **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `GoalDialog`, `csv-utils.ts`.
-- **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, utility and type files.
+- **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, `SessionTierBadges` (priority and recovered-from badges), utility and type files.
+- **`missed-recovery/`**: `MissedRecoveryPrompt` (the card's fold / shorten / let-go row, or the let-go undo), `MissedRecoveryDialog` (the option sheet with each day's impact) and `recoveryFormat.ts` (minutes, day, week and load-change copy).
 - **`combine-workouts-dialog/`**: `CombineWorkoutsDialog`, `FieldSelector`, `WorkoutCard`, `CombinedResultSummary`.
 
 Barrel exports via `index.ts` files in each subdirectory.
@@ -263,6 +265,7 @@ Workout detail surfaces live in their own top-level directory so Timeline, Log W
 - `ReviewSurface` -- Completed/logged workout review surface, including inline title editing and embedded coach access.
 - `LogSheet` -- Planned or missed workout logging surface, plus future planned edit mode.
 - `PreviewSheet` -- Future planned workout preview surface.
+- `SessionPriorityControl` -- Key / supporting / optional chips for a planned or missed session, rendered by `LogSheet` and `PreviewSheet`; hidden for rest days and finished sessions.
 - `SkippedSheet` -- Skipped workout review, undo, and delete surface.
 - `AdhocLogSheet` -- Quick timeline entry surface for logging a new workout.
 - `ReadOnlyWorkoutDetailSheet` -- Shared responsive sheet shell for read-only workout detail surfaces.

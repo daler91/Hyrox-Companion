@@ -7,6 +7,7 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 import { and, asc, desc, eq, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
@@ -148,14 +149,17 @@ export class AnalyticsStorage {
     userId: string,
     from: string,
     to: string,
-  ): Promise<{ id: string; date: string; focus: string; status: string; skipReason: string | null; planName: string | null }[]> {
+  ): Promise<{ id: string; date: string; focus: string; mainWorkout: string; status: string; skipReason: string | null; priority: string | null; recovery: string | null; planName: string | null }[]> {
     const days = await db
       .select({
         id: planDays.id,
         scheduledDate: planDays.scheduledDate,
         focus: planDays.focus,
+        mainWorkout: planDays.mainWorkout,
         status: planDays.status,
         skipReason: planDays.skipReason,
+        priority: planDays.priority,
+        recovery: planDays.recovery,
         planName: trainingPlans.name,
       })
       .from(planDays)
@@ -177,8 +181,11 @@ export class AnalyticsStorage {
         id: d.id,
         date: d.scheduledDate,
         focus: d.focus,
+        mainWorkout: d.mainWorkout,
         status: d.status ?? "planned",
         skipReason: d.skipReason,
+        priority: d.priority,
+        recovery: d.recovery,
         planName: d.planName,
       }));
   }
@@ -200,12 +207,21 @@ export class AnalyticsStorage {
     // ran finds the day already stored as `missed`, and "you missed yesterday's
     // session" is the worst possible thing to email someone on day two of an
     // injury they have already logged.
+    //
+    // Nor for a session nobody should be chased about: one the athlete already
+    // let go (they can open the app before the reminder goes out), an optional
+    // one (the plan does not need it back), or a rest day — "You missed: Rest"
+    // was never a sentence worth sending. The tier is inferred from the title
+    // for days the athlete never marked, which SQL cannot do, so that part of
+    // the filter runs on the (at most a handful of) rows below.
     const days = await db
       .select({
         id: planDays.id,
         scheduledDate: planDays.scheduledDate,
         focus: planDays.focus,
         mainWorkout: planDays.mainWorkout,
+        priority: planDays.priority,
+        recovery: planDays.recovery,
         planName: trainingPlans.name,
       })
       .from(planDays)
@@ -218,13 +234,19 @@ export class AnalyticsStorage {
           noAbsenceDeclaredForUserDate(db, userId, date),
         ),
       );
-    return days.map((d) => ({
-      planDayId: d.id,
-      date: d.scheduledDate || date,
-      focus: d.focus,
-      mainWorkout: d.mainWorkout,
-      planName: d.planName || undefined,
-    }));
+    return days
+      .filter((d) => {
+        if (d.recovery === "let_go") return false;
+        const priority = resolveSessionPriority(d);
+        return priority !== null && priority !== "optional";
+      })
+      .map((d) => ({
+        planDayId: d.id,
+        date: d.scheduledDate || date,
+        focus: d.focus,
+        mainWorkout: d.mainWorkout,
+        planName: d.planName || undefined,
+      }));
   }
 
   /**

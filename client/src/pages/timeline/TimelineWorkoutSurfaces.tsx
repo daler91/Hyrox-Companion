@@ -8,6 +8,7 @@ import {
   SchedulePlanDialog,
   SkipConfirmDialog,
 } from "@/components/timeline";
+import { MissedRecoveryDialog } from "@/components/timeline/missed-recovery";
 import { AdhocLogSheet } from "@/components/workout-detail/AdhocLogSheet";
 import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
@@ -17,6 +18,7 @@ import type { useToast } from "@/hooks/use-toast";
 import { useTimelineState } from "@/hooks/useTimelineState";
 
 import type { useEmbeddedCoachRouting } from "./useEmbeddedCoachRouting";
+import type { useMissedRecoveryFlow } from "./useMissedRecoveryFlow";
 import type { useTimelineDialogState } from "./useTimelineDialogState";
 import type { useTimelineSurfaceSelection } from "./useTimelineSurfaceSelection";
 import { useTimelineTitleMutation } from "./useTimelineTitleMutation";
@@ -109,6 +111,8 @@ interface TimelineWorkoutSurfacesProps {
   /** Reschedule, so the skip dialog can offer moving a session instead of skipping it. */
   readonly onMoveEntry?: (entry: TimelineEntry, newDate: string) => void;
   readonly isMovingEntry?: boolean;
+  /** Missed-session recovery: the open sheet, and the way into it from the log sheet. */
+  readonly missedRecovery?: ReturnType<typeof useMissedRecoveryFlow>;
 }
 
 function isMobileCoachPanelActive(
@@ -133,6 +137,7 @@ export function TimelineWorkoutSurfaces({
   annotations,
   onMoveEntry,
   isMovingEntry,
+  missedRecovery,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
   const {
     previewEntry,
@@ -267,6 +272,15 @@ export function TimelineWorkoutSurfaces({
           setLogEntry(null);
           setSkipConfirmEntry(entry);
         }}
+        onRecover={
+          missedRecovery
+            ? (entry, action) => {
+                closeEmbeddedCoach();
+                setLogEntry(null);
+                missedRecovery.recover(entry, action);
+              }
+            : undefined
+        }
         onAskCoach={openEmbeddedCoach}
         coachChatOpen={embeddedCoachEntryId === logEntry?.id}
         coachChatNonce={embeddedCoachSeedNonce}
@@ -390,6 +404,10 @@ export function TimelineWorkoutSurfaces({
           setFutureEditEntry(entry);
         }}
       />
+
+      {missedRecovery ? (
+        <MissedRecoveryDialog request={missedRecovery.request} onClose={missedRecovery.close} />
+      ) : null}
 
       <SkipConfirmDialog
         entry={skipConfirmEntry}

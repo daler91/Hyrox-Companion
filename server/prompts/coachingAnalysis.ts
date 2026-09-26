@@ -375,6 +375,22 @@ function formatRecentSkips(recentSkips: CoachingInsights["recentSkips"]): string
   return `RECENT SKIPS (athlete-stated reasons): ${items}. Treat ill/injured skips as recovery signals to program around — not as compliance failures to nudge about.`;
 }
 
+/**
+ * Missed key and supporting sessions, and what the athlete decided about each.
+ * A let-go is a settled decision; the coach should build on it rather than
+ * quietly putting the session back.
+ */
+function formatRecentMisses(recentMisses: CoachingInsights["recentMisses"]): string {
+  if (!recentMisses || recentMisses.length === 0) return "";
+  const items = recentMisses
+    .map(
+      (miss) =>
+        `${miss.date} ${sanitizeUserInput(miss.focus)} (${miss.priority}, ${miss.decision === "let_go" ? "let go" : "no decision yet"})`,
+    )
+    .join("; ");
+  return `RECENT MISSED SESSIONS: ${items}. A session the athlete let go is their decision — don't add it back. Protect the key sessions still ahead rather than making up the missed volume.`;
+}
+
 export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: string): string {
   const lines: string[] = [
     `--- COACHING ANALYSIS ---`,
@@ -383,6 +399,7 @@ export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: st
   ];
 
   pushBlock(lines, formatRecentSkips(insights.recentSkips));
+  pushBlock(lines, formatRecentMisses(insights.recentMisses));
 
   pushBlock(lines, formatLoadGovernor(insights.loadGovernor));
   pushBlock(lines, formatBodySystemLoad(insights.bodySystemLoad));

@@ -12,6 +12,7 @@ import {
   type GeneratePlanInput,
   type InsertExerciseSet,
   type ParsedExercise,
+  type PlanDayPriority,
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { convertWeight, getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences, type WeightUnit } from "@shared/unitConversion";
@@ -911,6 +912,21 @@ export async function createPendingPlan(
 }
 
 /**
+ * The tier the workout engine gave the session on this day, or null when no
+ * engine shaped the plan or the engine has the day as rest. The model is told
+ * which session goes on which day, so the engine's rhythm is the authority on
+ * what each day is for; a day the model filled differently still reads
+ * sensibly, because a rest-like day never resolves to a tier.
+ */
+function engineSessionPriority(
+  calibration: GenerationCalibration,
+  day: Pick<GeneratedDay, "weekNumber" | "dayName">,
+): PlanDayPriority | null {
+  const week = calibration.engine?.weeks.at(day.weekNumber - 1);
+  return week?.sessions.find((session) => session.day === day.dayName)?.priority ?? null;
+}
+
+/**
  * The athlete's own calendar date. A UTC "today" would retire a plan a day early
  * for anyone west of Greenwich — the same reasoning as PlanStorage.resolveUserToday.
  */
@@ -966,6 +982,7 @@ export async function executePlanGeneration(
         notes: day.notes || null,
         status: "planned" as const,
         aiSource: "generated" as const,
+        priority: engineSessionPriority(calibration, day),
       }));
 
       const createdPlanDays = await storage.plans.createPlanDays(planDaysPayload, tx);

@@ -15,6 +15,7 @@ import emailRoutes from "./routes/email";
 import { registerEmailUnsubscribeRoutes } from "./routes/emailUnsubscribe";
 import nutritionRoutes from "./routes/nutrition/index";
 import planProposalRoutes from "./routes/planProposals";
+import planRecoveryRoutes from "./routes/planRecovery";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
 import pushRoutes from "./routes/push";
@@ -63,6 +64,7 @@ export async function registerRoutes(
   app.use(analyticsRoutes);
   app.use(workoutRoutes);
   app.use(planRoutes);
+  app.use(planRecoveryRoutes);
   app.use(planProposalRoutes);
   app.use(coachingRoutes);
   app.use(consentRoutes);

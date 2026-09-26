@@ -100,6 +100,7 @@ function makeDay(overrides: Partial<UpcomingPlannedDay> = {}): UpcomingPlannedDa
     aiInputsUsed: null,
     expectedDurationMin: null,
     expectedRpe: null,
+    priority: "supporting",
     exerciseSets: [],
     structureBlocks: [],
     ...overrides,

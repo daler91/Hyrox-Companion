@@ -7,6 +7,9 @@ import {
   type ExerciseSet,
   exerciseSets,
   type PlanDay,
+  type PlanDayPriority,
+  type PlanDayRecovery,
+  planDayRecoveryEnum,
   planDays,
   stoppedSecondsFor,
   timelineAnnotations,
@@ -17,6 +20,7 @@ import {
   workoutLogs,
   type WorkoutStatus,
 } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or } from "drizzle-orm";
 
 import { db } from "../db";
@@ -92,6 +96,47 @@ function calculatePlanDayStatus(
   return "planned";
 }
 
+/**
+ * The recovery decision worth showing for a day shown as `status`. A let-go
+ * only means something while the day still reads `missed`, both as stored and
+ * as shown: logged late, or held out of missed by a declared absence, there is
+ * nothing left to have let go. A let-go left on a day stored as planned (logged,
+ * then the log deleted) is not a decision about this miss either — the nightly
+ * sweep clears it, and the timeline must not show it as let go until then.
+ * A fold or shorten is where the session came from, so it rides along
+ * whatever happens next — including being missed again on its new day.
+ */
+function visibleRecovery(
+  day: Pick<PlanDay, "recovery" | "status">,
+  status: WorkoutStatus,
+): PlanDayRecovery | undefined {
+  if (!(planDayRecoveryEnum as readonly (string | null)[]).includes(day.recovery)) return undefined;
+  const recovery = day.recovery as PlanDayRecovery;
+  if (recovery === "let_go" && (status !== "missed" || day.status !== "missed")) return undefined;
+  return recovery;
+}
+
+/** Priority, recovery and where a moved session came from, for a plan day's entry. */
+function planDayTierFields(
+  day: PlanDay,
+  status: WorkoutStatus,
+  shown: { focus: string; mainWorkout: string; overridden: boolean },
+): Pick<TimelineEntry, "priority" | "recovery" | "missedOn"> {
+  // A race-day override replaces the session on screen, so the tier comes from
+  // what is shown (the race is key, a shakeout optional, post-race recovery a
+  // rest day) rather than from the day underneath it.
+  const priority = resolveSessionPriority({
+    priority: shown.overridden ? null : day.priority,
+    focus: shown.focus,
+    mainWorkout: shown.mainWorkout,
+  });
+  return {
+    priority: priority ?? undefined,
+    recovery: visibleRecovery(day, status),
+    missedOn: day.missedOn ?? undefined,
+  };
+}
+
 function createLinkedWorkoutEntry(
   day: PlanDay,
   linkedLog: WorkoutLog,
@@ -110,6 +155,11 @@ function createLinkedWorkoutEntry(
     rpe: linkedLog.rpe,
     planDayId: day.id,
     workoutLogId: linkedLog.id,
+    ...planDayTierFields(day, "completed", {
+      focus: day.focus,
+      mainWorkout: day.mainWorkout,
+      overridden: false,
+    }),
     weekNumber: day.weekNumber,
     dayName: day.dayName,
     planName: row.planName,
@@ -144,6 +194,11 @@ function createPlannedDayEntry(
     // Only meaningful on skipped days; carried so the coach can distinguish an
     // ill/injured skip from a schedule one. Omitted when never set.
     skipReason: (day.skipReason as TimelineEntry["skipReason"]) ?? undefined,
+    ...planDayTierFields(day, status, {
+      focus: override ? override.focus : day.focus,
+      mainWorkout: override ? override.mainWorkout : day.mainWorkout,
+      overridden: override !== null,
+    }),
     focus: override ? override.focus : day.focus,
     mainWorkout: override ? override.mainWorkout : day.mainWorkout,
     accessory: override ? override.accessory : day.accessory,
@@ -178,6 +233,8 @@ export interface UpcomingPlannedDay {
   /** Athlete-set expected duration/intensity for the session, when saved. */
   expectedDurationMin: number | null;
   expectedRpe: number | null;
+  /** Key, supporting or optional; null for a rest day. */
+  priority: PlanDayPriority | null;
   exerciseSets: ExerciseSet[];
   structureBlocks: TimelineEntry["structureBlocks"];
 }
@@ -197,6 +254,7 @@ function toUpcomingPlannedDay(
     aiInputsUsed: PlanDay["aiInputsUsed"];
     expectedDurationMin: number | null;
     expectedRpe: number | null;
+    priority: string | null;
   },
   scheduledDate: string,
   override: RaceDayOverride | null,
@@ -218,6 +276,11 @@ function toUpcomingPlannedDay(
     // shakeout day replaces it, so drop them alongside the exercises.
     expectedDurationMin: override ? null : row.expectedDurationMin,
     expectedRpe: override ? null : row.expectedRpe,
+    priority: resolveSessionPriority({
+      priority: override ? null : row.priority,
+      focus: override?.focus ?? row.focus,
+      mainWorkout: override?.mainWorkout ?? row.mainWorkout,
+    }),
     exerciseSets: override ? [] : (setsByPlanDayId.get(row.id) ?? []),
     structureBlocks: override ? [] : (blocksByPlanDayId.get(row.id) ?? []),
   };
@@ -755,6 +818,7 @@ export class TimelineStorage {
         aiInputsUsed: true,
         expectedDurationMin: true,
         expectedRpe: true,
+        priority: true,
         status: true,
       },
       orderBy: asc(planDays.scheduledDate),

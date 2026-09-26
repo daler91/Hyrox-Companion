@@ -104,6 +104,7 @@ export const QUERY_KEYS = {
   exerciseHistory: (exerciseName: string, sessions: number) =>
     ["/api/v1/exercises", exerciseName, "history", sessions] as const,
   planDayExercises: (dayId: string) => ["/api/v1/plans/days", dayId, "sets"] as const,
+  missedRecovery: (dayId: string) => ["/api/v1/plans/days", dayId, "recovery"] as const,
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
   trainingOverview: ["/api/v1/training-overview"] as const,

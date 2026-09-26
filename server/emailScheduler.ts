@@ -227,21 +227,22 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
  *
  * Copy is deliberately an invitation rather than a reprimand: the athlete who
  * gets this has already missed the session, and the useful thing to offer is the
- * next action, not the verdict.
+ * next action, not the verdict. The deep link lands on the session, which leads
+ * with the three ways forward — fold it in, shorten it, or let it go.
  */
 export function buildMissedWorkoutPush(missed: MissedWorkoutData[]): PushPayload {
   const [first] = missed;
   if (missed.length === 1 && first) {
     return {
       title: `Missed: ${first.focus}`,
-      body: "Still worth doing — log it, or move it to a day that works.",
+      body: "Fold it into another day, shorten it, or let it go — see what each does to your plan.",
       url: `/?workout=${encodeURIComponent(first.planDayId)}`,
     };
   }
 
   return {
     title: `${missed.length} missed sessions`,
-    body: `${missed.map(m => m.focus).join(", ")} — log them or move them to a day that works.`,
+    body: `${missed.map(m => m.focus).join(", ")} — fold them into other days, shorten them, or let them go.`,
     url: "/",
   };
 }

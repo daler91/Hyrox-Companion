@@ -760,26 +760,35 @@ Update a plan day. Despite the path, `:planId` is not checked: the day is looked
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
-- **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin)
+- **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin, priority)
 - **Validation:** `updatePlanDayRouteSchema`
 - **Response:** Updated `PlanDay`
+
+`priority` is the session's tier — `"key" | "supporting" | "optional"`, or
+`null` to go back to the tier inferred from the day's title.
 
 `status` and `skipReason` are **not** accepted here — use
 [`PATCH /api/v1/plans/days/:dayId/status`](#patch-apiv1plansdaysdayidstatus),
 which enforces the legal status transitions. The AI-provenance columns
-(`aiSource`, `aiRationale`, `aiInputsUsed`, `aiNoteUpdatedAt`) are server-managed
-and are likewise rejected; writing `aiNoteUpdatedAt` directly would have let a
-client bypass the coach-note regeneration cooldown. `updatePlanDaySchema`
+(`aiSource`, `aiRationale`, `aiInputsUsed`, `aiNoteUpdatedAt`) and the recovery
+record (`recovery`, `missedOn`) are server-managed and are likewise stripped
+from the body;
+writing `aiNoteUpdatedAt` directly would have let a client bypass the
+coach-note regeneration cooldown. `updatePlanDaySchema`
 remains the internal write surface used by the coach and suggestion services.
 
 ### PATCH /api/v1/plans/days/:dayId
 
-Update a plan day (`updatePlanDayWithCleanup` in `server/services/planService.ts`). It cannot change `status` and does not touch linked workout logs; the only difference from the scoped route above is that an actual `scheduledDate` change also queues a debounced `auto-coach` run.
+Update a plan day (`updatePlanDayWithCleanup` in `server/services/planService.ts`). It cannot change `status` directly and does not touch linked workout logs; it differs from the scoped route above only in what an actual `scheduledDate` change does: it queues a debounced `auto-coach` run, and it folds a missed session moved forward.
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
 - **Body:** Same client-writable fields as the scoped route above (`updatePlanDayRouteSchema`)
 - **Response:** Updated `PlanDay`
+
+Moving a missed session to today or later makes it planned again and records
+it as folded (`recovery: "folded"`, `missedOn` = the date it was missed), the
+same as folding it through [missed-session recovery](#get-apiv1plansdaysdayidrecovery).
 
 ### PATCH /api/v1/plans/days/:dayId/status
 
@@ -793,6 +802,78 @@ Update only the status, scheduled date and/or skip reason of a plan day.
   other status clears it. Omitting the key leaves an existing reason untouched;
   sending `null` clears it explicitly. Sending only `scheduledDate` (no `status`)
   takes the reschedule path and skips the status-transition check.
+  A status change away from `missed` clears a let-go (`recovery: "let_go"`), and
+  moving a missed day to today or later folds it, as on
+  `PATCH /api/v1/plans/days/:dayId`.
+
+### GET /api/v1/plans/days/:dayId/recovery
+
+What each way forward for a missed session would do to the plan
+(`getMissedSessionRecoveryPreview` in `server/services/missedRecovery`). The
+preview is computed from the athlete's own timeline, in their timezone.
+
+- **Auth:** Required
+- **Rate limit:** `planDayRecoveryRead` category, 60/min
+- **Response:** `MissedSessionRecoveryPreview` (`shared/schema/types/recovery.ts`):
+  - `priority` — the session's tier; `session` — its estimated length and RPE
+  - `fold` / `shorten` — `{ available, unavailableReason, suggestedDate, targets }`,
+    one target per day it could move to (today and the next six days, inside the
+    plan, before race day, outside absences). Each target lists the sessions
+    already on that day and the option's `impact`: the day's minutes after the
+    move, each changed week's minutes, load (UTSS) and key sessions before and
+    after, and `notes` (`stacked_key`, `back_to_back_key`, `hard_neighbor`,
+    `long_day`, `week_jump`, `race_close` cautions; `optional_on_day`,
+    `blocks_not_trimmed`, `not_trimmable` tips). `shorten` also carries the
+    shortened `durationMin`, `keptFraction` and the per-exercise `changes`.
+  - `letGo.impact` — the same impact for leaving the session where it is
+  - `recommendation` — `{ action, targetDate, reason }`, chosen by tier: an
+    optional session is let go; a key one is folded into a day with no
+    cautions, else shortened onto a day without a severe one (`race_close`,
+    `stacked_key`, `back_to_back_key`), else let go; a supporting one is folded
+    only into a caution-free day in its own week, else shortened onto a
+    caution-free day, else let go. A session missed again after a move is let
+    go unless it is key and a shorter version still fits
+- **`404`:** Plan day not found, unscheduled, or not the caller's
+- **`409 CONFLICT`:** The day isn't missed (including a past day an absence
+  excuses), is a rest day, or falls on or after its plan's retirement date
+
+Folding and shortening are unavailable (`available: false`, only letting go is
+offered) for a session missed more than seven days ago, a race-week day, or
+when no day in the window qualifies.
+
+### POST /api/v1/plans/days/:dayId/recovery
+
+Carry out the athlete's choice for a missed session
+(`applyMissedSessionRecovery`).
+
+- **Auth:** Required
+- **Rate limit:** `planDayRecovery` category, 20/min
+- **Body:** one of `{ action: "fold", targetDate }`, `{ action: "shorten", targetDate }`,
+  `{ action: "let_go" }`, `{ action: "reopen" }`
+- **Validation:** `applyMissedRecoverySchema`
+- **Response:** `{ day: PlanDay }`
+- **`400`:** `targetDate` is not one of the preview's targets
+- **`404`:** Plan day not found
+- **`409 CONFLICT`:** Same as the preview; also when the chosen option is
+  unavailable, when `reopen` targets a day that was not let go, or when the day
+  changed (status, date or recovery) between reading and writing
+
+- `fold` moves the session to `targetDate` as planned, with `recovery: "folded"`
+  and `missedOn` set to the date it was missed.
+- `shorten` does the same with `recovery: "shortened"` and cuts the prescription
+  to about 60%: the last sets of each exercise are dropped, a single continuous
+  effort is scaled down, and timed structure blocks are left alone. When the
+  table can't show the cut, `expectedDurationMin` is pinned to the shorter
+  length and the notes gain a line saying how much of the session to do.
+- `let_go` leaves the session on its day as `missed` with `recovery: "let_go"`;
+  it drops out of the missed-workout reminder, the weekly review lists it as
+  let go rather than missed, and the coach is told not to add it back. It still
+  counts as missed for adherence.
+- `reopen` undoes a let-go.
+
+The move and the prescription change are written in one transaction, guarded on
+the day's status, date and recovery. `fold` and `shorten` queue a debounced
+`auto-coach` run.
 
 ### DELETE /api/v1/plans/:id
 

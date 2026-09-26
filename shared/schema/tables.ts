@@ -21,6 +21,8 @@ import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
   deviceLinkSourceEnum,
   MEAL_TYPES,
+  planDayPriorityEnum,
+  planDayRecoveryEnum,
   planDaySkipReasonEnum,
   recycleBinEntityTypeEnum,
   workoutStatusEnum,
@@ -438,12 +440,30 @@ export const planDays = pgTable(
     // overwritten from the workout log on a completed→planned transition.
     // Cleared whenever the day transitions away from `skipped`.
     skipReason: text("skip_reason"),
+    // key / supporting / optional (planDayPriorityEnum). NULL = never set by
+    // the athlete; reads infer a tier from the session (sessionPriority.ts).
+    priority: text("priority"),
+    // What the athlete decided about this session after missing it
+    // (planDayRecoveryEnum): folded or shortened onto another day, or let go.
+    // NULL = no decision, which is the missed state the timeline asks about.
+    recovery: text("recovery"),
+    // The date the session was on when it was missed, kept when recovery moves
+    // it, so the card can say where it came from. NULL unless it was moved.
+    missedOn: date("missed_on"),
   },
   (table) => [
     check("status_check", sql`status IN (${inValues(workoutStatusEnum)})`),
     check(
       "plan_days_skip_reason_check",
       sql`skip_reason IS NULL OR skip_reason IN (${inValues(planDaySkipReasonEnum)})`,
+    ),
+    check(
+      "plan_days_priority_check",
+      sql`priority IS NULL OR priority IN (${inValues(planDayPriorityEnum)})`,
+    ),
+    check(
+      "plan_days_recovery_check",
+      sql`recovery IS NULL OR recovery IN (${inValues(planDayRecoveryEnum)})`,
     ),
     check(
       "plan_days_expected_duration_check",

@@ -599,7 +599,7 @@ export function buildMissedWorkoutEmail(
   <div class="content">
     <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
 ${workoutItems}
-    <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
+    <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. Open it in the app to fold it into another day, shorten it, or let it go — each option shows what it does to the rest of your plan.</p>
 
     <div style="margin-top: 24px; text-align: center;">
       <a href="${getAppUrl()}/" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>

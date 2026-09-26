@@ -153,7 +153,7 @@ describe("Review page", () => {
           { id: "a1", type: "injury", startDate: "2026-05-25", endDate: "2026-06-20", note: "Achilles" },
         ],
         plannedDays: [
-          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan", excused: false },
+          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, priority: "key", recovery: null, planName: "Plan", excused: false },
         ],
       }),
     );
@@ -174,7 +174,7 @@ describe("Review page", () => {
           missed: 0, skipped: 0, outstanding: 0, excused: 2, totalDurationMin: 60, avgRpe: 6,
         },
         plannedDays: [
-          { planDayId: "pd-e", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan", excused: true },
+          { planDayId: "pd-e", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, priority: "key", recovery: null, planName: "Plan", excused: true },
         ],
       }),
     );
@@ -191,7 +191,7 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         plannedDays: [
-          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "Plan", excused: false },
+          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", priority: "supporting", recovery: null, planName: "Plan", excused: false },
         ],
       }),
     );
@@ -199,6 +199,24 @@ describe("Review page", () => {
 
     await waitFor(() => expect(screen.getByTestId("weekly-review-planned-pd-2")).toBeInTheDocument());
     expect(screen.getByTestId("weekly-review-skip-reason-pd-2")).toHaveTextContent("Injured");
+  });
+
+  it("reads a missed session the athlete let go as the decision it was, and marks key sessions", async () => {
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({
+        plannedDays: [
+          { planDayId: "pd-lg", date: "2026-06-09", focus: "Threshold run", status: "missed", skipReason: null, priority: "key", recovery: "let_go", planName: "Plan", excused: false },
+          { planDayId: "pd-m", date: "2026-06-10", focus: "Strength", status: "missed", skipReason: null, priority: "supporting", recovery: null, planName: "Plan", excused: false },
+        ],
+      }),
+    );
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review-planned-pd-lg")).toBeInTheDocument());
+    expect(screen.getByTestId("weekly-review-status-pd-lg")).toHaveTextContent("Let go");
+    expect(screen.getByTestId("weekly-review-key-pd-lg")).toHaveTextContent("Key");
+    expect(screen.getByTestId("weekly-review-status-pd-m")).toHaveTextContent("Missed");
+    expect(screen.queryByTestId("weekly-review-key-pd-m")).toBeNull();
   });
 
   it("shows what the athlete added and dropped, not just the compliance number", async () => {

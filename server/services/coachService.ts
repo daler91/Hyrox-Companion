@@ -398,6 +398,7 @@ function buildUpcomingWorkoutInputs(trainingContext: TrainingContext): UpcomingW
       aiRationale: w.aiRationale,
       aiNoteUpdatedAt: w.aiNoteUpdatedAt,
       aiInputsUsed: w.aiInputsUsed,
+      priority: w.priority,
       ...(w.exerciseDetails && w.exerciseDetails.length > 0
         ? { exerciseDetails: w.exerciseDetails }
         : {}),

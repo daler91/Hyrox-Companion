@@ -87,6 +87,34 @@ export function collectRecentSkips(
     }));
 }
 
+const MAX_RECENT_MISSES = 5;
+
+/**
+ * The missed sessions worth a coach's attention, newest first, capped: key
+ * and supporting ones, with whether the athlete let each go. Optional misses
+ * and rest days stay out — the plan never needed them — and a folded or
+ * shortened session has moved to a later day, so it is not a miss any more.
+ */
+export function collectRecentMisses(
+  timeline: TimelineEntry[],
+): NonNullable<TrainingContext["coachingInsights"]>["recentMisses"] {
+  return timeline
+    .filter(
+      (entry): entry is TimelineEntry & { date: string; priority: "key" | "supporting" } =>
+        entry.status === "missed" &&
+        Boolean(entry.date) &&
+        (entry.priority === "key" || entry.priority === "supporting"),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, MAX_RECENT_MISSES)
+    .map((entry) => ({
+      date: entry.date,
+      focus: entry.focus || "",
+      priority: entry.priority,
+      decision: entry.recovery === "let_go" ? "let_go" : "undecided",
+    }));
+}
+
 export function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["recentWorkouts"] {
   const recent: TrainingContext["recentWorkouts"] = [];
   for (const entry of timeline) {

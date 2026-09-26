@@ -265,6 +265,7 @@ describe("PlanStorage.markMissedPlanDays", () => {
   let storage: PlanStorage;
   let whereClauses: unknown[];
   let whereMock: ReturnType<typeof vi.fn>;
+  let setMock: ReturnType<typeof vi.fn>;
 
   // Mock the three chains the sweep drives: the distinct-zone read, the
   // per-zone plan-id subquery (never executed — it is passed to inArray), and
@@ -286,7 +287,8 @@ describe("PlanStorage.markMissedPlanDays", () => {
       whereClauses.push(clause);
       return { returning: returningMock };
     });
-    vi.mocked(db.update).mockReturnValue({ set: () => ({ where: whereMock }) } as never);
+    setMock = vi.fn(() => ({ where: whereMock }));
+    vi.mocked(db.update).mockReturnValue({ set: setMock } as never);
   }
 
   function comparedDates(): string[] {
@@ -322,6 +324,19 @@ describe("PlanStorage.markMissedPlanDays", () => {
     // The whole point: the LA cohort is judged against 07-20, so a day
     // scheduled 07-20 is NOT swept while that athlete's day is still running.
     expect(comparedDates()).toEqual(["2026-07-21", "2026-07-20"]);
+  });
+
+  it("drops a stale let-go but keeps a fold's provenance", async () => {
+    primeSweep([{ tz: "UTC" }]);
+
+    await storage.markMissedPlanDays();
+
+    const [payload] = setMock.mock.calls[0] as [{ status: string; recovery: unknown }];
+    expect(payload.status).toBe("missed");
+    const rendered = new PgDialect().sqlToQuery(payload.recovery as never).sql;
+    expect(rendered).toBe(
+      'CASE WHEN "plan_days"."recovery" = \'let_go\' THEN NULL ELSE "plan_days"."recovery" END',
+    );
   });
 
   it("keeps sweeping other cohorts when one stored timezone is unusable", async () => {

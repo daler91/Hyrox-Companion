@@ -743,6 +743,13 @@
       "when": 1790345191036,
       "tag": "0105_drop_redundant_timeline_annotations_user_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790379645172,
+      "tag": "0106_plan_days_priority_and_recovery",
+      "breakpoints": true
     }
   ]
 }

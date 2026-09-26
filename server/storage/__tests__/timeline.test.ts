@@ -468,3 +468,58 @@ describe("TimelineStorage declared absences", () => {
     expect(byDate("2026-07-16").skipReason).toBeUndefined();
   });
 });
+
+describe("TimelineStorage priority tiers and missed-session recovery", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    storage = setupTimelineStorage({ plans: [{ id: "plan-1", name: "Plan", raceDate: RACE }] });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-08T12:00:00Z")); // today = 2026-07-08 UTC
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("carries the athlete's tier, infers one for unmarked days, and gives rest days none", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-marked", "2026-07-06", { focus: "Easy run", priority: "key" }),
+      planDay("d-tempo", "2026-07-07", { focus: "Tempo run" }),
+      planDay("d-rest", "2026-07-09", { focus: "Rest", mainWorkout: "Complete rest or light walk" }),
+      // The derived race-day card is key whatever the day underneath was marked.
+      planDay("d-race", RACE, { focus: "Easy run", priority: "optional" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entries.find((e) => e.planDayId === id)!;
+
+    expect(byId("d-marked").priority).toBe("key");
+    expect(byId("d-tempo").priority).toBe("key");
+    expect(byId("d-rest").priority).toBeUndefined();
+    expect(byId("d-race").priority).toBe("key");
+  });
+
+  it("shows a let-go only while the day reads missed, and a fold's origin wherever it goes", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-let-go", "2026-07-06", { status: "missed", recovery: "let_go" }),
+      // A stale let-go on a completed day is not shown.
+      planDay("d-stale", "2026-07-05", { status: "completed", recovery: "let_go" }),
+      planDay("d-folded", "2026-07-09", { status: "planned", recovery: "folded", missedOn: "2026-07-07" }),
+      planDay("d-open", "2026-07-04", { status: "missed" }),
+      // Logged after the let-go, then the log deleted: stored planned, shown
+      // missed — an open miss again, as it will be once the sweep clears it.
+      planDay("d-unlogged", "2026-07-03", { status: "planned", recovery: "let_go" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entries.find((e) => e.planDayId === id)!;
+
+    expect(byId("d-let-go")).toMatchObject({ status: "missed", recovery: "let_go" });
+    expect(byId("d-stale").recovery).toBeUndefined();
+    expect(byId("d-unlogged").status).toBe("missed");
+    expect(byId("d-unlogged").recovery).toBeUndefined();
+    expect(byId("d-folded")).toMatchObject({ status: "planned", recovery: "folded", missedOn: "2026-07-07" });
+    expect(byId("d-open").recovery).toBeUndefined();
+  });
+});

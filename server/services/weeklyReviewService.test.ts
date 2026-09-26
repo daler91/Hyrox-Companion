@@ -225,7 +225,26 @@ describe("buildWeeklyReview", () => {
 
     // The completed day is already in `sessions` with far more detail.
     expect(review.plannedDays).toEqual([
-      { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "12-week build", excused: false },
+      { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", priority: "supporting", recovery: null, planName: "12-week build", excused: false },
+    ]);
+  });
+
+  it("names a missed day the athlete let go, and each day's tier", async () => {
+    const storage = storageFor({
+      planDays: [
+        planDay({ id: "pd-1", date: "2026-06-08", status: "missed", focus: "Threshold run", recovery: "let_go" }),
+        planDay({ id: "pd-2", date: "2026-06-09", status: "missed", focus: "Easy run" }),
+        // A let-go the day has since moved past (logged late) is not shown.
+        planDay({ id: "pd-3", date: "2026-06-10", status: "planned", focus: "Strength", priority: "key", recovery: "let_go" }),
+      ],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.plannedDays.map((day) => [day.planDayId, day.priority, day.recovery])).toEqual([
+      ["pd-1", "key", "let_go"],
+      ["pd-2", "optional", null],
+      ["pd-3", "key", null],
     ]);
   });
 

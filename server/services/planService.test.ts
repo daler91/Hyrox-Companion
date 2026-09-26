@@ -1,6 +1,6 @@
 import type { PlanDay } from "@shared/schema";
 import * as csvParse from "csv-parse/sync";
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach,describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay,createMockTrainingPlan, createMockTrainingPlanWithDays } from "../../test/factories";
 import { db } from "../db";
@@ -684,6 +684,26 @@ describe("planService", () => {
       );
     });
 
+    it("clears a let-go when the missed day is logged after all", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "completed" });
+      const tx = setupTx([{ status: "missed", recovery: "let_go" } as never], [], [returned]);
+
+      await updatePlanDayStatus(dayId, { status: "completed" }, userId);
+
+      expect(tx.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "completed", recovery: null }),
+      );
+    });
+
+    it("keeps a fold's provenance when the moved session is logged", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "completed" });
+      const tx = setupTx([{ status: "planned", recovery: "folded" } as never], [], [returned]);
+
+      await updatePlanDayStatus(dayId, { status: "completed" }, userId);
+
+      expect(tx.updateSet.mock.calls[0][0]).not.toHaveProperty("recovery");
+    });
+
     it("skips transition check when only scheduledDate changes", async () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(
         createMockPlanDay({ id: dayId }),
@@ -698,5 +718,65 @@ describe("planService", () => {
         userId,
       );
     });
+  });
+});
+
+describe("planService — moving a missed session", () => {
+  const dayId = "test-day-id";
+  const userId = "test-user-id";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Thursday 24 September 2026, midday UTC.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-24T12:00:00Z"));
+    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(createMockPlanDay({ id: dayId }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("folds it: moved to today or later it is planned again, remembering the day it was missed", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+      createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22", recovery: "let_go" }),
+    );
+
+    await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-25" }, userId);
+
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      dayId,
+      { scheduledDate: "2026-09-25", status: "planned", recovery: "folded", missedOn: "2026-09-22" },
+      userId,
+    );
+  });
+
+  it("counts a past day the nightly sweep has not reached yet", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+      createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-23" }),
+    );
+
+    await updatePlanDayStatus(dayId, { scheduledDate: "2026-09-24" }, userId);
+
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      dayId,
+      { scheduledDate: "2026-09-24", status: "planned", recovery: "folded", missedOn: "2026-09-23" },
+      userId,
+    );
+  });
+
+  it("leaves the status alone when it moves to another past day, or was never missed", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce(
+      createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22" }),
+    );
+    await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-21" }, userId);
+    expect(storage.plans.updatePlanDay).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-21" }, userId);
+
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce(
+      createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-26" }),
+    );
+    await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-28" }, userId);
+    expect(storage.plans.updatePlanDay).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-28" }, userId);
   });
 });
