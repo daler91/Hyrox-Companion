@@ -45,9 +45,9 @@ export function intentOnTarget(counts: SessionGradeRollupCounts, intent: "easy" 
   onTarget: number;
   graded: number;
 } {
-  const c = counts[intent];
-  const graded = c.onTarget + c.creptUp + c.tooHard + c.driftedHarder + c.under;
-  return { onTarget: c.onTarget, graded };
+  const verdicts = intent === "easy" ? counts.easy : counts.threshold;
+  const graded = verdicts.onTarget + verdicts.creptUp + verdicts.tooHard + verdicts.driftedHarder + verdicts.under;
+  return { onTarget: verdicts.onTarget, graded };
 }
 
 export function formatShare(part: number, whole: number): string {

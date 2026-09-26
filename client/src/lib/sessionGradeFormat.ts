@@ -10,26 +10,29 @@ import type {
   SessionGradeVerdict,
   SessionStreamState,
 } from "@shared/schema";
-import { RUN_PURPOSE_LABELS, type RunPurpose, type SessionGradeIntent } from "@shared/sessionIntent";
+import { type RunPurpose, runPurposeLabel, type SessionGradeIntent } from "@shared/sessionIntent";
 
 import { getToneClassName, type Tone } from "./adherenceFormat";
 
 export type GradeTone = Tone | "neutral";
 
-const VERDICT_TONES: Readonly<Record<SessionGradeVerdict, GradeTone>> = {
-  on_target: "good",
-  crept_up: "partial",
-  under: "partial",
-  too_hard: "low",
-  drifted_harder: "low",
-  inconclusive: "neutral",
-  ungradeable: "neutral",
-};
 
 const NEUTRAL_CLASSNAME = "border-border text-muted-foreground bg-muted/40";
 
 export function getGradeTone(verdict: SessionGradeVerdict): GradeTone {
-  return VERDICT_TONES[verdict];
+  switch (verdict) {
+    case "on_target":
+      return "good";
+    case "crept_up":
+    case "under":
+      return "partial";
+    case "too_hard":
+    case "drifted_harder":
+      return "low";
+    case "inconclusive":
+    case "ungradeable":
+      return "neutral";
+  }
 }
 
 export function getGradeToneClassName(verdict: SessionGradeVerdict): string {
@@ -58,7 +61,7 @@ export function getGradeLabel(intent: SessionGradeIntent, verdict: SessionGradeV
 }
 
 export function getPurposeLabel(purpose: RunPurpose): string {
-  return RUN_PURPOSE_LABELS[purpose];
+  return runPurposeLabel(purpose);
 }
 
 const CONFIDENCE_LABELS: Readonly<Record<SessionGradeConfidence, string>> = {

@@ -53,7 +53,7 @@ function withoutFinish(samples: SessionStreamSamples, moving: number[], finishMi
   let end = moving.length;
   while (end > 0 && remaining > 0) {
     end -= 1;
-    remaining -= samples.mov[moving[end] ?? 0] ?? 0;
+    remaining -= samples.mov.at(moving.at(end) ?? 0) ?? 0;
   }
   return moving.slice(0, end);
 }
@@ -69,13 +69,13 @@ function hrDrift(samples: SessionStreamSamples, buckets: number[]): Drift | null
   let elapsed = 0;
   const settled = buckets.filter((i) => {
     const keep = elapsed >= EASY_DRIFT_WARMUP_EXCLUDE_S;
-    elapsed += samples.mov[i] ?? 0;
+    elapsed += samples.mov.at(i) ?? 0;
     return keep;
   });
   if (movingSeconds(samples, settled) < EASY_MIN_ANALYSED_S) return null;
   const thirds = splitByMovingTime(samples, settled, 3);
-  const first = hrOver(samples, thirds[0] ?? []).avg;
-  const last = hrOver(samples, thirds[2] ?? []).avg;
+  const first = hrOver(samples, thirds.at(0) ?? []).avg;
+  const last = hrOver(samples, thirds.at(2) ?? []).avg;
   if (first === null || last === null) return null;
   return { first, last, pct: roundTo(((last - first) / first) * 100, 1) };
 }

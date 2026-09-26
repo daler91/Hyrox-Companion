@@ -77,9 +77,12 @@ describe("downsampleStravaStreams", () => {
   it("drops implausible HR readings and leaves thin buckets without HR", () => {
     const stream = streamFromStretches([{ seconds: 300, paceSecPerKm: 330, hr: 145 }]);
     // Strap dropout: the second bucket reads zero, the third reads 250.
-    for (let i = 15; i < 30; i++) stream.heartrate![i] = 0;
-    for (let i = 30; i < 45; i++) stream.heartrate![i] = 250;
-    const { samples } = downsampleStravaStreams(stream);
+    const glitch = (hr: number, i: number) => {
+      if (i >= 15 && i < 30) return 0;
+      if (i >= 30 && i < 45) return 250;
+      return hr;
+    };
+    const { samples } = downsampleStravaStreams({ ...stream, heartrate: stream.heartrate?.map(glitch) });
     expect(samples?.hr[0]).toBe(145);
     expect(samples?.hr[1]).toBeNull();
     expect(samples?.hr[2]).toBeNull();

@@ -11,13 +11,12 @@ const mocks = vi.hoisted(() => ({
   buildPlanSessionGrades: vi.fn(),
   gradeWorkoutLogs: vi.fn(),
   requestSessionStreamForLog: vi.fn(),
+  getWorkoutLog: vi.fn(),
 }));
 
 vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
-vi.mock("../../storage", async () =>
-  (await import("./testUtils")).mockStorageModule({ workouts: ["getWorkoutLog"] }),
-);
+vi.mock("../../storage", () => ({ storage: { workouts: { getWorkoutLog: mocks.getWorkoutLog } } }));
 vi.mock("../../services/sessionGrades/sessionGradeService", () => ({
   buildPlanSessionGrades: mocks.buildPlanSessionGrades,
   gradeWorkoutLogs: mocks.gradeWorkoutLogs,
@@ -66,14 +65,14 @@ describe("session grade routes", () => {
 
   describe("GET /api/v1/workouts/:id/session-grade", () => {
     it("404s a workout that is not the athlete's", async () => {
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(undefined);
+      mocks.getWorkoutLog.mockResolvedValue(undefined);
       const res = await request(app).get("/api/v1/workouts/nope/session-grade");
       expect(res.status).toBe(404);
       expect(mocks.gradeWorkoutLogs).not.toHaveBeenCalled();
     });
 
     it("returns a null grade for a workout we do not grade", async () => {
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(makeWorkoutLog({ id: "w1" }));
+      mocks.getWorkoutLog.mockResolvedValue(makeWorkoutLog({ id: "w1" }));
       const res = await request(app).get("/api/v1/workouts/w1/session-grade");
       expect(res.body).toEqual({ grade: null });
       expect(mocks.requestSessionStreamForLog).not.toHaveBeenCalled();
@@ -81,7 +80,7 @@ describe("session grade routes", () => {
 
     it("returns the grade, and nudges the stream fetcher while it is pending", async () => {
       const log = makeWorkoutLog({ id: "w1", planDayId: "d1", stravaActivityId: "9" });
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(log);
+      mocks.getWorkoutLog.mockResolvedValue(log);
       const grade = makeGrade({ workoutLogId: "w1", streamStatus: "pending", dataSource: "summary" });
       mocks.gradeWorkoutLogs.mockResolvedValue(new Map([["w1", grade]]));
 
@@ -89,12 +88,12 @@ describe("session grade routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.grade).toMatchObject({ workoutLogId: "w1", verdict: "on_target", streamStatus: "pending" });
-      expect(storage.workouts.getWorkoutLog).toHaveBeenCalledWith("w1", TEST_USER_ID);
+      expect(mocks.getWorkoutLog).toHaveBeenCalledWith("w1", TEST_USER_ID);
       expect(mocks.requestSessionStreamForLog).toHaveBeenCalledWith(storage, TEST_USER_ID, log, "read");
     });
 
     it("does not nudge once the stream is in", async () => {
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(makeWorkoutLog({ id: "w1", planDayId: "d1" }));
+      mocks.getWorkoutLog.mockResolvedValue(makeWorkoutLog({ id: "w1", planDayId: "d1" }));
       mocks.gradeWorkoutLogs.mockResolvedValue(new Map([["w1", makeGrade({ workoutLogId: "w1" })]]));
       await request(app).get("/api/v1/workouts/w1/session-grade");
       expect(mocks.requestSessionStreamForLog).not.toHaveBeenCalled();

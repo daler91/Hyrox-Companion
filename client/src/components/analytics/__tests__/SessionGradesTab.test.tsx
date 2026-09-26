@@ -1,4 +1,8 @@
-import type { SessionGradeRollupCounts, SessionGradesResponse, SessionGradeWeek } from "@shared/schema";
+import type {
+  SessionGradeRollupCounts,
+  SessionGradesResponse,
+  SessionGradeWeek,
+} from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,12 +17,23 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    api: { ...actual.api, analytics: { ...actual.api.analytics, getSessionGrades: mocks.getSessionGrades } },
+    api: {
+      ...actual.api,
+      analytics: { ...actual.api.analytics, getSessionGrades: mocks.getSessionGrades },
+    },
   };
 });
 
 function counts(overrides: Partial<SessionGradeRollupCounts> = {}): SessionGradeRollupCounts {
-  const verdicts = { onTarget: 0, creptUp: 0, tooHard: 0, driftedHarder: 0, under: 0, inconclusive: 0, ungradeable: 0 };
+  const verdicts = {
+    onTarget: 0,
+    creptUp: 0,
+    tooHard: 0,
+    driftedHarder: 0,
+    under: 0,
+    inconclusive: 0,
+    ungradeable: 0,
+  };
   return {
     easy: { ...verdicts },
     threshold: { ...verdicts },
@@ -55,9 +70,26 @@ const LOADED: SessionGradesResponse = {
       block: 1,
       phase: "early",
       deload: false,
-      counts: counts({ easy: { onTarget: 3, creptUp: 1, tooHard: 0, driftedHarder: 0, under: 0, inconclusive: 0, ungradeable: 0 } }),
+      counts: counts({
+        easy: {
+          onTarget: 3,
+          creptUp: 1,
+          tooHard: 0,
+          driftedHarder: 0,
+          under: 0,
+          inconclusive: 0,
+          ungradeable: 0,
+        },
+      }),
     },
-    { weekNumber: 2, weekStart: "2026-09-21", block: 1, phase: "race_week", deload: false, counts: counts() },
+    {
+      weekNumber: 2,
+      weekStart: "2026-09-21",
+      block: 1,
+      phase: "race_week",
+      deload: false,
+      counts: counts(),
+    },
   ],
   blocks: [
     {
@@ -67,16 +99,48 @@ const LOADED: SessionGradesResponse = {
       phases: ["early", "race_week"],
       includesDeload: false,
       counts: counts({
-        easy: { onTarget: 3, creptUp: 1, tooHard: 0, driftedHarder: 0, under: 0, inconclusive: 0, ungradeable: 0 },
-        threshold: { onTarget: 1, creptUp: 0, tooHard: 0, driftedHarder: 1, under: 0, inconclusive: 0, ungradeable: 0 },
+        easy: {
+          onTarget: 3,
+          creptUp: 1,
+          tooHard: 0,
+          driftedHarder: 0,
+          under: 0,
+          inconclusive: 0,
+          ungradeable: 0,
+        },
+        threshold: {
+          onTarget: 1,
+          creptUp: 0,
+          tooHard: 0,
+          driftedHarder: 1,
+          under: 0,
+          inconclusive: 0,
+          ungradeable: 0,
+        },
         driftedHarder: 1,
         easyTooHard: 1,
       }),
     },
   ],
   totals: counts({
-    easy: { onTarget: 3, creptUp: 1, tooHard: 0, driftedHarder: 0, under: 0, inconclusive: 0, ungradeable: 0 },
-    threshold: { onTarget: 1, creptUp: 0, tooHard: 0, driftedHarder: 1, under: 0, inconclusive: 0, ungradeable: 0 },
+    easy: {
+      onTarget: 3,
+      creptUp: 1,
+      tooHard: 0,
+      driftedHarder: 0,
+      under: 0,
+      inconclusive: 0,
+      ungradeable: 0,
+    },
+    threshold: {
+      onTarget: 1,
+      creptUp: 0,
+      tooHard: 0,
+      driftedHarder: 1,
+      under: 0,
+      inconclusive: 0,
+      ungradeable: 0,
+    },
     driftedHarder: 1,
     easyTooHard: 1,
   }),
@@ -101,12 +165,16 @@ describe("SessionGradesTab", () => {
     mocks.getSessionGrades.mockResolvedValue(LOADED);
     renderTab();
 
-    await waitFor(() => expect(screen.getByTestId("text-session-grades-easy-rate")).toHaveTextContent("75%"));
+    await waitFor(() => {
+      expect(screen.getByTestId("text-session-grades-easy-rate")).toHaveTextContent("75%");
+    });
     expect(mocks.getSessionGrades).toHaveBeenCalledWith(undefined);
     expect(screen.getByTestId("text-session-grades-threshold-rate")).toHaveTextContent("50%");
     expect(screen.getByTestId("text-session-grades-drifted")).toHaveTextContent("1");
     expect(
-      screen.getByRole("img", { name: /Stacked bar chart of graded runs across 2 plan weeks: 3 of 4 did their job/ }),
+      screen.getByRole("img", {
+        name: /Stacked bar chart of graded runs across 2 plan weeks: 3 of 4 did their job/,
+      }),
     ).toBeInTheDocument();
     const row = screen.getByTestId("row-session-grades-block-1");
     expect(within(row).getByText("3 of 4 (75%)")).toBeInTheDocument();
@@ -116,15 +184,27 @@ describe("SessionGradesTab", () => {
   });
 
   it("explains what grading needs when there is no plan", async () => {
-    mocks.getSessionGrades.mockResolvedValue({ plan: null, sessions: [], weeks: [], blocks: [], totals: null });
+    mocks.getSessionGrades.mockResolvedValue({
+      plan: null,
+      sessions: [],
+      weeks: [],
+      blocks: [],
+      totals: null,
+    });
     renderTab();
-    await waitFor(() => expect(screen.getByTestId("session-grades-empty")).toHaveTextContent(/Start a training plan/));
+    await waitFor(() => {
+      expect(screen.getByTestId("session-grades-empty")).toHaveTextContent(/Start a training plan/);
+    });
   });
 
   it("says nothing is graded yet on a plan with no graded runs", async () => {
     mocks.getSessionGrades.mockResolvedValue({ ...LOADED, sessions: [] });
     renderTab();
-    await waitFor(() => expect(screen.getByTestId("session-grades-empty")).toHaveTextContent(/No graded runs in Autumn block/));
+    await waitFor(() => {
+      expect(screen.getByTestId("session-grades-empty")).toHaveTextContent(
+        /No graded runs in Autumn block/,
+      );
+    });
   });
 });
 
@@ -137,8 +217,24 @@ describe("toGradeChartRow", () => {
       phase: "build",
       deload: true,
       counts: counts({
-        easy: { onTarget: 2, creptUp: 1, tooHard: 1, driftedHarder: 0, under: 0, inconclusive: 0, ungradeable: 1 },
-        threshold: { onTarget: 1, creptUp: 0, tooHard: 0, driftedHarder: 2, under: 1, inconclusive: 1, ungradeable: 0 },
+        easy: {
+          onTarget: 2,
+          creptUp: 1,
+          tooHard: 1,
+          driftedHarder: 0,
+          under: 0,
+          inconclusive: 0,
+          ungradeable: 1,
+        },
+        threshold: {
+          onTarget: 1,
+          creptUp: 0,
+          tooHard: 0,
+          driftedHarder: 2,
+          under: 1,
+          inconclusive: 1,
+          ungradeable: 0,
+        },
       }),
     };
     expect(toGradeChartRow(week)).toMatchObject({

@@ -6,29 +6,42 @@ import type { SessionGradeTargets, SessionGradeVerdict } from "@shared/schema";
 import type { SessionGradeIntent } from "@shared/sessionIntent";
 import { formatPace } from "@shared/unitConversion";
 
-const HEADLINES: Readonly<Record<SessionGradeIntent, Readonly<Record<SessionGradeVerdict, string>>>> = {
-  easy: {
-    on_target: "Stayed easy",
-    crept_up: "Crept above easy",
-    too_hard: "Too hard for an easy day",
-    drifted_harder: "Too hard for an easy day",
-    under: "Stayed easy",
-    inconclusive: "Can't tell from this data",
-    ungradeable: "Can't grade yet",
-  },
-  threshold: {
-    on_target: "Held threshold",
-    crept_up: "Drifted harder than threshold",
-    too_hard: "Drifted harder than threshold",
-    drifted_harder: "Drifted harder than threshold",
-    under: "Stayed under threshold",
-    inconclusive: "Can't tell from the averages",
-    ungradeable: "Can't grade yet",
-  },
-};
+function easyHeadline(verdict: SessionGradeVerdict): string {
+  switch (verdict) {
+    case "on_target":
+    case "under":
+      return "Stayed easy";
+    case "crept_up":
+      return "Crept above easy";
+    case "too_hard":
+    case "drifted_harder":
+      return "Too hard for an easy day";
+    case "inconclusive":
+      return "Can't tell from this data";
+    case "ungradeable":
+      return "Can't grade yet";
+  }
+}
+
+function thresholdHeadline(verdict: SessionGradeVerdict): string {
+  switch (verdict) {
+    case "on_target":
+      return "Held threshold";
+    case "crept_up":
+    case "too_hard":
+    case "drifted_harder":
+      return "Drifted harder than threshold";
+    case "under":
+      return "Stayed under threshold";
+    case "inconclusive":
+      return "Can't tell from the averages";
+    case "ungradeable":
+      return "Can't grade yet";
+  }
+}
 
 export function headlineFor(intent: SessionGradeIntent, verdict: SessionGradeVerdict): string {
-  return HEADLINES[intent][verdict];
+  return intent === "easy" ? easyHeadline(verdict) : thresholdHeadline(verdict);
 }
 
 export function fmtPace(secondsPerKm: number, distanceUnit: string): string {

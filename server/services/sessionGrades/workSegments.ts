@@ -42,8 +42,8 @@ export interface Segmentation {
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  const upper = sorted[mid] ?? 0;
-  return sorted.length % 2 === 0 ? ((sorted[mid - 1] ?? upper) + upper) / 2 : upper;
+  const upper = sorted.at(mid) ?? 0;
+  return sorted.length % 2 === 0 ? ((sorted.at(mid - 1) ?? upper) + upper) / 2 : upper;
 }
 
 function chooseSignal(
@@ -66,7 +66,8 @@ function smooth(raw: (number | null)[]): (number | null)[] {
     if (value === null) return null;
     const window: number[] = [];
     for (let j = i - half; j <= i + half; j++) {
-      const neighbour = raw[j];
+      // at() would wrap a negative index round to the end of the run.
+      const neighbour = j >= 0 ? raw.at(j) : undefined;
       if (neighbour !== null && neighbour !== undefined) window.push(neighbour);
     }
     return median(window);
@@ -81,9 +82,10 @@ export function otsuCut(values: readonly number[]): number | null {
   let lowSum = 0;
   let best: { score: number; cut: number } | null = null;
   for (let k = 1; k < sorted.length; k++) {
-    lowSum += sorted[k - 1] ?? 0;
-    const current = sorted[k] ?? 0;
-    if (current === sorted[k - 1]) continue;
+    const previous = sorted.at(k - 1) ?? 0;
+    lowSum += previous;
+    const current = sorted.at(k) ?? 0;
+    if (current === previous) continue;
     const lowMean = lowSum / k;
     const highMean = (total - lowSum) / (sorted.length - k);
     const score = k * (sorted.length - k) * (highMean - lowMean) ** 2;
@@ -108,22 +110,22 @@ function stretches(high: readonly boolean[]): number[][] {
   const runs: number[][] = [];
   let current: number[] | null = null;
   let gap = 0;
-  high.forEach((isHigh, i) => {
+  for (const [i, isHigh] of high.entries()) {
     if (isHigh) {
       if (current && gap > 0) for (let j = i - gap; j < i; j++) current.push(j);
       current ??= [];
       current.push(i);
       gap = 0;
-      return;
+      continue;
     }
-    if (!current) return;
+    if (!current) continue;
     gap += 1;
     if (gap > MAX_DIP_BUCKETS) {
       runs.push(current);
       current = null;
       gap = 0;
     }
-  });
+  }
   if (current) runs.push(current);
   return runs;
 }
@@ -154,7 +156,7 @@ function continuousBlock(samples: SessionStreamSamples, moving: readonly number[
   const block: number[] = [];
   let elapsed = 0;
   for (const i of moving) {
-    const dt = samples.mov[i] ?? 0;
+    const dt = samples.mov.at(i) ?? 0;
     if (elapsed >= CONTINUOUS_WARMUP_S && elapsed + dt <= total - CONTINUOUS_COOLDOWN_S) block.push(i);
     elapsed += dt;
   }

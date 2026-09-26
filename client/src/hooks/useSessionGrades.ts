@@ -29,7 +29,7 @@ export function useWorkoutSessionGrade(workoutId: string | null | undefined, ena
   return useQuery<WorkoutSessionGradeResponse>({
     queryKey: QUERY_KEYS.workoutSessionGrade(workoutId ?? ""),
     queryFn: () => api.analytics.getWorkoutSessionGrade(workoutId ?? ""),
-    enabled: enabled && !!workoutId,
+    enabled: enabled && Boolean(workoutId),
     staleTime: 60_000,
     refetchInterval: (query) =>
       query.state.data?.grade?.streamStatus === "pending" && query.state.dataUpdateCount < MAX_PENDING_REFETCHES

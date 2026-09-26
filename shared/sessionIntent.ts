@@ -51,15 +51,25 @@ export interface RunPurposeInput {
   readonly exerciseNames?: readonly string[];
 }
 
-export const RUN_PURPOSE_LABELS: Readonly<Record<RunPurpose, string>> = {
-  easy: "Easy run",
-  recovery: "Recovery run",
-  long: "Long run",
-  threshold: "Threshold run",
-  intervals: "Intervals",
-  steady: "Steady run",
-  race: "Race effort",
-};
+/** The purpose in the words the grade card and chips use. */
+export function runPurposeLabel(purpose: RunPurpose): string {
+  switch (purpose) {
+    case "easy":
+      return "Easy run";
+    case "recovery":
+      return "Recovery run";
+    case "long":
+      return "Long run";
+    case "threshold":
+      return "Threshold run";
+    case "intervals":
+      return "Intervals";
+    case "steady":
+      return "Steady run";
+    case "race":
+      return "Race effort";
+  }
+}
 
 const NONE: RunPurposeResult = { purpose: null, source: null, reason: null, hardFinishMinutes: null };
 

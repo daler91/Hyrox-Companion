@@ -46,16 +46,6 @@ export interface SessionGradeRollups {
   totals: SessionGradeRollupCounts;
 }
 
-const VERDICT_KEYS: Readonly<Record<SessionGradeVerdict, keyof SessionGradeVerdictCounts>> = {
-  on_target: "onTarget",
-  crept_up: "creptUp",
-  too_hard: "tooHard",
-  drifted_harder: "driftedHarder",
-  under: "under",
-  inconclusive: "inconclusive",
-  ungradeable: "ungradeable",
-};
-
 function emptyVerdicts(): SessionGradeVerdictCounts {
   return { onTarget: 0, creptUp: 0, tooHard: 0, driftedHarder: 0, under: 0, inconclusive: 0, ungradeable: 0 };
 }
@@ -75,8 +65,44 @@ export function emptyRollupCounts(): SessionGradeRollupCounts {
   };
 }
 
+function bumpVerdict(counts: SessionGradeVerdictCounts, verdict: SessionGradeVerdict): void {
+  switch (verdict) {
+    case "on_target":
+      counts.onTarget += 1;
+      break;
+    case "crept_up":
+      counts.creptUp += 1;
+      break;
+    case "too_hard":
+      counts.tooHard += 1;
+      break;
+    case "drifted_harder":
+      counts.driftedHarder += 1;
+      break;
+    case "under":
+      counts.under += 1;
+      break;
+    case "inconclusive":
+      counts.inconclusive += 1;
+      break;
+    case "ungradeable":
+      counts.ungradeable += 1;
+      break;
+  }
+}
+
+function mergeVerdicts(into: SessionGradeVerdictCounts, from: SessionGradeVerdictCounts): void {
+  into.onTarget += from.onTarget;
+  into.creptUp += from.creptUp;
+  into.tooHard += from.tooHard;
+  into.driftedHarder += from.driftedHarder;
+  into.under += from.under;
+  into.inconclusive += from.inconclusive;
+  into.ungradeable += from.ungradeable;
+}
+
 export function addGrade(counts: SessionGradeRollupCounts, grade: SessionGrade): void {
-  counts[grade.intent][VERDICT_KEYS[grade.verdict]] += 1;
+  bumpVerdict(grade.intent === "easy" ? counts.easy : counts.threshold, grade.verdict);
   if (isDefinite(grade.verdict)) counts.graded += 1;
   if (grade.verdict === "on_target") counts.onTarget += 1;
   if (grade.intent === "threshold" && grade.verdict === "drifted_harder") counts.driftedHarder += 1;
@@ -89,11 +115,8 @@ export function addGrade(counts: SessionGradeRollupCounts, grade: SessionGrade):
 }
 
 function mergeCounts(into: SessionGradeRollupCounts, from: SessionGradeRollupCounts): void {
-  for (const intent of ["easy", "threshold"] as const) {
-    for (const key of Object.keys(from[intent]) as (keyof SessionGradeVerdictCounts)[]) {
-      into[intent][key] += from[intent][key];
-    }
-  }
+  mergeVerdicts(into.easy, from.easy);
+  mergeVerdicts(into.threshold, from.threshold);
   into.graded += from.graded;
   into.onTarget += from.onTarget;
   into.driftedHarder += from.driftedHarder;

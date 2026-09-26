@@ -42,28 +42,52 @@ export interface DownsampleResult {
   samples: SessionStreamSamples | null;
 }
 
-const STREAM_KEYS = ["time", "heartrate", "velocity_smooth", "distance", "moving"] as const;
+function seriesData(entry: unknown): unknown[] | null {
+  if (typeof entry !== "object" || entry === null) return null;
+  const data = (entry as { data?: unknown }).data;
+  return Array.isArray(data) ? data : null;
+}
+
+function numberSeries(entry: unknown): number[] | undefined {
+  const data = seriesData(entry);
+  return data?.every((value): value is number => typeof value === "number" && Number.isFinite(value))
+    ? data
+    : undefined;
+}
+
+function booleanSeries(entry: unknown): boolean[] | undefined {
+  const data = seriesData(entry);
+  return data?.every((value): value is boolean => typeof value === "boolean") ? data : undefined;
+}
+
+interface StravaStreamBody {
+  time?: unknown;
+  heartrate?: unknown;
+  velocity_smooth?: unknown;
+  distance?: unknown;
+  moving?: unknown;
+}
 
 /**
  * Strava's `key_by_type=true` body is `{ time: { data: [...] }, heartrate:
  * { data: [...] }, ... }`. Keep only well-formed arrays of the right type so
- * the downsampler never sees a surprise shape.
+ * the downsampler never sees a surprise shape. Each series is read by name,
+ * never through a computed key.
  */
 export function parseStravaStreamResponse(body: unknown): StravaStreamSet {
+  if (typeof body !== "object" || body === null) return {};
+  const record = body as StravaStreamBody;
   const set: StravaStreamSet = {};
-  if (typeof body !== "object" || body === null) return set;
-  const record = body as Record<string, unknown>;
-  for (const key of STREAM_KEYS) {
-    const entry = record[key];
-    const data =
-      typeof entry === "object" && entry !== null ? (entry as { data?: unknown }).data : undefined;
-    if (!Array.isArray(data)) continue;
-    if (key === "moving") {
-      if (data.every((value): value is boolean => typeof value === "boolean")) set.moving = data;
-    } else if (data.every((value): value is number => typeof value === "number" && Number.isFinite(value))) {
-      set[key] = data;
-    }
-  }
+  const time = numberSeries(record.time);
+  const heartrate = numberSeries(record.heartrate);
+  const velocity = numberSeries(record.velocity_smooth);
+  const distance = numberSeries(record.distance);
+  const moving = booleanSeries(record.moving);
+  if (time) set.time = time;
+  if (heartrate) set.heartrate = heartrate;
+  if (velocity) set.velocity_smooth = velocity;
+  if (distance) set.distance = distance;
+  if (moving) set.moving = moving;
   return set;
 }
 
@@ -72,89 +96,111 @@ function aligned<T>(series: T[] | undefined, length: number): T[] | undefined {
   return series && series.length === length ? series : undefined;
 }
 
-interface Accumulator {
-  hrWeighted: number[];
-  hrSeconds: number[];
-  dist: number[];
-  mov: number[];
+/** One bucket's running sums. */
+interface BucketSums {
+  hrWeighted: number;
+  hrSeconds: number;
+  dist: number;
+  mov: number;
 }
 
-function emptyAccumulator(buckets: number): Accumulator {
-  return {
-    hrWeighted: new Array<number>(buckets).fill(0),
-    hrSeconds: new Array<number>(buckets).fill(0),
-    dist: new Array<number>(buckets).fill(0),
-    mov: new Array<number>(buckets).fill(0),
+interface AlignedStreams {
+  time: number[];
+  heartrate: number[] | undefined;
+  velocity: number[] | undefined;
+  distance: number[] | undefined;
+  moving: boolean[] | undefined;
+}
+
+/** Whether sample `i` was moving: Strava's own flag, else speed, else assume so. */
+function isMovingAt(streams: AlignedStreams, i: number): boolean {
+  if (streams.moving) return streams.moving.at(i) === true;
+  if (streams.velocity) return (streams.velocity.at(i) ?? 0) > MOVING_SPEED_MS;
+  return true;
+}
+
+/** Metres covered by sample `i`: the distance stream's step, else speed × time. */
+function metresAt(streams: AlignedStreams, i: number, dt: number): number {
+  if (streams.distance) return Math.max(0, (streams.distance.at(i) ?? 0) - (streams.distance.at(i - 1) ?? 0));
+  const speed = streams.velocity?.at(i);
+  return speed === undefined ? 0 : Math.max(0, speed * dt);
+}
+
+interface Totals {
+  buckets: BucketSums[];
+  truncated: boolean;
+  movingSeconds: number;
+  hrMovingSeconds: number;
+  hasDistance: boolean;
+}
+
+function accumulate(streams: AlignedStreams, bucketCount: number): Totals {
+  const { time } = streams;
+  const start = time.at(0) ?? 0;
+  const totals: Totals = {
+    buckets: Array.from({ length: bucketCount }, () => ({ hrWeighted: 0, hrSeconds: 0, dist: 0, mov: 0 })),
+    truncated: false,
+    movingSeconds: 0,
+    hrMovingSeconds: 0,
+    hasDistance: false,
   };
+  for (let i = 1; i < time.length; i++) {
+    const prev = time.at(i - 1) ?? 0;
+    const dt = (time.at(i) ?? 0) - prev;
+    // Out-of-order samples and pauses add nothing.
+    if (dt <= 0 || dt > MAX_SAMPLE_GAP_S) continue;
+    const bucket = totals.buckets.at(Math.floor((prev - start) / BUCKET_SECONDS));
+    if (!bucket) {
+      totals.truncated = true;
+      break;
+    }
+    if (!isMovingAt(streams, i)) continue;
+    bucket.mov += dt;
+    totals.movingSeconds += dt;
+
+    const metres = metresAt(streams, i, dt);
+    if (metres > 0) totals.hasDistance = true;
+    bucket.dist += metres;
+
+    const hr = streams.heartrate?.at(i);
+    if (hr !== undefined && hr >= HR_MIN_BPM && hr <= HR_MAX_BPM) {
+      bucket.hrWeighted += hr * dt;
+      bucket.hrSeconds += dt;
+      totals.hrMovingSeconds += dt;
+    }
+  }
+  return totals;
 }
 
 export function downsampleStravaStreams(set: StravaStreamSet): DownsampleResult {
   const time = set.time;
   if (!time || time.length < 2) return { status: "unavailable", samples: null };
-  const length = time.length;
-  const heartrate = aligned(set.heartrate, length);
-  const velocity = aligned(set.velocity_smooth, length);
-  const distance = aligned(set.distance, length);
-  const moving = aligned(set.moving, length);
+  const streams: AlignedStreams = {
+    time,
+    heartrate: aligned(set.heartrate, time.length),
+    velocity: aligned(set.velocity_smooth, time.length),
+    distance: aligned(set.distance, time.length),
+    moving: aligned(set.moving, time.length),
+  };
 
-  const elapsedSeconds = Math.max(0, (time.at(-1) ?? 0) - (time[0] ?? 0));
-  const start = time[0] ?? 0;
+  const elapsedSeconds = Math.max(0, (time.at(-1) ?? 0) - (time.at(0) ?? 0));
   const bucketCount = Math.min(MAX_BUCKETS, Math.floor(elapsedSeconds / BUCKET_SECONDS) + 1);
-  const acc = emptyAccumulator(bucketCount);
-  let truncated = false;
-  let movingSeconds = 0;
-  let hrMovingSeconds = 0;
-  let hasDistance = false;
+  const totals = accumulate(streams, bucketCount);
+  const truncated = totals.truncated || elapsedSeconds >= MAX_BUCKETS * BUCKET_SECONDS;
 
-  for (let i = 1; i < length; i++) {
-    const prev = time[i - 1] ?? 0;
-    const dt = (time[i] ?? 0) - prev;
-    // Out-of-order samples and pauses add nothing.
-    if (dt <= 0 || dt > MAX_SAMPLE_GAP_S) continue;
-    const bucket = Math.floor((prev - start) / BUCKET_SECONDS);
-    if (bucket >= bucketCount) {
-      truncated = true;
-      break;
-    }
-
-    const speed = velocity?.[i];
-    let isMoving = true;
-    if (moving) isMoving = moving[i] === true;
-    else if (velocity) isMoving = (speed ?? 0) > MOVING_SPEED_MS;
-    if (!isMoving) continue;
-    acc.mov[bucket] = (acc.mov[bucket] ?? 0) + dt;
-    movingSeconds += dt;
-
-    let metres = 0;
-    if (distance) metres = Math.max(0, (distance[i] ?? 0) - (distance[i - 1] ?? 0));
-    else if (speed !== undefined) metres = Math.max(0, speed * dt);
-    if (metres > 0) hasDistance = true;
-    acc.dist[bucket] = (acc.dist[bucket] ?? 0) + metres;
-
-    const hr = heartrate?.[i];
-    if (hr !== undefined && hr >= HR_MIN_BPM && hr <= HR_MAX_BPM) {
-      acc.hrWeighted[bucket] = (acc.hrWeighted[bucket] ?? 0) + hr * dt;
-      acc.hrSeconds[bucket] = (acc.hrSeconds[bucket] ?? 0) + dt;
-      hrMovingSeconds += dt;
-    }
-  }
-  if (!truncated && elapsedSeconds >= MAX_BUCKETS * BUCKET_SECONDS) truncated = true;
-
-  if (movingSeconds < MIN_MOVING_SECONDS) return { status: "unavailable", samples: null };
-  const hasHr = hrMovingSeconds >= movingSeconds * MIN_HR_COVERAGE;
-  if (!hasHr && !hasDistance) return { status: "unavailable", samples: null };
+  if (totals.movingSeconds < MIN_MOVING_SECONDS) return { status: "unavailable", samples: null };
+  const hasHr = totals.hrMovingSeconds >= totals.movingSeconds * MIN_HR_COVERAGE;
+  if (!hasHr && !totals.hasDistance) return { status: "unavailable", samples: null };
 
   const samples: SessionStreamSamples = {
     v: SESSION_STREAM_SAMPLES_VERSION,
     bucketSeconds: BUCKET_SECONDS,
-    hr: acc.hrSeconds.map((seconds, i) =>
-      hasHr && seconds >= MIN_HR_SECONDS_PER_BUCKET
-        ? Math.round((acc.hrWeighted[i] ?? 0) / seconds)
-        : null,
+    hr: totals.buckets.map((bucket) =>
+      hasHr && bucket.hrSeconds >= MIN_HR_SECONDS_PER_BUCKET ? Math.round(bucket.hrWeighted / bucket.hrSeconds) : null,
     ),
-    dist: acc.dist.map((metres) => Math.round(metres)),
-    mov: acc.mov.map((seconds) => Math.round(seconds)),
-    has: { hr: hasHr, distance: hasDistance },
+    dist: totals.buckets.map((bucket) => Math.round(bucket.dist)),
+    mov: totals.buckets.map((bucket) => Math.round(bucket.mov)),
+    has: { hr: hasHr, distance: totals.hasDistance },
     elapsedSeconds: Math.round(elapsedSeconds),
     truncated,
   };

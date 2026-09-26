@@ -9,17 +9,17 @@ import { MAX_RUN_SPEED_MS, MIN_MOVING_S_FOR_SPEED, MIN_RUN_SPEED_MS } from "./co
 
 /** m/s for a bucket, or null when it barely moved or the speed is not a run's. */
 export function bucketSpeed(samples: SessionStreamSamples, i: number): number | null {
-  const moving = samples.mov[i] ?? 0;
-  const metres = samples.dist[i] ?? 0;
+  const moving = samples.mov.at(i) ?? 0;
+  const metres = samples.dist.at(i) ?? 0;
   if (!samples.has.distance || moving < MIN_MOVING_S_FOR_SPEED || metres <= 0) return null;
   const speed = metres / moving;
   return speed >= MIN_RUN_SPEED_MS && speed <= MAX_RUN_SPEED_MS ? speed : null;
 }
 
 export function bucketHr(samples: SessionStreamSamples, i: number): number | null {
-  const moving = samples.mov[i] ?? 0;
+  const moving = samples.mov.at(i) ?? 0;
   if (!samples.has.hr || moving <= 0) return null;
-  return samples.hr[i] ?? null;
+  return samples.hr.at(i) ?? null;
 }
 
 /** Indices of buckets with any movement. */
@@ -32,7 +32,7 @@ export function movingBuckets(samples: SessionStreamSamples): number[] {
 }
 
 export function movingSeconds(samples: SessionStreamSamples, buckets: readonly number[]): number {
-  return buckets.reduce((sum, i) => sum + (samples.mov[i] ?? 0), 0);
+  return buckets.reduce((sum, i) => sum + (samples.mov.at(i) ?? 0), 0);
 }
 
 export interface HrSummary {
@@ -48,7 +48,7 @@ export function hrOver(samples: SessionStreamSamples, buckets: readonly number[]
   for (const i of buckets) {
     const hr = bucketHr(samples, i);
     if (hr === null) continue;
-    const dt = samples.mov[i] ?? 0;
+    const dt = samples.mov.at(i) ?? 0;
     weighted += hr * dt;
     seconds += dt;
   }
@@ -66,7 +66,7 @@ export function hrShare(
   for (const i of buckets) {
     const hr = bucketHr(samples, i);
     if (hr === null) continue;
-    const dt = samples.mov[i] ?? 0;
+    const dt = samples.mov.at(i) ?? 0;
     total += dt;
     if (predicate(hr)) matched += dt;
   }
@@ -79,8 +79,8 @@ export function paceOver(samples: SessionStreamSamples, buckets: readonly number
   let seconds = 0;
   for (const i of buckets) {
     if (bucketSpeed(samples, i) === null) continue;
-    metres += samples.dist[i] ?? 0;
-    seconds += samples.mov[i] ?? 0;
+    metres += samples.dist.at(i) ?? 0;
+    seconds += samples.mov.at(i) ?? 0;
   }
   return metres > 0 ? (seconds / metres) * 1000 : null;
 }
@@ -97,7 +97,7 @@ export function fasterThanShare(
   for (const i of buckets) {
     const speed = bucketSpeed(samples, i);
     if (speed === null) continue;
-    const dt = samples.mov[i] ?? 0;
+    const dt = samples.mov.at(i) ?? 0;
     total += dt;
     if (speed > speedCut) matched += dt;
   }
@@ -115,8 +115,8 @@ export function splitByMovingTime(
   let elapsed = 0;
   for (const i of buckets) {
     const part = Math.min(parts - 1, Math.floor((elapsed / Math.max(1, total)) * parts));
-    chunks[part]?.push(i);
-    elapsed += samples.mov[i] ?? 0;
+    chunks.at(part)?.push(i);
+    elapsed += samples.mov.at(i) ?? 0;
   }
   return chunks;
 }

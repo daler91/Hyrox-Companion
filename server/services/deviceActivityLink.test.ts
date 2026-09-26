@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { db } from "../db";
-import { storage } from "../storage";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
 import {
   attachStravaActivityToLogInTx,
@@ -21,8 +20,9 @@ import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
 import { createWorkoutInTx } from "./workoutService";
 
 vi.mock("../db", () => ({ db: { transaction: vi.fn(), update: vi.fn() } }));
+const streamMocks = vi.hoisted(() => ({ deleteForLog: vi.fn() }));
 vi.mock("../storage", () => ({
-  storage: { plans: { getPlanDay: vi.fn() }, sessionStreams: { deleteForLog: vi.fn() } },
+  storage: { plans: { getPlanDay: vi.fn() }, sessionStreams: { deleteForLog: streamMocks.deleteForLog } },
 }));
 vi.mock("../storage/planDayStatus", () => ({ syncPlanDayStatusFromWorkouts: vi.fn() }));
 vi.mock("./workoutService", () => ({ createWorkoutInTx: vi.fn() }));
@@ -244,7 +244,7 @@ describe("unlinkDeviceActivity", () => {
     expect(result.log?.stravaActivityId).toBeNull();
     expect(result.standalone.id).toBe("standalone");
     // The kept log loses the recording's stream with it, inside the same transaction.
-    expect(storage.sessionStreams.deleteForLog).toHaveBeenCalledWith("log-1", USER, tx);
+    expect(streamMocks.deleteForLog).toHaveBeenCalledWith("log-1", USER, tx);
   });
 
   it("deletes a plan-day log the sync created and re-derives the day's status", async () => {

@@ -267,7 +267,9 @@ describe("Review page", () => {
     );
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-session-wl-1")).toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByTestId("weekly-review-session-wl-1")).toBeInTheDocument();
+    });
     const chip = screen.getByTestId("weekly-review-session-grade-wl-1");
     expect(chip).toHaveTextContent("Drifted harder");
     expect(chip).toHaveAttribute("title", "Drifted harder than threshold");

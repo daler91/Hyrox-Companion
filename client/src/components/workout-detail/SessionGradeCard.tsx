@@ -20,18 +20,18 @@ function keyMetrics(grade: SessionGrade, distanceUnit: string): Metric[] {
     if (value !== null && value !== undefined) metrics.push({ label, value: `${value}${suffix}` });
   };
   if (grade.threshold) {
-    const t = grade.threshold;
-    if (t.segmentation === "reps") push("Reps", t.repCount);
-    if (t.segmentation !== "whole_run") push("Work", t.workMinutes, " min");
-    push("Work pace", formatGradePace(t.workAvgPaceSecPerKm, distanceUnit));
-    push("Work HR", t.workAvgHr, " bpm");
-    push("In Z5", t.pctWorkZ5, "%");
+    const work = grade.threshold;
+    if (work.segmentation === "reps") push("Reps", work.repCount);
+    if (work.segmentation !== "whole_run") push("Work", work.workMinutes, " min");
+    push("Work pace", formatGradePace(work.workAvgPaceSecPerKm, distanceUnit));
+    push("Work HR", work.workAvgHr, " bpm");
+    push("In Z5", work.pctWorkZ5, "%");
   } else if (grade.easy) {
-    const e = grade.easy;
-    push("Avg HR", e.avgHr, " bpm");
-    push("Above easy", e.pctAboveCeiling, "%");
-    push("Pace", formatGradePace(e.avgPaceSecPerKm, distanceUnit));
-    push("HR drift", e.hrDriftPct, "%");
+    const run = grade.easy;
+    push("Avg HR", run.avgHr, " bpm");
+    push("Above easy", run.pctAboveCeiling, "%");
+    push("Pace", formatGradePace(run.avgPaceSecPerKm, distanceUnit));
+    push("HR drift", run.hrDriftPct, "%");
   }
   return metrics;
 }
