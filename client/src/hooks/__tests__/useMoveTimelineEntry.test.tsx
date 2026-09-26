@@ -52,6 +52,7 @@ const missed = {
   notes: null,
   planDayId: "pd-1",
   priority: "key",
+  dayName: format(subDays(new Date(), 2), "EEEE"),
 } as TimelineEntry;
 
 beforeEach(() => {
@@ -80,6 +81,8 @@ describe("useMoveTimelineEntry", () => {
         status: "planned",
         recovery: "folded",
         missedOn: missed.date,
+        // The weekday chip moves with the card.
+        dayName: format(addDays(new Date(), 1), "EEEE"),
       });
     });
     expect(apiMocks.updateDayWithoutPlan).toHaveBeenCalledWith("pd-1", { scheduledDate: day(1) });

@@ -89,6 +89,7 @@ function planDay(overrides: Partial<PlanDay> = {}): PlanDay {
     priority: null,
     recovery: null,
     missedOn: null,
+    recoveryUndo: null,
     ...overrides,
   };
 }

@@ -2,6 +2,7 @@ import type { PlanDayPriority, PlanDayRecovery } from "../enums";
 import { z } from "../zod";
 import type { PlanDay } from "./plans";
 import { dateStringSchema } from "./requests";
+import type { ExerciseSet } from "./workouts";
 
 /**
  * Missed-session recovery: the contract behind
@@ -14,7 +15,7 @@ import { dateStringSchema } from "./requests";
  * (server/services/missedRecovery) from the same timeline the athlete sees.
  */
 
-/** The ways forward the preview offers. `reopen` undoes a let-go. */
+/** The ways forward the preview offers. `reopen` takes a decision back: a let-go, a fold or a shorten. */
 export const missedRecoveryActionEnum = ["fold", "shorten", "let_go", "reopen"] as const;
 export type MissedRecoveryAction = (typeof missedRecoveryActionEnum)[number];
 
@@ -137,7 +138,7 @@ export interface MissedSessionRecoveryPreview {
   today: string;
   session: {
     durationMin: number;
-    /** No exercise table or saved duration to go on: the minutes are an assumption. */
+    /** No saved duration, exercise table or length in the text ("40 min easy") to go on: the minutes are an assumption. */
     estimated: boolean;
     rpe: number;
     /** Key, or hard enough (RPE 7+) that neighbouring hard days matter. */
@@ -161,4 +162,42 @@ export interface MissedSessionRecoveryPreview {
 
 export interface ApplyMissedRecoveryResponse {
   day: PlanDay;
+}
+
+/** The prescription fields a shorten scales down. */
+export type RecoveryScaledSetField = "reps" | "plannedReps" | "distance" | "plannedDistance" | "time" | "plannedTime";
+
+/** A set a shorten scaled down: what it held, and what the shorten wrote. */
+export interface RecoveryUndoScaledSet {
+  id: string;
+  before: Partial<Record<RecoveryScaledSetField, number | null>>;
+  after: Partial<Record<RecoveryScaledSetField, number>>;
+}
+
+/** A field a shorten rewrote on the day: what it held, and what the shorten wrote. */
+export interface RecoveryUndoField<T> {
+  before: T;
+  after: T;
+}
+
+/**
+ * What a fold or shorten changed, kept on the day (`plan_days.recovery_undo`)
+ * so the athlete can take the decision back: the day returns to the date it
+ * was missed on, undecided, with its whole prescription. Anything the athlete
+ * has edited since is theirs and stays — a field or a set comes back only
+ * where it still reads what the move wrote.
+ */
+export interface PlanDayRecoveryUndo {
+  /** The day as it stood before it moved. */
+  scheduledDate: string;
+  status: "missed" | "planned";
+  recovery: PlanDayRecovery | null;
+  missedOn: string | null;
+  notes?: RecoveryUndoField<string | null>;
+  expectedDurationMin?: RecoveryUndoField<number | null>;
+  /** Sets the shorten dropped, whole rows. */
+  deletedSets: ExerciseSet[];
+  scaledSets: RecoveryUndoScaledSet[];
+  /** The undo this move replaced: a session moved twice goes back one move at a time. */
+  previous: PlanDayRecoveryUndo | null;
 }

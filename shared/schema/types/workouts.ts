@@ -240,6 +240,13 @@ export type TimelineEntry = {
    */
   recoverable?: boolean;
   /**
+   * A folded or shortened session whose move can still be taken back: upcoming
+   * and not yet done, with the day it was missed on recent enough to decide
+   * about again. Undoing it (`reopen`) returns it there, undecided, with its
+   * whole prescription. Omitted otherwise.
+   */
+  recoveryUndoable?: boolean;
+  /**
    * The session shown is set by the plan's race date — the race itself, the
    * shakeout the day before, or recovery after it — rather than the stored
    * plan day, so it can't be moved or given another tier. Omitted otherwise.
@@ -261,6 +268,11 @@ export type TimelineEntry = {
   planDayId?: string | null;
   workoutLogId?: string | null;
   weekNumber?: number;
+  /**
+   * The weekday the entry sits on ("Tuesday"). Derived from `date` rather than
+   * copied from the plan day's `dayName`, which names the plan slot the session
+   * was written for: a session moved to Thursday is on Thursday.
+   */
   dayName?: string;
   planName?: string | null;
   planId?: string | null;

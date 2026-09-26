@@ -152,6 +152,18 @@ describe("getMissedSessionRecoveryPreview", () => {
     expect(mocks.getTimelinePage).toHaveBeenCalledWith(USER, { limit: 60, before: "2026-10-05" });
   });
 
+  it("reads a table-less session's length from its text, and assumes an hour only when the text doesn't say", async () => {
+    mocks.getExerciseSetsByPlanDay.mockResolvedValue([]);
+
+    mocks.getPlanDay.mockResolvedValueOnce({ ...missedDay, focus: "Tempo run", mainWorkout: "10 min easy, 25 min tempo, 10 min easy" });
+    const written = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+    expect(written.session).toMatchObject({ durationMin: 45, estimated: false });
+
+    mocks.getPlanDay.mockResolvedValueOnce({ ...missedDay, focus: "Tempo run", mainWorkout: "Tempo, by feel" });
+    const unsaid = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+    expect(unsaid.session).toMatchObject({ durationMin: 60, estimated: true });
+  });
+
   it("reads back page by page until the missed week is covered, however long the plan runs", async () => {
     mocks.getTimelinePage
       .mockResolvedValueOnce({
@@ -216,6 +228,16 @@ describe("applyMissedSessionRecovery", () => {
         recovery: "folded",
         missedOn: "2026-09-22",
         skipReason: null,
+        // What the undo needs to put it back.
+        recoveryUndo: {
+          scheduledDate: "2026-09-22",
+          status: "missed",
+          recovery: null,
+          missedOn: null,
+          deletedSets: [],
+          scaledSets: [],
+          previous: null,
+        },
       },
     });
     expect(day).toMatchObject({ scheduledDate: "2026-09-24", recovery: "folded" });
@@ -230,6 +252,8 @@ describe("applyMissedSessionRecovery", () => {
     expect(write.update).not.toHaveProperty("notes");
     expect(write.update).not.toHaveProperty("expectedDurationMin");
     expect(write.deleteSetIds).toEqual(["set-4", "set-5"]);
+    // The dropped intervals are kept, whole, for the undo.
+    expect(write.update.recoveryUndo?.deletedSets.map((set) => set.id)).toEqual(["set-4", "set-5"]);
   });
 
   it("pins the length and adds an instruction when there is no table to cut", async () => {
@@ -243,6 +267,44 @@ describe("applyMissedSessionRecovery", () => {
       expectedDurationMin: 30,
       notes: "Shortened after it was missed on Tue 22 Sep: do about 60% of it.\nHold 4:10/km",
     });
+    expect(write.update.recoveryUndo).toMatchObject({
+      notes: { before: "Hold 4:10/km", after: "Shortened after it was missed on Tue 22 Sep: do about 60% of it.\nHold 4:10/km" },
+      expectedDurationMin: { before: 50, after: 30 },
+    });
+  });
+
+  it("takes a shorten back: the day it was missed on, undecided, with the whole table", async () => {
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "shorten", targetDate: "2026-09-26" });
+    const shortened = { ...missedDay, ...lastWrite().update };
+    mocks.getPlanDay.mockResolvedValue(shortened);
+    // Sets 4 and 5 are gone now.
+    mocks.getExerciseSetsByPlanDay.mockResolvedValue(intervalSets().slice(0, 3));
+    vi.mocked(enqueueAutoCoachInBackground).mockClear();
+
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
+
+    const undo = lastWrite();
+    expect(undo.guard).toEqual({ statuses: ["planned"], scheduledDate: "2026-09-26", recovery: "shortened" });
+    expect(undo.update).toEqual({
+      scheduledDate: "2026-09-22",
+      status: "missed",
+      recovery: null,
+      missedOn: null,
+      recoveryUndo: null,
+    });
+    expect(undo.insertSets?.map((set) => set.id)).toEqual(["set-4", "set-5"]);
+    expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+  });
+
+  it("won't take a move back once the session has been done", async () => {
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "fold", targetDate: "2026-09-24" });
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, ...lastWrite().update, status: "completed" });
+    mocks.applyPlanDayRecovery.mockClear();
+
+    await expect(applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(mocks.applyPlanDayRecovery).not.toHaveBeenCalled();
   });
 
   it("refuses a day the preview would not offer", async () => {
@@ -264,7 +326,7 @@ describe("applyMissedSessionRecovery", () => {
     expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
   });
 
-  it("reopens only a let-go", async () => {
+  it("reopens only a decision the timeline shows", async () => {
     await expect(applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" })).rejects.toMatchObject({
       status: 409,
     });

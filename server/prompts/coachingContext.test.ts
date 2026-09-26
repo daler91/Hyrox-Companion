@@ -53,6 +53,28 @@ describe("coaching context prompt sanitization (W1)", () => {
   });
 });
 
+describe("buildOverallStats — let-go sessions", () => {
+  const base = {
+    totalWorkouts: 6,
+    completedWorkouts: 4,
+    plannedWorkouts: 0,
+    missedWorkouts: 1,
+    skippedWorkouts: 0,
+    completionRate: 80,
+    currentStreak: 0,
+  } as TrainingContext;
+
+  it("lists sessions the athlete let go apart from the misses", () => {
+    const out = buildOverallStats({ ...base, letGoWorkouts: 1 });
+    expect(out).toContain("- Missed: 1\n- Let go by choice after missing (not counted as missed or in the rate): 1");
+  });
+
+  it("says nothing about letting go when there were none", () => {
+    expect(buildOverallStats(base)).not.toContain("Let go");
+    expect(buildOverallStats({ ...base, letGoWorkouts: 0 })).not.toContain("Let go");
+  });
+});
+
 // The coach was reading dates straight from the workout data with no "today"
 // anchor, so it called the current day's session "tomorrow". These cover the
 // date anchoring that keeps it aligned with the athlete's local calendar.

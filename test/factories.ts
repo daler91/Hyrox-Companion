@@ -105,6 +105,7 @@ export function createMockPlanDay(overrides: Partial<PlanDay> = {}): PlanDay {
     priority: null,
     recovery: null,
     missedOn: null,
+    recoveryUndo: null,
     ...overrides,
   };
 }
@@ -233,6 +234,7 @@ export function createMockWeeklySummary(overrides: Partial<WeeklySummaryData> = 
     missedCount: 1,
     skippedCount: 0,
     excusedCount: 0,
+    letGoCount: 0,
     completionRate: 75,
     currentStreak: 2,
     prsThisWeek: 1,

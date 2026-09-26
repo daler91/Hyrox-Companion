@@ -5,6 +5,7 @@ import type {
   TimelineEntry,
 } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
 
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -54,9 +55,19 @@ export function useMissedRecoveryPreview(planDayId: string | null) {
 interface ApplyVariables {
   readonly planDayId: string;
   readonly body: ApplyMissedRecoveryBody;
+  /** For `reopen` on a moved session: the move being taken back, so the toast can say where it went. */
+  readonly undoing?: { readonly recovery: "folded" | "shortened"; readonly missedOn: string | null };
 }
 
-function successTitle(body: ApplyMissedRecoveryBody): string {
+/** Where an undone move put the session back. */
+function undoneMoveTitle(undoing: NonNullable<ApplyVariables["undoing"]>): string {
+  const day = undoing.missedOn ? format(parseISO(undoing.missedOn), "EEE d MMM") : "the day you missed it";
+  return undoing.recovery === "shortened"
+    ? `Full session back on ${day} — decide again`
+    : `Moved back to ${day} — decide again`;
+}
+
+function successTitle({ body, undoing }: ApplyVariables): string {
   switch (body.action) {
     case "fold":
       return "Session moved";
@@ -65,7 +76,7 @@ function successTitle(body: ApplyMissedRecoveryBody): string {
     case "let_go":
       return "Let go — the plan carries on";
     case "reopen":
-      return "Back on your list to decide";
+      return undoing ? undoneMoveTitle(undoing) : "Back on your list to decide";
   }
 }
 
@@ -80,7 +91,7 @@ export function useApplyMissedRecovery() {
       // Every week's review, whichever one is cached (prefix match).
       ["/api/v1/weekly-review"],
     ],
-    successToast: (_data, { body }) => ({ title: successTitle(body) }),
+    successToast: (_data, variables) => ({ title: successTitle(variables) }),
     errorToast: "Couldn't update the session",
     onSuccess: async (_data, { planDayId }) => {
       queryClient.removeQueries({ queryKey: QUERY_KEYS.missedRecovery(planDayId) });

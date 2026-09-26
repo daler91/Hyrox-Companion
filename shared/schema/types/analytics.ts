@@ -509,6 +509,12 @@ export interface WeeklyReviewCounts {
    * injured must not be scored as a week of failures they already explained.
    */
   excused: number;
+  /**
+   * Missed days the athlete let go (missed-session recovery). Out of `missed`:
+   * dropping a session on purpose is adjusting the plan, not falling short of
+   * it. An excused day is counted as excused, even if it was also let go.
+   */
+  letGo: number;
   totalDurationMin: number;
   avgRpe: number | null;
 }

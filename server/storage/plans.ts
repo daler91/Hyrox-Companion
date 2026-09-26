@@ -67,10 +67,12 @@ export interface PlanDayRecoveryWrite {
   readonly guard: PlanDayRecoveryGuard;
   readonly update: Pick<
     UpdatePlanDay,
-    "scheduledDate" | "status" | "recovery" | "missedOn" | "skipReason" | "expectedDurationMin" | "notes"
+    "scheduledDate" | "status" | "recovery" | "missedOn" | "skipReason" | "expectedDurationMin" | "notes" | "recoveryUndo"
   >;
   readonly deleteSetIds?: readonly string[];
   readonly setUpdates?: readonly PlanDayRecoverySetUpdate[];
+  /** Sets to put back, whole rows with their ids (undoing a shorten). */
+  readonly insertSets?: readonly ExerciseSet[];
 }
 
 export type PlanDayRecoveryOutcome =
@@ -498,6 +500,13 @@ export class PlanStorage {
           .update(exerciseSets)
           .set({ ...fields, version: sql`${exerciseSets.version} + 1` })
           .where(and(eq(exerciseSets.id, id), eq(exerciseSets.planDayId, dayId)));
+      }
+      if (write.insertSets && write.insertSets.length > 0) {
+        await tx
+          .insert(exerciseSets)
+          .values(write.insertSets.map((set) => ({ ...set, planDayId: dayId, workoutLogId: null })))
+          // Already back (restored twice): the row that is there stays.
+          .onConflictDoNothing({ target: exerciseSets.id });
       }
 
       const [day] = await tx.update(planDays).set(write.update).where(eq(planDays.id, dayId)).returning();

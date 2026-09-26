@@ -8,10 +8,10 @@ vi.mock("../../db", () => ({
 
 import { AnalyticsStorage } from "../analytics";
 
-// getWeeklyStats issues four sequential db.select() calls: the logged-session
-// totals, the planned/missed/skipped counts by status, a nested EXISTS
-// subquery (built but never awaited on its own — it's handed to `exists()`),
-// and the excused-count query. Each gets its own thenable "chain" so the test
+// getWeeklyStats issues sequential db.select() calls: the logged-session
+// totals, the planned/missed/skipped counts by status, the excused-count
+// query, and the let-go count — the last two each building a nested EXISTS
+// subquery (never awaited on its own — it's handed to `exists()`). Each gets its own thenable "chain" so the test
 // can hand back different rows per call without threading one shared mock
 // through every .from()/.innerJoin()/.where()/.groupBy().
 function chain(resolvedValue: unknown) {
@@ -34,6 +34,7 @@ describe("AnalyticsStorage.getWeeklyStats", () => {
     logs = [{ completedCount: 0, totalDuration: 0 }],
     days = [] as { status: string; count: number }[],
     excusedRows = [] as { status: string; count: number }[],
+    letGo = [{ count: 0 }] as { count: number }[],
   } = {}) {
     // Call order: the logs query, the days-by-status query, then the
     // excusedRows query itself — whose own .where() builds a nested EXISTS
@@ -43,7 +44,9 @@ describe("AnalyticsStorage.getWeeklyStats", () => {
       .mockReturnValueOnce(chain(logs))
       .mockReturnValueOnce(chain(days))
       .mockReturnValueOnce(chain(excusedRows))
-      .mockReturnValueOnce(chain([])); // nested EXISTS subquery — never awaited directly
+      .mockReturnValueOnce(chain([])) // nested EXISTS subquery — never awaited directly
+      .mockReturnValueOnce(chain(letGo))
+      .mockReturnValueOnce(chain([])); // its nested EXISTS subquery
   }
 
   it("returns the logged sessions and total duration from the workout_logs query", async () => {
@@ -107,6 +110,22 @@ describe("AnalyticsStorage.getWeeklyStats", () => {
 
     expect(result.plannedCount).toBe(2);
     expect(result.excusedCount).toBe(1);
+  });
+
+  it("takes days the athlete let go out of the missed count, and counts them on their own", async () => {
+    mockQueries({
+      days: [
+        { status: "missed", count: 3 },
+        { status: "completed", count: 2 },
+      ],
+      letGo: [{ count: 2 }],
+    });
+
+    const result = await storage.getWeeklyStats("user-1", "2026-06-08", "2026-06-14");
+
+    expect(result.missedCount).toBe(1);
+    expect(result.letGoCount).toBe(2);
+    expect(result.planCompletedCount).toBe(2);
   });
 
   it("sums excusedCount across both missed and planned excused rows", async () => {

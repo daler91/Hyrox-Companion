@@ -67,6 +67,7 @@ describe("buildTrainingContext", () => {
       plannedWorkouts: 0,
       missedWorkouts: 0,
       skippedWorkouts: 0,
+      letGoWorkouts: 0,
       completionRate: 0,
       currentStreak: 0,
       currentDate: "2026-01-15",

@@ -88,6 +88,11 @@ export function weekdayIndex(date: string): number {
   return (parseIsoDate(date).getUTCDay() + 6) % 7;
 }
 
+/** The weekday `date` falls on: "Monday" … "Sunday". */
+export function weekdayName(date: string): (typeof PLAN_WEEKDAYS)[number] {
+  return PLAN_WEEKDAYS[weekdayIndex(date)] ?? "Monday";
+}
+
 /** The Monday that opens week 1 of a plan starting on `startDate`. */
 export function planWeekOneMonday(startDate: string): string {
   return addDaysToISODate(startDate, -weekdayIndex(startDate));

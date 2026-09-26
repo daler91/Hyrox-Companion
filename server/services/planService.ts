@@ -12,6 +12,7 @@ import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
 import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
+import { captureMove } from "./missedRecovery/undo";
 
 // Moving a plan day changes the shape of the athlete's upcoming schedule, so
 // re-run the auto-coach and let its suggestions/review notes reflect the new
@@ -267,11 +268,13 @@ export async function createSamplePlan(
  * sweep only ever touches planned days. A past day the sweep has not reached
  * yet reads as missed too, so it counts the same.
  */
+type MissedSessionMoveFields = Pick<UpdatePlanDay, "status" | "recovery" | "missedOn" | "recoveryUndo">;
+
 async function missedSessionMoveFields(
   existing: PlanDay,
   nextDate: string | null,
   userId: string,
-): Promise<Pick<UpdatePlanDay, "status" | "recovery" | "missedOn">> {
+): Promise<MissedSessionMoveFields> {
   const from = existing.scheduledDate;
   if (!nextDate || !from || nextDate === from) return {};
   if (existing.status !== "missed" && existing.status !== "planned") return {};
@@ -279,7 +282,8 @@ async function missedSessionMoveFields(
   const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const wasMissed = existing.status === "missed" || from < today;
   if (!wasMissed || nextDate < today) return {};
-  return { status: "planned", recovery: "folded", missedOn: from };
+  // Recorded like any fold, so the card's undo can put it back.
+  return { status: "planned", recovery: "folded", missedOn: from, recoveryUndo: captureMove(existing) };
 }
 
 /**
@@ -294,7 +298,7 @@ async function writeReschedule(
   updates: UpdatePlanDay,
   userId: string,
   existing: PlanDay | null | undefined,
-  moveFields: Pick<UpdatePlanDay, "status" | "recovery" | "missedOn">,
+  moveFields: MissedSessionMoveFields,
 ) {
   if (!existing || moveFields.status === undefined) return storage.plans.updatePlanDay(dayId, updates, userId);
   return db.transaction(async (tx) => {

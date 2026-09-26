@@ -1,6 +1,7 @@
 ﻿import { planDayPriorityEnum, planDayRecoveryEnum } from "../enums";
 import { planDays, trainingPlans } from "../tables";
 import { createInsertSchema, z } from "../zod";
+import type { PlanDayRecoveryUndo } from "./recovery";
 import { dateStringSchema } from "./requests";
 // Training plan types and schemas
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans)
@@ -71,6 +72,13 @@ export const insertPlanDaySchema = createInsertSchema(planDays)
     // null hands the tier back to the server's inference.
     priority: z.enum(planDayPriorityEnum).nullable().optional(),
     recovery: z.enum(planDayRecoveryEnum).nullable().optional(),
+    // Written only by recovery (server-built, never parsed from a request;
+    // every client-facing schema omits it).
+    recoveryUndo: z
+      .custom<PlanDayRecoveryUndo>()
+      .openapi({ type: "object", description: "What the last fold or shorten changed, so it can be undone." })
+      .nullable()
+      .optional(),
   });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
@@ -88,15 +96,16 @@ export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
  * `/status` route exists) and the coach-note regeneration cooldown keyed on
  * `aiNoteUpdatedAt`, letting a client re-trigger AI note generation at will.
  *
- * `recovery` and `missedOn` are written only by missed-session recovery
- * (`POST /api/v1/plans/days/:dayId/recovery`) and the reschedule path, which
- * move the status with them. `priority` stays writable: it is the athlete's.
+ * `recovery`, `missedOn` and `recoveryUndo` are written only by missed-session
+ * recovery (`POST /api/v1/plans/days/:dayId/recovery`) and the reschedule path,
+ * which move the status with them. `priority` stays writable: it is the athlete's.
  */
 export const updatePlanDayRouteSchema = updatePlanDaySchema.omit({
   status: true,
   skipReason: true,
   recovery: true,
   missedOn: true,
+  recoveryUndo: true,
   aiSource: true,
   aiRationale: true,
   aiInputsUsed: true,

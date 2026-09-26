@@ -1,2 +1,7 @@
 export { MissedRecoveryDialog, type MissedRecoveryRequest } from "./MissedRecoveryDialog";
-export { isRecoverableEntry, MissedRecoveryPrompt, type RecoverEntryHandler } from "./MissedRecoveryPrompt";
+export {
+  isRecoverableEntry,
+  isUndoableMove,
+  MissedRecoveryPrompt,
+  type RecoverEntryHandler,
+} from "./MissedRecoveryPrompt";

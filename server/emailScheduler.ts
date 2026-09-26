@@ -125,7 +125,8 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   // email told them 100%, captioned "3 of 3 planned sessions" (audit H6).
   //
   // Excused days are already subtracted from `plannedCount`/`missedCount` by
-  // the storage layer, so a week spent injured is not a week of failures.
+  // the storage layer, so a week spent injured is not a week of failures; so
+  // are missed days the athlete let go, which were a decision, not a lapse.
   // `null` when nothing was due: no plan is not the same as a perfect score.
   const dueCount =
     stats.planCompletedCount + stats.plannedCount + stats.missedCount + stats.skippedCount;
@@ -138,6 +139,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     missedCount: stats.missedCount,
     skippedCount: stats.skippedCount,
     excusedCount: stats.excusedCount,
+    letGoCount: stats.letGoCount,
     completionRate,
     currentStreak: streak,
     prsThisWeek,

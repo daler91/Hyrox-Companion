@@ -12,7 +12,7 @@ export interface WeeklySummaryData {
   completedCount: number;
   /** Plan days completed. The completion-rate numerator. */
   planCompletedCount: number;
-  /** Plan days due this week (completed + planned + missed + skipped, less excused). */
+  /** Plan days due this week (completed + planned + missed + skipped, less excused and let go). */
   dueCount: number;
   plannedCount: number;
   missedCount: number;
@@ -23,6 +23,12 @@ export interface WeeklySummaryData {
    * the athlete spent injured is not a week of failures.
    */
   excusedCount: number;
+  /**
+   * Missed days the athlete let go (missed-session recovery). Out of
+   * `missedCount` and the completion-rate denominator: dropping a session on
+   * purpose is adjusting the plan, not falling short of it.
+   */
+  letGoCount: number;
   /**
    * Plan days completed ÷ plan days due, as a percentage. `null` when nothing
    * was due — an athlete with no plan has no completion rate, and reporting
@@ -482,15 +488,20 @@ export function buildWeeklySummaryEmail(
     data.excusedCount > 0
       ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${excusedSuffix} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
       : "";
+  const letGoSuffix = data.letGoCount === 1 ? "" : "s";
+  const letGoNote =
+    data.letGoCount > 0
+      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.letGoCount} missed session${letGoSuffix} you chose to let go — not counted as missed.</p>`
+      : "";
   let missedSessionsMessage: string;
   if (data.missedCount > 0) {
     let missedSuffix = "s";
     if (data.missedCount === 1) {
       missedSuffix = "";
     }
-    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>${excusedNote}`;
-  } else if (data.excusedCount > 0) {
-    missedSessionsMessage = excusedNote;
+    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>${excusedNote}${letGoNote}`;
+  } else if (data.excusedCount > 0 || data.letGoCount > 0) {
+    missedSessionsMessage = `${excusedNote}${letGoNote}`;
   } else {
     missedSessionsMessage =
       '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';

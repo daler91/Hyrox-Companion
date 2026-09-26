@@ -1,0 +1,1 @@
+ALTER TABLE "plan_days" ADD COLUMN "recovery_undo" jsonb;

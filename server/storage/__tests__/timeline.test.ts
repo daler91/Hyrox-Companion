@@ -527,6 +527,8 @@ describe("TimelineStorage priority tiers and missed-session recovery", () => {
     expect(byId("d-unlogged").status).toBe("missed");
     expect(byId("d-unlogged").recovery).toBeUndefined();
     expect(byId("d-folded")).toMatchObject({ status: "planned", recovery: "folded", missedOn: "2026-07-07" });
+    // Written for a Monday, it now sits on Thursday, and says so.
+    expect(byId("d-folded").dayName).toBe("Thursday");
     expect(byId("d-open").recovery).toBeUndefined();
   });
 
@@ -564,5 +566,39 @@ describe("TimelineStorage priority tiers and missed-session recovery", () => {
     expect(byId("d-post-race")).toMatchObject({ status: "missed", raceDerived: true });
     expect(byId("d-post-race").recoverable).toBeUndefined();
     expect(byId("d-recent").raceDerived).toBeUndefined();
+  });
+
+  it("offers to take a move back only while the session is upcoming and its miss recent", async () => {
+    const undoFrom = (date: string) => ({
+      scheduledDate: date,
+      status: "missed",
+      recovery: null,
+      missedOn: null,
+      deletedSets: [],
+      scaledSets: [],
+      previous: null,
+    });
+    const moved = (id: string, date: string, missedOn: string, overrides: Record<string, unknown> = {}) =>
+      planDay(id, date, { recovery: "folded", missedOn, recoveryUndo: undoFrom(missedOn), ...overrides });
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      moved("d-upcoming", "2026-07-09", "2026-07-06"),
+      moved("d-today", "2026-07-08", "2026-07-06", { recovery: "shortened" }),
+      // Back there, the card would no longer ask about it.
+      moved("d-stale", "2026-07-10", "2026-06-29"),
+      // Done, or missed again on its new day: it has moved on.
+      moved("d-done", "2026-07-08", "2026-07-06", { status: "completed" }),
+      moved("d-missed-again", "2026-07-07", "2026-07-05", { status: "missed" }),
+      // Moved before undo was recorded.
+      planDay("d-no-record", "2026-07-09", { recovery: "folded", missedOn: "2026-07-06" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entryFor(entries, id);
+
+    expect(byId("d-upcoming").recoveryUndoable).toBe(true);
+    expect(byId("d-today").recoveryUndoable).toBe(true);
+    for (const id of ["d-stale", "d-done", "d-missed-again", "d-no-record"]) {
+      expect(byId(id).recoveryUndoable, id).toBeUndefined();
+    }
   });
 });

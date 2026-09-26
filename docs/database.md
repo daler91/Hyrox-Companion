@@ -248,6 +248,7 @@ Individual workout days within a training plan.
 | `priority` | `text` | nullable — the session's tier (`key`, `supporting`, `optional`). The workout engine stamps it on generated plans and the athlete can set it; null means "not set", and readers infer a tier from the day's title (`resolveSessionPriority()` in `shared/sessionPriority.ts`). Rest days have no tier |
 | `recovery` | `text` | nullable — what happened after the session was missed: `folded` (moved to another day in full), `shortened` (moved and cut down), or `let_go` (the athlete decided not to make it up; it stays `missed`). `let_go` only counts while the day is `missed`: readers ignore it on any other status, the plan-day status routes clear it when the day leaves `missed`, and the nightly missed sweep drops it from a day that is missed again |
 | `missed_on` | `date` | nullable — the date the session was originally on when it was missed, kept when recovery moves it so the card can say where it came from |
+| `recovery_undo` | `jsonb` | nullable — typed `PlanDayRecoveryUndo` (`shared/schema/types/recovery.ts`): what the last fold or shorten changed, so the athlete can take it back — the day's date, status, `recovery` and `missed_on` before the move, the sets a shorten dropped (whole rows) or scaled (before and after), the notes and `expected_duration_min` it rewrote, and the undo it replaced (`previous`), so a session moved twice goes back one move at a time. Written only by recovery and the drag-to-fold reschedule; never client-writable |
 
 **Check constraints:**
 - `status_check`: `status IN ('planned', 'completed', 'missed', 'skipped')`
@@ -1412,6 +1413,7 @@ Notable recent migrations:
 - `0097`: Adds the `email_weekly_review_reminder`, `email_today_session` and `email_analysis_digest` toggles, `notify_hour` (default `7`, with `users_notify_hour_check`) and the three matching `last_*_at` claim ledgers to `users`.
 - `0098`: Adds the five per-email `notify_hour_*` overrides to `users`, each with its own `0..23` CHECK.
 - `0106`: Adds `plan_days.priority`, `plan_days.recovery` and `plan_days.missed_on` (with CHECK constraints on the first two) for session priority tiers and missed-session recovery. All three are nullable, so existing rows need no backfill: an unset tier is inferred from the day's title at read time.
+- `0107`: Adds `plan_days.recovery_undo`, the record that lets a fold or shorten be undone. Nullable: sessions moved before it existed simply offer no undo.
 
 ### Startup Migration
 
