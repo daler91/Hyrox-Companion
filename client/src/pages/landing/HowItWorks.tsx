@@ -34,8 +34,8 @@ export function HowItWorks() {
               </div>
               <h3 className="font-heading font-semibold text-lg mb-2">Set Up Your Plan</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Generate a personalized AI plan from your goals, import a CSV, or start from a
-                built-in 8-week template. Set a start date and your timeline is ready.
+                Generate an AI plan built from your own lifts, run paces, and goals, import a CSV, or
+                start from a built-in 8-week template. Set a start date and your timeline is ready.
               </p>
             </div>
 
@@ -48,8 +48,8 @@ export function HowItWorks() {
               </div>
               <h3 className="font-heading font-semibold text-lg mb-2">Train & Log</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Complete your workouts and log them by text, voice, or photo — times, weights, RPE,
-                notes. Or let Strava and Garmin auto-import for you.
+                Log workouts by text, voice, or photo — or let Strava and Garmin auto-import them.
+                Easy and threshold runs are graded on whether they did their job.
               </p>
             </div>
 
@@ -62,8 +62,8 @@ export function HowItWorks() {
               </div>
               <h3 className="font-heading font-semibold text-lg mb-2">AI Adapts</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Your AI coach analyzes your data, identifies weak spots, and automatically modifies
-                upcoming workouts to keep you progressing.
+                Loads and paces move with every session, missed sessions get a recovery plan, and
+                your coach watches load on every body system to keep you progressing.
               </p>
             </div>
           </div>

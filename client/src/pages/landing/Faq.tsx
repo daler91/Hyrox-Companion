@@ -17,7 +17,17 @@ const BASE_FAQS = [
   {
     question: "How does the AI coach work?",
     answer:
-      "After each workout you log, the AI reviews your recent volume, intensity, and plan progression, then suggests adjustments to upcoming sessions. You can accept, tweak, or dismiss any suggestion before it touches your plan.",
+      "After each workout you log, the AI reviews your recent volume, intensity, load on each body system, and plan progression, then suggests adjustments to upcoming sessions. You can accept, tweak, or dismiss any suggestion before it touches your plan. Plan numbers aren't guessed: loads come from your estimated 1RMs, run paces from your best recent run, and exercises from your own training history.",
+  },
+  {
+    question: "What happens if I miss a session?",
+    answer:
+      "You choose what to do with it: fold it into another day, shorten it, or let it go. Each option shows what it does to that day and week — minutes, load, and which key sessions are kept — with a recommendation based on the session's priority. Any choice can be undone, and a session you let go doesn't count against your adherence.",
+  },
+  {
+    question: "How do I know if a run did its job?",
+    answer:
+      "Easy and threshold runs on your plan are graded from your Strava heart-rate and pace data: easy runs stayed easy, crept up, or went too hard; threshold runs held threshold, drifted harder, or stayed under. Grades show on the workout, in the Weekly Review, and rolled up by week and training block in Analytics.",
   },
   {
     question: "Do I have to type out every workout?",
@@ -43,6 +53,16 @@ const BASE_FAQS = [
     question: "Can the AI coach use my own coaching style?",
     answer:
       "Yes. Upload your own coaching principles or documents in Settings and the AI coach indexes them, then grounds its answers and plan adjustments in your methodology instead of relying on generic advice.",
+  },
+  {
+    question: "Can I get reminders and weekly summaries?",
+    answer:
+      "Yes, if you opt in. Choose daily session briefs, weekly summaries, missed-day reminders, and Sunday weekly-review reminders by email or push, each sent at the local hour you pick. Every email has a one-click unsubscribe.",
+  },
+  {
+    question: "What if I delete something by mistake?",
+    answer:
+      "Deleted workouts, plan days, and training plans go to a recycle bin for 90 days. Restore them with Undo on the delete message or from the Recycle bin tab in Settings.",
   },
 ];
 

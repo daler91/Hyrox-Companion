@@ -1,5 +1,5 @@
 import { SignInButton } from "@clerk/react";
-import { ArrowRight, CheckCircle2, Menu, Sparkles, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, Gauge, Menu, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Logo } from "@/components/brand/Logo";
@@ -15,7 +15,7 @@ function TimelineMockup() {
     <div
       className="w-full max-w-md mx-auto"
       role="img"
-      aria-label="Preview of the training timeline showing today's completed workout, an AI-modified session for tomorrow, and a planned recovery day"
+      aria-label="Preview of the training timeline showing today's completed easy run graded as stayed easy, an AI-modified key session for tomorrow, and an optional recovery day"
     >
       <div
         className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-[0_24px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-accent/20 overflow-hidden"
@@ -39,13 +39,13 @@ function TimelineMockup() {
           <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-2">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-success" />
-              <span className="text-sm font-medium">Upper Body Strength</span>
+              <span className="text-sm font-medium">Easy Aerobic Run</span>
               <Badge className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-0 ml-auto">
                 Completed
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground pl-6">
-              Sled Push 4x50m, Wall Balls 4x15, Farmers Carry 3x100m
+              8.2 km · 5:48/km · avg HR 138
             </p>
             <div className="flex gap-1.5 pl-6">
               <Badge
@@ -55,10 +55,13 @@ function TimelineMockup() {
                 <StravaIcon className="h-2.5 w-2.5 mr-0.5" aria-hidden="true" /> Strava
               </Badge>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                RPE 7
+                RPE 4
               </Badge>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                52 min
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-success/20"
+              >
+                <Gauge className="h-2.5 w-2.5 mr-0.5" aria-hidden="true" /> Stayed easy
               </Badge>
             </div>
           </div>
@@ -73,12 +76,15 @@ function TimelineMockup() {
             <div className="relative flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary animate-pulse" />
               <span className="text-sm font-medium">Circuit Simulation</span>
-              <Badge className="text-[10px] px-1.5 py-0 bg-primary/20 text-primary border-0 ml-auto">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-auto">
+                Key
+              </Badge>
+              <Badge className="text-[10px] px-1.5 py-0 bg-primary/20 text-primary border-0">
                 AI Modified
               </Badge>
             </div>
             <p className="relative text-xs text-muted-foreground pl-6">
-              Full circuit workout (AI adjusted based on your progress)
+              Sled Push 4x50m, Wall Balls 4x15 — loads raised after your last session
             </p>
           </div>
 
@@ -87,7 +93,7 @@ function TimelineMockup() {
               <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
               <span className="text-sm font-medium text-muted-foreground">Recovery & Mobility</span>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-auto">
-                Planned
+                Optional
               </Badge>
             </div>
           </div>
@@ -219,7 +225,7 @@ export function Hero() {
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-center lg:text-left">
             <div className="fade-up mb-4 flex justify-center lg:justify-start">
-              <Eyebrow icon={Sparkles}>Now with AI Auto-Coaching</Eyebrow>
+              <Eyebrow icon={Sparkles}>New: Session Grading &amp; Recovery</Eyebrow>
             </div>
             <h1 className="fade-up font-heading text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-5 leading-[1.05]">
               Your AI
@@ -229,8 +235,8 @@ export function Hero() {
               </span>
             </h1>
             <p className="fade-up text-lg md:text-xl text-muted-foreground mb-8 max-w-lg mx-auto lg:mx-0">
-              Plan, track, and analyze every session. Our AI coach watches your progress and
-              automatically adapts your upcoming workouts.
+              Plan, track, and analyze every session. Your AI coach builds your plan from your own
+              numbers, checks whether each run did its job, and adapts what comes next.
             </p>
             <div className="fade-up flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <SignInButton mode="modal">
