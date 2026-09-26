@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~2,090 lines, 40 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of eleven modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `planProposals.ts`, `plans.ts`, `recycleBin.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~2,140 lines, 41 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of twelve modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `planProposals.ts`, `plans.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -942,6 +942,36 @@ Not captured: `plan_adjustment_proposals` (cascade with the plan and are not res
 
 Served by the [Recycle Bin routes](api-reference.md#recycle-bin-routes).
 
+### workout_log_streams
+
+The compact heart-rate/pace stream behind session grading ("did the session do its job?"). One row per workout log, only for Strava runs linked to a plan day whose purpose is graded (easy/recovery/long or threshold/tempo). Fetched by the `session-streams` job ([integrations.md](integrations.md#session-streams-session-grading)); grades are **computed on read** from these buckets, never stored, so a changed max HR re-grades old runs without a refetch.
+
+A table of its own rather than a jsonb column on `workout_logs`: that table is read in bulk by the timeline, analytics and the workout list, and a stream column would ride along on all of them; the fetch bookkeeping (status, attempts, last attempt) is not the athlete's data either. `last_attempt_at` doubles as the ledger the fetcher counts against its share of Strava's read budget.
+
+`samples` (`SessionStreamSamples`, `shared/schema/sessionStream.ts`) folds Strava's one-sample-a-second stream into 15-second buckets: `hr` (time-weighted mean bpm, null where under 5 s of HR), `dist` (metres moved), `mov` (moving seconds), plus `has.hr`/`has.distance`, `elapsedSeconds` and `truncated` (capped at six hours). About 3 KB of JSON per hour of running. No GPS is requested or kept.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `workout_log_id` | varchar(255) | Not null, UNIQUE, FK → `workout_logs.id` ON DELETE CASCADE |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `strava_activity_id` | varchar(255) | Not null -- the activity the row was fetched for; a log relinked to another activity no longer matches, which marks the row stale |
+| `status` | text | Not null, CHECK IN (`ok`, `no_heartrate`, `unavailable`, `failed`, `skipped`) — rendered from `sessionStreamStatusEnum`. `skipped` = the run's day is not a graded purpose, so no Strava read was spent |
+| `attempts` | integer | Not null, default 0, CHECK >= 0 -- failed fetches; retried after 6 h, up to 3 |
+| `bucket_seconds` | integer | Nullable |
+| `samples` | jsonb | Nullable -- `SessionStreamSamples` when `status` is `ok` or `no_heartrate` |
+| `last_error` | text | Nullable -- a status code (`http_503`, `network`), never a response body |
+| `last_attempt_at` | timestamp with time zone | Not null, default `now()` |
+| `fetched_at` | timestamp with time zone | Nullable |
+| `created_at` | timestamp with time zone | Not null, default `now()` |
+
+**Indexes:**
+- `uq_workout_log_streams_workout_log` -- unique on (`workout_log_id`) -- one stream per log; the upsert's conflict target
+- `idx_workout_log_streams_user` -- (`user_id`) -- the cascade and the disconnect purge
+- `idx_workout_log_streams_last_attempt` -- (`last_attempt_at`) -- the read-budget ledger
+
+Health data derived purely from Strava: it cascades with the log and the user, is deleted when the recording is unlinked from the log, and is purged on Strava disconnect (the summary metrics on `workout_logs` stay, and grades fall back to them).
+
 ### Nutrition tables
 
 The nutrition module's eight tables — `foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `meal_targets`, `food_favorites`, `recipes`, and `recipe_ingredients` — are defined in the same `shared/schema/tables.ts` and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model) (including the per-100g storage invariant and the shared-cache visibility rules). Two schema details worth surfacing here:
@@ -953,7 +983,7 @@ The nutrition module's eight tables — `foods`, `food_servings`, `food_log_entr
 
 ## Drizzle Relations
 
-26 of the 40 tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
+26 of the 41 tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
 
 **Defined relations:**
 
@@ -1227,6 +1257,7 @@ export interface IStorage {
   nutrition: NutritionStorage;
   weeklyReviews: WeeklyReviewsStorage;
   recycleBin: RecycleBinStorage;
+  sessionStreams: SessionStreamStorage;
 }
 ```
 
@@ -1253,6 +1284,7 @@ Each domain class owns a cohesive slice of functionality:
 | `PlanProposalStorage` | `server/storage/planProposals.ts` | AI plan-adjustment proposals (pending lookup, apply/dismiss transitions) |
 | `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
 | `RecycleBinStorage` | `server/storage/recycleBin.ts` | Recycle bin: list, restore (single or bulk-delete batch), purge; the delete-time snapshots themselves are written by `recycleBinCapture.ts` |
+| `SessionStreamStorage` | `server/storage/sessionStreams.ts` | Session-grading streams: pending-fetch lists, the upsert, the read-budget ledger, and the unlink/disconnect purges |
 
 Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts`, `raceDayView.ts` and `recycleBinCapture.ts` (the delete-time snapshot writers that `workouts.ts`, `plans.ts` and `bulkDeleteWorkouts.ts` call inside their own transactions). `WorkoutStorage` is a single module, `server/storage/workouts.ts`; custom exercises live on `UserStorage`.
 
@@ -1281,6 +1313,7 @@ export const storage: IStorage = {
   nutrition: new NutritionStorage(),
   weeklyReviews: new WeeklyReviewsStorage(),
   recycleBin: new RecycleBinStorage(),
+  sessionStreams: new SessionStreamStorage(),
 };
 ```
 
@@ -1414,6 +1447,7 @@ Notable recent migrations:
 - `0098`: Adds the five per-email `notify_hour_*` overrides to `users`, each with its own `0..23` CHECK.
 - `0106`: Adds `plan_days.priority`, `plan_days.recovery` and `plan_days.missed_on` (with CHECK constraints on the first two) for session priority tiers and missed-session recovery. All three are nullable, so existing rows need no backfill: an unset tier is inferred from the day's title at read time.
 - `0107`: Adds `plan_days.recovery_undo`, the record that lets a fold or shorten be undone. Nullable: sessions moved before it existed simply offer no undo.
+- `0108`: Creates `workout_log_streams`, the compact HR/pace streams session grading reads. A new table only; existing runs are backfilled by the `sessionStreamBackfill` cron, not the migration.
 
 ### Startup Migration
 

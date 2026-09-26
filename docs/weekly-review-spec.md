@@ -77,6 +77,19 @@ adherence. `workout_logs` already stores `compliancePct`, `matchedSetCount`, `ad
 `removedSetCount` — so rendering the add/drop detail here also delivers **register quick win
 #14** for free, in a place where the athlete has time to read it.
 
+**Did each run do its job?** *(added with session grading.)* A plan-linked easy or threshold
+run carries a verdict chip — "Stayed easy", "Crept up", "Too hard", "Held threshold",
+"Drifted harder", "Under threshold", "Can't tell" — with the headline as its tooltip, and the
+"What you did" card opens with one line: "Runs that did their job: 3 of 4 · 1 threshold run
+drifted harder". Both come from the same grader as `GET /api/v1/session-grades`
+(`sessions[].grade`, `gradeSummary`), computed only for the page — the weekly email builds the
+review without them. The review keeps its calendar week; the Analytics "Session Quality" tab
+rolls the same grades up by **plan** week, so a session moved into another week by
+missed-session recovery can sit in different weeks on the two surfaces. A closed week is
+normally cached forever; while any of its grades is still waiting on its Strava stream the
+page treats it as a 60-second-stale week instead, and saving new heart-rate settings
+invalidates every week.
+
 **What did not happen, and why.** Missed and skipped days, with the skip reason.
 `plan_days.skip_reason` is captured today (`SkipConfirmDialog.tsx`) and **read by nothing** —
 this page would be its first consumer, which is the argument for building it here rather than

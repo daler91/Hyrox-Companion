@@ -1204,6 +1204,7 @@ The athlete's own Monday→Sunday week: completion against plan, prior-week comp
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 20/min
 - **Query:** `week` (optional) — any date inside the wanted week; defaults to the last completed week. The week is resolved in the athlete's `userTimezone` (falling back to UTC) and the payload reports the zone it was actually resolved in.
+- **Session grades:** each `sessions[]` entry carries `grade: SessionGradeChip | null` — `{ intent, purpose, verdict, confidence, headline, streamStatus }` for a graded run (see [session grades](#get-apiv1session-grades)), `null` otherwise — and the review carries `gradeSummary: { graded, onTarget, driftedHarder, easyTooHard } | null`. Both are computed only for this route; the weekly email builds the review without them. A grading failure drops the chips, never the review.
 - **Errors:** `400` (`Invalid 'week' date format`)
 
 ### POST /api/v1/weekly-review/intent
@@ -1215,6 +1216,28 @@ Write or clear the athlete's intent for a week. `POST` rather than `PUT` despite
 - **Body:** `{ week: string, intent?: string | null }` — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
 - **Response:** `{ weekStart, intent }`
 - **Errors:** `400` (validation)
+
+### GET /api/v1/session-grades
+
+"Did the session do its job?" for one plan: every plan-linked easy/recovery/long and threshold/tempo run graded against what its day was for, rolled up by plan week and training block. Computed on read (`server/services/sessionGrades/sessionGradeService.ts`), never stored — a changed max HR or a newly fetched stream shows up on the next read. Deterministic; no AI.
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 20/min
+- **Query:** `planId` (optional, 1-255 chars) — defaults to the active plan. Unknown query keys are rejected (`400`).
+- **Response:** `SessionGradesResponse` — `{ plan: { id, name, totalWeeks, startDate, currentWeek } | null, sessions: SessionGrade[] (newest first), weeks: SessionGradeWeek[], blocks: SessionGradeBlock[], totals: SessionGradeRollupCounts | null }`. No plan at all is `plan: null` with empty lists, not an error.
+- **`SessionGrade`:** `intent` (`easy` | `threshold`), `purpose` (`easy` | `recovery` | `long` | `threshold`), `verdict` (`on_target`, `crept_up`, `too_hard`, `drifted_harder`, `under`, `inconclusive`, `ungradeable`), `headline`, 1-3 `evidence` sentences, `confidence` (`high` | `medium` | `low`), `dataSource` (`stream` | `summary`), `streamStatus` (`ok`, `no_heartrate`, `unavailable`, `failed`, `skipped`, `pending`, `not_applicable`), `ungradeableReason` (`no_targets` | `no_data` | `too_short`), the `targets` it was measured against (HR bands from the app's Karvonen zones or the MAF ceiling; pace from the plan text, the plan's engine VDOT, or recent runs), and `easy` / `threshold` metrics. `countsInRollup` is false for all but the best-recorded log when a plan day has several.
+- **Rollups:** weeks are the plan's own `week_number`; blocks come from the plan generator's outline (a new block after each deload), or from the weeks whose text says "deload". Counts per verdict and intent, `graded`, `onTarget`, `onTargetRate`, `driftedHarder`, `easyTooHard`, `ungradeable`, `pending`, `plannedGradeable`.
+- **Errors:** `400` (validation), `404` (`planId` is not the athlete's)
+
+### GET /api/v1/workouts/:id/session-grade
+
+One workout's grade, for the workout detail view. A separate read rather than a field on `GET /workouts/:id`, because PATCH responses replace the detail cache and a grade whose stream is pending refetches on its own cadence.
+
+- **Auth:** Required
+- **Rate limit:** `sessionGrade` category, 60/min
+- **Response:** `{ grade: SessionGrade | null }` — `null` for anything not graded (not plan-linked, not a run, a session kind with no grader yet).
+- **Side effect:** when the grade's `streamStatus` is `pending`, queues a (debounced) `session-streams` fetch for the athlete.
+- **Errors:** `404` (`Workout not found`)
 
 ### GET /api/v1/race-prediction
 
