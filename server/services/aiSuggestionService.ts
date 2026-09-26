@@ -1,3 +1,4 @@
+import { appendCoachBlock, appendCoachCue } from "@shared/coachNotes";
 import type { CoachNoteInputs, ExerciseSet, UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits } from "@shared/unitConversion";
 import type { Logger } from "pino";
@@ -105,10 +106,10 @@ function buildTextUpdateValue(
   input: ApplyTimelineSuggestionInput,
 ): string {
   if (input.action !== "append") return input.recommendation;
-  const existing = getPlanDayFieldValue(day, input.targetField).trim();
-  return existing
-    ? `${existing}\n\nAI suggestion: ${input.recommendation}`
-    : `AI suggestion: ${input.recommendation}`;
+  // Same cue format and dedupe as the auto-coach, so applying the same
+  // suggestion twice doesn't repeat it.
+  if (input.targetField === "notes") return appendCoachCue(day.notes, input.recommendation);
+  return appendCoachBlock(getPlanDayFieldValue(day, input.targetField), input.recommendation);
 }
 
 type PlanDayPrescription = {

@@ -50,6 +50,7 @@ import { MafCeilingChip } from "./MafCeilingChip";
 import { RecoveryOriginBadge, SessionPriorityBadge } from "./SessionTierBadges";
 import type { TimelineWorkoutCardProps } from "./types";
 import { getCardClasses, getStatusBadge, type MissedDetail } from "./utils";
+import { WorkoutNotes } from "./WorkoutNotes";
 import { WorkoutStravaStats } from "./WorkoutStravaStats";
 
 type TimelineWorkoutEntry = TimelineWorkoutCardProps["entry"];
@@ -683,7 +684,7 @@ function TimelineCardWorkoutBody({
         <p className="text-sm text-muted-foreground mb-1">{entry.mainWorkout}</p>
       )}
       {entry.accessory && <p className="text-sm text-muted-foreground mb-1">{entry.accessory}</p>}
-      {entry.notes && <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>}
+      {entry.notes && <WorkoutNotes entryId={entry.id} notes={entry.notes} />}
       {metricsText && <p className="text-xs text-muted-foreground mt-1">{metricsText}</p>}
       {featureFlags.nutritionEnabled && isPlannedTimelineEntry(entry) && (
         <FuellingTargetChip entry={entry} />

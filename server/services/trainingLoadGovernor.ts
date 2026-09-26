@@ -1,3 +1,4 @@
+import { LOAD_GOVERNOR_CUE_PREFIX } from "@shared/coachNotes";
 import { dayDiff as daysBetween, toIsoDateUtc } from "@shared/dateUtils";
 import type { InsertExerciseSet, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
 
@@ -179,10 +180,12 @@ function reducedSummary(mode: "reduce" | "cap"): string {
     : "On-ramp: the planned session with about a fifth fewer sets. Ease back toward full load over the next few days and keep effort controlled.";
 }
 
+// Starts with LOAD_GOVERNOR_CUE_PREFIX so appending it replaces, rather than
+// stacks on, the governor cue an earlier coach run left in the notes.
 function reducedCue(mode: "reduce" | "cap"): string {
   return mode === "reduce"
-    ? "Load governor: cut total volume by about a third (fewer sets/intervals), hold the exercise selection, and keep effort easy to moderate."
-    : "Load governor on-ramp: trim total volume by about a fifth and keep effort controlled while load ramps back up.";
+    ? `${LOAD_GOVERNOR_CUE_PREFIX}: cut total volume by about a third (fewer sets/intervals), hold the exercise selection, and keep effort easy to moderate.`
+    : `${LOAD_GOVERNOR_CUE_PREFIX} on-ramp: trim total volume by about a fifth and keep effort controlled while load ramps back up.`;
 }
 
 // Drop trailing sets per exercise: keep the first round(count * keepFraction)
