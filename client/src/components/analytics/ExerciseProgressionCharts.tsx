@@ -190,7 +190,7 @@ export function ExerciseProgressionCharts({
                 aria-label="Bar chart view"
                 aria-pressed={chartMode === "bar"}
               >
-                <BarChart3 className="h-4 w-4" />
+                <BarChart3 className="h-4 w-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -206,7 +206,7 @@ export function ExerciseProgressionCharts({
                 aria-label="Line chart view"
                 aria-pressed={chartMode === "line"}
               >
-                <LineChartIcon className="h-4 w-4" />
+                <LineChartIcon className="h-4 w-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>

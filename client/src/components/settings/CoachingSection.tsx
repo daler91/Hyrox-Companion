@@ -28,11 +28,12 @@ export function CoachingSection() {
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
+            <BookOpen className="h-5 w-5" aria-hidden="true" />
             Coaching Knowledge
           </CardTitle>
           <CardDescription>
-            Add training principles or reference materials for the AI coach to use when making workout decisions
+            Add training principles or reference materials for the AI coach to use when making
+            workout decisions
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

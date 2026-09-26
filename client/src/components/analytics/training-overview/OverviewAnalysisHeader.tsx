@@ -65,14 +65,14 @@ export function OverviewAnalysisHeader({
               if (hasAnalysis) {
                 return (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
+                    <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
                     Regenerate
                   </>
                 );
               }
               return (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" />
+                  <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
                   Generate analysis
                 </>
               );
