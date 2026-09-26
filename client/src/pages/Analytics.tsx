@@ -6,6 +6,7 @@ import {
   Download,
   FileJson,
   FileSpreadsheet,
+  Gauge,
   HeartPulse,
   Loader2,
   PieChart,
@@ -24,6 +25,7 @@ import { FuellingTab } from "@/components/analytics/FuellingTab";
 import { MafTrendTab } from "@/components/analytics/MafTrendTab";
 import { ProgressTab } from "@/components/analytics/ProgressTab";
 import { RacePredictorTab } from "@/components/analytics/RacePredictorTab";
+import { SessionGradesTab } from "@/components/analytics/SessionGradesTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,12 +55,13 @@ type DateRange = "30" | "90" | "180" | "365" | "all";
 
 const DATE_RANGES: readonly DateRange[] = ["30", "90", "180", "365", "all"];
 
-// Literal classes (not interpolated) so Tailwind's JIT keeps them; the tab grid
-// widens by one column per optional tab (MAF trend, Fuelling).
+// Literal classes (not interpolated) so Tailwind's JIT keeps them. Six tabs fit
+// one row; with the optional tabs (MAF trend, Fuelling) a single row squeezes
+// the labels until their icons collapse, so seven or eight wrap to two rows of four.
 const SM_GRID_COLS: Record<number, string> = {
-  5: "sm:grid-cols-5",
   6: "sm:grid-cols-6",
-  7: "sm:grid-cols-7",
+  7: "sm:grid-cols-4",
+  8: "sm:grid-cols-4",
 };
 
 function getExportFilename(response: Response, exportFormat: AnalyticsExportFormat) {
@@ -73,9 +76,14 @@ export default function Analytics() {
   const { user } = useAuth();
   const isMaf = user?.trainingStyleId === "maf_method";
   const showFuelling = featureFlags.nutritionEnabled;
-  // 5 base tabs + each optional tab. On mobile the tabs flow in a 2-col grid, so
-  // the last tab is alone (and looks unbalanced) when the total is odd.
-  const tabCount = 5 + (isMaf ? 1 : 0) + (showFuelling ? 1 : 0);
+  // 6 base tabs + each optional tab. On mobile the tabs flow in a 2-col grid, so
+  // the last tab is alone (and looks unbalanced) when the total is odd: it then
+  // spans both columns.
+  const tabCount = 6 + (isMaf ? 1 : 0) + (showFuelling ? 1 : 0);
+  let lastTab = "predictor";
+  if (showFuelling) lastTab = "fuelling";
+  else if (isMaf) lastTab = "maf";
+  const lastTabSpan = (tab: string) => `${tab === lastTab && tabCount % 2 === 1 ? "col-span-2" : ""} sm:col-span-1`;
   const [dateRange, setDateRange] = useUrlQueryState<DateRange>("range", "90", DATE_RANGES);
   const [exportingFormat, setExportingFormat] = useState<AnalyticsExportFormat | null>(null);
   const isExporting = exportingFormat !== null;
@@ -220,30 +228,26 @@ export default function Analytics() {
             <Trophy className="h-4 w-4 mr-2" aria-hidden="true" />
             PRs &amp; Trends
           </TabsTrigger>
+          <TabsTrigger value="sessions" data-testid="tab-session-grades">
+            <Gauge className="h-4 w-4 mr-2" aria-hidden="true" />
+            Session Quality
+          </TabsTrigger>
           <TabsTrigger value="insights" data-testid="tab-coach-insights">
             <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
             Coach Insights
           </TabsTrigger>
-          <TabsTrigger
-            value="predictor"
-            className={`${!isMaf && !showFuelling ? "col-span-2" : ""} sm:col-span-1`}
-            data-testid="tab-race-predictor"
-          >
+          <TabsTrigger value="predictor" className={lastTabSpan("predictor")} data-testid="tab-race-predictor">
             <Timer className="h-4 w-4 mr-2" aria-hidden="true" />
             Race Predictor
           </TabsTrigger>
           {isMaf ? (
-            <TabsTrigger value="maf" data-testid="tab-maf-trend">
+            <TabsTrigger value="maf" className={lastTabSpan("maf")} data-testid="tab-maf-trend">
               <HeartPulse className="h-4 w-4 mr-2" aria-hidden="true" />
               MAF Trend
             </TabsTrigger>
           ) : null}
           {showFuelling ? (
-            <TabsTrigger
-              value="fuelling"
-              className={`${tabCount % 2 === 1 ? "col-span-2" : ""} sm:col-span-1`}
-              data-testid="tab-fuelling"
-            >
+            <TabsTrigger value="fuelling" className={lastTabSpan("fuelling")} data-testid="tab-fuelling">
               <UtensilsCrossed className="h-4 w-4 mr-2" aria-hidden="true" />
               Fuelling
             </TabsTrigger>
@@ -260,6 +264,10 @@ export default function Analytics() {
 
         <TabsContent value="progress" className="space-y-6">
           <ProgressTab dateParams={dateParams} />
+        </TabsContent>
+
+        <TabsContent value="sessions" className="space-y-6">
+          <SessionGradesTab />
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">

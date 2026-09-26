@@ -178,6 +178,7 @@ describe("Analytics tabs", () => {
       "Overview",
       "Breakdown",
       "PRs & Trends",
+      "Session Quality",
       "Coach Insights",
       "Race Predictor",
       "Fuelling",

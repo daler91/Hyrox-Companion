@@ -1,8 +1,13 @@
+import type { WeeklyReview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { addDays, mondayOf, todayLocalDateStr } from "@/lib/weekDates";
+
+function hasPendingGrade(review: WeeklyReview | undefined): boolean {
+  return review?.sessions.some((session) => session.grade?.streamStatus === "pending") ?? false;
+}
 
 /**
  * The weekly review for `week` (any date inside the wanted week), defaulting to
@@ -26,7 +31,11 @@ export function useWeeklyReview(week?: string) {
   return useQuery({
     queryKey: QUERY_KEYS.weeklyReview(resolvedWeek),
     queryFn: () => api.analytics.getWeeklyReview(resolvedWeek),
-    staleTime: isCurrentWeek ? 60_000 : Infinity,
+    // A closed week can still change in one way: a run's grade sharpens once
+    // its Strava stream arrives. Until then it stays short-lived like the
+    // current week.
+    staleTime: (query) =>
+      isCurrentWeek || hasPendingGrade(query.state.data) ? 60_000 : Infinity,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: isCurrentWeek,
   });

@@ -72,7 +72,8 @@ function sportTypeOf(log: WorkoutLog): string | null {
 }
 
 function isRun(log: WorkoutLog, sportType: string | null): boolean {
-  return log.source === "manual" && !log.stravaActivityId ? true : isRunSportType(sportType);
+  // No sport on record: only the athlete's own log on a run day counts as a run.
+  return sportType === null ? log.source === "manual" : isRunSportType(sportType);
 }
 
 function toSummary(log: WorkoutLog): SummaryMetrics {

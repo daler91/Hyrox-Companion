@@ -101,6 +101,9 @@ export const QUERY_KEYS = {
   workouts: ["/api/v1/workouts"] as const,
   workout: (id: string) => ["/api/v1/workouts", id] as const,
   workoutHistory: (id: string) => ["/api/v1/workouts", id, "history"] as const,
+  // Under the workouts prefix on purpose: every workout write already
+  // invalidates ["/api/v1/workouts"], which refreshes the grade with it.
+  workoutSessionGrade: (id: string) => ["/api/v1/workouts", id, "session-grade"] as const,
   exerciseHistory: (exerciseName: string, sessions: number) =>
     ["/api/v1/exercises", exerciseName, "history", sessions] as const,
   planDayExercises: (dayId: string) => ["/api/v1/plans/days", dayId, "sets"] as const,
@@ -112,6 +115,9 @@ export const QUERY_KEYS = {
   // invalidation refreshes the home summary too, with no extra call sites.
   trainingSummary: ["/api/v1/training-overview", "summary"] as const,
   weeklyReview: (week: string) => ["/api/v1/weekly-review", week] as const,
+  sessionGrades: (planId?: string) => ["/api/v1/session-grades", planId ?? "active"] as const,
+  // Prefix for invalidating every plan's grades at once.
+  sessionGradesPrefix: ["/api/v1/session-grades"] as const,
   overviewAnalysis: ["/api/v1/overview-analysis"] as const,
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,

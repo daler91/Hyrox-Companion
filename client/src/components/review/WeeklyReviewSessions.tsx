@@ -1,6 +1,7 @@
 import type { PlanDaySkipReason, WeeklyReview } from "@shared/schema";
 import { CircleSlash, Dumbbell } from "lucide-react";
 
+import { GradeVerdictBadge } from "@/components/session-grades/GradeVerdictBadge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDayLabel } from "@/lib/weekDates";
@@ -17,6 +18,28 @@ const STATUS_LABELS: Record<WeeklyReview["plannedDays"][number]["status"], strin
   skipped: "Skipped",
   planned: "Still to do",
 };
+
+/** Whether the run did what its plan day was for; the headline rides along as the tooltip. */
+function GradeBadge({ session }: { readonly session: WeeklyReview["sessions"][number] }) {
+  const grade = session.grade;
+  if (!grade) return null;
+  return (
+    <GradeVerdictBadge
+      intent={grade.intent}
+      verdict={grade.verdict}
+      headline={grade.headline}
+      testId={`weekly-review-session-grade-${session.workoutLogId}`}
+    />
+  );
+}
+
+/** "Runs that did their job: 3 of 4 · 1 drifted harder" — the week's graded runs in a line. */
+export function describeGradeSummary(summary: NonNullable<WeeklyReview["gradeSummary"]>): string {
+  const parts = [`Runs that did their job: ${summary.onTarget} of ${summary.graded}`];
+  if (summary.driftedHarder > 0) parts.push(`${summary.driftedHarder} threshold ${summary.driftedHarder === 1 ? "run" : "runs"} drifted harder`);
+  if (summary.easyTooHard > 0) parts.push(`${summary.easyTooHard} easy ${summary.easyTooHard === 1 ? "run" : "runs"} not easy`);
+  return parts.join(" · ");
+}
 
 /**
  * What the athlete actually did, one row per logged session.
@@ -53,6 +76,7 @@ function SessionRow({ session }: { readonly session: WeeklyReview["sessions"][nu
             {changes.join(" / ")} sets
           </Badge>
         )}
+        <GradeBadge session={session} />
         {session.planDayId === null && <Badge variant="secondary">Off plan</Badge>}
       </div>
     </li>
@@ -114,6 +138,11 @@ export function WeeklyReviewSessions({ review }: { readonly review: WeeklyReview
             <Dumbbell className="h-4 w-4" aria-hidden="true" />
             What you did
           </CardTitle>
+          {review.gradeSummary ? (
+            <p className="text-sm text-muted-foreground" data-testid="weekly-review-grade-summary">
+              {describeGradeSummary(review.gradeSummary)}
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent>
           {sessions.length === 0 ? (

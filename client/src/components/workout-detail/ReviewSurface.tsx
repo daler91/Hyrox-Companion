@@ -33,6 +33,7 @@ import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";
+import { SessionGradeCard } from "./SessionGradeCard";
 import {
   CoachRationaleSection,
   DetailGroup,
@@ -409,6 +410,8 @@ function ReviewDetailsColumn({
         detailsTestId={`review-strava-${entry.id}`}
         testId={`review-summary-${entry.id}`}
       />
+      {/* Only plan-linked sessions have a purpose to be graded against. */}
+      {entry.planDayId ? <SessionGradeCard workoutLogId={workoutLogId} distanceUnit={distanceUnit} /> : null}
       <ReviewActualsSection
         entry={entry}
         detail={detail}

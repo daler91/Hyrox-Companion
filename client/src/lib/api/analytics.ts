@@ -1,4 +1,4 @@
-import type { OverviewChartKey, PersonalRecord, RacePredictionResponse, TimelineEntry, TrainingOverview, TrainingSummary, WeeklyReview } from "@shared/schema";
+import type { OverviewChartKey, PersonalRecord, RacePredictionResponse, SessionGradesResponse, TimelineEntry, TrainingOverview, TrainingSummary, WeeklyReview, WorkoutSessionGradeResponse } from "@shared/schema";
 
 import type { TimelinePage } from "../timelineCache";
 import { rawRequest, typedRequest } from "./client";
@@ -50,6 +50,19 @@ export interface OverviewAnalysisResponse {
 }
 
 export const analytics = {
+  /** "Did the session do its job?" for a plan (the active one by default). */
+  getSessionGrades: (planId?: string) =>
+    typedRequest<SessionGradesResponse>(
+      "GET",
+      `/api/v1/session-grades${planId ? `?planId=${encodeURIComponent(planId)}` : ""}`,
+    ),
+
+  getWorkoutSessionGrade: (workoutId: string) =>
+    typedRequest<WorkoutSessionGradeResponse>(
+      "GET",
+      `/api/v1/workouts/${encodeURIComponent(workoutId)}/session-grade`,
+    ),
+
   getPersonalRecords: (dateParams?: string) =>
     typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
 

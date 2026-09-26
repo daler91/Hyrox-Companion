@@ -41,6 +41,9 @@ vi.mock("@/hooks/useExerciseHistory", () => ({
   useExerciseHistory: () => ({ data: undefined }),
 }));
 
+// Same reason: the "Did it do its job?" card reads its grade through react-query.
+// SessionGradeCard.test.tsx covers the card; here it renders nothing.
+vi.mock("@/hooks/useSessionGrades", () => ({ useWorkoutSessionGrade: () => ({ data: undefined }) }));
 vi.mock("@/components/ui/responsive-sheet", () => ({
   ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
     <div>
