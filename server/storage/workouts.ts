@@ -410,6 +410,22 @@ export class WorkoutStorage {
   }
 
   /**
+   * Every log recorded against one of the plan's days, oldest first — the
+   * sessions session grading measures against their plan day. Joined through
+   * plan_days rather than read off workout_logs.plan_id so a log linked to a
+   * day is found whatever its plan_id column says.
+   */
+  async listLogsForPlan(userId: string, planId: string): Promise<WorkoutLog[]> {
+    const rows = await db
+      .select({ log: workoutLogs })
+      .from(workoutLogs)
+      .innerJoin(planDays, eq(planDays.id, workoutLogs.planDayId))
+      .where(and(eq(workoutLogs.userId, userId), eq(planDays.planId, planId)))
+      .orderBy(asc(workoutLogs.date), asc(workoutLogs.id));
+    return rows.map((row) => row.log);
+  }
+
+  /**
    * The athlete's logs on `dates` that carry no device activity yet — the rows
    * a freshly synced Strava activity may be a recording of (stravaReconciler).
    * Both device-id columns must be NULL: a row holds at most one recording.

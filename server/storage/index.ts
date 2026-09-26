@@ -11,6 +11,7 @@ import { PlanProposalStorage } from "./planProposals";
 import { PlanStorage } from "./plans";
 import { PushStorage } from "./push";
 import { RecycleBinStorage } from "./recycleBin";
+import { SessionStreamStorage } from "./sessionStreams";
 import { TimelineStorage } from "./timeline";
 import { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import { UserStorage } from "./users";
@@ -39,4 +40,5 @@ export const storage: IStorage = {
   nutrition: new NutritionStorage(),
   weeklyReviews: new WeeklyReviewsStorage(),
   recycleBin: new RecycleBinStorage(),
+  sessionStreams: new SessionStreamStorage(),
 };

@@ -18,10 +18,10 @@ import {
 } from "./workoutInvalidation";
 
 /**
- * The derived-view keys a workout write moves. Six invalidations per call is
+ * The derived-view keys a workout write moves. Seven invalidations per call is
  * the contract the coalescing below is measured against.
  */
-const DERIVED_KEY_COUNT = 6;
+const DERIVED_KEY_COUNT = 7;
 
 describe("workoutInvalidation", () => {
   beforeEach(() => {
@@ -42,6 +42,8 @@ describe("workoutInvalidation", () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.timeline });
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.trainingOverview });
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.personalRecords });
+    // A re-linked or edited run can change its session grade.
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.sessionGradesPrefix });
   });
 
   it("coalesces a burst of set saves into ONE trailing invalidation", () => {

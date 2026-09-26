@@ -1,4 +1,4 @@
-import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays, User } from "@shared/schema";
+import type { InsertWorkoutLog, PlanDay, SessionGrade, TimelineEntry, TrainingPlan, TrainingPlanWithDays, User } from "@shared/schema";
 
 import type { MissedWorkoutData, WeeklySummaryData } from "../server/emailTemplates";
 import type { UpcomingWorkout } from "../server/gemini/suggestionService";
@@ -252,6 +252,41 @@ export function createMockMissedWorkout(overrides: Partial<MissedWorkoutData> = 
     focus: "Strength",
     mainWorkout: "Squats, Deadlifts, Bench",
     planName: "Hyrox Base",
+    ...overrides,
+  };
+}
+
+/** A finished session grade, for rollup/route/UI tests that do not care how it was reached. */
+export function createMockSessionGrade(overrides: Partial<SessionGrade> = {}): SessionGrade {
+  return {
+    workoutLogId: "log-1",
+    planDayId: `day-${overrides.workoutLogId ?? "1"}`,
+    planId: "plan-1",
+    date: "2026-09-22",
+    weekNumber: 1,
+    title: "Easy Run",
+    intent: "easy",
+    purpose: "easy",
+    intentReason: "The plan day is titled for it",
+    verdict: "on_target",
+    headline: "Stayed easy",
+    evidence: ["HR averaged 140 bpm, under your easy ceiling of 148 bpm."],
+    confidence: "high",
+    dataSource: "stream",
+    streamStatus: "ok",
+    ungradeableReason: null,
+    targets: {
+      easyCeilingHr: 148,
+      thresholdHr: { min: 162, max: 176 },
+      z5FloorHr: 176,
+      hrBasis: "measured",
+      easyPace: { fast: 360, slow: 400 },
+      thresholdPace: null,
+      paceSource: "plan",
+    },
+    easy: null,
+    threshold: null,
+    countsInRollup: true,
     ...overrides,
   };
 }

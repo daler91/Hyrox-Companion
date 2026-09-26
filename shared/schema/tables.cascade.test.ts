@@ -26,6 +26,7 @@ import {
   userTrainingStyle,
   weeklyReviews,
   workoutLogs,
+  workoutLogStreams,
 } from "./tables";
 
 // The README promises that DELETE /api/v1/account cascades to every
@@ -65,6 +66,8 @@ describe("user-owned tables cascade on DELETE", () => {
     // Snapshots of the athlete's deleted records — the same data as the tables
     // above, just waiting to be restored, so it must leave with them too.
     recycleBinItems,
+    // Heart-rate/pace streams derived from Strava recordings — health data.
+    workoutLogStreams,
   } as const;
 
   // Tables that are user-scoped transitively through a parent table rather

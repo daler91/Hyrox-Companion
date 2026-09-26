@@ -416,6 +416,9 @@ export async function unlinkDeviceActivity(input: {
         })
         .where(eq(workoutLogs.id, log.id))
         .returning();
+      // The recording is no longer this log's, so neither is its stream. (The
+      // other branch deletes the log, and the stream row cascades with it.)
+      await storage.sessionStreams.deleteForLog(log.id, userId, tx);
     }
 
     const standalone = await releaseStravaActivityInTx(tx, log, userId, distanceUnit);

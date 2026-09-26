@@ -13,6 +13,7 @@ import {
   deauthorizeStravaBestEffort,
   enrichFromActivityDetail,
   fetchStravaActivities,
+  fetchStravaActivityStreams,
   verifySignedState,
 } from './strava';
 import { RetryableHttpError } from './utils/httpRetry';
@@ -366,6 +367,85 @@ describe('enrichFromActivityDetail', () => {
   });
 });
 
+describe('fetchStravaActivityStreams', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('asks for the HR/pace series only, keyed by type, and flattens the body', async () => {
+    fetchMock.mockResolvedValue(
+      stravaResponse({
+        time: { data: [0, 1, 2] },
+        heartrate: { data: [120, 121, 122] },
+        velocity_smooth: { data: [3, 3.1, 3.2] },
+        moving: { data: [true, true, true] },
+      }),
+    );
+
+    const result = await fetchStravaActivityStreams('token', '9001');
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.pathname).toBe('/api/v3/activities/9001/streams');
+    expect(url.searchParams.get('keys')).toBe('time,heartrate,velocity_smooth,distance,moving');
+    expect(url.searchParams.get('key_by_type')).toBe('true');
+    // No GPS is ever requested.
+    expect(url.searchParams.get('keys')).not.toContain('latlng');
+    expect(result).toEqual({
+      ok: true,
+      streams: {
+        time: [0, 1, 2],
+        heartrate: [120, 121, 122],
+        velocity_smooth: [3, 3.1, 3.2],
+        moving: [true, true, true],
+      },
+    });
+  });
+
+  it.each([
+    [404, { ok: false, reason: 'not_found' }],
+    [401, { ok: false, reason: 'reauth_required' }],
+    [403, { ok: false, reason: 'reauth_required' }],
+    [400, { ok: false, reason: 'failed', status: 400 }],
+  ])('maps HTTP %s to %o', async (status, expected) => {
+    fetchMock.mockResolvedValue(stravaResponse(null, status));
+    await expect(fetchStravaActivityStreams('token', '1')).resolves.toEqual(expected);
+  });
+
+  it('reports a 429 that outlasts the retry as rate_limited with the Retry-After hint', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 429, '300'));
+    await expect(fetchStravaActivityStreams('token', '1')).resolves.toEqual({
+      ok: false,
+      reason: 'rate_limited',
+      retryAfterSeconds: 300,
+    });
+    // One retry, then give up: a stream is never worth the full retry ladder.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a persistent 5xx or network failure as failed', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 503));
+    await expect(fetchStravaActivityStreams('token', '1')).resolves.toEqual({
+      ok: false,
+      reason: 'failed',
+      status: 503,
+    });
+    fetchMock.mockRejectedValue(new Error('boom'));
+    await expect(fetchStravaActivityStreams('token', '1')).resolves.toEqual({
+      ok: false,
+      reason: 'failed',
+      status: null,
+    });
+  });
+});
+
 describe('deauthorizeStravaBestEffort', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -620,6 +700,7 @@ describe('syncStravaForUser', () => {
   let setStravaReauthRequired: ReturnType<typeof vi.fn>;
   let reconcileStravaActivities: ReturnType<typeof vi.fn>;
   let fetchMock: ReturnType<typeof vi.fn>;
+  let enqueueSessionStreams: ReturnType<typeof vi.fn>;
   let syncStravaForUser: typeof import('./strava')['syncStravaForUser'];
 
   beforeEach(async () => {
@@ -665,6 +746,8 @@ describe('syncStravaForUser', () => {
       isStravaAutoSyncEnabled: () => true,
     }));
     vi.doMock('./stravaWebhook', () => ({ getStravaWebhookState: vi.fn().mockResolvedValue(null) }));
+    enqueueSessionStreams = vi.fn().mockResolvedValue({ enqueued: true, jobId: 'job-1' });
+    vi.doMock('./services/sessionStreamQueue', () => ({ enqueueSessionStreams }));
 
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -680,6 +763,7 @@ describe('syncStravaForUser', () => {
     vi.doUnmock('./services/stravaReconciler');
     vi.doUnmock('./services/stravaSyncQueue');
     vi.doUnmock('./stravaWebhook');
+    vi.doUnmock('./services/sessionStreamQueue');
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -724,6 +808,19 @@ describe('syncStravaForUser', () => {
     // A complete sync moves the cursor to "now" (no explicit cursor argument).
     expect(updateStravaLastSync).toHaveBeenCalledWith('user-1');
     expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ imported: 1 }), 'strava.sync.ok');
+    // A recording now sits on a log, so its stream is queued for grading.
+    expect(enqueueSessionStreams).toHaveBeenCalledWith('user-1', 'sync');
+  });
+
+  it('queues no stream fetch when nothing was linked to a log or plan day', async () => {
+    fetchMock
+      .mockResolvedValueOnce(stravaResponse([activity(5)]))
+      .mockResolvedValueOnce(stravaResponse({ id: 5 }));
+    reconcileStravaActivities.mockResolvedValue({ ...zeroCounts, standalone: 1 });
+
+    await syncStravaForUser('user-1', log);
+
+    expect(enqueueSessionStreams).not.toHaveBeenCalled();
   });
 
   it('advances the cursor only through the fetched window when the page cap is hit', async () => {

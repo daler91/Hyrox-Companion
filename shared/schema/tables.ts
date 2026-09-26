@@ -25,8 +25,10 @@ import {
   planDayRecoveryEnum,
   planDaySkipReasonEnum,
   recycleBinEntityTypeEnum,
+  sessionStreamStatusEnum,
   workoutStatusEnum,
 } from "./enums";
+import type { SessionStreamSamples } from "./sessionStream";
 import type {
   CoachNoteInputs,
   PlanAdjustmentProposalPayload,
@@ -680,6 +682,59 @@ export const stravaConnections = pgTable("strava_connections", {
   requiresReauth: boolean("requires_reauth").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// The compact Strava stream behind a graded run ("did the session do its
+// job?"). One row per workout log, only for runs linked to a plan day whose
+// purpose we grade (easy or threshold).
+//
+// A table of its own rather than a jsonb column on workout_logs: that table is
+// read in bulk by the timeline, analytics and the workout list, and a stream
+// column would ride along on all of them; the fetch bookkeeping (status,
+// attempts, last attempt) is also not the athlete's data, and workout_logs'
+// device columns already follow strict fill/unlink rules. `last_attempt_at`
+// doubles as the ledger the fetcher counts against Strava's read budget.
+//
+// Health data derived purely from Strava: cascades with the log and the user,
+// and is purged on Strava disconnect (the summary columns on the log stay).
+export const workoutLogStreams = pgTable(
+  "workout_log_streams",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    workoutLogId: varchar("workout_log_id", { length: 255 })
+      .notNull()
+      .references(() => workoutLogs.id, { onDelete: "cascade" }),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The activity the row was fetched for. A log relinked to another
+    // activity no longer matches, which marks the row stale.
+    stravaActivityId: varchar("strava_activity_id", { length: 255 }).notNull(),
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    bucketSeconds: integer("bucket_seconds"),
+    samples: jsonb("samples").$type<SessionStreamSamples>(),
+    // A status code ("http_503"), never a response body.
+    lastError: text("last_error"),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_workout_log_streams_workout_log").on(table.workoutLogId),
+    index("idx_workout_log_streams_user").on(table.userId),
+    index("idx_workout_log_streams_last_attempt").on(table.lastAttemptAt),
+    check(
+      "workout_log_streams_status_check",
+      sql`status IN (${inValues(sessionStreamStatusEnum)})`,
+    ),
+    check("workout_log_streams_attempts_check", sql`attempts >= 0`),
+  ],
+);
+
+export type WorkoutLogStream = typeof workoutLogStreams.$inferSelect;
+export type InsertWorkoutLogStream = typeof workoutLogStreams.$inferInsert;
 
 // Garmin Connect session storage. Unlike Strava, Garmin has no public OAuth
 // for end users — we authenticate with the user's email + password against the

@@ -91,6 +91,29 @@ function repace(
   return clock(paceAtFraction(toVdot, fraction), unit);
 }
 
+/** Every pace written in `text`, in order. A range's second clock belongs to the pace already read. */
+function* writtenPaces(text: string): Generator<WrittenPace> {
+  let scanned = 0;
+  for (const clock of text.matchAll(CLOCK)) {
+    if (clock.index < scanned) continue;
+    const pace = paceAt(text, clock);
+    if (!pace) continue;
+    scanned = pace.end;
+    yield pace;
+  }
+}
+
+/**
+ * The paces written in a prescription, each as seconds per km (a range as its
+ * two ends, fast first as written). Session grading reads the plan's own
+ * target from these before falling back to the athlete's fitted zones.
+ */
+export function readWrittenPaces(text: string): number[][] {
+  return [...writtenPaces(text)].map((pace) =>
+    pace.clocks.map((seconds) => secondsPerKm(seconds, pace.unit)),
+  );
+}
+
 /**
  * `text` with every zone pace moved from `fromVdot` to `toVdot`, and whether
  * anything changed. A range moves only when both of its ends are zone paces.
@@ -102,13 +125,7 @@ export function rescalePaces(
 ): { text: string; changed: boolean } {
   let next = "";
   let copied = 0;
-  let scanned = 0;
-  for (const clock of text.matchAll(CLOCK)) {
-    // A range's second clock belongs to the pace already read.
-    if (clock.index < scanned) continue;
-    const pace = paceAt(text, clock);
-    if (!pace) continue;
-    scanned = pace.end;
+  for (const pace of writtenPaces(text)) {
     const moved = pace.clocks.map((seconds) => repace(seconds, pace.unit, fromVdot, toVdot));
     if (!moved.every((value): value is string => value != null)) continue;
     next += `${text.slice(copied, pace.start)}${moved.join("-")}${pace.suffix}`;

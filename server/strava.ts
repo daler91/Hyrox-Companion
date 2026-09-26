@@ -13,6 +13,8 @@ import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
+import { parseStravaStreamResponse, type StravaStreamSet } from "./services/sessionGrades/downsample";
+import { enqueueSessionStreams } from "./services/sessionStreamQueue";
 import {
   mapStravaActivityToWorkout,
   perceivedExertionToRpe,
@@ -462,6 +464,9 @@ async function handleStravaDisconnect(req: Request, res: Response) {
     await deauthorizeStravaBestEffort(connection.accessToken, reqLogger(req));
   }
   await storage.users.deleteStravaConnection(userId);
+  // The session streams came from Strava, so they leave with it. The summary
+  // metrics on each workout stay, and grades fall back to them.
+  await storage.sessionStreams.deleteForUser(userId);
   res.json({ success: true });
 }
 
@@ -687,6 +692,66 @@ export async function enrichFromActivityDetail(
   }
 }
 
+// The series session grading needs. GPS (`latlng`) is deliberately not
+// requested: grading never uses location, so it is never fetched or kept.
+const STRAVA_STREAM_KEYS = "time,heartrate,velocity_smooth,distance,moving";
+
+export type StravaStreamFetchResult =
+  | { ok: true; streams: StravaStreamSet }
+  | { ok: false; reason: "not_found" | "reauth_required" }
+  | { ok: false; reason: "failed"; status: number | null }
+  | { ok: false; reason: "rate_limited"; retryAfterSeconds: number };
+
+/**
+ * One activity's HR/pace streams — a single read however long the run was.
+ * Never throws for a Strava-side problem: the session-stream job maps each
+ * outcome to a row status. Only status codes are ever logged or returned,
+ * never a response body.
+ */
+export async function fetchStravaActivityStreams(
+  accessToken: string,
+  stravaActivityId: string,
+): Promise<StravaStreamFetchResult> {
+  const url = `${STRAVA_API_BASE}/activities/${encodeURIComponent(stravaActivityId)}/streams?keys=${STRAVA_STREAM_KEYS}&key_by_type=true`;
+  try {
+    return await retryWithJitter(
+      async (): Promise<StravaStreamFetchResult> => {
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+        });
+        if (response.status === 429 || response.status >= 500) {
+          throw new RetryableHttpError(
+            response.status,
+            parseRetryAfter(response.headers.get("retry-after")),
+          );
+        }
+        if (response.status === 401 || response.status === 403) {
+          return { ok: false, reason: "reauth_required" };
+        }
+        // 404: deleted on Strava, or a manual entry with no recording.
+        if (response.status === 404) return { ok: false, reason: "not_found" };
+        if (!response.ok) return { ok: false, reason: "failed", status: response.status };
+        return { ok: true, streams: parseStravaStreamResponse(await response.json()) };
+      },
+      // Like the detail enrichment: one retry, then leave it to the next job.
+      { label: "strava.activityStreams", retries: 1 },
+    );
+  } catch (err) {
+    if (err instanceof RetryableHttpError) {
+      if (err.status === 429) {
+        return {
+          ok: false,
+          reason: "rate_limited",
+          retryAfterSeconds: err.retryAfterMs ? Math.ceil(err.retryAfterMs / 1000) : 60,
+        };
+      }
+      return { ok: false, reason: "failed", status: err.status };
+    }
+    return { ok: false, reason: "failed", status: null };
+  }
+}
+
 type StravaSyncFailure = Extract<StravaSyncOutcome, { ok: false }>;
 
 // Translate sync failures into actionable client responses instead of a
@@ -863,6 +928,17 @@ export async function syncStravaForUser(
   const totalSkipped = skipped + counts.skipped;
 
   await advanceStravaSyncCursor(userId, activities, hasMore);
+
+  // A recording now sits on a plan day: fetch its HR/pace stream so the
+  // session can be graded against what the day was for. Best-effort — a
+  // queue hiccup must never fail the sync that already landed.
+  if (counts.enriched + counts.completedPlanDays > 0) {
+    enqueueSessionStreams(userId, "sync").catch((err: unknown) => {
+      // err is a queue (DB) error; no activity data or token material.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn({ err }, "Failed to queue session streams after Strava sync (non-fatal)");
+    });
+  }
 
   // Counts, the internal user id and a static context only; no activity data.
   // bearer:disable javascript_lang_logger_leak

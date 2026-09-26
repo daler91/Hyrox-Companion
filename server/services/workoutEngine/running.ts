@@ -97,11 +97,12 @@ const MIN_VDOT = 15;
 const MAX_VDOT = 85;
 const VOLUME_WINDOW_DAYS = 28;
 
-// Zone fractions of VDOT, from Daniels' Running Formula.
-const EASY_FAST = 0.7;
-const EASY_SLOW = 0.62;
+// Zone fractions of VDOT, from Daniels' Running Formula. Exported for session
+// grading (sessionGrades/targets.ts), which measures a run against the same zones.
+export const EASY_FAST = 0.7;
+export const EASY_SLOW = 0.62;
 const STEADY = 0.82;
-const THRESHOLD = 0.88;
+export const THRESHOLD = 0.88;
 const INTERVAL = 0.975;
 const REPETITION = 1.055;
 

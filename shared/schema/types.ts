@@ -8,5 +8,6 @@ export * from "./types/plans";
 export * from "./types/recovery";
 export * from "./types/recycleBin";
 export * from "./types/requests";
+export * from "./types/sessionGrades";
 export * from "./types/users";
 export * from "./types/workouts";

@@ -175,7 +175,7 @@ The response reports `imported` (activities now on the timeline, wherever they l
 
 ### Disconnect Flow
 
-`DELETE /api/v1/strava/disconnect` first performs a **best-effort upstream revocation** (`POST https://www.strava.com/oauth/deauthorize` via `deauthorizeStravaBestEffort()` — failures are logged and ignored so a Strava outage can never block disconnect), then removes the Strava connection record via `storage.users.deleteStravaConnection()`. Previously imported workout logs are not deleted. Account deletion reuses the same helper.
+`DELETE /api/v1/strava/disconnect` first performs a **best-effort upstream revocation** (`POST https://www.strava.com/oauth/deauthorize` via `deauthorizeStravaBestEffort()` — failures are logged and ignored so a Strava outage can never block disconnect), then removes the Strava connection record via `storage.users.deleteStravaConnection()` and the athlete's [session streams](#session-streams-session-grading) (`storage.sessionStreams.deleteForUser()`). Previously imported workout logs, and the summary metrics on them, are not deleted. Account deletion reuses the same helper.
 
 ### Rate Limiting
 
@@ -219,6 +219,19 @@ Connected athletes no longer need the Sync button: activities are imported in th
 **Kill switch.** `STRAVA_AUTO_SYNC_ENABLED=false` disables all three paths (no subscription registration, no polling, no post-connect job; events are still acknowledged but ignored), leaving the manual Sync button as the only import path. `GET /api/v1/strava/status` reports the active mode as `autoSync: { enabled, webhook, intervalMinutes }`, which the Settings page turns into "usually within a minute of finishing" vs "checked every hour" copy.
 
 **Operator tool.** `pnpm strava:webhook status | register | delete` (`script/strava-webhook.ts`) shows what Strava holds for the application, forces a registration, or removes the current subscription.
+
+### Session Streams (Session Grading)
+
+Session grading ("did the session do its job?", `server/services/sessionGrades/`) measures each plan-linked easy or threshold run against what its day was for. Whole-run averages can't do that for a threshold session — the warm-up and cool-down dilute them, and they can't show HR drifting over the reps — so the app fetches the run's **stream** for those runs only.
+
+- **Endpoint.** `GET https://www.strava.com/api/v3/activities/{id}/streams?keys=time,heartrate,velocity_smooth,distance,moving&key_by_type=true` (`fetchStravaActivityStreams()` in `server/strava.ts`). **One read per activity**, however long the run: an hour at one sample a second comes back as ~3,600 points per series in the same response. GPS (`latlng`) is never requested. Status mapping: `404` → `unavailable`, `401/403` → the connection is tombstoned like a sync's, `429` → the shared cooldown, `5xx`/network → `failed` (retried after 6 h, up to 3 attempts). One retry inside the call, like the detail enrichment.
+- **Storage.** `downsampleStravaStreams()` folds the samples into 15-second buckets (time-weighted HR, metres, moving seconds; pauses and HR dropouts handled) and the result is upserted into [`workout_log_streams`](database.md#workout_log_streams) — ~3 KB per hour of running. Grades are recomputed from it on every read.
+- **Which runs.** Plan-linked Strava logs whose sport is a run (`isRunSportType`) and whose plan day classifies as easy/recovery/long or threshold/tempo (`shared/sessionIntent.ts`). Anything else is written as `skipped` with **no Strava read**. The last 180 days are eligible.
+- **Queue.** A per-athlete debounced `session-streams` job (see [Job Types](#session-streams)) fetches at most **5 streams per job**, newest first. It is enqueued after a sync that attached a recording to a log or plan day, after a manual device link, after `PATCH /workouts/:id/plan-day`, and when the athlete opens a run whose grade is still `pending`.
+- **Backfill.** Cron `sessionStreamBackfill` (`11,26,41,56 * * * *`, offset from the auto-sync scan) queues a job for up to **3 athletes per tick** with pending streams — runs linked before the feature existed, or left over by the per-job cap.
+- **Budget.** Streams take a soft share of the app budget: **20 reads per 15 minutes and 250 per day**, counted from `workout_log_streams.last_attempt_at` across all athletes (`skipped` rows cost nothing). A 3 × 5 scan tick stays inside the 15-minute share even with an empty ledger. A `429` on a stream read arms the same `strava:sync-cooldown` the activity sync uses, so both stop together. At typical volume an athlete costs one extra read per graded run (about four a week for a runner doing three or four runs).
+- **Kill switch.** `STRAVA_AUTO_SYNC_ENABLED=false` stops stream fetches too; grades then use the summary metrics (`streamStatus: "unavailable"`).
+- **Unlink / disconnect.** Unlinking a recording from the athlete's own log deletes that log's stream in the same transaction; a log the link created is deleted and its stream cascades. Disconnecting Strava purges every stream.
 
 ### Database Schema
 
@@ -563,7 +576,7 @@ const queue = new PgBoss(env.DATABASE_URL);
 The queue is started via `startQueue()`, which:
 
 1. Calls `queue.start()` to initialize pg-boss tables and begin polling (wrapped in a 30s timeout that calls `queue.stop()` on failure to avoid leaking the connection pool)
-2. Creates the ten named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `send-weekly-review-reminder`, `send-today-session`, `send-analysis-digest`, `plan-generation`, `recompute-analytics`. An eleventh, `strava-sync`, is created by `registerStravaAutoSyncWorker()`, which `server/index.ts` calls right after `startQueue()` — the worker imports the sync engine in `server/strava.ts`, which must stay out of `server/queue.ts`'s import graph.
+2. Creates the ten named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `send-weekly-review-reminder`, `send-today-session`, `send-analysis-digest`, `plan-generation`, `recompute-analytics`. An eleventh, `strava-sync`, is created by `registerStravaAutoSyncWorker()`, and a twelfth, `session-streams`, by `registerSessionStreamWorker()`; `server/index.ts` calls both right after `startQueue()` — the workers import the Strava engine in `server/strava.ts`, which must stay out of `server/queue.ts`'s import graph.
 3. Registers a worker function for each queue
 
 Errors on the queue emit to a global error handler that logs via the application logger.
@@ -648,6 +661,13 @@ Errors on the queue emit to a global error handler that logs via the application
 - **Worker**: `registerStravaAutoSyncWorker()` in `server/services/stravaAutoSync.ts`. Calls `runStravaSyncJob()`, which skips during the shared 429 cooldown, runs the engine, and absorbs Strava-side outcomes (`rate_limited` starts the cooldown; `reauth_required`, `not_connected` and `transient` are logged and left for the next polling scan) rather than failing the job.
 - **Enqueued via**: `enqueueStravaSync()` → `queue.sendDebounced()` with `DEFAULT_JOB_OPTIONS`, `singletonKey: strava-sync:<userId>` and a 60-second window (`singletonNextSlot` on), so bursts collapse to one job per athlete per window plus one follow-up. Retries apply only to unexpected errors (DB failures); the engine's dedup and reconciler make a replay safe.
 
+#### `session-streams`
+
+- **Purpose**: Fetch and store the HR/pace streams session grading reads, for one athlete's pending graded runs (see [Strava → Session Streams](#session-streams-session-grading)).
+- **Payload**: `{ userId: string, trigger: "sync" | "link" | "assign" | "scan" | "read" }`
+- **Worker**: `registerSessionStreamWorker()` in `server/services/sessionStreamSync.ts`. `runSessionStreamJob()` skips under the kill switch, during the shared 429 cooldown, or once the read budget is spent; lists the athlete's pending runs (`storage.sessionStreams.listPendingForUser()`), marks runs we don't grade `skipped` without a read, and fetches up to 5 streams. Strava-side outcomes become row statuses (`ok`, `no_heartrate`, `unavailable`, `failed`); a `429` arms the cooldown and a `401/403` tombstones the connection. Only unexpected (DB) errors fail the job.
+- **Enqueued via**: `enqueueSessionStreams()` (`server/services/sessionStreamQueue.ts`) → `queue.sendDebounced()` with `DEFAULT_JOB_OPTIONS`, `singletonKey: session-streams:<userId>` and a 60-second window. The job reads what is pending from the database, so a duplicate is harmless. Account erasure purges pending jobs (`userId` is top-level).
+
 ### Job Processing Pattern
 
 Every worker receives an array of `Job[]` objects and processes them concurrently via the shared `runBatch()` helper, which uses a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll. Each job is additionally wrapped in a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`) that aborts the job — deliberately 10 minutes below the 60-minute `expireInMinutes` so an orphaned upstream call can tear down before pg-boss treats the job as re-dispatchable.
@@ -702,6 +722,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | Nutrition push reminders | `25 * * * *` UTC (hourly; per-user refuel window + 20:00 local logging nudge) | `nutritionReminders` |
 | Strava auto-sync polling scan | `7,22,37,52 * * * *` UTC (every 15 minutes) | `stravaAutoSync` |
 | Strava webhook subscription check | `20 */6 * * *` UTC (six-hourly, plus 30 s after boot) | `stravaWebhookEnsure` |
+| Session-stream backfill | `11,26,41,56 * * * *` UTC (every 15 minutes, offset from the auto-sync scan) | `sessionStreamBackfill` |
 | Recycle bin purge | `45 3 * * *` UTC (drops `recycle_bin_items` past their 90-day expiry; see [database.md](database.md#recycle_bin_items)) | `recycleBinPurge` |
 
 #### Analytics Recompute Scan
@@ -716,6 +737,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 
 - **Polling scan** — `7,22,37,52 * * * *` (every 15 minutes) in `Etc/UTC`, advisory lock `stravaAutoSync`. Calls `runStravaAutoSyncScan(storage, now)` (`server/services/stravaAutoSync.ts`), which enqueues a [`strava-sync`](#strava-sync) job for up to 10 connections whose cursor is older than `STRAVA_AUTO_SYNC_INTERVAL_MINUTES`, stalest first. No-ops under `STRAVA_AUTO_SYNC_ENABLED=false` and while the shared 429 cooldown is in force. See [Strava → Automatic Sync](#automatic-sync).
 - **Webhook subscription check** — `20 */6 * * *` (six-hourly) in `Etc/UTC`, advisory lock `stravaWebhookEnsure`, plus a one-shot run 30 seconds after every boot under the same lock. Calls `ensureStravaWebhookSubscription()` (`server/stravaWebhook.ts`): verifies the push subscription for this deployment's callback URL and creates it when missing. It runs after boot rather than as a startup phase because Strava validates the callback synchronously while creating the subscription, so the server must already be serving requests.
+- **Session-stream backfill** — `11,26,41,56 * * * *` (every 15 minutes) in `Etc/UTC`, advisory lock `sessionStreamBackfill`. Calls `runSessionStreamBackfillScan(storage, now)` (`server/services/sessionStreamSync.ts`), which enqueues a [`session-streams`](#session-streams) job for up to 3 athletes whose graded runs still lack a stream. No-ops under `STRAVA_AUTO_SYNC_ENABLED=false`, during the shared 429 cooldown, and once the streams' read share is spent. See [Strava → Session Streams](#session-streams-session-grading).
 
 ### Startup Catch-Up
 

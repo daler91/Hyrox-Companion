@@ -22,6 +22,7 @@ import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
 import pushRoutes from "./routes/push";
 import recycleBinRoutes from "./routes/recycleBin";
+import sessionGradesRoutes from "./routes/sessionGrades";
 import timelineAnnotationsRoutes from "./routes/timelineAnnotations";
 import workoutRoutes from "./routes/workouts/index";
 import { registerStravaRoutes } from "./strava";
@@ -53,6 +54,7 @@ vi.mock("./routes/plans", () => ({ default: { name: "planRoutes" } }));
 vi.mock("./routes/preferences", () => ({ default: { name: "preferencesRoutes" } }));
 vi.mock("./routes/push", () => ({ default: { name: "pushRoutes" } }));
 vi.mock("./routes/recycleBin", () => ({ default: { name: "recycleBinRoutes" } }));
+vi.mock("./routes/sessionGrades", () => ({ default: { name: "sessionGradesRoutes" } }));
 vi.mock("./routes/timelineAnnotations", () => ({ default: { name: "timelineAnnotationsRoutes" } }));
 vi.mock("./routes/workouts/index", () => ({ default: { name: "workoutRoutes" } }));
 
@@ -141,6 +143,7 @@ describe("registerRoutes", () => {
     expect(app.use).toHaveBeenCalledWith(pushRoutes);
     expect(app.use).toHaveBeenCalledWith(timelineAnnotationsRoutes);
     expect(app.use).toHaveBeenCalledWith(recycleBinRoutes);
+    expect(app.use).toHaveBeenCalledWith(sessionGradesRoutes);
     expect(app.use).toHaveBeenCalledWith(nutritionRoutes);
   });
 

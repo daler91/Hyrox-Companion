@@ -246,6 +246,39 @@ describe("Review page", () => {
     expect(screen.getByTestId("weekly-review-session-changes-wl-1")).toHaveTextContent("+2 / −1 sets");
   });
 
+  it("marks whether each run did its job, and sums the week in one line", async () => {
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({
+        sessions: [
+          session({
+            grade: {
+              intent: "threshold",
+              purpose: "threshold",
+              verdict: "drifted_harder",
+              confidence: "high",
+              headline: "Drifted harder than threshold",
+              streamStatus: "ok",
+            },
+          }),
+          session({ workoutLogId: "wl-2", planDayId: null, grade: null }),
+        ],
+        gradeSummary: { graded: 3, onTarget: 2, driftedHarder: 1, easyTooHard: 0 },
+      }),
+    );
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("weekly-review-session-wl-1")).toBeInTheDocument();
+    });
+    const chip = screen.getByTestId("weekly-review-session-grade-wl-1");
+    expect(chip).toHaveTextContent("Drifted harder");
+    expect(chip).toHaveAttribute("title", "Drifted harder than threshold");
+    expect(screen.queryByTestId("weekly-review-session-grade-wl-2")).toBeNull();
+    expect(screen.getByTestId("weekly-review-grade-summary")).toHaveTextContent(
+      "Runs that did their job: 2 of 3 · 1 threshold run drifted harder",
+    );
+  });
+
   it("reads as a starting point, not a report card, on an empty week", async () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({

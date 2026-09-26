@@ -12,6 +12,7 @@
  */
 import { env } from "../env";
 import { DEFAULT_JOB_OPTIONS, queue, withTrace } from "../queue";
+import { isStravaAutoSyncEnabled } from "./stravaAutoSyncFlag";
 
 export const STRAVA_SYNC_QUEUE = "strava-sync";
 
@@ -34,10 +35,7 @@ export interface StravaSyncJobData {
  */
 export const STRAVA_SYNC_DEBOUNCE_SECONDS = 60;
 
-/** Master kill switch: STRAVA_AUTO_SYNC_ENABLED=false leaves only the manual Sync button. */
-export function isStravaAutoSyncEnabled(): boolean {
-  return env.STRAVA_AUTO_SYNC_ENABLED !== "false";
-}
+export { isStravaAutoSyncEnabled };
 
 /** Polling fallback: how stale last_synced_at may get before a re-sync. */
 export function getStravaAutoSyncIntervalMs(): number {

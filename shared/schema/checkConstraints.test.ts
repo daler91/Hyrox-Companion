@@ -7,6 +7,7 @@ import {
   MEAL_TYPES,
   planDaySkipReasonEnum,
   recycleBinEntityTypeEnum,
+  sessionStreamStatusEnum,
   workoutStatusEnum,
 } from "./enums";
 import {
@@ -18,10 +19,11 @@ import {
   planDays,
   recycleBinItems,
   workoutLogs,
+  workoutLogStreams,
 } from "./tables";
 
 /**
- * Six CHECK constraints enumerate values that also exist as TypeScript
+ * Seven CHECK constraints enumerate values that also exist as TypeScript
  * constants. They used to hold a hand-copied second list — the copy in
  * `foods_source_check` was dropped and re-added across migrations 0069-0071
  * chasing the TS side — so they are now rendered from the constant itself.
@@ -72,6 +74,19 @@ describe("enum-backed CHECK constraints", () => {
       "entity_type IN ('workout_log', 'plan_day', 'training_plan')",
     );
     expect(recycleBinEntityTypeEnum).toEqual(["workout_log", "plan_day", "training_plan"]);
+  });
+
+  it("renders workout_log_streams.status from sessionStreamStatusEnum", () => {
+    expect(checkSql(workoutLogStreams, "workout_log_streams_status_check")).toBe(
+      "status IN ('ok', 'no_heartrate', 'unavailable', 'failed', 'skipped')",
+    );
+    expect(sessionStreamStatusEnum).toEqual([
+      "ok",
+      "no_heartrate",
+      "unavailable",
+      "failed",
+      "skipped",
+    ]);
   });
 
   it("renders foods.source from FOOD_SOURCES", () => {

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { type ExerciseAnalyticDay, MiniBarChart } from "../MiniBarChart";
 import { MiniLineChart } from "../MiniLineChart";
 import { MultiLineChart } from "../MultiLineChart";
+import { WeeklyGradesChart } from "../session-grades/WeeklyGradesChart";
 
 // recharts' ResponsiveContainer can't measure in jsdom; the role="img" wrapper
 // these tests assert on sits OUTSIDE it, so it renders regardless. This locks in
@@ -35,5 +36,12 @@ describe("chart accessibility", () => {
       />,
     );
     expect(screen.getByRole("img", { name: "Load overlay, line chart" })).toBeInTheDocument();
+  });
+
+  it("WeeklyGradesChart exposes a labelled image role for screen readers", () => {
+    render(<WeeklyGradesChart weeks={[]} />);
+    expect(
+      screen.getByRole("img", { name: "Stacked bar chart of graded runs across 0 plan weeks: 0 of 0 did their job" }),
+    ).toBeInTheDocument();
   });
 });

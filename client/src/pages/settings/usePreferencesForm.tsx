@@ -105,6 +105,11 @@ export function usePreferencesForm() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+      // Session grades are measured against max/resting HR, age and units:
+      // re-grade everything, closed Weekly Review weeks included.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessionGradesPrefix }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/weekly-review"] }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = savePayloadToSnapshot(variables);

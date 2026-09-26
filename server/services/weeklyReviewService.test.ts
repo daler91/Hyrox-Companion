@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IStorage } from "../storage";
-import { buildWeeklyReview, isWeekParamValid, listPersonalRecordsInRange, resolveReviewWeek } from "./weeklyReviewService";
+import { makeGrade } from "./sessionGrades/testFixtures";
+import {
+  buildWeeklyReview,
+  isWeekParamValid,
+  listPersonalRecordsInRange,
+  resolveReviewWeek,
+  summarizeWeekGrades,
+} from "./weeklyReviewService";
+
+const grading = vi.hoisted(() => ({ gradeWorkoutLogs: vi.fn() }));
+vi.mock("./sessionGrades/sessionGradeService", () => ({ gradeWorkoutLogs: grading.gradeWorkoutLogs }));
 
 vi.mock("./analyticsService", () => ({
   // The PR calculation has its own suite; here it is a seam, so tests can hand
@@ -496,5 +506,69 @@ describe("buildWeeklyReview — intent", () => {
     const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
 
     expect(review.intent).toBeNull();
+  });
+});
+
+describe("session grades on the review", () => {
+  beforeEach(() => {
+    grading.gradeWorkoutLogs.mockReset();
+  });
+
+  it("leaves grades off unless asked, so the weekly email pays nothing for them", async () => {
+    const review = await buildWeeklyReview(storageFor({ logs: [log()] }), "u1", { now: WEDNESDAY });
+    expect(grading.gradeWorkoutLogs).not.toHaveBeenCalled();
+    expect(review.sessions[0]).not.toHaveProperty("grade");
+    expect(review).not.toHaveProperty("gradeSummary");
+  });
+
+  it("puts each run's verdict on its row and sums the week in one line", async () => {
+    grading.gradeWorkoutLogs.mockResolvedValue(
+      new Map([
+        ["wl-1", makeGrade({ workoutLogId: "wl-1", intent: "threshold", purpose: "threshold", verdict: "drifted_harder", headline: "Drifted harder than threshold" })],
+        ["wl-2", makeGrade({ workoutLogId: "wl-2", verdict: "on_target" })],
+      ]),
+    );
+    const review = await buildWeeklyReview(
+      storageFor({ logs: [log(), log({ id: "wl-2", date: "2026-06-12" }), log({ id: "wl-3", date: "2026-06-13", planDayId: null })] }),
+      "u1",
+      { now: WEDNESDAY, includeSessionGrades: true },
+    );
+    expect(review.sessions.map((session) => session.grade?.verdict ?? null)).toEqual(["drifted_harder", "on_target", null]);
+    expect(review.sessions[0]?.grade).toEqual({
+      intent: "threshold",
+      purpose: "threshold",
+      verdict: "drifted_harder",
+      confidence: "high",
+      headline: "Drifted harder than threshold",
+      streamStatus: "ok",
+    });
+    expect(review.gradeSummary).toEqual({ graded: 2, onTarget: 1, driftedHarder: 1, easyTooHard: 0 });
+  });
+
+  it("still serves the review when grading fails", async () => {
+    grading.gradeWorkoutLogs.mockRejectedValue(new Error("db down"));
+    const review = await buildWeeklyReview(storageFor({ logs: [log()] }), "u1", {
+      now: WEDNESDAY,
+      includeSessionGrades: true,
+    });
+    expect(review.sessions).toHaveLength(1);
+    expect(review.sessions[0]).not.toHaveProperty("grade");
+  });
+});
+
+describe("summarizeWeekGrades", () => {
+  it("counts only definite verdicts, and has nothing to say without any", () => {
+    expect(summarizeWeekGrades(new Map())).toBeNull();
+    expect(
+      summarizeWeekGrades(new Map([["a", makeGrade({ verdict: "inconclusive" })]])),
+    ).toBeNull();
+    expect(
+      summarizeWeekGrades(
+        new Map([
+          ["a", makeGrade({ verdict: "crept_up" })],
+          ["b", makeGrade({ verdict: "ungradeable" })],
+        ]),
+      ),
+    ).toEqual({ graded: 1, onTarget: 0, driftedHarder: 0, easyTooHard: 1 });
   });
 });
