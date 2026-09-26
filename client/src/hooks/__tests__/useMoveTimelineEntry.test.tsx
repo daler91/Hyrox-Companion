@@ -69,17 +69,19 @@ describe("useMoveTimelineEntry", () => {
     seed(missed);
     const { result } = renderHook(() => useMoveTimelineEntry(null), { wrapper });
 
-    act(() => result.current.moveEntry(missed, day(1)));
+    act(() => {
+      result.current.moveEntry(missed, day(1));
+    });
 
     // onMutate awaits cancelQueries before it patches the cache.
-    await waitFor(() =>
+    await waitFor(() => {
       expect(cachedEntry()).toMatchObject({
         date: day(1),
         status: "planned",
         recovery: "folded",
         missedOn: missed.date,
-      }),
-    );
+      });
+    });
     expect(apiMocks.updateDayWithoutPlan).toHaveBeenCalledWith("pd-1", { scheduledDate: day(1) });
   });
 
@@ -87,9 +89,13 @@ describe("useMoveTimelineEntry", () => {
     seed(missed);
     const { result } = renderHook(() => useMoveTimelineEntry(null), { wrapper });
 
-    act(() => result.current.moveEntry(missed, day(-1)));
+    act(() => {
+      result.current.moveEntry(missed, day(-1));
+    });
 
-    await waitFor(() => expect(cachedEntry()).toMatchObject({ date: day(-1), status: "missed" }));
+    await waitFor(() => {
+      expect(cachedEntry()).toMatchObject({ date: day(-1), status: "missed" });
+    });
     expect(cachedEntry()?.recovery).toBeUndefined();
   });
 });

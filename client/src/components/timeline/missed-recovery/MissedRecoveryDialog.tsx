@@ -83,7 +83,19 @@ function isAvailable(preview: MissedSessionRecoveryPreview, option: MissedRecove
 function startingDate(preview: MissedSessionRecoveryPreview, option: "fold" | "shorten"): string | null {
   const { recommendation } = preview;
   if (recommendation.action === option && recommendation.targetDate) return recommendation.targetDate;
-  return preview[option].suggestedDate;
+  return (option === "fold" ? preview.fold : preview.shorten).suggestedDate;
+}
+
+interface ChosenDates {
+  readonly fold: string | null;
+  readonly shorten: string | null;
+}
+
+/** The day picked for `option`; letting go has none. */
+function chosenDate(dates: ChosenDates, option: MissedRecoveryOption): string | null {
+  if (option === "fold") return dates.fold;
+  if (option === "shorten") return dates.shorten;
+  return null;
 }
 
 /** "today", "tomorrow" or "Thu 25 Sep", for the middle of a sentence. */
@@ -185,13 +197,13 @@ function RecoveryChooser({ preview, initialOption, isApplying, onCancel, onConfi
   const [option, setOption] = useState<MissedRecoveryOption>(
     initialOption && isAvailable(preview, initialOption) ? initialOption : preview.recommendation.action,
   );
-  const [dates, setDates] = useState({
+  const [dates, setDates] = useState<ChosenDates>({
     fold: startingDate(preview, "fold"),
     shorten: startingDate(preview, "shorten"),
   });
 
   const move = moveOptionFor(preview, option);
-  const date = option === "let_go" ? null : dates[option];
+  const date = chosenDate(dates, option);
   const target = move?.targets.find((candidate) => candidate.date === date) ?? null;
   const impact: RecoveryImpact | null = option === "let_go" ? preview.letGo.impact : (target?.impact ?? null);
 
@@ -209,7 +221,9 @@ function RecoveryChooser({ preview, initialOption, isApplying, onCancel, onConfi
 
       <RadioGroup
         value={option}
-        onValueChange={(value) => setOption(value as MissedRecoveryOption)}
+        onValueChange={(value) => {
+          setOption(value as MissedRecoveryOption);
+        }}
         aria-label="What to do with the missed session"
         className="gap-2"
       >
@@ -291,7 +305,7 @@ function OptionCard({ copy, preview, selected }: OptionCardProps) {
           ) : null}
         </span>
         <span className="block text-sm text-muted-foreground">
-          {disabled ? move?.unavailableReason : copy.describe(preview)}
+          {disabled ? move.unavailableReason : copy.describe(preview)}
         </span>
         {copy.value === "shorten" && !disabled && preview.shorten.changes.length > 0 ? (
           <span className="block text-xs text-muted-foreground" data-testid="missed-recovery-shorten-changes">
@@ -324,7 +338,9 @@ function DayPicker({ move, today, value, onChange }: DayPickerProps) {
               key={target.date}
               type="button"
               aria-pressed={selected}
-              onClick={() => onChange(target.date)}
+              onClick={() => {
+                onChange(target.date);
+              }}
               data-testid={`missed-recovery-day-${target.date}`}
               className={cn(
                 "flex min-h-14 flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left text-sm transition-colors",

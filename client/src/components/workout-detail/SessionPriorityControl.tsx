@@ -80,7 +80,11 @@ function PriorityChips({ entryId, planDayId, initial }: PriorityChipsProps) {
                 setValue(tier.value);
                 setPriority(
                   { planDayId, priority: tier.value },
-                  { onError: () => setValue(previous) },
+                  {
+                    onError: () => {
+                      setValue(previous);
+                    },
+                  },
                 );
               }}
               data-testid={`session-priority-${tier.value}`}

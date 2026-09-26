@@ -16,10 +16,12 @@ vi.mock("csv-parse/sync", () => {
   };
 });
 
+const { transactionMock } = vi.hoisted(() => ({ transactionMock: vi.fn<typeof db.transaction>() }));
+
 vi.mock("../db", () => {
   return {
     db: {
-      transaction: vi.fn(),
+      transaction: transactionMock,
     },
   };
 });
@@ -30,6 +32,14 @@ const { createTrainingPlan, createPlanDays, getTrainingPlan } = vi.hoisted(() =>
   getTrainingPlan: vi.fn(),
 }));
 
+// The same functions as `storage.plans.getPlanDay` etc., held directly so the
+// tests below don't detach methods from `storage` to stub or assert on them.
+const { getPlanDayMock, updatePlanDayMock, getUserMock } = vi.hoisted(() => ({
+  getPlanDayMock: vi.fn<typeof storage.plans.getPlanDay>(),
+  updatePlanDayMock: vi.fn<typeof storage.plans.updatePlanDay>(),
+  getUserMock: vi.fn<typeof storage.users.getUser>(),
+}));
+
 // We'll mock the storage module to avoid interacting with the database
 vi.mock("../storage", () => {
   return {
@@ -38,12 +48,12 @@ vi.mock("../storage", () => {
       createTrainingPlan,
       createPlanDays,
       getTrainingPlan,
-      getPlanDay: vi.fn(),
-      updatePlanDay: vi.fn(),
+      getPlanDay: getPlanDayMock,
+      updatePlanDay: updatePlanDayMock,
       deleteTrainingPlan: vi.fn(),
     },
     users: {
-      getUser: vi.fn(),
+      getUser: getUserMock,
     },
   },
   };
@@ -734,7 +744,7 @@ describe("planService — moving a missed session", () => {
         }),
       }),
     };
-    vi.mocked(db.transaction).mockImplementation(async (callback) =>
+    transactionMock.mockImplementation(async (callback) =>
       callback(tx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]),
     );
     return tx;
@@ -745,8 +755,8 @@ describe("planService — moving a missed session", () => {
     // Thursday 24 September 2026, midday UTC.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-24T12:00:00Z"));
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(createMockPlanDay({ id: dayId }));
+    getUserMock.mockResolvedValue({ userTimezone: "UTC" } as never);
+    updatePlanDayMock.mockResolvedValue(createMockPlanDay({ id: dayId }));
   });
 
   afterEach(() => {
@@ -754,14 +764,14 @@ describe("planService — moving a missed session", () => {
   });
 
   it("folds it: moved to today or later it is planned again, remembering the day it was missed", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+    getPlanDayMock.mockResolvedValue(
       createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22", recovery: "let_go" }),
     );
     const tx = lockedRow({ status: "missed", scheduledDate: "2026-09-22" });
 
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-25" }, userId);
 
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+    expect(updatePlanDayMock).toHaveBeenCalledWith(
       dayId,
       { scheduledDate: "2026-09-25", status: "planned", recovery: "folded", missedOn: "2026-09-22" },
       userId,
@@ -770,7 +780,7 @@ describe("planService — moving a missed session", () => {
   });
 
   it("still moves, but doesn't fold, a day completed while the move was on its way", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+    getPlanDayMock.mockResolvedValue(
       createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22" }),
     );
     // A sync linked a workout between the read and the write.
@@ -778,18 +788,18 @@ describe("planService — moving a missed session", () => {
 
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-25" }, userId);
 
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(dayId, { scheduledDate: "2026-09-25" }, userId, tx);
+    expect(updatePlanDayMock).toHaveBeenCalledWith(dayId, { scheduledDate: "2026-09-25" }, userId, tx);
   });
 
   it("counts a past day the nightly sweep has not reached yet", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+    getPlanDayMock.mockResolvedValue(
       createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-23" }),
     );
     const tx = lockedRow({ status: "planned", scheduledDate: "2026-09-23" });
 
     await updatePlanDayStatus(dayId, { scheduledDate: "2026-09-24" }, userId);
 
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+    expect(updatePlanDayMock).toHaveBeenCalledWith(
       dayId,
       { scheduledDate: "2026-09-24", status: "planned", recovery: "folded", missedOn: "2026-09-23" },
       userId,
@@ -798,16 +808,16 @@ describe("planService — moving a missed session", () => {
   });
 
   it("leaves the status alone when it moves to another past day, or was never missed", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce(
+    getPlanDayMock.mockResolvedValueOnce(
       createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22" }),
     );
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-21" }, userId);
-    expect(storage.plans.updatePlanDay).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-21" }, userId);
+    expect(updatePlanDayMock).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-21" }, userId);
 
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce(
+    getPlanDayMock.mockResolvedValueOnce(
       createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-26" }),
     );
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-28" }, userId);
-    expect(storage.plans.updatePlanDay).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-28" }, userId);
+    expect(updatePlanDayMock).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-28" }, userId);
   });
 });

@@ -54,7 +54,8 @@ function input(overrides: Partial<PlannerInput> = {}): PlannerInput {
 }
 
 function target(preview: ReturnType<typeof planMissedSessionRecovery>, option: "fold" | "shorten", date: string) {
-  const found = preview[option].targets.find((t) => t.date === date);
+  const move = option === "fold" ? preview.fold : preview.shorten;
+  const found = move.targets.find((t) => t.date === date);
   if (!found) throw new Error(`no ${option} target on ${date}`);
   return found;
 }
@@ -112,11 +113,16 @@ describe("planMissedSessionRecovery", () => {
     expect(today.impact.summary).toBe("Today gets the full Threshold run (50 min).");
     expect(today.impact.keptFraction).toBe(1);
     // Folding inside the week keeps the week exactly as written.
-    const [week] = today.impact.weeks;
-    expect(week).toMatchObject({ weekStart: "2026-09-21", minutesBefore: 260, minutesAfter: 260 });
-    expect(week?.keyBefore).toBe(2);
-    expect(week?.keyAfter).toBe(2);
-    expect(week?.keyScheduled).toBe(2);
+    expect(today.impact.weeks).toEqual([
+      expect.objectContaining({
+        weekStart: "2026-09-21",
+        minutesBefore: 260,
+        minutesAfter: 260,
+        keyBefore: 2,
+        keyAfter: 2,
+        keyScheduled: 2,
+      }),
+    ]);
   });
 
   it("shows what letting it go costs the week", () => {
@@ -151,12 +157,15 @@ describe("planMissedSessionRecovery", () => {
         ],
       }),
     );
-    const [week] = preview.letGo.impact.weeks;
-    expect(week?.minutesBefore).toBe(90);
-    expect(week?.minutesAfter).toBe(40);
-    // The skipped key session still counts as scheduled: "1 of 2 key sessions".
-    expect(week?.keyScheduled).toBe(2);
-    expect(week?.keyAfter).toBe(0);
+    expect(preview.letGo.impact.weeks).toEqual([
+      expect.objectContaining({
+        minutesBefore: 90,
+        minutesAfter: 40,
+        // The skipped key session still counts as scheduled: "1 of 2 key sessions".
+        keyScheduled: 2,
+        keyAfter: 0,
+      }),
+    ]);
   });
 
   it("recommends letting an optional session go", () => {

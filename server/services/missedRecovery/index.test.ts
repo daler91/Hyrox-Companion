@@ -2,27 +2,47 @@ import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay, createMockTrainingPlan } from "../../../test/factories";
-import { storage } from "../../storage";
+import type { storage } from "../../storage";
 import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
 import { applyMissedSessionRecovery, getMissedSessionRecoveryPreview } from "./index";
+
+// Standalone mocks, typed as the storage methods they stand in for, so the
+// tests read and assert on them without detaching methods from `storage`.
+const mocks = vi.hoisted(() => ({
+  getPlanDay: vi.fn<typeof storage.plans.getPlanDay>(),
+  listTrainingPlans: vi.fn<typeof storage.plans.listTrainingPlans>(),
+  applyPlanDayRecovery: vi.fn<typeof storage.plans.applyPlanDayRecovery>(),
+  getUser: vi.fn<typeof storage.users.getUser>(),
+  getTimelinePage: vi.fn<typeof storage.timeline.getTimelinePage>(),
+  listAnnotations: vi.fn<typeof storage.timelineAnnotations.list>(),
+  getExerciseSetsByPlanDay: vi.fn<typeof storage.workouts.getExerciseSetsByPlanDay>(),
+  getWorkoutStructureByPlanDay: vi.fn<typeof storage.workouts.getWorkoutStructureByPlanDay>(),
+}));
 
 vi.mock("../../storage", () => ({
   storage: {
     plans: {
-      getPlanDay: vi.fn(),
-      listTrainingPlans: vi.fn(),
-      applyPlanDayRecovery: vi.fn(),
+      getPlanDay: mocks.getPlanDay,
+      listTrainingPlans: mocks.listTrainingPlans,
+      applyPlanDayRecovery: mocks.applyPlanDayRecovery,
     },
-    users: { getUser: vi.fn() },
-    timeline: { getTimelinePage: vi.fn() },
-    timelineAnnotations: { list: vi.fn() },
+    users: { getUser: mocks.getUser },
+    timeline: { getTimelinePage: mocks.getTimelinePage },
+    timelineAnnotations: { list: mocks.listAnnotations },
     workouts: {
-      getExerciseSetsByPlanDay: vi.fn(),
-      getWorkoutStructureByPlanDay: vi.fn(),
+      getExerciseSetsByPlanDay: mocks.getExerciseSetsByPlanDay,
+      getWorkoutStructureByPlanDay: mocks.getWorkoutStructureByPlanDay,
     },
   },
 }));
 vi.mock("../autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+
+/** The write the service last handed to storage. */
+function lastWrite() {
+  const call = mocks.applyPlanDayRecovery.mock.lastCall;
+  if (!call) throw new Error("no recovery was written");
+  return call[2];
+}
 
 const USER = "user-1";
 // Thursday 24 September 2026 in the athlete's zone.
@@ -85,15 +105,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
-  vi.mocked(storage.plans.getPlanDay).mockResolvedValue(missedDay);
-  vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC", distanceUnit: "km" } as never);
-  vi.mocked(storage.plans.listTrainingPlans).mockResolvedValue([
+  mocks.getPlanDay.mockResolvedValue(missedDay);
+  mocks.getUser.mockResolvedValue({ userTimezone: "UTC", distanceUnit: "km" } as never);
+  mocks.listTrainingPlans.mockResolvedValue([
     createMockTrainingPlan({ id: "plan-1", startDate: "2026-09-07", endDate: "2026-11-01" }),
   ]);
-  vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
-  vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue(intervalSets());
-  vi.mocked(storage.workouts.getWorkoutStructureByPlanDay).mockResolvedValue([]);
-  vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({
+  mocks.listAnnotations.mockResolvedValue([]);
+  mocks.getExerciseSetsByPlanDay.mockResolvedValue(intervalSets());
+  mocks.getWorkoutStructureByPlanDay.mockResolvedValue([]);
+  mocks.getTimelinePage.mockResolvedValue({
     entries: [
       entry("2026-09-22", "Threshold run", { planDayId: "pd-missed", status: "missed", priority: "key" }),
       entry("2026-09-25", "Strength B"),
@@ -102,7 +122,7 @@ beforeEach(() => {
     ],
     nextCursor: null,
   });
-  vi.mocked(storage.plans.applyPlanDayRecovery).mockImplementation(async (_id, _user, write) => ({
+  mocks.applyPlanDayRecovery.mockImplementation(async (_id, _user, write) => ({
     outcome: "applied",
     day: { ...missedDay, ...write.update },
   }));
@@ -129,11 +149,11 @@ describe("getMissedSessionRecoveryPreview", () => {
     const today = preview.fold.targets.find((target) => target.date === "2026-09-24");
     expect(today?.sessions).toEqual([]);
     // Read backwards from the end of the last candidate day's week (Sun 4 Oct).
-    expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith(USER, { limit: 60, before: "2026-10-05" });
+    expect(mocks.getTimelinePage).toHaveBeenCalledWith(USER, { limit: 60, before: "2026-10-05" });
   });
 
   it("reads back page by page until the missed week is covered, however long the plan runs", async () => {
-    vi.mocked(storage.timeline.getTimelinePage)
+    mocks.getTimelinePage
       .mockResolvedValueOnce({
         entries: [entry("2026-10-04", "Long run", { priority: "key" }), entry("2026-09-28", "Strength A")],
         nextCursor: "2026-09-28",
@@ -149,8 +169,8 @@ describe("getMissedSessionRecoveryPreview", () => {
 
     const preview = await getMissedSessionRecoveryPreview(USER, "pd-missed");
 
-    expect(storage.timeline.getTimelinePage).toHaveBeenNthCalledWith(2, USER, { limit: 60, before: "2026-09-28" });
-    expect(storage.timeline.getTimelinePage).toHaveBeenNthCalledWith(3, USER, { limit: 60, before: "2026-09-22" });
+    expect(mocks.getTimelinePage).toHaveBeenNthCalledWith(2, USER, { limit: 60, before: "2026-09-28" });
+    expect(mocks.getTimelinePage).toHaveBeenNthCalledWith(3, USER, { limit: 60, before: "2026-09-22" });
     // Friday's session came from the second page, so Friday is not "free".
     const friday = preview.fold.targets.find((target) => target.date === "2026-09-25");
     expect(friday?.sessions.map((session) => session.focus)).toEqual(["Strength B"]);
@@ -160,24 +180,24 @@ describe("getMissedSessionRecoveryPreview", () => {
   });
 
   it("refuses a day that isn't missed, a rest day, and someone else's day", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce({ ...missedDay, status: "completed" });
+    mocks.getPlanDay.mockResolvedValueOnce({ ...missedDay, status: "completed" });
     await expect(getMissedSessionRecoveryPreview(USER, "pd-missed")).rejects.toMatchObject({ status: 409 });
 
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce({ ...missedDay, focus: "Rest", mainWorkout: "Rest" });
+    mocks.getPlanDay.mockResolvedValueOnce({ ...missedDay, focus: "Rest", mainWorkout: "Rest" });
     await expect(getMissedSessionRecoveryPreview(USER, "pd-missed")).rejects.toMatchObject({
       status: 409,
       message: "Rest days don't need recovering.",
     });
 
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce(undefined);
+    mocks.getPlanDay.mockResolvedValueOnce(undefined);
     await expect(getMissedSessionRecoveryPreview(USER, "pd-missed")).rejects.toMatchObject({ status: 404 });
   });
 
   it("counts a past day the sweep has not reached yet as missed, but not one an absence excuses", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce({ ...missedDay, status: "planned" });
+    mocks.getPlanDay.mockResolvedValueOnce({ ...missedDay, status: "planned" });
     await expect(getMissedSessionRecoveryPreview(USER, "pd-missed")).resolves.toMatchObject({ planDayId: "pd-missed" });
 
-    vi.mocked(storage.timelineAnnotations.list).mockResolvedValueOnce([
+    mocks.listAnnotations.mockResolvedValueOnce([
       { startDate: "2026-09-21", endDate: "2026-09-23" } as never,
     ]);
     await expect(getMissedSessionRecoveryPreview(USER, "pd-missed")).rejects.toMatchObject({ status: 409 });
@@ -188,7 +208,7 @@ describe("applyMissedSessionRecovery", () => {
   it("folds the session into the chosen day, remembering where it was missed", async () => {
     const day = await applyMissedSessionRecovery(USER, "pd-missed", { action: "fold", targetDate: "2026-09-24" });
 
-    expect(storage.plans.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
+    expect(mocks.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
       guard: { statuses: ["missed"], scheduledDate: "2026-09-22", recovery: null },
       update: {
         scheduledDate: "2026-09-24",
@@ -205,21 +225,21 @@ describe("applyMissedSessionRecovery", () => {
   it("shortens it by dropping the last intervals, leaving the notes alone when the table shows the cut", async () => {
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "shorten", targetDate: "2026-09-26" });
 
-    const write = vi.mocked(storage.plans.applyPlanDayRecovery).mock.calls[0]?.[2];
-    expect(write?.update).toMatchObject({ scheduledDate: "2026-09-26", status: "planned", recovery: "shortened" });
-    expect(write?.update).not.toHaveProperty("notes");
-    expect(write?.update).not.toHaveProperty("expectedDurationMin");
-    expect(write?.deleteSetIds).toEqual(["set-4", "set-5"]);
+    const write = lastWrite();
+    expect(write.update).toMatchObject({ scheduledDate: "2026-09-26", status: "planned", recovery: "shortened" });
+    expect(write.update).not.toHaveProperty("notes");
+    expect(write.update).not.toHaveProperty("expectedDurationMin");
+    expect(write.deleteSetIds).toEqual(["set-4", "set-5"]);
   });
 
   it("pins the length and adds an instruction when there is no table to cut", async () => {
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ ...missedDay, expectedDurationMin: 50, notes: "Hold 4:10/km" });
+    mocks.getExerciseSetsByPlanDay.mockResolvedValue([]);
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, expectedDurationMin: 50, notes: "Hold 4:10/km" });
 
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "shorten", targetDate: "2026-09-24" });
 
-    const write = vi.mocked(storage.plans.applyPlanDayRecovery).mock.calls[0]?.[2];
-    expect(write?.update).toMatchObject({
+    const write = lastWrite();
+    expect(write.update).toMatchObject({
       expectedDurationMin: 30,
       notes: "Shortened after it was missed on Tue 22 Sep: do about 60% of it.\nHold 4:10/km",
     });
@@ -229,15 +249,15 @@ describe("applyMissedSessionRecovery", () => {
     await expect(
       applyMissedSessionRecovery(USER, "pd-missed", { action: "fold", targetDate: "2026-10-20" }),
     ).rejects.toMatchObject({ status: 400 });
-    expect(storage.plans.applyPlanDayRecovery).not.toHaveBeenCalled();
+    expect(mocks.applyPlanDayRecovery).not.toHaveBeenCalled();
   });
 
   it("lets it go without moving it, and writes the status a not-yet-swept day is missing", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ ...missedDay, status: "planned" });
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, status: "planned" });
 
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" });
 
-    expect(storage.plans.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
+    expect(mocks.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
       guard: { statuses: ["planned"], scheduledDate: "2026-09-22", recovery: null },
       update: { status: "missed", recovery: "let_go" },
     });
@@ -249,32 +269,32 @@ describe("applyMissedSessionRecovery", () => {
       status: 409,
     });
     // Left behind on a day that was logged and then unlogged: not a let-go the timeline shows.
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValueOnce({ ...missedDay, status: "planned", recovery: "let_go" });
+    mocks.getPlanDay.mockResolvedValueOnce({ ...missedDay, status: "planned", recovery: "let_go" });
     await expect(applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" })).rejects.toMatchObject({
       status: 409,
     });
 
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ ...missedDay, recovery: "let_go" });
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, recovery: "let_go" });
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
-    expect(storage.plans.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
+    expect(mocks.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
       guard: { statuses: ["missed"], scheduledDate: "2026-09-22", recovery: "let_go" },
       update: { recovery: null },
     });
   });
 
   it("reopens a let-go of a session that had already been moved as moved, not as new", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ ...missedDay, recovery: "let_go", missedOn: "2026-09-18" });
+    mocks.getPlanDay.mockResolvedValue({ ...missedDay, recovery: "let_go", missedOn: "2026-09-18" });
 
     await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
 
-    expect(storage.plans.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
+    expect(mocks.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
       guard: { statuses: ["missed"], scheduledDate: "2026-09-22", recovery: "let_go" },
       update: { recovery: "folded" },
     });
   });
 
   it("turns a decision made against a stale preview into a conflict", async () => {
-    vi.mocked(storage.plans.applyPlanDayRecovery).mockResolvedValue({ outcome: "conflict" });
+    mocks.applyPlanDayRecovery.mockResolvedValue({ outcome: "conflict" });
 
     await expect(applyMissedSessionRecovery(USER, "pd-missed", { action: "let_go" })).rejects.toMatchObject({
       status: 409,

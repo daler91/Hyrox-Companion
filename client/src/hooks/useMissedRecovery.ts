@@ -101,14 +101,11 @@ interface PriorityVariables {
   readonly priority: PlanDayPriority;
 }
 
+/** `entries` with the session's tier set; the same array when nothing changes, so the cache keeps its identity. */
 function withPriority(entries: TimelineEntry[], planDayId: string, priority: PlanDayPriority) {
-  let changed = false;
-  const next = entries.map((entry) => {
-    if (entry.planDayId !== planDayId || entry.priority === priority) return entry;
-    changed = true;
-    return { ...entry, priority };
-  });
-  return changed ? next : entries;
+  const needsTier = (entry: TimelineEntry) => entry.planDayId === planDayId && entry.priority !== priority;
+  if (!entries.some(needsTier)) return entries;
+  return entries.map((entry) => (needsTier(entry) ? { ...entry, priority } : entry));
 }
 
 /**

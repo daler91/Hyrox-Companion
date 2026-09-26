@@ -1,5 +1,5 @@
 import type { RecoveryNote, RecoveryShortenChange } from "@shared/schema";
-import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
+import { knownExerciseLabel, normalizeExerciseName } from "@shared/schema/exercises";
 import {
   formatDistanceFromMeters,
   getStoredDistanceUnit,
@@ -76,7 +76,7 @@ export interface ShortenPlan {
 function exerciseLabel(set: ShortenableSet): string {
   if (set.customLabel?.trim()) return set.customLabel.trim();
   const key = normalizeExerciseName(set.exerciseName);
-  return key ? EXERCISE_DEFINITIONS[key].label : set.exerciseName;
+  return (key ? knownExerciseLabel(key) : undefined) ?? set.exerciseName;
 }
 
 function groupKey(set: ShortenableSet): string {
@@ -124,11 +124,18 @@ function changedFields(
   set: ShortenableSet,
   scaled: Partial<Record<ScalableField, number | null>>,
 ): Partial<Record<ScalableField, number>> {
-  const out: Partial<Record<ScalableField, number>> = {};
-  for (const [field, value] of Object.entries(scaled) as [ScalableField, number | null][]) {
-    if (value !== null && value !== set[field]) out[field] = value;
-  }
-  return out;
+  const current = new Map<ScalableField, number | null>([
+    ["plannedDistance", set.plannedDistance],
+    ["distance", set.distance],
+    ["plannedTime", set.plannedTime],
+    ["time", set.time],
+    ["plannedReps", set.plannedReps],
+    ["reps", set.reps],
+  ]);
+  const changed = (Object.entries(scaled) as [ScalableField, number | null][]).filter(
+    (entry): entry is [ScalableField, number] => entry[1] !== null && entry[1] !== current.get(entry[0]),
+  );
+  return Object.fromEntries(changed);
 }
 
 interface ScaledSingle {
@@ -223,7 +230,7 @@ interface GroupCut {
 /** One exercise's cut: its last sets dropped, or — a single continuous effort — the effort scaled down. */
 function cutGroup(group: readonly ShortenableSet[], keep: number, distanceUnit: string): GroupCut {
   const ordered = [...group].sort(bySetOrder);
-  const first = ordered[0];
+  const first = ordered.at(0);
   if (!first) return { deleteSetIds: [], setUpdates: [], changes: [], remaining: [] };
 
   if (ordered.length === 1) {

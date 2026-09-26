@@ -24,7 +24,9 @@ export function useMissedRecoveryFlow() {
     [applyRecovery],
   );
 
-  const close = useCallback(() => setRequest(null), []);
+  const close = useCallback(() => {
+    setRequest(null);
+  }, []);
 
   return { request, recover, close };
 }
