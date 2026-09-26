@@ -1210,7 +1210,8 @@ export const customExercises = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
-    index("idx_custom_exercises_user_id").on(table.userId),
+    // idx_custom_exercises_user_id (single-column, user_id) dropped: fully shadowed by this
+    // composite, which leads with user_id and already serves every eq(userId) lookup.
     uniqueIndex("idx_custom_exercises_user_name").on(table.userId, table.name),
   ],
 );

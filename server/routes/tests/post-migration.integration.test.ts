@@ -50,7 +50,6 @@ const EXPECTED_INDEXES = [
   "idx_exercise_sets_workout_sort",
   "idx_exercise_sets_workout_exercise",
   "idx_chat_messages_user_time",
-  "idx_custom_exercises_user_id",
   "idx_custom_exercises_user_name",
   "idx_coaching_materials_user_id",
   // 0091 concurrency guards — load-bearing for correctness, not just speed:

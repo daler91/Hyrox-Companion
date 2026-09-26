@@ -1,0 +1,1 @@
+DROP INDEX "idx_custom_exercises_user_id";

@@ -610,8 +610,7 @@ User-defined exercises for AI recognition beyond the built-in list.
 | `created_at` | `timestamp` | default `now()` |
 
 **Indexes:**
-- `idx_custom_exercises_user_id` on (`user_id`)
-- `idx_custom_exercises_user_name` on (`user_id`, `name`) -- UNIQUE composite index
+- `idx_custom_exercises_user_name` on (`user_id`, `name`) -- UNIQUE composite index; it also serves `user_id`-only lookups, which is why the single-column `user_id` index was dropped (migration 0103)
 
 ---
 
@@ -1516,15 +1515,15 @@ for (const ex of exercises) {
 - Single-column: `material_id`, `user_id`
 - `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding::halfvec(3072) halfvec_cosine_ops` for fast approximate cosine similarity search. Built on the `halfvec` (half-precision) cast because 3072-dim embeddings exceed pgvector's 2000-dim HNSW limit for native `vector`. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
 
-**coaching_materials**, **custom_exercises** (1 index each):
-- Both indexed on `user_id`
+**coaching_materials** (1 index):
+- Indexed on `user_id`
+
+**custom_exercises** (1 index):
+- Unique composite: `(user_id, name)` to prevent duplicate exercise names per user; it also serves `user_id`-only lookups, which is why the single-column `user_id` index was dropped (migration 0103)
 
 **training_plans** (2 indexes):
 - Single-column: `user_id`
 - `uq_training_plans_user_in_flight` -- **partial** unique on (`user_id`) `WHERE generation_status IN ('pending', 'generating')` (migration 0091). One in-flight generation per athlete, so a double-submit cannot start a second AI run. Partial, so finished plans (`ready` / `failed` -- every historical row) are unaffected; the startup stuck-generation sweep keeps a crashed worker from wedging the athlete behind it.
-
-**custom_exercises** also has:
-- Unique composite: `(user_id, name)` to prevent duplicate exercise names per user
 
 **analytics_results** (2 indexes):
 - Unique composite: `(user_id, feature)` — one stored result per user+feature (the upsert target)
