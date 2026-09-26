@@ -98,6 +98,12 @@ export interface TrainingContext {
   plannedWorkouts: number;
   missedWorkouts: number;
   skippedWorkouts: number;
+  /**
+   * Missed sessions the athlete then let go (missed-session recovery). Not in
+   * `missedWorkouts` or `completionRate`: a decision about the plan, not a
+   * lapse. Optional so contexts built without it read as none.
+   */
+  letGoWorkouts?: number;
   completionRate: number;
   currentStreak: number;
   /**

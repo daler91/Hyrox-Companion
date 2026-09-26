@@ -111,6 +111,7 @@ function planDayRow(overrides: Record<string, unknown> = {}) {
     priority: null,
     recovery: null,
     missedOn: null,
+    recoveryUndo: null,
     ...overrides,
   };
 }

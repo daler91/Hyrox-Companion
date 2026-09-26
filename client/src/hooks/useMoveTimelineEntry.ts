@@ -1,3 +1,4 @@
+import { weekdayName } from "@shared/dateUtils";
 import type { TimelineEntry } from "@shared/schema";
 import { format } from "date-fns";
 import { useCallback } from "react";
@@ -41,8 +42,10 @@ interface MoveContext {
  */
 function movedEntry(entry: TimelineEntry, newDate: string): TimelineEntry {
   const today = format(new Date(), "yyyy-MM-dd");
-  if (entry.status !== "missed" || !entry.planDayId || newDate < today) return { ...entry, date: newDate };
-  return { ...entry, date: newDate, status: "planned", recovery: "folded", missedOn: entry.date, recoverable: undefined };
+  // The weekday chip goes with the card, as it will in the server's entry.
+  const moved = { ...entry, date: newDate, dayName: entry.dayName === undefined ? undefined : weekdayName(newDate) };
+  if (entry.status !== "missed" || !entry.planDayId || newDate < today) return moved;
+  return { ...moved, status: "planned", recovery: "folded", missedOn: entry.date, recoverable: undefined };
 }
 
 function moveEntryDate(entries: TimelineEntry[], entryId: string, newDate: string): TimelineEntry[] {

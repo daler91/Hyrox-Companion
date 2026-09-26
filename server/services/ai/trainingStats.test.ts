@@ -29,10 +29,26 @@ describe("calculateTrainingStats", () => {
       plannedWorkouts: 0,
       missedWorkouts: 0,
       skippedWorkouts: 0,
+      letGoWorkouts: 0,
       totalWorkouts: 0,
       completionRate: 0,
       completedDates: new Set(),
     });
+  });
+
+  it("counts a missed session the athlete let go apart, outside the completion rate", () => {
+    const stats = calculateTrainingStats([
+      makeEntry({ status: COMPLETED }),
+      makeEntry({ status: COMPLETED }),
+      makeEntry({ status: COMPLETED }),
+      makeEntry({ status: MISSED }),
+      makeEntry({ status: MISSED, recovery: "let_go" }),
+    ]);
+    expect(stats.missedWorkouts).toBe(1);
+    expect(stats.letGoWorkouts).toBe(1);
+    // 3 of 4: the let-go day is not in the denominator.
+    expect(stats.completionRate).toBe(75);
+    expect(stats.totalWorkouts).toBe(5);
   });
 
   it("counts each status bucket and totals them", () => {

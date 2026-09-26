@@ -30,6 +30,7 @@ import {
 import type {
   CoachNoteInputs,
   PlanAdjustmentProposalPayload,
+  PlanDayRecoveryUndo,
   PlanEngineState,
   RecycleBinPayload,
 } from "./types";
@@ -450,6 +451,10 @@ export const planDays = pgTable(
     // The date the session was on when it was missed, kept when recovery moves
     // it, so the card can say where it came from. NULL unless it was moved.
     missedOn: date("missed_on"),
+    // What the last fold or shorten changed (date, status, the sets a shorten
+    // dropped or scaled, notes and duration it rewrote), so the athlete can
+    // take it back. NULL until the session is moved; written only by recovery.
+    recoveryUndo: jsonb("recovery_undo").$type<PlanDayRecoveryUndo>(),
   },
   (table) => [
     check("status_check", sql`status IN (${inValues(workoutStatusEnum)})`),

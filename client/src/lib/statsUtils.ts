@@ -61,7 +61,10 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     //   - Days inside a declared absence. `excused` is exactly the flag the
     //     timeline uses to explain why a past date is not red; a week spent
     //     injured is not a week of failures.
-    if (entry.date < todayStr && !entry.excused) {
+    //
+    // Nor does a missed session the athlete let go: dropping it was a decision
+    // about the plan, and the card already reads "Let go", not "Missed".
+    if (entry.date < todayStr && !entry.excused && entry.recovery !== "let_go") {
       totalElapsed++;
       if (entry.status === "completed") {
         completedElapsedCount++;

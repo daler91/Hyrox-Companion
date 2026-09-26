@@ -86,6 +86,31 @@ describe("TimelineWorkoutCard missed-session recovery", () => {
     expect(onRecover).toHaveBeenCalledWith(expect.objectContaining({ planDayId: "pd-1" }), "reopen");
   });
 
+  it("offers to take a fold or a shorten back while it can be", async () => {
+    const user = userEvent.setup();
+    const upcoming = {
+      date: format(new Date(), "yyyy-MM-dd"),
+      status: "planned",
+      recovery: "shortened",
+      missedOn: daysAgo(2),
+      recoverable: undefined,
+      recoveryUndoable: true,
+    } as const;
+    const { onClick, onRecover } = renderCard(upcoming);
+
+    expect(screen.getByTestId("recovery-moved-plan-pd-1")).toHaveTextContent("Shortened after you missed it.");
+    await user.click(screen.getByRole("button", { name: "Undo shortening: bring the full session back" }));
+    expect(onRecover).toHaveBeenCalledWith(expect.objectContaining({ planDayId: "pd-1" }), "reopen");
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("stops offering the undo once the server says the move can't be taken back", () => {
+    renderCard({ date: format(new Date(), "yyyy-MM-dd"), status: "planned", recovery: "folded", missedOn: daysAgo(9), recoverable: undefined });
+
+    expect(screen.getByTestId("badge-recovered-plan-pd-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("recovery-moved-plan-pd-1")).toBeNull();
+  });
+
   it("never asks about a rest day that went by", () => {
     renderCard({ focus: "Rest", mainWorkout: "Complete rest or light walk", priority: undefined, recoverable: undefined });
 

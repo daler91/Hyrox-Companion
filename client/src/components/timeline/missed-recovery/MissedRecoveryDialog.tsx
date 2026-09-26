@@ -388,7 +388,7 @@ function ImpactPanel({ impact, preview }: ImpactPanelProps) {
       <p className="text-sm">{impact.summary}</p>
       <p className="text-sm text-muted-foreground" data-testid="missed-recovery-kept">
         {describeKept(impact.keptFraction, impact.keptMinutes, preview.session.durationMin)}
-        {preview.session.estimated ? " — an estimate, with no exercise table to go on" : ""}
+        {preview.session.estimated ? " — an estimate: nothing in the session says how long it is" : ""}
       </p>
       <ul className="space-y-1 text-sm">
         {impact.weeks.map((week) => (

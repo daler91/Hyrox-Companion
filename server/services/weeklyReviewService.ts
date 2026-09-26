@@ -86,6 +86,7 @@ function buildCounts(
   let skipped = 0;
   let outstanding = 0;
   let excused = 0;
+  let letGo = 0;
 
   for (const d of planDays) {
     if (isExcusedDay(d, ranges, today)) {
@@ -97,7 +98,9 @@ function buildCounts(
         plannedCompleted++;
         break;
       case "missed":
-        missed++;
+        // Let go on purpose: a decision about the plan, not a miss (same rule as buildPlannedDays).
+        if (d.recovery === "let_go") letGo++;
+        else missed++;
         break;
       case "skipped":
         skipped++;
@@ -128,6 +131,7 @@ function buildCounts(
     skipped,
     outstanding,
     excused,
+    letGo,
     totalDurationMin,
     avgRpe: rpeCount === 0 ? null : Math.round((rpeSum / rpeCount) * 10) / 10,
   };

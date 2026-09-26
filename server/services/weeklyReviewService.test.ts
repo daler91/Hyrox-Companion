@@ -246,6 +246,8 @@ describe("buildWeeklyReview", () => {
       ["pd-2", "optional", null],
       ["pd-3", "key", null],
     ]);
+    // Counted as let go, not missed; the stale let-go on a planned day is outstanding.
+    expect(review.current).toMatchObject({ missed: 1, letGo: 1, outstanding: 1 });
   });
 
   it("carries the adherence add/drop detail per session", async () => {

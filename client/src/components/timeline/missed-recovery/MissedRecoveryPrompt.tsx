@@ -69,32 +69,83 @@ interface MissedRecoveryPromptProps {
   readonly onRecover?: RecoverEntryHandler;
 }
 
+/** A folded or shortened session whose move the card can offer to take back (the server decides). */
+export function isUndoableMove(entry: TimelineEntry): boolean {
+  return (
+    entry.status === "planned" &&
+    entry.recoveryUndoable === true &&
+    Boolean(entry.planDayId) &&
+    (entry.recovery === "folded" || entry.recovery === "shortened")
+  );
+}
+
+interface DecisionLineProps {
+  readonly entry: TimelineEntry;
+  readonly onRecover: RecoverEntryHandler;
+  readonly text: string;
+  /** What the undo takes back, for its accessible name. */
+  readonly undoLabel: string;
+  readonly testId: string;
+  readonly undoTestId: string;
+}
+
+/** A decision already made, said quietly, with the way to take it back. */
+function DecisionLine({ entry, onRecover, text, undoLabel, testId, undoTestId }: DecisionLineProps) {
+  return (
+    <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground" data-testid={testId}>
+      {text}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-auto min-h-0 px-1 py-0 text-xs underline underline-offset-2"
+        aria-label={undoLabel}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRecover(entry, "reopen");
+        }}
+        onKeyDown={stopKeys}
+        data-testid={undoTestId}
+      >
+        Undo
+      </Button>
+    </p>
+  );
+}
+
 /**
  * Where the red "Missed" square used to end: the three ways forward, right on
  * the card. Each opens the recovery sheet on that option, with what it does to
- * the plan. Once let go, the card says so quietly and offers the undo.
+ * the plan. Once decided, the card says so quietly and offers the undo: a
+ * let-go reopens where it is; a fold or shorten goes back to the day it was
+ * missed, with the whole session.
  */
 export function MissedRecoveryPrompt({ entry, onRecover }: MissedRecoveryPromptProps) {
   if (!onRecover || !entry.planDayId) return null;
 
   if (entry.status === "missed" && entry.recovery === "let_go") {
     return (
-      <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground" data-testid={`missed-let-go-${entry.id}`}>
-        You let this one go.
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto min-h-0 px-1 py-0 text-xs underline underline-offset-2"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRecover(entry, "reopen");
-          }}
-          onKeyDown={stopKeys}
-          data-testid={`missed-let-go-undo-${entry.id}`}
-        >
-          Undo
-        </Button>
-      </p>
+      <DecisionLine
+        entry={entry}
+        onRecover={onRecover}
+        text="You let this one go."
+        undoLabel="Undo letting this session go"
+        testId={`missed-let-go-${entry.id}`}
+        undoTestId={`missed-let-go-undo-${entry.id}`}
+      />
+    );
+  }
+
+  if (isUndoableMove(entry)) {
+    const shortened = entry.recovery === "shortened";
+    return (
+      <DecisionLine
+        entry={entry}
+        onRecover={onRecover}
+        text={shortened ? "Shortened after you missed it." : "Moved here after you missed it."}
+        undoLabel={shortened ? "Undo shortening: bring the full session back" : "Undo the move"}
+        testId={`recovery-moved-${entry.id}`}
+        undoTestId={`recovery-moved-undo-${entry.id}`}
+      />
     );
   }
 

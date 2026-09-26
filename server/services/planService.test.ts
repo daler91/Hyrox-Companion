@@ -773,7 +773,14 @@ describe("planService — moving a missed session", () => {
 
     expect(updatePlanDayMock).toHaveBeenCalledWith(
       dayId,
-      { scheduledDate: "2026-09-25", status: "planned", recovery: "folded", missedOn: "2026-09-22" },
+      {
+        scheduledDate: "2026-09-25",
+        status: "planned",
+        recovery: "folded",
+        missedOn: "2026-09-22",
+        // Recorded like any fold, so the card's undo can put it back — as let go.
+        recoveryUndo: expect.objectContaining({ scheduledDate: "2026-09-22", status: "missed", recovery: "let_go" }),
+      },
       userId,
       tx,
     );
@@ -801,7 +808,13 @@ describe("planService — moving a missed session", () => {
 
     expect(updatePlanDayMock).toHaveBeenCalledWith(
       dayId,
-      { scheduledDate: "2026-09-24", status: "planned", recovery: "folded", missedOn: "2026-09-23" },
+      {
+        scheduledDate: "2026-09-24",
+        status: "planned",
+        recovery: "folded",
+        missedOn: "2026-09-23",
+        recoveryUndo: expect.objectContaining({ scheduledDate: "2026-09-23", status: "planned" }),
+      },
       userId,
       tx,
     );

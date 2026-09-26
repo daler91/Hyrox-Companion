@@ -8,11 +8,12 @@ import {
   workoutLogs,
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import { and, asc, desc, eq, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, not, notExists,or,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
 import { absenceDeclaredForPlanDay, noAbsenceDeclaredForUserDate } from "./absenceGuard";
+import { planDayLetGo } from "./letGoGuard";
 import { planDayWithinPlanLifetime } from "./planRetirement";
 import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
 
@@ -344,7 +345,8 @@ export class AnalyticsStorage {
    * future is not yet due and must not count against the athlete. Days covered
    * by a declared absence are excluded entirely, matching the weekly email and
    * the timeline's "Not counted" badge — a week spent injured is not a week of
-   * failures.
+   * failures. So are missed days the athlete let go ({@link planDayLetGo}):
+   * dropping a session on purpose is adjusting the plan, not falling short of it.
    *
    * Sessions from a retired plan's cutoff onward are excluded for the same
    * reason. This query joins plan_days to training_plans on the USER, so before
@@ -368,6 +370,7 @@ export class AnalyticsStorage {
             inArray(planDays.status, ["completed", "missed", "skipped"]),
             and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} <= ${dueThrough}`),
           ),
+          not(planDayLetGo()),
           notExists(
             db
               .select({ one: sql`1` })
@@ -391,7 +394,7 @@ export class AnalyticsStorage {
    * relies on: with every day of the week in the past, "held out of missed by a
    * declared absence" collapses to annotation coverage, no today needed).
    */
-  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; planCompletedCount: number; plannedCount: number; missedCount: number; skippedCount: number; excusedCount: number; totalDuration: number }> {
+  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; planCompletedCount: number; plannedCount: number; missedCount: number; skippedCount: number; excusedCount: number; letGoCount: number; totalDuration: number }> {
     const [logs] = await db
       .select({
         completedCount: sql<number>`cast(count(*) as int)`,
@@ -451,8 +454,26 @@ export class AnalyticsStorage {
       )
       .groupBy(planDays.status);
 
+    // Missed days the athlete let go: out of "missed" like an excused day, and
+    // out of the completion rate. One inside a declared absence is already
+    // excused above, and is not taken off a second time.
+    const [letGo = { count: 0 }] = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          sql`${planDays.scheduledDate} >= ${weekStart}`,
+          sql`${planDays.scheduledDate} <= ${weekEnd}`,
+          planDayLetGo(),
+          not(absenceDeclaredForPlanDay(db, userId)),
+        ),
+      );
+
     const completedCount = logs?.completedCount || 0;
     const totalDuration = logs?.totalDuration || 0;
+    const letGoCount = letGo.count;
 
     let plannedCount = 0;
     let missedCount = 0;
@@ -485,6 +506,8 @@ export class AnalyticsStorage {
       }
     }
 
-    return { completedCount, planCompletedCount, plannedCount, missedCount, skippedCount, excusedCount, totalDuration };
+    missedCount -= letGoCount;
+
+    return { completedCount, planCompletedCount, plannedCount, missedCount, skippedCount, excusedCount, letGoCount, totalDuration };
   }
 }

@@ -23,7 +23,18 @@ const SCHEDULED_DAY = {
   weekNumber: 1,
   dayName: "Monday",
   focus: "Engine",
-  scheduledDate: "2026-05-01",
+  // A Monday, like its plan slot.
+  scheduledDate: "2026-05-04",
+  status: "planned",
+};
+// Written for Wednesday, moved to Friday.
+const MOVED_DAY = {
+  id: "day-3",
+  planId: "plan-1",
+  weekNumber: 1,
+  dayName: "Wednesday",
+  focus: "Tempo",
+  scheduledDate: "2026-05-08",
   status: "planned",
 };
 const UNSCHEDULED_DAY = {
@@ -52,7 +63,7 @@ describe("WorkoutPlanDayPicker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.plans.list).mockResolvedValue([PLAN] as never);
-    vi.mocked(api.plans.get).mockResolvedValue({ ...PLAN, days: [SCHEDULED_DAY, UNSCHEDULED_DAY] } as never);
+    vi.mocked(api.plans.get).mockResolvedValue({ ...PLAN, days: [SCHEDULED_DAY, UNSCHEDULED_DAY, MOVED_DAY] } as never);
   });
 
   it("cascades plan -> scheduled day and emits the link only when a day is picked", async () => {
@@ -72,6 +83,15 @@ describe("WorkoutPlanDayPicker", () => {
     await user.click(await screen.findByRole("option", { name: /Week 1 · Monday · Engine/i }));
 
     expect(onChange).toHaveBeenCalledWith({ planId: "plan-1", planDayId: "day-1" });
+  });
+
+  it("names a moved day by the weekday it is on now, not its plan slot", async () => {
+    const user = userEvent.setup();
+    renderPicker({ planId: "plan-1", planDayId: null, onChange: vi.fn() });
+
+    await user.click(await screen.findByRole("combobox", { name: /select plan day/i }));
+    expect(await screen.findByRole("option", { name: /Week 1 · Friday · Tempo/i })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /Wednesday/i })).toBeNull();
   });
 
   it("clears the link when 'No plan' is chosen", async () => {

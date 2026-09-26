@@ -2457,6 +2457,10 @@
           "missedOn": {
             "type": "string",
             "nullable": true
+          },
+          "recoveryUndo": {
+            "type": "object",
+            "description": "What the last fold or shorten changed, so it can be undone."
           }
         },
         "required": [

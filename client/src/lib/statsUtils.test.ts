@@ -121,6 +121,19 @@ describe("calculateStats", () => {
       // 1 of 1 elapsed, unexcused day. Counting the absence would report 33%.
       expect(stats.completionRate).toBe(100);
     });
+
+    it("does not count a missed session the athlete let go as a failure", () => {
+      const timeline: Partial<TimelineEntry>[] = [
+        { date: "2024-05-13", status: "completed" },
+        { date: "2024-05-14", status: "missed", recovery: "let_go" },
+        { date: "2024-05-14", status: "missed" },
+      ];
+
+      const stats = calculateStatsFor(timeline);
+
+      // 1 of 2: the real miss counts, the let-go does not.
+      expect(stats.completionRate).toBe(50);
+    });
   });
 
 });

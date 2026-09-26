@@ -1,3 +1,4 @@
+import { weekdayName } from "@shared/dateUtils";
 import type { PlanDay } from "@shared/schema";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -173,7 +174,9 @@ function usePlanDetailQuery(selectedPlanId: string | null) {
 }
 
 function formatDayLabel(day: PlanDay): string {
-  const base = `Week ${day.weekNumber} · ${day.dayName} · ${day.focus}`;
+  // The day it is on now: a moved session is no longer on its plan slot.
+  const weekday = day.scheduledDate ? weekdayName(day.scheduledDate) : day.dayName;
+  const base = `Week ${day.weekNumber} · ${weekday} · ${day.focus}`;
   // Flag days that already have a logged workout so re-linking is an informed
   // choice (the timeline shows the most recent workout in a day's slot).
   return day.status === "completed" ? `${base} (logged)` : base;

@@ -516,8 +516,8 @@ Aggregates the user's training state from two windows that `buildTrainingContext
 - **Load:** workout logs and exercise sets dated from 70 days before the athlete-local today through today. The load governor and the supplementary signals (personal records, PRs this week, compliance, neglected patterns and muscle groups, race readiness) come from this window.
 
 The context carries:
-- Workout counts (total, completed, planned, missed, skipped)
-- Completion rate and current streak
+- Workout counts (total, completed, planned, missed, skipped, and missed sessions the athlete let go — rendered on their own line only when there are any)
+- Completion rate (completed ÷ completed + missed + skipped; let-go sessions are in neither) and current streak
 - The 10 most recent completed workouts, with exercise details
 - Upcoming planned workouts (the next 7 planned days), each with its priority tier (key, supporting or optional) — the auto-coach's suggestion prompt tells it to protect key sessions and trim optional ones first when a week has to get lighter
 - Exercise breakdown (completed workouts per functional exercise named in the focus text, or per focus when none is named)

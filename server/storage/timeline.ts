@@ -2,7 +2,7 @@
 // counts apply the identical rule — a day must never read "Not counted" here
 // and "Missed" there.
 import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
-import { dayDiff } from "@shared/dateUtils";
+import { dayDiff, weekdayName } from "@shared/dateUtils";
 import { RECOVERABLE_WITHIN_DAYS } from "@shared/missedRecovery";
 import { RACE_DAY_FOCUS } from "@shared/raceDay";
 import {
@@ -167,6 +167,24 @@ function isRecoverableMiss(
   );
 }
 
+/**
+ * Whether a folded or shortened session's move can be taken back: it is still
+ * upcoming and undone, and the day it was missed on is recent enough that,
+ * back there, the card would ask about it again (see isRecoverableMiss).
+ */
+function isUndoableMove(
+  day: PlanDay,
+  scheduledDate: string,
+  today: string,
+  status: WorkoutStatus,
+  retiredOn: string | null,
+): boolean {
+  const undo = day.recoveryUndo;
+  if (!undo || status !== "planned" || scheduledDate < today) return false;
+  if (day.recovery !== "folded" && day.recovery !== "shortened") return false;
+  return (retiredOn === null || undo.scheduledDate < retiredOn) && dayDiff(undo.scheduledDate, today) <= RECOVERABLE_WITHIN_DAYS;
+}
+
 function createLinkedWorkoutEntry(
   day: PlanDay,
   linkedLog: WorkoutLog,
@@ -191,7 +209,8 @@ function createLinkedWorkoutEntry(
       overridden: false,
     }),
     weekNumber: day.weekNumber,
-    dayName: day.dayName,
+    // The day it was done on, not the plan's slot for it (see TimelineEntry.dayName).
+    dayName: weekdayName(linkedLog.date),
     planName: row.planName,
     planId: row.planId,
     aiSource: day.aiSource as TimelineEntry["aiSource"],
@@ -232,6 +251,7 @@ function createPlannedDayEntry(
     skipReason: (day.skipReason as TimelineEntry["skipReason"]) ?? undefined,
     ...tier,
     recoverable: isRecoverableMiss(scheduledDate, today, status, tier, shown, row.retiredOn) || undefined,
+    recoveryUndoable: isUndoableMove(day, scheduledDate, today, status, row.retiredOn) || undefined,
     raceDerived: shown.overridden || undefined,
     focus: shown.focus,
     mainWorkout: shown.mainWorkout,
@@ -242,7 +262,8 @@ function createPlannedDayEntry(
     expectedRpe: day.expectedRpe,
     plannedTimeOfDayMin: day.plannedTimeOfDayMin,
     weekNumber: day.weekNumber,
-    dayName: day.dayName,
+    // The day it now sits on: a moved session is no longer on its plan slot.
+    dayName: weekdayName(scheduledDate),
     planName: row.planName,
     planId: row.planId,
     aiSource: day.aiSource as TimelineEntry["aiSource"],

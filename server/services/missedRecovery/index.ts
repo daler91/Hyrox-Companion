@@ -15,6 +15,7 @@ import type {
 } from "@shared/schema";
 import { planDayRecoveryEnum } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
+import { readWrittenSessionMinutes, type WrittenSession } from "@shared/sessionTextDuration";
 
 import { AppError, ErrorCode } from "../../errors";
 import { storage } from "../../storage";
@@ -31,6 +32,7 @@ import {
   weekOf,
 } from "./planner";
 import { planShortenedPrescription, type ShortenPlan } from "./shorten";
+import { captureMove, planUndo } from "./undo";
 
 /**
  * Missed-session recovery: the loader that turns the athlete's plan into the
@@ -43,7 +45,7 @@ import { planShortenedPrescription, type ShortenPlan } from "./shorten";
  * accepts a day it would still offer.
  */
 
-/** No exercise table and no saved duration: the app's usual assumption of an hour at a moderate effort. */
+/** No saved duration, no exercise table, and no length in the text: the app's usual assumption of an hour at a moderate effort. */
 const ASSUMED_DURATION_MIN = 60;
 const ASSUMED_RPE = 5;
 /** Timeline entries per page when reading the days around the missed session. */
@@ -57,6 +59,8 @@ const MIN_SHORTENED_MIN = 10;
 
 interface RecoveryContext {
   readonly day: PlanDay;
+  /** The day's prescribed sets, as the shorten plan read them. */
+  readonly sets: readonly ExerciseSet[];
   readonly input: PlannerInput;
   readonly shortenPlan: ShortenPlan;
 }
@@ -100,17 +104,24 @@ function lastMoveDate(plan: TrainingPlan | undefined): string | null {
 interface SessionSize {
   readonly durationMin: number;
   readonly rpe: number;
+  /** Nothing said how long it is: the minutes are {@link ASSUMED_DURATION_MIN}. */
   readonly estimated: boolean;
 }
 
+/**
+ * How long a session is and how hard: the athlete's saved numbers, else the
+ * exercise table's estimate, else a length the text states ("40 min easy"),
+ * else an hour.
+ */
 function sizeOf(
   saved: { readonly durationMin: number | null | undefined; readonly rpe: number | null | undefined },
   blocks: readonly StructureBlockInput[],
   sets: readonly ExerciseSet[],
+  written: WrittenSession,
   distanceUnit: string,
 ): SessionSize {
   const estimate = estimatePlannedSession({ structureBlocks: blocks, exerciseSets: sets, distanceUnit });
-  const durationMin = saved.durationMin ?? estimate.durationMin;
+  const durationMin = saved.durationMin ?? estimate.durationMin ?? readWrittenSessionMinutes(written);
   return {
     durationMin: durationMin ?? ASSUMED_DURATION_MIN,
     rpe: saved.rpe ?? estimate.rpe ?? ASSUMED_RPE,
@@ -136,6 +147,7 @@ function toPlannerSession(entry: TimelineEntry, today: string, distanceUnit: str
       : { durationMin: entry.expectedDurationMin, rpe: entry.expectedRpe },
     entry.structureBlocks ?? [],
     entry.exerciseSets ?? [],
+    entry,
     distanceUnit,
   );
   return {
@@ -262,6 +274,7 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
     { durationMin: day.expectedDurationMin, rpe: day.expectedRpe },
     dayBlocks,
     daySets,
+    override ?? day,
     distanceUnit,
   );
   const shortenPlan = planShortenedPrescription(daySets, { blockCount: dayBlocks.length, distanceUnit });
@@ -275,6 +288,7 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
 
   return {
     day,
+    sets: daySets,
     shortenPlan,
     input: {
       today,
@@ -356,7 +370,7 @@ async function moveMissedSession(
     throw new AppError(ErrorCode.VALIDATION_ERROR, "That day isn't one this session can move to.", 400);
   }
 
-  const { day, shortenPlan } = context;
+  const { day } = context;
   const update: PlanDayRecoveryWrite["update"] = {
     scheduledDate: targetDate,
     status: "planned",
@@ -366,23 +380,8 @@ async function moveMissedSession(
   };
   const write: PlanDayRecoveryWrite =
     action === "fold"
-      ? { guard: guardFor(day), update }
-      : {
-          guard: guardFor(day),
-          update: {
-            ...update,
-            // Pinned when the table cannot say how long the session now is:
-            // an athlete-set duration, timed blocks, or free text.
-            ...(day.expectedDurationMin != null || shortenPlan.needsInstruction
-              ? { expectedDurationMin: context.input.missed.shortened.durationMin }
-              : {}),
-            ...(shortenPlan.needsInstruction
-              ? { notes: [shortenInstruction(context), day.notes].filter(Boolean).join("\n") }
-              : {}),
-          },
-          deleteSetIds: shortenPlan.deleteSetIds,
-          setUpdates: shortenPlan.setUpdates,
-        };
+      ? { guard: guardFor(day), update: { ...update, recoveryUndo: captureMove(day) } }
+      : shortenWrite(context, update);
 
   const updated = await writeRecovery(userId, day.id, write);
   // The upcoming schedule changed shape: let the coach look at it again.
@@ -390,11 +389,66 @@ async function moveMissedSession(
   return updated;
 }
 
-async function reopenLetGo(userId: string, planDayId: string): Promise<PlanDay> {
+/**
+ * The shorten's write: the move, the cut table, the pinned length and the
+ * instruction line when the table cannot carry the cut — and all of it
+ * recorded, so the whole session can come back.
+ */
+function shortenWrite(context: RecoveryContext, move: PlanDayRecoveryWrite["update"]): PlanDayRecoveryWrite {
+  const { day, shortenPlan } = context;
+  // Pinned when the table cannot say how long the session now is: an
+  // athlete-set duration, timed blocks, or free text.
+  const expectedDurationMin =
+    day.expectedDurationMin != null || shortenPlan.needsInstruction
+      ? context.input.missed.shortened.durationMin
+      : undefined;
+  const notes = shortenPlan.needsInstruction
+    ? [shortenInstruction(context), day.notes].filter(Boolean).join("\n")
+    : undefined;
+  return {
+    guard: guardFor(day),
+    update: {
+      ...move,
+      ...(expectedDurationMin === undefined ? {} : { expectedDurationMin }),
+      ...(notes === undefined ? {} : { notes }),
+      recoveryUndo: captureMove(day, {
+        sets: context.sets,
+        deleteSetIds: shortenPlan.deleteSetIds,
+        setUpdates: shortenPlan.setUpdates,
+        notes,
+        expectedDurationMin,
+      }),
+    },
+    deleteSetIds: shortenPlan.deleteSetIds,
+    setUpdates: shortenPlan.setUpdates,
+  };
+}
+
+/**
+ * Take a fold or shorten back: the session returns to the day it was missed
+ * on, undecided, with the whole prescription a shorten cut. Only while it is
+ * still an upcoming session — once logged, or missed again, it has moved on.
+ */
+async function undoMove(userId: string, day: PlanDay): Promise<PlanDay> {
+  if (!day.recoveryUndo || day.status !== "planned") {
+    throw new AppError(ErrorCode.CONFLICT, "This session has moved on since, so there's nothing to undo.", 409);
+  }
+  const sets = await storage.workouts.getExerciseSetsByPlanDay(day.id, userId);
+  const write = planUndo(day, day.recoveryUndo, sets ?? []);
+  const restored = await writeRecovery(userId, day.id, { guard: guardFor(day), ...write });
+  // The upcoming schedule changed shape again.
+  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
+  return restored;
+}
+
+/** Take a decision back: a let-go reopens where it is; a fold or shorten goes back to the missed day. */
+async function reopenDecision(userId: string, planDayId: string): Promise<PlanDay> {
   const day = await storage.plans.getPlanDay(planDayId, userId);
   if (!day) throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
-  if (storedRecovery(day) !== "let_go") {
-    throw new AppError(ErrorCode.CONFLICT, "Only a session you let go can be reopened.", 409);
+  const recovery = storedRecovery(day);
+  if (recovery === "folded" || recovery === "shortened") return undoMove(userId, day);
+  if (recovery !== "let_go") {
+    throw new AppError(ErrorCode.CONFLICT, "There's no decision on this session to take back.", 409);
   }
   // Letting go overwrote how an already-moved session got here; `missedOn` is
   // only set by a move, so it still says it was moved once. Whether it was
@@ -408,16 +462,16 @@ async function reopenLetGo(userId: string, planDayId: string): Promise<PlanDay> 
 
 /**
  * Carry out the athlete's decision. Fold and shorten move the session to the
- * chosen day (back to `planned`, remembering the day it was missed on); let go
- * leaves it where it is and stops the timeline asking; reopen takes a let-go
- * back.
+ * chosen day (back to `planned`, remembering the day it was missed on and what
+ * the move changed); let go leaves it where it is and stops the timeline
+ * asking; reopen takes any of them back.
  */
 export async function applyMissedSessionRecovery(
   userId: string,
   planDayId: string,
   body: ApplyMissedRecoveryBody,
 ): Promise<PlanDay> {
-  if (body.action === "reopen") return reopenLetGo(userId, planDayId);
+  if (body.action === "reopen") return reopenDecision(userId, planDayId);
 
   const context = await loadRecoveryContext(userId, planDayId);
   if (body.action === "let_go") {

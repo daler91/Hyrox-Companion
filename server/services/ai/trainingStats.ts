@@ -7,6 +7,7 @@ export function calculateTrainingStats(timeline: TimelineEntry[]) {
   let plannedWorkouts = 0;
   let missedWorkouts = 0;
   let skippedWorkouts = 0;
+  let letGoWorkouts = 0;
   const completedDates = new Set<string>();
 
   for (const entry of timeline) {
@@ -16,17 +17,29 @@ export function calculateTrainingStats(timeline: TimelineEntry[]) {
     } else if (entry.status === "planned") {
       plannedWorkouts++;
     } else if (entry.status === "missed") {
-      missedWorkouts++;
+      // Missed and then let go on purpose (missed-session recovery): the
+      // athlete adjusted the plan, so it is neither a miss nor in the rate.
+      if (entry.recovery === "let_go") letGoWorkouts++;
+      else missedWorkouts++;
     } else if (entry.status === "skipped") {
       skippedWorkouts++;
     }
   }
 
-  const totalWorkouts = completedWorkouts + plannedWorkouts + missedWorkouts + skippedWorkouts;
+  const totalWorkouts = completedWorkouts + plannedWorkouts + missedWorkouts + skippedWorkouts + letGoWorkouts;
   const denominator = completedWorkouts + missedWorkouts + skippedWorkouts;
   const completionRate = denominator > 0 ? Math.round((completedWorkouts / denominator) * 100) : 0;
 
-  return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
+  return {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    letGoWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  };
 }
 
 const functionalRegex = new RegExp(FUNCTIONAL_EXERCISES.join('|'), 'gi');

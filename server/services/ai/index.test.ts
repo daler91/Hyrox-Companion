@@ -92,6 +92,7 @@ function makeStats(overrides: Record<string, unknown> = {}) {
     plannedWorkouts: 0,
     missedWorkouts: 0,
     skippedWorkouts: 0,
+    letGoWorkouts: 0,
     totalWorkouts: 0,
     completionRate: 0,
     completedDates: new Set<string>(),

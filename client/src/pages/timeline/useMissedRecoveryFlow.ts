@@ -5,8 +5,9 @@ import { useApplyMissedRecovery } from "@/hooks/useMissedRecovery";
 
 /**
  * Which missed session the recovery sheet is open on. Fold, shorten and let go
- * all open the sheet — even letting go shows what it costs before it happens;
- * taking a let-go back is immediate, because it changes nothing but the card.
+ * all open the sheet — even letting go shows what it costs before it happens.
+ * Taking a decision back is immediate: it only returns the session to where it
+ * was, undecided, and the sheet is there again from its card.
  */
 export function useMissedRecoveryFlow() {
   const [request, setRequest] = useState<MissedRecoveryRequest | null>(null);
@@ -16,7 +17,13 @@ export function useMissedRecoveryFlow() {
     (entry, action) => {
       if (!entry.planDayId) return;
       if (action === "reopen") {
-        applyRecovery({ planDayId: entry.planDayId, body: { action: "reopen" } });
+        const { recovery } = entry;
+        const moved = recovery === "folded" || recovery === "shortened";
+        applyRecovery({
+          planDayId: entry.planDayId,
+          body: { action: "reopen" },
+          undoing: moved ? { recovery, missedOn: entry.missedOn ?? null } : undefined,
+        });
         return;
       }
       setRequest({ entry, option: action });
