@@ -10,6 +10,7 @@ import { runStrandedErasureSweep } from "./services/accountErasureService";
 import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
 import { embedMissingFoods, pruneDanglingFoodEmbeddings } from "./services/nutrition/foodEmbeddings";
 import { runNutritionReminderCron } from "./services/nutrition/reminders";
+import { runSessionStreamBackfillScan } from "./services/sessionStreamSync";
 import { runStravaAutoSyncScan } from "./services/stravaAutoSync";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
@@ -31,6 +32,7 @@ let accountErasureSweepTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaAutoSyncTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
 let recycleBinPurgeTask: ReturnType<typeof cron.schedule> | null = null;
+let sessionStreamBackfillTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -43,7 +45,7 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_019. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_020. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -66,6 +68,7 @@ export const CRON_LOCK_KEYS = {
   stravaAutoSync: 42_010_016n,
   stravaWebhookEnsure: 42_010_017n,
   recycleBinPurge: 42_010_018n,
+  sessionStreamBackfill: 42_010_019n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -453,6 +456,25 @@ export function startCron(storage: IStorage): void {
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Strava auto-sync scan scheduled: every 15 minutes");
 
+  // Session-stream backfill (server/services/sessionStreamSync.ts). Every 15
+  // minutes, offset from the auto-sync scan above so the two never draw on
+  // Strava's read budget in the same minute: queue a stream fetch for a few
+  // athletes whose graded runs still lack one. Capped per tick; no-ops under
+  // the kill switch, during a 429 cooldown, and once its read share is spent.
+  sessionStreamBackfillTask = scheduleLockedCronJob("sessionStreamBackfill", "11,26,41,56 * * * *", async () => {
+    const result = await runSessionStreamBackfillScan(storage, new Date());
+    if (result.enqueued === 0) return;
+    // Counts and a static context only, no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info(
+      { context: "cron", ...result },
+      `Session streams: enqueued ${result.enqueued} fetch job(s) for ${result.usersChecked} athlete(s)`,
+    );
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Session-stream backfill scheduled: every 15 minutes");
+
   // Keep the Strava webhook push subscription registered (one per Strava
   // application: created once, then just re-verified). Six-hourly, plus once
   // shortly after boot — Strava validates the callback URL synchronously
@@ -567,4 +589,5 @@ export async function stopCron(): Promise<void> {
     emailCatchUpTimer = null;
   }
   recycleBinPurgeTask = await stopTask(recycleBinPurgeTask);
+  sessionStreamBackfillTask = await stopTask(sessionStreamBackfillTask);
 }

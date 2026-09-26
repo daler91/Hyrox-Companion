@@ -98,3 +98,22 @@ export type DeviceLinkSource = (typeof deviceLinkSourceEnum)[number];
  */
 export const recycleBinEntityTypeEnum = ["workout_log", "plan_day", "training_plan"] as const;
 export type RecycleBinEntityType = (typeof recycleBinEntityTypeEnum)[number];
+
+/**
+ * Where a graded run's Strava stream stands (`workout_log_streams.status`).
+ *
+ * - `ok`: stream fetched and downsampled, with heart rate.
+ * - `no_heartrate`: fetched; the recording had pace/distance but no HR.
+ * - `unavailable`: Strava had no usable stream (deleted, manual, too short).
+ * - `failed`: the fetch failed; retried a few times, then left alone.
+ * - `skipped`: the run's plan day is not one we grade (intervals, a
+ *   simulation), so no Strava read was spent on it.
+ */
+export const sessionStreamStatusEnum = [
+  "ok",
+  "no_heartrate",
+  "unavailable",
+  "failed",
+  "skipped",
+] as const;
+export type SessionStreamStatus = (typeof sessionStreamStatusEnum)[number];

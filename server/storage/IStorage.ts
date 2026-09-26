@@ -10,6 +10,7 @@ import type { PlanProposalStorage } from "./planProposals";
 import type { PlanStorage } from "./plans";
 import type { PushStorage } from "./push";
 import type { RecycleBinStorage } from "./recycleBin";
+import type { SessionStreamStorage } from "./sessionStreams";
 import type { TimelineStorage } from "./timeline";
 import type { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import type { UserStorage } from "./users";
@@ -47,4 +48,5 @@ export interface IStorage {
   nutrition: NutritionStorage;
   weeklyReviews: WeeklyReviewsStorage;
   recycleBin: RecycleBinStorage;
+  sessionStreams: SessionStreamStorage;
 }

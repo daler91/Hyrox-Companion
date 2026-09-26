@@ -91,3 +91,43 @@ export function heartRateReflectsEffort(sportType: string | null | undefined): b
   if (!sportType) return true;
   return !HEART_RATE_BLIND_SPORTS.has(normalizeSportType(sportType));
 }
+
+/**
+ * Running sports, in both providers' spellings. An ALLOW-list, unlike the two
+ * above: session grading measures a recording against a run's pace and heart
+ * rate, so a ride or a row linked to an "Easy run" day must not be graded as
+ * one — the wrong answer here is a confident grade of the wrong sport.
+ */
+const RUNNING_SPORTS: ReadonlySet<string> = new Set([
+  "run",
+  "trailrun",
+  "virtualrun",
+  "running",
+  "trailrunning",
+  "treadmillrunning",
+  "indoorrunning",
+  "trackrunning",
+  "streetrunning",
+]);
+
+/** Whether a device activity's sport is running (see RUNNING_SPORTS). */
+export function isRunSportType(sportType: string | null | undefined): boolean {
+  if (!sportType) return false;
+  return RUNNING_SPORTS.has(normalizeSportType(sportType));
+}
+
+/**
+ * Indoor runs whose speed comes from a footpod or the treadmill's own
+ * estimate rather than GPS. Their pace is a weaker signal than their heart
+ * rate, so grading leans on HR for them.
+ */
+const INDOOR_RUNNING_SPORTS: ReadonlySet<string> = new Set([
+  "virtualrun",
+  "treadmillrunning",
+  "indoorrunning",
+]);
+
+export function isIndoorRunSportType(sportType: string | null | undefined): boolean {
+  if (!sportType) return false;
+  return INDOOR_RUNNING_SPORTS.has(normalizeSportType(sportType));
+}

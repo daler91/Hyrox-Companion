@@ -69,7 +69,12 @@ export async function getStravaSyncCooldownUntil(): Promise<number | null> {
   }
 }
 
-async function startStravaSyncCooldown(retryAfterSeconds: number): Promise<number> {
+/**
+ * Pause every background Strava read (activity syncs and session-stream
+ * fetches alike) until the throttled window has passed. Returns the epoch ms
+ * the cooldown lasts until.
+ */
+export async function startStravaSyncCooldown(retryAfterSeconds: number): Promise<number> {
   const durationMs = Math.max(retryAfterSeconds * 1000, STRAVA_SYNC_MIN_COOLDOWN_MS);
   const until = Date.now() + durationMs;
   try {

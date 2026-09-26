@@ -8,6 +8,7 @@ import {
   linkStandaloneDeviceLog,
   unlinkDeviceActivity,
 } from "../../services/deviceActivityLink";
+import { requestSessionStreamForLog } from "../../services/sessionStreamHooks";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPost } from "../_helpers/protectedRouteBuilder";
@@ -51,11 +52,9 @@ export function registerWorkoutDeviceLinkRoutes(router: Router): void {
       const target = body.planDayId
         ? { planDayId: body.planDayId }
         : { workoutLogId: body.workoutLogId as string };
-      const log = await linkStandaloneDeviceLog({
-        userId: getUserId(req),
-        deviceLogId: req.params.id,
-        target,
-      });
+      const userId = getUserId(req);
+      const log = await linkStandaloneDeviceLog({ userId, deviceLogId: req.params.id, target });
+      await requestSessionStreamForLog(storage, userId, log, "link");
       res.json(log);
     },
   );

@@ -19,6 +19,7 @@ import {
 } from "../../services/bulkDeleteWorkouts";
 import { combineWorkouts } from "../../services/combineWorkouts";
 import { loadSuggestedRpe } from "../../services/rpeSuggestion";
+import { requestSessionStreamForLog } from "../../services/sessionStreamHooks";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
@@ -215,10 +216,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
 
   protectedPatch(router, "/api/v1/workouts/:id/plan-day", { limiter: rateLimiter("workout", 40), middleware: [validateBody(assignWorkoutPlanDaySchema)] }, async (req: Request<{ id: string }>, res: Response) => {
     const { planDayId } = req.body as z.infer<typeof assignWorkoutPlanDaySchema>;
-    const result = await assignWorkoutPlanDayUseCase({ userId: getUserId(req), workoutId: req.params.id, planDayId });
+    const userId = getUserId(req);
+    const result = await assignWorkoutPlanDayUseCase({ userId, workoutId: req.params.id, planDayId });
     if (!result) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
+    await requestSessionStreamForLog(storage, userId, result, "assign");
     res.json(result);
   });
 

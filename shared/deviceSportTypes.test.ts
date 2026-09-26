@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countsAsTraining, heartRateReflectsEffort } from "./deviceSportTypes";
+import { countsAsTraining, heartRateReflectsEffort, isIndoorRunSportType, isRunSportType } from "./deviceSportTypes";
 
 describe("countsAsTraining", () => {
   it("excludes the sports that arrive without being training", () => {
@@ -81,5 +81,28 @@ describe("heartRateReflectsEffort", () => {
     expect(heartRateReflectsEffort("SomeNewStravaSport")).toBe(true);
     expect(heartRateReflectsEffort(null)).toBe(true);
     expect(heartRateReflectsEffort("")).toBe(true);
+  });
+});
+
+describe("isRunSportType", () => {
+  it("recognises runs in both providers' spellings", () => {
+    for (const sport of ["Run", "TrailRun", "VirtualRun", "running", "trail_running", "treadmill_running"]) {
+      expect(isRunSportType(sport), sport).toBe(true);
+    }
+  });
+
+  it("refuses everything else, including an unknown or missing sport", () => {
+    for (const sport of ["Ride", "Walk", "Rowing", "Workout", "WeightTraining", "SomeNewSport", "", null]) {
+      expect(isRunSportType(sport), String(sport)).toBe(false);
+    }
+  });
+});
+
+describe("isIndoorRunSportType", () => {
+  it("flags treadmill and virtual runs, whose pace is not GPS", () => {
+    expect(isIndoorRunSportType("VirtualRun")).toBe(true);
+    expect(isIndoorRunSportType("treadmill_running")).toBe(true);
+    expect(isIndoorRunSportType("Run")).toBe(false);
+    expect(isIndoorRunSportType(undefined)).toBe(false);
   });
 });

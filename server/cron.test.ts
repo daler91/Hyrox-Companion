@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   cronSchedule: vi.fn(),
   runNutritionReminderCron: vi.fn(),
   runStravaAutoSyncScan: vi.fn(),
+  runSessionStreamBackfillScan: vi.fn(),
   ensureStravaWebhookSubscription: vi.fn(),
 }));
 
@@ -48,6 +49,10 @@ vi.mock("./sharedRuntimeState", () => ({
 
 vi.mock("./services/stravaAutoSync", () => ({
   runStravaAutoSyncScan: mocks.runStravaAutoSyncScan,
+}));
+
+vi.mock("./services/sessionStreamSync", () => ({
+  runSessionStreamBackfillScan: mocks.runSessionStreamBackfillScan,
 }));
 
 vi.mock("./stravaWebhook", () => ({
@@ -421,5 +426,49 @@ describe("strava auto-sync cron jobs", () => {
       expect.any(Function),
     );
     expect(mocks.ensureStravaWebhookSubscription).toHaveBeenCalledWith(logger);
+  });
+});
+
+describe("session-stream backfill cron job", () => {
+  let backfillCallback: () => Promise<void>;
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    const scheduled = startCronWith({});
+    // Offset from the auto-sync scan so the two never read Strava in the same minute.
+    backfillCallback = scheduled("11,26,41,56 * * * *");
+  });
+
+  beforeEach(() => {
+    mocks.runSessionStreamBackfillScan.mockReset();
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.info).mockClear();
+  });
+
+  it("has its own advisory-lock key", () => {
+    expect(CRON_LOCK_KEYS.sessionStreamBackfill).toBe(42_010_019n);
+  });
+
+  it("runs the backfill scan under its lock and logs what it enqueued", async () => {
+    mocks.runSessionStreamBackfillScan.mockResolvedValueOnce({ usersChecked: 2, enqueued: 2, skipped: null });
+
+    await backfillCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.sessionStreamBackfill, name: "sessionStreamBackfill" },
+      expect.any(Function),
+    );
+    expect(mocks.runSessionStreamBackfillScan).toHaveBeenCalledWith({}, expect.any(Date));
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "cron", usersChecked: 2, enqueued: 2, skipped: null },
+      "Session streams: enqueued 2 fetch job(s) for 2 athlete(s)",
+    );
+  });
+
+  it("stays quiet on a tick that enqueues nothing", async () => {
+    mocks.runSessionStreamBackfillScan.mockResolvedValueOnce({ usersChecked: 0, enqueued: 0, skipped: "budget" });
+    await backfillCallback();
+    expect(logger.info).not.toHaveBeenCalled();
   });
 });
