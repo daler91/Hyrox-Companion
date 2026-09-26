@@ -24,7 +24,9 @@ describe("Landing", () => {
     render(<Landing />);
 
     for (const title of ["Session Grading", "Missed-Session Recovery", "Load by Body System"]) {
-      expect(screen.getByRole("heading", { level: 3, name: new RegExp(`^${title}`) })).toBeTruthy();
+      expect(
+        screen.getByRole("heading", { level: 3, name: (name) => name.startsWith(title) }),
+      ).toBeTruthy();
     }
     expect(screen.getByText("What happens if I miss a session?")).toBeTruthy();
     expect(screen.getByText("How do I know if a run did its job?")).toBeTruthy();

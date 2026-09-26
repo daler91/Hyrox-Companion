@@ -155,7 +155,7 @@ Marketing/landing page for unauthenticated users. Contains:
 - Sticky header with branding and "Log In" button (via Clerk `SignInButton`).
 - Hero section with animated timeline mockup and CTA buttons.
 - Social-proof strip (200+ Exercises, Strava & Garmin Sync, AI-Powered Coaching, Session Grading, Missed-Session Recovery, Voice & Photo Logging, plus Nutrition & Macros when the nutrition flag is on).
-- Feature highlights rendered from the `FEATURES` list in `landing/Features.tsx` (AI Auto-Coach, Plans Built From Your Numbers, Session Grading, Missed-Session Recovery, Load by Body System, Training Timeline, Voice & Photo Logging, Strava & Garmin Sync, Analytics & PRs, Weekly Review & Briefs, Nutrition & Fuelling when the nutrition flag is on, and Your Coaching Playbook). Cards flagged `isNew` carry a "New" badge, and a lone last card spans both columns when the count is odd.
+- Feature highlights rendered from the `FEATURES` list in `landing/landingCopy.ts`, which also holds the FAQ entries (AI Auto-Coach, Plans Built From Your Numbers, Session Grading, Missed-Session Recovery, Load by Body System, Training Timeline, Voice & Photo Logging, Strava & Garmin Sync, Analytics & PRs, Weekly Review & Briefs, Nutrition & Fuelling when the nutrition flag is on, and Your Coaching Playbook). Cards flagged `isNew` carry a "New" badge, and a lone last card spans both columns when the count is odd.
 - "How It Works" three-step flow (Set Up Your Plan, Train & Log, AI Adapts).
 - Exercise category grid (Functional, Running, Strength, Conditioning) with Gap Analysis, Pacing Strategy, Personal Records and Chat with Your Coach highlights.
 - "Fuel Every Session" nutrition showcase (`NutritionShowcase`), rendered only when `featureFlags.nutritionEnabled` is on.
