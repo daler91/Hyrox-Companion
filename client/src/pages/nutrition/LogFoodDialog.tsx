@@ -535,10 +535,16 @@ function LogFoodForm({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 shrink-0"
+                        className="h-7 w-7 shrink-0 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                         aria-label={`Remove ${s.label}`}
-                        disabled={removeServing.isPending}
-                        onClick={() => handleRemovePortion(s)}
+                        aria-disabled={removeServing.isPending}
+                        onClick={(e) => {
+                          if (removeServing.isPending) {
+                            e.preventDefault();
+                          } else {
+                            handleRemovePortion(s);
+                          }
+                        }}
                         data-testid="button-remove-portion"
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
