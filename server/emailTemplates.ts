@@ -446,6 +446,28 @@ ${insightsSection}
   return { subject, html };
 }
 
+// Three tones, in priority order: real misses get the gentle nudge, an
+// absence-only week gets a neutral acknowledgement (cheering "Perfect week!
+// Keep it up! 💪" at someone who spent it injured reads as not having
+// listened), and only a genuinely clean week gets the celebration.
+function weeklyMissedSessionsMessage(data: WeeklySummaryData): string {
+  const excusedNote =
+    data.excusedCount > 0
+      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${pluralSuffix(data.excusedCount)} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
+      : "";
+  const letGoNote =
+    data.letGoCount > 0
+      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.letGoCount} missed session${pluralSuffix(data.letGoCount)} you chose to let go — not counted as missed.</p>`
+      : "";
+  if (data.missedCount > 0) {
+    return `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${pluralSuffix(data.missedCount)} this week. Don't worry — consistency over perfection!</p>${excusedNote}${letGoNote}`;
+  }
+  if (data.excusedCount > 0 || data.letGoCount > 0) {
+    return `${excusedNote}${letGoNote}`;
+  }
+  return '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
+}
+
 export function buildWeeklySummaryEmail(
   user: User,
   data: WeeklySummaryData,
@@ -461,11 +483,7 @@ export function buildWeeklySummaryEmail(
       ? `${durationHours}h ${durationMins}m`
       : `${durationMins}m`;
 
-  let completedSuffix = "s";
-  if (data.completedCount === 1) {
-    completedSuffix = "";
-  }
-  const subject = `Your Week in Review: ${data.completedCount} workout${completedSuffix} completed`;
+  const subject = `Your Week in Review: ${data.completedCount} workout${pluralSuffix(data.completedCount)} completed`;
 
   const prsSection =
     data.prsThisWeek > 0
@@ -476,36 +494,7 @@ export function buildWeeklySummaryEmail(
       </div>`
       : "";
 
-  // Three tones, in priority order: real misses get the gentle nudge, an
-  // absence-only week gets a neutral acknowledgement (cheering "Perfect week!
-  // Keep it up! 💪" at someone who spent it injured reads as not having
-  // listened), and only a genuinely clean week gets the celebration.
-  let excusedSuffix = "s";
-  if (data.excusedCount === 1) {
-    excusedSuffix = "";
-  }
-  const excusedNote =
-    data.excusedCount > 0
-      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${excusedSuffix} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
-      : "";
-  const letGoSuffix = data.letGoCount === 1 ? "" : "s";
-  const letGoNote =
-    data.letGoCount > 0
-      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.letGoCount} missed session${letGoSuffix} you chose to let go — not counted as missed.</p>`
-      : "";
-  let missedSessionsMessage: string;
-  if (data.missedCount > 0) {
-    let missedSuffix = "s";
-    if (data.missedCount === 1) {
-      missedSuffix = "";
-    }
-    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>${excusedNote}${letGoNote}`;
-  } else if (data.excusedCount > 0 || data.letGoCount > 0) {
-    missedSessionsMessage = `${excusedNote}${letGoNote}`;
-  } else {
-    missedSessionsMessage =
-      '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
-  }
+  const missedSessionsMessage = weeklyMissedSessionsMessage(data);
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseStyles()}</style></head>

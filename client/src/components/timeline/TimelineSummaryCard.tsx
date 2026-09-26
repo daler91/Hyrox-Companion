@@ -68,9 +68,7 @@ function getTodayEntry(
   for (const entry of entries) {
     if (entry.date !== todayStr) continue;
     if (entry.status === "planned") return entry;
-    if (entry.status === "completed" && match?.status !== "completed") {
-      match = entry;
-    } else if (!match) {
+    if (!match || (entry.status === "completed" && match.status !== "completed")) {
       match = entry;
     }
   }

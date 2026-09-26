@@ -97,8 +97,10 @@ function lastMoveDate(plan: TrainingPlan | undefined): string | null {
   const end = plan?.endDate ?? null;
   const dayBeforeRetirement = plan?.retiredOn ? addDaysToISODate(plan.retiredOn, -1) : null;
   if (end === null || dayBeforeRetirement === null) return end ?? dayBeforeRetirement;
-  // ISO dates: the lexically smaller one is the earlier.
-  return dayBeforeRetirement < end ? dayBeforeRetirement : end;
+  // ISO dates: the lexically smaller one is the earlier. (Math.min would
+  // coerce the strings to NaN, so compare them directly.)
+  if (dayBeforeRetirement < end) return dayBeforeRetirement;
+  return end;
 }
 
 interface SessionSize {
