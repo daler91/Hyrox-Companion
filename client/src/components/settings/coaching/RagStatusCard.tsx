@@ -19,14 +19,14 @@ export function RagStatusCard() {
     if (ragStatus.allEmbedded) {
       return (
         <Badge variant="outline" className="text-green-600 border-green-600">
-          <CheckCircle2 className="h-3 w-3 mr-1" />
+          <CheckCircle2 className="h-3 w-3 mr-1" aria-hidden="true" />
           Active
         </Badge>
       );
     }
     return (
       <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-        <AlertCircle className="h-3 w-3 mr-1" />
+        <AlertCircle className="h-3 w-3 mr-1" aria-hidden="true" />
         Incomplete
       </Badge>
     );
@@ -44,7 +44,7 @@ export function RagStatusCard() {
       ragError instanceof Error ? ragError.message : "An unexpected error occurred";
     content = (
       <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-        <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+        <XCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
         <div>
           <p className="font-medium">Failed to load RAG status</p>
           <p className="text-xs mt-0.5">{errorMessage}</p>
@@ -56,14 +56,14 @@ export function RagStatusCard() {
       <>
         {!ragStatus.hasApiKey && (
           <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-            <XCircle className="h-4 w-4 shrink-0" />
+            <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
             GEMINI_API_KEY is not configured. Embeddings cannot be generated.
           </div>
         )}
 
         {ragStatus.embeddingApi && !ragStatus.embeddingApi.ok && ragStatus.hasApiKey && (
           <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-            <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <XCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
             <div>
               <p className="font-medium">Embedding API error</p>
               <p className="text-xs mt-0.5 break-all">{ragStatus.embeddingApi.error}</p>
@@ -73,7 +73,7 @@ export function RagStatusCard() {
 
         {ragStatus.dimensionMismatch && (
           <div className="flex items-start gap-2 p-2 rounded-md bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-sm">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
             <div>
               <p className="font-medium">Embedding dimension mismatch</p>
               <p className="text-xs mt-0.5">
@@ -103,7 +103,7 @@ export function RagStatusCard() {
 
         {ragStatus.embeddingApi?.ok && (
           <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 text-green-700 dark:text-green-400 text-sm">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             Embedding API working ({ragStatus.embeddingApi.dimension}-dim)
           </div>
         )}
@@ -118,9 +118,15 @@ export function RagStatusCard() {
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs text-muted-foreground">{m.chunkCount} chunks</span>
                 {m.hasEmbeddings ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
+                    <span className="sr-only">Embedded</span>
+                  </>
                 ) : (
-                  <XCircle className="h-3.5 w-3.5 text-red-500" />
+                  <>
+                    <XCircle className="h-3.5 w-3.5 text-red-500" aria-hidden="true" />
+                    <span className="sr-only">Not embedded</span>
+                  </>
                 )}
               </div>
             </div>

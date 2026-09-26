@@ -113,7 +113,7 @@ export function OfflineIndicator() {
         aria-live="polite"
         data-testid="indicator-sync-complete"
       >
-        <CheckCircle2 className="h-4 w-4" />
+        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
         <span className="text-sm font-medium">
           Back online — {recentlySynced} change{recentlySynced === 1 ? "" : "s"} synced
         </span>
