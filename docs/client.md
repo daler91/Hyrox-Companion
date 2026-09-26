@@ -154,12 +154,12 @@ Marketing/landing page for unauthenticated users. Contains:
 
 - Sticky header with branding and "Log In" button (via Clerk `SignInButton`).
 - Hero section with animated timeline mockup and CTA buttons.
-- Social-proof strip (200+ Exercises, Strava & Garmin Sync, AI-Powered Coaching, Voice & Photo Logging, plus Nutrition & Macros when the nutrition flag is on).
-- Feature highlights (AI Auto-Coach, Training Timeline, Voice & Photo Logging, Strava & Garmin Sync, Analytics & PRs, AI Plan Builder, Nutrition & Fuelling when the nutrition flag is on, and Your Coaching Playbook).
+- Social-proof strip (200+ Exercises, Strava & Garmin Sync, AI-Powered Coaching, Session Grading, Missed-Session Recovery, Voice & Photo Logging, plus Nutrition & Macros when the nutrition flag is on).
+- Feature highlights rendered from the `FEATURES` list in `landing/landingCopy.ts`, which also holds the FAQ entries (AI Auto-Coach, Plans Built From Your Numbers, Session Grading, Missed-Session Recovery, Load by Body System, Training Timeline, Voice & Photo Logging, Strava & Garmin Sync, Analytics & PRs, Weekly Review & Briefs, Nutrition & Fuelling when the nutrition flag is on, and Your Coaching Playbook). Cards flagged `isNew` carry a "New" badge, and a lone last card spans both columns when the count is odd.
 - "How It Works" three-step flow (Set Up Your Plan, Train & Log, AI Adapts).
 - Exercise category grid (Functional, Running, Strength, Conditioning) with Gap Analysis, Pacing Strategy, Personal Records and Chat with Your Coach highlights.
 - "Fuel Every Session" nutrition showcase (`NutritionShowcase`), rendered only when `featureFlags.nutritionEnabled` is on.
-- FAQ accordion (a nutrition question is appended when the flag is on).
+- FAQ accordion, including missed sessions, session grading, reminders and the recycle bin (a nutrition question is appended when the flag is on).
 - Final CTA section and footer (Features, How It Works, FAQ and Privacy links).
 
 Uses `IntersectionObserver` for fade-up scroll animations.
