@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendCoachBlock,
   appendCoachCue,
   formatCoachNotes,
   parseCoachNotes,
@@ -112,6 +113,34 @@ describe("appendCoachCue", () => {
     expect(appendCoachCue("", "Keep it easy.\n\nHeart-rate zones can be unreliable.")).toBe(
       "[AI Coach] Keep it easy. Heart-rate zones can be unreliable.",
     );
+  });
+});
+
+describe("appendCoachBlock", () => {
+  const BLOCK = "Calf raises 3x10\nTibialis raises 3x15";
+
+  it("appends a block, keeping its line breaks", () => {
+    expect(appendCoachBlock("Leg Press", BLOCK)).toBe(`Leg Press\n[AI Coach] ${BLOCK}`);
+    expect(appendCoachBlock(null, "Add calf raises")).toBe("[AI Coach] Add calf raises");
+  });
+
+  it("does not re-append a multi-line block already present", () => {
+    const once = appendCoachBlock("Leg Press", BLOCK);
+    expect(appendCoachBlock(once, BLOCK)).toBe(once);
+  });
+
+  it("matches ignoring case, spacing and trailing punctuation", () => {
+    const once = appendCoachBlock("Leg Press", "Add 3x10 calf raises.");
+    expect(appendCoachBlock(once, "add  3x10 calf raises")).toBe(once);
+  });
+
+  it("still appends a block that only partly overlaps", () => {
+    const once = appendCoachBlock("Leg Press", "Calf raises 3x10");
+    expect(appendCoachBlock(once, BLOCK)).toBe(`${once}\n[AI Coach] ${BLOCK}`);
+  });
+
+  it("ignores an empty recommendation", () => {
+    expect(appendCoachBlock("Leg Press", "  ")).toBe("Leg Press");
   });
 });
 

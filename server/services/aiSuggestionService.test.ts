@@ -279,10 +279,36 @@ describe("applyTimelineAiSuggestion", () => {
     expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
       "day-1",
       expect.objectContaining({
-        accessory: "Old accessory\n\nAI suggestion: Add calf raises",
+        accessory: "Old accessory\n[AI Coach] Add calf raises",
         aiSource: null,
         aiRationale: "Build lower leg durability",
       }),
+      "user-1",
+    );
+  });
+
+  it("does not stack a suggestion that was already applied", async () => {
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+      mockPlanDay({ accessory: "Old accessory\n[AI Coach] Add calf raises" }),
+    );
+
+    await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "accessory",
+        action: "append",
+        recommendation: "Add calf raises",
+        rationale: "Build lower leg durability",
+        aiSource: "none",
+      },
+      testLog,
+    );
+
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({ accessory: "Old accessory\n[AI Coach] Add calf raises" }),
       "user-1",
     );
   });

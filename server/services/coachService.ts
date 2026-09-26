@@ -1,4 +1,4 @@
-import { appendCoachCue, COACH_CUE_MARKER } from "@shared/coachNotes";
+import { appendCoachBlock, appendCoachCue } from "@shared/coachNotes";
 import { type CoachNoteInputs, type InsertExerciseSet, type UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
@@ -70,11 +70,7 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
   if (suggestion.targetField === "notes") {
     return appendCoachCue(existing, suggestion.recommendation);
   }
-  // mainWorkout/accessory appends are exercise prescriptions, so their line
-  // breaks are kept; only skip re-adding a line that is already there.
-  const cueLine = `${COACH_CUE_MARKER} ${suggestion.recommendation}`;
-  if (existing.split("\n").some((line) => line.trim() === cueLine)) return existing;
-  return existing ? `${existing}\n${cueLine}` : cueLine;
+  return appendCoachBlock(existing, suggestion.recommendation);
 }
 
 /**

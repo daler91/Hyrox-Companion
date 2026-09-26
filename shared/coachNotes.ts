@@ -111,6 +111,36 @@ export function appendCoachCue(existing: string | null | undefined, cue: string)
   return formatCoachNotes({ athleteText: parsed.athleteText, cues });
 }
 
+function lineKeys(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => cueKey(collapseWhitespace(line)))
+    .filter(Boolean);
+}
+
+function containsRun(haystack: readonly string[], needle: readonly string[]): boolean {
+  for (let start = 0; start + needle.length <= haystack.length; start += 1) {
+    if (needle.every((line, offset) => haystack[start + offset] === line)) return true;
+  }
+  return false;
+}
+
+/**
+ * Append coach-added work to a mainWorkout/accessory prescription. Unlike a
+ * notes cue, the recommendation's line breaks are kept (one exercise per
+ * line), so the whole block is matched line by line — ignoring case, spacing
+ * and trailing punctuation — and not re-added when it is already there.
+ */
+export function appendCoachBlock(
+  existing: string | null | undefined,
+  recommendation: string,
+): string {
+  const base = (existing ?? "").trim();
+  const block = `${COACH_CUE_MARKER} ${recommendation.trim()}`;
+  if (!recommendation.trim() || containsRun(lineKeys(base), lineKeys(block))) return base;
+  return base ? `${base}\n${block}` : block;
+}
+
 /** Split a cue's leading "Label: " off so the card can emphasise it. */
 export function splitCoachCueLabel(cue: string): CoachCueParts {
   const match = CUE_LABEL.exec(cue);
