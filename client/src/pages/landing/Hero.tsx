@@ -12,11 +12,7 @@ import { Eyebrow } from "./SectionHeading";
 
 function TimelineMockup() {
   return (
-    <div
-      className="w-full max-w-md mx-auto"
-      role="img"
-      aria-label="Preview of the training timeline showing today's completed easy run graded as stayed easy, an AI-modified key session for tomorrow, and an optional recovery day"
-    >
+    <div className="w-full max-w-md mx-auto">
       <div
         className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-[0_24px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-accent/20 overflow-hidden"
         aria-hidden="true"

@@ -26,10 +26,23 @@ describe("Landing", () => {
     for (const title of ["Session Grading", "Missed-Session Recovery", "Load by Body System"]) {
       expect(
         screen.getByRole("heading", { level: 3, name: (name) => name.startsWith(title) }),
-      ).toBeTruthy();
+      ).toBeInTheDocument();
     }
-    expect(screen.getByText("What happens if I miss a session?")).toBeTruthy();
-    expect(screen.getByText("How do I know if a run did its job?")).toBeTruthy();
+    expect(screen.getByText("What happens if I miss a session?")).toBeInTheDocument();
+    expect(screen.getByText("How do I know if a run did its job?")).toBeInTheDocument();
+  });
+
+  it("marks only the newly added features as New", () => {
+    render(<Landing />);
+
+    const newHeadings = screen
+      .getAllByText("New")
+      .map((badge) => badge.closest("h3")?.firstChild?.textContent);
+    expect(newHeadings).toEqual([
+      "Session Grading",
+      "Missed-Session Recovery",
+      "Load by Body System",
+    ]);
   });
 
   it(
