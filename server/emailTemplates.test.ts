@@ -194,6 +194,17 @@ describe("email generation", () => {
       expect(html).toContain("1 planned session fell inside an injury, illness, travel or rest window");
     });
 
+    it("names the sessions the athlete let go, and neither counts them as missed nor cheers the week", () => {
+      const letGoOnly = buildWeeklySummaryEmail(baseUser, { ...baseData, missedCount: 0, letGoCount: 2 }).html;
+      expect(letGoOnly).not.toContain("Perfect week");
+      expect(letGoOnly).not.toContain("You missed");
+      expect(letGoOnly).toContain("2 missed sessions you chose to let go — not counted as missed.");
+
+      const alongside = buildWeeklySummaryEmail(baseUser, { ...baseData, missedCount: 1, letGoCount: 1 }).html;
+      expect(alongside).toContain("You missed 1 session this week.");
+      expect(alongside).toContain("1 missed session you chose to let go");
+    });
+
     it("shows missed message when missedCount > 0", () => {
       const { html } = buildWeeklySummaryEmail(baseUser, baseData);
       expect(html).toContain("You missed 1 session this week. Don't worry");

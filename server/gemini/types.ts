@@ -1,5 +1,7 @@
 import type {
+  BodySystemLoadOverview,
   CoachNoteInputs,
+  PlanDayPriority,
   PlanDaySkipReason,
   RaceReadiness,
   TimelineAnnotationType,
@@ -7,6 +9,8 @@ import type {
 } from "@shared/schema";
 
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
+import type { ExerciseSelectionBrief } from "../services/ai/exerciseSelection";
+import type { TrainingTargets } from "../services/workoutEngine/trainingTargets";
 
 /**
  * A dated absence the athlete declared on their timeline, near enough to the
@@ -94,6 +98,12 @@ export interface TrainingContext {
   plannedWorkouts: number;
   missedWorkouts: number;
   skippedWorkouts: number;
+  /**
+   * Missed sessions the athlete then let go (missed-session recovery). Not in
+   * `missedWorkouts` or `completionRate`: a decision about the plan, not a
+   * lapse. Optional so contexts built without it read as none.
+   */
+  letGoWorkouts?: number;
   completionRate: number;
   currentStreak: number;
   /**
@@ -124,6 +134,18 @@ export interface TrainingContext {
   distanceUnit?: string;
   /** Recent fuelling vs training load + targets; present only when the nutrition feature is on and the athlete has logged food or set a target. */
   nutrition?: NutritionCoachContext;
+  /**
+   * What the athlete's own history says about exercise choice — familiar
+   * lifts, ranked needs with candidate exercises, constraint substitutes, and
+   * the shape of the coming week. Built by buildTrainingContext from data it
+   * already loads; see server/services/ai/exerciseSelection.ts.
+   */
+  exerciseSelection?: ExerciseSelectionBrief;
+  /**
+   * The athlete's current estimated 1RMs and run paces, from the workout
+   * engine (server/services/workoutEngine/trainingTargets.ts).
+   */
+  trainingTargets?: TrainingTargets;
   recentWorkouts: Array<{
     date: string;
     focus: string;
@@ -142,10 +164,12 @@ export interface TrainingContext {
     accessory?: string | null;
     notes?: string | null;
     exerciseDetails?: PromptExerciseSet[];
-    aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
+    aiSource?: "rag" | "legacy" | "review" | "load_governor" | "progression" | null;
     aiRationale?: string | null;
     aiNoteUpdatedAt?: string | Date | null;
     aiInputsUsed?: CoachNoteInputs | null;
+    /** Key, supporting or optional — how much the session matters to the plan. */
+    priority?: PlanDayPriority | null;
   }>;
   exerciseBreakdown: Record<string, number>;
   structuredExerciseStats?: Record<
@@ -198,10 +222,29 @@ export interface TrainingContext {
       focus: string;
       reason: PlanDaySkipReason;
     }>;
+    /**
+     * Recent missed sessions that mattered (key or supporting), newest first,
+     * capped, with what the athlete decided about each — let it go, or not
+     * decided yet. Folded and shortened ones have moved and are upcoming.
+     */
+    recentMisses?: Array<{
+      date: string;
+      focus: string;
+      priority: PlanDayPriority;
+      decision: "let_go" | "undecided";
+    }>;
     // Canonical training-load summary (shared with the analytics tab). Kept as a
     // direct reference so the coaching prompt context never drifts from the
     // source-of-truth shape in shared/schema.
     loadGovernor?: TrainingLoadOverview;
+    /**
+     * Load by body system: session RPE × minutes split into aerobic, running
+     * impact, leg muscle and upper-body pull, each against its own usual week.
+     * The same model the Analytics card renders, over the same training
+     * sessions. Present when any system carries load; the prompt block
+     * self-suppresses unless one stands out.
+     */
+    bodySystemLoad?: BodySystemLoadOverview;
     progressionFlags: Array<{
       exercise: string;
       flag: "plateau" | "progressing" | "regressing" | "new";

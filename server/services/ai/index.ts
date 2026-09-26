@@ -1,6 +1,7 @@
+import { hasBodySystemLoadData } from "@shared/bodySystemLoad";
 import { addDaysToISODate as addDays, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
-import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { getStoredDistanceUnit, standardizeWeightUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
@@ -16,8 +17,12 @@ import {
   countPersonalRecordsInRange,
 } from "../analyticsService";
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
-import { calculateTrainingLoad } from "../trainingLoadService";
+import { calculateBodySystemLoad } from "../trainingLoad/bodySystemLoad";
+import { type AthleteLoadContext, calculateTrainingLoad } from "../trainingLoadService";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
+import type { EngineSet } from "../workoutEngine/loadMath";
+import type { EngineRunLog } from "../workoutEngine/running";
+import { buildTrainingTargets, type TrainingTargets } from "../workoutEngine/trainingTargets";
 import {
   computeCurrentWeek,
   computeExerciseGaps,
@@ -26,11 +31,18 @@ import {
   computeRpeTrend,
   computeWeeklyVolume,
 } from "./coachingInsights";
+import {
+  buildExerciseSelectionBrief,
+  type ExerciseSelectionBrief,
+  type ExperienceLevel,
+  type SelectionSet,
+} from "./exerciseSelection";
 import { summarizeMafTrend } from "./mafTrend";
 import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
+  collectRecentMisses,
   collectRecentSkips,
   collectRecentWorkouts,
   getExerciseBreakdown,
@@ -147,7 +159,7 @@ function mapTestTrendDirection(
   return trendDirectionMap[trend];
 }
 
-function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermediate" | "advanced" {
+function classifyExperienceLevel(totalWorkouts: number): ExperienceLevel {
   if (totalWorkouts < 20) return "beginner";
   if (totalWorkouts < 80) return "intermediate";
   return "advanced";
@@ -232,10 +244,10 @@ type LoadWorkoutLogs = Awaited<ReturnType<typeof storage.analytics.getWorkoutLog
 /**
  * Derive the supplementary coaching signals that were added after the original
  * coach context: recent personal records / e1RM, PRs-this-week, plan
- * compliance, movement/muscle coverage gaps, and deterministic race readiness.
- * All reuse data already loaded by buildTrainingContext (no extra IO) and every
- * field self-suppresses when its signal is absent. Extracted to keep
- * buildTrainingContext's complexity bounded.
+ * compliance, movement/muscle coverage gaps, deterministic race readiness and
+ * load by body system. All reuse data already loaded by buildTrainingContext
+ * (no extra IO) and every field self-suppresses when its signal is absent.
+ * Extracted to keep buildTrainingContext's complexity bounded.
  */
 function buildSupplementaryInsights(params: {
   loadExerciseSets: LoadExerciseSets;
@@ -246,9 +258,19 @@ function buildSupplementaryInsights(params: {
   distanceUnit: string;
   userTimezone: string | null | undefined;
   today: string;
+  athlete: AthleteLoadContext;
 }): Partial<NonNullable<TrainingContext["coachingInsights"]>> {
-  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, userTimezone, today } =
-    params;
+  const {
+    loadExerciseSets,
+    loadWorkoutLogs,
+    loadGovernor,
+    totalWorkouts,
+    weightUnit,
+    distanceUnit,
+    userTimezone,
+    today,
+    athlete,
+  } = params;
 
   // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
   const personalRecordMap = calculatePersonalRecords(loadExerciseSets, { weightUnit, distanceUnit });
@@ -289,6 +311,15 @@ function buildSupplementaryInsights(params: {
   // Deterministic race-day form readiness from TSB — free (no AI call).
   const raceReadiness = computeRaceReadiness(loadGovernor.tsb, loadGovernor.acuteAvg);
 
+  // Where this week's load landed, from the TRAINING sessions — the same
+  // subset the Analytics card reads, so the coach and the chart describe the
+  // same numbers.
+  const bodySystemLoad = calculateBodySystemLoad(loadWorkoutLogs, loadExerciseSets, {
+    currentDate: today,
+    distanceUnit,
+    athlete,
+  });
+
   return {
     ...(personalRecords.length > 0 ? { personalRecords } : {}),
     ...(prsThisWeek > 0 ? { prsThisWeek } : {}),
@@ -296,6 +327,7 @@ function buildSupplementaryInsights(params: {
     ...(neglectedPatterns.length > 0 ? { neglectedPatterns } : {}),
     ...(neglectedMuscles.length > 0 ? { neglectedMuscles } : {}),
     ...(raceReadiness.status !== "insufficient_data" ? { raceReadiness } : {}),
+    ...(hasBodySystemLoadData(bodySystemLoad) ? { bodySystemLoad } : {}),
   };
 }
 
@@ -319,6 +351,7 @@ function mapUpcomingWorkout(
     aiRationale: d.aiRationale,
     aiNoteUpdatedAt: d.aiNoteUpdatedAt,
     aiInputsUsed: d.aiInputsUsed,
+    priority: d.priority,
     ...((d.exerciseSets?.length ?? 0) > 0
       ? {
           // Upcoming plan-day sets carry their prescription in planned*
@@ -339,6 +372,87 @@ function mapUpcomingWorkout(
         }
       : {}),
   };
+}
+
+/**
+ * The athlete's current estimated 1RMs and run paces for the coach, from the
+ * reads buildTrainingContext already made. Same failure rule as the brief: a
+ * coach without them is the coach this app had before they existed.
+ */
+function coachTrainingTargetsField(params: {
+  readonly sets: readonly EngineSet[];
+  readonly logs: readonly EngineRunLog[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  /** Its primary lifts are listed first: they are the plan's backbone. */
+  readonly brief: ExerciseSelectionBrief | undefined;
+}): { trainingTargets?: TrainingTargets } {
+  try {
+    const trainingTargets = buildTrainingTargets({
+      sets: params.sets,
+      logs: params.logs,
+      weightUnit: standardizeWeightUnit(params.weightUnit),
+      distanceUnit: params.distanceUnit,
+      priority: params.brief?.primaryLifts.map((lift) => lift.exercise) ?? [],
+    });
+    return trainingTargets ? { trainingTargets } : {};
+  } catch (err) {
+    // A bug in a pure computation over rows already read: the error carries a
+    // message and stack, never the athlete's records.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[coach] training targets unavailable; coaching without them");
+    return {};
+  }
+}
+
+/**
+ * The exercise-selection brief for the coach, from reads buildTrainingContext
+ * has already made — no extra IO — as a field to spread into the context.
+ * Never allowed to take the context down with it: a coach without the brief
+ * is the coach this app had before it existed.
+ */
+function coachExerciseSelectionField(params: {
+  readonly plan: { readonly goal?: string | null } | null | undefined;
+  readonly experienceLevel: ExperienceLevel;
+  readonly constraints: string | null;
+  readonly today: string;
+  readonly user: { weightUnit?: string | null; distanceUnit?: string | null; division?: string | null; gender?: string | null } | undefined;
+  readonly sets: readonly SelectionSet[];
+  readonly stationGaps: readonly { station: string; daysSinceLastTrained: number | null }[] | undefined;
+  readonly upcomingDays: readonly UpcomingPlannedDay[];
+}): { exerciseSelection?: ExerciseSelectionBrief } {
+  try {
+    const exerciseSelection = buildExerciseSelectionBrief({
+      goal: params.plan?.goal,
+      experienceLevel: params.experienceLevel,
+      constraints: params.constraints,
+      today: params.today,
+      weightUnit: params.user?.weightUnit,
+      distanceUnit: params.user?.distanceUnit,
+      sets: params.sets,
+      stationGaps: (params.stationGaps ?? []).map((gap) => ({
+        station: gap.station,
+        daysSince: gap.daysSinceLastTrained,
+      })),
+      // Planned sets carry their prescription in planned* until logged — the
+      // same fallback mapUpcomingWorkout makes for the prompt.
+      upcoming: params.upcomingDays.map((day) => ({
+        date: day.date,
+        sets: day.exerciseSets.map((es) => ({
+          exerciseName: es.exerciseName,
+          weight: es.weight ?? es.plannedWeight,
+        })),
+      })),
+      division: params.user?.division,
+      gender: params.user?.gender,
+    });
+    return { exerciseSelection };
+  } catch (err) {
+    // As above: a pure computation, so the error holds no athlete data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err }, "[coach] exercise-selection brief unavailable; coaching without it");
+    return {};
+  }
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
@@ -395,6 +509,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     plannedWorkouts,
     missedWorkouts,
     skippedWorkouts,
+    letGoWorkouts,
     totalWorkouts,
     completionRate,
     completedDates,
@@ -425,19 +540,20 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
   const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const progressionFlags = computeProgressionFlags(timeline, weightUnit, distanceUnit);
+  const athlete: AthleteLoadContext = {
+    age: user?.age ?? null,
+    gender: user?.gender ?? null,
+    restingHr: user?.restingHr ?? null,
+    // Scales unweighted-rep tonnage with the body being moved (audit M2).
+    bodyweightKg: user?.bodyweightKg ?? null,
+    maxHr: user?.maxHr ?? null,
+    ftp: user?.ftp ?? null,
+  };
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
     weightUnit,
     distanceUnit,
-    athlete: {
-      age: user?.age ?? null,
-      gender: user?.gender ?? null,
-      restingHr: user?.restingHr ?? null,
-      // Scales unweighted-rep tonnage with the body being moved (audit M2).
-      bodyweightKg: user?.bodyweightKg ?? null,
-      maxHr: user?.maxHr ?? null,
-      ftp: user?.ftp ?? null,
-    },
+    athlete,
   }).overview;
   const completedLast7d = recentWorkouts.filter((w) => {
     // ⚡ Bolt Performance Optimization:
@@ -502,9 +618,10 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   );
   const trainingSets = loadExerciseSets.filter((set) => !nonTrainingLogIds.has(set.workoutLogId));
 
-  // Supplementary signals (PRs/e1RM, compliance, coverage gaps, race readiness)
-  // derived from data already loaded above — no extra IO. Each self-suppresses
-  // when absent. Extracted to keep this function's complexity bounded.
+  // Supplementary signals (PRs/e1RM, compliance, coverage gaps, race readiness,
+  // load by body system) derived from data already loaded above — no extra IO.
+  // Each self-suppresses when absent. Extracted to keep this function's
+  // complexity bounded.
   const supplementaryInsights = buildSupplementaryInsights({
     loadExerciseSets: trainingSets,
     loadWorkoutLogs: trainingLogs,
@@ -514,6 +631,26 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     distanceUnit,
     userTimezone,
     today,
+    athlete,
+  });
+
+  const exerciseSelectionField = coachExerciseSelectionField({
+    plan: activePlanRecord,
+    experienceLevel,
+    constraints: trainingConstraints,
+    today,
+    user,
+    sets: trainingSets,
+    stationGaps,
+    upcomingDays,
+  });
+
+  const trainingTargetsField = coachTrainingTargetsField({
+    sets: trainingSets,
+    logs: trainingLogs,
+    weightUnit,
+    distanceUnit,
+    brief: exerciseSelectionField.exerciseSelection,
   });
 
   const coachingInsights: TrainingContext["coachingInsights"] = {
@@ -521,6 +658,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     stationGaps,
     // Unconditional like its neighbours; the renderer self-suppresses on empty.
     recentSkips: collectRecentSkips(timeline),
+    recentMisses: collectRecentMisses(timeline),
     planPhase,
     weeklyVolume,
     progressionFlags,
@@ -594,6 +732,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     plannedWorkouts,
     missedWorkouts,
     skippedWorkouts,
+    letGoWorkouts,
     completionRate,
     currentStreak,
     currentDate: today,
@@ -608,6 +747,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     ...(nutrition ? { nutrition } : {}),
+    ...exerciseSelectionField,
+    ...trainingTargetsField,
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map(mapUpcomingWorkout),
     exerciseBreakdown,

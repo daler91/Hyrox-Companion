@@ -13,49 +13,21 @@
  *
  * The value is the RPE the load model already scores the same as this heart
  * rate (`rpeEquivalentOfHrReserve`), so accepting it describes the session
- * the way its training load already does.
+ * the way its training load already does. The computation itself is pure and
+ * lives in trainingLoad/heartRateRpe.ts, which the body-system load model also
+ * reads; this module adds the profile lookup.
  */
-import { heartRateReflectsEffort } from "@shared/deviceSportTypes";
-import type { User, WorkoutLog } from "@shared/schema";
+import type { User } from "@shared/schema";
 
 import { storage } from "../storage";
-import { hrReserveRatio, rpeEquivalentOfHrReserve } from "./trainingLoad/hrModel";
+import {
+  hasUsableHeartRate,
+  type HeartRateRpeLog,
+  suggestRpeFromHeartRate,
+} from "./trainingLoad/heartRateRpe";
 import type { AthleteLoadContext } from "./trainingLoad/types";
 
-type SuggestionLog = Pick<WorkoutLog, "avgHeartrate" | "focus" | "source" | "deviceActivity">;
-
-/**
- * The sport the recording says this was. A linked log's own focus is the
- * plan's or the athlete's title ("Lower body strength"), so the recording's
- * snapshot is read first. A standalone import's focus IS the sport type,
- * because both mappers write it there.
- */
-function recordedSportType(log: SuggestionLog): string | null {
-  const raw = log.deviceActivity?.raw;
-  if (raw) return raw.sport_type || raw.type || null;
-  return log.source === "strava" || log.source === "garmin" ? log.focus : null;
-}
-
-/** Whether this log could get a suggestion from anyone's heart-rate profile. */
-function hasUsableHeartRate(log: SuggestionLog): boolean {
-  return (log.avgHeartrate ?? 0) > 0 && heartRateReflectsEffort(recordedSportType(log));
-}
-
-/**
- * The suggested RPE, or null when there is nothing honest to suggest: no
- * average heart rate, a sport whose heart rate does not reflect effort, or no
- * measured max HR or age to read it against (`hrReserveRatio` withholds then).
- * Computed whether or not the athlete has rated the session; the client shows
- * it only while `rpe` is empty, so clearing a rating brings it back.
- */
-export function suggestRpeFromHeartRate(
-  log: SuggestionLog,
-  athlete: AthleteLoadContext | undefined,
-): number | null {
-  if (!hasUsableHeartRate(log)) return null;
-  const hrr = hrReserveRatio(log.avgHeartrate, athlete);
-  return hrr == null ? null : rpeEquivalentOfHrReserve(hrr);
-}
+export { suggestRpeFromHeartRate } from "./trainingLoad/heartRateRpe";
 
 /** The heart-rate fields of the athlete's profile, as the HR model reads them. */
 function athleteHeartRateContext(user: User | undefined): AthleteLoadContext {
@@ -71,7 +43,7 @@ function athleteHeartRateContext(user: User | undefined): AthleteLoadContext {
  * only when the log could get a suggestion at all: most manual logs carry no
  * heart rate, and opening one should not cost a profile lookup.
  */
-export async function loadSuggestedRpe(log: SuggestionLog, userId: string): Promise<number | null> {
+export async function loadSuggestedRpe(log: HeartRateRpeLog, userId: string): Promise<number | null> {
   if (!hasUsableHeartRate(log)) return null;
   const user = await storage.users.getUser(userId);
   return suggestRpeFromHeartRate(log, athleteHeartRateContext(user));

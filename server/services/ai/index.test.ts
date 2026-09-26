@@ -44,6 +44,7 @@ vi.mock("./nutritionContext", () => ({
 vi.mock("./trainingDecisionEngine", () => ({ decideTrainingState: vi.fn() }));
 vi.mock("./trainingStats", () => ({
   calculateTrainingStats: vi.fn(),
+  collectRecentMisses: vi.fn(),
   collectRecentSkips: vi.fn(),
   collectRecentWorkouts: vi.fn(),
   getExerciseBreakdown: vi.fn(),
@@ -91,6 +92,7 @@ function makeStats(overrides: Record<string, unknown> = {}) {
     plannedWorkouts: 0,
     missedWorkouts: 0,
     skippedWorkouts: 0,
+    letGoWorkouts: 0,
     totalWorkouts: 0,
     completionRate: 0,
     completedDates: new Set<string>(),
@@ -482,6 +484,56 @@ describe("buildTrainingContext", () => {
     ]);
   });
 
+  it("builds the exercise-selection brief from the plan goal, training sets and upcoming days", async () => {
+    vi.mocked(storage.plans).getActivePlan.mockResolvedValue({
+      name: "Strength block",
+      totalWeeks: 8,
+      startDate: "2026-06-01",
+      goal: "Get stronger",
+    } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue(
+      makeUser({ trainingConstraints: "no barbell at home", weightUnit: "kg" }),
+    );
+    // A walk is load, not an exercise habit: its sets must not become a staple.
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([
+      { id: "log-a", date: "2026-06-05", countsAsTraining: true },
+      { id: "log-b", date: "2026-06-10", countsAsTraining: true },
+      { id: "log-walk", date: "2026-06-11", countsAsTraining: false },
+      { id: "log-walk-2", date: "2026-06-12", countsAsTraining: false },
+    ] as never);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([
+      { workoutLogId: "log-a", date: "2026-06-05", exerciseName: "goblet_squat", reps: 10, weight: 24, weightUnit: "kg" },
+      { workoutLogId: "log-b", date: "2026-06-10", exerciseName: "goblet_squat", reps: 10, weight: 26, weightUnit: "kg" },
+      { workoutLogId: "log-walk", date: "2026-06-11", exerciseName: "walking", distance: 3000, distanceUnit: "m" },
+      { workoutLogId: "log-walk-2", date: "2026-06-12", exerciseName: "walking", distance: 3000, distanceUnit: "m" },
+    ] as never);
+    vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([
+      { planDayId: "pd-1", date: "2026-06-16", focus: "Legs", mainWorkout: "", exerciseSets: [{ exerciseName: "goblet_squat", plannedWeight: 26 }] },
+      { planDayId: "pd-2", date: "2026-06-18", focus: "Push", mainWorkout: "", exerciseSets: [{ exerciseName: "push_up" }] },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    const brief = ctx.exerciseSelection;
+    expect(brief?.lens).toBe("strength");
+    expect(brief?.staples.map((staple) => staple.exercise)).toEqual(["goblet_squat"]);
+    expect(brief?.unavailableEquipment).toEqual(["barbell"]);
+    // The athlete's own squat carries the slot; the barbell defaults for the
+    // rest give way to what their constraints allow, and with no completed
+    // workouts on record they are coached as a beginner (lat pulldown, not
+    // pull-ups).
+    expect(brief?.experienceLevel).toBe("beginner");
+    expect(brief?.primaryLifts.map((lift) => lift.exercise)).toEqual([
+      "goblet_squat",
+      "romanian_deadlift",
+      "dumbbell_bench_press",
+      "seated_dumbbell_press",
+      "lat_pulldown",
+    ]);
+    expect(brief?.upcomingShape?.setsByGroup.get("squat")).toBe(1);
+    expect(brief?.upcomingShape?.setsByGroup.get("push")).toBe(1);
+  });
+
   it("falls back to the planned prescription in upcoming exercise details", async () => {
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {
@@ -660,6 +712,28 @@ describe("buildTrainingContext", () => {
 
     expect(ctx.coachingInsights?.neglectedPatterns).toBeUndefined();
     expect(ctx.coachingInsights?.neglectedMuscles).toBeUndefined();
+  });
+
+  it("attaches load by body system from the training sessions, as the Analytics card does", async () => {
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([
+      { id: "run", date: "2026-06-14", focus: "Run", mainWorkout: "", duration: 30, rpe: 5, countsAsTraining: true },
+      // A walk the athlete does not count as training stays out, like the card.
+      { id: "walk", date: "2026-06-14", focus: "Walk", mainWorkout: "", duration: 60, rpe: 2, countsAsTraining: false },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    const bodySystems = ctx.coachingInsights?.bodySystemLoad;
+    expect(bodySystems?.asOf).toBe(TODAY);
+    expect(bodySystems?.sessionCount).toBe(1);
+    // The run alone: 30 min × RPE 5 on the heart and lungs.
+    expect(bodySystems?.systems[0]).toMatchObject({ system: "aerobic", current: 150 });
+  });
+
+  it("omits load by body system when no system carries any load", async () => {
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.bodySystemLoad).toBeUndefined();
   });
 });
 

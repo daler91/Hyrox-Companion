@@ -1,5 +1,5 @@
 {
-  "id": "f15060f8-bb92-4e34-9dd0-f688ba5f1945",
+  "id": "4cfd1477-ec11-4959-8f6f-ba86146b256b",
   "prevId": "8777b91f-4aae-46d1-928a-f8ab8952dcb9",
   "version": "7",
   "dialect": "postgresql",
@@ -441,6 +441,21 @@
         }
       },
       "indexes": {
+        "idx_custom_exercises_user_id": {
+          "name": "idx_custom_exercises_user_id",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "idx_custom_exercises_user_name": {
           "name": "idx_custom_exercises_user_name",
           "columns": [
@@ -4224,6 +4239,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "now()"
+        },
+        "engine_state": {
+          "name": "engine_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

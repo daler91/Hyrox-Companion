@@ -21,11 +21,19 @@ import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
   deviceLinkSourceEnum,
   MEAL_TYPES,
+  planDayPriorityEnum,
+  planDayRecoveryEnum,
   planDaySkipReasonEnum,
   recycleBinEntityTypeEnum,
   workoutStatusEnum,
 } from "./enums";
-import type { CoachNoteInputs, PlanAdjustmentProposalPayload, RecycleBinPayload } from "./types";
+import type {
+  CoachNoteInputs,
+  PlanAdjustmentProposalPayload,
+  PlanDayRecoveryUndo,
+  PlanEngineState,
+  RecycleBinPayload,
+} from "./types";
 
 /**
  * Render a TS value list as the quoted literal list inside a CHECK constraint's
@@ -371,6 +379,12 @@ export const trainingPlans = pgTable(
     // backfills existing rows harmlessly — only stuck pending/generating rows are
     // ever swept, and those are all newly created.
     generationStartedAt: timestamp("generation_started_at").defaultNow(),
+    // The workout engine's memory of this plan: the run fitness its paces were
+    // written against and the logged workouts it has already adapted the plan
+    // to (server/services/workoutEngine/adaptation.ts). Server-managed. NULL for
+    // plans made before the engine existed or imported by hand — the first
+    // adaptation pass initialises it.
+    engineState: jsonb("engine_state").$type<PlanEngineState>(),
   },
   (table) => [
     index("idx_training_plans_user_id").on(table.userId),
@@ -427,12 +441,34 @@ export const planDays = pgTable(
     // overwritten from the workout log on a completed→planned transition.
     // Cleared whenever the day transitions away from `skipped`.
     skipReason: text("skip_reason"),
+    // key / supporting / optional (planDayPriorityEnum). NULL = never set by
+    // the athlete; reads infer a tier from the session (sessionPriority.ts).
+    priority: text("priority"),
+    // What the athlete decided about this session after missing it
+    // (planDayRecoveryEnum): folded or shortened onto another day, or let go.
+    // NULL = no decision, which is the missed state the timeline asks about.
+    recovery: text("recovery"),
+    // The date the session was on when it was missed, kept when recovery moves
+    // it, so the card can say where it came from. NULL unless it was moved.
+    missedOn: date("missed_on"),
+    // What the last fold or shorten changed (date, status, the sets a shorten
+    // dropped or scaled, notes and duration it rewrote), so the athlete can
+    // take it back. NULL until the session is moved; written only by recovery.
+    recoveryUndo: jsonb("recovery_undo").$type<PlanDayRecoveryUndo>(),
   },
   (table) => [
     check("status_check", sql`status IN (${inValues(workoutStatusEnum)})`),
     check(
       "plan_days_skip_reason_check",
       sql`skip_reason IS NULL OR skip_reason IN (${inValues(planDaySkipReasonEnum)})`,
+    ),
+    check(
+      "plan_days_priority_check",
+      sql`priority IS NULL OR priority IN (${inValues(planDayPriorityEnum)})`,
+    ),
+    check(
+      "plan_days_recovery_check",
+      sql`recovery IS NULL OR recovery IN (${inValues(planDayRecoveryEnum)})`,
     ),
     check(
       "plan_days_expected_duration_check",
@@ -446,7 +482,6 @@ export const planDays = pgTable(
       "plan_days_time_of_day_check",
       sql`planned_time_of_day_min IS NULL OR (planned_time_of_day_min BETWEEN 0 AND 1439)`,
     ),
-    index("idx_plan_days_plan_id").on(table.planId),
     index("idx_plan_days_scheduled_date").on(table.scheduledDate),
     index("idx_plan_days_status").on(table.status),
     index("idx_plan_days_plan_week").on(table.planId, table.weekNumber),
@@ -1096,7 +1131,10 @@ export const timelineAnnotations = pgTable(
   (table) => [
     check("timeline_annotation_type_check", sql`type IN ('injury', 'illness', 'travel', 'rest')`),
     check("timeline_annotation_range_check", sql`end_date >= start_date`),
-    index("idx_timeline_annotations_user_id").on(table.userId),
+    // idx_timeline_annotations_user_id dropped: fully shadowed by the
+    // composite index below, which leads with the same column (see
+    // .jules/bolt.md 2026-09-25). Every caller filters on userId either
+    // bare or ANDed with startDate/endDate, both servable by this index.
     index("idx_timeline_annotations_user_range").on(table.userId, table.startDate, table.endDate),
   ],
 );

@@ -203,7 +203,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 |------|------|---------|
 | `useVoiceInput` | `useVoiceInput.ts` | Web Speech API integration. Manages microphone permissions, speech recognition start/stop, transcript accumulation, and error handling. |
 
-Additional feature hooks not catalogued above include `useWorkoutDetail`, `usePlanDayExercises`, `useExerciseSetsForOwner`, `useMoveTimelineEntry`, `useLogWorkoutDraft`, `usePushNotifications`, and `useUrlQueryState`. Related hooks are also grouped under the `voice/`, `workout-form/`, and `workout-actions/` subdirectories of `client/src/hooks/`.
+Additional feature hooks not catalogued above include `useWorkoutDetail`, `usePlanDayExercises`, `useExerciseSetsForOwner`, `useMoveTimelineEntry`, `useLogWorkoutDraft`, `usePushNotifications`, and `useUrlQueryState`. `useMissedRecovery.ts` holds the missed-session recovery hooks: `useMissedRecoveryPreview` (uncached — the preview depends on today and the rest of the week, so it is refetched every time the sheet opens), `useApplyMissedRecovery` (invalidates the timeline, training overview, plans, weekly review and the day's cached exercise sets — shortening drops or scales them, and undoing it puts them back; a 404/409 refreshes the timeline and the open preview; an `undoing` variable lets the toast say where an undone move went) and `useSetSessionPriority` (optimistic tier change on the cached timeline entry, rolled back on error). Related hooks are also grouped under the `voice/`, `workout-form/`, and `workout-actions/` subdirectories of `client/src/hooks/`.
 
 ### Hook Dependency Tree
 

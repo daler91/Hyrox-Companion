@@ -1,6 +1,7 @@
 import type { PersonalRecord,TimelineEntry } from "@shared/schema";
 import type { DistanceUnit } from "@shared/unitConversion";
 
+import type { RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
 
 export interface TimelineWorkoutCardProps {
@@ -30,6 +31,12 @@ export interface TimelineWorkoutCardProps {
    * session or logged workout it might belong to and offer to link to it.
    */
   readonly dayEntries?: readonly TimelineEntry[];
+  /**
+   * Opens missed-session recovery (fold / shorten / let go) for a missed
+   * card, or takes a let-go back. Undefined where the timeline doesn't wire
+   * it up; the card then shows no recovery prompt.
+   */
+  readonly onRecover?: RecoverEntryHandler;
 }
 
 export interface WorkoutStravaStatsProps {

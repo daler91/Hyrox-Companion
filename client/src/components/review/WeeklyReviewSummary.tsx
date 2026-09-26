@@ -76,6 +76,8 @@ export function WeeklyReviewSummary({ review }: { readonly review: WeeklyReview 
           value={`${current.plannedCompleted}/${current.sessionsPlanned}`}
           sub={[
             current.missed > 0 ? `${current.missed} missed` : null,
+            // The session card's own words for these days: a choice, not a miss.
+            current.letGo > 0 ? `${current.letGo} let go` : null,
             current.skipped > 0 ? `${current.skipped} skipped` : null,
             // Same wording as the timeline's badge for these days. Deliberately
             // its own phrase, never folded into "missed" — the split is the point.

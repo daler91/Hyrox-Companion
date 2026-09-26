@@ -102,6 +102,6 @@ describe("TimelineAnnotationCard", () => {
       />,
     );
 
-    expect(screen.getByTestId("button-delete-annotation-a1")).toBeDisabled();
+    expect(screen.getByTestId("button-delete-annotation-a1")).toHaveAttribute("aria-disabled", "true");
   });
 });

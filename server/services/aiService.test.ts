@@ -59,7 +59,7 @@ describe("buildTrainingContext", () => {
     vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
 
-    const result = await buildTrainingContext("user-1");
+    const { exerciseSelection, ...result } = await buildTrainingContext("user-1");
 
     expect(result).toEqual({
       totalWorkouts: 0,
@@ -67,6 +67,7 @@ describe("buildTrainingContext", () => {
       plannedWorkouts: 0,
       missedWorkouts: 0,
       skippedWorkouts: 0,
+      letGoWorkouts: 0,
       completionRate: 0,
       currentStreak: 0,
       currentDate: "2026-01-15",
@@ -87,6 +88,14 @@ describe("buildTrainingContext", () => {
         undertrainingFlag: false,
         progressionFlags: [],
       }),
+    });
+    // Even with nothing logged the brief carries the goal lens and the
+    // beginner-friendly defaults; it just has no history to draw needs from.
+    expect(exerciseSelection).toMatchObject({
+      lens: "general",
+      experienceLevel: "beginner",
+      staples: [],
+      needs: [],
     });
   });
 

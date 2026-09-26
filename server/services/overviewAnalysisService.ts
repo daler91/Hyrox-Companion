@@ -10,6 +10,11 @@
  * OWN gating for the midnight recompute cron. Structured-output handling
  * (generateJsonText + JSON.parse + zod) follows the race-predictor service.
  */
+import {
+  BODY_SYSTEM_META,
+  describeBodySystemDivergence,
+  hasBodySystemLoadData,
+} from "@shared/bodySystemLoad";
 import type { OverviewAnalysisResult, OverviewChartKey, TrainingLoadOverview, TrainingOverview, WeeklySummary } from "@shared/schema";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -34,6 +39,7 @@ const RECENT_WEEKS = 8;
 // One human-readable title per chart so the model labels each section correctly.
 const CHART_TITLES: Record<OverviewChartKey, string> = {
   trainingLoad: "Training Load Governor (ACWR)",
+  bodySystems: "Load by body system",
   formMonotony: "Form (TSB) & Monotony",
   objectiveLoad: "Objective Load, Fitness/Fatigue & Strain",
   weeklyWorkouts: "Weekly Workouts",
@@ -60,6 +66,8 @@ export const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
   "- Fitness (chronic EWMA) vs Fatigue (acute EWMA): fitness above fatigue and rising is a good base; fatigue spiking above fitness means a hard block.",
   "- UTSS is this app's own training-load unit. It prefers heart rate, then power, then the athlete's RPE — so it is NOT a purely subjective measure, and a session with HR data barely uses RPE at all.",
   "- hrTSS / Power TSS are separate objective loads shown for reference only; they never feed UTSS and sit on a different scale, so do not tell the athlete they should agree or read a gap between them as an inconsistency.",
+  "- Load by body system: each session's RPE × minutes (session-RPE load) is split into aerobic, running impact, leg muscle and upper-body pull by what the session contained, and each system is compared ONLY with its own usual week (the mean of the four weeks before this one): ratio <0.8 low, 0.8-1.3 normal, 1.3-1.5 high, >1.5 very high; 'new' is a real week of load after almost none; a six-week high is the heaviest week of the last six for that system. Numbers are not comparable across systems, so never compare one system's number with another's. When `divergence` is present it is the headline — explain what it means for the coming week. When many sessions were estimated (no RPE or duration logged), say the split is approximate and that rating sessions sharpens it.",
+  "- UTSS and body-system load are different models on different scales; do not convert between them or read a gap between them as an inconsistency.",
   "- Weekly Workouts vs the weekly goal shows consistency against target; RPE/Duration trends show how hard and how long sessions are trending; the consistency heatmap + streak show training regularity.",
   "- Counts named *InWindow (acwrDaysInWindow, loggedDaysInWindow) describe only the chart's own window, NOT how long the athlete has trained. The load window is the last 42 days and ACWR needs 14 logged days before it computes, so acwrDaysInWindow saturates at 42 for anyone past their first six weeks. Never tell the athlete how much history they have, or call them new, from these numbers.",
   "",
@@ -141,6 +149,31 @@ export function buildOverviewChartFacts(
         // shipped with its denominator so the model can read the coverage.
         acwrDaysInWindow: acwrSeries.filter((v) => v != null).length,
         trendWindowDays: acwrSeries.length,
+      },
+    };
+  }
+
+  // bodySystems — the card renders on exactly this predicate.
+  const bodySystems = overview.bodySystemLoad;
+  if (bodySystems && hasBodySystemLoadData(bodySystems)) {
+    out.bodySystems = {
+      title: CHART_TITLES.bodySystems,
+      facts: {
+        unit: "session RPE × minutes (arbitrary units)",
+        systems: bodySystems.systems.map((s) => ({
+          system: BODY_SYSTEM_META[s.system].label,
+          thisWeek: s.current,
+          usualWeek: s.baseline,
+          ratioToUsual: s.ratio,
+          status: s.status,
+          sixWeekHigh: s.sixWeekHigh,
+          previousPeak: s.previousPeak,
+          lastSixWeeks: s.weekly,
+        })),
+        divergence: describeBodySystemDivergence(bodySystems),
+        sessionsInSixWeeks: bodySystems.sessionCount,
+        estimatedSessions: bodySystems.estimatedSessions,
+        unattributedSessions: bodySystems.unattributedSessions,
       },
     };
   }

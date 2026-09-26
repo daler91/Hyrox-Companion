@@ -726,8 +726,43 @@
     {
       "idx": 103,
       "version": "7",
-      "when": 1790431625480,
-      "tag": "0103_cheerful_screwball",
+      "when": 1790214729418,
+      "tag": "0103_training_plans_engine_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1790258803917,
+      "tag": "0104_drop_redundant_plan_days_plan_id_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1790345191036,
+      "tag": "0105_drop_redundant_timeline_annotations_user_id_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790379645172,
+      "tag": "0106_plan_days_priority_and_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1790389916858,
+      "tag": "0107_plan_days_recovery_undo",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1790433477644,
+      "tag": "0108_drop_redundant_custom_exercises_user_id_index",
       "breakpoints": true
     }
   ]

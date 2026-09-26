@@ -33,12 +33,18 @@ export function buildCurrentDateContext(trainingContext: TrainingContext): strin
   return `\nToday's date: ${trainingContext.currentDate}. Treat this as "today" when discussing workout timing — the dated workouts below are annotated relative to it.`;
 }
 
+/** Missed sessions the athlete chose to let go, when there are any. Already out of "Missed" and the rate. */
+function letGoLine(letGoWorkouts: number | undefined): string {
+  if (!letGoWorkouts) return "";
+  return `\n- Let go by choice after missing (not counted as missed or in the rate): ${letGoWorkouts}`;
+}
+
 export function buildOverallStats(trainingContext: TrainingContext): string {
   let section = `\nOverall Stats:
 - Total workouts tracked: ${trainingContext.totalWorkouts}
 - Completed: ${trainingContext.completedWorkouts}
 - Planned (upcoming): ${trainingContext.plannedWorkouts}
-- Missed: ${trainingContext.missedWorkouts}
+- Missed: ${trainingContext.missedWorkouts}${letGoLine(trainingContext.letGoWorkouts)}
 - Skipped: ${trainingContext.skippedWorkouts}
 - Completion rate: ${trainingContext.completionRate}%
 - Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak === 1 ? "" : "s"}`;
@@ -118,7 +124,8 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
       weightUnit: trainingContext.weightUnit,
       distanceUnit: trainingContext.distanceUnit,
     });
-    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus || "General")} - `;
+    const tier = workout.priority ? ` [${workout.priority} session]` : "";
+    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}${tier}: ${sanitizeUserInput(workout.focus || "General")} - `;
     if (exerciseSummary) {
       line += `Exercises: ${exerciseSummary}`;
     } else {

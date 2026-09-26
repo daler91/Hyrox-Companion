@@ -1,4 +1,4 @@
-import { timelineAnnotations, workoutLogs } from "@shared/schema";
+import { timelineAnnotations, type TimelineEntry, workoutLogs } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
@@ -84,7 +84,7 @@ const workoutStorage = {
  */
 function setupTimelineStorage(
   options: {
-    plans?: { id: string; name: string; raceDate: string | null }[];
+    plans?: { id: string; name: string; raceDate: string | null; retiredOn?: string | null }[];
     emptyPlanDays?: boolean;
     timezone?: string | null;
   } = {},
@@ -466,5 +466,139 @@ describe("TimelineStorage declared absences", () => {
     // This is what collectRecentSkips reads to tell the coach WHY.
     expect(byDate("2026-07-15").skipReason).toBe("injured");
     expect(byDate("2026-07-16").skipReason).toBeUndefined();
+  });
+});
+
+/** The entry for a plan day, failing the test by name when it is missing. */
+function entryFor(entries: TimelineEntry[], planDayId: string): TimelineEntry {
+  const found = entries.find((entry) => entry.planDayId === planDayId);
+  if (!found) throw new Error(`no timeline entry for plan day ${planDayId}`);
+  return found;
+}
+
+describe("TimelineStorage priority tiers and missed-session recovery", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    storage = setupTimelineStorage({ plans: [{ id: "plan-1", name: "Plan", raceDate: RACE }] });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-08T12:00:00Z")); // today = 2026-07-08 UTC
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("carries the athlete's tier, infers one for unmarked days, and gives rest days none", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-marked", "2026-07-06", { focus: "Easy run", priority: "key" }),
+      planDay("d-tempo", "2026-07-07", { focus: "Tempo run" }),
+      planDay("d-rest", "2026-07-09", { focus: "Rest", mainWorkout: "Complete rest or light walk" }),
+      // The derived race-day card is key whatever the day underneath was marked.
+      planDay("d-race", RACE, { focus: "Easy run", priority: "optional" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entryFor(entries, id);
+
+    expect(byId("d-marked").priority).toBe("key");
+    expect(byId("d-tempo").priority).toBe("key");
+    expect(byId("d-rest").priority).toBeUndefined();
+    expect(byId("d-race").priority).toBe("key");
+  });
+
+  it("shows a let-go only while the day reads missed, and a fold's origin wherever it goes", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-let-go", "2026-07-06", { status: "missed", recovery: "let_go" }),
+      // A stale let-go on a completed day is not shown.
+      planDay("d-stale", "2026-07-05", { status: "completed", recovery: "let_go" }),
+      planDay("d-folded", "2026-07-09", { status: "planned", recovery: "folded", missedOn: "2026-07-07" }),
+      planDay("d-open", "2026-07-04", { status: "missed" }),
+      // Logged after the let-go, then the log deleted: stored planned, shown
+      // missed — an open miss again, as it will be once the sweep clears it.
+      planDay("d-unlogged", "2026-07-03", { status: "planned", recovery: "let_go" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entryFor(entries, id);
+
+    expect(byId("d-let-go")).toMatchObject({ status: "missed", recovery: "let_go" });
+    expect(byId("d-stale").recovery).toBeUndefined();
+    expect(byId("d-unlogged").status).toBe("missed");
+    expect(byId("d-unlogged").recovery).toBeUndefined();
+    expect(byId("d-folded")).toMatchObject({ status: "planned", recovery: "folded", missedOn: "2026-07-07" });
+    // Written for a Monday, it now sits on Thursday, and says so.
+    expect(byId("d-folded").dayName).toBe("Thursday");
+    expect(byId("d-open").recovery).toBeUndefined();
+  });
+
+  it("asks only about a recent, undecided miss of a real session in a live plan", async () => {
+    storage = setupTimelineStorage({
+      plans: [
+        { id: "plan-1", name: "Plan", raceDate: RACE },
+        { id: "plan-old", name: "Old block", raceDate: null, retiredOn: "2026-07-03" },
+        { id: "plan-raced", name: "Last race", raceDate: "2026-07-04" },
+      ],
+    });
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-recent", "2026-07-06", { status: "missed" }),
+      // Not swept yet, but past: missed all the same.
+      planDay("d-unswept", "2026-07-07"),
+      // Seven days back is the last day that can still move; eight is history.
+      planDay("d-week", "2026-07-01", { status: "missed" }),
+      planDay("d-old", "2026-06-30", { status: "missed" }),
+      planDay("d-let-go", "2026-07-05", { status: "missed", recovery: "let_go" }),
+      planDay("d-rest", "2026-07-04", { status: "missed", focus: "Rest", mainWorkout: "Complete rest" }),
+      planDay("d-retired", "2026-07-05", { planId: "plan-old" }),
+      // The day after that plan's race reads as post-race recovery, set by the race.
+      planDay("d-post-race", "2026-07-06", { planId: "plan-raced", status: "missed" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entryFor(entries, id);
+
+    expect(byId("d-recent").recoverable).toBe(true);
+    expect(byId("d-unswept")).toMatchObject({ status: "missed", recoverable: true });
+    expect(byId("d-week").recoverable).toBe(true);
+    for (const id of ["d-old", "d-let-go", "d-rest", "d-retired"]) {
+      expect(byId(id).recoverable).toBeUndefined();
+    }
+    expect(byId("d-post-race")).toMatchObject({ status: "missed", raceDerived: true });
+    expect(byId("d-post-race").recoverable).toBeUndefined();
+    expect(byId("d-recent").raceDerived).toBeUndefined();
+  });
+
+  it("offers to take a move back only while the session is upcoming and its miss recent", async () => {
+    const undoFrom = (date: string) => ({
+      scheduledDate: date,
+      status: "missed",
+      recovery: null,
+      missedOn: null,
+      deletedSets: [],
+      scaledSets: [],
+      previous: null,
+    });
+    const moved = (id: string, date: string, missedOn: string, overrides: Record<string, unknown> = {}) =>
+      planDay(id, date, { recovery: "folded", missedOn, recoveryUndo: undoFrom(missedOn), ...overrides });
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      moved("d-upcoming", "2026-07-09", "2026-07-06"),
+      moved("d-today", "2026-07-08", "2026-07-06", { recovery: "shortened" }),
+      // Back there, the card would no longer ask about it.
+      moved("d-stale", "2026-07-10", "2026-06-29"),
+      // Done, or missed again on its new day: it has moved on.
+      moved("d-done", "2026-07-08", "2026-07-06", { status: "completed" }),
+      moved("d-missed-again", "2026-07-07", "2026-07-05", { status: "missed" }),
+      // Moved before undo was recorded.
+      planDay("d-no-record", "2026-07-09", { recovery: "folded", missedOn: "2026-07-06" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byId = (id: string) => entryFor(entries, id);
+
+    expect(byId("d-upcoming").recoveryUndoable).toBe(true);
+    expect(byId("d-today").recoveryUndoable).toBe(true);
+    for (const id of ["d-stale", "d-done", "d-missed-again", "d-no-record"]) {
+      expect(byId(id).recoveryUndoable, id).toBeUndefined();
+    }
   });
 });

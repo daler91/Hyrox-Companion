@@ -1,3 +1,4 @@
+import { loadIncrement } from "@shared/exerciseEquipment";
 import { describe, expect, it } from "vitest";
 
 import { toPreferenceScaleAll } from "@/lib/setDisplay";
@@ -345,6 +346,53 @@ describe("suggestNextTarget — the same prescription missed twice (deload)", ()
       expect(target?.step.field).toBe("deload");
       expect(target!.weight).toBeLessThan(weight);
       expect(target!.weight).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("suggestNextTarget — the implement's own steps", () => {
+  it("moves a dumbbell to the next dumbbell, not by a barbell plate", () => {
+    // 24 kg x 10: only the weight can move. The next dumbbell (+2 kg) raises
+    // the estimate 2.7 kg, inside the 3.2 kg cap; a barbell plate would have
+    // been rejected and the fractional fallback suggested 25.25 kg.
+    const target = suggestNextTarget([set({ reps: 10, weight: 24 })], {
+      ...KG,
+      exerciseName: "dumbbell_bench_press",
+    });
+
+    expect(target).toMatchObject({ reps: 10, weight: 26, step: { field: "weight", amount: 2 } });
+  });
+
+  it("steps a machine by its pin, and stays silent when the next kettlebell is too big a jump", () => {
+    expect(
+      suggestNextTarget([set({ reps: 10, weight: 100 })], { ...KG, exerciseName: "leg_press" }),
+    ).toMatchObject({ weight: 105, step: { field: "weight", amount: 5 } });
+    // 16 kg x 10: the next bell (+4 kg) would lift the estimate 25%, and a
+    // kettlebell has no half steps to fall back on.
+    expect(
+      suggestNextTarget([set({ reps: 10, weight: 16 })], {
+        ...KG,
+        exerciseName: "kettlebell_swings",
+      }),
+    ).toBeNull();
+  });
+
+  it("deloads onto the dumbbell rack", () => {
+    // 10% off 26 kg is 23.4 kg: 22 kg on a dumbbell rack, not a 22.5 kg bell.
+    const missed = [set({ reps: 8, weight: 26, plannedReps: 10, plannedWeight: 26 })];
+    const target = suggestNextTarget(missed, {
+      ...KG,
+      exerciseName: "dumbbell_bench_press",
+      previousSets: missed,
+    });
+
+    expect(target).toMatchObject({ weight: 22, step: { field: "deload", amount: 4 } });
+  });
+
+  it("uses the step the workout engine loads plans with", () => {
+    for (const exerciseName of ["back_squat", "dumbbell_bench_press", "leg_press"]) {
+      const target = suggestNextTarget([set({ reps: 10, weight: 100 })], { ...KG, exerciseName });
+      expect(target?.step).toEqual({ field: "weight", amount: loadIncrement(exerciseName, "kg") });
     }
   });
 });

@@ -42,11 +42,11 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
     hasPlan: true,
     current: {
       sessionsLogged: 3, sessionsPlanned: 4, plannedCompleted: 3,
-      missed: 1, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 180, avgRpe: 7,
+      missed: 1, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 180, avgRpe: 7,
     },
     previous: {
       sessionsLogged: 2, sessionsPlanned: 4, plannedCompleted: 2,
-      missed: 2, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 120, avgRpe: 6,
+      missed: 2, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 120, avgRpe: 6,
     },
     deltas: { sessionsLogged: 1, totalDurationMin: 60, avgRpe: 1 },
     sessions: [],
@@ -118,7 +118,7 @@ describe("Review page", () => {
       review({
         current: {
           sessionsLogged: 4, sessionsPlanned: 1, plannedCompleted: 1,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 240, avgRpe: 6,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 240, avgRpe: 6,
         },
       }),
     );
@@ -135,7 +135,7 @@ describe("Review page", () => {
         hasPlan: false,
         current: {
           sessionsLogged: 2, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 90, avgRpe: 6,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 90, avgRpe: 6,
         },
       }),
     );
@@ -153,7 +153,7 @@ describe("Review page", () => {
           { id: "a1", type: "injury", startDate: "2026-05-25", endDate: "2026-06-20", note: "Achilles" },
         ],
         plannedDays: [
-          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan", excused: false },
+          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, priority: "key", recovery: null, planName: "Plan", excused: false },
         ],
       }),
     );
@@ -171,10 +171,10 @@ describe("Review page", () => {
       review({
         current: {
           sessionsLogged: 1, sessionsPlanned: 3, plannedCompleted: 1,
-          missed: 0, skipped: 0, outstanding: 0, excused: 2, totalDurationMin: 60, avgRpe: 6,
+          missed: 0, skipped: 0, outstanding: 0, excused: 2, letGo: 0, totalDurationMin: 60, avgRpe: 6,
         },
         plannedDays: [
-          { planDayId: "pd-e", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan", excused: true },
+          { planDayId: "pd-e", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, priority: "key", recovery: null, planName: "Plan", excused: true },
         ],
       }),
     );
@@ -187,11 +187,28 @@ describe("Review page", () => {
     expect(screen.getByTestId("weekly-review-adherence")).toHaveTextContent("2 not counted");
   });
 
+  it("counts a let-go day on its own in the plan tile, never as missed", async () => {
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({
+        current: {
+          sessionsLogged: 2, sessionsPlanned: 4, plannedCompleted: 2,
+          missed: 1, skipped: 0, outstanding: 0, excused: 0, letGo: 1, totalDurationMin: 90, avgRpe: 6,
+        },
+      }),
+    );
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("weekly-review-adherence")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("weekly-review-adherence")).toHaveTextContent("1 missed · 1 let go");
+  });
+
   it("names the skip reason next to what did not happen", async () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         plannedDays: [
-          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "Plan", excused: false },
+          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", priority: "supporting", recovery: null, planName: "Plan", excused: false },
         ],
       }),
     );
@@ -199,6 +216,24 @@ describe("Review page", () => {
 
     await waitFor(() => expect(screen.getByTestId("weekly-review-planned-pd-2")).toBeInTheDocument());
     expect(screen.getByTestId("weekly-review-skip-reason-pd-2")).toHaveTextContent("Injured");
+  });
+
+  it("reads a missed session the athlete let go as the decision it was, and marks key sessions", async () => {
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({
+        plannedDays: [
+          { planDayId: "pd-lg", date: "2026-06-09", focus: "Threshold run", status: "missed", skipReason: null, priority: "key", recovery: "let_go", planName: "Plan", excused: false },
+          { planDayId: "pd-m", date: "2026-06-10", focus: "Strength", status: "missed", skipReason: null, priority: "supporting", recovery: null, planName: "Plan", excused: false },
+        ],
+      }),
+    );
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review-planned-pd-lg")).toBeInTheDocument());
+    expect(screen.getByTestId("weekly-review-status-pd-lg")).toHaveTextContent("Let go");
+    expect(screen.getByTestId("weekly-review-key-pd-lg")).toHaveTextContent("Key");
+    expect(screen.getByTestId("weekly-review-status-pd-m")).toHaveTextContent("Missed");
+    expect(screen.queryByTestId("weekly-review-key-pd-m")).toBeNull();
   });
 
   it("shows what the athlete added and dropped, not just the compliance number", async () => {
@@ -217,11 +252,11 @@ describe("Review page", () => {
         hasPlan: false,
         current: {
           sessionsLogged: 0, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 0, avgRpe: null,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 0, avgRpe: null,
         },
         previous: {
           sessionsLogged: 0, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 0, avgRpe: null,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 0, avgRpe: null,
         },
         deltas: { sessionsLogged: 0, totalDurationMin: 0, avgRpe: null },
       }),

@@ -2,6 +2,7 @@ import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { Check, Dumbbell, Gauge, Loader2, MessageSquare, SkipForward } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
+import { MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StructureBlocksEditor } from "@/components/workout-structure";
@@ -13,6 +14,7 @@ import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
+import { SessionPriorityControl } from "./SessionPriorityControl";
 import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -29,6 +31,11 @@ interface LogSheetBaseProps extends WorkoutCoachChatProps {
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
   readonly isRenamingTitle?: boolean;
+  /**
+   * Missed-session recovery. A missed session opens here (to log it late), so
+   * the sheet leads with the same fold / shorten / let go choice as its card.
+   */
+  readonly onRecover?: RecoverEntryHandler;
 }
 
 type LogSheetModeProps =
@@ -508,6 +515,7 @@ export function LogSheet({
   isRenamingTitle = false,
   isLogging,
   mode = "log",
+  onRecover,
   ...coachChat
 }: LogSheetProps) {
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
@@ -598,6 +606,7 @@ export function LogSheet({
       detailsTestId={`log-details-${entry.id}`}
       returnTestId={`log-return-to-coach-${entry.id}`}
     >
+      <MissedRecoveryPrompt entry={entry} onRecover={onRecover} />
       <WorkoutSummaryHeader
         stats={buildWorkoutSummaryStats({
           entry,
@@ -607,6 +616,7 @@ export function LogSheet({
         })}
         testId={`log-summary-${entry.id}`}
       />
+      <SessionPriorityControl key={entry.id} entry={entry} />
       <CoachRationaleSection
         rationale={entry.aiRationale}
         title="Why this workout"

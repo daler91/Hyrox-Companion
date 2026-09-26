@@ -10,6 +10,7 @@ import { getBulkDeleteSelectionKey, isTimelineEntryBulkDeletable } from "@/hooks
 import { cn } from "@/lib/utils";
 
 import { FuellingDayChip } from "./FuellingDayChip";
+import type { RecoverEntryHandler } from "./missed-recovery";
 import TimelineWorkoutCard from "./timeline-workout-card";
 import { TimelineAnnotationCard } from "./TimelineAnnotationCard";
 
@@ -36,6 +37,8 @@ interface TimelineDateGroupProps {
   isBulkSelectMode?: boolean;
   selectedBulkEntryKeys?: ReadonlySet<string>;
   onBulkSelectToggle?: (entry: TimelineEntry) => void;
+  /** Missed-session recovery for a missed card (fold / shorten / let go, or undo a let-go). */
+  onRecoverEntry?: RecoverEntryHandler;
 }
 
 function getDateLabel(dateObj: Date) {
@@ -148,6 +151,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
       isBulkSelectMode,
       selectedBulkEntryKeys,
       onBulkSelectToggle,
+      onRecoverEntry,
     },
     ref,
   ) => {
@@ -251,6 +255,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
               )}
               canBulkSelect={isTimelineEntryBulkDeletable(entry)}
               onBulkSelectToggle={onBulkSelectToggle}
+              onRecover={onRecoverEntry}
             />
           ))}
         </div>

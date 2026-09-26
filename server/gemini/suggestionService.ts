@@ -1,4 +1,4 @@
-import type { CoachNoteInputs, WorkoutSuggestion } from "@shared/schema";
+import type { CoachNoteInputs, PlanDayPriority, WorkoutSuggestion } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 import { z } from "zod";
@@ -9,12 +9,14 @@ import { SUGGESTIONS_PROMPT } from "../prompts";
 import { formatAthleteConstraints } from "../prompts/athleteConstraints";
 import { formatCoachingAnalysis } from "../prompts/coachingAnalysis";
 import { relativeDayLabel } from "../prompts/coachingContext";
+import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import {
   formatExerciseSetsForPrompt,
   type PromptExerciseSet,
 } from "../prompts/exerciseSetFormatter";
 import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
+import { formatTrainingTargets } from "../prompts/workoutEngine";
 import { formatZodIssues, sanitizeForLog, sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -32,10 +34,12 @@ export interface UpcomingWorkout {
   accessory?: string;
   notes?: string;
   exerciseDetails?: PromptExerciseSet[];
-  aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
+  aiSource?: "rag" | "legacy" | "review" | "load_governor" | "progression" | null;
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;
+  /** Key, supporting or optional — how much the session matters to the plan. */
+  priority?: PlanDayPriority | null;
 }
 
 export type { WorkoutSuggestion };
@@ -247,6 +251,15 @@ function formatPriorAiContext(workout: UpcomingWorkout): string {
   return prior.length > 0 ? `, ${prior.join(", ")}` : "";
 }
 
+/**
+ * How to read the Priority field on each upcoming workout. The athlete marks
+ * sessions (or the plan does) so that when a week has to give, it gives in
+ * the right place — a coach trimming the long run while the optional easy
+ * spin survives has the tiers backwards.
+ */
+const PRIORITY_TIER_GUIDANCE =
+  "Priority tiers: key sessions carry the plan — protect them. When a week has to get lighter, trim optional sessions first, then supporting ones, and only then key ones.";
+
 function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: TrainingContext): string {
   const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
     weightUnit: trainingContext.weightUnit,
@@ -254,10 +267,11 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
   });
   const priorAiContext = formatPriorAiContext(workout);
   const dateLabel = `${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}`;
+  const priority = workout.priority ? `, Priority: ${workout.priority}` : "";
   if (exerciseSummary) {
-    return `ID: ${workout.id}, Date: ${dateLabel}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
+    return `ID: ${workout.id}, Date: ${dateLabel}${priority}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
   }
-  let line = `ID: ${workout.id}, Date: ${dateLabel}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
+  let line = `ID: ${workout.id}, Date: ${dateLabel}${priority}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
   if (workout.accessory) line += `, Accessory: ${sanitizeUserInput(workout.accessory)}`;
   if (workout.notes) line += `, Notes: ${sanitizeUserInput(workout.notes)}`;
   line += priorAiContext;
@@ -308,11 +322,20 @@ export function buildPromptDataSections(
     sections.push(formatCoachingAnalysis(trainingContext.coachingInsights, planGoal));
   }
 
+  // After the analysis on purpose: the analysis says whether and how much to
+  // change a session, the brief says which exercise to change it to.
+  const selectionSection = formatExerciseSelectionBrief(trainingContext.exerciseSelection, "coach");
+  if (selectionSection) sections.push(selectionSection);
+  // And the brief says which exercise; the targets say how heavy and how fast.
+  const targetsSection = formatTrainingTargets(trainingContext.trainingTargets);
+  if (targetsSection) sections.push(targetsSection);
+
   const nutritionSection = buildNutritionSection(trainingContext);
   if (nutritionSection) sections.push(nutritionSection);
 
   sections.push(
     `--- UPCOMING WORKOUTS ---`,
+    ...(upcomingWorkouts.some((workout) => workout.priority) ? [PRIORITY_TIER_GUIDANCE] : []),
     upcomingWorkouts.map((workout) => formatUpcomingWorkout(workout, trainingContext)).join("\n"),
     ...(coachingMaterials ? [coachingMaterials] : []),
   );
@@ -375,7 +398,7 @@ export type ReviewNote = z.infer<typeof reviewNoteSchema>;
 
 const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite functional fitness coach with deep knowledge of hyrox-style racing, running, and strength training. Write short reassurance notes to the athlete for upcoming workouts you reviewed but decided to leave as-is.
 
-Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, training state, load governor / Form / monotony, race readiness, recent personal records, plan compliance, coverage gaps, recent workouts, plan goal, or coaching materials). Do not prescribe a new workout — these are review notes only.
+Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, training state, load governor / Form / monotony, race readiness, recent personal records, plan compliance, coverage gaps, the exercise selection brief, recent workouts, plan goal, or coaching materials). When the session already serves one of the brief's needs or progresses one of the athlete's familiar lifts, say which — "this keeps your back squat moving from last week's 100 kg" beats "this session builds strength". Do not prescribe a new workout — these are review notes only.
 
 Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
 

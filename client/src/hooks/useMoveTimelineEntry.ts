@@ -1,4 +1,6 @@
+import { weekdayName } from "@shared/dateUtils";
 import type { TimelineEntry } from "@shared/schema";
+import { format } from "date-fns";
 import { useCallback } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -32,9 +34,22 @@ interface MoveContext {
  * Optimistic update: we patch the cached timeline immediately so the card
  * jumps to the new date under the user's cursor; the server response (or
  * the invalidate-driven refetch) resolves the final ordering.
+ *
+ * A missed session moved to today or later is folded — planned again, and
+ * remembering the day it was missed — exactly as the server records it, so
+ * the card does not sit on its new day still reading "Missed" until the
+ * refetch lands.
  */
+function movedEntry(entry: TimelineEntry, newDate: string): TimelineEntry {
+  const today = format(new Date(), "yyyy-MM-dd");
+  // The weekday chip goes with the card, as it will in the server's entry.
+  const moved = { ...entry, date: newDate, dayName: entry.dayName === undefined ? undefined : weekdayName(newDate) };
+  if (entry.status !== "missed" || !entry.planDayId || newDate < today) return moved;
+  return { ...moved, status: "planned", recovery: "folded", missedOn: entry.date, recoverable: undefined };
+}
+
 function moveEntryDate(entries: TimelineEntry[], entryId: string, newDate: string): TimelineEntry[] {
-  return entries.map((e) => (e.id === entryId ? { ...e, date: newDate } : e));
+  return entries.map((e) => (e.id === entryId ? movedEntry(e, newDate) : e));
 }
 
 export function useMoveTimelineEntry(selectedPlanId: string | null) {

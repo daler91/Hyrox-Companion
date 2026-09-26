@@ -125,7 +125,8 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   // email told them 100%, captioned "3 of 3 planned sessions" (audit H6).
   //
   // Excused days are already subtracted from `plannedCount`/`missedCount` by
-  // the storage layer, so a week spent injured is not a week of failures.
+  // the storage layer, so a week spent injured is not a week of failures; so
+  // are missed days the athlete let go, which were a decision, not a lapse.
   // `null` when nothing was due: no plan is not the same as a perfect score.
   const dueCount =
     stats.planCompletedCount + stats.plannedCount + stats.missedCount + stats.skippedCount;
@@ -138,6 +139,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     missedCount: stats.missedCount,
     skippedCount: stats.skippedCount,
     excusedCount: stats.excusedCount,
+    letGoCount: stats.letGoCount,
     completionRate,
     currentStreak: streak,
     prsThisWeek,
@@ -227,21 +229,22 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
  *
  * Copy is deliberately an invitation rather than a reprimand: the athlete who
  * gets this has already missed the session, and the useful thing to offer is the
- * next action, not the verdict.
+ * next action, not the verdict. The deep link lands on the session, which leads
+ * with the three ways forward — fold it in, shorten it, or let it go.
  */
 export function buildMissedWorkoutPush(missed: MissedWorkoutData[]): PushPayload {
   const [first] = missed;
   if (missed.length === 1 && first) {
     return {
       title: `Missed: ${first.focus}`,
-      body: "Still worth doing — log it, or move it to a day that works.",
+      body: "Fold it into another day, shorten it, or let it go — see what each does to your plan.",
       url: `/?workout=${encodeURIComponent(first.planDayId)}`,
     };
   }
 
   return {
     title: `${missed.length} missed sessions`,
-    body: `${missed.map(m => m.focus).join(", ")} — log them or move them to a day that works.`,
+    body: `${missed.map(m => m.focus).join(", ")} — fold them into other days, shorten them, or let them go.`,
     url: "/",
   };
 }

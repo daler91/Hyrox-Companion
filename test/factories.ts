@@ -67,6 +67,7 @@ export function createMockTrainingPlan(overrides: Partial<TrainingPlan> = {}): T
     generationStatus: "ready",
     generationError: null,
     generationStartedAt: null,
+    engineState: null,
     ...overrides,
   };
 }
@@ -101,6 +102,10 @@ export function createMockPlanDay(overrides: Partial<PlanDay> = {}): PlanDay {
     expectedRpe: null,
     plannedTimeOfDayMin: null,
     skipReason: null,
+    priority: null,
+    recovery: null,
+    missedOn: null,
+    recoveryUndo: null,
     ...overrides,
   };
 }
@@ -229,6 +234,7 @@ export function createMockWeeklySummary(overrides: Partial<WeeklySummaryData> = 
     missedCount: 1,
     skippedCount: 0,
     excusedCount: 0,
+    letGoCount: 0,
     completionRate: 75,
     currentStreak: 2,
     prsThisWeek: 1,

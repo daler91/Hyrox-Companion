@@ -1,6 +1,6 @@
 import { RACE_DAY_FOCUS } from "@shared/raceDay";
-import type { PersonalRecord } from "@shared/schema";
-import { CalendarOff,CheckCircle2, Clock, Flag, SkipForward, XCircle } from "lucide-react";
+import type { PersonalRecord, PlanDayRecovery } from "@shared/schema";
+import { CalendarOff,CheckCircle2, Clock, Feather, Flag, Moon, SkipForward, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
@@ -30,7 +30,22 @@ export function isRaceDayEntry(focus: string | null | undefined): boolean {
   return (focus ?? "").trim().toLowerCase() === RACE_DAY_FOCUS.toLowerCase();
 }
 
-export function getStatusBadge(status: string, focus?: string | null, excused?: boolean) {
+/** What sets a missed day apart from one still waiting on a decision. */
+export interface MissedDetail {
+  /** The athlete's decision about it; `let_go` ends the question. */
+  readonly recovery?: PlanDayRecovery;
+  /** A rest day: when it goes by there was nothing to miss. */
+  readonly restDay?: boolean;
+  /** Still waiting on a decision the card offers (fold / shorten / let go). */
+  readonly open?: boolean;
+}
+
+export function getStatusBadge(
+  status: string,
+  focus?: string | null,
+  excused?: boolean,
+  detail: MissedDetail = {},
+) {
   if (isRaceDayEntry(focus)) {
     return (
       <Badge
@@ -57,6 +72,22 @@ export function getStatusBadge(status: string, focus?: string | null, excused?: 
       </Badge>
     );
   }
+  if (status === "missed" && detail.restDay) {
+    return (
+      <Badge className="bg-muted text-muted-foreground" data-testid="badge-rest-day">
+        <Moon className="h-3 w-3 mr-1" aria-hidden="true" />
+        Rest day
+      </Badge>
+    );
+  }
+  if (status === "missed" && detail.recovery === "let_go") {
+    return (
+      <Badge className="bg-muted text-muted-foreground" data-testid="badge-let-go">
+        <Feather className="h-3 w-3 mr-1" aria-hidden="true" />
+        Let go
+      </Badge>
+    );
+  }
   switch (status) {
     case "completed":
       return (
@@ -73,8 +104,14 @@ export function getStatusBadge(status: string, focus?: string | null, excused?: 
         </Badge>
       );
     case "missed":
+      // Never red: a recent miss is a decision waiting to be made (the card
+      // offers fold / shorten / let go), so it takes the warning tone; an
+      // older one is just history.
       return (
-        <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">
+        <Badge
+          className={detail.open ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground"}
+          data-testid="badge-missed"
+        >
           <XCircle className="h-3 w-3 mr-1" aria-hidden="true" />
           Missed
         </Badge>
@@ -96,12 +133,13 @@ export function getCardClasses(
   canBeCombinedWith: boolean | undefined,
   status: string,
   focus?: string | null,
+  detail: MissedDetail = {},
 ) {
   if (isBeingCombined) return "border-primary ring-2 ring-primary/30";
   if (canBeCombinedWith) return "border-primary/50 hover:border-primary";
   if (isRaceDayEntry(focus)) return "border-amber-500/40 bg-amber-500/10";
   if (status === "completed") return "border-success/20 bg-success/5";
-  if (status === "missed") return "border-red-500/20 bg-red-500/5";
+  if (status === "missed") return detail.open ? "border-warning/30 bg-warning/5" : "";
   if (status === "skipped") return "border-yellow-500/20 bg-yellow-500/5";
   return "";
 }

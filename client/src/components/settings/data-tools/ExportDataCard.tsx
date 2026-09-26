@@ -8,7 +8,7 @@ export function ExportDataCard() {
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <Download className="h-5 w-5" />
+          <Download className="h-5 w-5" aria-hidden="true" />
           Export Data
         </CardTitle>
         <CardDescription>Download your training data for backup or analysis</CardDescription>

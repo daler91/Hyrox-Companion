@@ -12,7 +12,7 @@ export interface WeeklySummaryData {
   completedCount: number;
   /** Plan days completed. The completion-rate numerator. */
   planCompletedCount: number;
-  /** Plan days due this week (completed + planned + missed + skipped, less excused). */
+  /** Plan days due this week (completed + planned + missed + skipped, less excused and let go). */
   dueCount: number;
   plannedCount: number;
   missedCount: number;
@@ -23,6 +23,12 @@ export interface WeeklySummaryData {
    * the athlete spent injured is not a week of failures.
    */
   excusedCount: number;
+  /**
+   * Missed days the athlete let go (missed-session recovery). Out of
+   * `missedCount` and the completion-rate denominator: dropping a session on
+   * purpose is adjusting the plan, not falling short of it.
+   */
+  letGoCount: number;
   /**
    * Plan days completed ÷ plan days due, as a percentage. `null` when nothing
    * was due — an athlete with no plan has no completion rate, and reporting
@@ -482,15 +488,20 @@ export function buildWeeklySummaryEmail(
     data.excusedCount > 0
       ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${excusedSuffix} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
       : "";
+  const letGoSuffix = data.letGoCount === 1 ? "" : "s";
+  const letGoNote =
+    data.letGoCount > 0
+      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.letGoCount} missed session${letGoSuffix} you chose to let go — not counted as missed.</p>`
+      : "";
   let missedSessionsMessage: string;
   if (data.missedCount > 0) {
     let missedSuffix = "s";
     if (data.missedCount === 1) {
       missedSuffix = "";
     }
-    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>${excusedNote}`;
-  } else if (data.excusedCount > 0) {
-    missedSessionsMessage = excusedNote;
+    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>${excusedNote}${letGoNote}`;
+  } else if (data.excusedCount > 0 || data.letGoCount > 0) {
+    missedSessionsMessage = `${excusedNote}${letGoNote}`;
   } else {
     missedSessionsMessage =
       '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
@@ -599,7 +610,7 @@ export function buildMissedWorkoutEmail(
   <div class="content">
     <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, you had ${count} planned session${pluralSuffix} that ${wasWere} missed:</p>
 ${workoutItems}
-    <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
+    <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. Open it in the app to fold it into another day, shorten it, or let it go — each option shows what it does to the rest of your plan.</p>
 
     <div style="margin-top: 24px; text-align: center;">
       <a href="${getAppUrl()}/" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>

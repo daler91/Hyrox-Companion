@@ -30,6 +30,12 @@ import {
 } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { buildCoachNoteInputs } from "./coachNoteInputs";
+import {
+  adaptedDayIds,
+  applyPlanAdaptation,
+  computePlanAdaptation,
+  type PlanAdaptation,
+} from "./planAdaptationService";
 import { retrieveCoachingText } from "./ragRetrieval";
 import {
   applyStructuredPlanDaySuggestionRows,
@@ -128,6 +134,8 @@ interface AutoCoachApplyInput {
   readonly coachSignals: CoachModificationSignals;
   readonly unitPreferences: UnitPreferences;
   readonly reviewNotes: ReviewNote[];
+  /** The workout engine's adaptation of the plan to the latest logs, if any. */
+  readonly adaptation?: PlanAdaptation | null;
 }
 
 function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
@@ -390,6 +398,7 @@ function buildUpcomingWorkoutInputs(trainingContext: TrainingContext): UpcomingW
       aiRationale: w.aiRationale,
       aiNoteUpdatedAt: w.aiNoteUpdatedAt,
       aiInputsUsed: w.aiInputsUsed,
+      priority: w.priority,
       ...(w.exerciseDetails && w.exerciseDetails.length > 0
         ? { exerciseDetails: w.exerciseDetails }
         : {}),
@@ -472,6 +481,7 @@ async function applyAutoCoachChanges({
   coachSignals,
   unitPreferences,
   reviewNotes,
+  adaptation,
 }: AutoCoachApplyInput): Promise<{ adjusted: number; noted: number }> {
   return db.transaction(async (tx) => {
     const modResults: AppliedSuggestionResult[] = [];
@@ -508,7 +518,9 @@ async function applyAutoCoachChanges({
       ),
     );
 
-    let adjustedCount = 0;
+    // The engine's days never overlap the ones above: the governor's days are
+    // excluded from the adaptation, and the adaptation's from the model's pass.
+    let adjustedCount = await applyPlanAdaptation(adaptation ?? null, userId, tx);
     let notedCount = 0;
     for (const result of modResults) if (result.applied) adjustedCount++;
     for (const result of noteResults) if (result) notedCount++;
@@ -524,6 +536,79 @@ async function applyAutoCoachChanges({
 // Public API
 // ---------------------------------------------------------------------------
 
+interface DeterministicStages {
+  readonly loadGovernorPrepared: PreparedSuggestion[];
+  /** Days the governor or the adaptation will rewrite: the model's pass leaves them alone. */
+  readonly modifiedIds: Set<string>;
+  readonly adaptation: PlanAdaptation | null;
+}
+
+/**
+ * The coach's rule-based stages, in precedence order: the load governor
+ * (fatigue and workload), then the workout engine's adaptation of the plan to
+ * the athlete's latest logs — which skips any day the governor rewrote. Both
+ * are free and deterministic, so they run whether or not the model does.
+ */
+async function prepareDeterministicStages(
+  userId: string,
+  trainingContext: TrainingContext,
+  upcomingWorkouts: UpcomingWorkout[],
+  unitPreferences: UnitPreferences,
+): Promise<DeterministicStages> {
+  const loadGovernorPrepared = trainingContext.coachingInsights?.loadGovernor
+    ? buildLoadGovernorSuggestions(
+        trainingContext.coachingInsights.loadGovernor,
+        upcomingWorkouts,
+        trainingContext.currentDate,
+      ).map(prepareLoadGovernorSuggestion)
+    : [];
+  const loadGovernorModifiedIds = collectModifiedWorkoutIds(
+    loadGovernorPrepared.map((prepared) => prepared.suggestion),
+    upcomingWorkouts,
+  );
+  const adaptation = await computePlanAdaptation(
+    userId,
+    trainingContext,
+    unitPreferences,
+    loadGovernorModifiedIds,
+  );
+  return {
+    loadGovernorPrepared,
+    modifiedIds: new Set([...loadGovernorModifiedIds, ...adaptedDayIds(adaptation)]),
+    adaptation,
+  };
+}
+
+function hasDeterministicWork(stages: DeterministicStages): boolean {
+  return stages.loadGovernorPrepared.length > 0 || stages.adaptation != null;
+}
+
+/** Apply only the rule-based stages: no model call, no review notes. */
+async function applyDeterministicStagesOnly(
+  stages: DeterministicStages,
+  context: {
+    readonly userId: string;
+    readonly trainingContext: TrainingContext;
+    readonly upcomingWorkouts: UpcomingWorkout[];
+    readonly unitPreferences: UnitPreferences;
+    readonly activePlanGoal: string | undefined;
+  },
+): Promise<{ adjusted: number }> {
+  if (!hasDeterministicWork(stages)) return { adjusted: 0 };
+  const { adjusted } = await applyAutoCoachChanges({
+    preparedSuggestions: stages.loadGovernorPrepared,
+    upcomingWorkouts: context.upcomingWorkouts,
+    userId: context.userId,
+    aiSource: null,
+    inputsUsed: buildCoachNoteInputs(context.trainingContext, false, Boolean(context.activePlanGoal)),
+    coachSignals: buildSignalsFromTrainingContext(context.trainingContext),
+    unitPreferences: context.unitPreferences,
+    reviewNotes: [],
+    adaptation: stages.adaptation,
+  });
+  return { adjusted };
+}
+
 /**
  * Auto-coach: fires after a workout is completed.
  * Reads the user's active plan goal + recent performance, then applies AI-suggested
@@ -534,12 +619,10 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const user = await storage.users.getUser(userId);
     if (!user?.aiCoachEnabled) return { adjusted: 0 };
 
-    // Skip if user is over AI budget — background jobs should not exceed the cap
+    // The budget gates the MODEL's pass only. The load governor and the plan
+    // adaptation below cost nothing, so an athlete over their AI budget still
+    // gets their plan moved to what they logged.
     const budget = await checkAiBudget(userId);
-    if (!budget.allowed) {
-      logger.info({ userId }, "[coach] Skipping auto-coach — user AI budget exceeded");
-      return { adjusted: 0 };
-    }
 
     await storage.users.updateIsAutoCoaching(userId, true);
 
@@ -552,27 +635,46 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     const upcomingWorkouts = buildUpcomingWorkoutInputs(trainingContext);
 
+    const unitPreferences = {
+      weightUnit: user.weightUnit || "kg",
+      distanceUnit: user.distanceUnit || "km",
+    };
+    const stages = await prepareDeterministicStages(
+      userId,
+      trainingContext,
+      upcomingWorkouts,
+      unitPreferences,
+    );
+    const deterministicContext = {
+      userId,
+      trainingContext,
+      upcomingWorkouts,
+      unitPreferences,
+      activePlanGoal,
+    };
+
+    if (!budget.allowed) {
+      logger.info("[coach] AI budget exceeded — applying rule-based stages only");
+      return await applyDeterministicStagesOnly(stages, deterministicContext);
+    }
+
+    if (upcomingWorkouts.length === 0) {
+      // Legitimate no-op for the model: user has no active plan or the plan has
+      // no planned days this week. Log so support can distinguish this from an
+      // AI/API failure (W3). The adaptation may still reach days further out.
+      logger.info(
+        { userId, planName: trainingContext.activePlan?.name },
+        "[coach] Auto-coach skipped — no upcoming planned workouts",
+      );
+      return await applyDeterministicStagesOnly(stages, deterministicContext);
+    }
+
     const resolvedStyle = resolveTrainingStyle(user.trainingStyleId);
     const stylePromptContext = resolvedStyle.strategy.buildPromptContext(
       trainingContext,
       upcomingWorkouts,
     );
 
-    if (upcomingWorkouts.length === 0) {
-      // Legitimate no-op: user has no active plan or the plan has no future
-      // planned days. Log so support can distinguish this from an AI/API
-      // failure (W3).
-      logger.info(
-        { userId, planName: trainingContext.activePlan?.name },
-        "[coach] Auto-coach skipped — no upcoming planned workouts",
-      );
-      return { adjusted: 0 };
-    }
-
-    const unitPreferences = {
-      weightUnit: user.weightUnit || "kg",
-      distanceUnit: user.distanceUnit || "km",
-    };
     const coachingContext = await getCoachingMaterialsString(
       userId,
       upcomingWorkouts,
@@ -585,17 +687,6 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     );
 
     const safetySignals = analyzeSafetySignals(trainingContext, upcomingWorkouts);
-    const loadGovernorPreparedSuggestions = trainingContext.coachingInsights?.loadGovernor
-      ? buildLoadGovernorSuggestions(
-          trainingContext.coachingInsights.loadGovernor,
-          upcomingWorkouts,
-          trainingContext.currentDate,
-        ).map(prepareLoadGovernorSuggestion)
-      : [];
-    const loadGovernorModifiedIds = collectModifiedWorkoutIds(
-      loadGovernorPreparedSuggestions.map((prepared) => prepared.suggestion),
-      upcomingWorkouts,
-    );
 
     const rawSuggestions = await generateWorkoutSuggestions(
       trainingContext,
@@ -608,9 +699,12 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
     const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
     const coachSignals = buildSignalsFromTrainingContext(trainingContext);
+    // The model never rewrites a day a rule-based stage already changed: the
+    // governor's fatigue edits and the engine's log-driven loads come from the
+    // athlete's own data, and a generic rewrite would silently undo them.
     const suggestions = safetyAdjustedSuggestions.filter(
       (suggestion) =>
-        !loadGovernorModifiedIds.has(suggestion.workoutId) &&
+        !stages.modifiedIds.has(suggestion.workoutId) &&
         !shouldSuppressRepeatedFatigueReduction(
           suggestion,
           workoutMap.get(suggestion.workoutId),
@@ -620,10 +714,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const preparedSuggestions = await Promise.all(
       suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, unitPreferences, userId)),
     );
-    const allPreparedSuggestions = [
-      ...loadGovernorPreparedSuggestions,
-      ...preparedSuggestions,
-    ];
+    const allPreparedSuggestions = [...stages.loadGovernorPrepared, ...preparedSuggestions];
 
     // For any upcoming day the coach did NOT modify, request a short review
     // note so the athlete can still see the coach's thinking on that day.
@@ -634,11 +725,15 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // suggestion (missing workoutId/recommendation, or targeting an id
     // not in the upcoming slate) would otherwise be dropped in both the
     // modification pass AND the review-note pass, leaving that day with
-    // no note at all (C-NOTE-1).
-    const modifiedIds = collectModifiedWorkoutIds(
-      allPreparedSuggestions.map((prepared) => prepared.suggestion),
-      upcomingWorkouts,
-    );
+    // no note at all (C-NOTE-1). Days the adaptation changed carry the
+    // engine's own note, so they are "modified" too.
+    const modifiedIds = new Set([
+      ...collectModifiedWorkoutIds(
+        allPreparedSuggestions.map((prepared) => prepared.suggestion),
+        upcomingWorkouts,
+      ),
+      ...adaptedDayIds(stages.adaptation),
+    ]);
 
     const unchanged = selectUnchangedWorkouts(upcomingWorkouts, modifiedIds);
 
@@ -671,6 +766,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       coachSignals,
       unitPreferences,
       reviewNotes,
+      adaptation: stages.adaptation,
     });
 
     if (adjusted > 0 || noted > 0) {

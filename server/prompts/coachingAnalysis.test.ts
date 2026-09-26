@@ -1,3 +1,4 @@
+import { bodySystemOverview, legSpikeOverview } from "@shared/bodySystemLoadTestFixtures";
 import { describe, expect, it } from "vitest";
 
 import type { TrainingContext } from "../gemini/types";
@@ -102,5 +103,62 @@ describe("formatCoachingAnalysis", () => {
     });
 
     expect(out).toContain("RECENT SKIPS (athlete-stated reasons): 2026-06-10 Leg day (injured).");
+  });
+
+  it("names recent misses with their tier and the athlete's decision", () => {
+    const out = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      recentMisses: [
+        { date: "2026-06-11", focus: "Threshold run", priority: "key", decision: "let_go" },
+        { date: "2026-06-09", focus: "Strength B", priority: "supporting", decision: "undecided" },
+      ],
+    });
+
+    expect(out).toContain(
+      "RECENT MISSED SESSIONS: 2026-06-11 Threshold run (key, let go); 2026-06-09 Strength B (supporting, no decision yet).",
+    );
+    expect(out).toContain("don't add it back");
+  });
+});
+
+describe("formatCoachingAnalysis — load by body system", () => {
+  it("names the divergence and what spares the flagged system", () => {
+    const out = formatCoachingAnalysis({ ...BASE_INSIGHTS, bodySystemLoad: legSpikeOverview() });
+
+    expect(out).toContain("LOAD BY BODY SYSTEM");
+    expect(out).toContain("- Leg muscle: 1080 this week vs usual 540 (2.00×) — VERY HIGH; SIX-WEEK HIGH (previous peak 540).");
+    expect(out).toContain("- Aerobic: 500 this week vs usual 500 (1.00×) — normal.");
+    expect(out).toContain(
+      "Summary: Leg muscle load is at a six-week high (100% above your usual week), while aerobic and running impact loads are normal.",
+    );
+    // Easing legs means sparing them — not "more running", which loads them too.
+    expect(out).toContain("leg muscle: go easy on sleds, lunges, heavy squats, wall balls and hills");
+    expect(out).not.toContain("running impact: move some running");
+  });
+
+  it("says a new load came from almost nothing rather than printing a ratio", () => {
+    const out = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      bodySystemLoad: bodySystemOverview({ upper_pull: { current: 180, baseline: 0, ratio: null, status: "new" } }),
+    });
+
+    expect(out).toContain("- Upper-body pull: 180 this week vs almost none in the previous four weeks — NEW LOAD.");
+  });
+
+  it("owns up to estimated sessions", () => {
+    const out = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      bodySystemLoad: legSpikeOverview({ sessionCount: 20, estimatedSessions: 6 }),
+    });
+
+    expect(out).toContain("6 of 20 sessions in the last six weeks had no logged RPE or duration");
+  });
+
+  it("stays out of the prompt when no system stands out", () => {
+    const calm = formatCoachingAnalysis({ ...BASE_INSIGHTS, bodySystemLoad: bodySystemOverview() });
+    const absent = formatCoachingAnalysis(BASE_INSIGHTS);
+
+    expect(calm).not.toContain("LOAD BY BODY SYSTEM");
+    expect(calm).toBe(absent);
   });
 });

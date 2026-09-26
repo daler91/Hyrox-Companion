@@ -1,4 +1,15 @@
-import type { TrainingLoadOverview } from "@shared/schema";
+import {
+  BODY_SYSTEM_META,
+  describeBodySystemDivergence,
+  isNotableBodySystem,
+} from "@shared/bodySystemLoad";
+import type {
+  BodySystem,
+  BodySystemLoadOverview,
+  BodySystemLoadStatus,
+  BodySystemLoadSummary,
+  TrainingLoadOverview,
+} from "@shared/schema";
 
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
@@ -164,6 +175,73 @@ function formatLoadGovernor(lg: TrainingLoadOverview | undefined): string | null
   return lines.join("\n");
 }
 
+const BODY_SYSTEM_STATUS_LABELS: Record<BodySystemLoadStatus, string> = {
+  insufficient_data: "no usual week yet",
+  minimal: "minimal",
+  new: "NEW LOAD",
+  low: "below usual",
+  normal: "normal",
+  high: "HIGH",
+  very_high: "VERY HIGH",
+};
+
+// What spares each system, from the same profiles the split is built on. Named
+// per system because the other systems are not interchangeable: easing leg load
+// by adding running would still load the legs (a run is half a minute of leg
+// work per minute).
+const BODY_SYSTEM_EASING: Record<BodySystem, string> = {
+  aerobic: "keep extra sessions short and easy, and favour strength or mobility over more conditioning",
+  running_impact: "move some running to the bike, rower or SkiErg, which carry no impact",
+  leg_muscle: "go easy on sleds, lunges, heavy squats, wall balls and hills; favour upper-body work, the SkiErg or easy flat running",
+  upper_pull: "go easy on rows, pull-ups, the SkiErg and sled pulls; favour leg or pressing work, running or the bike",
+};
+
+function formatBodySystemLine(s: BodySystemLoadSummary): string {
+  const label = BODY_SYSTEM_META[s.system].label;
+  const status = BODY_SYSTEM_STATUS_LABELS[s.status];
+  let line: string;
+  if (s.status === "new") {
+    line = `${label}: ${s.current} this week vs almost none in the previous four weeks — ${status}`;
+  } else if (s.baseline == null || s.ratio == null) {
+    line = `${label}: ${s.current} this week — ${status}`;
+  } else {
+    line = `${label}: ${s.current} this week vs usual ${s.baseline} (${s.ratio.toFixed(2)}×) — ${status}`;
+  }
+  if (s.sixWeekHigh && s.previousPeak != null) {
+    line += `; SIX-WEEK HIGH (previous peak ${s.previousPeak})`;
+  }
+  return `- ${line}.`;
+}
+
+/**
+ * Load by body system — but only when a system stands out (above its usual
+ * week, new, or at a six-week high); a calm split says nothing the governor
+ * block has not. Advisory rather than binding like the governor: it says where
+ * this week's load landed, so the coach steers the NEXT sessions away from the
+ * system that is carrying it. Every string here is a constant or a number —
+ * no athlete text reaches this block.
+ */
+function formatBodySystemLoad(bsl: BodySystemLoadOverview | undefined): string | null {
+  if (!bsl) return null;
+  const divergence = describeBodySystemDivergence(bsl);
+  if (!divergence) return null;
+  const easing = bsl.systems
+    .filter(isNotableBodySystem)
+    .map((s) => `${BODY_SYSTEM_META[s.system].noun}: ${BODY_SYSTEM_EASING[s.system]}`);
+  const lines = [
+    "LOAD BY BODY SYSTEM (session RPE × minutes, split by what each session trained; each system against its own usual week, the mean of the four weeks before this one):",
+    ...bsl.systems.map(formatBodySystemLine),
+    `- Summary: ${divergence}`,
+    `- The single overall load number hides this split. When adjusting upcoming sessions, do not add load to a flagged system this week — ${easing.join("; ")}. Never compare one system's number with another's; each is on its own scale.`,
+  ];
+  if (bsl.estimatedSessions > 0) {
+    lines.push(
+      `- ${bsl.estimatedSessions} of ${bsl.sessionCount} sessions in the last six weeks had no logged RPE or duration, so their load was estimated.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 /**
  * Training decision-engine state. A SOFT gate that complements the load
  * governor: when intensity is not permitted, bias toward the allowed workout
@@ -297,6 +375,22 @@ function formatRecentSkips(recentSkips: CoachingInsights["recentSkips"]): string
   return `RECENT SKIPS (athlete-stated reasons): ${items}. Treat ill/injured skips as recovery signals to program around — not as compliance failures to nudge about.`;
 }
 
+/**
+ * Missed key and supporting sessions, and what the athlete decided about each.
+ * A let-go is a settled decision; the coach should build on it rather than
+ * quietly putting the session back.
+ */
+function formatRecentMisses(recentMisses: CoachingInsights["recentMisses"]): string {
+  if (!recentMisses || recentMisses.length === 0) return "";
+  const items = recentMisses
+    .map(
+      (miss) =>
+        `${miss.date} ${sanitizeUserInput(miss.focus)} (${miss.priority}, ${miss.decision === "let_go" ? "let go" : "no decision yet"})`,
+    )
+    .join("; ");
+  return `RECENT MISSED SESSIONS: ${items}. A session the athlete let go is their decision — don't add it back. Protect the key sessions still ahead rather than making up the missed volume.`;
+}
+
 export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: string): string {
   const lines: string[] = [
     `--- COACHING ANALYSIS ---`,
@@ -305,8 +399,10 @@ export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: st
   ];
 
   pushBlock(lines, formatRecentSkips(insights.recentSkips));
+  pushBlock(lines, formatRecentMisses(insights.recentMisses));
 
   pushBlock(lines, formatLoadGovernor(insights.loadGovernor));
+  pushBlock(lines, formatBodySystemLoad(insights.bodySystemLoad));
   pushBlock(lines, formatDecisionTree(insights.decisionTree));
   pushBlock(lines, formatRaceReadiness(insights.raceReadiness));
   pushBlock(lines, formatPlanPhase(insights.planPhase));

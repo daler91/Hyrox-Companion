@@ -1,4 +1,4 @@
-import type { CreateSamplePlanInput, ExerciseSet, GeneratePlanInput, PlanDay, PlanDaySkipReason, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { ApplyMissedRecoveryBody, ApplyMissedRecoveryResponse, CreateSamplePlanInput, ExerciseSet, GeneratePlanInput, MissedSessionRecoveryPreview, PlanDay, PlanDayPriority, PlanDaySkipReason, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import { IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
@@ -34,6 +34,17 @@ export const plans = {
 
   updateDayWithoutPlan: (dayId: string, updates: Record<string, unknown>) =>
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}`, updates),
+
+  /** Mark a session key, supporting or optional. */
+  setDayPriority: (dayId: string, priority: PlanDayPriority) =>
+    typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}`, { priority }),
+
+  /** What folding, shortening or letting a missed session go would each do to the plan. */
+  getMissedRecovery: (dayId: string) =>
+    typedRequest<MissedSessionRecoveryPreview>("GET", `/api/v1/plans/days/${dayId}/recovery`),
+
+  applyMissedRecovery: (dayId: string, body: ApplyMissedRecoveryBody) =>
+    typedRequest<ApplyMissedRecoveryResponse>("POST", `/api/v1/plans/days/${dayId}/recovery`, body),
 
   deletePlan: (planId: string) => typedRequest<DeleteToRecycleBinResponse>("DELETE", `/api/v1/plans/${planId}`),
 

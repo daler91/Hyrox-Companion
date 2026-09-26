@@ -77,9 +77,9 @@ export function LastTimeRow({
   const nextTarget = useMemo(
     () =>
       lastSession
-        ? suggestNextTarget(lastSession.sets, { category, weightUnit, previousSets })
+        ? suggestNextTarget(lastSession.sets, { category, weightUnit, previousSets, exerciseName })
         : null,
-    [lastSession, previousSets, category, weightUnit],
+    [lastSession, previousSets, category, weightUnit, exerciseName],
   );
 
   if (!lastSession || !prescription) return null;

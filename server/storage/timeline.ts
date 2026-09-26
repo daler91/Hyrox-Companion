@@ -2,11 +2,17 @@
 // counts apply the identical rule — a day must never read "Not counted" here
 // and "Missed" there.
 import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
+import { dayDiff, weekdayName } from "@shared/dateUtils";
+import { RECOVERABLE_WITHIN_DAYS } from "@shared/missedRecovery";
+import { RACE_DAY_FOCUS } from "@shared/raceDay";
 import {
   type DeviceLinkSource,
   type ExerciseSet,
   exerciseSets,
   type PlanDay,
+  type PlanDayPriority,
+  type PlanDayRecovery,
+  planDayRecoveryEnum,
   planDays,
   stoppedSecondsFor,
   timelineAnnotations,
@@ -17,6 +23,7 @@ import {
   workoutLogs,
   type WorkoutStatus,
 } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or } from "drizzle-orm";
 
 import { db } from "../db";
@@ -92,6 +99,92 @@ function calculatePlanDayStatus(
   return "planned";
 }
 
+/**
+ * The recovery decision worth showing for a day shown as `status`. A let-go
+ * only means something while the day still reads `missed`, both as stored and
+ * as shown: logged late, or held out of missed by a declared absence, there is
+ * nothing left to have let go. A let-go left on a day stored as planned (logged,
+ * then the log deleted) is not a decision about this miss either — the nightly
+ * sweep clears it, and the timeline must not show it as let go until then.
+ * A fold or shorten is where the session came from, so it rides along
+ * whatever happens next — including being missed again on its new day.
+ */
+function visibleRecovery(
+  day: Pick<PlanDay, "recovery" | "status">,
+  status: WorkoutStatus,
+): PlanDayRecovery | undefined {
+  if (!(planDayRecoveryEnum as readonly (string | null)[]).includes(day.recovery)) return undefined;
+  const recovery = day.recovery as PlanDayRecovery;
+  if (recovery === "let_go" && (status !== "missed" || day.status !== "missed")) return undefined;
+  return recovery;
+}
+
+/** Priority, recovery and where a moved session came from, for a plan day's entry. */
+function planDayTierFields(
+  day: PlanDay,
+  status: WorkoutStatus,
+  shown: { focus: string; mainWorkout: string; overridden: boolean },
+): Pick<TimelineEntry, "priority" | "recovery" | "missedOn"> {
+  // A race-day override replaces the session on screen, so the tier comes from
+  // what is shown (the race is key, a shakeout optional, post-race recovery a
+  // rest day) rather than from the day underneath it.
+  const priority = resolveSessionPriority({
+    priority: shown.overridden ? null : day.priority,
+    focus: shown.focus,
+    mainWorkout: shown.mainWorkout,
+  });
+  return {
+    priority: priority ?? undefined,
+    recovery: visibleRecovery(day, status),
+    missedOn: day.missedOn ?? undefined,
+  };
+}
+
+/**
+ * Whether the card should ask what to do about a missed session: undecided, a
+ * real session (not a rest day), the day as planned rather than a race-week
+ * stand-in (the race itself included), before its plan was retired, and recent
+ * enough that the recovery sheet (services/missedRecovery) can still move it.
+ * Anything older simply reads as missed — nobody needs a prompt for every miss
+ * in their history.
+ */
+function isRecoverableMiss(
+  scheduledDate: string,
+  today: string,
+  status: WorkoutStatus,
+  tier: Pick<TimelineEntry, "priority" | "recovery">,
+  shown: { focus: string; overridden: boolean },
+  retiredOn: string | null,
+): boolean {
+  return (
+    status === "missed" &&
+    tier.recovery !== "let_go" &&
+    tier.priority !== undefined &&
+    !shown.overridden &&
+    shown.focus.trim().toLowerCase() !== RACE_DAY_FOCUS.toLowerCase() &&
+    (retiredOn === null || scheduledDate < retiredOn) &&
+    dayDiff(scheduledDate, today) <= RECOVERABLE_WITHIN_DAYS
+  );
+}
+
+/**
+ * Whether a folded or shortened session's move can be taken back: it is still
+ * upcoming and undone, and the day it was missed on is recent enough that,
+ * back there, the card would ask about it again (see isRecoverableMiss).
+ */
+function isUndoableMove(
+  day: PlanDay,
+  scheduledDate: string,
+  today: string,
+  status: WorkoutStatus,
+  retiredOn: string | null,
+): boolean {
+  const undo = day.recoveryUndo;
+  if (!undo || status !== "planned" || scheduledDate < today) return false;
+  if (day.recovery !== "folded" && day.recovery !== "shortened") return false;
+  return (retiredOn === null || undo.scheduledDate < retiredOn) && dayDiff(undo.scheduledDate, today) <= RECOVERABLE_WITHIN_DAYS;
+}
+
 function createLinkedWorkoutEntry(
   day: PlanDay,
   linkedLog: WorkoutLog,
@@ -110,8 +203,14 @@ function createLinkedWorkoutEntry(
     rpe: linkedLog.rpe,
     planDayId: day.id,
     workoutLogId: linkedLog.id,
+    ...planDayTierFields(day, "completed", {
+      focus: day.focus,
+      mainWorkout: day.mainWorkout,
+      overridden: false,
+    }),
     weekNumber: day.weekNumber,
-    dayName: day.dayName,
+    // The day it was done on, not the plan's slot for it (see TimelineEntry.dayName).
+    dayName: weekdayName(linkedLog.date),
     planName: row.planName,
     planId: row.planId,
     aiSource: day.aiSource as TimelineEntry["aiSource"],
@@ -125,12 +224,18 @@ function createLinkedWorkoutEntry(
 function createPlannedDayEntry(
   day: PlanDay,
   scheduledDate: string,
-  row: { planName: string; planId: string },
+  row: { planName: string; planId: string; retiredOn: string | null },
   today: string,
   override: RaceDayOverride | null,
   isExcused: boolean,
 ): TimelineEntry {
   const status = calculatePlanDayStatus(day.status, scheduledDate, today, isExcused);
+  const shown = {
+    focus: override ? override.focus : day.focus,
+    mainWorkout: override ? override.mainWorkout : day.mainWorkout,
+    overridden: override !== null,
+  };
+  const tier = planDayTierFields(day, status, shown);
   return {
     id: `plan-${day.id}`,
     date: scheduledDate,
@@ -144,8 +249,12 @@ function createPlannedDayEntry(
     // Only meaningful on skipped days; carried so the coach can distinguish an
     // ill/injured skip from a schedule one. Omitted when never set.
     skipReason: (day.skipReason as TimelineEntry["skipReason"]) ?? undefined,
-    focus: override ? override.focus : day.focus,
-    mainWorkout: override ? override.mainWorkout : day.mainWorkout,
+    ...tier,
+    recoverable: isRecoverableMiss(scheduledDate, today, status, tier, shown, row.retiredOn) || undefined,
+    recoveryUndoable: isUndoableMove(day, scheduledDate, today, status, row.retiredOn) || undefined,
+    raceDerived: shown.overridden || undefined,
+    focus: shown.focus,
+    mainWorkout: shown.mainWorkout,
     accessory: override ? override.accessory : day.accessory,
     notes: override ? override.notes : day.notes,
     planDayId: day.id,
@@ -153,7 +262,8 @@ function createPlannedDayEntry(
     expectedRpe: day.expectedRpe,
     plannedTimeOfDayMin: day.plannedTimeOfDayMin,
     weekNumber: day.weekNumber,
-    dayName: day.dayName,
+    // The day it now sits on: a moved session is no longer on its plan slot.
+    dayName: weekdayName(scheduledDate),
     planName: row.planName,
     planId: row.planId,
     aiSource: day.aiSource as TimelineEntry["aiSource"],
@@ -178,6 +288,8 @@ export interface UpcomingPlannedDay {
   /** Athlete-set expected duration/intensity for the session, when saved. */
   expectedDurationMin: number | null;
   expectedRpe: number | null;
+  /** Key, supporting or optional; null for a rest day. */
+  priority: PlanDayPriority | null;
   exerciseSets: ExerciseSet[];
   structureBlocks: TimelineEntry["structureBlocks"];
 }
@@ -197,6 +309,7 @@ function toUpcomingPlannedDay(
     aiInputsUsed: PlanDay["aiInputsUsed"];
     expectedDurationMin: number | null;
     expectedRpe: number | null;
+    priority: string | null;
   },
   scheduledDate: string,
   override: RaceDayOverride | null,
@@ -218,6 +331,11 @@ function toUpcomingPlannedDay(
     // shakeout day replaces it, so drop them alongside the exercises.
     expectedDurationMin: override ? null : row.expectedDurationMin,
     expectedRpe: override ? null : row.expectedRpe,
+    priority: resolveSessionPriority({
+      priority: override ? null : row.priority,
+      focus: override?.focus ?? row.focus,
+      mainWorkout: override?.mainWorkout ?? row.mainWorkout,
+    }),
     exerciseSets: override ? [] : (setsByPlanDayId.get(row.id) ?? []),
     structureBlocks: override ? [] : (blocksByPlanDayId.get(row.id) ?? []),
   };
@@ -394,6 +512,7 @@ export class TimelineStorage {
     const planIds = userPlans.map((p) => p.id);
     if (planIds.length === 0) return { scheduledDays: [], planNameById };
     const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
+    const retiredOnById = new Map(userPlans.map((p) => [p.id, p.retiredOn]));
 
     // Asking for ONE plan shows all of it, retired or not — that is the athlete
     // inspecting their own history, and hiding half of it would be a lie. The
@@ -422,6 +541,7 @@ export class TimelineStorage {
       planName: planNameById.get(day.planId)!,
       planId: day.planId,
       raceDate: raceDateById.get(day.planId) ?? null,
+      retiredOn: retiredOnById.get(day.planId) ?? null,
     }));
     return { scheduledDays, planNameById };
   }
@@ -544,7 +664,7 @@ export class TimelineStorage {
           createPlannedDayEntry(
             day,
             day.scheduledDate,
-            { planName: row.planName, planId: row.planId },
+            { planName: row.planName, planId: row.planId, retiredOn: row.retiredOn },
             today,
             override,
             isDateExcused(day.scheduledDate, absences),
@@ -755,6 +875,7 @@ export class TimelineStorage {
         aiInputsUsed: true,
         expectedDurationMin: true,
         expectedRpe: true,
+        priority: true,
         status: true,
       },
       orderBy: asc(planDays.scheduledDate),

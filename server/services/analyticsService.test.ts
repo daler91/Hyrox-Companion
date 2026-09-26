@@ -408,6 +408,12 @@ describe("calculateTrainingOverview", () => {
       acwr: null,
       zone: "insufficient_data",
     }));
+    expect(result.bodySystemLoad?.systems.map((s) => s.status)).toEqual([
+      "insufficient_data",
+      "insufficient_data",
+      "insufficient_data",
+      "insufficient_data",
+    ]);
   });
 
   it("returns AI-aligned streak and Monday-week completion fields", () => {

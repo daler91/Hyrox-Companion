@@ -7,6 +7,7 @@ export function calculateTrainingStats(timeline: TimelineEntry[]) {
   let plannedWorkouts = 0;
   let missedWorkouts = 0;
   let skippedWorkouts = 0;
+  let letGoWorkouts = 0;
   const completedDates = new Set<string>();
 
   for (const entry of timeline) {
@@ -16,17 +17,29 @@ export function calculateTrainingStats(timeline: TimelineEntry[]) {
     } else if (entry.status === "planned") {
       plannedWorkouts++;
     } else if (entry.status === "missed") {
-      missedWorkouts++;
+      // Missed and then let go on purpose (missed-session recovery): the
+      // athlete adjusted the plan, so it is neither a miss nor in the rate.
+      if (entry.recovery === "let_go") letGoWorkouts++;
+      else missedWorkouts++;
     } else if (entry.status === "skipped") {
       skippedWorkouts++;
     }
   }
 
-  const totalWorkouts = completedWorkouts + plannedWorkouts + missedWorkouts + skippedWorkouts;
+  const totalWorkouts = completedWorkouts + plannedWorkouts + missedWorkouts + skippedWorkouts + letGoWorkouts;
   const denominator = completedWorkouts + missedWorkouts + skippedWorkouts;
   const completionRate = denominator > 0 ? Math.round((completedWorkouts / denominator) * 100) : 0;
 
-  return { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates };
+  return {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    letGoWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  };
 }
 
 const functionalRegex = new RegExp(FUNCTIONAL_EXERCISES.join('|'), 'gi');
@@ -84,6 +97,34 @@ export function collectRecentSkips(
       date: entry.date,
       focus: entry.focus || "",
       reason: entry.skipReason as NonNullable<TimelineEntry["skipReason"]>,
+    }));
+}
+
+const MAX_RECENT_MISSES = 5;
+
+/**
+ * The missed sessions worth a coach's attention, newest first, capped: key
+ * and supporting ones, with whether the athlete let each go. Optional misses
+ * and rest days stay out — the plan never needed them — and a folded or
+ * shortened session has moved to a later day, so it is not a miss any more.
+ */
+export function collectRecentMisses(
+  timeline: TimelineEntry[],
+): NonNullable<TrainingContext["coachingInsights"]>["recentMisses"] {
+  return timeline
+    .filter(
+      (entry): entry is TimelineEntry & { date: string; priority: "key" | "supporting" } =>
+        entry.status === "missed" &&
+        Boolean(entry.date) &&
+        (entry.priority === "key" || entry.priority === "supporting"),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, MAX_RECENT_MISSES)
+    .map((entry) => ({
+      date: entry.date,
+      focus: entry.focus || "",
+      priority: entry.priority,
+      decision: entry.recovery === "let_go" ? "let_go" : "undecided",
     }));
 }
 

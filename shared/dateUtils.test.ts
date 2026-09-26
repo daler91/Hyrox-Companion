@@ -12,6 +12,7 @@ import {
   planWeekOneMonday,
   toIsoDateUtc,
   weekdayIndex,
+  weekdayName,
   weekOneDaysBeforeStart,
 } from "./dateUtils";
 
@@ -91,6 +92,12 @@ describe("plan week 1", () => {
     expect(weekdayIndex("2026-09-21")).toBe(0);
     expect(weekdayIndex("2026-09-23")).toBe(2);
     expect(weekdayIndex("2026-09-27")).toBe(6);
+  });
+
+  it("names the weekday a date falls on", () => {
+    expect(weekdayName("2026-09-21")).toBe("Monday");
+    expect(weekdayName("2026-09-24")).toBe("Thursday");
+    expect(weekdayName("2026-09-27")).toBe("Sunday");
   });
 
   it("opens week 1 on the Monday of the start date's week", () => {
