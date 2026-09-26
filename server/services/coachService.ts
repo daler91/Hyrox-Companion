@@ -1,3 +1,4 @@
+import { appendCoachCue, COACH_CUE_MARKER } from "@shared/coachNotes";
 import { type CoachNoteInputs, type InsertExerciseSet, type UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
@@ -63,9 +64,17 @@ function getExistingFieldValue(suggestion: WorkoutSuggestion, entry: UpcomingWor
 function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.action !== "append") return suggestion.recommendation;
   const existing = getExistingFieldValue(suggestion, entry);
-  return existing
-    ? `${existing}\n[AI Coach] ${suggestion.recommendation}`
-    : `[AI Coach] ${suggestion.recommendation}`;
+  // Auto-coach re-runs on every sync, so a plain append stacked the same cue
+  // (notably the load governor's) once per run. appendCoachCue dedupes and
+  // keeps one cue per line after the athlete's own text.
+  if (suggestion.targetField === "notes") {
+    return appendCoachCue(existing, suggestion.recommendation);
+  }
+  // mainWorkout/accessory appends are exercise prescriptions, so their line
+  // breaks are kept; only skip re-adding a line that is already there.
+  const cueLine = `${COACH_CUE_MARKER} ${suggestion.recommendation}`;
+  if (existing.split("\n").some((line) => line.trim() === cueLine)) return existing;
+  return existing ? `${existing}\n${cueLine}` : cueLine;
 }
 
 /**

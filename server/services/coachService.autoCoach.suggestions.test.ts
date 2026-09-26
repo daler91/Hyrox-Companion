@@ -204,6 +204,46 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     });
   });
 
+  it("does not stack a notes cue the day already carries", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({
+        notes: "Knee felt tight\n[AI Coach] Keep the squat depth shallow\n[AI Coach] Keep the squat depth shallow",
+      }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        targetField: "notes",
+        action: "append",
+        recommendation: "Keep the squat depth shallow",
+      }),
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    await triggerAutoCoach("user-1");
+    expectPlanDayUpdate("day-1", {
+      notes: "Knee felt tight\n[AI Coach] Keep the squat depth shallow",
+    });
+  });
+
+  it("does not re-append an accessory line the day already carries", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises" }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        targetField: "accessory",
+        action: "append",
+        recommendation: "Add 3x10 calf raises",
+      }),
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    await triggerAutoCoach("user-1");
+    expectPlanDayUpdate("day-1", {
+      accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises",
+    });
+  });
+
   it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext, [
       makeTimelineEntry({

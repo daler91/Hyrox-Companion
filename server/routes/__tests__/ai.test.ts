@@ -994,7 +994,7 @@ describe("POST /api/timeline/ai-suggestions/apply", () => {
     expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
       "day-1",
       expect.objectContaining({
-        notes: "AI suggestion: Keep two reps in reserve.",
+        notes: "[AI Coach] Keep two reps in reserve.",
         aiSource: "rag",
         aiRationale: "RPE is rising",
       }),

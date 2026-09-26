@@ -1,3 +1,4 @@
+import { appendCoachCue } from "@shared/coachNotes";
 import type { CoachNoteInputs, ExerciseSet, UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits } from "@shared/unitConversion";
 import type { Logger } from "pino";
@@ -105,6 +106,9 @@ function buildTextUpdateValue(
   input: ApplyTimelineSuggestionInput,
 ): string {
   if (input.action !== "append") return input.recommendation;
+  // Notes share the auto-coach's cue format so the card can list them, and
+  // applying the same suggestion twice doesn't repeat it.
+  if (input.targetField === "notes") return appendCoachCue(day.notes, input.recommendation);
   const existing = getPlanDayFieldValue(day, input.targetField).trim();
   return existing
     ? `${existing}\n\nAI suggestion: ${input.recommendation}`
