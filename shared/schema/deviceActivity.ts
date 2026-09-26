@@ -38,6 +38,10 @@ export interface StravaActivitySummary {
   suffer_score?: number;
   pr_count?: number;
   achievement_count?: number;
+  /** Recorded on a trainer/treadmill: speed is not GPS. */
+  trainer?: boolean;
+  /** Entered by hand on Strava, with no recording behind it. */
+  manual?: boolean;
 }
 
 export type DeviceActivityProvider = "strava";

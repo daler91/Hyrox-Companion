@@ -20,6 +20,7 @@ import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
 import pushRoutes from "./routes/push";
 import recycleBinRoutes from "./routes/recycleBin";
+import sessionGradesRoutes from "./routes/sessionGrades";
 import timelineAnnotationsRoutes from "./routes/timelineAnnotations";
 import workoutRoutes from "./routes/workouts/index";
 import { registerStravaRoutes } from "./strava";
@@ -62,6 +63,7 @@ export async function registerRoutes(
   app.use(emailRoutes);
   app.use(aiRoutes);
   app.use(analyticsRoutes);
+  app.use(sessionGradesRoutes);
   app.use(workoutRoutes);
   app.use(planRoutes);
   app.use(planRecoveryRoutes);

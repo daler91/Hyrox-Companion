@@ -4,6 +4,7 @@
  * and service tests describe runs the same way (and SonarCloud's duplication
  * gate stays quiet).
  */
+import type { SessionGrade } from "@shared/schema";
 import type { SessionStreamSamples } from "@shared/schema/sessionStream";
 
 import type { StravaStreamSet } from "./downsample";
@@ -106,3 +107,38 @@ export function thresholdSession(work: { pace: number; hrStart: number; hrEnd: n
 /** An athlete whose Karvonen zones are round numbers: rest 50, max 190 (reserve 140). */
 export const ATHLETE = { age: 35, restingHr: 50, maxHr: 190 } as const;
 // Zone floors for ATHLETE: Z2 134, Z3 148, Z4 162, Z5 176.
+
+/** A finished grade, for rollup/route/UI tests that do not care how it was reached. */
+export function makeGrade(overrides: Partial<SessionGrade> = {}): SessionGrade {
+  return {
+    workoutLogId: "log-1",
+    planDayId: `day-${overrides.workoutLogId ?? "1"}`,
+    planId: "plan-1",
+    date: "2026-09-22",
+    weekNumber: 1,
+    title: "Easy Run",
+    intent: "easy",
+    purpose: "easy",
+    intentReason: "The plan day is titled for it",
+    verdict: "on_target",
+    headline: "Stayed easy",
+    evidence: ["HR averaged 140 bpm, under your easy ceiling of 148 bpm."],
+    confidence: "high",
+    dataSource: "stream",
+    streamStatus: "ok",
+    ungradeableReason: null,
+    targets: {
+      easyCeilingHr: 148,
+      thresholdHr: { min: 162, max: 176 },
+      z5FloorHr: 176,
+      hrBasis: "measured",
+      easyPace: { fast: 360, slow: 400 },
+      thresholdPace: null,
+      paceSource: "plan",
+    },
+    easy: null,
+    threshold: null,
+    countsInRollup: true,
+    ...overrides,
+  };
+}

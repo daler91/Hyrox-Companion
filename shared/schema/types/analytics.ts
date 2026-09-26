@@ -2,6 +2,7 @@
 import type { PlanDayPriority, PlanDayRecovery, PlanDaySkipReason } from "../enums";
 import type { HeatMapMuscle, MovementPattern, MuscleHeatMapBodyRegion } from "../exercises";
 import type { RagInfo } from "./ai";
+import type { SessionGradeChip, WeeklyReviewGradeSummary } from "./sessionGrades";
 import type { PersonalRecordMetric } from "./workouts";
 
 export interface WeeklySummary {
@@ -455,6 +456,12 @@ export interface WeeklyReviewSession {
   matchedSetCount: number | null;
   addedSetCount: number | null;
   removedSetCount: number | null;
+  /**
+   * Whether the run did what its plan day was for ("did the session do its
+   * job?"). Absent where the review was built without grades (the weekly
+   * email), null for a session that is not a graded run.
+   */
+  grade?: SessionGradeChip | null;
 }
 
 /** A plan day in the week that did NOT become a logged session. */
@@ -573,4 +580,6 @@ export interface WeeklyReview {
    * review. Recall is the whole value — nothing scores the week against it.
    */
   previousIntent: string | null;
+  /** The week's graded runs in one line; null when the week had none. Absent without grades. */
+  gradeSummary?: WeeklyReviewGradeSummary | null;
 }

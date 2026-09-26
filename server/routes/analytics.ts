@@ -116,7 +116,7 @@ router.get("/api/v1/weekly-review", isAuthenticated, rateLimiter("analytics", 20
       return;
     }
 
-    res.json(await buildWeeklyReview(storage, userId, { week }));
+    res.json(await buildWeeklyReview(storage, userId, { week, includeSessionGrades: true }));
   }));
 
 // Write (or clear) the athlete's intent for a week. Keyed on the same week the

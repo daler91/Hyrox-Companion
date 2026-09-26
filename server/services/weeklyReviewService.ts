@@ -18,19 +18,24 @@ import type {
   PersonalRecord,
   PersonalRecordMetric,
   PlanDaySkipReason,
+  SessionGrade,
   WeeklyReview,
   WeeklyReviewAnnotation,
   WeeklyReviewCounts,
   WeeklyReviewDeltas,
+  WeeklyReviewGradeSummary,
   WeeklyReviewPersonalRecord,
   WeeklyReviewPlannedDay,
   WeeklyReviewSession,
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
 
+import { logger } from "../logger";
 import type { IStorage } from "../storage";
 import { addDaysLocal, getLocalDateStrSafe, isValidTimezone } from "../timezone";
 import { calculatePersonalRecords } from "./analyticsService";
+import { isDefinite } from "./sessionGrades/gradeSession";
+import { gradeWorkoutLogs } from "./sessionGrades/sessionGradeService";
 import { getLocalMondayWeekBoundaries, getWeekRangeForDate, type LocalWeekRange } from "./weeklyProgress";
 
 const PR_METRICS: readonly PersonalRecordMetric[] = ["maxWeight", "maxDistance", "bestTime", "estimated1RM"];
@@ -150,7 +155,13 @@ function buildDeltas(current: WeeklyReviewCounts, previous: WeeklyReviewCounts):
   };
 }
 
-function buildSessions(logs: WorkoutLogRow[]): WeeklyReviewSession[] {
+function gradeChip(grade: SessionGrade | undefined): WeeklyReviewSession["grade"] {
+  if (!grade) return null;
+  const { intent, purpose, verdict, confidence, headline, streamStatus } = grade;
+  return { intent, purpose, verdict, confidence, headline, streamStatus };
+}
+
+function buildSessions(logs: WorkoutLogRow[], grades?: ReadonlyMap<string, SessionGrade>): WeeklyReviewSession[] {
   return logs
     .map((log) => ({
       workoutLogId: log.id,
@@ -164,8 +175,43 @@ function buildSessions(logs: WorkoutLogRow[]): WeeklyReviewSession[] {
       matchedSetCount: log.matchedSetCount ?? null,
       addedSetCount: log.addedSetCount ?? null,
       removedSetCount: log.removedSetCount ?? null,
+      ...(grades ? { grade: gradeChip(grades.get(log.id)) } : {}),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The one line the review shows about the week's graded runs, or null with none. */
+export function summarizeWeekGrades(grades: ReadonlyMap<string, SessionGrade>): WeeklyReviewGradeSummary | null {
+  const definite = [...grades.values()].filter((grade) => isDefinite(grade.verdict));
+  if (definite.length === 0) return null;
+  return {
+    graded: definite.length,
+    onTarget: definite.filter((grade) => grade.verdict === "on_target").length,
+    driftedHarder: definite.filter((grade) => grade.intent === "threshold" && grade.verdict === "drifted_harder").length,
+    easyTooHard: definite.filter(
+      (grade) => grade.intent === "easy" && (grade.verdict === "crept_up" || grade.verdict === "too_hard"),
+    ).length,
+  };
+}
+
+/**
+ * Grades for the week's runs. A grading failure must never take the review
+ * down with it: the review renders without chips instead.
+ */
+async function loadWeekGrades(
+  storage: IStorage,
+  userId: string,
+  logs: WorkoutLogRow[],
+  now: Date,
+): Promise<Map<string, SessionGrade> | undefined> {
+  try {
+    return await gradeWorkoutLogs(storage, userId, logs, { now });
+  } catch (err) {
+    // err is a DB/compute error; no PII beyond the internal id context.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ context: "weekly-review", err }, "Session grading failed; review served without grades");
+    return undefined;
+  }
 }
 
 /**
@@ -253,7 +299,11 @@ function buildAnnotations(
 export async function buildWeeklyReview(
   storage: IStorage,
   userId: string,
-  options: { now?: Date; week?: string } = {},
+  /**
+   * `includeSessionGrades` adds each run's "did it do its job?" chip. Off by
+   * default so the weekly email, which never shows them, pays nothing for it.
+   */
+  options: { now?: Date; week?: string; includeSessionGrades?: boolean } = {},
 ): Promise<WeeklyReview> {
   const now = options.now ?? new Date();
   const user = await storage.users.getUser(userId);
@@ -289,6 +339,7 @@ export async function buildWeeklyReview(
   // week's counts need ranges that overlap that week, not this one.
   const current = buildCounts(logs, planDays, annotations, today);
   const previous = buildCounts(priorLogs, priorPlanDays, annotations, today);
+  const grades = options.includeSessionGrades ? await loadWeekGrades(storage, userId, logs, now) : undefined;
 
   return {
     weekStart: week.weekStart,
@@ -300,7 +351,7 @@ export async function buildWeeklyReview(
     current,
     previous,
     deltas: buildDeltas(current, previous),
-    sessions: buildSessions(logs),
+    sessions: buildSessions(logs, grades),
     plannedDays: buildPlannedDays(planDays, annotations, today),
     personalRecords: listPersonalRecordsInRange(
       calculatePersonalRecords(prSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }),
@@ -310,6 +361,7 @@ export async function buildWeeklyReview(
     annotations: buildAnnotations(annotations, week),
     intent: intents.get(week.weekStart) ?? null,
     previousIntent: intents.get(prior.weekStart) ?? null,
+    ...(grades ? { gradeSummary: summarizeWeekGrades(grades) } : {}),
   };
 }
 

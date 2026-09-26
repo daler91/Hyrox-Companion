@@ -25,6 +25,13 @@ export const MIN_MOVING_SECONDS = 60;
 /** HR must cover this share of moving time for the recording to count as having HR. */
 export const MIN_HR_COVERAGE = 0.2;
 
+// ── Fetching (sessionStreamSync.ts) and stream state (sessionGradeService.ts) ─
+
+/** A stream that failed this many times is left alone; the grade uses the summary. */
+export const SESSION_STREAM_MAX_ATTEMPTS = 3;
+/** Only runs from the last six months are fetched. */
+export const SESSION_STREAM_BACKFILL_DAYS = 180;
+
 // ── Shared signal rules ─────────────────────────────────────────────────────
 
 /** A bucket needs this much moving time before its pace means anything. */
@@ -37,6 +44,8 @@ export const MIN_SIGNAL_COVERAGE = 0.8;
 
 // ── Easy runs (gradeEasy.ts) ────────────────────────────────────────────────
 
+/** Under five minutes of running is not an easy run to judge. */
+export const MIN_EASY_RUN_S = 300;
 /** HR takes a while to settle; drift is measured after the first 10 minutes. */
 export const EASY_DRIFT_WARMUP_EXCLUDE_S = 600;
 /** Drift needs at least this much running after the excluded warm-up. */

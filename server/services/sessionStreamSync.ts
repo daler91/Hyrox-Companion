@@ -25,6 +25,7 @@ import { getUserIdFromJob } from "../queue.utils";
 import type { IStorage } from "../storage";
 import type { PendingStreamCandidate, PendingStreamWindow } from "../storage/sessionStreams";
 import { fetchStravaActivityStreams, getValidAccessToken } from "../strava";
+import { SESSION_STREAM_BACKFILL_DAYS, SESSION_STREAM_MAX_ATTEMPTS } from "./sessionGrades/constants";
 import { downsampleStravaStreams } from "./sessionGrades/downsample";
 import {
   enqueueSessionStreams,
@@ -54,12 +55,8 @@ export const SESSION_STREAM_READS_PER_15_MIN = 20;
 export const SESSION_STREAM_READS_PER_DAY = 250;
 /** 3 athletes × 5 streams = 15 reads per tick, inside the 20 even with an empty ledger. */
 export const SESSION_STREAM_SCAN_USERS_PER_TICK = 3;
-/** A stream that failed this many times is left alone; the grade uses the summary. */
-export const SESSION_STREAM_MAX_ATTEMPTS = 3;
 /** How long a failed fetch waits before it is tried again. */
 export const SESSION_STREAM_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
-/** Only runs from the last six months are backfilled. */
-export const SESSION_STREAM_BACKFILL_DAYS = 180;
 /** Candidates loaded per job — more than it fetches, since some are skipped without a read. */
 const CANDIDATES_PER_JOB = 20;
 const QUARTER_HOUR_MS = 15 * 60 * 1000;
