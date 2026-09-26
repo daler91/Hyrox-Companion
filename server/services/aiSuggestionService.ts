@@ -286,6 +286,7 @@ export async function generateTimelineAiSuggestions(
     aiRationale: d.aiRationale,
     aiNoteUpdatedAt: d.aiNoteUpdatedAt,
     aiInputsUsed: d.aiInputsUsed,
+    priority: d.priority,
     ...(d.exerciseSets && d.exerciseSets.length > 0
       ? { exerciseDetails: d.exerciseSets.map(mapExerciseSetToPromptDetail) }
       : {}),

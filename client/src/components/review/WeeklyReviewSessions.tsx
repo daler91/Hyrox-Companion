@@ -83,7 +83,15 @@ function PlannedDayRow({ day }: { readonly day: WeeklyReview["plannedDays"][numb
             Not counted
           </Badge>
         ) : (
-          <Badge variant="outline">{STATUS_LABELS[day.status]}</Badge>
+          // A missed session the athlete let go reads as the decision it was.
+          <Badge variant="outline" data-testid={`weekly-review-status-${day.planDayId}`}>
+            {day.status === "missed" && day.recovery === "let_go" ? "Let go" : STATUS_LABELS[day.status]}
+          </Badge>
+        )}
+        {day.priority === "key" && (
+          <Badge variant="secondary" data-testid={`weekly-review-key-${day.planDayId}`}>
+            Key
+          </Badge>
         )}
         {day.skipReason && (
           <Badge variant="secondary" data-testid={`weekly-review-skip-reason-${day.planDayId}`}>

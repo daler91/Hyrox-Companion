@@ -1,4 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
+import { isRestLikePlanDay } from "@shared/planDayKind";
 import type { DistanceUnit } from "@shared/unitConversion";
 import { addDays, format } from "date-fns";
 import {
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
+import { isRecoverableEntry, MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,8 +47,9 @@ import { DeviceLinkSuggestion, StravaLinkBadge } from "./DeviceLinkControls";
 import { ExerciseChips } from "./ExerciseChips";
 import { FuellingTargetChip } from "./FuellingTargetChip";
 import { MafCeilingChip } from "./MafCeilingChip";
+import { RecoveryOriginBadge, SessionPriorityBadge } from "./SessionTierBadges";
 import type { TimelineWorkoutCardProps } from "./types";
-import { getCardClasses, getStatusBadge } from "./utils";
+import { getCardClasses, getStatusBadge, type MissedDetail } from "./utils";
 import { WorkoutStravaStats } from "./WorkoutStravaStats";
 
 type TimelineWorkoutEntry = TimelineWorkoutCardProps["entry"];
@@ -68,6 +71,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   canBulkSelect,
   onBulkSelectToggle,
   dayEntries,
+  onRecover,
 }: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel, showAdherenceInsights } = useUnitPreferences();
   const [movePickerOpen, setMovePickerOpen] = useState(false);
@@ -146,12 +150,17 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     return groupTimelineExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
+  const missedDetail = getMissedDetail(entry);
   const baseCardClasses = getCardClasses(
     isBeingCombined,
     canBeCombinedWith,
     entry.status,
     entry.focus,
+    missedDetail,
   );
+  // Recovery is a decision about one card; it waits while the timeline is in
+  // a selection mode, and a queued offline entry has no server row to change.
+  const recoverHandler = isBulkSelectMode || isCombining || isPending ? undefined : onRecover;
   const aiCoachClasses = getAiCoachCardClasses(isTargetedByCoach);
   const dragClasses = getDragCardClasses(isDragging, isMoving);
 
@@ -217,6 +226,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               adherenceBadge={adherenceBadge}
               isPending={isPending}
               dayEntries={dayEntries}
+              missedDetail={missedDetail}
             />
             <TimelineCardWorkoutBody
               entry={entry}
@@ -225,6 +235,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               weightLabel={weightLabel}
               distanceUnit={distanceUnit}
               dayEntries={dayEntries}
+              onRecover={recoverHandler}
             />
           </div>
         </div>
@@ -259,6 +270,15 @@ function getTimelineCardCombineState({
   return {
     isBeingCombined,
     canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate),
+  };
+}
+
+/** A missed day's decision, whether it was a rest day (nothing to miss), and whether it still asks. */
+function getMissedDetail(entry: TimelineWorkoutEntry): MissedDetail {
+  return {
+    recovery: entry.recovery,
+    restDay: entry.type === "planned" && isRestLikePlanDay(entry.focus ?? "", entry.mainWorkout ?? ""),
+    open: isRecoverableEntry(entry),
   };
 }
 
@@ -536,6 +556,7 @@ interface TimelineCardHeaderProps {
   readonly adherenceBadge: ReturnType<typeof getAdherenceBadge>;
   readonly isPending?: boolean;
   readonly dayEntries: TimelineWorkoutCardProps["dayEntries"];
+  readonly missedDetail: MissedDetail;
 }
 
 function TimelineCardHeader({
@@ -544,12 +565,15 @@ function TimelineCardHeader({
   adherenceBadge,
   isPending,
   dayEntries,
+  missedDetail,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div
       className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-[4.5rem] md:pr-16")}
     >
-      {getStatusBadge(entry.status, entry.focus, entry.excused)}
+      {getStatusBadge(entry.status, entry.focus, entry.excused, missedDetail)}
+      <SessionPriorityBadge entry={entry} />
+      <RecoveryOriginBadge entry={entry} />
       {isPending && (
         <Badge
           variant="outline"
@@ -629,6 +653,7 @@ interface TimelineCardWorkoutBodyProps {
   readonly weightLabel: string;
   readonly distanceUnit: DistanceUnit;
   readonly dayEntries: TimelineWorkoutCardProps["dayEntries"];
+  readonly onRecover?: RecoverEntryHandler;
 }
 
 function TimelineCardWorkoutBody({
@@ -638,6 +663,7 @@ function TimelineCardWorkoutBody({
   weightLabel,
   distanceUnit,
   dayEntries,
+  onRecover,
 }: Readonly<TimelineCardWorkoutBodyProps>) {
   const metricsText = getWorkoutMetricsText(entry);
   const hasExerciseSets = Boolean(entry.exerciseSets?.length);
@@ -676,6 +702,7 @@ function TimelineCardWorkoutBody({
           inputsUsed={entry.aiInputsUsed}
         />
       )}
+      <MissedRecoveryPrompt entry={entry} onRecover={onRecover} />
     </>
   );
 }

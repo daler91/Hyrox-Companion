@@ -579,6 +579,11 @@ describe("executePlanGeneration", () => {
     expect(weekOneSquat.every((row) => row.reps === 8 && row.weight === 72.5)).toBe(true);
     const savedDays = mocks.plans.createPlanDays.mock.calls[0][0] as PlanDay[];
     expect(savedDays[0].mainWorkout).toBe("A) Front Squat 4x8 @ 72.5 kg (RPE 7)");
+    // Each day carries the tier the engine gave its session: a two-day HYROX
+    // week is both of the goal's must-haves, and the engine's rest days get none.
+    expect(savedDays).toHaveLength(28);
+    expect(savedDays.filter((day) => day.priority === "key")).toHaveLength(8);
+    expect(savedDays.filter((day) => day.priority === null)).toHaveLength(20);
     // Race week's primers are left as the model wrote them.
     const raceWeekSquat = rows.filter(
       (row) => row.planDayId === "day-4-Monday" && row.exerciseName === "front_squat",

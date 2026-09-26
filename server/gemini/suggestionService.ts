@@ -1,4 +1,4 @@
-import type { CoachNoteInputs, WorkoutSuggestion } from "@shared/schema";
+import type { CoachNoteInputs, PlanDayPriority, WorkoutSuggestion } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 import { z } from "zod";
@@ -38,6 +38,8 @@ export interface UpcomingWorkout {
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;
+  /** Key, supporting or optional — how much the session matters to the plan. */
+  priority?: PlanDayPriority | null;
 }
 
 export type { WorkoutSuggestion };
@@ -249,6 +251,15 @@ function formatPriorAiContext(workout: UpcomingWorkout): string {
   return prior.length > 0 ? `, ${prior.join(", ")}` : "";
 }
 
+/**
+ * How to read the Priority field on each upcoming workout. The athlete marks
+ * sessions (or the plan does) so that when a week has to give, it gives in
+ * the right place — a coach trimming the long run while the optional easy
+ * spin survives has the tiers backwards.
+ */
+const PRIORITY_TIER_GUIDANCE =
+  "Priority tiers: key sessions carry the plan — protect them. When a week has to get lighter, trim optional sessions first, then supporting ones, and only then key ones.";
+
 function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: TrainingContext): string {
   const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
     weightUnit: trainingContext.weightUnit,
@@ -256,10 +267,11 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
   });
   const priorAiContext = formatPriorAiContext(workout);
   const dateLabel = `${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}`;
+  const priority = workout.priority ? `, Priority: ${workout.priority}` : "";
   if (exerciseSummary) {
-    return `ID: ${workout.id}, Date: ${dateLabel}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
+    return `ID: ${workout.id}, Date: ${dateLabel}${priority}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
   }
-  let line = `ID: ${workout.id}, Date: ${dateLabel}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
+  let line = `ID: ${workout.id}, Date: ${dateLabel}${priority}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
   if (workout.accessory) line += `, Accessory: ${sanitizeUserInput(workout.accessory)}`;
   if (workout.notes) line += `, Notes: ${sanitizeUserInput(workout.notes)}`;
   line += priorAiContext;
@@ -323,6 +335,7 @@ export function buildPromptDataSections(
 
   sections.push(
     `--- UPCOMING WORKOUTS ---`,
+    ...(upcomingWorkouts.some((workout) => workout.priority) ? [PRIORITY_TIER_GUIDANCE] : []),
     upcomingWorkouts.map((workout) => formatUpcomingWorkout(workout, trainingContext)).join("\n"),
     ...(coachingMaterials ? [coachingMaterials] : []),
   );

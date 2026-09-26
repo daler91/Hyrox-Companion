@@ -1041,7 +1041,7 @@ describe('claim-before-send ledger', () => {
     // routes to the log surface — the whole point of the deep link.
     expect(sendPushToUser).toHaveBeenCalledWith(1, {
       title: 'Missed: Easy Run',
-      body: 'Still worth doing — log it, or move it to a day that works.',
+      body: 'Fold it into another day, shorten it, or let it go — see what each does to your plan.',
       url: '/?workout=pd-1',
     });
   });

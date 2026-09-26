@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 
 import { TimelineDateGroup, TimelineEmptyState, TimelineSkeleton } from "@/components/timeline";
+import type { RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Button } from "@/components/ui/button";
 import { useTimelineState } from "@/hooks/useTimelineState";
 
@@ -53,6 +54,8 @@ interface TimelineContentProps {
   isBulkSelectMode: boolean;
   selectedBulkEntryKeys: ReadonlySet<string>;
   onBulkSelectToggle: (entry: TimelineEntry) => void;
+  /** Opens missed-session recovery from a missed card. */
+  onRecoverEntry: RecoverEntryHandler;
   /** Per-day fuelling progress keyed by YYYY-MM-DD (Phase 2); empty/undefined when nutrition is off. */
   fuellingByDate?: Map<string, FuellingDayPoint>;
 }
@@ -97,6 +100,7 @@ export function TimelineContent({
   isBulkSelectMode,
   selectedBulkEntryKeys,
   onBulkSelectToggle,
+  onRecoverEntry,
   fuellingByDate,
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
@@ -210,6 +214,7 @@ export function TimelineContent({
                 isBulkSelectMode={isBulkSelectMode}
                 selectedBulkEntryKeys={selectedBulkEntryKeys}
                 onBulkSelectToggle={onBulkSelectToggle}
+                onRecoverEntry={onRecoverEntry}
               />
             </div>
           );

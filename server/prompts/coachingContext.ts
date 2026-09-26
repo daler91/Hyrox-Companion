@@ -118,7 +118,8 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
       weightUnit: trainingContext.weightUnit,
       distanceUnit: trainingContext.distanceUnit,
     });
-    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus || "General")} - `;
+    const tier = workout.priority ? ` [${workout.priority} session]` : "";
+    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}${tier}: ${sanitizeUserInput(workout.focus || "General")} - `;
     if (exerciseSummary) {
       line += `Exercises: ${exerciseSummary}`;
     } else {

@@ -2433,6 +2433,30 @@
           "skipReason": {
             "type": "string",
             "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "key",
+              "supporting",
+              "optional",
+              null
+            ]
+          },
+          "recovery": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "folded",
+              "shortened",
+              "let_go",
+              null
+            ]
+          },
+          "missedOn": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [

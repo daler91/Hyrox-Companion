@@ -45,6 +45,7 @@ import { TimelineContent } from "@/pages/timeline/TimelineContent";
 import { TimelineWorkoutSurfaces } from "@/pages/timeline/TimelineWorkoutSurfaces";
 import { useBulkDeleteSelection } from "@/pages/timeline/useBulkDeleteSelection";
 import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRouting";
+import { useMissedRecoveryFlow } from "@/pages/timeline/useMissedRecoveryFlow";
 import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
 import { useTimelinePageController } from "@/pages/timeline/useTimelinePageController";
 import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
@@ -192,6 +193,7 @@ export default function Timeline() {
 
   const { annotationsByDate, moveEntry, isMoving, handleDeleteAnnotation, isAnnotationDeleting } =
     useTimelinePageController(selectedPlanId, annotations);
+  const missedRecovery = useMissedRecoveryFlow();
 
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
@@ -364,7 +366,13 @@ export default function Timeline() {
   }, [allVisibleGroups, rowVirtualizer, selectedPlanId, timelineLoading, todayRef]);
 
   const isWorkoutSurfaceOpen = Boolean(
-    previewEntry || futureEditEntry || logEntry || reviewEntry || skippedEntry || adhocOpen,
+    previewEntry ||
+      futureEditEntry ||
+      logEntry ||
+      reviewEntry ||
+      skippedEntry ||
+      adhocOpen ||
+      missedRecovery.request,
   );
 
   return (
@@ -488,6 +496,7 @@ export default function Timeline() {
                 isBulkSelectMode={bulkDeleteMode}
                 selectedBulkEntryKeys={selectedBulkEntryKeys}
                 onBulkSelectToggle={handleBulkSelectToggle}
+                onRecoverEntry={missedRecovery.recover}
                 fuellingByDate={fuellingByDate}
               />
             </DndContext>
@@ -513,6 +522,7 @@ export default function Timeline() {
               annotations={dialogState}
               onMoveEntry={moveEntry}
               isMovingEntry={isMoving}
+              missedRecovery={missedRecovery}
             />
           </PageContainer>
         </div>

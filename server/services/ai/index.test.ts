@@ -44,6 +44,7 @@ vi.mock("./nutritionContext", () => ({
 vi.mock("./trainingDecisionEngine", () => ({ decideTrainingState: vi.fn() }));
 vi.mock("./trainingStats", () => ({
   calculateTrainingStats: vi.fn(),
+  collectRecentMisses: vi.fn(),
   collectRecentSkips: vi.fn(),
   collectRecentWorkouts: vi.fn(),
   getExerciseBreakdown: vi.fn(),

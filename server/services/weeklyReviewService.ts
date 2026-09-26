@@ -26,6 +26,7 @@ import type {
   WeeklyReviewPlannedDay,
   WeeklyReviewSession,
 } from "@shared/schema";
+import { resolveSessionPriority } from "@shared/sessionPriority";
 
 import type { IStorage } from "../storage";
 import { addDaysLocal, getLocalDateStrSafe, isValidTimezone } from "../timezone";
@@ -180,6 +181,10 @@ function buildPlannedDays(
       focus: day.focus,
       status: day.status as WeeklyReviewPlannedDay["status"],
       skipReason: (day.skipReason as PlanDaySkipReason | null) ?? null,
+      priority: resolveSessionPriority(day),
+      // Only a let-go is worth a label here: it is what the athlete decided
+      // about a missed day that is still on this week.
+      recovery: day.status === "missed" && day.recovery === "let_go" ? ("let_go" as const) : null,
       planName: day.planName,
       excused: isExcusedDay(day, ranges, today),
     }))

@@ -15,7 +15,7 @@ const ZONES: RunPaceZones = {
 };
 
 function session(kind: SkeletonSession["kind"], day = "Tuesday"): SkeletonSession {
-  return { day: day as SkeletonSession["day"], kind, label: kind, lifts: [], runFinisher: false };
+  return { day: day as SkeletonSession["day"], kind, label: kind, lifts: [], runFinisher: false, priority: "key" };
 }
 
 function ctx(overrides: Partial<SessionContext> = {}): SessionContext {

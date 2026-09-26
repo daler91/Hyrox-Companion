@@ -245,10 +245,15 @@ Individual workout days within a training plan.
 | `expected_rpe` | `integer` | nullable — the athlete's expected intensity (RPE 1–10), same purpose |
 | `planned_time_of_day_min` | `integer` | nullable — planned local start, minutes from midnight (0–1439); picks the pre/recovery meals in the per-meal fuel targets, null falls back to a morning session |
 | `skip_reason` | `text` | nullable — why a skipped day was skipped; cleared on any transition away from `skipped` |
+| `priority` | `text` | nullable — the session's tier (`key`, `supporting`, `optional`). The workout engine stamps it on generated plans and the athlete can set it; null means "not set", and readers infer a tier from the day's title (`resolveSessionPriority()` in `shared/sessionPriority.ts`). Rest days have no tier |
+| `recovery` | `text` | nullable — what happened after the session was missed: `folded` (moved to another day in full), `shortened` (moved and cut down), or `let_go` (the athlete decided not to make it up; it stays `missed`). `let_go` only counts while the day is `missed`: readers ignore it on any other status, the plan-day status routes clear it when the day leaves `missed`, and the nightly missed sweep drops it from a day that is missed again |
+| `missed_on` | `date` | nullable — the date the session was originally on when it was missed, kept when recovery moves it so the card can say where it came from |
 
 **Check constraints:**
 - `status_check`: `status IN ('planned', 'completed', 'missed', 'skipped')`
 - `plan_days_skip_reason_check`: `skip_reason IS NULL OR skip_reason IN ('ill', 'injured', 'schedule', 'low_energy')`
+- `plan_days_priority_check`: `priority IS NULL OR priority IN ('key', 'supporting', 'optional')`
+- `plan_days_recovery_check`: `recovery IS NULL OR recovery IN ('folded', 'shortened', 'let_go')`
 - `plan_days_expected_duration_check`: `expected_duration_min IS NULL OR (expected_duration_min BETWEEN 1 AND 600)`
 - `plan_days_expected_rpe_check`: `expected_rpe IS NULL OR (expected_rpe BETWEEN 1 AND 10)`
 - `plan_days_time_of_day_check`: `planned_time_of_day_min IS NULL OR (planned_time_of_day_min BETWEEN 0 AND 1439)`
@@ -1406,6 +1411,7 @@ Notable recent migrations:
 - `0096`, `0099`, `0100`: Drop single-column indexes that a composite index already leads with — `idx_chat_messages_user_id` (served by `idx_chat_messages_user_time`), `idx_workout_logs_user_id` (served by `idx_workout_logs_user_date` / `idx_workout_logs_user_started_at`), and `idx_exercise_sets_workout_log_id` / `idx_exercise_sets_plan_day_id` (served by the `workout_log_id`- and `plan_day_id`-led composites). Each added write cost with no read benefit.
 - `0097`: Adds the `email_weekly_review_reminder`, `email_today_session` and `email_analysis_digest` toggles, `notify_hour` (default `7`, with `users_notify_hour_check`) and the three matching `last_*_at` claim ledgers to `users`.
 - `0098`: Adds the five per-email `notify_hour_*` overrides to `users`, each with its own `0..23` CHECK.
+- `0106`: Adds `plan_days.priority`, `plan_days.recovery` and `plan_days.missed_on` (with CHECK constraints on the first two) for session priority tiers and missed-session recovery. All three are nullable, so existing rows need no backfill: an unset tier is inferred from the day's title at read time.
 
 ### Startup Migration
 
@@ -1613,6 +1619,8 @@ Type-safe enums are defined in `shared/schema/enums.ts`:
 
 - `WorkoutStatus`: `"planned" | "completed" | "missed" | "skipped"`
 - `ExerciseCategory`: `"functional" | "running" | "strength" | "conditioning"`
+- `PlanDayPriority`: `"key" | "supporting" | "optional"`
+- `PlanDayRecovery`: `"folded" | "shortened" | "let_go"`
 
 ### Exercise Definitions
 

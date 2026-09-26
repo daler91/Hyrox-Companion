@@ -1,4 +1,10 @@
-﻿import type { DeviceLinkSource, PlanDaySkipReason, WorkoutStatus } from "../enums";
+﻿import type {
+  DeviceLinkSource,
+  PlanDayPriority,
+  PlanDayRecovery,
+  PlanDaySkipReason,
+  WorkoutStatus,
+} from "../enums";
 import { customExercises, exerciseLoadTags, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { CoachNoteInputs } from "./plans";
@@ -209,6 +215,36 @@ export type TimelineEntry = {
    * ill/injured skip (a recovery signal to train around) from a schedule one.
    */
   skipReason?: PlanDaySkipReason | null;
+  /**
+   * How much this session matters to the plan: the athlete's own choice, or
+   * the tier the server infers for a day they never marked. Present on every
+   * entry that comes from a plan day (rest days aside); absent on unplanned
+   * logs.
+   */
+  priority?: PlanDayPriority;
+  /**
+   * What the athlete decided after missing this session: folded or shortened
+   * onto another day (the entry is then `planned` again), or let go (the entry
+   * stays `missed`, and the timeline stops asking about it). Omitted when no
+   * decision was made.
+   */
+  recovery?: PlanDayRecovery;
+  /** The date a folded or shortened session was missed on. */
+  missedOn?: string;
+  /**
+   * A missed session the timeline should ask about (fold / shorten / let go):
+   * undecided, a real session rather than a rest day, the day as planned
+   * rather than a race-week stand-in, before its plan was retired, and recent
+   * enough that it can still move. Older misses just read as missed. Omitted
+   * otherwise.
+   */
+  recoverable?: boolean;
+  /**
+   * The session shown is set by the plan's race date — the race itself, the
+   * shakeout the day before, or recovery after it — rather than the stored
+   * plan day, so it can't be moved or given another tier. Omitted otherwise.
+   */
+  raceDerived?: boolean;
   focus: string;
   mainWorkout: string;
   accessory: string | null;

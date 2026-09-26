@@ -42,6 +42,7 @@ import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutri
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
+  collectRecentMisses,
   collectRecentSkips,
   collectRecentWorkouts,
   getExerciseBreakdown,
@@ -350,6 +351,7 @@ function mapUpcomingWorkout(
     aiRationale: d.aiRationale,
     aiNoteUpdatedAt: d.aiNoteUpdatedAt,
     aiInputsUsed: d.aiInputsUsed,
+    priority: d.priority,
     ...((d.exerciseSets?.length ?? 0) > 0
       ? {
           // Upcoming plan-day sets carry their prescription in planned*
@@ -655,6 +657,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     stationGaps,
     // Unconditional like its neighbours; the renderer self-suppresses on empty.
     recentSkips: collectRecentSkips(timeline),
+    recentMisses: collectRecentMisses(timeline),
     planPhase,
     weeklyVolume,
     progressionFlags,

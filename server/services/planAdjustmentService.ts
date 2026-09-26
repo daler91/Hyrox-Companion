@@ -80,6 +80,7 @@ function toUpcomingWorkout(day: UpcomingPlannedDay): UpcomingWorkout {
     aiRationale: day.aiRationale,
     aiNoteUpdatedAt: day.aiNoteUpdatedAt,
     aiInputsUsed: day.aiInputsUsed,
+    priority: day.priority,
     ...(day.exerciseSets.length > 0
       ? { exerciseDetails: day.exerciseSets.map(mapExerciseSetToPromptDetail) }
       : {}),
