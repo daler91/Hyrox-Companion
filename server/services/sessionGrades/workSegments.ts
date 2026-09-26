@@ -68,7 +68,7 @@ function smooth(raw: (number | null)[]): (number | null)[] {
     for (let j = i - half; j <= i + half; j++) {
       // at() would wrap a negative index round to the end of the run.
       const neighbour = j >= 0 ? raw.at(j) : undefined;
-      if (neighbour !== null && neighbour !== undefined) window.push(neighbour);
+      if (neighbour != null) window.push(neighbour);
     }
     return median(window);
   });
