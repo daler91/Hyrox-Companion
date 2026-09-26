@@ -214,7 +214,11 @@ function RecoveryChooser({ preview, initialOption, isApplying, onCancel, onConfi
 
       {impact ? <ImpactPanel impact={impact} preview={preview} /> : null}
 
-      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+      {/* Pinned to the bottom of the scroll area, as on the review sheet, so
+          the decision stays one tap away while the athlete reads the impact.
+          The phone sheet's bottom padding sits below the pin; the ::after
+          strip covers it so the day chips don't show through underneath. */}
+      <div className="sticky bottom-0 z-10 flex flex-col-reverse gap-2 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 max-md:after:absolute max-md:after:inset-x-0 max-md:after:top-full max-md:after:h-[calc(1.5rem+env(safe-area-inset-bottom))] max-md:after:bg-background sm:flex-row sm:justify-end">
         <Button variant="outline" onClick={onCancel} data-testid="missed-recovery-cancel">
           Cancel
         </Button>
