@@ -725,6 +725,21 @@ describe("planService — moving a missed session", () => {
   const dayId = "test-day-id";
   const userId = "test-user-id";
 
+  /** The fold re-reads the day under a row lock; this is what that read finds. */
+  function lockedRow(row: { status: string; scheduledDate: string }) {
+    const tx = {
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ for: vi.fn().mockResolvedValue([row]) }),
+        }),
+      }),
+    };
+    vi.mocked(db.transaction).mockImplementation(async (callback) =>
+      callback(tx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]),
+    );
+    return tx;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     // Thursday 24 September 2026, midday UTC.
@@ -742,6 +757,7 @@ describe("planService — moving a missed session", () => {
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
       createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22", recovery: "let_go" }),
     );
+    const tx = lockedRow({ status: "missed", scheduledDate: "2026-09-22" });
 
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-25" }, userId);
 
@@ -749,13 +765,27 @@ describe("planService — moving a missed session", () => {
       dayId,
       { scheduledDate: "2026-09-25", status: "planned", recovery: "folded", missedOn: "2026-09-22" },
       userId,
+      tx,
     );
+  });
+
+  it("still moves, but doesn't fold, a day completed while the move was on its way", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+      createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22" }),
+    );
+    // A sync linked a workout between the read and the write.
+    const tx = lockedRow({ status: "completed", scheduledDate: "2026-09-22" });
+
+    await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-25" }, userId);
+
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(dayId, { scheduledDate: "2026-09-25" }, userId, tx);
   });
 
   it("counts a past day the nightly sweep has not reached yet", async () => {
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
       createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-23" }),
     );
+    const tx = lockedRow({ status: "planned", scheduledDate: "2026-09-23" });
 
     await updatePlanDayStatus(dayId, { scheduledDate: "2026-09-24" }, userId);
 
@@ -763,6 +793,7 @@ describe("planService — moving a missed session", () => {
       dayId,
       { scheduledDate: "2026-09-24", status: "planned", recovery: "folded", missedOn: "2026-09-23" },
       userId,
+      tx,
     );
   });
 

@@ -810,7 +810,8 @@ Update only the status, scheduled date and/or skip reason of a plan day.
 
 What each way forward for a missed session would do to the plan
 (`getMissedSessionRecoveryPreview` in `server/services/missedRecovery`). The
-preview is computed from the athlete's own timeline, in their timezone.
+preview is computed from the athlete's own timeline, in their timezone, read
+across the missed session's week and the weeks of the days it could move to.
 
 - **Auth:** Required
 - **Rate limit:** `planDayRecoveryRead` category, 60/min
@@ -818,7 +819,10 @@ preview is computed from the athlete's own timeline, in their timezone.
   - `priority` — the session's tier; `session` — its estimated length and RPE
   - `fold` / `shorten` — `{ available, unavailableReason, suggestedDate, targets }`,
     one target per day it could move to (today and the next six days, inside the
-    plan, before race day, outside absences). Each target lists the sessions
+    plan, before race day, outside absences). `suggestedDate` is the option's
+    best day: the recommendation's own day for the recommended option, otherwise
+    the best day without cautions (then without severe ones), where sooner,
+    same-week and lighter days rank higher. Each target lists the sessions
     already on that day and the option's `impact`: the day's minutes after the
     move, each changed week's minutes, load (UTSS) and key sessions before and
     after, and `notes` (`stacked_key`, `back_to_back_key`, `hard_neighbor`,
@@ -869,7 +873,9 @@ Carry out the athlete's choice for a missed session
   it drops out of the missed-workout reminder, the weekly review lists it as
   let go rather than missed, and the coach is told not to add it back. It still
   counts as missed for adherence.
-- `reopen` undoes a let-go.
+- `reopen` undoes a let-go. A session that had already been moved once before
+  it was let go comes back as moved (`recovery: "folded"`), so the planner
+  doesn't chase it as if it had never been.
 
 The move and the prescription change are written in one transaction, guarded on
 the day's status, date and recovery. `fold` and `shorten` queue a debounced
@@ -1831,6 +1837,8 @@ Get merged timeline of planned and logged workouts.
 - **Headers:** `X-Next-Cursor: YYYY-MM-DD` when older entries exist; echo it back as `before` for the next page
 
 The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus the most recent `limit` past entries, so the upcoming schedule is always complete. Pages never split a calendar date.
+
+Plan-day entries also carry `priority` (the session's tier, absent on rest days), `recovery` and `missedOn` (what became of a missed session — see [missed-session recovery](#get-apiv1plansdaysdayidrecovery)), `recoverable` (`true` on a missed session the timeline should ask about: undecided, a real session, not a race-week day, before its plan was retired, and missed no more than seven days ago in the athlete's timezone) and `raceDerived` (`true` when the session shown is the race, the shakeout before it or recovery after it, set by the plan's race date). Each is omitted when it doesn't apply.
 
 **Response example:**
 

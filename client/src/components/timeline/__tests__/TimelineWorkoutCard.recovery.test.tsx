@@ -8,7 +8,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { RecoverEntryHandler } from "../missed-recovery";
 import TimelineWorkoutCard from "../timeline-workout-card";
 
-// Relative to the real clock: the card only offers folding within a week of the miss.
 const daysAgo = (days: number) => format(subDays(new Date(), days), "yyyy-MM-dd");
 
 const missed = {
@@ -22,6 +21,8 @@ const missed = {
   notes: null,
   planDayId: "pd-1",
   priority: "key",
+  // The server's call: recent, undecided, a real session.
+  recoverable: true,
 } as TimelineEntry;
 
 function renderCard(overrides: Partial<TimelineEntry> = {}, props: { isBulkSelectMode?: boolean } = {}) {
@@ -74,7 +75,7 @@ describe("TimelineWorkoutCard missed-session recovery", () => {
 
   it("reads a let-go quietly, with an undo", async () => {
     const user = userEvent.setup();
-    const { onRecover } = renderCard({ recovery: "let_go" });
+    const { onRecover } = renderCard({ recovery: "let_go", recoverable: undefined });
 
     expect(screen.getByTestId("badge-let-go")).toHaveTextContent("Let go");
     expect(screen.queryByTestId("badge-missed")).toBeNull();
@@ -86,7 +87,7 @@ describe("TimelineWorkoutCard missed-session recovery", () => {
   });
 
   it("never asks about a rest day that went by", () => {
-    renderCard({ focus: "Rest", mainWorkout: "Complete rest or light walk", priority: undefined });
+    renderCard({ focus: "Rest", mainWorkout: "Complete rest or light walk", priority: undefined, recoverable: undefined });
 
     expect(screen.getByTestId("badge-rest-day")).toHaveTextContent("Rest day");
     expect(screen.queryByTestId("badge-missed")).toBeNull();
@@ -106,14 +107,13 @@ describe("TimelineWorkoutCard missed-session recovery", () => {
     expect(buttons.map((button) => button.textContent)).toEqual(["Let it go", "Fold into another day", "Shorten it"]);
   });
 
-  it("only offers letting go once the miss is more than a week old", () => {
-    renderCard({ date: daysAgo(9) });
-    expect(screen.getByTestId("missed-recovery-prompt-plan-pd-1")).toHaveTextContent(
-      "Missed over a week ago — the plan has moved on.",
-    );
-    expect(screen.getByTestId("missed-recovery-let_go-plan-pd-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("missed-recovery-fold-plan-pd-1")).toBeNull();
-    expect(screen.queryByTestId("missed-recovery-shorten-plan-pd-1")).toBeNull();
+  it("reads an older miss as history, without asking", () => {
+    // Past the recovery window (or a race-week day, or a retired plan's): the server leaves `recoverable` off.
+    renderCard({ date: daysAgo(9), recoverable: undefined });
+
+    expect(screen.queryByTestId("missed-recovery-prompt-plan-pd-1")).toBeNull();
+    expect(screen.getByTestId("badge-missed")).toHaveClass("text-muted-foreground");
+    expect(screen.getByTestId("card-timeline-entry-plan-pd-1").className).not.toContain("warning");
   });
 
   it("holds the prompt back while selecting cards to delete", () => {

@@ -231,6 +231,20 @@ export type TimelineEntry = {
   recovery?: PlanDayRecovery;
   /** The date a folded or shortened session was missed on. */
   missedOn?: string;
+  /**
+   * A missed session the timeline should ask about (fold / shorten / let go):
+   * undecided, a real session rather than a rest day, the day as planned
+   * rather than a race-week stand-in, before its plan was retired, and recent
+   * enough that it can still move. Older misses just read as missed. Omitted
+   * otherwise.
+   */
+  recoverable?: boolean;
+  /**
+   * The session shown is set by the plan's race date — the race itself, the
+   * shakeout the day before, or recovery after it — rather than the stored
+   * plan day, so it can't be moved or given another tier. Omitted otherwise.
+   */
+  raceDerived?: boolean;
   focus: string;
   mainWorkout: string;
   accessory: string | null;

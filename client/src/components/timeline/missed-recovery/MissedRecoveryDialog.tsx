@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
-import { useApplyMissedRecovery, useMissedRecoveryPreview } from "@/hooks/useMissedRecovery";
+import { isStaleRecoveryError, useApplyMissedRecovery, useMissedRecoveryPreview } from "@/hooks/useMissedRecovery";
+import { humanizeApiError } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
 import {
@@ -128,14 +129,9 @@ export function MissedRecoveryDialog({ request, onClose }: MissedRecoveryDialogP
         </p>
       ) : null}
       {preview.isError ? (
-        <div className="space-y-3 py-6" data-testid="missed-recovery-error">
-          <p className="text-sm text-muted-foreground">Couldn't work out your options just now.</p>
-          <Button variant="outline" size="sm" onClick={() => void preview.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <PreviewError error={preview.error} onRetry={() => void preview.refetch()} onClose={onClose} />
       ) : null}
-      {preview.data ? (
+      {preview.data && !preview.isError ? (
         <RecoveryChooser
           key={`${planDayId}:${request.option ?? "recommended"}`}
           preview={preview.data}
@@ -146,6 +142,32 @@ export function MissedRecoveryDialog({ request, onClose }: MissedRecoveryDialogP
         />
       ) : null}
     </ResponsiveSheet>
+  );
+}
+
+interface PreviewErrorProps {
+  readonly error: Error;
+  readonly onRetry: () => void;
+  readonly onClose: () => void;
+}
+
+/**
+ * The preview could not be built. When the server refused because the session
+ * has changed (logged, moved or let go elsewhere), say why and let the athlete
+ * close the sheet — the card behind it is already refreshing; trying again
+ * would only get the same answer.
+ */
+function PreviewError({ error, onRetry, onClose }: PreviewErrorProps) {
+  const stale = isStaleRecoveryError(error);
+  return (
+    <div className="space-y-3 py-6" data-testid="missed-recovery-error">
+      <p className="text-sm text-muted-foreground">
+        {stale ? humanizeApiError(error) : "Couldn't work out your options just now."}
+      </p>
+      <Button variant="outline" size="sm" onClick={stale ? onClose : onRetry}>
+        {stale ? "Close" : "Try again"}
+      </Button>
+    </div>
   );
 }
 

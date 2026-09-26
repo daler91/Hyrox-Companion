@@ -1,7 +1,4 @@
-import { RECOVERABLE_WITHIN_DAYS } from "@shared/missedRecovery";
-import { RACE_DAY_FOCUS } from "@shared/raceDay";
 import type { MissedRecoveryAction, MissedRecoveryOption, TimelineEntry } from "@shared/schema";
-import { differenceInCalendarDays, parseISO } from "date-fns";
 import { CalendarPlus, Feather, Scissors } from "lucide-react";
 import type React from "react";
 
@@ -11,27 +8,21 @@ import { Button } from "@/components/ui/button";
 export type RecoverEntryHandler = (entry: TimelineEntry, action: MissedRecoveryAction) => void;
 
 /**
- * A missed session the timeline should ask about: a real session (rest days
- * carry no tier), from a plan, with no decision made yet. The race is not
- * something to fold into another day.
+ * A missed session the timeline should ask about. The server decides
+ * (`recoverable`, in the athlete's own timezone): undecided, a real session,
+ * not a race-week day, and recent enough to move. Older misses just read as
+ * missed.
  */
 export function isRecoverableEntry(entry: TimelineEntry): boolean {
   return (
     entry.status === "missed" &&
+    entry.recoverable === true &&
     Boolean(entry.planDayId) &&
-    Boolean(entry.priority) &&
-    entry.recovery !== "let_go" &&
-    (entry.focus ?? "").trim().toLowerCase() !== RACE_DAY_FOCUS.toLowerCase()
+    entry.recovery !== "let_go"
   );
 }
 
-/** Missed more than a week ago: only letting it go is still on offer (the planner's own window). */
-function isPastRecoveryWindow(entry: TimelineEntry): boolean {
-  return differenceInCalendarDays(new Date(), parseISO(entry.date)) > RECOVERABLE_WITHIN_DAYS;
-}
-
-function promptCopy(entry: TimelineEntry, stale: boolean): string {
-  if (stale) return "Missed over a week ago — the plan has moved on.";
+function promptCopy(entry: TimelineEntry): string {
   if (entry.recovery === "folded" || entry.recovery === "shortened") {
     return "Missed again after it was moved. What now?";
   }
@@ -55,12 +46,8 @@ const FOLD: PromptAction = { action: "fold", label: "Fold into another day", ico
 const SHORTEN: PromptAction = { action: "shorten", label: "Shorten it", icon: Scissors };
 const LET_GO: PromptAction = { action: "let_go", label: "Let it go", icon: Feather };
 
-/**
- * The buttons, likeliest first: an optional session leads with letting it go,
- * and one past the recovery window offers nothing else.
- */
-function promptActions(entry: TimelineEntry, stale: boolean): readonly PromptAction[] {
-  if (stale) return [LET_GO];
+/** The buttons, likeliest first: an optional session leads with letting it go. */
+function promptActions(entry: TimelineEntry): readonly PromptAction[] {
   if (entry.priority === "optional") return [LET_GO, FOLD, SHORTEN];
   return [FOLD, SHORTEN, LET_GO];
 }
@@ -112,16 +99,15 @@ export function MissedRecoveryPrompt({ entry, onRecover }: MissedRecoveryPromptP
   }
 
   if (!isRecoverableEntry(entry)) return null;
-  const stale = isPastRecoveryWindow(entry);
 
   return (
     <div
       className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-3"
       data-testid={`missed-recovery-prompt-${entry.id}`}
     >
-      <p className="text-sm text-foreground">{promptCopy(entry, stale)}</p>
+      <p className="text-sm text-foreground">{promptCopy(entry)}</p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {promptActions(entry, stale).map(({ action, label, icon: Icon }, index) => (
+        {promptActions(entry).map(({ action, label, icon: Icon }, index) => (
           <Button
             key={action}
             type="button"

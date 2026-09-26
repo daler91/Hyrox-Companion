@@ -13,6 +13,20 @@ import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 import { useApiMutation } from "./useApiMutation";
 
 /**
+ * A 404 or 409 from the recovery routes: the session is gone, or is no longer
+ * a missed session waiting on a decision — logged, moved or let go, perhaps on
+ * another device. The card that offered it was out of date, and asking again
+ * will not change the answer.
+ */
+export function isStaleRecoveryError(error: unknown): boolean {
+  return error instanceof Error && (error.message.startsWith("409:") || error.message.startsWith("404:"));
+}
+
+function refreshTimeline(): void {
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
+}
+
+/**
  * What folding, shortening or letting a missed session go would each do to
  * the plan. Nothing is fetched until a session is chosen, and the preview is
  * never served from cache: it describes the calendar as it stands, and a
@@ -21,10 +35,19 @@ import { useApiMutation } from "./useApiMutation";
 export function useMissedRecoveryPreview(planDayId: string | null) {
   return useQuery<MissedSessionRecoveryPreview>({
     queryKey: QUERY_KEYS.missedRecovery(planDayId ?? ""),
-    queryFn: () => api.plans.getMissedRecovery(planDayId ?? ""),
+    queryFn: async () => {
+      try {
+        return await api.plans.getMissedRecovery(planDayId ?? "");
+      } catch (error) {
+        // Bring the card behind the sheet up to date with what the server knows.
+        if (isStaleRecoveryError(error)) refreshTimeline();
+        throw error;
+      }
+    },
     enabled: Boolean(planDayId),
     staleTime: 0,
     gcTime: 0,
+    retry: (failureCount, error) => !isStaleRecoveryError(error) && failureCount < 1,
   });
 }
 
@@ -59,8 +82,16 @@ export function useApplyMissedRecovery() {
     ],
     successToast: (_data, { body }) => ({ title: successTitle(body) }),
     errorToast: "Couldn't update the session",
-    onSuccess: (_data, { planDayId }) => {
+    onSuccess: async (_data, { planDayId }) => {
       queryClient.removeQueries({ queryKey: QUERY_KEYS.missedRecovery(planDayId) });
+      // Shortening drops or scales the day's prescribed sets; the sheets cache them.
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planDayExercises(planDayId) });
+    },
+    onError: async (error, { planDayId }) => {
+      if (!isStaleRecoveryError(error)) return;
+      // The session changed under the open sheet: show it as it is now.
+      refreshTimeline();
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.missedRecovery(planDayId) });
     },
   });
 }

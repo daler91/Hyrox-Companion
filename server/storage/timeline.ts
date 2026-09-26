@@ -2,6 +2,9 @@
 // counts apply the identical rule — a day must never read "Not counted" here
 // and "Missed" there.
 import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
+import { dayDiff } from "@shared/dateUtils";
+import { RECOVERABLE_WITHIN_DAYS } from "@shared/missedRecovery";
+import { RACE_DAY_FOCUS } from "@shared/raceDay";
 import {
   type DeviceLinkSource,
   type ExerciseSet,
@@ -137,6 +140,33 @@ function planDayTierFields(
   };
 }
 
+/**
+ * Whether the card should ask what to do about a missed session: undecided, a
+ * real session (not a rest day), the day as planned rather than a race-week
+ * stand-in (the race itself included), before its plan was retired, and recent
+ * enough that the recovery sheet (services/missedRecovery) can still move it.
+ * Anything older simply reads as missed — nobody needs a prompt for every miss
+ * in their history.
+ */
+function isRecoverableMiss(
+  scheduledDate: string,
+  today: string,
+  status: WorkoutStatus,
+  tier: Pick<TimelineEntry, "priority" | "recovery">,
+  shown: { focus: string; overridden: boolean },
+  retiredOn: string | null,
+): boolean {
+  return (
+    status === "missed" &&
+    tier.recovery !== "let_go" &&
+    tier.priority !== undefined &&
+    !shown.overridden &&
+    shown.focus.trim().toLowerCase() !== RACE_DAY_FOCUS.toLowerCase() &&
+    (retiredOn === null || scheduledDate < retiredOn) &&
+    dayDiff(scheduledDate, today) <= RECOVERABLE_WITHIN_DAYS
+  );
+}
+
 function createLinkedWorkoutEntry(
   day: PlanDay,
   linkedLog: WorkoutLog,
@@ -175,12 +205,18 @@ function createLinkedWorkoutEntry(
 function createPlannedDayEntry(
   day: PlanDay,
   scheduledDate: string,
-  row: { planName: string; planId: string },
+  row: { planName: string; planId: string; retiredOn: string | null },
   today: string,
   override: RaceDayOverride | null,
   isExcused: boolean,
 ): TimelineEntry {
   const status = calculatePlanDayStatus(day.status, scheduledDate, today, isExcused);
+  const shown = {
+    focus: override ? override.focus : day.focus,
+    mainWorkout: override ? override.mainWorkout : day.mainWorkout,
+    overridden: override !== null,
+  };
+  const tier = planDayTierFields(day, status, shown);
   return {
     id: `plan-${day.id}`,
     date: scheduledDate,
@@ -194,13 +230,11 @@ function createPlannedDayEntry(
     // Only meaningful on skipped days; carried so the coach can distinguish an
     // ill/injured skip from a schedule one. Omitted when never set.
     skipReason: (day.skipReason as TimelineEntry["skipReason"]) ?? undefined,
-    ...planDayTierFields(day, status, {
-      focus: override ? override.focus : day.focus,
-      mainWorkout: override ? override.mainWorkout : day.mainWorkout,
-      overridden: override !== null,
-    }),
-    focus: override ? override.focus : day.focus,
-    mainWorkout: override ? override.mainWorkout : day.mainWorkout,
+    ...tier,
+    recoverable: isRecoverableMiss(scheduledDate, today, status, tier, shown, row.retiredOn) || undefined,
+    raceDerived: shown.overridden || undefined,
+    focus: shown.focus,
+    mainWorkout: shown.mainWorkout,
     accessory: override ? override.accessory : day.accessory,
     notes: override ? override.notes : day.notes,
     planDayId: day.id,
@@ -457,6 +491,7 @@ export class TimelineStorage {
     const planIds = userPlans.map((p) => p.id);
     if (planIds.length === 0) return { scheduledDays: [], planNameById };
     const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
+    const retiredOnById = new Map(userPlans.map((p) => [p.id, p.retiredOn]));
 
     // Asking for ONE plan shows all of it, retired or not — that is the athlete
     // inspecting their own history, and hiding half of it would be a lie. The
@@ -485,6 +520,7 @@ export class TimelineStorage {
       planName: planNameById.get(day.planId)!,
       planId: day.planId,
       raceDate: raceDateById.get(day.planId) ?? null,
+      retiredOn: retiredOnById.get(day.planId) ?? null,
     }));
     return { scheduledDays, planNameById };
   }
@@ -607,7 +643,7 @@ export class TimelineStorage {
           createPlannedDayEntry(
             day,
             day.scheduledDate,
-            { planName: row.planName, planId: row.planId },
+            { planName: row.planName, planId: row.planId, retiredOn: row.retiredOn },
             today,
             override,
             isDateExcused(day.scheduledDate, absences),

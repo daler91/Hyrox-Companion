@@ -36,11 +36,8 @@ export interface MissedDetail {
   readonly recovery?: PlanDayRecovery;
   /** A rest day: when it goes by there was nothing to miss. */
   readonly restDay?: boolean;
-}
-
-/** A missed day nobody needs to act on: let go, or a rest day that simply went by. */
-function isSettledMiss(status: string, detail: MissedDetail): boolean {
-  return status === "missed" && (detail.recovery === "let_go" || Boolean(detail.restDay));
+  /** Still waiting on a decision the card offers (fold / shorten / let go). */
+  readonly open?: boolean;
 }
 
 export function getStatusBadge(
@@ -107,10 +104,14 @@ export function getStatusBadge(
         </Badge>
       );
     case "missed":
-      // The warning tone, not red: a missed session is a decision waiting to
-      // be made (the card offers fold / shorten / let go), not a verdict.
+      // Never red: a recent miss is a decision waiting to be made (the card
+      // offers fold / shorten / let go), so it takes the warning tone; an
+      // older one is just history.
       return (
-        <Badge className="bg-warning/10 text-warning" data-testid="badge-missed">
+        <Badge
+          className={detail.open ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground"}
+          data-testid="badge-missed"
+        >
           <XCircle className="h-3 w-3 mr-1" aria-hidden="true" />
           Missed
         </Badge>
@@ -138,8 +139,7 @@ export function getCardClasses(
   if (canBeCombinedWith) return "border-primary/50 hover:border-primary";
   if (isRaceDayEntry(focus)) return "border-amber-500/40 bg-amber-500/10";
   if (status === "completed") return "border-success/20 bg-success/5";
-  if (isSettledMiss(status, detail)) return "";
-  if (status === "missed") return "border-warning/30 bg-warning/5";
+  if (status === "missed") return detail.open ? "border-warning/30 bg-warning/5" : "";
   if (status === "skipped") return "border-yellow-500/20 bg-yellow-500/5";
   return "";
 }

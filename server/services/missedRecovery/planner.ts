@@ -465,10 +465,11 @@ function bestTarget(
 }
 
 /**
- * The day an option suggests: one with no cautions when there is one, then
- * one with no severe caution, then the least bad. The same order the
- * recommendation walks, so the sheet never marks one day "best fit" while
- * recommending another.
+ * The day an option suggests on its own: one with no cautions when there is
+ * one, then one with no severe caution, then the least bad. The recommended
+ * option suggests the recommendation's day instead (see
+ * planMissedSessionRecovery), so the sheet never marks one day "best fit"
+ * while recommending another.
  */
 function suggestTarget(input: PlannerInput, targets: readonly RecoveryTarget[]): RecoveryTarget | undefined {
   return (
@@ -576,12 +577,25 @@ function letGoImpact(input: PlannerInput): RecoveryImpact {
   };
 }
 
+/** The option with the recommendation's day as its best fit, when it is the one recommended. */
+function withRecommendedDay(
+  option: RecoveryMoveOption,
+  action: "fold" | "shorten",
+  recommendation: Recommendation,
+): RecoveryMoveOption {
+  if (recommendation.action !== action || recommendation.targetDate === null) return option;
+  return { ...option, suggestedDate: recommendation.targetDate };
+}
+
 export function planMissedSessionRecovery(input: PlannerInput): MissedSessionRecoveryPreview {
   const { missed } = input;
   const candidates = candidateDates(input);
   const reason = unmovableReason(input, candidates);
-  const fold = moveOption(input, "fold", candidates, reason);
-  const shorten = moveOption(input, "shorten", candidates, reason);
+  const foldOption = moveOption(input, "fold", candidates, reason);
+  const shortenOption = moveOption(input, "shorten", candidates, reason);
+  const recommendation = recommend(input, foldOption, shortenOption);
+  const fold = withRecommendedDay(foldOption, "fold", recommendation);
+  const shorten = withRecommendedDay(shortenOption, "shorten", recommendation);
 
   return {
     planDayId: missed.planDayId,
@@ -596,7 +610,7 @@ export function planMissedSessionRecovery(input: PlannerInput): MissedSessionRec
       rpe: missed.rpe,
       hard: isHard(missed.priority, missed.rpe),
     },
-    recommendation: recommend(input, fold, shorten),
+    recommendation,
     fold,
     shorten: {
       ...shorten,

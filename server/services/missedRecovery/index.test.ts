@@ -128,7 +128,35 @@ describe("getMissedSessionRecoveryPreview", () => {
     // The rest day and the missed session itself are not "sessions around it".
     const today = preview.fold.targets.find((target) => target.date === "2026-09-24");
     expect(today?.sessions).toEqual([]);
-    expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith(USER, { limit: 60 });
+    // Read backwards from the end of the last candidate day's week (Sun 4 Oct).
+    expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith(USER, { limit: 60, before: "2026-10-05" });
+  });
+
+  it("reads back page by page until the missed week is covered, however long the plan runs", async () => {
+    vi.mocked(storage.timeline.getTimelinePage)
+      .mockResolvedValueOnce({
+        entries: [entry("2026-10-04", "Long run", { priority: "key" }), entry("2026-09-28", "Strength A")],
+        nextCursor: "2026-09-28",
+      })
+      .mockResolvedValueOnce({
+        entries: [
+          entry("2026-09-25", "Strength B"),
+          entry("2026-09-22", "Threshold run", { planDayId: "pd-missed", status: "missed", priority: "key" }),
+        ],
+        nextCursor: "2026-09-22",
+      })
+      .mockResolvedValueOnce({ entries: [entry("2026-09-20", "Long run", { priority: "key" })], nextCursor: null });
+
+    const preview = await getMissedSessionRecoveryPreview(USER, "pd-missed");
+
+    expect(storage.timeline.getTimelinePage).toHaveBeenNthCalledWith(2, USER, { limit: 60, before: "2026-09-28" });
+    expect(storage.timeline.getTimelinePage).toHaveBeenNthCalledWith(3, USER, { limit: 60, before: "2026-09-22" });
+    // Friday's session came from the second page, so Friday is not "free".
+    const friday = preview.fold.targets.find((target) => target.date === "2026-09-25");
+    expect(friday?.sessions.map((session) => session.focus)).toEqual(["Strength B"]);
+    // The Sunday before the missed week is outside the window: it isn't counted in that week.
+    const missedWeek = preview.letGo.impact.weeks.find((week) => week.weekStart === "2026-09-21");
+    expect(missedWeek?.minutesAfter).toBe(45);
   });
 
   it("refuses a day that isn't missed, a rest day, and someone else's day", async () => {
@@ -231,6 +259,17 @@ describe("applyMissedSessionRecovery", () => {
     expect(storage.plans.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
       guard: { statuses: ["missed"], scheduledDate: "2026-09-22", recovery: "let_go" },
       update: { recovery: null },
+    });
+  });
+
+  it("reopens a let-go of a session that had already been moved as moved, not as new", async () => {
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ ...missedDay, recovery: "let_go", missedOn: "2026-09-18" });
+
+    await applyMissedSessionRecovery(USER, "pd-missed", { action: "reopen" });
+
+    expect(storage.plans.applyPlanDayRecovery).toHaveBeenCalledWith("pd-missed", USER, {
+      guard: { statuses: ["missed"], scheduledDate: "2026-09-22", recovery: "let_go" },
+      update: { recovery: "folded" },
     });
   });
 

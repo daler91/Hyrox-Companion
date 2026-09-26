@@ -282,6 +282,32 @@ async function missedSessionMoveFields(
   return { status: "planned", recovery: "folded", missedOn: from };
 }
 
+/**
+ * Write a reschedule, folding the session when `missedSessionMoveFields` says
+ * it was missed. That decision rests on a read taken before this write, so
+ * the day is locked and re-checked first: a log or a sync that completed it in
+ * between must not be flipped back to planned. The move itself still lands —
+ * it is what the athlete asked for — just without the fold.
+ */
+async function writeReschedule(
+  dayId: string,
+  updates: UpdatePlanDay,
+  userId: string,
+  existing: PlanDay | null | undefined,
+  moveFields: Pick<UpdatePlanDay, "status" | "recovery" | "missedOn">,
+) {
+  if (!existing || moveFields.status === undefined) return storage.plans.updatePlanDay(dayId, updates, userId);
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: planDays.status, scheduledDate: planDays.scheduledDate })
+      .from(planDays)
+      .where(eq(planDays.id, dayId))
+      .for("update");
+    const unchanged = current?.status === existing.status && current?.scheduledDate === existing.scheduledDate;
+    return storage.plans.updatePlanDay(dayId, unchanged ? { ...updates, ...moveFields } : updates, userId, tx);
+  });
+}
+
 export async function updatePlanDayWithCleanup(
   dayId: string,
   updates: UpdatePlanDay,
@@ -303,7 +329,7 @@ export async function updatePlanDayWithCleanup(
     existing && reschedulePending
       ? await missedSessionMoveFields(existing, reschedulePending.nextDate, userId)
       : {};
-  const result = await storage.plans.updatePlanDay(dayId, { ...updates, ...moveFields }, userId);
+  const result = await writeReschedule(dayId, updates, userId, existing, moveFields);
 
   if (result && existing && reschedulePending) {
     const oldDate = existing.scheduledDate ?? null;
@@ -467,7 +493,7 @@ export async function updatePlanDayStatus(
     const existing = reschedule ? await storage.plans.getPlanDay(dayId, userId) : null;
     const moveFields =
       existing && reschedule ? await missedSessionMoveFields(existing, reschedule.nextDate, userId) : {};
-    const result = await storage.plans.updatePlanDay(dayId, { ...updates, ...moveFields }, userId);
+    const result = await writeReschedule(dayId, updates, userId, existing, moveFields);
     if (
       result &&
       existing &&

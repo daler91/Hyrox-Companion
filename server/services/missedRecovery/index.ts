@@ -1,5 +1,6 @@
 import { type AbsenceRange, isDateExcused } from "@shared/absence";
-import { addDaysToISODate } from "@shared/dateUtils";
+import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
+import { RECOVERABLE_WITHIN_DAYS, RECOVERY_WINDOW_DAYS } from "@shared/missedRecovery";
 import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
 import type {
   ApplyMissedRecoveryBody,
@@ -27,6 +28,7 @@ import {
   type PlannerSession,
   type PlannerSessionState,
   shortDate,
+  weekOf,
 } from "./planner";
 import { planShortenedPrescription, type ShortenPlan } from "./shorten";
 
@@ -44,12 +46,10 @@ import { planShortenedPrescription, type ShortenPlan } from "./shorten";
 /** No exercise table and no saved duration: the app's usual assumption of an hour at a moderate effort. */
 const ASSUMED_DURATION_MIN = 60;
 const ASSUMED_RPE = 5;
-/**
- * Past timeline entries to read around the missed session. The planner needs
- * at most the missed session's week (it can only be recovered for a week),
- * which this covers for anyone logging fewer than four sessions a day.
- */
-const PAST_ENTRIES = 60;
+/** Timeline entries per page when reading the days around the missed session. */
+const WINDOW_PAGE_SIZE = 60;
+/** Pages to read before settling for what came back: a dozen entries a day for a month. */
+const WINDOW_MAX_PAGES = 6;
 /** A shortened session never reads as more than this share of the original, or less than the floor. */
 const MIN_SHORTENED_FRACTION = 0.3;
 const MAX_SHORTENED_FRACTION = 0.9;
@@ -182,6 +182,43 @@ function shortenedFraction(
   return clamp(after / before, MIN_SHORTENED_FRACTION, MAX_SHORTENED_FRACTION);
 }
 
+/**
+ * The days the planner reads: the missed session's week, and — while it can
+ * still move — every day it could move to, their weeks, and the day after the
+ * last one (a key session the next morning is a caution too).
+ */
+function plannerWindow(missedDate: string, today: string): { from: string; to: string } {
+  const from = weekOf(missedDate);
+  if (dayDiff(missedDate, today) > RECOVERABLE_WITHIN_DAYS) {
+    return { from, to: addDaysToISODate(from, 6) };
+  }
+  const lastCandidate = addDaysToISODate(today, RECOVERY_WINDOW_DAYS - 1);
+  const weekEnd = addDaysToISODate(weekOf(lastCandidate), 6);
+  const dayAfter = addDaysToISODate(lastCandidate, 1);
+  return { from, to: weekEnd > dayAfter ? weekEnd : dayAfter };
+}
+
+/**
+ * The athlete's timeline from `from` to `to`, read newest-first backwards from
+ * the window's end. Anchored on the window rather than on today: the
+ * timeline's first page leads with the whole upcoming schedule, and on a long
+ * plan (or two live ones) that crowds out the very days the planner needs,
+ * which would then read as free.
+ */
+async function loadTimelineWindow(userId: string, from: string, to: string): Promise<TimelineEntry[]> {
+  const entries: TimelineEntry[] = [];
+  let before: string | null = addDaysToISODate(to, 1);
+  for (let page = 0; page < WINDOW_MAX_PAGES && before !== null; page++) {
+    // Sequential by nature: each page starts where the previous one ended.
+    const result = await storage.timeline.getTimelinePage(userId, { limit: WINDOW_PAGE_SIZE, before });
+    entries.push(...result.entries);
+    const oldest = result.entries.at(-1)?.date;
+    // Pages never split a date, so reaching `from` means its whole day is in.
+    before = oldest !== undefined && oldest > from ? result.nextCursor : null;
+  }
+  return entries.filter((entry) => entry.date >= from && entry.date <= to);
+}
+
 async function loadRecoveryContext(userId: string, planDayId: string): Promise<RecoveryContext> {
   const [day, user] = await Promise.all([
     storage.plans.getPlanDay(planDayId, userId),
@@ -192,8 +229,9 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
 
   const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const distanceUnit = user?.distanceUnit || "km";
-  const [page, plans, annotations, sets, blocks] = await Promise.all([
-    storage.timeline.getTimelinePage(userId, { limit: PAST_ENTRIES }),
+  const span = plannerWindow(missedDate, today);
+  const [timeline, plans, annotations, sets, blocks] = await Promise.all([
+    loadTimelineWindow(userId, span.from, span.to),
     storage.plans.listTrainingPlans(userId),
     storage.timelineAnnotations.list(userId),
     storage.workouts.getExerciseSetsByPlanDay(planDayId, userId),
@@ -228,9 +266,8 @@ async function loadRecoveryContext(userId: string, planDayId: string): Promise<R
   const shortenPlan = planShortenedPrescription(daySets, { blockCount: dayBlocks.length, distanceUnit });
   const fraction = shortenedFraction(shortenPlan, dayBlocks, daySets, distanceUnit);
 
-  const windowEnd = addDaysToISODate(today, 14);
-  const sessions = page.entries.flatMap((entry) => {
-    if (entry.planDayId === day.id || entry.date > windowEnd) return [];
+  const sessions = timeline.flatMap((entry) => {
+    if (entry.planDayId === day.id) return [];
     const session = toPlannerSession(entry, today, distanceUnit);
     return session ? [session] : [];
   });
@@ -358,7 +395,14 @@ async function reopenLetGo(userId: string, planDayId: string): Promise<PlanDay> 
   if (storedRecovery(day) !== "let_go") {
     throw new AppError(ErrorCode.CONFLICT, "Only a session you let go can be reopened.", 409);
   }
-  return writeRecovery(userId, planDayId, { guard: guardFor(day), update: { recovery: null } });
+  // Letting go overwrote how an already-moved session got here; `missedOn` is
+  // only set by a move, so it still says it was moved once. Whether it was
+  // shortened on the way is lost, and "folded" is the honest remainder — what
+  // matters is that the planner doesn't chase it as if it had never moved.
+  return writeRecovery(userId, planDayId, {
+    guard: guardFor(day),
+    update: { recovery: day.missedOn ? "folded" : null },
+  });
 }
 
 /**

@@ -32,8 +32,17 @@ interface SessionPriorityControlProps {
  * coach what to protect when a week has to get lighter.
  */
 export function SessionPriorityControl({ entry }: SessionPriorityControlProps) {
-  // A rest day has no tier, and a logged or skipped session is past deciding.
-  if (!entry.planDayId || !entry.priority || entry.status === "completed" || entry.status === "skipped") return null;
+  // A rest day has no tier, a logged or skipped session is past deciding, and a
+  // race-week day's tier comes from the race (race day key, shakeout optional).
+  if (
+    !entry.planDayId ||
+    !entry.priority ||
+    entry.raceDerived ||
+    entry.status === "completed" ||
+    entry.status === "skipped"
+  ) {
+    return null;
+  }
   return <PriorityChips entryId={entry.id} planDayId={entry.planDayId} initial={entry.priority} />;
 }
 

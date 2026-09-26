@@ -42,7 +42,7 @@ interface MoveContext {
 function movedEntry(entry: TimelineEntry, newDate: string): TimelineEntry {
   const today = format(new Date(), "yyyy-MM-dd");
   if (entry.status !== "missed" || !entry.planDayId || newDate < today) return { ...entry, date: newDate };
-  return { ...entry, date: newDate, status: "planned", recovery: "folded", missedOn: entry.date };
+  return { ...entry, date: newDate, status: "planned", recovery: "folded", missedOn: entry.date, recoverable: undefined };
 }
 
 function moveEntryDate(entries: TimelineEntry[], entryId: string, newDate: string): TimelineEntry[] {

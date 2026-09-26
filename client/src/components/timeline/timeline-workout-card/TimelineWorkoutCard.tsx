@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
-import { MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
+import { isRecoverableEntry, MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -273,11 +273,12 @@ function getTimelineCardCombineState({
   };
 }
 
-/** A missed day's decision, and whether it was a rest day (nothing to miss). */
+/** A missed day's decision, whether it was a rest day (nothing to miss), and whether it still asks. */
 function getMissedDetail(entry: TimelineWorkoutEntry): MissedDetail {
   return {
     recovery: entry.recovery,
     restDay: entry.type === "planned" && isRestLikePlanDay(entry.focus ?? "", entry.mainWorkout ?? ""),
+    open: isRecoverableEntry(entry),
   };
 }
 

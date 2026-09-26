@@ -1,9 +1,11 @@
 import type { MissedSessionRecoveryPreview, RecoveryTarget, TimelineEntry } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { queryClient } from "@/lib/queryClient";
 
 import { MissedRecoveryDialog } from "./MissedRecoveryDialog";
 
@@ -19,6 +21,7 @@ vi.mock("@/lib/api", () => ({
     trainingOverview: ["/api/v1/training-overview"],
     plans: ["/api/v1/plans"],
     missedRecovery: (dayId: string) => ["/api/v1/plans/days", dayId, "recovery"],
+    planDayExercises: (dayId: string) => ["/api/v1/plans/days", dayId, "sets"],
   },
 }));
 vi.mock("@/hooks/use-toast", async () => (await import("@/test/support/mutationHookMocks")).makeToastMock());
@@ -178,6 +181,9 @@ describe("MissedRecoveryDialog", () => {
   });
 
   it("opens on the option tapped on the card, with the cut spelled out", async () => {
+    // The session's prescription as a sheet cached it before the cut.
+    const setsKey = ["/api/v1/plans/days", "pd-1", "sets"];
+    queryClient.setQueryData(setsKey, { exerciseSets: [], structureBlocks: [] });
     const user = userEvent.setup();
     renderDialog("shorten");
 
@@ -192,6 +198,9 @@ describe("MissedRecoveryDialog", () => {
         targetDate: "2026-09-24",
       }),
     );
+    // The dropped sets must not linger in the log sheet's cache.
+    await waitFor(() => expect(queryClient.getQueryState(setsKey)?.isInvalidated).toBe(true));
+    queryClient.removeQueries({ queryKey: setsKey });
   });
 
   it("shows what letting it go costs the week before doing it", async () => {
@@ -225,13 +234,29 @@ describe("MissedRecoveryDialog", () => {
   });
 
   it("offers a retry when the preview can't load", async () => {
-    apiMocks.getMissedRecovery.mockRejectedValueOnce(new Error("offline"));
+    // The hook retries a network failure once by itself before showing the error.
+    apiMocks.getMissedRecovery.mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(new Error("offline"));
     const user = userEvent.setup();
     renderDialog();
 
-    expect(await screen.findByTestId("missed-recovery-error")).toBeInTheDocument();
+    expect(await screen.findByTestId("missed-recovery-error", {}, { timeout: 4000 })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByTestId("missed-recovery-chooser")).toBeInTheDocument();
+  });
+
+  it("says why, and closes, when the session changed since the card was drawn", async () => {
+    apiMocks.getMissedRecovery.mockRejectedValue(
+      new Error(`409: {"error":"This session isn't missed, so there is nothing to recover.","code":"CONFLICT"}`),
+    );
+    const user = userEvent.setup();
+    const { onClose } = renderDialog();
+
+    const error = await screen.findByTestId("missed-recovery-error");
+    expect(error).toHaveTextContent("This session isn't missed, so there is nothing to recover.");
+    // Asking again would get the same answer, so there is no retry.
+    expect(apiMocks.getMissedRecovery).toHaveBeenCalledTimes(1);
+    await user.click(within(error).getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("has no detectable accessibility violations", async () => {

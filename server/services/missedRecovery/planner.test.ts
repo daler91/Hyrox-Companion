@@ -313,6 +313,58 @@ describe("planMissedSessionRecovery", () => {
     expect(preview.fold.suggestedDate).toBe("2026-10-01");
   });
 
+  it("marks the recommended day best fit even when another day is free of cautions", () => {
+    // A key session missed yesterday: a shorter one today sits next to
+    // tomorrow's strength (a caution, not a severe one) but keeps the week;
+    // next Monday is clean but a week late. The recommendation takes today,
+    // and the sheet must not open on today with "best fit" on Monday.
+    const preview = planMissedSessionRecovery(
+      input({
+        today: "2026-09-22",
+        missed: missed({ date: "2026-09-21", durationMin: 60, rpe: 8, shortened: { durationMin: 36, keptFraction: 0.6, changes: [], notes: [] } }),
+        sessions: [
+          session("2026-09-23", "Strength", { durationMin: 60, rpe: 7 }),
+          session("2026-09-24", "Tempo run", { priority: "key", durationMin: 50, rpe: 8 }),
+          session("2026-09-26", "Long run", { priority: "key", durationMin: 100, rpe: 6 }),
+          session("2026-09-29", "Strength", { durationMin: 60, rpe: 6 }),
+          session("2026-09-30", "Easy run", { priority: "optional", durationMin: 45, rpe: 4 }),
+          session("2026-10-01", "Tempo run", { priority: "key", durationMin: 60, rpe: 8 }),
+          session("2026-10-02", "Strength", { durationMin: 60, rpe: 6 }),
+          session("2026-10-03", "Long run", { priority: "key", durationMin: 150, rpe: 6 }),
+          session("2026-10-04", "Hyrox sim", { priority: "key", durationMin: 100, rpe: 8 }),
+        ],
+      }),
+    );
+    expect(noteCodes(preview, "shorten", "2026-09-22")).toEqual(["hard_neighbor"]);
+    expect(noteCodes(preview, "shorten", "2026-09-28")).toEqual([]);
+    expect(preview.recommendation).toMatchObject({ action: "shorten", targetDate: "2026-09-22" });
+    expect(preview.shorten.suggestedDate).toBe("2026-09-22");
+  });
+
+  it("marks a supporting session's same-week day best fit, as recommended", () => {
+    // Today is busy but clean; next Monday scores a little better on its own,
+    // but only a day inside the missed week keeps the week as planned.
+    const preview = planMissedSessionRecovery(
+      input({
+        missed: missed({ priority: "supporting", focus: "Strength", durationMin: 45, rpe: 5 }),
+        sessions: [
+          session("2026-09-24", "Strength B", { durationMin: 30 }),
+          session("2026-09-24", "Row", { durationMin: 30 }),
+          session("2026-09-25", "Bike", { durationMin: 30 }),
+          session("2026-09-25", "Ski", { durationMin: 30 }),
+          session("2026-09-26", "Run", { durationMin: 30 }),
+          session("2026-09-26", "Core", { durationMin: 30 }),
+          session("2026-09-27", "Swim", { durationMin: 30 }),
+          session("2026-09-27", "Bike", { durationMin: 30 }),
+          session("2026-09-29", "Strength", { durationMin: 300 }),
+          session("2026-10-01", "Run", { durationMin: 300 }),
+        ],
+      }),
+    );
+    expect(preview.recommendation).toMatchObject({ action: "fold", targetDate: "2026-09-24" });
+    expect(preview.fold.suggestedDate).toBe("2026-09-24");
+  });
+
   it("lets a supporting session go rather than push it into next week", () => {
     const preview = planMissedSessionRecovery(
       input({

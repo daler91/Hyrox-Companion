@@ -82,4 +82,9 @@ describe("SessionPriorityControl", () => {
     );
     expect(screen.queryByTestId("session-priority-plan-pd-1")).toBeNull();
   });
+
+  it("is absent on a race-week day, whose tier comes from the race", () => {
+    const { container } = renderControl({ focus: "Shakeout", priority: "optional", raceDerived: true });
+    expect(container).toBeEmptyDOMElement();
+  });
 });
