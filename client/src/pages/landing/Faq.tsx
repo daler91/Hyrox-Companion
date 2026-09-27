@@ -1,61 +1,7 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { featureFlags } from "@/lib/featureFlags";
 
+import { FAQS } from "./landingCopy";
 import { SectionHeading } from "./SectionHeading";
-
-const BASE_FAQS = [
-  {
-    question: "Is fitai.coach free to use?",
-    answer:
-      "Yes. The core training tracker, timeline, workout logging, and analytics are free. Some AI-assisted features (plan generation, streaming chat) may have fair-use limits.",
-  },
-  {
-    question: "Do I need a specific race goal?",
-    answer:
-      "No. fitai.coach works for any structured training: hyrox prep, half-marathon builds, general functional fitness, strength cycles. The exercise library covers running, strength, conditioning, and the full set of functional stations.",
-  },
-  {
-    question: "How does the AI coach work?",
-    answer:
-      "After each workout you log, the AI reviews your recent volume, intensity, and plan progression, then suggests adjustments to upcoming sessions. You can accept, tweak, or dismiss any suggestion before it touches your plan.",
-  },
-  {
-    question: "Do I have to type out every workout?",
-    answer:
-      "No. Describe a session in plain text, dictate it with your voice, or snap a photo of a whiteboard or printed plan. The AI parses it into structured exercises, sets, reps, and loads for you to review before saving.",
-  },
-  {
-    question: "Will my Strava and Garmin activities sync?",
-    answer:
-      "Yes. Connect Strava or Garmin Connect from Settings and completed activities appear on your timeline with a source badge. Your Strava tokens and Garmin credentials are encrypted at rest and never shared with third parties.",
-  },
-  {
-    question: "What happens if I go offline mid-workout?",
-    answer:
-      "The app is a Progressive Web App with an offline queue for workout logging. If a workout save loses connection, it is held locally and syncs automatically when you're back online. Signing out or deleting your account clears unsynced local saves for privacy.",
-  },
-  {
-    question: "Can I import my own training plan?",
-    answer:
-      "Yes. You can upload a CSV training plan during onboarding or from the Timeline page. We also ship an 8-week sample plan and can generate a custom plan from your goal description.",
-  },
-  {
-    question: "Can the AI coach use my own coaching style?",
-    answer:
-      "Yes. Upload your own coaching principles or documents in Settings and the AI coach indexes them, then grounds its answers and plan adjustments in your methodology instead of relying on generic advice.",
-  },
-];
-
-const NUTRITION_FAQ = {
-  question: "Can I track my nutrition?",
-  answer:
-    "Yes. Log meals by describing them, snapping a photo, or scanning a barcode, and track calories, macros, and micronutrients. Set training-aware targets that scale your carbs to each day's load — or calculate them from your profile — and get on-demand AI insights on your fuelling.",
-};
-
-const FAQS = [
-  ...BASE_FAQS,
-  ...(featureFlags.nutritionEnabled ? [NUTRITION_FAQ] : []),
-];
 
 export function Faq() {
   return (
