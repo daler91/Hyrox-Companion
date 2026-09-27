@@ -764,6 +764,13 @@
       "when": 1790428917640,
       "tag": "0108_workout_log_streams",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1790517975348,
+      "tag": "0109_drop_redundant_custom_exercises_user_id_index",
+      "breakpoints": true
     }
   ]
 }

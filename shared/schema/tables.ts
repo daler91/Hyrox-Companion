@@ -1303,7 +1303,11 @@ export const customExercises = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
-    index("idx_custom_exercises_user_id").on(table.userId),
+    // idx_custom_exercises_user_id (single-column, on user_id) was dropped:
+    // this composite unique index leads with user_id, so Postgres can already
+    // serve any `WHERE user_id = ...` query from it alone. The narrow index
+    // added write cost (every insert/delete maintains a second B-tree) with
+    // no read benefit — every caller filters by bare userId or (userId, name).
     uniqueIndex("idx_custom_exercises_user_name").on(table.userId, table.name),
   ],
 );
