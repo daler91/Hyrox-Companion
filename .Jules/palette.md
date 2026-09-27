@@ -1,0 +1,3 @@
+## 2026-09-27 - Native title vs styled Tooltip on touch devices
+**Learning:** This codebase consistently uses a styled `<Tooltip>` (Radix-based) component for icon-only button hints throughout the app. The delete workout button in ReviewSurface was the sole holdout using a native `title` attribute instead. Native `title` tooltips never appear on touch devices (iOS Safari, Android Chrome), so mobile users had no hint about what the trash icon did. The styled Tooltip component works everywhere.
+**Action:** Always use the app's `<Tooltip>` component for icon-only button hints, never the native `title` attribute. Search for stray `title=` on `<Button>` elements when auditing touch accessibility.

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -906,18 +907,24 @@ function ReviewActionButtons({
           </Button>
         ) : null}
         {onDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-muted-foreground hover:text-destructive"
-            onClick={() => onDeleteConfirmOpenChange(true)}
-            aria-label="Delete workout"
-            title="Delete workout"
-            data-testid={`review-delete-${entry.id}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => onDeleteConfirmOpenChange(true)}
+                  aria-label="Delete workout"
+                  data-testid={`review-delete-${entry.id}`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete workout</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
       </div>
       {onDelete ? (
