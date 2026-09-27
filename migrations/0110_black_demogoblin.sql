@@ -1,0 +1,1 @@
+DROP INDEX "idx_food_favorites_user_id";
