@@ -122,7 +122,7 @@ describe("MealSection", () => {
         logAgainPending
       />,
     );
-    expect(screen.getByTestId("button-log-again-e1")).toBeDisabled();
+    expect(screen.getByTestId("button-log-again-e1")).toHaveAttribute("aria-disabled", "true");
   });
 
   it("offers copy-yesterday on an empty meal only when a handler is given", async () => {
