@@ -13,3 +13,4 @@
 ## 2024-05-24 - Improve tooltip accessibility for disabled buttons
 **Learning:** To make tooltips accessible on disabled buttons, avoid wrapping them in a focusable <span> which breaks semantic meaning and ARIA associations. Instead, replace native disabled with aria-disabled, manage visual state with Tailwind (aria-disabled:opacity-50 aria-disabled:cursor-not-allowed), and prevent default on click.
 **Action:** Always use this pattern for tooltips on disabled interactive elements.
+## 2024-05-16 - Add tooltip to Delete workout icon button \n **Learning:** Using `size="icon"` with icon-only buttons requires explanatory tooltips and `aria-label` for screen reader and keyboard accessibility, particularly for destructive actions like delete.\n**Action:** Use Tooltip, TooltipTrigger, TooltipContent and TooltipProvider to wrap the icon button and ensure the native title attribute is replaced.
