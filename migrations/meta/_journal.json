@@ -771,6 +771,13 @@
       "when": 1790517975348,
       "tag": "0109_drop_redundant_custom_exercises_user_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1790540584963,
+      "tag": "0110_black_demogoblin",
+      "breakpoints": true
     }
   ]
 }

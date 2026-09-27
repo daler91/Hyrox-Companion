@@ -1886,7 +1886,6 @@ export const foodFavorites = pgTable(
   },
   (table) => [
     uniqueIndex("uq_food_favorites_user_food").on(table.userId, table.foodId),
-    index("idx_food_favorites_user_id").on(table.userId),
   ],
 );
 export type FoodFavorite = typeof foodFavorites.$inferSelect;
