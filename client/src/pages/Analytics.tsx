@@ -16,16 +16,10 @@ import {
   Trophy,
   UtensilsCrossed,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "wouter";
 
-import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
-import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
-import { FuellingTab } from "@/components/analytics/FuellingTab";
-import { MafTrendTab } from "@/components/analytics/MafTrendTab";
 import { ProgressTab } from "@/components/analytics/ProgressTab";
-import { RacePredictorTab } from "@/components/analytics/RacePredictorTab";
-import { SessionGradesTab } from "@/components/analytics/SessionGradesTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
 import {
   Select,
@@ -50,6 +45,37 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { type AnalyticsExportFormat, api, QUERY_KEYS } from "@/lib/api";
 import { featureFlags } from "@/lib/featureFlags";
+
+// Lazy-loaded: only the "overview" tab (below) is visible on first paint, and
+// Radix unmounts inactive TabsContent, so these chunks (several pull in
+// recharts and/or react-markdown+rehype-sanitize) only download when a user
+// actually clicks that tab instead of bundling into every Analytics visit.
+const CategoryBreakdownTab = lazy(() =>
+  import("@/components/analytics/CategoryBreakdownTab").then((m) => ({
+    default: m.CategoryBreakdownTab,
+  })),
+);
+const SessionGradesTab = lazy(() =>
+  import("@/components/analytics/SessionGradesTab").then((m) => ({
+    default: m.SessionGradesTab,
+  })),
+);
+const CoachInsightsTab = lazy(() =>
+  import("@/components/analytics/CoachInsightsTab").then((m) => ({
+    default: m.CoachInsightsTab,
+  })),
+);
+const RacePredictorTab = lazy(() =>
+  import("@/components/analytics/RacePredictorTab").then((m) => ({
+    default: m.RacePredictorTab,
+  })),
+);
+const MafTrendTab = lazy(() =>
+  import("@/components/analytics/MafTrendTab").then((m) => ({ default: m.MafTrendTab })),
+);
+const FuellingTab = lazy(() =>
+  import("@/components/analytics/FuellingTab").then((m) => ({ default: m.FuellingTab })),
+);
 
 type DateRange = "30" | "90" | "180" | "365" | "all";
 
@@ -259,7 +285,9 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="breakdown" className="space-y-6">
-          <CategoryBreakdownTab dateParams={dateParams} />
+          <Suspense fallback={<LoadingSpinner className="w-full py-12" />}>
+            <CategoryBreakdownTab dateParams={dateParams} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="progress" className="space-y-6">
@@ -267,26 +295,36 @@ export default function Analytics() {
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-6">
-          <SessionGradesTab />
+          <Suspense fallback={<LoadingSpinner className="w-full py-12" />}>
+            <SessionGradesTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">
-          <CoachInsightsTab />
+          <Suspense fallback={<LoadingSpinner className="w-full py-12" />}>
+            <CoachInsightsTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="predictor" className="space-y-6">
-          <RacePredictorTab />
+          <Suspense fallback={<LoadingSpinner className="w-full py-12" />}>
+            <RacePredictorTab />
+          </Suspense>
         </TabsContent>
 
         {isMaf ? (
           <TabsContent value="maf" className="space-y-6">
-            <MafTrendTab />
+            <Suspense fallback={<LoadingSpinner className="w-full py-12" />}>
+              <MafTrendTab />
+            </Suspense>
           </TabsContent>
         ) : null}
 
         {showFuelling ? (
           <TabsContent value="fuelling" className="space-y-6">
-            <FuellingTab dateParams={dateParams} />
+            <Suspense fallback={<LoadingSpinner className="w-full py-12" />}>
+              <FuellingTab dateParams={dateParams} />
+            </Suspense>
           </TabsContent>
         ) : null}
       </Tabs>
