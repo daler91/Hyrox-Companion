@@ -3,9 +3,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function TimelineSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" role="status" aria-live="polite" data-testid="timeline-skeleton">
+      <span className="sr-only">Loading training timeline</span>
       {[1, 2, 3].map((group) => (
-        <div key={group}>
+        <div key={group} aria-hidden="true">
           <div className="flex items-center gap-3 mb-3 h-6">
             <Skeleton className="h-3 w-3 rounded-full" />
             <Skeleton className="h-4 w-32" />
