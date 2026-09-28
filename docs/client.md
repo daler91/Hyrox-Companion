@@ -594,7 +594,7 @@ Build output goes to `dist/public`.
 
 ## Auth Bypass
 
-The app includes two auth bypass mechanisms for development and testing, controlled by the `shouldBypassAuth()` function in `App.tsx`:
+The app includes two auth bypass mechanisms for development and testing, controlled by the `shouldBypassAuth()` function in `client/src/lib/authBypass.ts`:
 
 ### Dev Preview Mode (`isDevPreview`)
 
