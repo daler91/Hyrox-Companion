@@ -7,7 +7,7 @@
 one thing to carry into next week.
 
 **Why it is cheap.** Almost every number is already computed. `processWeeklySummary`
-(`server/emailScheduler.ts:40-100`) assembles the whole thing today and then posts it to an
+(`server/emailScheduler.ts:68-177`) assembles the whole thing today and then posts it to an
 email address. This is largely a surfacing job, in the same "built-but-unwired" pattern as
 Wave 0.
 

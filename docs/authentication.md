@@ -54,7 +54,7 @@ The custom `useAuth` hook abstracts over two implementations:
 The hook export is selected at module load time:
 
 ```ts
-export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
+export const useAuth = shouldBypassAuth() ? useTestAuthImpl : useClerkAuthImpl;
 ```
 
 ### Request Credentials
@@ -165,7 +165,7 @@ The dev auth bypass allows the app to run without Clerk credentials. It is contr
 
 ### Activation Conditions
 
-The bypass activates when any of the following client-side conditions are met (evaluated in `client/src/App.tsx` and `client/src/hooks/useAuth.ts`):
+The bypass activates when any of the following client-side conditions are met (evaluated in `client/src/lib/authBypass.ts`, used by `client/src/App.tsx` and `client/src/hooks/useAuth.ts`):
 
 - **Cypress tests** -- `window.Cypress` is defined.
 - **Dev preview** -- The app is running in Vite dev mode (`import.meta.env.DEV`) AND either the `VITE_CLERK_PUBLISHABLE_KEY` is missing or the page is loaded inside an iframe (`window.self !== window.top`).
@@ -189,8 +189,13 @@ Three independent layers prevent the bypass from being used in production:
 The `useAuth` export is determined at module load time (not runtime):
 
 ```typescript
-const shouldBypassAuth = isCypressTest || isDevPreview;
-export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
+// client/src/lib/authBypass.ts
+export function shouldBypassAuth(): boolean {
+  return isCypressTest() || isDevPreview();
+}
+
+// client/src/hooks/useAuth.ts
+export const useAuth = shouldBypassAuth() ? useTestAuthImpl : useClerkAuthImpl;
 ```
 
 - `useClerkAuthImpl`: Uses `@clerk/react` hooks (`useAuth`, `useUser`). Fetches DB user via React Query when `isSignedIn`. Falls back to Clerk profile while DB loads.
