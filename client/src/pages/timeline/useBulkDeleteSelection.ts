@@ -13,22 +13,28 @@ export function useBulkDeleteSelection(allVisibleGroups: readonly TimelineEntryG
   const [selectedBulkEntryKeys, setSelectedBulkEntryKeys] = useState<Set<string>>(() => new Set());
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
 
-  const bulkDeletableEntries = useMemo(
-    () =>
-      allVisibleGroups
-        .flatMap(([, entries]) => entries)
-        .filter(isTimelineEntryBulkDeletable),
-    [allVisibleGroups],
-  );
-  const bulkDeletableEntryKeys = useMemo(
-    () =>
-      new Set(
-        bulkDeletableEntries
-          .map(getBulkDeleteSelectionKey)
-          .filter((key): key is string => Boolean(key)),
-      ),
-    [bulkDeletableEntries],
-  );
+  // ⚡ Bolt Optimization: Replace flatMap().filter() with for...of to avoid intermediate arrays
+  const bulkDeletableEntries = useMemo(() => {
+    const deletable = [];
+    for (const [, entries] of allVisibleGroups) {
+      for (const entry of entries) {
+        if (isTimelineEntryBulkDeletable(entry)) {
+          deletable.push(entry);
+        }
+      }
+    }
+    return deletable;
+  }, [allVisibleGroups]);
+
+  // ⚡ Bolt Optimization: Replace map().filter() with for...of
+  const bulkDeletableEntryKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const entry of bulkDeletableEntries) {
+      const key = getBulkDeleteSelectionKey(entry);
+      if (key) keys.add(key);
+    }
+    return keys;
+  }, [bulkDeletableEntries]);
   const selectedBulkEntries = useMemo(
     () =>
       bulkDeletableEntries.filter((entry) => {

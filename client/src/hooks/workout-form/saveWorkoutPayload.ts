@@ -342,7 +342,17 @@ export function buildWorkoutSavePayload({
     return emptyWorkoutResult("Please add at least one exercise or describe your workout.");
   }
 
-  const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
+  // ⚡ Bolt Optimization: Replace flatMap() + Set array spread with manual set insertion
+  // to avoid creating intermediate arrays for missing field warnings
+  const missingFieldWarningsSet = new Set<string>();
+  for (const exercise of exercises) {
+    const warnings = getMissingFieldWarnings(exercise);
+    for (const warning of warnings) {
+      missingFieldWarningsSet.add(warning);
+    }
+  }
+  const missingFieldWarnings = Array.from(missingFieldWarningsSet);
+
   const structureBlocks = enrichStructureBlocksFromRows(allStructureBlocks, exercises);
   const lint = lintWorkoutStructure(structureBlocks, exercises.map(exerciseToPayload) as ParsedExercise[]);
   const lintIssues: StructureLintIssue[] = [

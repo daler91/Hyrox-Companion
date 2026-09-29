@@ -19,7 +19,20 @@ export type TimelineCache = InfiniteData<TimelinePage, string | null>;
 /** Flat, newest-first view of every loaded page. */
 export function flattenTimelineCache(cache: TimelineCache | undefined): TimelineEntry[] {
   if (!cache) return [];
-  return cache.pages.flatMap((page) => page.entries);
+  // ⚡ Bolt Optimization: Replace flatMap() with a pre-sized array loop to avoid multiple reallocations
+  let totalLength = 0;
+  for (const page of cache.pages) {
+    if (page?.entries) totalLength += page.entries.length;
+  }
+  const result = new Array<TimelineEntry>(totalLength);
+  let offset = 0;
+  for (const page of cache.pages) {
+    if (!page?.entries) continue;
+    for (const entry of page.entries) {
+      result[offset++] = entry;
+    }
+  }
+  return result;
 }
 
 /**
