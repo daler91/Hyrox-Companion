@@ -1,6 +1,6 @@
 import type { RecycleBinEntityType, RecycleBinListItem } from "@shared/schema";
 import { differenceInCalendarDays, formatDistanceToNow } from "date-fns";
-import { CalendarDays, ClipboardList, Dumbbell, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarDays, ClipboardList, Dumbbell, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -79,10 +79,15 @@ function RecycleBinRow({
           size="sm"
           onClick={onRestore}
           disabled={isRestoring || isPurging}
+          aria-busy={isRestoring}
           data-testid={`button-restore-${item.id}`}
         >
-          <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
-          Restore
+          {isRestoring ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+          ) : (
+            <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
+          )}
+          {isRestoring ? "Restoring…" : "Restore"}
         </Button>
         <TooltipProvider>
           <Tooltip>
