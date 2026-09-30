@@ -36,7 +36,13 @@ export function BlockGradesTable({ blocks }: Readonly<{ blocks: SessionGradeBloc
             {blocks.map((block) => {
               const easy = intentOnTarget(block.counts, "easy");
               const threshold = intentOnTarget(block.counts, "threshold");
-              const phases = block.phases.map(phaseLabel).filter(Boolean).join(", ");
+              // ⚡ Bolt Optimization: Replace map().filter() with for...of to avoid intermediate array allocation
+              const phaseLabels = [];
+              for (const phase of block.phases) {
+                const label = phaseLabel(phase);
+                if (label) phaseLabels.push(label);
+              }
+              const phases = phaseLabels.join(", ");
               return (
                 <tr key={block.block} className="border-b last:border-b-0" data-testid={`row-session-grades-block-${block.block}`}>
                   <th scope="row" className="py-2 pr-3 text-left font-medium">

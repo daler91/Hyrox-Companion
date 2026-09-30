@@ -5,7 +5,7 @@ import { useEffect, useMemo, useReducer } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 
 import { QUERY_KEYS } from "@/lib/api";
-import { flattenTimelineCache, type TimelineCache } from "@/lib/timelineCache";
+import { type TimelineCache } from "@/lib/timelineCache";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Training",
@@ -35,10 +35,18 @@ function findEntryInTimelineCache(
     queryKey: QUERY_KEYS.timeline,
   });
   for (const [, data] of variants) {
-    const hit = flattenTimelineCache(data).find(
-      (entry) => entry.workoutLogId === id || entry.planDayId === id,
-    );
-    if (hit) return hit;
+    // ⚡ Bolt Optimization: Flattening the cache array creates a new large
+    // array which is then iterated over by `find`. Instead, we can avoid the
+    // intermediate array allocation and find by iterating the pages manually.
+    if (!data?.pages) continue;
+    for (const page of data.pages) {
+      if (!page?.entries) continue;
+      for (const entry of page.entries) {
+        if (entry.workoutLogId === id || entry.planDayId === id) {
+          return entry;
+        }
+      }
+    }
   }
   return undefined;
 }
