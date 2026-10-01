@@ -6,6 +6,8 @@ import { api, type PlanProposalView, QUERY_KEYS } from "@/lib/api";
 import { createLocalMessage } from "@/lib/chatMessage";
 import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
 
+import { ignoreResult } from "./chat/chatSessionModel";
+
 interface UsePlanProposalOptions {
   /** Push a local assistant message into the chat log (optional — the
    * embedded workout chat omits it and relies on the card disappearing). */
@@ -40,7 +42,7 @@ function invalidatePendingProposal(): void {
 
 /** The proposal's card in the chat re-reads its status: applied, dismissed, or gone stale. */
 function invalidateProposal(id: string): void {
-  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposal(id) }).catch(() => {});
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposal(id) }).catch(ignoreResult);
 }
 
 /**
