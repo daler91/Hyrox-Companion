@@ -11,6 +11,7 @@ import {
   saveCoachReply,
   saveUserTurn,
   serverOwnedTurn,
+  sessionWindow,
   splitSessions,
 } from "./chatConversation";
 
@@ -85,10 +86,11 @@ describe("serverOwnedTurn", () => {
 });
 
 describe("fitHistoryWindow", () => {
-  it("keeps the last 20 turns and cuts older ones past the character budget", () => {
-    const turns = Array.from({ length: 25 }, (_, i) => ({ role: "user" as const, content: `${i}`.padEnd(2_000, "x") }));
+  it("keeps the last 30 turns and cuts older ones past the character budget", () => {
+    // 30: the 20-turn window plus the room a long session gets before its rolling note is refreshed.
+    const turns = Array.from({ length: 35 }, (_, i) => ({ role: "user" as const, content: `${i}`.padEnd(2_000, "x") }));
     const fitted = fitHistoryWindow(turns);
-    expect(fitted).toHaveLength(20);
+    expect(fitted).toHaveLength(30);
     expect(fitted.at(-1)?.content).toHaveLength(2_000);
     expect(fitted[0].content.endsWith(" [truncated]")).toBe(true);
   });
@@ -139,8 +141,63 @@ describe("splitSessions", () => {
     expect(split.toSummarise).toBeUndefined();
   });
 
+  it("keeps rolling notes out of the turns, and finds the current session's latest", () => {
+    const turns = sessionTurns(4);
+    const older = rollingNote(turns[0], "- older");
+    const latest = rollingNote(turns[2], "- latest");
+    const split = splitSessions([turns[0], older, turns[1], turns[2], latest, turns[3]], NOW.getTime());
+    expect(split.current).toEqual(turns);
+    expect(split.rolling).toBe(latest);
+  });
+
+  it("hands the session before its rolling note, to summarise along with its turns", () => {
+    const previous = sessionTurns(3, 30);
+    const note = rollingNote(previous[1]);
+    const split = splitSessions([previous[0], previous[1], note, previous[2]], NOW.getTime());
+    expect(split.current).toEqual([]);
+    expect(split.toSummarise).toEqual({ turns: previous, earlier: undefined, rolling: note });
+  });
+
   it("has nothing to carry for a first conversation", () => {
     expect(splitSessions([], NOW.getTime())).toEqual({ current: [], carried: undefined, previousEndedAt: undefined });
+  });
+});
+
+/** `count` turns of one session, a minute apart, the last one `endHoursAgo` ago. */
+function sessionTurns(count: number, endHoursAgo = 0.1): ChatMessage[] {
+  return Array.from({ length: count }, (_, i) =>
+    row(i % 2 === 0 ? "user" : "assistant", `turn ${i + 1}`, endHoursAgo + (count - 1 - i) / 60),
+  );
+}
+
+/** A rolling note saved just after `turn`, as the fold saves it. */
+function rollingNote(turn: ChatMessage, content = "- The athlete said their knee was sore."): ChatMessage {
+  return { ...row("assistant", content, 0), kind: "rolling", timestamp: new Date((turn.timestamp?.getTime() ?? 0) + 1) };
+}
+
+describe("sessionWindow", () => {
+  it("shows a session of up to 30 turns in full", () => {
+    const turns = sessionTurns(30);
+    expect(sessionWindow(turns, undefined)).toEqual({ shown: turns, note: undefined });
+  });
+
+  it("folds all but the last 20 turns once a session passes 30", () => {
+    const turns = sessionTurns(31);
+    const window = sessionWindow(turns, undefined);
+    expect(window.shown).toEqual(turns.slice(11));
+    expect(window.toFold).toEqual({ turns: turns.slice(0, 11), earlier: undefined });
+  });
+
+  it("shows the turns after the note, and folds again only after 30 more", () => {
+    const turns = sessionTurns(41);
+    const note = rollingNote(turns[10]);
+
+    expect(sessionWindow(turns, note)).toEqual({ shown: turns.slice(11), note });
+
+    const longer = [...turns, ...sessionTurns(1, 0.05)];
+    const window = sessionWindow(longer, note);
+    expect(window.shown).toEqual(longer.slice(-20));
+    expect(window.toFold).toEqual({ turns: longer.slice(11, -20), earlier: note });
   });
 });
 
@@ -310,6 +367,69 @@ describe("loadConversation", () => {
     expect(storage.users.saveChatMessage).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "summary", focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" }),
     );
+  });
+
+  it("folds the start of a long session into a rolling note, saved just after the turns it covers", async () => {
+    const turns = sessionTurns(31);
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue(turns);
+    vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked about pacing.", model: "fast" });
+
+    const conversation = await loadConversation("user-1", TURN, { focusPlanDayId: "day-1" }, NOW);
+
+    expect(conversation.turns.map((turn) => turn.content)).toEqual(turns.slice(11).map((turn) => turn.content));
+    await expect(conversation.earlierInSession).resolves.toBe("- The athlete asked about pacing.");
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ modelRole: "fast", reasoningEffort: "none", feature: "chat_rolling_summary" }),
+    );
+    const prompt = vi.mocked(generateText).mock.calls[0][0].messages[0].content;
+    expect(prompt).toContain("Athlete: turn 1");
+    expect(prompt).toContain("Athlete: turn 11");
+    expect(prompt).not.toContain("turn 12");
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "rolling",
+        content: "- The athlete asked about pacing.",
+        timestamp: new Date((turns[10].timestamp?.getTime() ?? 0) + 1),
+        focusPlanDayId: "day-1",
+      }),
+    );
+  });
+
+  it("reads the rolling note without writing another while the session has room", async () => {
+    const turns = sessionTurns(35);
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([...turns.slice(0, 11), rollingNote(turns[10]), ...turns.slice(11)]);
+
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
+
+    expect(conversation.turns).toHaveLength(24);
+    await expect(conversation.earlierInSession).resolves.toBe("- The athlete said their knee was sore.");
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("carries the athlete's last words in the rolling note when the model fails", async () => {
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue(sessionTurns(31));
+    vi.mocked(generateText).mockRejectedValue(new Error("provider down"));
+
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
+
+    await expect(conversation.earlierInSession).resolves.toContain('- The athlete wrote: "turn 11"');
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "rolling" }));
+  });
+
+  it("writes the next session's handover from the rolling note and the turns after it", async () => {
+    const previous = sessionTurns(4, 30);
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([previous[0], previous[1], rollingNote(previous[1], "- folded start"), previous[2], previous[3]]);
+    vi.mocked(generateText).mockResolvedValue({ text: "- handover", model: "fast" });
+
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
+    await conversation.earlier;
+
+    const prompt = vi.mocked(generateText).mock.calls[0][0].messages[0].content;
+    expect(prompt).toContain("Note on the start of this conversation");
+    expect(prompt).toContain("- folded start");
+    expect(prompt).not.toContain("turn 1\n");
+    expect(prompt).not.toContain("Athlete: turn 1");
+    expect(prompt).toContain("Athlete: turn 3");
   });
 
   it("uses the session's saved summary without writing another", async () => {

@@ -87,6 +87,10 @@ describe("chat messages and their proposals (real Postgres)", () => {
     await expect(
       storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "x", kind: "bogus" }),
     ).rejects.toThrow();
+    // A long session's rolling note (migration 0113).
+    await expect(
+      storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "- note", kind: "rolling" }),
+    ).resolves.toMatchObject({ kind: "rolling" });
   });
 
   it("keeps each workout's conversation in its own thread", async () => {

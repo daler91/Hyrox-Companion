@@ -631,7 +631,7 @@ Persisted AI coach conversation history.
 | `role` | `varchar(20)` | NOT NULL |
 | `content` | `text` | NOT NULL |
 | `timestamp` | `timestamp` | default `now()`; the chat routes stamp both turns on the app's clock |
-| `kind` | `varchar(20)` | NOT NULL, default `'text'`; CHECK `chat_messages_kind_check`: `text`, `proposal` or `summary` (the note a new session carries forward) |
+| `kind` | `varchar(20)` | NOT NULL, default `'text'`; CHECK `chat_messages_kind_check`: `text`, `proposal`, `summary` (the note a new session carries forward) or `rolling` (the note on the start of a long session, timestamped just after the last turn it covers; migration `0113`) |
 | `proposal_id` | `varchar(255)` | FK -> `plan_adjustment_proposals.id` ON DELETE SET NULL; the proposal a `proposal` reply carried |
 | `safety_notice` | `jsonb` | The fixed safety notice shown above the reply |
 | `rag_info` | `jsonb` | The reply's retrieval: source, excerpt count and material titles, never the excerpts |

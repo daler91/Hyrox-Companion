@@ -892,6 +892,17 @@ describe("Chat History and Messages Routes", () => {
     expect(response.headers["x-next-cursor-id"]).toBe("m1");
   });
 
+  it("never shows a long session's rolling notes", async () => {
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([
+      { id: "m1", role: "user", content: "Hi", kind: "text", timestamp: new Date("2025-01-01T00:00:00Z") },
+      { id: "m2", role: "assistant", content: "- note", kind: "rolling", timestamp: new Date("2025-01-01T00:00:01Z") },
+    ] as never);
+
+    const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
+
+    expect(response.body.map((message: { id: string }) => message.id)).toEqual(["m1"]);
+  });
+
   it("reads a workout's own conversation when one is named", async () => {
     vi.mocked(storage.users.getChatMessages).mockResolvedValue([]);
 

@@ -126,6 +126,9 @@ export type SessionStreamStatus = (typeof sessionStreamStatusEnum)[number];
  *   (`proposal_id`); its outcome is read from the proposal itself.
  * - `summary`: the hidden summary of earlier sessions that the coach reads at
  *   the start of a new session instead of their raw turns. Never shown.
+ * - `rolling`: the note on the start of a long session that no longer fits in
+ *   the turns the coach reads, refreshed as the session grows. Its timestamp
+ *   is just after the last turn it covers. Never shown.
  */
-export const chatMessageKindEnum = ["text", "proposal", "summary"] as const;
+export const chatMessageKindEnum = ["text", "proposal", "summary", "rolling"] as const;
 export type ChatMessageKind = (typeof chatMessageKindEnum)[number];

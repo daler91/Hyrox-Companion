@@ -99,7 +99,7 @@ protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: r
   });
 
 /** The per-message parts of the coach's prompt: the open workout, the earlier sessions, the notes on the new message. */
-type ChatPromptOptions = Pick<ChatCallOptions, "focusedWorkout" | "earlierConversation" | "messageNotes">;
+type ChatPromptOptions = Pick<ChatCallOptions, "focusedWorkout" | "earlierConversation" | "earlierInSession" | "messageNotes">;
 
 // validateBody(chatRequestSchema) guarantees req.body conforms, so the
 // handler can read it directly without a second safeParse pass.
@@ -112,10 +112,11 @@ async function prepareChatContext(
   const history = conversation.turns;
   // The first message after a break writes the earlier sessions' summary;
   // it runs alongside the context build rather than in front of it.
-  const [aiContext, focused, earlierConversation] = await Promise.all([
+  const [aiContext, focused, earlierConversation, earlierInSession] = await Promise.all([
     buildAIContext(userId, chatRetrievalQuery(message, history), reqLogger(req), { cachedTrainingContext: true }),
     loadFocusedWorkout(userId, { planDayId: focusPlanDayId, workoutLogId: focusWorkoutLogId }),
     conversation.earlier,
+    conversation.earlierInSession,
   ]);
   const { trainingContext } = aiContext;
   const focusedWorkout = focused
@@ -131,6 +132,7 @@ async function prepareChatContext(
     promptOptions: {
       focusedWorkout,
       earlierConversation,
+      earlierInSession,
       ...(conversation.notes.length > 0 ? { messageNotes: conversation.notes } : {}),
     },
   };
@@ -621,7 +623,8 @@ router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 6
       res.setHeader("X-Next-Cursor", nextCursor.timestamp);
       res.setHeader("X-Next-Cursor-Id", nextCursor.id);
     }
-    res.json(await withProposals(userId, messages));
+    // A long session's rolling notes are for the coach, never shown (I5).
+    res.json(await withProposals(userId, messages.filter((message) => message.kind !== "rolling")));
   }));
 
 // The coach's opening line and prompt chips, from the athlete's training (I19).

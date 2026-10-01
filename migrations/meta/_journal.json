@@ -792,6 +792,13 @@
       "when": 1790881748742,
       "tag": "0112_plan_proposal_undo",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1790886052108,
+      "tag": "0113_chat_message_rolling_note",
+      "breakpoints": true
     }
   ]
 }

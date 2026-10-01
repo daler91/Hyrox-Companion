@@ -1417,7 +1417,7 @@ Retrieve saved chat messages for the current user, cursor-paginated.
 - **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together. `focusPlanDayId?` and `focusWorkoutLogId?` read one workout's own conversation (rows saved with either id); without them, the general conversation (rows saved with neither).
 - **Response:** `ChatMessage[]` (plain array for backward compatibility). When more rows exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back on the next request.
 - **Row fields:** `id, role, content, timestamp`, plus:
-  - `kind`: `text`, `proposal` or `summary`. A `summary` row is the note the coach carried into a new session after a break, not something it said to the athlete.
+  - `kind`: `text`, `proposal` or `summary`. A `summary` row is the note the coach carried into a new session after a break, not something it said to the athlete. `rolling` rows (the note on the start of a long session) are left out of the response.
   - `proposalId`, `safetyNotice`, `ragInfo` (source, excerpt count and material titles), `focusPlanDayId` and `focusWorkoutLogId`.
   - `proposal`: on a proposal reply whose proposal still exists, the proposal (same shape as `GET /api/v1/plan-proposals/pending`) with its **current** status.
 

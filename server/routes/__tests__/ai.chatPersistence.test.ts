@@ -281,6 +281,22 @@ describe("the server-owned chat conversation", () => {
     expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "summary" }));
   });
 
+  it("gives the coach a note on the start of a long session it no longer reads in full", async () => {
+    // 31 turns a minute apart: past the 30 the coach reads before the note is written.
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue(
+      Array.from({ length: 31 }, (_, i) => savedRow(i % 2 === 0 ? "user" : "assistant", `turn ${i + 1}`, 40 - i)),
+    );
+    vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked about pacing.", model: "fast" });
+    streamReply("Sure.");
+
+    const response = await request(app).post(STREAM).send({ message: "And the sled?", ...IDS });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][1]).toHaveLength(20);
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.earlierInSession).toBe("- The athlete asked about pacing.");
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "rolling" }));
+  });
+
   it("saves both turns of a non-streamed reply once it exists", async () => {
     vi.mocked(chatWithCoach).mockResolvedValue("Even splits.");
 
