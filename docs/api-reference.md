@@ -1439,6 +1439,15 @@ Save a chat message to history: a turn the chat routes don't save themselves (th
 - **Validation:** `insertChatMessageSchema` — `role` is an enum and `content` is length-bounded. The underlying column is a bare `varchar(20)`, so before these constraints any short string was accepted and later replayed into the model's context; the client legitimately persists both its own turn and the assistant reply it streamed, and nothing else. A `userId` in the body is ignored: the server always takes it from the session.
 - **Response:** Saved `ChatMessage`
 
+### PATCH /api/v1/chat/messages/:id
+
+Rate one of the coach's saved replies, or clear the rating. Only the athlete's own visible coach replies (`text` and `proposal` rows) can be rated; anything else is a 404.
+
+- **Auth:** Required
+- **Rate limit:** `chatFeedback` category, 60/min
+- **Body:** `{ feedback: "up" | "down" | null }` (`chatMessageFeedbackSchema`)
+- **Response:** `{ id, feedback }`; `404` when there is no such reply. The client retries a 404 once after a second, since a reply that just finished streaming may still be on its way into the database.
+
 ### DELETE /api/v1/chat/history
 
 Clear all chat messages for the current user, in every thread: the general conversation and each workout's.

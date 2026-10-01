@@ -232,6 +232,20 @@ describe('useChatSession', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('lets the athlete rate a reply once it has arrived in full, but not one that failed', async () => {
+    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Run easy.' }, { done: true })));
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Today?');
+    });
+    expect(result.current.messages[2]).toMatchObject({ content: 'Run easy.', rateable: true });
+    expect(result.current.messages[1].rateable).toBeUndefined();
+
+    const failed = await sendAfterApiFailure('Again?', new Error('500: Internal Server Error'));
+    expect(failed.current.messages[2].rateable).toBeUndefined();
+  });
+
   it('should handle clear history', async () => {
     // Simulate some messages
     const { result } = renderHook(() => useChatSession(), { wrapper });

@@ -277,6 +277,16 @@ Behind `AI_CHAT_TOOLS` (default `false`, see [Environment Reference](env-referen
 - **Prompt.** With tools, the PLAN CHANGES rule in `BASE_SYSTEM_PROMPT` is swapped: call `propose_plan_changes` (offering a change is fine), or, without that tool, say the change must be asked for from the Coach panel. A TOOLS section tells the coach to look things up rather than guess about anything outside the training data.
 - **Not covered.** The non-streamed `POST /api/v1/chat` and coach insights never use tools. Live behaviour (when the model chooses to call, the quality of its summaries) has not been evaluated yet, which is why the flag is off: run the scenario evals in tools mode (`AI_EVAL_MODES=tools pnpm eval:chat`, see [Chat Scenario Evals](testing.md#chat-scenario-evals)) before turning it on.
 
+### Chat Quality: Telemetry and Feedback
+
+**Files:** `server/services/chatTurnTelemetry.ts`, `server/routes/ai.ts`, `client/src/hooks/chat/useMessageFeedback.ts`, `script/chat-quality-report.ts`
+
+`ai_usage_logs` records what each chat call cost. Three things record whether it helped (AI coach chat review, I23):
+
+- **The `[chat] turn` log line.** Every streamed reply logs one info line when it ends, with no message text: `mode` (`classic` or `tools`), `outcome` (`prose`, `proposal`, `error` or `aborted`), `regenerate` (a retry of a failed reply), `ttftMs` (request to first reply text, or to the proposal summary), `contextMs` (request to the training context and retrieval being ready), `totalMs`, `planEditGate` (`closed`, or `open` with `planEditIntent` and `planEditConfidence`: the classifier's verdict), `toolCalls`, `proposal` (what drafting returned: `proposal`, `chat_fallback`, `generation_failed` or `error`) with `proposalId`, `replyChars`, `retrieval` and `safetyNotice`. The classifier's hit rate is the share of open gates it called a plan edit; its false positives show as `chat_fallback` drafts and as proposals later dismissed.
+- **Thumbs.** A coach reply the server saved, loaded from the history or finished in this session, shows Helpful and Not helpful buttons; pressing the chosen one again clears it. `PATCH /api/v1/chat/messages/:id` stores it in `chat_messages.feedback` (migration `0114`); the UI updates at once and puts the old rating back with a toast if the save fails.
+- **The report.** `pnpm tsx script/chat-quality-report.ts [--days N]` (default 30) prints, for proposals drafted in the window, how many were applied (and how many only partly, and how many undone), dismissed, went out of date or were replaced, and, for coach replies, how many were rated and how. Read-only and aggregate.
+
 ---
 
 ## Auto-Coach Pipeline

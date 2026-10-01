@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChatHistoryMessage, PlanProposalView } from "@/lib/api";
 import type { Message } from "@/lib/chatMessage";
 
-import { createMessageUpdater, handleSendFailure, messageFromHistory, type SetMessages } from "../chatSessionModel";
+import { createMessageUpdater, handleSendFailure, markReplyRateable, messageFromHistory, type SetMessages } from "../chatSessionModel";
 
 function message(overrides: Partial<Message>): Message {
   return { id: "m", role: "user", content: "", timestamp: "", createdAtMs: 1, ...overrides };
@@ -31,6 +31,8 @@ function savedRow(overrides: Partial<ChatHistoryMessage>): ChatHistoryMessage {
     ragInfo: null,
     focusPlanDayId: null,
     focusWorkoutLogId: null,
+    feedback: null,
+    feedbackAt: null,
     ...overrides,
   };
 }
@@ -80,6 +82,28 @@ describe("messageFromHistory", () => {
     expect(hydrated).not.toHaveProperty("safetyNotice");
     expect(hydrated).not.toHaveProperty("proposal");
     expect(hydrated).not.toHaveProperty("ragInfo");
+  });
+
+  it("lets the athlete rate the coach's replies, with the rating they gave, and nothing else", () => {
+    expect(messageFromHistory(savedRow({ feedback: "down" }))).toMatchObject({ rateable: true, feedback: "down" });
+    expect(messageFromHistory(savedRow({ kind: "proposal" }))).toMatchObject({ rateable: true });
+    expect(messageFromHistory(savedRow({ role: "user" }))).not.toHaveProperty("rateable");
+    expect(messageFromHistory(savedRow({ kind: "summary" }))).not.toHaveProperty("rateable");
+    expect(messageFromHistory(savedRow({ feedback: "meh" }))).not.toHaveProperty("feedback");
+  });
+});
+
+describe("markReplyRateable", () => {
+  it("opens a reply to rating once it arrived in full, never a failed or empty one", () => {
+    const buffer = messageBuffer([
+      message({ id: "done", role: "assistant", content: "Run easy." }),
+      message({ id: "failed", role: "assistant", content: "Run", failure: { message: "Stopped." } }),
+      message({ id: "empty", role: "assistant", content: "" }),
+    ]);
+
+    for (const id of ["done", "failed", "empty"]) markReplyRateable(buffer.setMessages, id);
+
+    expect(buffer.current().map((m) => m.rateable)).toEqual([true, undefined, undefined]);
   });
 });
 

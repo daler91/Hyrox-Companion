@@ -1,5 +1,5 @@
-import type { ChatSafetyNotice } from "@shared/schema";
-import { AlertCircle, Bot, HeartPulse, RotateCcw, ShieldAlert, User } from "lucide-react";
+import type { ChatFeedback, ChatSafetyNotice } from "@shared/schema";
+import { AlertCircle, Bot, HeartPulse, RotateCcw, ShieldAlert, ThumbsDown, ThumbsUp, User } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
@@ -23,6 +23,12 @@ interface ChatMessageProps {
   readonly failure?: MessageFailure;
   /** Offered only on a failed reply that can be sent again. */
   readonly onRetry?: () => void;
+  /** The reply's id, for its rating. */
+  readonly messageId?: string;
+  /** The athlete's thumbs on the reply. */
+  readonly feedback?: ChatFeedback | null;
+  /** Offered only on a reply the server saved. Stable across renders, so memo holds. */
+  readonly onFeedback?: (messageId: string, feedback: ChatFeedback | null) => void;
 }
 
 /**
@@ -98,13 +104,51 @@ function ReplyFailureNote({ message, onRetry, afterText }: ReplyFailureNoteProps
   );
 }
 
+const FEEDBACK_OPTIONS = [
+  { value: "up", label: "Helpful", Icon: ThumbsUp },
+  { value: "down", label: "Not helpful", Icon: ThumbsDown },
+] as const;
+
+interface ReplyFeedbackProps {
+  readonly messageId: string;
+  readonly feedback?: ChatFeedback | null;
+  readonly onFeedback: (messageId: string, feedback: ChatFeedback | null) => void;
+}
+
+/** Thumbs on a coach reply (I23); pressing the chosen one again clears it. */
+function ReplyFeedback({ messageId, feedback, onFeedback }: ReplyFeedbackProps) {
+  return (
+    <div className="flex items-center" data-testid="message-feedback">
+      {FEEDBACK_OPTIONS.map(({ value, label, Icon }) => {
+        const selected = feedback === value;
+        return (
+          <Button
+            key={value}
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("h-11 w-11 text-muted-foreground md:h-7 md:w-7", selected && "text-foreground")}
+            aria-label={label}
+            aria-pressed={selected}
+            onClick={() => onFeedback(messageId, selected ? null : value)}
+            data-testid={`button-feedback-${value}`}
+          >
+            <Icon className={cn("h-3.5 w-3.5", selected && "fill-current")} aria-hidden="true" />
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ⚡ Perf: React.memo prevents re-rendering unchanged messages during streaming.
 // During AI response streaming, setMessages fires on every token chunk, triggering
 // a re-render of the entire message list. Without memo, all N messages re-render
 // per chunk; with memo, only the actively streaming message re-renders (~N-1 fewer
 // re-renders per chunk). Props are primitives or references that stay stable
-// for an unchanged message (onRetry is passed only to a failed reply), so the
-// default shallow comparison works correctly.
+// for an unchanged message (onRetry is passed only to a failed reply, and
+// onFeedback is one stable callback), so the default shallow comparison works
+// correctly.
 export const ChatMessage = memo(function ChatMessage({
   role,
   content,
@@ -113,10 +157,14 @@ export const ChatMessage = memo(function ChatMessage({
   safetyNotice,
   failure,
   onRetry,
+  messageId,
+  feedback,
+  onFeedback,
 }: Readonly<ChatMessageProps>) {
   const isUser = role === "user";
   // A reply that failed before any text arrived is just its failure note.
   const showText = content !== "" || !failure;
+  const canRate = !isUser && !failure && messageId !== undefined && onFeedback !== undefined;
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`} data-testid={`message-${role}`}>
@@ -159,13 +207,15 @@ export const ChatMessage = memo(function ChatMessage({
             </>
           )}
         </div>
-        {timestamp && (
-          <span
-            className="text-xs text-muted-foreground mt-1"
-            aria-label={`sent ${timestamp}`}
-          >
-            {timestamp}
-          </span>
+        {(timestamp || canRate) && (
+          <div className="mt-1 flex items-center gap-1">
+            {timestamp && (
+              <span className="text-xs text-muted-foreground" aria-label={`sent ${timestamp}`}>
+                {timestamp}
+              </span>
+            )}
+            {canRate && <ReplyFeedback messageId={messageId} feedback={feedback} onFeedback={onFeedback} />}
+          </div>
         )}
         {!isUser && ragInfo && <RagDebugBadge ragInfo={ragInfo} />}
       </div>

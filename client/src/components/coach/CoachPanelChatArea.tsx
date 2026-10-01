@@ -1,3 +1,4 @@
+import type { ChatFeedback } from "@shared/schema";
 import { forwardRef, Fragment, type UIEventHandler, useMemo } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
@@ -37,6 +38,8 @@ interface CoachPanelChatAreaProps {
   readonly undoingProposalId?: string | null;
   /** Send a failed message again (see useChatSession.retryMessage). */
   readonly onRetryMessage?: (messageId: string) => void;
+  /** Rate a saved coach reply (see useChatSession.rateMessage). */
+  readonly onRateMessage?: (messageId: string, feedback: ChatFeedback | null) => void;
 }
 
 export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaProps>(
@@ -60,6 +63,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       onUndoProposal,
       undoingProposalId = null,
       onRetryMessage,
+      onRateMessage,
     },
     ref
   ) => {
@@ -104,6 +108,9 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                       ? () => onRetryMessage(message.id)
                       : undefined
                   }
+                  messageId={message.id}
+                  feedback={message.feedback}
+                  onFeedback={message.rateable ? onRateMessage : undefined}
                 />
                 {message.proposal && (
                   <InlinePlanProposal

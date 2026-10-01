@@ -100,6 +100,7 @@ export function CoachPanel({
     pinAutoScroll,
     sendMessage,
     retryMessage,
+    rateMessage,
     cancelStream,
     clearHistory,
     isClearingHistory,
@@ -228,6 +229,7 @@ export function CoachPanel({
         onUndoProposal={undoProposal}
         undoingProposalId={undoingProposalId}
         onRetryMessage={retryMessage}
+        onRateMessage={rateMessage}
       />
       <CoachPanelFooter
         quickActions={welcome?.quickActions ?? selectQuickActions(timeline.some((entry) => entry.status === "completed"))}

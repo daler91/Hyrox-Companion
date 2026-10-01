@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSafetyNotice, CoachingMaterial, CoachWelcome, RagInfo } from "@shared/schema";
+import type { ChatFeedback, ChatMessage, ChatSafetyNotice, CoachingMaterial, CoachWelcome, RagInfo } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import type { PlanProposalView } from "./planProposals";
@@ -111,14 +111,23 @@ export const chat = {
     const params = new URLSearchParams();
     if (focus.focusPlanDayId) params.set("focusPlanDayId", focus.focusPlanDayId);
     if (focus.focusWorkoutLogId) params.set("focusWorkoutLogId", focus.focusWorkoutLogId);
-    const query = params.toString();
-    return typedRequest<ChatHistoryMessage[]>("GET", `/api/v1/chat/history${query ? `?${query}` : ""}`);
+    const search = params.toString();
+    const query = search ? `?${search}` : "";
+    return typedRequest<ChatHistoryMessage[]>("GET", `/api/v1/chat/history${query}`);
   },
 
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
 
   /** The coach's opening line and prompt chips, from the athlete's training. */
   getWelcome: () => typedRequest<CoachWelcome>("GET", "/api/v1/chat/welcome"),
+
+  /** Rate one of the coach's saved replies, or clear the rating with null (I23). */
+  setFeedback: (id: string, feedback: ChatFeedback | null) =>
+    typedRequest<{ id: string; feedback: ChatFeedback | null }>(
+      "PATCH",
+      `/api/v1/chat/messages/${encodeURIComponent(id)}`,
+      { feedback },
+    ),
 
   // Fetch the LAST stored insights (no AI spend) so the tab paints instantly on
   // open. Returns `{ insights: null }` when never generated.

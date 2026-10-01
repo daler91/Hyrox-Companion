@@ -132,3 +132,7 @@ export type SessionStreamStatus = (typeof sessionStreamStatusEnum)[number];
  */
 export const chatMessageKindEnum = ["text", "proposal", "summary", "rolling"] as const;
 export type ChatMessageKind = (typeof chatMessageKindEnum)[number];
+
+/** The athlete's thumbs on a coach reply (AI coach chat review, I23). */
+export const chatFeedbackEnum = ["up", "down"] as const;
+export type ChatFeedback = (typeof chatFeedbackEnum)[number];

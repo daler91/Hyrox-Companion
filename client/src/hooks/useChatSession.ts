@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 
-import { handleSendFailure, ignoreResult } from "./chat/chatSessionModel";
+import { handleSendFailure, ignoreResult, markReplyRateable } from "./chat/chatSessionModel";
 import {
   fetchChatReply,
   refreshSavedConversation,
@@ -13,6 +13,7 @@ import {
 import { useBudgetWarning } from "./chat/useBudgetWarning";
 import { useChatAutoScroll } from "./chat/useChatAutoScroll";
 import { useChatHistory } from "./chat/useChatHistory";
+import { useMessageFeedback } from "./chat/useMessageFeedback";
 
 export type { RagInfo } from "@/lib/api";
 export type { Message } from "@/lib/chatMessage";
@@ -159,9 +160,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             fullResponse = text;
           },
         });
+        markReplyRateable(setMessages, assistantMessageId);
       } else {
         const assistantMessage = await fetchChatReply(request);
-        setMessages((prev) => [...prev, assistantMessage]);
+        // The non-streamed route saves both turns before it answers.
+        setMessages((prev) => [...prev, { ...assistantMessage, rateable: true }]);
       }
     } catch (err) {
       handleSendFailure({
@@ -206,6 +209,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     streamControllerRef.current?.abort();
   }, []);
 
+  const rateMessage = useMessageFeedback(setMessages, messagesRef);
+
   return {
     messages,
     isLoading,
@@ -219,6 +224,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     pinAutoScroll,
     sendMessage,
     retryMessage,
+    rateMessage,
     cancelStream,
     clearHistory,
     isClearingHistory,

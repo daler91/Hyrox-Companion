@@ -1,5 +1,6 @@
 import { calculateMafHr } from "@shared/maf";
 import {
+  type ChatFeedback,
   type ChatMessage,
   chatMessages,
   type CustomExercise,
@@ -71,6 +72,27 @@ async function deleteAssistantChatMessage(userId: string, id: string): Promise<v
   await db
     .delete(chatMessages)
     .where(and(eq(chatMessages.id, id), eq(chatMessages.userId, userId), eq(chatMessages.role, "assistant")));
+}
+
+/**
+ * Rate one of the athlete's coach replies, or clear the rating (I23). Only a
+ * reply they can see is rated: never another athlete's row, an athlete turn,
+ * or a hidden summary. Returns whether there was such a reply.
+ */
+async function setChatMessageFeedback(userId: string, id: string, feedback: ChatFeedback | null): Promise<boolean> {
+  const rows = await db
+    .update(chatMessages)
+    .set({ feedback, feedbackAt: feedback ? new Date() : null })
+    .where(
+      and(
+        eq(chatMessages.id, id),
+        eq(chatMessages.userId, userId),
+        eq(chatMessages.role, "assistant"),
+        inArray(chatMessages.kind, ["text", "proposal"]),
+      ),
+    )
+    .returning({ id: chatMessages.id });
+  return rows.length > 0;
 }
 
 export class UserStorage {
@@ -435,10 +457,11 @@ export class UserStorage {
     return chatMessage;
   }
 
-  // Neither uses the instance, so they are module functions bound here, as
+  // None uses the instance, so they are module functions bound here, as
   // NutritionStorage binds its own: storage.users.X() and its mocks still work.
   readonly saveChatMessageOnce = saveChatMessageOnce;
   readonly deleteAssistantChatMessage = deleteAssistantChatMessage;
+  readonly setChatMessageFeedback = setChatMessageFeedback;
 
   async clearChatHistory(userId: string): Promise<boolean> {
     await db.delete(chatMessages).where(eq(chatMessages.userId, userId));

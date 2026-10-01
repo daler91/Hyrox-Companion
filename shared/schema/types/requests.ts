@@ -1,5 +1,6 @@
 ﻿import { CHAT_MESSAGE_MAX_LENGTH } from "../../chat";
 import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
+import { chatFeedbackEnum } from "../enums";
 import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
@@ -27,6 +28,10 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages)
   });
 
 export type ChatMessageBody = z.infer<typeof insertChatMessageSchema>;
+
+/** Body for `PATCH /api/v1/chat/messages/:id`: the athlete's thumbs on a coach reply, or null to clear it (I23). */
+export const chatMessageFeedbackSchema = z.object({ feedback: z.enum(chatFeedbackEnum).nullable() });
+export type ChatMessageFeedbackBody = z.infer<typeof chatMessageFeedbackSchema>;
 /** A chat row as the server writes it; the user id is always the session's. */
 export type InsertChatMessage = typeof chatMessages.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;

@@ -55,7 +55,16 @@ export function messageFromHistory(row: ChatHistoryMessage): Message {
     ...(row.ragInfo ? { ragInfo: row.ragInfo } : {}),
     ...(isChatSafetyNotice(row.safetyNotice) ? { safetyNotice: row.safetyNotice } : {}),
     ...(isPlanProposalView(row.proposal) ? { proposal: row.proposal } : {}),
+    ...(row.role === "assistant" && (row.kind === "text" || row.kind === "proposal") ? { rateable: true } : {}),
+    ...(row.feedback === "up" || row.feedback === "down" ? { feedback: row.feedback } : {}),
   };
+}
+
+/** A reply that arrived in full: the server has saved it under its id, so the athlete can rate it. */
+export function markReplyRateable(setMessages: SetMessages, id: string): void {
+  setMessages((prev) =>
+    prev.map((m) => (m.id === id && !m.failure && m.content !== "" ? { ...m, rateable: true } : m)),
+  );
 }
 
 /** What a stream's extra events put on the reply: the safety notice, and the proposal it drafted. */

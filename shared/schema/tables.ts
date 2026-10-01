@@ -19,6 +19,7 @@ import {
 
 import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
+  chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
   MEAL_TYPES,
@@ -1384,6 +1385,9 @@ export const chatMessages = pgTable(
     /** The workout the athlete was chatting from, when it was the workout-detail chat. */
     focusPlanDayId: varchar("focus_plan_day_id", { length: 255 }),
     focusWorkoutLogId: varchar("focus_workout_log_id", { length: 255 }),
+    /** The athlete's thumbs on a coach reply (chatFeedbackEnum), and when they gave it. */
+    feedback: varchar("feedback", { length: 10 }),
+    feedbackAt: timestamp("feedback_at"),
   },
   (table) => [
     // idx_chat_messages_user_id (single-column, on user_id) was dropped:
@@ -1394,6 +1398,7 @@ export const chatMessages = pgTable(
     // high-write-volume table.
     index("idx_chat_messages_user_time").on(table.userId, table.timestamp),
     check("chat_messages_kind_check", sql`kind IN (${inValues(chatMessageKindEnum)})`),
+    check("chat_messages_feedback_check", sql`feedback IS NULL OR feedback IN (${inValues(chatFeedbackEnum)})`),
   ],
 );
 

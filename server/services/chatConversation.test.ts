@@ -56,6 +56,8 @@ function row(
     ragInfo: null,
     focusPlanDayId: null,
     focusWorkoutLogId: null,
+    feedback: null,
+    feedbackAt: null,
     ...extra,
   };
 }

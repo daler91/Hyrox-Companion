@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { type ChatIntentResult, type ChatMessage, type ChatMessageBody, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -20,6 +20,7 @@ import { type CoachReply, type Conversation, type ConversationTurn, loadConversa
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
 import { type ChatToolContext, chatToolsFor, PROPOSE_PLAN_CHANGES, runChatTool } from "../services/chatTools";
+import { chatTurnLogFields, type ChatTurnTelemetry, markFirstText, recordClassifierVerdict, startChatTurn } from "../services/chatTurnTelemetry";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { getCoachWelcome } from "../services/coachWelcome";
 import { loadFocusedWorkout } from "../services/focusedWorkoutService";
@@ -30,7 +31,7 @@ import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
-import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
+import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 import { serializePlanProposal } from "./planProposals";
 
 const router = Router();
@@ -340,6 +341,8 @@ interface PlanEditBranchOptions {
   readonly safeWrite: SseWriter;
   /** Filled with what was sent, for saving when the server owns the turn. */
   readonly reply: CoachReply;
+  /** What the turn's log line reports (I23). */
+  readonly telemetry: ChatTurnTelemetry;
 }
 
 const NOT_A_PLAN_EDIT: ChatIntentResult = { intent: "normal_chat", confidence: 0 };
@@ -418,10 +421,11 @@ async function sendPlanProposalReply(
  * to the normal chat stream (including on `generation_failed`).
  */
 async function handlePlanEditRequest(
-  { req, res, userId, input, aiContext, controller, safeWrite, reply }: PlanEditBranchOptions,
+  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry }: PlanEditBranchOptions,
   planEditIntent: Promise<ChatIntentResult>,
 ): Promise<boolean> {
   const intent = await planEditIntent;
+  recordClassifierVerdict(telemetry, intent);
   if (!isPlanEditIntent(intent) || controller.signal.aborted) return false;
 
   // Lets the client swap "Thinking..." for a plan-review status.
@@ -436,6 +440,7 @@ async function handlePlanEditRequest(
     },
     reqLogger(req),
   );
+  telemetry.proposal = result.kind;
   if (result.kind !== "proposal" && result.kind !== "chat_fallback") return false;
 
   const proposal =
@@ -445,6 +450,7 @@ async function handlePlanEditRequest(
   const summaryText = result.kind === "proposal" ? result.proposal.summaryMessage : result.text;
   reply.content = summaryText;
   reply.proposalId = proposal?.id;
+  markFirstText(telemetry);
   await sendPlanProposalReply(res, controller, safeWrite, summaryText, proposal);
   return true;
 }
@@ -457,11 +463,12 @@ async function handlePlanEditRequest(
  * plain conversation.
  */
 async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
-  const { req, res, planEditIntent, controller } = options;
+  const { req, res, planEditIntent, controller, telemetry } = options;
   if (!planEditIntent) return false;
   try {
     return await handlePlanEditRequest(options, planEditIntent);
   } catch (planEditError) {
+    telemetry.proposal = "error";
     if (controller.signal.aborted) {
       res.end();
       return true;
@@ -474,11 +481,12 @@ async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boole
   }
 }
 
-/** The open stream a reply goes out on, and the reply as sent so far. */
+/** The open stream a reply goes out on, the reply as sent so far, and what its log line reports. */
 interface CoachStream {
   readonly controller: AbortController;
   readonly safeWrite: SseWriter;
   readonly reply: CoachReply;
+  readonly telemetry: ChatTurnTelemetry;
 }
 
 /** Function calling for the chat (I8), behind AI_CHAT_TOOLS until it has been evaluated. */
@@ -521,13 +529,16 @@ async function streamCoachReplyWithTools(
   aiContext: AIContext,
   userId: string,
   chatOptions: ChatCallOptions,
-  { controller, safeWrite, reply }: CoachStream,
+  { controller, safeWrite, reply, telemetry }: CoachStream,
   planChanges: boolean,
 ): Promise<TextAiToolCall | undefined> {
   const toolContext = await toolContextFor(req, userId, aiContext);
   const toolset: CoachToolset = {
     tools: chatToolsFor({ planChanges }),
-    run: (call) => runChatTool(call, toolContext),
+    run: (call) => {
+      telemetry.toolCalls.push(call.name);
+      return runChatTool(call, toolContext);
+    },
     ...(planChanges ? { handoff: PROPOSE_PLAN_CHANGES } : {}),
   };
   const stream = streamChatWithCoachTools(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, {
@@ -541,8 +552,12 @@ async function streamCoachReplyWithTools(
       reqLogger(req).info("Client disconnected mid-stream, stopping AI generation");
       return undefined;
     }
-    if (event.type === "handoff") return event.call;
+    if (event.type === "handoff") {
+      telemetry.toolCalls.push(event.call.name);
+      return event.call;
+    }
     await safeWrite(sseEvent({ text: event.text }));
+    markFirstText(telemetry);
     reply.content += event.text;
   }
   return undefined;
@@ -557,7 +572,7 @@ const TOOL_PROPOSAL_FAILED_TEXT =
  * with it (and its card) after whatever the coach already said.
  */
 async function replyWithToolProposal(
-  { req, res, userId, input, aiContext, controller, safeWrite, reply }: Omit<PlanEditBranchOptions, "planEditIntent">,
+  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry }: Omit<PlanEditBranchOptions, "planEditIntent">,
   call: TextAiToolCall,
 ): Promise<void> {
   await safeWrite(sseEvent({ planProposalPending: true }));
@@ -575,6 +590,7 @@ async function replyWithToolProposal(
       },
       reqLogger(req),
     );
+    telemetry.proposal = result.kind;
     if (result.kind === "proposal") {
       proposal = await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req));
       text = result.proposal.summaryMessage;
@@ -582,6 +598,7 @@ async function replyWithToolProposal(
       text = result.text;
     }
   } catch (error) {
+    telemetry.proposal = "error";
     // The plan-adjustment error; no message content.
     // bearer:disable javascript_lang_logger_leak
     reqLogger(req).warn({ err: error }, "[plan-adjustment] Tool-called proposal failed");
@@ -589,6 +606,7 @@ async function replyWithToolProposal(
   const sent = reply.content ? `\n\n${text}` : text;
   reply.content += sent;
   reply.proposalId = proposal?.id;
+  markFirstText(telemetry);
   await sendPlanProposalReply(res, controller, safeWrite, sent, proposal);
 }
 
@@ -598,7 +616,7 @@ async function streamCoachReply(
   aiContext: AIContext,
   userId: string,
   chatOptions: ChatCallOptions,
-  { controller, safeWrite, reply }: CoachStream,
+  { controller, safeWrite, reply, telemetry }: CoachStream,
 ): Promise<void> {
   const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { ...chatOptions, signal: controller.signal });
 
@@ -608,6 +626,7 @@ async function streamCoachReply(
       break;
     }
     await safeWrite(sseEvent({ text: chunk }));
+    markFirstText(telemetry);
     // Only what was sent: a cut-off reply is saved as the athlete saw it.
     reply.content += chunk;
   }
@@ -646,8 +665,8 @@ type ChatAnswer = "prose" | "proposal";
 /** The classifier path: a plan-change request becomes a proposal, anything else streamed prose. */
 async function answerWithoutTools(branch: PlanEditBranchOptions, chatOptions: ChatCallOptions): Promise<ChatAnswer> {
   if (await tryPlanEditRequest(branch)) return "proposal";
-  const { req, input, aiContext, userId, controller, safeWrite, reply } = branch;
-  await streamCoachReply(req, input, aiContext, userId, chatOptions, { controller, safeWrite, reply });
+  const { req, input, aiContext, userId, controller, safeWrite, reply, telemetry } = branch;
+  await streamCoachReply(req, input, aiContext, userId, chatOptions, { controller, safeWrite, reply, telemetry });
   return "prose";
 }
 
@@ -657,24 +676,27 @@ async function answerWithTools(
   chatOptions: ChatCallOptions,
   planChanges: boolean,
 ): Promise<ChatAnswer> {
-  const { req, input, aiContext, userId, controller, safeWrite, reply } = branch;
-  const call = await streamCoachReplyWithTools(req, input, aiContext, userId, chatOptions, { controller, safeWrite, reply }, planChanges);
+  const { req, input, aiContext, userId, controller, safeWrite, reply, telemetry } = branch;
+  const call = await streamCoachReplyWithTools(req, input, aiContext, userId, chatOptions, { controller, safeWrite, reply, telemetry }, planChanges);
   if (!call || controller.signal.aborted) return "prose";
   await replyWithToolProposal(branch, call);
   return "proposal";
 }
 
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
+    const useTools = chatToolsEnabled();
+    const telemetry = startChatTurn(useTools ? "tools" : "classic", req.body.replaceAssistantId !== undefined);
     const userId = getUserId(req);
     const turn = serverOwnedTurn(req.body);
     const conversation = await conversationFor(userId, turn, req.body);
     // The athlete's own words, scanned for red-flag symptoms and heart-rate
     // medication (analyzeSafetySignals only ever reads workout text).
     const chatSafety = analyzeChatSafety(req.body.message, conversation.turns);
-    const useTools = chatToolsEnabled();
     // With tools the reply model decides itself, so the classifier never runs.
     const planEditIntent = useTools ? null : startPlanEditIntent(req, userId, chatSafety, conversation.turns);
+    if (!useTools && !planEditIntent) telemetry.planEdit = { gate: "closed" };
     const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
+    telemetry.contextReadyAt = Date.now();
     const focus = turnFocus(req.body);
     // Accepted from here: the athlete's turn is saved before the first byte, so
     // any reply the client sees has its question in the history.
@@ -707,15 +729,17 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       // independent of what the model goes on to write.
       if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
-      const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply };
+      const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry };
       const answered = useTools
         ? await answerWithTools(branch, { chatSafety, ...promptOptions }, canProposePlanChanges(req, chatSafety))
         : await answerWithoutTools({ ...branch, planEditIntent }, { chatSafety, ...promptOptions });
+      telemetry.outcome = controller.signal.aborted ? "aborted" : answered;
       if (answered === "proposal") return;
 
       sendSseTerminalEvent(res, controller, abortState);
       res.end();
     } catch (streamError) {
+      telemetry.outcome = controller.signal.aborted ? "aborted" : "error";
       if (controller.signal.aborted) return;
       reqLogger(req).error({ err: streamError }, "Stream error:");
       res.write(sseEvent({ error: "Stream error" }));
@@ -725,6 +749,9 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       unregister();
       // Finished, cut off, or a proposal: whatever reached the athlete.
       if (turn) await saveCoachReply(userId, turn, reply, focus);
+      // Timings, decisions and sizes for an opaque user id; never message text (I23).
+      // bearer:disable javascript_lang_logger_leak
+      reqLogger(req).info({ userId, ...chatTurnLogFields(telemetry, reply) }, "[chat] turn");
     }
   });
 
@@ -794,6 +821,20 @@ protectedPost(router, "/api/v1/chat/message", { limiter: rateLimiter("chatMessag
 
     const message = await storage.users.saveChatMessage({ userId, role, content });
     res.json(message);
+  });
+
+// The athlete's thumbs on a coach reply (I23): whether it helped, which no
+// log line can say. null clears it.
+protectedPatch(router, "/api/v1/chat/messages/:id", { limiter: rateLimiter("chatFeedback", 60), validation: [validateBody(chatMessageFeedbackSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, ChatMessageFeedbackBody>, res: Response) => {
+    const userId = getUserId(req);
+    const { feedback } = req.body;
+    if (!(await storage.users.setChatMessageFeedback(userId, req.params.id, feedback))) {
+      sendNotFound(res, "Message not found");
+      return;
+    }
+    // The rating and the reply's id; never its content.
+    reqLogger(req).info({ messageId: req.params.id, feedback }, "[chat] feedback");
+    res.json({ id: req.params.id, feedback });
   });
 
 protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHistoryDelete", 5) }, async (req: ExpressRequest, res: Response) => {

@@ -1,4 +1,4 @@
-import type { ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
+import type { ChatFeedback, ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
 
 import type { PlanProposalView } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
@@ -42,6 +42,13 @@ export interface Message {
   /** When it was sent, for the date separators (the welcome message has none). */
   sentAtMs?: number;
   failure?: MessageFailure;
+  /**
+   * A coach reply the server saved under this id, so the athlete can rate it:
+   * one loaded from the history, or one that finished arriving here (I23).
+   */
+  rateable?: boolean;
+  /** The athlete's thumbs on the reply, when they gave one. */
+  feedback?: ChatFeedback | null;
   /**
    * Epoch ms the Coach panel sorts by when it merges the chat hook's messages
    * with its own local ones (suggestion replies, plan-proposal confirmations).

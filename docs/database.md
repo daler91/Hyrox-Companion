@@ -637,6 +637,8 @@ Persisted AI coach conversation history.
 | `rag_info` | `jsonb` | The reply's retrieval: source, excerpt count and material titles, never the excerpts |
 | `focus_plan_day_id` | `varchar(255)` | The workout the athlete was chatting from, if any (not a FK: the turn outlives the day) |
 | `focus_workout_log_id` | `varchar(255)` | As above, for a logged session |
+| `feedback` | `varchar(10)` | The athlete's thumbs on a coach reply; CHECK `chat_messages_feedback_check`: NULL, `up` or `down` (migration `0114`) |
+| `feedback_at` | `timestamp` | When the athlete gave it; NULL once cleared |
 
 The chat routes save rows under ids the client generates, once each (`saveChatMessageOnce`), so a retried send never saves a turn twice (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)).
 

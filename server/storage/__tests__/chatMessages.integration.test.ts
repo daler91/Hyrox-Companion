@@ -9,8 +9,8 @@ import { resetIntegrationDb, seedUser } from "./integrationDb";
 /**
  * The server-owned chat conversation against the REAL schema: a message saved
  * once under its client id, a failed reply deleted for its owner only, a
- * reply's metadata columns, the kind CHECK, and the proposal link that
- * unlinks rather than deletes. The route and service tests mock all of this.
+ * reply's metadata columns, the kind and feedback CHECKs, the athlete's
+ * rating, and the proposal link that unlinks rather than deletes. The route and service tests mock all of this.
  */
 describe("chat messages and their proposals (real Postgres)", () => {
   const ALICE = "chat-alice";
@@ -91,6 +91,29 @@ describe("chat messages and their proposals (real Postgres)", () => {
     await expect(
       storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "- note", kind: "rolling" }),
     ).resolves.toMatchObject({ kind: "rolling" });
+  });
+
+  it("rates only the athlete's own visible coach replies, and refuses a rating it doesn't know", async () => {
+    const reply = await storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "Easy today." });
+    const question = await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "Today?" });
+    const summary = await storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "- notes", kind: "summary" });
+
+    expect(await storage.users.setChatMessageFeedback(BOB, reply.id, "down")).toBe(false);
+    expect(await storage.users.setChatMessageFeedback(ALICE, question.id, "up")).toBe(false);
+    expect(await storage.users.setChatMessageFeedback(ALICE, summary.id, "up")).toBe(false);
+    expect(await storage.users.setChatMessageFeedback(ALICE, reply.id, "up")).toBe(true);
+
+    const rated = (await storage.users.getChatMessages(ALICE)).find((row) => row.id === reply.id);
+    expect(rated?.feedback).toBe("up");
+    expect(rated?.feedbackAt).toBeInstanceOf(Date);
+
+    expect(await storage.users.setChatMessageFeedback(ALICE, reply.id, null)).toBe(true);
+    const cleared = (await storage.users.getChatMessages(ALICE)).find((row) => row.id === reply.id);
+    expect(cleared).toMatchObject({ feedback: null, feedbackAt: null });
+
+    await expect(
+      storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "x", feedback: "meh" }),
+    ).rejects.toThrow();
   });
 
   it("keeps each workout's conversation in its own thread", async () => {

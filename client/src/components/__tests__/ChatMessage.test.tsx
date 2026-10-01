@@ -188,4 +188,41 @@ describe('ChatMessage', () => {
       expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
     });
   });
+
+  describe('rating a reply', () => {
+    it('offers thumbs on a saved coach reply, and reports which was pressed', async () => {
+      const onFeedback = vi.fn();
+      render(<ChatMessage role="assistant" content="Run easy." messageId="reply-1" onFeedback={onFeedback} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Helpful' }));
+
+      expect(onFeedback).toHaveBeenCalledWith('reply-1', 'up');
+      expect(screen.getByRole('button', { name: 'Not helpful' })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('clears the rating when the chosen thumb is pressed again', async () => {
+      const onFeedback = vi.fn();
+      render(<ChatMessage role="assistant" content="Run easy." messageId="reply-1" feedback="down" onFeedback={onFeedback} />);
+
+      const notHelpful = screen.getByRole('button', { name: 'Not helpful' });
+      expect(notHelpful).toHaveAttribute('aria-pressed', 'true');
+      await userEvent.click(notHelpful);
+
+      expect(onFeedback).toHaveBeenCalledWith('reply-1', null);
+    });
+
+    it('offers no thumbs on the athlete\'s own message, a failed reply, or one with no handler', () => {
+      const onFeedback = vi.fn();
+      const { rerender } = render(<ChatMessage role="user" content="Hi" messageId="m-1" onFeedback={onFeedback} />);
+      expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
+
+      rerender(
+        <ChatMessage role="assistant" content="" messageId="m-2" onFeedback={onFeedback} failure={{ message: 'The reply stopped.' }} />,
+      );
+      expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
+
+      rerender(<ChatMessage role="assistant" content="Welcome!" messageId="welcome" />);
+      expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
+    });
+  });
 });

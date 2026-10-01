@@ -3,6 +3,7 @@ import { getTableConfig,PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import {
+  chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
   MEAL_TYPES,
@@ -53,6 +54,11 @@ describe("enum-backed CHECK constraints", () => {
   it("renders chat_messages.kind from chatMessageKindEnum", () => {
     expect(checkSql(chatMessages, "chat_messages_kind_check")).toBe("kind IN ('text', 'proposal', 'summary', 'rolling')");
     expect(chatMessageKindEnum).toEqual(["text", "proposal", "summary", "rolling"]);
+  });
+
+  it("renders chat_messages.feedback from chatFeedbackEnum", () => {
+    expect(checkSql(chatMessages, "chat_messages_feedback_check")).toBe("feedback IS NULL OR feedback IN ('up', 'down')");
+    expect(chatFeedbackEnum).toEqual(["up", "down"]);
   });
 
   it("renders plan_days.status from workoutStatusEnum", () => {

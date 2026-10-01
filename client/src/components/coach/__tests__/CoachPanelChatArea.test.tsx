@@ -21,7 +21,11 @@ function message(id: string, overrides: Partial<Message> = {}): Message {
   return { id, role: "assistant", content: id, timestamp: "10:00", createdAtMs: 0, ...overrides };
 }
 
-function renderChat(messages: Message[], planProposal: PlanProposalView | null = null) {
+function renderChat(
+  messages: Message[],
+  planProposal: PlanProposalView | null = null,
+  onRateMessage?: (messageId: string, feedback: "up" | "down" | null) => void,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   return render(
@@ -35,6 +39,7 @@ function renderChat(messages: Message[], planProposal: PlanProposalView | null =
       planProposal={planProposal}
       onApplyProposal={vi.fn()}
       onDismissProposal={vi.fn()}
+      onRateMessage={onRateMessage}
     />,
     { wrapper },
   );
@@ -83,5 +88,23 @@ describe("CoachPanelChatArea", () => {
     const note = screen.getByTestId("chat-session-summary");
     expect(note).toHaveTextContent("- The athlete has a sore knee.");
     expect(screen.queryAllByTestId("message-assistant")).toHaveLength(0);
+  });
+
+  it("offers thumbs only on the coach's saved replies", () => {
+    const onRateMessage = vi.fn();
+    renderChat(
+      [
+        message("welcome", { content: "Hi, I'm your coach." }),
+        message("Today?", { role: "user" }),
+        message("reply-1", { content: "Run easy.", rateable: true, feedback: "up" }),
+      ],
+      null,
+      onRateMessage,
+    );
+
+    const feedback = screen.getAllByTestId("message-feedback");
+    expect(feedback).toHaveLength(1);
+    within(feedback[0]).getByRole("button", { name: "Helpful" }).click();
+    expect(onRateMessage).toHaveBeenCalledWith("reply-1", null);
   });
 });
