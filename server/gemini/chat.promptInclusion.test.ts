@@ -52,3 +52,18 @@ describe("chat system prompt — medical safety", () => {
     expect(prompt).toContain(CHAT_HR_MEDICATION_GUIDANCE);
   });
 });
+
+describe("chat system prompt — what a reply can and cannot do", () => {
+  it("says a reply cannot change the plan, and how the athlete gets a change", () => {
+    const prompt = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }));
+    expect(prompt).toContain("Your reply here cannot change the athlete's plan.");
+    expect(prompt).toContain("never say or imply that this reply has moved");
+    expect(prompt).toContain('"Move my long run to Saturday"');
+  });
+
+  it("says it on day one too, before any workout is logged", () => {
+    expect(buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 0 }))).toContain(
+      "Your reply here cannot change the athlete's plan.",
+    );
+  });
+});
