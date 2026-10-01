@@ -113,12 +113,13 @@ export default function EditWorkoutDialog({
                   data-testid="button-voice-edit-notes"
                 />
               </div>
-              <Input
+              <Textarea
                 id="edit-notes"
                 value={editForm.notes}
                 onChange={(e) =>
                   onEditFormChange({ ...editForm, notes: e.target.value })
                 }
+                rows={3}
                 data-testid="input-edit-notes"
                 placeholder="Add any observations or notes..."
               />
