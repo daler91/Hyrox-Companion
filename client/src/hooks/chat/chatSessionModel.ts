@@ -45,7 +45,7 @@ export function truncateHistory(history: HistoryTurn[]): HistoryTurn[] {
     } else {
       result[i] = {
         ...result[i],
-        content: result[i].content.slice(0, TRUNCATED_MSG_LENGTH) + " [truncated]",
+        content: `${result[i].content.slice(0, TRUNCATED_MSG_LENGTH)} [truncated]`,
       };
       budget = 0;
     }
