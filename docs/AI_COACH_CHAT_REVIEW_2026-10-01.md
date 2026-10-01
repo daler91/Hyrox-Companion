@@ -1,0 +1,380 @@
+# AI Coach Chat Review — 2026-10-01
+
+**Scope:** the conversational coach end to end. That covers the main Coach panel
+(`client/src/components/CoachPanel.tsx`, `client/src/components/coach/`), the workout-detail chat
+(`client/src/components/workout-detail/EmbeddedWorkoutCoachChat.tsx`), the shared hook
+(`client/src/hooks/useChatSession.ts`), the chat routes (`server/routes/ai.ts`), prompt assembly
+(`server/prompts.ts`, `server/prompts/`), context and retrieval (`server/services/aiContextService.ts`,
+`server/services/ai/`, `server/services/ragRetrieval.ts`, `server/services/ragService.ts`), and
+chat-driven plan editing (`server/services/chatIntentService.ts`,
+`server/services/planAdjustmentService.ts`, `client/src/hooks/usePlanProposal.ts`).
+
+**Method:** the code was read end to end. Two behaviours were checked by running verbatim copies of
+the production logic in Node: the plan-edit keyword gate (D1, I9) and the Coach panel's message sort
+(D3). Nothing was run against a live model or in the running app, so the latency and model-behaviour
+claims are reasoned from the code, not measured. No application code was changed.
+
+**Headline:** the plumbing is unusually solid: backpressure-aware SSE, abort propagation to the
+provider, chunk-boundary output validation, sanitised prompt inputs, and fingerprinted proposal
+staleness. The gaps are in the conversation itself:
+
+1. **"Yes please" goes nowhere.** Confirming a change the coach just offered never reaches plan
+   editing, and nothing in the chat prompt stops the coach from replying as if it had made the change.
+2. **The chat has no safety net of its own.** Red-flag symptom detection runs on workout text for the
+   auto-coach and for plan edits. It never runs on what the athlete types into chat.
+3. **The coach often can't see what it's being asked about.** The workout chat doesn't tell the
+   server which workout is open, and the chat prompt carries less per-session data than the
+   auto-coach prompt.
+4. **The browser owns the conversation.** History is uploaded by the client on every turn and saved
+   by separate calls. As a result replies get lost, failed sends leave orphan turns, and the two chat
+   surfaces drift apart.
+
+---
+
+## How a chat turn works today
+
+```
+ChatInput → useChatSession.sendMessage
+  ├─ POST /api/v1/chat/message   save the user turn (before the request is accepted)
+  └─ POST /api/v1/chat/stream    { message ≤1000 chars, history: last 20 turns ≤30k chars, focusPlanDayId? }
+       aiConsentCheck → aiBudgetCheck → validateBody
+       buildAIContext = buildTrainingContext ∥ retrieveCoachingContext (embed query → top-6 chunks)
+       flush headers → SSE { ragInfo }
+       hasPlanEditKeywords? → classifyPlanEditIntent (fast model)              ← runs after the context build
+         └─ plan_modification ≥ 0.7 → createPlanAdjustmentProposal (reasoning model, JSON, not streamed)
+                                      → SSE { text: summary } { planProposal } { done }
+       otherwise streamChatWithCoach (reasoning model, global effort "high") → SSE { text }… { done }
+  └─ POST /api/v1/chat/message   save the assistant turn (only if the stream finished in this tab)
+```
+
+---
+
+## Defects — fix first
+
+### D1 · Confirming a change the coach offered does nothing · S
+
+`hasPlanEditKeywords` (`server/services/chatIntentService.ts:24-39`) looks only at the new message.
+None of "yes please", "yes, do it", "sounds good, go ahead", "ok", "sure" or "do that" matches a
+pattern (checked by running the patterns), so a confirmation never reaches the classifier and goes
+through normal chat. The normal chat prompt (`BASE_SYSTEM_PROMPT`, `server/prompts.ts:30-65`) tells
+the coach to discuss "whether modifications might help", but never says it can't apply them. So this
+natural exchange:
+
+> **Coach:** …want me to move your long run to Saturday?
+> **Athlete:** yes please
+
+ends with a reply that may say the change is done, when nothing changed.
+
+**Fix.**
+
+- (a) When the previous assistant turn offered a change, send short affirmations to the classifier
+  with that turn as context. Today the classifier sees only the last two _user_ turns
+  (`chatIntentService.ts:52-55`).
+- (b) Add a capability line to `BASE_SYSTEM_PROMPT`: the coach cannot change the plan in a prose
+  reply and must never say it has. It should tell the athlete to ask directly ("Move my long run to
+  Saturday") to get a proposal card.
+
+(b) alone removes the false claim, and it is a one-line change.
+
+### D2 · No deterministic safety layer on chat · S
+
+`analyzeSafetySignals` (`server/services/aiSafety.ts:89-111`) scans recent and upcoming workout text.
+It runs for auto-coach suggestions, review notes and plan proposals, but `/chat` and `/chat/stream`
+never call it, and nothing scans the chat message itself. "I've had chest pain on my last two runs,
+should I still do tomorrow's intervals?" gets whatever the model decides, and the chat prompt has no
+medical-safety guidance. The plan-edit branch checks workout text only, so the same message phrased as
+a change ("skip tomorrow, I had chest pain") produces a proposal and no escalation.
+
+**Fix.** Run `RED_FLAG_SYMPTOM_PATTERNS` and `HR_MEDICATION_PATTERNS` over the message and the last
+user turn. On a hit:
+
+- send the existing `ESCALATION_MESSAGE` as its own SSE event, rendered as a banner above the reply.
+  It adds to the reply rather than replacing it, so a false positive ("a faint chance") costs a
+  banner, not the answer;
+- add a prompt line telling the coach to put medical care first and not to prescribe hard training;
+- run the same check before `createPlanAdjustmentProposal`.
+
+Add a short MEDICAL SAFETY paragraph to `BASE_SYSTEM_PROMPT` either way.
+
+### D3 · The Coach panel shows some replies above the question · S
+
+`CoachPanel` merges hook and local messages and sorts them by `createdAtMs ?? 0`
+(`client/src/components/CoachPanel.tsx:105-112`). Some messages are created without `createdAtMs`:
+the suggestions reply and its error messages (`client/src/components/coach/SuggestionsTab.tsx:41-46`),
+and the plan-proposal confirmations (`client/src/hooks/usePlanProposal.ts:82-87`). They sort as 0,
+ahead of every message sent in this session. Tapping _Get workout suggestions_ shows "I have 3
+suggestions…" above the "Get workout suggestions" bubble (reproduced with a copy of the
+merge-and-sort). A reload hides the problem, because hydrated history also has no `createdAtMs` and
+keeps server order.
+
+**Fix.** Set `createdAtMs: Date.now()` on every locally created message (and derive it from
+`msg.timestamp` on hydrated ones), or drop the sort and keep insertion order. The longer-term fix is a
+single message store (I1).
+
+### D4 · Every chat failure says "Something went wrong on our side" · S
+
+`useChatSession` sorts failures into abort, network and other (`client/src/hooks/useChatSession.ts:39-56`).
+All of these become "other":
+
+- the daily AI cap (`AiBudgetExceededError`);
+- the 10-per-minute rate limit (`RateLimitError`);
+- a message over 1000 characters (400). `ChatInput` has no `maxLength` and no counter
+  (`client/src/components/ChatInput.tsx:94`);
+- AI consent switched off (403);
+- the server's named stream endings, `auth-expired` and `timeout`. Each is sent with a readable
+  `reason` (`server/routes/ai.ts:399-417`), but `consumeSSEStream` throws `new Error(data.error)` and
+  drops it (`client/src/lib/sseStream.ts:59-61`).
+
+The suggestions flow already handles these with `describeAiError`. The main chat doesn't use it.
+
+The user turn is saved before the server accepts the request (`useChatSession.ts:312`). Each failed
+send (for example a too-long message retried a few times) leaves a user message with no reply, and
+the next turn's history then has two user turns in a row.
+
+**Fix.**
+
+- Route chat errors through `describeAiError`, and carry `reason` through from the SSE error event.
+- Add `maxLength={1000}` and a counter to `ChatInput`.
+- Save the user turn only after the server accepts the request (or server-side, see I1), and give a
+  failed message a Retry action instead of adding a new bubble.
+- Show the budget warning the server already sends (`X-AI-Budget-Warning`,
+  `server/middleware/aibudget.ts:59-61`). The client never reads it.
+
+### D5 · The workout chat doesn't tell the coach which workout is open · M
+
+The workout-detail chat sends `focusPlanDayId`, but only the plan-edit branch uses it
+(`server/routes/ai.ts:333`). Normal chat, including the seed question "Can you walk me through your
+take on my _X_ workout on _date_?" (`EmbeddedWorkoutCoachChat.tsx:26-39`), gets only the general
+training context. That context lists the last 7 workouts and the next 7 planned days
+(`server/prompts/coachingContext.ts:102,121`). A session outside those windows is invisible, and the
+coach answers from the seed text alone. Ad-hoc logged workouts have no `planDayId`, so nothing
+identifies them at all. The non-streaming fallback drops `focusPlanDayId` as well
+(`useChatSession.ts:375-378`).
+
+**Fix.** Accept `focusWorkout: { planDayId?, workoutLogId? }` on the chat request, load the workout
+server-side with an ownership check, and render a FOCUSED WORKOUT block into the chat prompt:
+
+- the prescription next to what was logged (sets, RPE, duration, device heart rate and pace);
+- the athlete note, adherence snapshot and session grade;
+- any coach note and its rationale.
+
+### D6 · The chat sees less than the auto-coach · S
+
+The two prompt assemblers have drifted apart on per-session detail:
+
+| Data                  | Auto-coach (`server/gemini/suggestionService.ts`)                                   | Chat (`server/prompts/coachingContext.ts`)                         |
+| --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Recent workouts       | last 10, with RPE and duration (`:182-183`)                                         | last 7, without RPE or duration (`:99-116`)                        |
+| Upcoming days         | prior AI review, last AI modification, last fatigue reduction (`:202-252`)          | none, so "why did Thursday change?" can't be answered              |
+| Max weight / distance | with units                                                                          | no units (`:90-91`; already logged as REFACTORING_REVIEW D1)       |
+
+The chat prompt has three smaller inaccuracies:
+
+- A brand-new plan with nothing due yet shows "Completion rate: 0%" (`trainingStats.ts:31` →
+  `coachingContext.ts:49`), which invites a day-one lecture about consistency.
+- "Upcoming Planned Workouts (next 7 days)" is really the next 7 planned _sessions_
+  (`services/ai/index.ts:494`). For a plan without rest-day rows, that covers two weeks.
+- The athlete's unit preference is never stated, although `BASE_SYSTEM_PROMPT` asks for loads "in
+  the athlete's unit". The zero-workout branch has no unit information at all.
+
+**Fix.**
+
+- Render RPE, duration and prior-AI context in the chat builders, or share the suggestion renderers
+  outright, as `formatAthleteConstraints` and `formatMafContext` already are.
+- Print "n/a — nothing due yet" when the completion denominator is 0.
+- Fix the upcoming-workouts label.
+- Add a `Units: kg, km` line.
+
+Extend the existing prompt-inclusion tests so the two assemblers can't drift apart again.
+
+---
+
+## Improvements
+
+### Conversation model and memory
+
+**I1 · Make the server own the conversation · M–L.** Today the browser uploads up to 30k characters
+of history with every message and saves turns through separate `POST /chat/message` calls. This has
+four consequences:
+
+- A reply that finishes after the tab closes is generated and billed, but never saved.
+- Failed sends leave orphan turns (D4).
+- A client can replay any "assistant" turns it likes. They are sanitised, but the client still
+  chooses what the model reads.
+- The Coach panel's local messages (suggestion results, apply confirmations) never enter the hook's
+  history. Later in the same session, the coach doesn't know what it just suggested or what was
+  applied.
+
+Persist both turns inside `/chat/stream`, saving the assistant turn on completion _or_ abort. Load
+history from the database, and have the client send `{ message, conversationId }`. One React Query
+store then feeds every chat surface.
+
+**I2 · Make history time-aware, and start fresh sessions · S–M.** The chat is one thread that never
+ends, and the model receives history without timestamps (`server/gemini/chatService.ts:10-33`). A
+knee complaint from three weeks ago, still inside the last 20 turns, reads as current. Prefix turns
+with a relative time, or insert a marker like "— 19 days later —". After a long gap (say 12 hours),
+start a new session that carries a short summary forward instead of raw turns. The UI needs date
+separators too: timestamps show the time of day only.
+
+**I3 · Give messages metadata, and render cards inline · M.** `chat_messages` holds only `role`,
+`content` and `timestamp` (`shared/schema/tables.ts:1316-1338`). Add `kind` (text, proposal,
+suggestions, safety, system), `proposalId`, the focus workout, `ragSource`, model, latency and
+feedback. Proposal and suggestion cards can then render inline at the turn that produced them, with
+their final status (applied, dismissed, stale). Today they float at the bottom of the panel while
+pending and disappear from history afterwards.
+
+**I4 · Separate threads for workout chats · M.** The workout-detail chat loads the whole global
+history and writes into it. A question about Tuesday's session therefore shows unrelated
+conversations, and sends them to the model. Once I1 and I3 are in place, give each workout its own
+thread. At minimum, render an "About: Lower Strength · Tue 29 Sep" divider and send only that
+thread's turns.
+
+**I5 · Rolling summary and chat-proposed athlete facts · M.** After 20 turns the coach forgets
+everything. A rolling summary (fast model, refreshed every N turns) is cheap. Separately,
+`coach-memory-spec.md` Path C is still open. When the athlete states a lasting fact in chat ("no sled
+at my gym"), propose it as a fact card for the athlete to confirm. The register already says inferred
+facts must be proposed and never written silently.
+
+### Plan editing from chat
+
+**I6 · Apply changes one by one, and allow undo · M.** `PlanProposalCard` offers only _Apply all
+changes_. A request for one change that comes with four rebalancing edits is all or nothing. Add a
+toggle for each change. Then add Undo. Each change's `baseline` already stores the text fields, date,
+duration, RPE and status, so restoring those is one transaction. Table-backed days also need their
+exercise rows saved at apply time, because `baseline` keeps only a fingerprint of them. Undo matters
+most with `coachAutoApplyPlanChanges`, which applies changes without a click.
+
+**I7 · Tell the coach what happened · S.** Dismissing a proposal is silent
+(`usePlanProposal.ts:119-124`). Apply confirmations are local messages that never reach the hook's
+history. So on the next turn the coach doesn't know whether the athlete took the proposal. Record
+apply, dismiss and stale as conversation events the model can see.
+
+**I8 · Function calling instead of keyword gate plus classifier · L.** The current flow is a keyword
+regex, then a fast-model classifier, then a separate JSON generation. Give the reasoning model a
+`propose_plan_changes` tool (backed by the existing proposal pipeline) and read tools:
+`get_workouts(range)`, `get_exercise_history(exercise)`, `get_personal_records` and
+`search_coaching_materials(query)`. Then:
+
+- one call decides with the full conversation as context, which fixes D1 at the root;
+- the coach can answer questions the 10-workout window can't, such as "what did I squat in July?";
+- the prompt that goes out on every turn gets smaller.
+
+This needs tool support in `TextAiProvider`. The Gemini, Anthropic and OpenAI-compatible APIs all
+offer it.
+
+### Latency and cost
+
+Time to first token is currently the sum of: the budget check, the full context build, the query
+embedding, often a classifier round trip, and high-effort thinking on the reasoning model.
+
+**I9 · Run the classifier alongside the context build · S.** `classifyPlanEditIntent` needs only the
+message and history, yet it starts only after `buildAIContext` resolves (`server/routes/ai.ts:421,445`).
+In a quick sample, the keyword gate let through 5 of 12 ordinary questions ("What should I do
+tomorrow?", "How should I pace my race?", "My legs are sore, is that normal?"…). Each of those waits
+for the round trip in sequence. Start the classifier in parallel.
+
+**I10 · Set reasoning effort per feature · S.** `chatService` doesn't pass `reasoningEffort`, so chat
+inherits the global `AI_TEXT_REASONING_EFFORT`. Its default is `high` (Gemini `ThinkingLevel.HIGH`),
+the same as plan generation. The per-request override already exists, and the parsers use it.
+Default chat to `medium`, keep `high` for plan generation and adjustment, and consider the fast model
+for short conversational messages. The intent classifier runs on the fast model but also inherits
+`high`, whereas the exercise and meal parsers pass `none`. The classifier should pass `none` too.
+
+**I11 · Progress events · S.** Turn the existing `planProposalPending` event into a general `status`
+event with steps such as "Reading your training log…" and "Checking your plan…". During a long think,
+the dots are currently the only feedback. Stream the proposal summary instead of waiting for the
+whole JSON.
+
+**I12 · Cache the training context · M.** `buildTrainingContext` runs again on every turn: about seven
+parallel reads, plus nutrition and MAF. The coach-memory spec calls it the heaviest uncached read.
+Cache it per user for a few minutes, and invalidate the cache on workout and plan writes.
+
+**I13 · Prompt caching on Anthropic · S.** The system prompt is large and stays the same within a
+conversation, but the Anthropic adapter sends no `cache_control`. The RAG excerpts sit at the end of
+the prompt, which keeps everything before them cacheable. Keep it that way.
+
+### Retrieval
+
+**I14 · Retrieve only when it helps · S.** Every message, "thanks!" included, costs an embedding call
+and adds six chunks to the prompt: up to 3 pinned principles plus nearest neighbours, with no
+similarity threshold (`server/services/ragService.ts:194,341`). Skip retrieval for short social
+messages, and add a distance cut-off for the semantic results (keep the pinned ones).
+
+**I15 · Retrieve for the conversation, not just the last message · S.** The search query is the raw
+new message. A follow-up such as "what about for the sled?" searches for exactly that phrase. For
+short messages or ones that start with a pronoun, prepend the previous user turn, or have the fast
+model write a standalone query.
+
+**I16 · Cite sources · S.** Excerpts are labelled `[Excerpt 1]` with no title
+(`server/prompts/materialsBuilder.ts:55`), and the only trace in the UI is a dev-only badge. Label
+each excerpt with its material title, let the coach cite it, and show a small "From your coaching
+notes" chip. That chip is the visible payoff for uploading materials.
+
+### Chat UX
+
+**I17 · Render GFM · S.** `ReactMarkdown` runs without `remark-gfm`
+(`client/src/components/ChatMessage.tsx:49`). Tables are the natural format for pacing splits and
+weekly schedules, and they currently show up as raw pipe characters.
+
+**I18 · Message actions · S–M.** Add copy, regenerate, thumbs up/down with an optional reason, Retry
+on a failed turn, and editing the last message.
+
+**I19 · Contextual welcome and quick actions · S.** The welcome message is fixed, and so are the
+quick-action lists (`CoachPanel.tsx:18-43`). Two of the actions are generic ("Pacing tips", "Exercise
+form tips"). Build them from today's session, readiness and load-governor state, an upcoming race or
+a new personal record, for example "Today: 6×800 m @ 4:05/km — want pacing cues?". Greet the athlete
+by first name.
+
+**I20 · Input · S–M.** 1000 characters is tight for a race recap or a pasted session. Raise the limit
+for chat and show a counter (D4). Photo attachments could reuse the existing image parsing ("here's
+my watch screenshot, how was my pacing?").
+
+**I21 · Streaming and screen readers · S.** The whole conversation is a polite live region
+(`CoachPanelChatArea.tsx:65`), and its content changes on every animation-frame flush. Mark the
+streaming message `aria-busy`, and announce it once when it completes.
+
+### Quality loop
+
+**I22 · Scenario evals · M.** `server/services/aiEval.test.ts` has two keyword checks and is off by
+default. Add golden conversations graded by an LLM judge, covering:
+
+- red-flag escalation;
+- respecting the load governor and taper in chat;
+- never claiming a change that wasn't applied, including the "yes please" flow;
+- using the athlete's units and the focused workout;
+- refusing to reveal the prompt.
+
+Run the suite on every prompt or model change.
+
+**I23 · Telemetry and feedback · S–M.** Log time to first token, the classifier's hit and
+false-positive rates, the proposal apply, dismiss, undo and stale rates, the regenerate rate, and
+thumbs ratings. Today `ai_usage_logs` records cost per feature and nothing about whether the answers
+helped.
+
+### Prompt hygiene
+
+**I24 · Escape less · S.** `sanitizeUserInput` is `sanitizeHtml`, so every user and assistant turn
+is HTML-entity-encoded. "can't" reaches the model as `can&#39;t`, and quotes become `&quot;`
+(`server/utils/sanitize.ts:8-27`). That costs tokens on every turn, and the model sees its own past
+replies in encoded form. Escaping `<`, `>` and `&` is enough to stop text breaking out of
+`<user_input>`. Encoding quotes and apostrophes adds nothing in a prompt.
+
+---
+
+## Suggested order
+
+| Wave                          | Items                                       | Why                                                                                    |
+| ----------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1 — small, user-visible       | D1(b), D2, D3, D4, D6, I9, I10, I17         | Defects and one-line wins. Each is S and can ship on its own                            |
+| 2 — context and conversation  | D5, D1(a), I1–I3, I6, I7, I14–I16, I19      | The coach sees what it's asked about, and the server owns a coherent conversation       |
+| 3 — architecture              | I8, I4, I5, I12, I22, I23                   | Tool calling, threads, memory and evals: larger pieces, easier once wave 2 is in place  |
+
+---
+
+## Not verified
+
+- No live model calls were made. Whether the coach actually claims a change it didn't make (D1), or
+  mishandles a red-flag message (D2), depends on the model. The gaps are in the code; those outcomes
+  are risks, not observations.
+- Latency was not measured. I9–I12 are reasoned from the order of calls.
+- Whether the fast Gemini model accepts the inherited `thinkingLevel` (I10) was not tested.
