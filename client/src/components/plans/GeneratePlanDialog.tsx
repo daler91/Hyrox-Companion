@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAthleteFacts } from "@/hooks/useAthleteFacts";
 import { useAuth, useIsAiCoachEnabled } from "@/hooks/useAuth";
 import { useEnableAiCoach } from "@/hooks/useEnableAiCoach";
 import { useGeneratePlan } from "@/hooks/usePlanGeneration";
@@ -70,7 +71,8 @@ export function GeneratePlanDialog({
   existingPlans,
   aiCoachEnabled = false,
 }: GeneratePlanDialogProps) {
-  // The athlete's remembered injuries/limitations, so the box arrives prefilled.
+  // The older free-text injuries note, while the athlete still has one: the
+  // box arrives prefilled with it, and generating moves it onto the card.
   const { user } = useAuth();
   const { toast } = useToast();
   // Generation is consent-gated on the server, and every account starts with
@@ -81,6 +83,9 @@ export function GeneratePlanDialog({
   const aiCoachOn = useIsAiCoachEnabled();
   const enableAiCoach = useEnableAiCoach();
   const needsConsent = !(aiCoachOn || aiCoachEnabled || enableAiCoach.isSuccess);
+  // The athlete card, shown on the details step so the athlete sees what every
+  // plan is already written around instead of retyping it into the box.
+  const athleteFacts = useAthleteFacts({ enabled: open && !needsConsent });
   const form = useGeneratePlanForm({
     initialConstraints: user?.trainingConstraints ?? "",
     initialGoal,
@@ -202,6 +207,7 @@ export function GeneratePlanDialog({
               <GeneratePlanDetailsStep
                 focusAreas={form.focusAreas}
                 onFocusToggle={form.toggleFocus}
+                cardFacts={athleteFacts.data?.filter((fact) => fact.active) ?? []}
                 injuries={form.injuries}
                 onInjuriesChange={form.setInjuries}
                 onBack={() => form.setStep(1)}

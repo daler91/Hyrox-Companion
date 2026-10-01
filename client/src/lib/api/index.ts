@@ -5,6 +5,7 @@ export type {
   Suggestion,
 } from "./analytics";
 export { analytics, timeline } from "./analytics";
+export { athleteFacts } from "./athleteFacts";
 export type { ChatFocus, ChatHistoryMessage, ChatTurnIds, RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
@@ -57,6 +58,7 @@ export { workouts } from "./workouts";
 // Re-assembled api object (preserves existing import shape)
 // ---------------------------------------------------------------------------
 import { analytics, timeline } from "./analytics";
+import { athleteFacts } from "./athleteFacts";
 import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { mafTests } from "./mafTests";
@@ -77,6 +79,7 @@ export const api = {
   exercises,
   timeline,
   timelineAnnotations,
+  athleteFacts,
   analytics,
   strava,
   garmin,
@@ -97,6 +100,7 @@ export const QUERY_KEYS = {
   plan: (id: string) => ["/api/v1/plans", id] as const,
   timeline: ["/api/v1/timeline"] as const,
   timelineAnnotations: ["/api/v1/timeline-annotations"] as const,
+  athleteFacts: ["/api/v1/athlete-facts"] as const,
   recycleBin: ["/api/v1/recycle-bin"] as const,
   workouts: ["/api/v1/workouts"] as const,
   workout: (id: string) => ["/api/v1/workouts", id] as const,

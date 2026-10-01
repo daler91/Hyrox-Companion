@@ -77,8 +77,9 @@ export interface GeneratePlanFormOptions {
    */
   readonly initialRaceDate?: string;
   /**
-   * The athlete's remembered injuries/limitations, prefilled into the box so
-   * they are not retyped on every regeneration. Passed in rather than read from
+   * The older free-text injuries note, while the athlete still has one,
+   * prefilled into the box: generating puts the box on the athlete card, a
+   * fact per sentence, and drops the note. Passed in rather than read from
    * `useAuth` here, so this hook stays free of query context — same reason
    * `initialGoal` is a parameter.
    */
@@ -173,8 +174,9 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
       : {}),
     ...(values.focusAreas.length > 0 ? { focusAreas: values.focusAreas } : {}),
     // Always sent, even empty: the server treats presence as authoritative and
-    // an empty string clears the remembered constraints. Omitting it would make
-    // a cleared box indistinguishable from an older client that never sent one.
+    // an empty string drops the older note the box was prefilled with. Omitting
+    // it would make a cleared box indistinguishable from an older client that
+    // never sent one.
     injuries: values.injuries,
     // Omitted when empty so the payload stays identical to what an older client
     // sends, rather than carrying an empty array through the job queue.
@@ -206,9 +208,10 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const [endDateIsRaceDate, setEndDateIsRaceDate] = useState(defaultEndDateIsRaceDate);
   const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
-  // Prefilled from the athlete's remembered constraints so they do not retype
-  // them on every regeneration; clearing the box and generating clears the
-  // profile, which is how a resolved injury is forgotten.
+  // Prefilled with the older free-text note while the athlete has one.
+  // Generating puts what the box holds on the athlete card and drops the note,
+  // so clearing the box is how a resolved injury in it is forgotten; a fact
+  // already on the card is retired in Settings.
   const rememberedConstraints = options.initialConstraints ?? "";
   const [injuries, setInjuries] = useState(rememberedConstraints);
 
