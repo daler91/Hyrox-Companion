@@ -37,8 +37,9 @@ const PROPOSAL = {
 describe("GET /api/v1/plan-proposals/:id", () => {
   let app: express.Express;
 
+  // Reset, not cleared: each test starts from storage that finds nothing.
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     clearRateLimitBuckets();
     app = createTestApp(planProposalRouter);
   });
@@ -61,20 +62,18 @@ describe("GET /api/v1/plan-proposals/:id", () => {
   });
 
   it("is a 404 for a proposal that isn't the athlete's", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(undefined);
-
     const response = await request(app).get("/api/v1/plan-proposals/someone-elses");
 
     expect(response.status).toBe(404);
+    expect(storage.planProposals.getById).toHaveBeenCalledWith("someone-elses", "test_user_id");
   });
 
   it("still serves the pending proposal from its own route", async () => {
-    vi.mocked(storage.planProposals.getPending).mockResolvedValue(undefined);
-
     const response = await request(app).get("/api/v1/plan-proposals/pending");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ proposal: null });
+    expect(storage.planProposals.getPending).toHaveBeenCalledWith("test_user_id");
     expect(storage.planProposals.getById).not.toHaveBeenCalled();
   });
 });

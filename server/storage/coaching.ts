@@ -14,6 +14,19 @@ import { vectorPool } from "../vectorDb";
 /** A search result: the chunk and its cosine distance to the query. */
 export type ScoredDocumentChunk = DocumentChunk & { distance: number };
 
+/**
+ * Titles of the athlete's materials among `materialIds`, by id. The ids come
+ * from the vector database, so they are scoped to the user here as well.
+ */
+async function getMaterialTitles(userId: string, materialIds: string[]): Promise<Map<string, string>> {
+  if (materialIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: coachingMaterials.id, title: coachingMaterials.title })
+    .from(coachingMaterials)
+    .where(and(eq(coachingMaterials.userId, userId), inArray(coachingMaterials.id, materialIds)));
+  return new Map(rows.map((row) => [row.id, row.title]));
+}
+
 export class CoachingStorage {
   async listCoachingMaterials(userId: string): Promise<CoachingMaterial[]> {
     return await db
@@ -178,18 +191,10 @@ export class CoachingStorage {
     return rows.map((row) => row.id);
   }
 
-  /**
-   * Titles of the athlete's materials among `materialIds`, by id. The ids come
-   * from the vector database, so they are scoped to the user here as well.
-   */
-  async getMaterialTitles(userId: string, materialIds: string[]): Promise<Map<string, string>> {
-    if (materialIds.length === 0) return new Map();
-    const rows = await db
-      .select({ id: coachingMaterials.id, title: coachingMaterials.title })
-      .from(coachingMaterials)
-      .where(and(eq(coachingMaterials.userId, userId), inArray(coachingMaterials.id, materialIds)));
-    return new Map(rows.map((row) => [row.id, row.title]));
-  }
+  // Uses no instance state, so it is a module function bound here, as
+  // NutritionStorage binds its own: storage.coaching.getMaterialTitles() and
+  // its mocks still work.
+  readonly getMaterialTitles = getMaterialTitles;
 
   /**
    * Chunks belonging to `materialIds`, oldest chunk first, capped.

@@ -62,10 +62,10 @@ describe("loadFocusedWorkout", () => {
   });
 
   it("returns nothing for ids that aren't the athlete's", async () => {
-    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(undefined);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(undefined);
-
+    // The getters, reset before each test, find neither id.
     expect(await loadFocusedWorkout("user-1", { planDayId: "day-x", workoutLogId: "log-x" })).toBeNull();
+    expect(storage.workouts.getWorkoutLog).toHaveBeenCalledWith("log-x", "user-1");
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("day-x", "user-1");
     // Never reads sets for a log it couldn't verify.
     expect(storage.workouts.getExerciseSetsByWorkoutLog).not.toHaveBeenCalled();
   });

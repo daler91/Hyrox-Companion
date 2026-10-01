@@ -819,16 +819,17 @@ describe("POST /api/chat/stream", () => {
 
   it("leaves the focus out for a workout that isn't the athlete's", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(undefined);
     vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
       yield "Sure.";
     });
 
+    // getPlanDay, reset before each test, finds no day: it isn't the athlete's.
     const response = await request(app)
       .post(CHAT_STREAM_ENDPOINT)
       .send({ message: "How did that go?", history: [], focusPlanDayId: "someone-elses-day" });
 
     expect(response.status).toBe(200);
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("someone-elses-day", "test_user_id");
     expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.focusedWorkout).toBeUndefined();
   });
 

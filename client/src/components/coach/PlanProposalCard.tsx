@@ -244,7 +244,7 @@ function ProposalActions({ proposal, isApplying, onApply, onDismiss }: ProposalA
         ) : (
           <Check className="h-3 w-3 mr-1" aria-hidden="true" />
         )}
-        {isApplying ? "Applying…" : `Apply all changes`}
+        {isApplying ? "Applying…" : "Apply all changes"}
       </Button>
       <span role="status" aria-live="polite" className="sr-only">
         {isApplying ? "Applying plan changes" : ""}

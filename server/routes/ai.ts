@@ -145,7 +145,7 @@ function conversationFor(
   body: z.infer<typeof chatRequestSchema>,
 ): Promise<Conversation> | Conversation {
   if (turn) return loadConversation(userId, turn);
-  return { turns: body.history, notes: [], earlier: Promise.resolve(undefined) };
+  return { turns: body.history, notes: [] };
 }
 
 function turnFocus(body: z.infer<typeof chatRequestSchema>): TurnFocus {

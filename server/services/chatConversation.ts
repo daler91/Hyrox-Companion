@@ -46,8 +46,11 @@ export interface Conversation {
   turns: ConversationTurn[];
   /** Notes for the new message itself (see ConversationTurn.notes). */
   notes: string[];
-  /** What this session carries forward from earlier ones, when anything. Never rejects. */
-  earlier: Promise<EarlierConversation | undefined>;
+  /**
+   * What this session carries forward from earlier ones, when anything. Never
+   * rejects. Absent for an older client, which sends its own history.
+   */
+  earlier?: Promise<EarlierConversation | undefined>;
 }
 
 /**
@@ -196,13 +199,18 @@ function placeNote(placements: NotePlacements, index: number, note: string): voi
   placements.set(index, [...(placements.get(index) ?? []), note]);
 }
 
+function placeGapNote(placements: NotePlacements, index: number, gap: number): void {
+  if (gap >= NOTED_GAP_MS) placeNote(placements, index, `${describeDuration(gap)} later`);
+}
+
 /** "3 hours later" ahead of an athlete turn — or the new message — that came after a pause. */
 function placeGapNotes(placements: NotePlacements, rows: ChatMessage[], now: number): void {
-  for (let i = 1; i <= rows.length; i++) {
-    if (i < rows.length && rows[i].role !== "user") continue;
-    const gap = (i < rows.length ? timeOf(rows[i]) : now) - timeOf(rows[i - 1]);
-    if (gap >= NOTED_GAP_MS) placeNote(placements, i, `${describeDuration(gap)} later`);
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i].role === "user") placeGapNote(placements, i, timeOf(rows[i]) - timeOf(rows[i - 1]));
   }
+  // The new message goes at index rows.length, after the last saved turn.
+  const last = rows.at(-1);
+  if (last) placeGapNote(placements, rows.length, now - timeOf(last));
 }
 
 /** A proposal's outcome goes ahead of the first athlete turn after it was decided; a pending one, ahead of the new message. */
