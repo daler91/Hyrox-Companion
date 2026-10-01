@@ -138,10 +138,8 @@ export function CoachPanel({
     clearSuggestions,
   } = useSuggestions({ timeline, addLocalMessage, saveMessage });
 
-  const { proposal, isApplyingProposal, applyProposal, dismissProposal } = usePlanProposal({
-    addLocalMessage,
-    saveMessage,
-  });
+  const { proposal, isApplyingProposal, undoingProposalId, applyProposal, dismissProposal, undoProposal } =
+    usePlanProposal({ addLocalMessage, saveMessage });
 
   useEffect(() => {
     if (isOpen) setTimeout(() => scrollToBottom(), 50);
@@ -214,6 +212,8 @@ export function CoachPanel({
         isApplyingProposal={isApplyingProposal}
         onApplyProposal={applyProposal}
         onDismissProposal={dismissProposal}
+        onUndoProposal={undoProposal}
+        undoingProposalId={undoingProposalId}
         onRetryMessage={retryMessage}
       />
       <CoachPanelFooter

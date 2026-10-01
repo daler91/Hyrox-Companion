@@ -36,6 +36,7 @@ import type {
   PlanAdjustmentProposalPayload,
   PlanDayRecoveryUndo,
   PlanEngineState,
+  PlanProposalApplyUndo,
   RagInfo,
   RecycleBinPayload,
 } from "./types";
@@ -1342,11 +1343,16 @@ export const planAdjustmentProposals = pgTable(
     aiSource: text("ai_source"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    // What the apply wrote, day by day, so the athlete can undo it. NULL until
+    // applied, and on proposals applied before undo existed (those can't be undone).
+    applyUndo: jsonb("apply_undo").$type<PlanProposalApplyUndo>(),
+    // When the athlete undid the apply (status `reverted`); resolvedAt stays the apply time.
+    revertedAt: timestamp("reverted_at", { withTimezone: true }),
   },
   (table) => [
     check(
       "plan_adjustment_proposals_status_check",
-      sql`status IN ('pending','applied','dismissed','superseded','invalidated')`,
+      sql`status IN ('pending','applied','dismissed','superseded','invalidated','reverted')`,
     ),
     index("idx_plan_proposals_user_status").on(table.userId, table.status),
   ],

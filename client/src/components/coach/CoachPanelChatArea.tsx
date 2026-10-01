@@ -3,7 +3,6 @@ import { forwardRef, Fragment, type UIEventHandler, useMemo } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatDaySeparator, SessionSummaryNote } from "@/components/coach/ChatTranscriptMarkers";
 import { InlinePlanProposal } from "@/components/coach/InlinePlanProposal";
-import { PlanProposalCard } from "@/components/coach/PlanProposalCard";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Message } from "@/hooks/useChatSession";
@@ -25,14 +24,17 @@ interface CoachPanelChatAreaProps {
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
   /**
-   * Pending conversational plan-adjustment proposal, when one exists. Its
-   * card sits at the turn that carried it; it trails the chat only when that
-   * turn isn't in view (an older page, or a reply saved before it carried one).
+   * The pending conversational plan-adjustment proposal, or the one this
+   * surface just applied (usePlanProposal). Its card sits at the turn that
+   * carried it; it trails the chat only when that turn isn't in view (an
+   * older page, or a reply saved before it carried one).
    */
   readonly planProposal?: PlanProposalView | null;
   readonly isApplyingProposal?: boolean;
-  readonly onApplyProposal?: (proposal: PlanProposalView) => void;
+  readonly onApplyProposal?: (proposal: PlanProposalView, planDayIds?: readonly string[]) => void;
   readonly onDismissProposal?: (id: string) => void;
+  readonly onUndoProposal?: (proposal: PlanProposalView) => void;
+  readonly undoingProposalId?: string | null;
   /** Send a failed message again (see useChatSession.retryMessage). */
   readonly onRetryMessage?: (messageId: string) => void;
 }
@@ -55,6 +57,8 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       isApplyingProposal = false,
       onApplyProposal,
       onDismissProposal,
+      onUndoProposal,
+      undoingProposalId = null,
       onRetryMessage,
     },
     ref
@@ -107,6 +111,8 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                     isApplying={isApplyingProposal}
                     onApply={onApplyProposal}
                     onDismiss={onDismissProposal}
+                    onUndo={onUndoProposal}
+                    undoingId={undoingProposalId}
                   />
                 )}
               </Fragment>
@@ -120,11 +126,13 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
             onDismiss={onDismissSuggestion}
           />
           {planProposal && !pendingCardInChat && onApplyProposal && onDismissProposal && (
-            <PlanProposalCard
-              proposal={planProposal}
+            <InlinePlanProposal
+              snapshot={planProposal}
               isApplying={isApplyingProposal}
               onApply={onApplyProposal}
               onDismiss={onDismissProposal}
+              onUndo={onUndoProposal}
+              undoingId={undoingProposalId}
             />
           )}
           {isProcessing && (

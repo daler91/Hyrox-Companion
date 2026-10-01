@@ -1,11 +1,13 @@
 import { planAdjustmentProposals } from "../tables";
 import { z } from "../zod";
+import type { CoachNoteInputs, PlanDay } from "./plans";
 import { dateStringSchema } from "./requests";
+import type { ExerciseSet } from "./workouts";
 
 // ---------------------------------------------------------------------------
 // Conversational plan editing — the AI coach proposes multi-day plan changes
 // from a chat message ("I want to go to a Hyrox class this week"); the user
-// applies or dismisses the proposal as one atomic unit.
+// applies all of them or the ones they pick, dismisses them, or undoes an apply.
 // ---------------------------------------------------------------------------
 
 /**
@@ -108,9 +110,72 @@ export const planProposalStatusSchema = z.enum([
   "dismissed",
   "superseded",
   "invalidated",
+  // Applied, then undone by the athlete.
+  "reverted",
 ]);
 
 export type PlanProposalStatus = z.infer<typeof planProposalStatusSchema>;
+
+/** `POST /api/v1/plan-proposals/:id/apply`: no body, or the days to apply. */
+export const applyPlanProposalRequestSchema = z
+  .object({
+    /** The changes to apply, by plan day. Absent means every change. */
+    planDayIds: z.array(z.string().min(1).max(255)).min(1).max(PLAN_ADJUSTMENT_MAX_CHANGES).optional(),
+  })
+  // A POST without a body applies every change, as before the athlete could pick.
+  .default({});
+
+export type ApplyPlanProposalRequest = z.infer<typeof applyPlanProposalRequestSchema>;
+
+/** How long after an apply the athlete can still undo it. */
+export const PLAN_PROPOSAL_UNDO_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The plan-day fields an apply can change, and an undo can put back. */
+export const PLAN_PROPOSAL_UNDO_FIELDS = [
+  "focus",
+  "mainWorkout",
+  "accessory",
+  "notes",
+  "scheduledDate",
+  "expectedDurationMin",
+  "expectedRpe",
+] as const;
+
+export type PlanProposalUndoField = (typeof PLAN_PROPOSAL_UNDO_FIELDS)[number];
+
+/** A value the apply replaced, and the value it wrote. */
+export interface PlanProposalFieldUndo<T> {
+  before: T;
+  after: T;
+}
+
+/**
+ * What an apply wrote to one plan day, kept so the athlete can take it back.
+ * Anything changed since is the athlete's (or a later coach note's) and stays:
+ * a field, the coach note or the exercise table comes back only while it still
+ * reads what the apply wrote, the rule `plan_days.recovery_undo` follows.
+ */
+export interface PlanProposalDayUndo {
+  planDayId: string;
+  fields: { [K in PlanProposalUndoField]?: PlanProposalFieldUndo<PlanDay[K]> };
+  /** The coach note the apply replaced, and when the apply wrote its own. */
+  coachNote: {
+    before: {
+      aiSource: string | null;
+      aiRationale: string | null;
+      aiNoteUpdatedAt: string | null;
+      aiInputsUsed: CoachNoteInputs | null;
+    };
+    writtenAt: string;
+  };
+  /** The exercise table before the apply replaced or cleared it, and a fingerprint of the table it left. */
+  sets?: { before: ExerciseSet[]; afterFingerprint: string };
+}
+
+/** `plan_adjustment_proposals.apply_undo`: one entry per day the apply changed. */
+export interface PlanProposalApplyUndo {
+  days: PlanProposalDayUndo[];
+}
 
 export type PlanAdjustmentProposal = typeof planAdjustmentProposals.$inferSelect;
 export type InsertPlanAdjustmentProposal = typeof planAdjustmentProposals.$inferInsert;

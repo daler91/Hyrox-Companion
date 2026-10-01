@@ -785,6 +785,13 @@
       "when": 1790872777733,
       "tag": "0111_chat_message_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1790881748742,
+      "tag": "0112_plan_proposal_undo",
+      "breakpoints": true
     }
   ]
 }

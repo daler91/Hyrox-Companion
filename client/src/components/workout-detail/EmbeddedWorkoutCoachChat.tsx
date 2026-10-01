@@ -75,7 +75,8 @@ export function EmbeddedWorkoutCoachChat({
   // Plan-adjustment proposals work here too; confirmation messages are
   // skipped (no local-message plumbing) — the card and timeline refresh
   // carry the outcome.
-  const { proposal, isApplyingProposal, applyProposal, dismissProposal } = usePlanProposal();
+  const { proposal, isApplyingProposal, undoingProposalId, applyProposal, dismissProposal, undoProposal } =
+    usePlanProposal();
 
   const handleSend = useCallback(
     (message: string) => {
@@ -137,6 +138,8 @@ export function EmbeddedWorkoutCoachChat({
         isApplyingProposal={isApplyingProposal}
         onApplyProposal={applyProposal}
         onDismissProposal={dismissProposal}
+        onUndoProposal={undoProposal}
+        undoingProposalId={undoingProposalId}
         onRetryMessage={retryMessage}
       />
 

@@ -2,19 +2,13 @@ import {
   type InsertPlanAdjustmentProposal,
   type PlanAdjustmentProposal,
   planAdjustmentProposals,
+  type PlanProposalApplyUndo,
   type PlanProposalStatus,
 } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 
-/**
- * Conversational plan-adjustment proposals. Invariant: at most one `pending`
- * proposal per user — creating a new one supersedes any pending predecessor
- * in the same transaction, and `resolve` is guarded by `status='pending'` so
- * concurrent apply/dismiss races lose cleanly (rowCount 0) instead of
- * double-writing.
- */
 /** The athlete's proposals among `ids`: the chat history and the coach's conversation read their outcomes. */
 async function getProposalsByIds(ids: readonly string[], userId: string): Promise<PlanAdjustmentProposal[]> {
   if (ids.length === 0) return [];
@@ -29,6 +23,63 @@ async function getProposalsByIds(ids: readonly string[], userId: string): Promis
     );
 }
 
+/**
+ * Mark a pending proposal applied, with what the apply wrote so it can be
+ * undone. Guarded like PlanProposalStorage.resolve: undefined when it wasn't
+ * pending.
+ */
+async function markProposalApplied(
+  id: string,
+  userId: string,
+  applyUndo: PlanProposalApplyUndo,
+  tx?: DbExecutor,
+): Promise<PlanAdjustmentProposal | undefined> {
+  const executor = tx ?? db;
+  const [row] = await executor
+    .update(planAdjustmentProposals)
+    .set({ status: "applied", resolvedAt: new Date(), applyUndo })
+    .where(
+      and(
+        eq(planAdjustmentProposals.id, id),
+        eq(planAdjustmentProposals.userId, userId),
+        eq(planAdjustmentProposals.status, "pending"),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+/**
+ * Mark an applied proposal undone. Undefined when it wasn't applied anymore
+ * (a concurrent undo won), so the losing undo's transaction rolls back.
+ */
+async function markProposalReverted(
+  id: string,
+  userId: string,
+  tx?: DbExecutor,
+): Promise<PlanAdjustmentProposal | undefined> {
+  const executor = tx ?? db;
+  const [row] = await executor
+    .update(planAdjustmentProposals)
+    .set({ status: "reverted", revertedAt: new Date() })
+    .where(
+      and(
+        eq(planAdjustmentProposals.id, id),
+        eq(planAdjustmentProposals.userId, userId),
+        eq(planAdjustmentProposals.status, "applied"),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+/**
+ * Conversational plan-adjustment proposals. Invariant: at most one `pending`
+ * proposal per user — creating a new one supersedes any pending predecessor
+ * in the same transaction, and `resolve` is guarded by `status='pending'` so
+ * concurrent apply/dismiss races lose cleanly (rowCount 0) instead of
+ * double-writing.
+ */
 export class PlanProposalStorage {
   async create(
     proposal: Omit<InsertPlanAdjustmentProposal, "id" | "status" | "createdAt" | "resolvedAt">,
@@ -86,7 +137,7 @@ export class PlanProposalStorage {
   async resolve(
     id: string,
     userId: string,
-    status: Exclude<PlanProposalStatus, "pending">,
+    status: Exclude<PlanProposalStatus, "pending" | "applied" | "reverted">,
     tx?: DbExecutor,
   ): Promise<PlanAdjustmentProposal | undefined> {
     const executor = tx ?? db;
@@ -103,4 +154,9 @@ export class PlanProposalStorage {
       .returning();
     return row;
   }
+
+  // Neither uses the instance, so they are module functions bound here, like
+  // getByIds: storage.planProposals.markApplied() and its mocks still work.
+  readonly markApplied = markProposalApplied;
+  readonly markReverted = markProposalReverted;
 }

@@ -8,8 +8,11 @@ interface InlinePlanProposalProps {
   /** The proposal as the chat message carried it; the card shows its current status. */
   readonly snapshot: PlanProposalView;
   readonly isApplying: boolean;
-  readonly onApply?: (proposal: PlanProposalView) => void;
+  readonly onApply?: (proposal: PlanProposalView, planDayIds?: readonly string[]) => void;
   readonly onDismiss?: (id: string) => void;
+  readonly onUndo?: (proposal: PlanProposalView) => void;
+  /** The proposal an undo is in flight for, if any. */
+  readonly undoingId?: string | null;
 }
 
 /**
@@ -22,6 +25,8 @@ export const InlinePlanProposal = memo(function InlinePlanProposal({
   isApplying,
   onApply,
   onDismiss,
+  onUndo,
+  undoingId = null,
 }: InlinePlanProposalProps) {
   const proposal = useLiveProposal(snapshot);
   return (
@@ -30,6 +35,8 @@ export const InlinePlanProposal = memo(function InlinePlanProposal({
       isApplying={isApplying && proposal.status === "pending"}
       onApply={onApply}
       onDismiss={onDismiss}
+      onUndo={onUndo}
+      isUndoing={undoingId === proposal.id}
     />
   );
 });

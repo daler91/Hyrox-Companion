@@ -373,8 +373,10 @@ async function maybeAutoApplyProposal(
 ): Promise<PlanAdjustmentProposal> {
   const user = await storage.users.getUser(userId);
   if (!user?.coachAutoApplyPlanChanges) return proposal;
-  const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, log);
-  return applyResult?.applied ? { ...proposal, status: "applied" } : proposal;
+  const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, { log });
+  if (!applyResult?.applied) return proposal;
+  // Re-read, so the card that arrives with the reply can offer Undo.
+  return (await storage.planProposals.getById(proposal.id, userId)) ?? { ...proposal, status: "applied" };
 }
 
 /** Write the proposal reply as the whole response, then close the stream. */

@@ -856,13 +856,15 @@ A proposed rewrite of the athlete's upcoming plan, raised by the AI coach rather
 | `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
 | `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
 | `plan_id` | varchar(255) | Not null, FK → `training_plans.id` ON DELETE CASCADE |
-| `status` | text | Not null, default `'pending'`, CHECK `status IN ('pending','applied','dismissed','superseded','invalidated')` |
+| `status` | text | Not null, default `'pending'`, CHECK `status IN ('pending','applied','dismissed','superseded','invalidated','reverted')`; `reverted` is an apply the athlete undid |
 | `summary_message` | text | Not null -- the one-line description shown to the athlete |
 | `user_request` | text | Not null -- the triggering chat message, kept so AI plan writes stay auditable |
 | `payload` | jsonb | Not null -- `PlanAdjustmentProposalPayload`; the changes plus their baselines |
 | `ai_source` | text | Nullable |
 | `created_at` | timestamp with time zone | Not null, default `now()` |
 | `resolved_at` | timestamp with time zone | Nullable -- set when applied or dismissed |
+| `apply_undo` | jsonb | Nullable -- `PlanProposalApplyUndo`, written by the apply: for each day it changed (only the athlete's pick, on a partial apply), the fields it replaced and wrote, the coach note it replaced, and, where it replaced or cleared the exercise table, the old rows whole plus a fingerprint of the table it left. Null until applied, and on proposals applied before migration `0112`, which cannot be undone |
+| `reverted_at` | timestamp with time zone | Nullable -- when the athlete undid the apply; `resolved_at` stays the apply time |
 
 **Indexes:**
 - Primary key on `id`

@@ -1566,7 +1566,7 @@ Re-embed all coaching materials for the current user.
 
 ## Plan Proposal Routes
 
-When a coach-chat message reads as a plan-change request, [`POST /api/v1/chat/stream`](#post-apiv1chatstream) raises a proposal (`createPlanAdjustmentProposal` in `server/services/planAdjustmentService.ts`) rather than rewriting the plan silently; these routes are how the athlete accepts or declines it. With `coachAutoApplyPlanChanges` on, the stream tries to apply it straight away. The background auto-coach (`server/services/coachService.ts`) raises no proposals — it writes its plan-day adjustments directly. **File:** `server/routes/planProposals.ts`.
+When a coach-chat message reads as a plan-change request, [`POST /api/v1/chat/stream`](#post-apiv1chatstream) raises a proposal (`createPlanAdjustmentProposal` in `server/services/planAdjustmentService.ts`) rather than rewriting the plan silently; these routes are how the athlete accepts all or some of it, declines it, or undoes an apply. With `coachAutoApplyPlanChanges` on, the stream tries to apply it straight away. The background auto-coach (`server/services/coachService.ts`) raises no proposals — it writes its plan-day adjustments directly. **File:** `server/routes/planProposals.ts`.
 
 ### GET /api/v1/plan-proposals/pending
 
@@ -1574,7 +1574,7 @@ The athlete's currently pending proposal, if any.
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
-- **Response:** `{ proposal: { id, planId, status, summaryMessage, changes, createdAt } | null }`
+- **Response:** `{ proposal: { id, planId, status, summaryMessage, changes, createdAt } | null }`. An `applied` or `reverted` proposal also carries `appliedPlanDayIds` (the days the apply changed, which may be some of the changes), and an `applied` one `undoable` (whether `/undo` still works). `status` is one of `pending`, `applied`, `dismissed`, `superseded`, `invalidated` or `reverted`.
 
 ### GET /api/v1/plan-proposals/:id
 
@@ -1587,11 +1587,22 @@ One of the athlete's proposals with its current status, for its card at the chat
 
 ### POST /api/v1/plan-proposals/:id/apply
 
-Apply the proposed changes to the plan.
+Apply the proposed changes to the plan: all of them, or the ones the athlete picked.
 
 - **Auth:** Required
 - **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately _not_ checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
-- **Errors:** `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it)
+- **Body:** optional `{ planDayIds?: string[] }` (1–14 ids). Without it, every change is applied. Only the picked changes are re-checked, re-parsed and written; the others are never applied.
+- **Response:** `{ applied: true, changeCount }`, or `{ applied: false, reason, message }` for a retryable failure (`structured_parse_failed`, `ai_budget_exceeded`, `ai_disabled`), with the proposal left pending.
+- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it)
+
+### POST /api/v1/plan-proposals/:id/undo
+
+Take an applied proposal back, within a week of the apply. Each day's fields, coach note and exercise table return to what they were, except what has changed since the apply (an edit by the athlete, a newer coach note, a changed exercise table, or a day no longer planned), which stays. The proposal becomes `reverted`.
+
+- **Auth:** Required
+- **Rate limit:** `suggestionApply` category, 10/min. No AI consent check: the undo calls no model.
+- **Response:** `{ undone: true, restoredCount, keptDays: [{ planDayId, dayLabel }] }` — `keptDays` are the days where something stayed as the athlete left it.
+- **Errors:** `404` (proposal not found), `409` with `{ undone: false, reason, message }`: `not_applied`, `not_undoable` (applied before undo existed), `expired` (over a week ago) or `changed_since` (nothing left to restore)
 
 ### POST /api/v1/plan-proposals/:id/dismiss
 

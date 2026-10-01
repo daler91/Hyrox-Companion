@@ -10,6 +10,10 @@ export interface PlanProposalView {
   summaryMessage: string;
   changes: EnrichedPlanAdjustmentChange[];
   createdAt: string;
+  /** Applied or undone: the days the apply changed (the athlete may have picked some). */
+  appliedPlanDayIds?: string[];
+  /** Applied: whether the apply can still be undone. */
+  undoable?: boolean;
 }
 
 export interface ApplyPlanProposalResponse {
@@ -18,6 +22,15 @@ export interface ApplyPlanProposalResponse {
   reason?: string;
   message?: string;
   staleChanges?: Array<{ planDayId: string; dayLabel: string }>;
+}
+
+export interface UndoPlanProposalResponse {
+  undone: boolean;
+  restoredCount?: number;
+  /** Days where something changed since the apply, which the undo left as it is. */
+  keptDays?: Array<{ planDayId: string; dayLabel: string }>;
+  reason?: string;
+  message?: string;
 }
 
 export const planProposals = {
@@ -29,14 +42,18 @@ export const planProposals = {
     typedRequest<{ proposal: PlanProposalView }>("GET", `/api/v1/plan-proposals/${encodeURIComponent(id)}`),
 
   // The apply can trigger one more AI parse for table-backed days, so give it
-  // the same generous budget as the suggestions apply flow.
-  apply: (id: string) =>
+  // the same generous budget as the suggestions apply flow. Without
+  // `planDayIds`, every change is applied.
+  apply: (id: string, planDayIds?: readonly string[]) =>
     typedRequest<ApplyPlanProposalResponse>(
       "POST",
       `/api/v1/plan-proposals/${id}/apply`,
-      {},
+      planDayIds ? { planDayIds } : {},
       { timeoutMs: 90_000 },
     ),
+
+  undo: (id: string) =>
+    typedRequest<UndoPlanProposalResponse>("POST", `/api/v1/plan-proposals/${id}/undo`, {}),
 
   dismiss: (id: string) =>
     typedRequest<{ dismissed: boolean }>("POST", `/api/v1/plan-proposals/${id}/dismiss`, {}),

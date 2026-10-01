@@ -11,6 +11,7 @@ import { logger } from "../logger";
 import { CHAT_SESSION_SUMMARY_PROMPT, type EarlierConversation } from "../prompts";
 import { storage } from "../storage";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { appliedPlanDayIds } from "./planProposalUndo";
 
 /**
  * The server-owned conversation (AI coach chat review, I1, I2, I7).
@@ -189,8 +190,38 @@ const PROPOSAL_OUTCOME_NOTES = new Map<string, string>(
     dismissed: "The athlete dismissed the plan changes the coach proposed; the plan was not changed.",
     superseded: "The proposed plan changes were replaced by a newer proposal and not applied.",
     invalidated: "The proposed plan changes went out of date before they were applied; the plan was not changed.",
+    reverted:
+      "The athlete undid the plan changes they had applied; those days are back as they were, apart from anything changed since.",
   } satisfies Record<PlanProposalStatus, string>),
 );
+
+/** The applied note, naming the days when the athlete applied only some of the changes (I6). */
+function appliedNote(proposal: PlanAdjustmentProposal): string | undefined {
+  const applied = new Set(appliedPlanDayIds(proposal));
+  const { changes } = proposal.payload;
+  if (applied.size >= changes.length) return PROPOSAL_OUTCOME_NOTES.get("applied");
+  // Day labels carry the plan's own text, so they are sanitised like any athlete text.
+  const days = changes
+    .filter((change) => applied.has(change.planDayId))
+    .map((change) => sanitizeUserInput(change.dayLabel))
+    .join("; ");
+  return `The athlete applied ${applied.size} of the ${changes.length} plan changes the coach proposed (${days}); the others were not applied.`;
+}
+
+/** What became of a proposal, and when, as the notes the coach reads; an undo adds a second note. */
+function proposalOutcomes(proposal: PlanAdjustmentProposal): { at: number; note: string }[] {
+  const decidedAt = proposal.resolvedAt?.getTime() ?? Number.POSITIVE_INFINITY;
+  const outcome = (at: number, note: string | undefined) => (note ? [{ at, note }] : []);
+  if (proposal.status === "applied") return outcome(decidedAt, appliedNote(proposal));
+  if (proposal.status === "reverted") {
+    const revertedAt = proposal.revertedAt?.getTime() ?? Number.POSITIVE_INFINITY;
+    return [
+      ...outcome(decidedAt, appliedNote(proposal)),
+      ...outcome(revertedAt, PROPOSAL_OUTCOME_NOTES.get("reverted")),
+    ];
+  }
+  return outcome(decidedAt, PROPOSAL_OUTCOME_NOTES.get(proposal.status));
+}
 
 /** Where a note lands: the index of an athlete turn in the session, or the session's length for the new message. */
 type NotePlacements = Map<number, string[]>;
@@ -221,11 +252,11 @@ function placeProposalNotes(
 ): void {
   rows.forEach((row, index) => {
     const proposal = row.proposalId ? proposals.get(row.proposalId) : undefined;
-    const note = proposal && PROPOSAL_OUTCOME_NOTES.get(proposal.status);
-    if (!proposal || !note) return;
-    const decidedAt = proposal.resolvedAt?.getTime() ?? Number.POSITIVE_INFINITY;
-    const next = rows.findIndex((later, i) => i > index && later.role === "user" && timeOf(later) >= decidedAt);
-    placeNote(placements, next === -1 ? rows.length : next, note);
+    if (!proposal) return;
+    for (const { at, note } of proposalOutcomes(proposal)) {
+      const next = rows.findIndex((later, i) => i > index && later.role === "user" && timeOf(later) >= at);
+      placeNote(placements, next === -1 ? rows.length : next, note);
+    }
   });
 }
 

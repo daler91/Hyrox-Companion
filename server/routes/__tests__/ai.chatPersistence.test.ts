@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generateJsonText, generateText } from "../../ai/providers";
 import { chatWithCoach, streamChatWithCoach } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
-import { createPlanAdjustmentProposal } from "../../services/planAdjustmentService";
+import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../../services/planAdjustmentService";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -35,7 +35,7 @@ vi.mock("../../storage", () => ({
       getStoredEmbeddingDimension: vi.fn(() => Promise.resolve(3072)),
     },
     aiUsage: { getDailyTotalCents: vi.fn(() => Promise.resolve(0)) },
-    planProposals: { getByIds: vi.fn(() => Promise.resolve([])) },
+    planProposals: { getByIds: vi.fn(() => Promise.resolve([])), getById: vi.fn() },
     plans: { getPlanDay: vi.fn() },
     workouts: { getWorkoutLog: vi.fn() },
   },
@@ -222,6 +222,38 @@ describe("the server-owned chat conversation", () => {
         proposalId: "proposal-1",
       }),
     );
+  });
+
+  it("sends an auto-applied proposal as it now stands, so its card can offer Undo", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    const pending = {
+      id: "proposal-1",
+      planId: "plan-1",
+      status: "pending",
+      summaryMessage: "Moved your long run to Saturday.",
+      payload: { changes: [{ planDayId: "day-1" }] },
+      createdAt: new Date(),
+      resolvedAt: null,
+      applyUndo: null,
+    } as unknown as PlanAdjustmentProposal;
+    vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({ kind: "proposal", proposal: pending });
+    vi.mocked(applyPlanAdjustmentProposal).mockResolvedValue({ applied: true, changeCount: 1 });
+    vi.mocked(storage.planProposals.getById).mockResolvedValue({
+      ...pending,
+      status: "applied",
+      resolvedAt: new Date(),
+      applyUndo: { days: [{ planDayId: "day-1" }] },
+    } as unknown as PlanAdjustmentProposal);
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    expect(applyPlanAdjustmentProposal).toHaveBeenCalledWith("test_user_id", "proposal-1", expect.anything());
+    expect(response.text).toContain('"status":"applied"');
+    expect(response.text).toContain('"undoable":true');
   });
 
   it("gives the coach a summary of the earlier conversation after a break", async () => {

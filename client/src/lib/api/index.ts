@@ -25,7 +25,7 @@ export type {
 } from "./mafTests";
 export { mafTests } from "./mafTests";
 export { nutrition } from "./nutrition";
-export type { ApplyPlanProposalResponse, PlanProposalView } from "./planProposals";
+export type { ApplyPlanProposalResponse, PlanProposalView, UndoPlanProposalResponse } from "./planProposals";
 export { planProposals } from "./planProposals";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";

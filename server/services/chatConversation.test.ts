@@ -71,6 +71,8 @@ function proposal(id: string, status: string, resolvedHoursAgo?: number): PlanAd
     aiSource: null,
     createdAt: NOW,
     resolvedAt: resolvedHoursAgo === undefined ? null : new Date(NOW.getTime() - resolvedHoursAgo * HOUR),
+    applyUndo: null,
+    revertedAt: null,
   };
 }
 
@@ -180,6 +182,43 @@ describe("annotateSession", () => {
     expect(notes).toEqual([
       "The athlete dismissed the plan changes the coach proposed; the plan was not changed.",
       "The plan changes the coach proposed are still waiting for the athlete to apply or dismiss them.",
+    ]);
+  });
+
+  /** p-1 proposed changes to two days; the athlete applied only Saturday's. */
+  function partlyApplied(status: string, resolvedHoursAgo: number, revertedHoursAgo?: number): PlanAdjustmentProposal {
+    return {
+      ...proposal("p-1", status, resolvedHoursAgo),
+      payload: {
+        changes: [
+          { planDayId: "day-1", dayLabel: "Thu Jul 16 — Tempo Run" },
+          { planDayId: "day-2", dayLabel: "Sat Jul 18 — Long Run" },
+        ],
+      } as never,
+      applyUndo: { days: [{ planDayId: "day-2" }] } as never,
+      revertedAt: revertedHoursAgo === undefined ? null : new Date(NOW.getTime() - revertedHoursAgo * HOUR),
+    };
+  }
+
+  it("names the days when the athlete applied only some of the changes", () => {
+    const rows = [row("assistant", "Here's a proposal.", 0.5, { kind: "proposal", proposalId: "p-1" })];
+    const { notes } = annotateSession(rows, new Map([["p-1", partlyApplied("applied", 0.3)]]), NOW.getTime());
+    expect(notes).toEqual([
+      "The athlete applied 1 of the 2 plan changes the coach proposed (Sat Jul 18 — Long Run); the others were not applied.",
+    ]);
+  });
+
+  it("tells the coach about an apply and then its undo, each where it happened", () => {
+    const rows = [
+      row("assistant", "Here's a proposal.", 0.5, { kind: "proposal", proposalId: "p-1" }),
+      row("user", "done, thanks", 0.4),
+    ];
+    const { turns, notes } = annotateSession(rows, new Map([["p-1", partlyApplied("reverted", 0.45, 0.2)]]), NOW.getTime());
+    expect(turns[1].notes).toEqual([
+      "The athlete applied 1 of the 2 plan changes the coach proposed (Sat Jul 18 — Long Run); the others were not applied.",
+    ]);
+    expect(notes).toEqual([
+      "The athlete undid the plan changes they had applied; those days are back as they were, apart from anything changed since.",
     ]);
   });
 });

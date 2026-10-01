@@ -4,12 +4,13 @@ import type {
   PlanAdjustmentUpdatedFields,
   PlanProposalStatus,
 } from "@shared/schema";
-import { ArrowRight, CalendarClock, Check, ChevronDown, Loader2, Wand2, XIcon } from "lucide-react";
+import { ArrowRight, CalendarClock, Check, ChevronDown, Loader2, Undo2, Wand2, XIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import type { PlanProposalView } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -17,8 +18,11 @@ interface PlanProposalCardProps {
   readonly proposal: PlanProposalView;
   readonly isApplying: boolean;
   /** Apply and Dismiss show on a pending proposal when the surface handles them. */
-  readonly onApply?: (proposal: PlanProposalView) => void;
+  readonly onApply?: (proposal: PlanProposalView, planDayIds?: readonly string[]) => void;
   readonly onDismiss?: (id: string) => void;
+  /** Undo shows on an applied proposal that can still be undone, when the surface handles it. */
+  readonly onUndo?: (proposal: PlanProposalView) => void;
+  readonly isUndoing?: boolean;
 }
 
 const KIND_LABELS: Record<PlanAdjustmentChangeKind, string> = {
@@ -99,13 +103,31 @@ function collectFieldDiffs(change: EnrichedPlanAdjustmentChange): FieldDiff[] {
   return diffs;
 }
 
-function ChangeRow({ change }: { readonly change: EnrichedPlanAdjustmentChange }) {
+/** A pending change the athlete can leave out of the apply. */
+interface ChangeSelection {
+  readonly included: boolean;
+  readonly onToggle: (planDayId: string) => void;
+  readonly disabled: boolean;
+}
+
+interface ChangeRowProps {
+  readonly change: EnrichedPlanAdjustmentChange;
+  readonly selection?: ChangeSelection;
+  /** On an applied proposal, a change the athlete left out. */
+  readonly notApplied?: boolean;
+}
+
+function ChangeRow({ change, selection, notApplied = false }: ChangeRowProps) {
   const [showRationale, setShowRationale] = useState(false);
   const diffs = collectFieldDiffs(change);
+  const switchId = `proposal-change-include-${change.planDayId}`;
 
   return (
     <div
-      className="rounded-md border border-border/60 bg-background/60 p-2 space-y-1.5"
+      className={cn(
+        "rounded-md border border-border/60 bg-background/60 p-2 space-y-1.5",
+        (notApplied || selection?.included === false) && "opacity-60",
+      )}
       data-testid={`proposal-change-${change.planDayId}`}
     >
       <div className="flex items-center gap-2 flex-wrap">
@@ -113,6 +135,26 @@ function ChangeRow({ change }: { readonly change: EnrichedPlanAdjustmentChange }
         <Badge className={cn("text-[10px] shrink-0", KIND_COLORS[change.kind])}>
           {KIND_LABELS[change.kind]}
         </Badge>
+        {notApplied && (
+          <Badge variant="outline" className="text-[10px] shrink-0">
+            Not applied
+          </Badge>
+        )}
+        {selection && (
+          <span className="ml-auto flex items-center gap-1.5">
+            <label htmlFor={switchId} className="text-[11px] text-muted-foreground">
+              Include
+            </label>
+            <Switch
+              id={switchId}
+              checked={selection.included}
+              onCheckedChange={() => selection.onToggle(change.planDayId)}
+              disabled={selection.disabled}
+              aria-label={`Include ${change.dayLabel}`}
+              data-testid={`switch-include-change-${change.planDayId}`}
+            />
+          </span>
+        )}
       </div>
       <div className="space-y-1">
         {diffs.map((diff) => (
@@ -148,12 +190,15 @@ const CLOSED_LABELS: Record<Exclude<PlanProposalStatus, "pending" | "applied">, 
   dismissed: "Dismissed — plan not changed",
   superseded: "Replaced by a newer proposal",
   invalidated: "Out of date — not applied",
+  reverted: "Undone — plan restored",
 };
 
-function headerLabel(status: PlanProposalStatus, count: number): string {
+function headerLabel(status: PlanProposalStatus, count: number, appliedCount: number): string {
   const days = `${count} ${count === 1 ? "day" : "days"}`;
   if (status === "pending") return `Proposed plan changes (${days})`;
-  if (status === "applied") return `Applied — ${days} updated`;
+  if (status === "applied") {
+    return appliedCount < count ? `Applied — ${appliedCount} of ${count} changes` : `Applied — ${days} updated`;
+  }
   return CLOSED_LABELS[status];
 }
 
@@ -163,7 +208,13 @@ function StatusIcon({ status }: { readonly status: PlanProposalStatus }) {
   return <XIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />;
 }
 
-function ProposalHeader({ status, count }: { readonly status: PlanProposalStatus; readonly count: number }) {
+interface ProposalHeaderProps {
+  readonly status: PlanProposalStatus;
+  readonly count: number;
+  readonly appliedCount: number;
+}
+
+function ProposalHeader({ status, count, appliedCount }: ProposalHeaderProps) {
   const closed = status !== "pending" && status !== "applied";
   return (
     <div className="flex items-center gap-1.5">
@@ -174,7 +225,7 @@ function ProposalHeader({ status, count }: { readonly status: PlanProposalStatus
           closed ? "text-muted-foreground" : "text-primary",
         )}
       >
-        {headerLabel(status, count)}
+        {headerLabel(status, count, appliedCount)}
       </span>
       <CalendarClock
         className="h-3 w-3 text-muted-foreground ml-auto shrink-0"
@@ -188,9 +239,17 @@ interface ProposalChangesProps {
   readonly changes: EnrichedPlanAdjustmentChange[];
   /** The proposal changed nothing, so its changes start folded away. */
   readonly folded: boolean;
+  /** Pending, with more than one change: the athlete picks which to apply. */
+  readonly selection?: {
+    readonly excluded: ReadonlySet<string>;
+    readonly onToggle: (planDayId: string) => void;
+    readonly disabled: boolean;
+  };
+  /** Applied: the days the apply changed, when the athlete picked some. */
+  readonly appliedIds?: ReadonlySet<string>;
 }
 
-function ProposalChanges({ changes, folded }: ProposalChangesProps) {
+function ProposalChanges({ changes, folded, selection, appliedIds }: ProposalChangesProps) {
   const [expanded, setExpanded] = useState(false);
   const toggle = useCallback(() => setExpanded((open) => !open), []);
   return (
@@ -213,7 +272,18 @@ function ProposalChanges({ changes, folded }: ProposalChangesProps) {
       {(!folded || expanded) && (
         <div className="space-y-2">
           {changes.map((change) => (
-            <ChangeRow key={change.planDayId} change={change} />
+            <ChangeRow
+              key={change.planDayId}
+              change={change}
+              selection={
+                selection && {
+                  included: !selection.excluded.has(change.planDayId),
+                  onToggle: selection.onToggle,
+                  disabled: selection.disabled,
+                }
+              }
+              notApplied={appliedIds !== undefined && !appliedIds.has(change.planDayId)}
+            />
           ))}
         </div>
       )}
@@ -221,21 +291,30 @@ function ProposalChanges({ changes, folded }: ProposalChangesProps) {
   );
 }
 
+function applyLabel(selected: number, total: number): string {
+  if (selected === total) return "Apply all changes";
+  if (selected === 0) return "Apply";
+  return `Apply ${selected} ${selected === 1 ? "change" : "changes"}`;
+}
+
 interface ProposalActionsProps {
   readonly proposal: PlanProposalView;
   readonly isApplying: boolean;
-  readonly onApply: (proposal: PlanProposalView) => void;
+  /** The days to apply; undefined applies every change. */
+  readonly selectedIds: readonly string[] | undefined;
+  readonly onApply: (proposal: PlanProposalView, planDayIds?: readonly string[]) => void;
   readonly onDismiss: (id: string) => void;
 }
 
-function ProposalActions({ proposal, isApplying, onApply, onDismiss }: ProposalActionsProps) {
+function ProposalActions({ proposal, isApplying, selectedIds, onApply, onDismiss }: ProposalActionsProps) {
+  const selected = selectedIds?.length ?? proposal.changes.length;
   return (
     <div className="flex items-center gap-2 pt-1">
       <Button
         size="sm"
         className="min-h-11 md:min-h-8"
-        onClick={() => onApply(proposal)}
-        disabled={isApplying}
+        onClick={() => onApply(proposal, selectedIds)}
+        disabled={isApplying || selected === 0}
         aria-busy={isApplying}
         data-testid="button-apply-plan-proposal"
       >
@@ -244,7 +323,7 @@ function ProposalActions({ proposal, isApplying, onApply, onDismiss }: ProposalA
         ) : (
           <Check className="h-3 w-3 mr-1" aria-hidden="true" />
         )}
-        {isApplying ? "Applying…" : "Apply all changes"}
+        {isApplying ? "Applying…" : applyLabel(selected, proposal.changes.length)}
       </Button>
       <span role="status" aria-live="polite" className="sr-only">
         {isApplying ? "Applying plan changes" : ""}
@@ -264,19 +343,77 @@ function ProposalActions({ proposal, isApplying, onApply, onDismiss }: ProposalA
   );
 }
 
+interface UndoActionProps {
+  readonly proposal: PlanProposalView;
+  readonly isUndoing: boolean;
+  readonly onUndo: (proposal: PlanProposalView) => void;
+}
+
+function UndoAction({ proposal, isUndoing, onUndo }: UndoActionProps) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-h-11 md:min-h-8"
+        onClick={() => onUndo(proposal)}
+        disabled={isUndoing}
+        aria-busy={isUndoing}
+        data-testid="button-undo-plan-proposal"
+      >
+        {isUndoing ? (
+          <Loader2 className="h-3 w-3 animate-spin mr-1" aria-hidden="true" />
+        ) : (
+          <Undo2 className="h-3 w-3 mr-1" aria-hidden="true" />
+        )}
+        {isUndoing ? "Undoing…" : "Undo"}
+      </Button>
+      <span role="status" aria-live="polite" className="sr-only">
+        {isUndoing ? "Undoing plan changes" : ""}
+      </span>
+    </div>
+  );
+}
+
+/** The days left out of a pending apply: none until the athlete turns one off. */
+function useExcludedChanges() {
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = useCallback((planDayId: string) => {
+    setExcluded((current) => {
+      const next = new Set(current);
+      if (next.has(planDayId)) next.delete(planDayId);
+      else next.add(planDayId);
+      return next;
+    });
+  }, []);
+  return { excluded, toggle };
+}
+
 /**
  * A proposal's card, at the chat turn that produced it. Pending, it offers
- * Apply and Dismiss; applied, it lists what changed; dismissed, replaced or
- * out of date, it says so and folds its changes away.
+ * Apply and Dismiss, with a toggle on each change when there is more than
+ * one; applied, it lists what changed and offers Undo for a week; dismissed,
+ * replaced, out of date or undone, it says so and folds its changes away.
  */
 export function PlanProposalCard({
   proposal,
   isApplying,
   onApply,
   onDismiss,
+  onUndo,
+  isUndoing = false,
 }: Readonly<PlanProposalCardProps>) {
+  const { excluded, toggle } = useExcludedChanges();
   const isPending = proposal.status === "pending";
   const isClosed = !isPending && proposal.status !== "applied";
+  const canAct = isPending && onApply !== undefined && onDismiss !== undefined;
+  const canPick = canAct && proposal.changes.length > 1;
+  const selectedIds =
+    excluded.size > 0
+      ? proposal.changes.map((change) => change.planDayId).filter((id) => !excluded.has(id))
+      : undefined;
+  const appliedIds =
+    proposal.status === "applied" && proposal.appliedPlanDayIds ? new Set(proposal.appliedPlanDayIds) : undefined;
 
   return (
     <Card
@@ -289,10 +426,28 @@ export function PlanProposalCard({
       data-testid={`plan-proposal-card-${proposal.id}`}
       data-status={proposal.status}
     >
-      <ProposalHeader status={proposal.status} count={proposal.changes.length} />
-      <ProposalChanges changes={proposal.changes} folded={isClosed} />
-      {isPending && onApply && onDismiss && (
-        <ProposalActions proposal={proposal} isApplying={isApplying} onApply={onApply} onDismiss={onDismiss} />
+      <ProposalHeader
+        status={proposal.status}
+        count={proposal.changes.length}
+        appliedCount={appliedIds?.size ?? proposal.changes.length}
+      />
+      <ProposalChanges
+        changes={proposal.changes}
+        folded={isClosed}
+        selection={canPick ? { excluded, onToggle: toggle, disabled: isApplying } : undefined}
+        appliedIds={appliedIds}
+      />
+      {canAct && (
+        <ProposalActions
+          proposal={proposal}
+          isApplying={isApplying}
+          selectedIds={selectedIds}
+          onApply={onApply}
+          onDismiss={onDismiss}
+        />
+      )}
+      {proposal.status === "applied" && proposal.undoable && onUndo && (
+        <UndoAction proposal={proposal} isUndoing={isUndoing} onUndo={onUndo} />
       )}
     </Card>
   );
