@@ -118,7 +118,12 @@ export function EmbeddedWorkoutCoachChat({
         <Sparkles className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs font-medium uppercase text-muted-foreground">
           <span className="sr-only">Asking about </span>
-          <span className="block truncate text-foreground">{entry.focus?.trim() || "This workout"}</span>
+          {/* This workout's own conversation (AI coach chat review, I4): the
+              session and its day name the thread. */}
+          <span className="block truncate text-foreground" data-testid="embedded-workout-coach-chat-about">
+            {entry.focus?.trim() || "This workout"}
+            {entry.date ? <span className="text-muted-foreground"> · {formatScheduledDate(entry.date)}</span> : null}
+          </span>
         </div>
       </header>
 

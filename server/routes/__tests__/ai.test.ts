@@ -881,13 +881,29 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
+    // Without a workout, the general conversation (I4).
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
       limit: undefined,
       beforeTimestamp: undefined,
       beforeId: undefined,
+      thread: { planDayId: undefined, workoutLogId: undefined },
     });
     expect(response.headers["x-next-cursor"]).toBe("2025-01-01T00:00:00.000Z");
     expect(response.headers["x-next-cursor-id"]).toBe("m1");
+  });
+
+  it("reads a workout's own conversation when one is named", async () => {
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([]);
+
+    const response = await request(app)
+      .get(CHAT_HISTORY_ENDPOINT)
+      .query({ focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith(
+      "test_user_id",
+      expect.objectContaining({ thread: { planDayId: "day-1", workoutLogId: "log-1" } }),
+    );
   });
 
   it("passes composite cursor through to storage", async () => {
@@ -903,6 +919,7 @@ describe("Chat History and Messages Routes", () => {
       limit: 20,
       beforeTimestamp: new Date(before),
       beforeId: "m2",
+      thread: { planDayId: undefined, workoutLogId: undefined },
     });
   });
 

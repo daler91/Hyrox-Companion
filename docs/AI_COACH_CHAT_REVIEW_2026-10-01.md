@@ -35,7 +35,7 @@ staleness. The gaps are in the conversation itself:
 
 Wave 1 is fixed (daler91/Hyrox-Companion#2085). Wave 2's first batch (D1(a), D5, I14, I15, I16) and
 second batch (I1, I2, I3, I7) are fixed (daler91/Hyrox-Companion#2086), and its last two items, I6
-and I19, on `claude/amazing-rubin-zz0w63`. Wave 3 is under way on the same branch (I12 so far). The
+and I19, on `claude/amazing-rubin-zz0w63`. Wave 3 is under way on the same branch (I12 and I4 so far). The
 rest of this document describes the code as it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
 configurations, ESLint on the whole repo (no errors; the only warning in a touched file, the length
 of `server/routes/__tests__/ai.test.ts`, predates this work), the full unit suite with coverage
@@ -108,6 +108,7 @@ Behaviour changes:
 | ------- | --- |
 | I6      | A proposal holds at most one change per day, and a card with more than one change has an Include toggle on each; `POST /plan-proposals/:id/apply` takes the pick (`planDayIds`) and writes only those changes. The apply records what each day's write replaced and wrote (`plan_adjustment_proposals.apply_undo`, migration 0112): the fields, the coach note, and, where it replaced or cleared the exercise table, the old rows whole. `POST /plan-proposals/:id/undo` puts them back for a week, but only what still reads what the apply wrote; an athlete's later edit, a newer coach note, a changed table or a day no longer planned stays, and the reply names those days. The proposal becomes `reverted`. The card shows "Applied — 2 of 4 changes" and offers Undo, including on an auto-applied proposal, and the coach's history names a partial apply's days and notes an undo. |
 | I19     | `GET /api/v1/chat/welcome` builds the Coach panel's opening line and chips from the athlete's training, with no model call: their first name, a race in the next three weeks, today's session (or the one just done, or the next one), a load spike or hard sessions, new bests, and a missed session still undecided. Chips carry the message they send ("Pacing for today's Intervals" sends "How should I pace today's Intervals?"), filled to four with standing ones. The fixed text and chips stay as the fallback. |
+| I4      | Each workout has its own thread. The workout-detail chat loads and sends only the rows saved with that workout's plan day or log (either id, so a planned day's thread carries on once logged), and the Coach panel only the rows with neither; `GET /chat/history` takes `focusPlanDayId` and `focusWorkoutLogId`. A session's handover note is saved into the thread it summarises, and the workout chat's header names the session and its day. |
 | I12     | The chat reads its training context through a per-athlete cache (`server/services/trainingContextCache.ts`, five minutes, concurrent builds shared, the athlete-local date in the key). It is dropped after any successful write request by the athlete outside the chat, after any background job for them (the auto-coach, syncs, plan generation), and when a proposal is applied or undone. The auto-coach, suggestions and insights still build their own. Opening the panel warms it through the welcome. |
 
 Checked beyond the unit suite: an integration test against Postgres applies a proposal, edits a day, undoes it and finds the cleared exercise table back row for row and the athlete's edit kept; and the built app, seeded with a real plan and a two-change proposal, was driven in Chromium at desktop and phone width: the welcome ("Hi Sam! Race day is 17 days away. Today: Intervals.") and its chips, a change toggled off, "Apply 1 change", the applied card with "Not applied" and Undo, the timeline moving the long run, and Undo putting it back.
@@ -117,13 +118,13 @@ Behaviour changes:
 - **An applied proposal can be taken back** for a week after the apply, from its card. Proposals applied before migration 0112 can't be.
 - **The chat's training context can be up to five minutes old** when nothing dropped it. Writes in the same instance drop it at once; on a deployment with more than one instance, a write on another instance shows up when the five minutes run out.
 - **Opening the Coach panel makes one more request** (`GET /chat/welcome`), which builds the training context or reuses the cached one.
+- **Workout chats leave the Coach panel.** Turns sent from a workout's chat (saved with its ids since migration 0111) now show only in that workout's chat, and the Coach panel's coach no longer reads them. Older turns, saved without the ids, stay in the general conversation.
 
 **Deliberately not changed:**
 
-- **I1 uses message ids, not a `conversationId`.** There is still one thread per athlete; separate threads per workout are I4.
+- **I1 uses message ids, not a `conversationId`.** Threads (I4) are keyed by the workout ids each row already carries.
 - **I3 is partial.** The `suggestions`, `safety` and `system` kinds, and the model, latency and feedback columns, are not added. Suggestion cards still float at the end of the Coach panel: they are not chat turns.
 - **No rolling summary.** The note is written once per session break, not refreshed during a long session (I5).
-- **The workout-detail chat still shares the global thread** (I4).
 - **No GFM elsewhere.** The other markdown surfaces (coach insights, race predictor, chart explanations, nutrition insights) still render without GFM.
 
 ---

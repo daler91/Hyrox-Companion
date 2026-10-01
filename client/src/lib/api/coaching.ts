@@ -103,6 +103,18 @@ export const chat = {
       idempotencyKey ? { headers: { "X-Idempotency-Key": idempotencyKey } } : undefined,
     ),
 
+  /**
+   * The saved conversation: a workout's own thread when `focus` names it,
+   * the general one otherwise (AI coach chat review, I4).
+   */
+  getHistory: (focus: ChatFocus = {}) => {
+    const params = new URLSearchParams();
+    if (focus.focusPlanDayId) params.set("focusPlanDayId", focus.focusPlanDayId);
+    if (focus.focusWorkoutLogId) params.set("focusWorkoutLogId", focus.focusWorkoutLogId);
+    const query = params.toString();
+    return typedRequest<ChatHistoryMessage[]>("GET", `/api/v1/chat/history${query ? `?${query}` : ""}`);
+  },
+
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
 
   /** The coach's opening line and prompt chips, from the athlete's training. */

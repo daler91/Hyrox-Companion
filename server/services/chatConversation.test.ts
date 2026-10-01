@@ -233,10 +233,14 @@ describe("loadConversation", () => {
     const retried = { ...row("user", "how should I pace it?", 0.01), id: TURN.userMessageId };
     vi.mocked(storage.users.getChatMessages).mockResolvedValue([row("user", "hi", 1), row("assistant", "hey", 1), retried]);
 
-    const conversation = await loadConversation("user-1", { ...TURN, replaceAssistantId: "33333333-3333-4333-8333-333333333333" }, NOW);
+    const conversation = await loadConversation("user-1", { ...TURN, replaceAssistantId: "33333333-3333-4333-8333-333333333333" }, {}, NOW);
 
     expect(storage.users.deleteAssistantChatMessage).toHaveBeenCalledWith("user-1", "33333333-3333-4333-8333-333333333333");
-    expect(storage.users.getChatMessages).toHaveBeenCalledWith("user-1", { limit: 60 });
+    // The Coach panel's message reads the general conversation only (I4).
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith("user-1", {
+      limit: 60,
+      thread: { planDayId: undefined, workoutLogId: undefined },
+    });
     expect(conversation.turns.map((turn) => turn.content)).toEqual(["hi", "hey"]);
     expect(conversation.notes).toEqual(["1 hour later"]);
     await expect(conversation.earlier).resolves.toBeUndefined();
@@ -248,7 +252,7 @@ describe("loadConversation", () => {
     ]);
     vi.mocked(storage.planProposals.getByIds).mockResolvedValue([proposal("p-1", "invalidated", 0.2)]);
 
-    const conversation = await loadConversation("user-1", TURN, NOW);
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
 
     expect(storage.planProposals.getByIds).toHaveBeenCalledWith(["p-1"], "user-1");
     expect(conversation.notes).toEqual([
@@ -263,7 +267,7 @@ describe("loadConversation", () => {
     ]);
     vi.mocked(generateText).mockResolvedValue({ text: "- The athlete reported knee pain.", model: "fast" });
 
-    const conversation = await loadConversation("user-1", TURN, NOW);
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
 
     expect(conversation.turns).toEqual([]);
     await expect(conversation.earlier).resolves.toEqual({ text: "- The athlete reported knee pain.", endedAgo: "1 day" });
@@ -282,13 +286,30 @@ describe("loadConversation", () => {
     vi.mocked(storage.users.getChatMessages).mockResolvedValue([row("user", "travelling next week", 20)]);
     vi.mocked(generateText).mockRejectedValue(new Error("provider down"));
 
-    const conversation = await loadConversation("user-1", TURN, NOW);
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
 
     await expect(conversation.earlier).resolves.toEqual({
       text: '- The athlete wrote: "travelling next week"',
       endedAgo: "20 hours",
     });
     expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "summary" }));
+  });
+
+  it("reads a workout's own thread, and keeps its summary there", async () => {
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([row("user", "was that too hard?", 30)]);
+    vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked whether the session was too hard.", model: "fast" });
+    const focus = { focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" };
+
+    const conversation = await loadConversation("user-1", TURN, focus, NOW);
+    await conversation.earlier;
+
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith("user-1", {
+      limit: 60,
+      thread: { planDayId: "day-1", workoutLogId: "log-1" },
+    });
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "summary", focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" }),
+    );
   });
 
   it("uses the session's saved summary without writing another", async () => {
@@ -298,7 +319,7 @@ describe("loadConversation", () => {
       row("user", "back again", 2),
     ]);
 
-    const conversation = await loadConversation("user-1", TURN, NOW);
+    const conversation = await loadConversation("user-1", TURN, {}, NOW);
 
     await expect(conversation.earlier).resolves.toEqual({ text: "- Earlier note", endedAgo: "1 day" });
     expect(generateText).not.toHaveBeenCalled();

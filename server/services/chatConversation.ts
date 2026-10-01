@@ -281,6 +281,13 @@ async function proposalsIn(userId: string, rows: ChatMessage[]): Promise<Map<str
   return new Map(proposals.map((proposal) => [proposal.id, proposal]));
 }
 
+function focusColumns(focus: TurnFocus) {
+  return {
+    focusPlanDayId: focus.focusPlanDayId ?? null,
+    focusWorkoutLogId: focus.focusWorkoutLogId ?? null,
+  };
+}
+
 const SUMMARY_TURNS = 30;
 const SUMMARY_TURN_CHARS = 1_500;
 const SUMMARY_MAX_CHARS = 1_200;
@@ -331,6 +338,7 @@ function fallbackSummary({ turns, earlier }: NonNullable<SessionSplit["toSummari
 async function summarisePreviousSession(
   userId: string,
   toSummarise: NonNullable<SessionSplit["toSummarise"]>,
+  focus: TurnFocus,
 ): Promise<string> {
   const text = await writeSummary(userId, toSummarise).catch((error: unknown) => {
     // A provider or validation error, not chat content.
@@ -339,7 +347,15 @@ async function summarisePreviousSession(
     return fallbackSummary(toSummarise);
   });
   try {
-    await storage.users.saveChatMessage({ userId, role: "assistant", content: text, kind: "summary", timestamp: new Date() });
+    // Saved into the conversation it summarises: a workout's note stays in that workout's thread.
+    await storage.users.saveChatMessage({
+      userId,
+      role: "assistant",
+      content: text,
+      kind: "summary",
+      timestamp: new Date(),
+      ...focusColumns(focus),
+    });
   } catch (error) {
     // A storage error and an opaque user id; no chat content.
     // bearer:disable javascript_lang_logger_leak
@@ -348,9 +364,10 @@ async function summarisePreviousSession(
   return text;
 }
 
-async function earlierConversation(
+async function earlierConversationOrThrow(
   userId: string,
   split: SessionSplit,
+  focus: TurnFocus,
   now: number,
 ): Promise<EarlierConversation | undefined> {
   const endedAt = split.previousEndedAt ?? (split.carried ? timeOf(split.carried) : undefined);
@@ -358,7 +375,22 @@ async function earlierConversation(
   const endedAgo = describeDuration(now - endedAt);
   if (split.carried) return { text: split.carried.content, endedAgo };
   if (!split.toSummarise) return undefined;
-  return { text: await summarisePreviousSession(userId, split.toSummarise), endedAgo };
+  return { text: await summarisePreviousSession(userId, split.toSummarise, focus), endedAgo };
+}
+
+/** The earlier sessions' note, or nothing: it never rejects, since nobody may wait on it. */
+async function earlierConversation(
+  userId: string,
+  split: SessionSplit,
+  focus: TurnFocus,
+  now: number,
+): Promise<EarlierConversation | undefined> {
+  try {
+    return await earlierConversationOrThrow(userId, split, focus, now);
+  } catch {
+    // The summary already falls back on its own; this is only a backstop.
+    return;
+  }
 }
 
 /**
@@ -367,30 +399,31 @@ async function earlierConversation(
  * here because it is the new message. The earlier sessions' summary is
  * returned as a promise, so the caller can wait on it alongside the context
  * build: only the first message after a break writes one.
+ *
+ * Each workout has its own thread (I4): a message from the workout-detail
+ * chat reads only that workout's turns, and one from the Coach panel only
+ * the general conversation.
  */
 export async function loadConversation(
   userId: string,
   turn: ServerOwnedTurn,
+  focus: TurnFocus,
   now: Date = new Date(),
 ): Promise<Conversation> {
   if (turn.replaceAssistantId) {
     await storage.users.deleteAssistantChatMessage(userId, turn.replaceAssistantId);
   }
-  const rows = await storage.users.getChatMessages(userId, { limit: HISTORY_ROWS });
+  const rows = await storage.users.getChatMessages(userId, {
+    limit: HISTORY_ROWS,
+    thread: { planDayId: focus.focusPlanDayId, workoutLogId: focus.focusWorkoutLogId },
+  });
   const split = splitSessions(rows.filter((row) => row.id !== turn.userMessageId), now.getTime());
   const proposals = await proposalsIn(userId, split.current);
   const { turns, notes } = annotateSession(split.current, proposals, now.getTime());
   return {
     turns: fitHistoryWindow(turns),
     notes,
-    earlier: earlierConversation(userId, split, now.getTime()).catch(() => undefined),
-  };
-}
-
-function focusColumns(focus: TurnFocus) {
-  return {
-    focusPlanDayId: focus.focusPlanDayId ?? null,
-    focusWorkoutLogId: focus.focusWorkoutLogId ?? null,
+    earlier: earlierConversation(userId, split, focus, now.getTime()),
   };
 }
 

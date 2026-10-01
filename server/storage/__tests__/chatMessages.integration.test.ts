@@ -89,6 +89,31 @@ describe("chat messages and their proposals (real Postgres)", () => {
     ).rejects.toThrow();
   });
 
+  it("keeps each workout's conversation in its own thread", async () => {
+    const at = (minute: number) => new Date(`2026-10-01T10:${String(minute).padStart(2, "0")}:00Z`);
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "general", timestamp: at(0) });
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "planned day", timestamp: at(1), focusPlanDayId: "day-1" });
+    await storage.users.saveChatMessage({
+      userId: ALICE,
+      role: "user",
+      content: "same day, logged",
+      timestamp: at(2),
+      focusPlanDayId: "day-1",
+      focusWorkoutLogId: "log-1",
+    });
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "ad-hoc log", timestamp: at(3), focusWorkoutLogId: "log-2" });
+
+    const contents = async (thread?: { planDayId?: string; workoutLogId?: string }) =>
+      (await storage.users.getChatMessages(ALICE, { thread })).map((row) => row.content);
+
+    expect(await contents({})).toEqual(["general"]);
+    expect(await contents({ planDayId: "day-1" })).toEqual(["planned day", "same day, logged"]);
+    // Once logged, the day's thread is found by either id.
+    expect(await contents({ planDayId: "day-1", workoutLogId: "log-1" })).toEqual(["planned day", "same day, logged"]);
+    expect(await contents({ workoutLogId: "log-2" })).toEqual(["ad-hoc log"]);
+    expect(await contents()).toHaveLength(4);
+  });
+
   it("reads proposals by id for their owner only, and unlinks a deleted proposal from its reply", async () => {
     const [plan] = await db
       .insert(trainingPlans)

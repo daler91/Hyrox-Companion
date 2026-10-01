@@ -145,7 +145,7 @@ function conversationFor(
   turn: ServerOwnedTurn | null,
   body: z.infer<typeof chatRequestSchema>,
 ): Promise<Conversation> | Conversation {
-  if (turn) return loadConversation(userId, turn);
+  if (turn) return loadConversation(userId, turn, turnFocus(body));
   return { turns: body.history, notes: [] };
 }
 
@@ -597,6 +597,9 @@ const chatHistoryQuerySchema = z
     limit: z.coerce.number().int().min(1).max(200).optional(),
     before: z.string().datetime({ offset: true }).optional(),
     beforeId: z.string().min(1).max(255).optional(),
+    // A workout's conversation; without either, the general one (I4).
+    focusPlanDayId: z.string().min(1).max(255).optional(),
+    focusWorkoutLogId: z.string().min(1).max(255).optional(),
   })
   .refine(
     (q) => (q.before == null) === (q.beforeId == null),
@@ -605,8 +608,15 @@ const chatHistoryQuerySchema = z
 
 router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 60), validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
-    const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
+    const { limit, before, beforeId, focusPlanDayId, focusWorkoutLogId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
+    const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, {
+      userId,
+      limit,
+      before,
+      beforeId,
+      focusPlanDayId,
+      focusWorkoutLogId,
+    });
     if (nextCursor) {
       res.setHeader("X-Next-Cursor", nextCursor.timestamp);
       res.setHeader("X-Next-Cursor-Id", nextCursor.id);

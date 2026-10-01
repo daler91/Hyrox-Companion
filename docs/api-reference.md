@@ -1414,7 +1414,7 @@ Retrieve saved chat messages for the current user, cursor-paginated.
 
 - **Auth:** Required
 - **Rate limit:** `chatHistory` category, 60/min
-- **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together
+- **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together. `focusPlanDayId?` and `focusWorkoutLogId?` read one workout's own conversation (rows saved with either id); without them, the general conversation (rows saved with neither).
 - **Response:** `ChatMessage[]` (plain array for backward compatibility). When more rows exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back on the next request.
 - **Row fields:** `id, role, content, timestamp`, plus:
   - `kind`: `text`, `proposal` or `summary`. A `summary` row is the note the coach carried into a new session after a break, not something it said to the athlete.
@@ -1441,7 +1441,7 @@ Save a chat message to history: a turn the chat routes don't save themselves (th
 
 ### DELETE /api/v1/chat/history
 
-Clear all chat messages for the current user.
+Clear all chat messages for the current user, in every thread: the general conversation and each workout's.
 
 - **Auth:** Required
 - **Rate limit:** `chatHistoryDelete` category, 5/min

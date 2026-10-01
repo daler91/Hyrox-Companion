@@ -122,6 +122,10 @@ export const QUERY_KEYS = {
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,
+  // A workout's own conversation (I4). Under chatHistory, so invalidating
+  // that key refreshes every thread.
+  chatThreadHistory: (planDayId: string | undefined, workoutLogId: string | undefined) =>
+    ["/api/v1/chat/history", { planDayId: planDayId ?? null, workoutLogId: workoutLogId ?? null }] as const,
   chatWelcome: ["/api/v1/chat/welcome"] as const,
   planProposalPending: ["/api/v1/plan-proposals/pending"] as const,
   // One proposal's live status, for its card in the chat. The prefix matches

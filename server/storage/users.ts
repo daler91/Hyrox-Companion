@@ -36,6 +36,27 @@ import { logger } from "../logger";
  * call wrote it. The row's user id is part of every read, so an id that
  * collides with another athlete's row simply isn't written here.
  */
+/**
+ * Which conversation chat rows belong to (AI coach chat review, I4): a
+ * workout's, by the plan day or the log it was chatted about from (a row
+ * matches either, so a planned day's thread carries on once it is logged),
+ * or, with neither, the general one, which holds every row without a workout.
+ */
+export interface ChatThread {
+  readonly planDayId?: string;
+  readonly workoutLogId?: string;
+}
+
+function chatThreadCondition({ planDayId, workoutLogId }: ChatThread) {
+  if (!planDayId && !workoutLogId) {
+    return and(isNull(chatMessages.focusPlanDayId), isNull(chatMessages.focusWorkoutLogId));
+  }
+  return or(
+    planDayId ? eq(chatMessages.focusPlanDayId, planDayId) : undefined,
+    workoutLogId ? eq(chatMessages.focusWorkoutLogId, workoutLogId) : undefined,
+  );
+}
+
 async function saveChatMessageOnce(message: InsertChatMessage & { id: string }): Promise<boolean> {
   const rows = await db
     .insert(chatMessages)
@@ -380,10 +401,13 @@ export class UserStorage {
   // together.
   async getChatMessages(
     userId: string,
-    options: { limit?: number; beforeTimestamp?: Date; beforeId?: string } = {},
+    options: { limit?: number; beforeTimestamp?: Date; beforeId?: string; thread?: ChatThread } = {},
   ): Promise<ChatMessage[]> {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
     const conditions = [eq(chatMessages.userId, userId)];
+    // Without a thread, every row: the export and other whole-history readers.
+    const threadClause = options.thread ? chatThreadCondition(options.thread) : undefined;
+    if (threadClause) conditions.push(threadClause);
     if (options.beforeTimestamp && options.beforeId) {
       const cursorClause = or(
         lt(chatMessages.timestamp, options.beforeTimestamp),

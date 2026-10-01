@@ -92,6 +92,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const { historyLoading, clearHistory, isClearingHistory } = useChatHistory({
     welcomeMessage: welcomeMessageObj,
     setMessages,
+    focus: { focusPlanDayId, focusWorkoutLogId },
   });
   const { scrollRef, scrollToBottom, updateAutoScrollMode, scrollToBottomIfPinned, pinAutoScroll } =
     useChatAutoScroll(messages);

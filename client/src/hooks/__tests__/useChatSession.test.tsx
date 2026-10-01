@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
@@ -141,6 +141,16 @@ describe('useChatSession', () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].id).toBe('welcome');
     expect(result.current.messages[0].role).toBe('assistant');
+  });
+
+  it("loads a workout's own thread in the workout chat, and the general one elsewhere", () => {
+    vi.mocked(useQuery).mockClear();
+    renderHook(() => useChatSession({ focusPlanDayId: 'day-1', focusWorkoutLogId: 'log-1' }), { wrapper });
+    renderHook(() => useChatSession(), { wrapper });
+
+    const keys = vi.mocked(useQuery).mock.calls.map(([options]) => options.queryKey);
+    expect(keys).toContainEqual(['/api/v1/chat/history', { planDayId: 'day-1', workoutLogId: 'log-1' }]);
+    expect(keys).toContainEqual(['/api/v1/chat/history']);
   });
 
   it('swaps in a welcome that arrives after mount', () => {
