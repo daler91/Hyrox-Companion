@@ -2,7 +2,7 @@ import type { ChatMessage } from "@shared/schema";
 
 import { generateText, streamText, type TextAiMessage } from "../ai/providers";
 import { resolveChatReasoningEffort } from "../ai/providers/config";
-import type { TextAiReasoningEffort } from "../ai/providers/types";
+import type { TextAiReasoningEffort, TextAiRequest } from "../ai/providers/types";
 import { AppError, classifyAiError } from "../errors";
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput, type SystemPromptOptions } from "../prompts";
@@ -44,6 +44,35 @@ function buildCoachMessages(
   return messages;
 }
 
+interface CoachTurn {
+  userMessage: string;
+  conversationHistory: Pick<ChatMessage, "role" | "content">[];
+  trainingContext?: TrainingContext;
+  coachingMaterials?: CoachingMaterialInput[];
+  retrievedChunks?: string[];
+  options: ChatCallOptions;
+}
+
+/**
+ * The provider request both chat paths send: prompt, turns, model role and
+ * effort. One builder, so the streamed and non-streamed coach can't drift.
+ */
+function buildCoachRequest(
+  turn: CoachTurn,
+): Pick<TextAiRequest, "systemInstruction" | "messages" | "modelRole" | "reasoningEffort"> {
+  return {
+    systemInstruction: buildSystemPrompt(
+      turn.trainingContext,
+      turn.coachingMaterials,
+      turn.retrievedChunks,
+      turn.options,
+    ),
+    messages: buildCoachMessages(turn.userMessage, turn.conversationHistory),
+    modelRole: "reasoning",
+    reasoningEffort: turn.options.reasoningEffort ?? resolveChatReasoningEffort(),
+  };
+}
+
 export async function chatWithCoach(
   userMessage: string,
   conversationHistory: Pick<ChatMessage, "role" | "content">[] = [],
@@ -55,10 +84,7 @@ export async function chatWithCoach(
 ): Promise<string> {
   try {
     const response = await generateText({
-      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options),
-      messages: buildCoachMessages(userMessage, conversationHistory),
-      modelRole: "reasoning",
-      reasoningEffort: options.reasoningEffort ?? resolveChatReasoningEffort(),
+      ...buildCoachRequest({ userMessage, conversationHistory, trainingContext, coachingMaterials, retrievedChunks, options }),
       label: "chat",
       feature: "chat",
       userId,
@@ -89,10 +115,7 @@ export async function* streamChatWithCoach(
     // caught on the chunk that completes it (S4).
     const validateChunk = createStreamingOutputValidator();
     for await (const text of streamText({
-      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options),
-      messages: buildCoachMessages(userMessage, conversationHistory),
-      modelRole: "reasoning",
-      reasoningEffort: options.reasoningEffort ?? resolveChatReasoningEffort(),
+      ...buildCoachRequest({ userMessage, conversationHistory, trainingContext, coachingMaterials, retrievedChunks, options }),
       label: "chat-stream",
       feature: "chat_stream",
       userId,
