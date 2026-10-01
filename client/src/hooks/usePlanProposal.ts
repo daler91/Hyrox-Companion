@@ -3,7 +3,7 @@ import { useCallback } from "react";
 
 import type { Message } from "@/hooks/useChatSession";
 import { api, type PlanProposalView, QUERY_KEYS } from "@/lib/api";
-import { getCurrentTimeString } from "@/lib/dateUtils";
+import { createLocalMessage } from "@/lib/chatMessage";
 import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
 
 interface UsePlanProposalOptions {
@@ -79,12 +79,7 @@ export function usePlanProposal(options: UsePlanProposalOptions = {}) {
 
   const pushAssistantMessage = useCallback(
     (content: string, persist: boolean) => {
-      addLocalMessage?.({
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content,
-        timestamp: getCurrentTimeString(),
-      });
+      addLocalMessage?.(createLocalMessage("assistant", content));
       if (persist) saveMessage?.({ role: "assistant", content });
     },
     [addLocalMessage, saveMessage],

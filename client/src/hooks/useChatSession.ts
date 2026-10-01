@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo,useRef, useState } from "react";
 
 import { api, type PlanProposalView, QUERY_KEYS, type RagInfo } from "@/lib/api";
+import type { Message } from "@/lib/chatMessage";
 import { formatTime,getCurrentTimeString } from "@/lib/dateUtils";
 import { queryClient } from "@/lib/queryClient";
 import { consumeSSEStream } from "@/lib/sseStream";
@@ -10,6 +11,7 @@ import { consumeSSEStream } from "@/lib/sseStream";
 import { useClearHistoryMutation,useSaveMessageMutation } from "./useChatMutations";
 
 export type { RagInfo } from "@/lib/api";
+export type { Message } from "@/lib/chatMessage";
 
 function createMessageUpdater(
   assistantMessageId: string,
@@ -109,17 +111,6 @@ function handleStreamError({
     const withoutPlaceholder = prev.filter((m) => m.id !== assistantMessageId);
     return [...withoutPlaceholder, errorMessage];
   });
-}
-
-export interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-  ragInfo?: RagInfo;
-  // ⚡ Bolt Performance Optimization:
-  // Adds raw epoch time to avoid parsing localized '10:30 AM' time strings via new Date() during array sorts
-  createdAtMs?: number;
 }
 
 interface UseChatSessionOptions {
@@ -241,6 +232,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         timestamp: msg.timestamp
           ? formatTime(new Date(msg.timestamp))
           : "",
+        // Older than anything created in this session, so it sorts first. Not
+        // derived from msg.timestamp: that is the server's clock, and a client
+        // clock running behind it would sort this session's new turns above
+        // the history they follow.
+        createdAtMs: 0,
       }));
       // eslint-disable-next-line react-hooks/set-state-in-effect -- One-time hydration from React Query into the editable chat buffer.
       setMessages([welcomeMessageObj, ...loadedMessages]);

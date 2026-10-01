@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import type { Message } from "@/hooks/useChatSession";
 import { api, QUERY_KEYS, type RagInfo,type Suggestion } from "@/lib/api";
-import { getCurrentTimeString } from "@/lib/dateUtils";
+import { createLocalMessage } from "@/lib/chatMessage";
 import { describeAiError } from "@/lib/describeAiError";
 import { queryClient } from "@/lib/queryClient";
 
@@ -38,12 +38,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         setPendingSuggestions(data.suggestions);
       }
       
-      const suggestionsMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: responseContent,
-        timestamp: getCurrentTimeString(),
-      };
+      const suggestionsMessage = createLocalMessage("assistant", responseContent);
       addLocalMessage(suggestionsMessage);
       saveMessage({ role: "assistant", content: responseContent });
     },
@@ -53,12 +48,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         slow: "Suggestions are taking longer than expected. Please try again in a moment.",
         fallback: "Sorry, I couldn't analyze your workouts right now. Please try again.",
       });
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: errorContent,
-        timestamp: getCurrentTimeString(),
-      };
+      const errorMessage = createLocalMessage("assistant", errorContent);
       addLocalMessage(errorMessage);
     },
   });
@@ -68,12 +58,10 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
     try {
       const workoutExists = timeline.some(e => e.planDayId === suggestion.workoutId);
       if (!workoutExists) {
-        const errorMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: `Could not find the workout for ${suggestion.focus} (${suggestion.date}). The suggestion is still available to retry.`,
-          timestamp: getCurrentTimeString(),
-        };
+        const errorMessage = createLocalMessage(
+          "assistant",
+          `Could not find the workout for ${suggestion.focus} (${suggestion.date}). The suggestion is still available to retry.`,
+        );
         addLocalMessage(errorMessage);
         return;
       }
@@ -84,12 +72,7 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       });
 
       if (!result.applied) {
-        const notAppliedMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: result.message,
-          timestamp: getCurrentTimeString(),
-        };
+        const notAppliedMessage = createLocalMessage("assistant", result.message);
         addLocalMessage(notAppliedMessage);
         return;
       }
@@ -102,20 +85,16 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       }
       setPendingSuggestions(prev => prev.filter(s => s.workoutId !== suggestion.workoutId));
       
-      const confirmMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: `Applied suggestion to ${suggestion.focus} (${suggestion.date}). The ${suggestion.targetField === "mainWorkout" ? "main workout" : suggestion.targetField} has been updated.`,
-        timestamp: getCurrentTimeString(),
-      };
+      const confirmMessage = createLocalMessage(
+        "assistant",
+        `Applied suggestion to ${suggestion.focus} (${suggestion.date}). The ${suggestion.targetField === "mainWorkout" ? "main workout" : suggestion.targetField} has been updated.`,
+      );
       addLocalMessage(confirmMessage);
     } catch {
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: `Failed to apply suggestion to ${suggestion.focus}. Please try again.`,
-        timestamp: getCurrentTimeString(),
-      };
+      const errorMessage = createLocalMessage(
+        "assistant",
+        `Failed to apply suggestion to ${suggestion.focus}. Please try again.`,
+      );
       addLocalMessage(errorMessage);
     } finally {
       setApplyingId(null);
