@@ -33,8 +33,9 @@ staleness. The gaps are in the conversation itself:
 
 ## Remediation status (updated 2026-10-01)
 
-Wave 1 is fixed on `claude/amazing-rubin-zz0w63`. The rest of this document describes the code as
-it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
+Wave 1 is fixed (daler91/Hyrox-Companion#2085). The first batch of wave 2 (D1(a), D5, I14, I15,
+I16) is fixed on `claude/amazing-rubin-zz0w63`; the rest of wave 2 (I1–I3, I6, I7, I19) is still
+open. The rest of this document describes the code as it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
 configurations, ESLint on the whole repo (no errors; the only warning in a touched file, the length
 of `server/routes/__tests__/ai.test.ts`, predates this work), the full unit suite with coverage
 thresholds, and `pnpm build` followed by `pnpm check:bundle`. Not run: Cypress (the binary download
@@ -60,11 +61,21 @@ is blocked in this environment), the running app, or any live model.
 - The chat system prompt is somewhat longer: the PLAN CHANGES and MEDICAL SAFETY paragraphs, the
   Units line, RPE and duration per recent session, and prior-AI context per upcoming session.
 
+**Wave 2, first batch:**
+
+| ID      | Fix |
+| ------- | --- |
+| D1(a)   | `mayRequestPlanEdit` lets a short confirmation ("yes please", "go ahead") through the gate when the coach's last turn offered a change: one sentence with an offer phrase and an edit verb. The classifier then sees that offer, and `PLAN_ADJUSTMENT_PROMPT` says a confirmation asks for the change offered in the conversation it already receives. |
+| D5      | Both chat routes accept `focusPlanDayId` and `focusWorkoutLogId`. `loadFocusedWorkout` reads them through the ownership-checked getters (failing open), and `formatFocusedWorkout` adds a FOCUSED WORKOUT block at the end of the training data. It shows the prescription beside the logged sets, duration, RPE, distance, heart rate and pace, plus the athlete note, adherence, session grade and the coach's notes. The non-streaming fallback sends the ids too. |
+| I14     | `chatRetrievalQuery` retrieves nothing for a message that is only thanks or emoji, and semantic results further than `RAG_MAX_COSINE_DISTANCE` (default 0.6, deliberately loose) are dropped. Pinned principles always stay. The search log records the best distance and the kept count, to tune the cut-off against. |
+| I15     | A short or pronoun-led follow-up searches with the previous athlete turn in front of it. |
+| I16     | Each excerpt opens with its material's title, and the prompt asks the coach to name it. `ragInfo.sources` lists the titles, which survive production's `sanitizeRagInfo`, and the reply's chip reads "From your coaching notes" and expands to them. |
+
+Behaviour changes: "thanks!" no longer spends an embedding call; a far-off excerpt can now be left
+out where it used to fill a slot; the classifier runs for "yes please" after an offer.
+
 **Deliberately not changed:**
 
-- D1(a), routing a bare "yes please" to the classifier with the coach's offer as context, is wave 2.
-  With D1(b) the coach should no longer make that offer, but the gate still can't follow a
-  confirmation.
 - The safety notice is not saved with the message, so it is gone after a reload (the reply, which
   the prompt tells to put medical care first, stays). Saving it needs message metadata (I3).
 - The other markdown surfaces (coach insights, race predictor, chart explanations, nutrition

@@ -152,6 +152,16 @@ The red-flag symptom and heart-rate-medication patterns in `server/services/aiSa
 
 `BASE_SYSTEM_PROMPT` also carries standing MEDICAL SAFETY rules (no diagnosis, no medication advice, stop and seek care for alarming symptoms) and a PLAN CHANGES rule: a prose reply cannot change the plan and must never claim to, and the athlete is told to ask directly to get a proposal.
 
+### The workout in view
+
+The workout-detail chat sends `focusPlanDayId` and, once the session is logged, `focusWorkoutLogId`, on both chat routes. `loadFocusedWorkout()` (`server/services/focusedWorkoutService.ts`) reads them only through the ownership-checked getters, then the log's sets and, for a plan-linked run, its session grade. An id that isn't the athlete's, or any failed read, leaves the chat without the block rather than failing the turn. `formatFocusedWorkout()` (`server/prompts/focusedWorkoutContext.ts`) renders a FOCUSED WORKOUT block at the end of the training data:
+
+- the prescription (the log's own snapshot of it when there is one, else the plan day) next to what was logged: sets, duration, RPE, distance, heart rate and pace, in the athlete's units;
+- the athlete's note, set adherence and the session grade;
+- the coach's notes on the day, through the shared `priorAiContextParts()`.
+
+The general context lists only the last seven workouts and the next planned days, so without this a session outside those windows, or any unplanned log, was invisible to the coach.
+
 ### Streaming Chat
 
 `streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. Its options take an optional `signal` (`AbortSignal`), allowing the caller to cancel provider generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
@@ -204,12 +214,13 @@ Every chat response includes `RagInfo` metadata:
   source: "rag" | "legacy" | "none"; // Which retrieval method was used
   chunkCount: number;                // Number of RAG chunks retrieved
   chunks?: string[];                 // Chunk contents (dev only)
+  sources?: string[];                // Titles of the materials they came from, each once
   materialCount?: number;            // Legacy material count
   fallbackReason?: string;           // Why RAG wasn't used (dev only)
 }
 ```
 
-In production, `chunks` and `fallbackReason` are stripped by `sanitizeRagInfo()`.
+In production, `chunks` and `fallbackReason` are stripped by `sanitizeRagInfo()`. `sources` stays: it is the athlete's own material titles, and the reply's "From your coaching notes" chip expands to them.
 
 ### Plan Editing From Chat
 
@@ -217,7 +228,7 @@ In production, `chunks` and `fallbackReason` are stripped by `sanitizeRagInfo()`
 
 On the streaming route (`POST /api/v1/chat/stream`), a message asking for a plan change gets a structured proposal instead of a prose reply:
 
-1. **Intent gate.** A free keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", and so on) decides whether to classify at all; `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context. It needs nothing from the training context, so the route starts it alongside `buildAIContext()` rather than after. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, a red-flag safety match skips the gate entirely (see [Safety](#safety)), and any error in this branch falls back to the normal chat stream.
+1. **Intent gate.** A free check (`mayRequestPlanEdit()`) decides whether to classify at all: a keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", and so on), or a short confirmation ("yes please", "go ahead") when the coach's last turn offered a change ("Want me to move your long run to Saturday?"). `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context, plus the coach's offer for a confirmation. The proposal generator already sees the recent conversation, so it makes the change that was offered. It needs nothing from the training context, so the route starts it alongside `buildAIContext()` rather than after. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, a red-flag safety match skips the gate entirely (see [Safety](#safety)), and any error in this branch falls back to the normal chat stream.
 2. **Proposal.** `createPlanAdjustmentProposal()` shows the reasoning model (`PLAN_ADJUSTMENT_PROMPT`) up to 28 upcoming planned days. Changes to days outside that set are dropped, as are `focus`/`mainWorkout`/`accessory` edits to structure-block (EMOM/AMRAP) days. A red-flag safety signal answers with the safety escalation note instead; no upcoming days, or no change surviving the checks, answers in plain text; a failed generation falls back to the normal chat stream. Otherwise the proposal is stored as `pending` in `plan_adjustment_proposals` (superseding any earlier pending one) and the stream sends its summary text plus a `planProposal` event.
 3. **Apply or dismiss.** The athlete decides via `POST /api/v1/plan-proposals/:id/apply` or `/dismiss` (see [API Reference → Plan Proposal Routes](api-reference.md#plan-proposal-routes)). Apply re-checks every targeted day first: if any is no longer `planned` or has changed since the proposal was built, the whole proposal is marked `invalidated` (409 `stale`). Otherwise table-backed days whose `mainWorkout`/`accessory` text changes are re-parsed into structured rows, all changes are written in one transaction, and the proposal becomes `applied`.
 4. **Auto-apply.** With the `coachAutoApplyPlanChanges` preference on (Settings → "Auto-Apply Chat Plan Changes", default off), the proposal is applied as soon as it is created; if applying fails it keeps its status (pending, or invalidated) for the athlete to retry or dismiss.
@@ -308,10 +319,12 @@ Embedding is triggered asynchronously via pg-boss queue (`embed-coaching-materia
 
 1. Check if the user has any document chunks (`storage.coaching.hasChunksForUser()`).
 2. If chunks exist, verify embedding dimensions match (detects model changes).
-3. Generate a query embedding and search via `storage.coaching.searchChunksByEmbedding()` (cosine distance, top-6 by default).
-4. If RAG succeeds, return chunks with `ragInfo.source = "rag"`.
+3. Generate a query embedding and search via `storage.coaching.searchChunksByEmbedding()` (cosine distance, top-6 by default). Semantic results further than `RAG_MAX_COSINE_DISTANCE` (default 0.6) from the query are dropped; pinned principles never are.
+4. If RAG succeeds, return chunks with `ragInfo.source = "rag"`. Each excerpt opens with the title of the material it came from (`Source: …`), the prompt asks the coach to name it when its advice rests on one, and `ragInfo.sources` lists the titles.
 5. If RAG fails (no chunks, dimension mismatch, retrieval error), fall back to legacy full-text coaching materials with `ragInfo.source = "legacy"`.
 6. If no coaching materials exist at all, return `ragInfo.source = "none"`.
+
+Chat decides the query first (`chatRetrievalQuery()`, `server/services/chatRetrievalQuery.ts`). A message that is only thanks, acknowledgement or emoji retrieves nothing (`ragInfo.source = "none"`), and a short or pronoun-led follow-up ("what about for the sled?") searches with the previous athlete turn in front of it. Anything else searches with the message itself.
 
 ### RAG Retrieval Decision Tree
 
