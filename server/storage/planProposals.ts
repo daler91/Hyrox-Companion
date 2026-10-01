@@ -62,7 +62,7 @@ export class PlanProposalStorage {
   /** The athlete's proposals among `ids`: the chat history and the coach's conversation read their outcomes. */
   async getByIds(ids: readonly string[], userId: string): Promise<PlanAdjustmentProposal[]> {
     if (ids.length === 0) return [];
-    return db
+    return await db
       .select()
       .from(planAdjustmentProposals)
       .where(

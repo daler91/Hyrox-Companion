@@ -371,7 +371,8 @@ export async function retrieveRelevantChunks(
   // question still fetched six. Pinned principles are exempt.
   const maxDistance = env.RAG_MAX_COSINE_DISTANCE;
   const chunks = found.filter((chunk) => chunk.distance <= maxDistance);
-  // Counts and distances only, never chunk content.
+  // An opaque uuid, counts and distances: never the query or chunk content.
+  // bearer:disable javascript_lang_logger_leak
   logger.info(
     { userId, found: found.length, kept: chunks.length, bestDistance: found[0]?.distance, maxDistance },
     "[rag] Search returned chunks",

@@ -295,6 +295,7 @@ async function summarisePreviousSession(
 ): Promise<string> {
   const text = await writeSummary(userId, toSummarise).catch((error: unknown) => {
     // A provider or validation error, not chat content.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err: error }, "[chat] Could not summarise the earlier conversation; carrying its last turns");
     return fallbackSummary(toSummarise);
   });

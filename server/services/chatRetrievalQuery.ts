@@ -8,18 +8,31 @@ import type { ChatMessage } from "@shared/schema";
  * searched for exactly that phrase, not for what the conversation was about.
  */
 
-// One emoji code point: a pictograph, or a skin-tone modifier, variation
-// selector or joiner composing one (not \p{Emoji_Component}, which also covers
-// digits). An alternation, because a character class would split the composed
-// sequences.
-const EMOJI = String.raw`(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\u{FE0F}|\u{200D})`;
-/** A message that is only thanks, acknowledgement or emoji. */
-const SOCIAL_MESSAGE = new RegExp(
-  String.raw`^(?:(?:thanks|thank you|thx|ty|cheers|cool|nice|great|awesome|perfect|amazing|brilliant|ok(?:ay)?|got it|sounds good|will do|noted|lol|haha|legend|appreciate it)(?:[\s,.!]|${EMOJI})*)+$`,
-  "iu",
-);
-const EMOJI_ONLY = new RegExp(String.raw`^(?:\s|${EMOJI})+$`, "u");
+// An emoji code point, in both patterns below: a pictograph, or a skin-tone
+// modifier, variation selector or joiner composing one (not
+// \p{Emoji_Component}, which also covers digits). An alternation, because a
+// character class would split the composed sequences.
+const EMOJI_ONLY = /^(?:\s|\p{Extended_Pictographic}|\p{Emoji_Modifier}|\u{FE0F}|\u{200D})+$/u;
+/** What may sit between the phrases of a thank-you: spaces, light punctuation, emoji. */
+const SOCIAL_FILLER = /^(?:[\s,.!]|\p{Extended_Pictographic}|\p{Emoji_Modifier}|\u{FE0F}|\u{200D})+/u;
+/** Thanks and acknowledgements, longest first so "okay" isn't read as "ok" + "ay". */
+const SOCIAL_PHRASES = [
+  "appreciate it", "sounds good", "thank you", "brilliant", "awesome", "perfect", "amazing", "will do",
+  "cheers", "legend", "thanks", "got it", "noted", "great", "okay", "cool", "nice", "haha", "thx", "lol",
+  "ok", "ty",
+];
 const SOCIAL_MAX_CHARS = 60;
+
+/** A message made only of thanks and acknowledgements, with the filler between them. */
+function isThankYou(message: string): boolean {
+  let text = message.toLowerCase();
+  while (text !== "") {
+    const phrase = SOCIAL_PHRASES.find((candidate) => text.startsWith(candidate));
+    if (phrase === undefined) return false;
+    text = text.slice(phrase.length).replace(SOCIAL_FILLER, "");
+  }
+  return true;
+}
 
 /** A follow-up leans on the turn before it: short, or opening with a pronoun or connector. */
 const FOLLOW_UP_OPENER = /^(?:and|but|so|also|what about|how about|what if|why|it|that|this|those|these|they|them|same)\b/i;
@@ -29,7 +42,7 @@ const PREVIOUS_TURN_MAX_CHARS = 300;
 export function isSocialMessage(message: string): boolean {
   const text = message.trim();
   if (text.length > SOCIAL_MAX_CHARS) return false;
-  return text === "" || SOCIAL_MESSAGE.test(text) || EMOJI_ONLY.test(text);
+  return text === "" || EMOJI_ONLY.test(text) || isThankYou(text);
 }
 
 function isFollowUp(message: string): boolean {
