@@ -4,25 +4,31 @@ import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
 /**
+ * The body of POST /api/v1/chat/message: which side spoke, and what it said.
+ *
  * The `role` column is a bare varchar(20), so the generated schema accepted any
  * short string — a client could seed "system" turns (or anything else) into its
  * own stored history, which `chatService` then replays into the model context.
- * The conversation only has two sides, and the client legitimately persists
- * both: its own turn and the assistant reply it streamed. Constrain to exactly
- * those, and bound the content so a single message can't be used to park a
- * large blob in the chat table.
+ * The conversation only has two sides; constrain to exactly those, and bound
+ * the content so a single message can't be used to park a large blob in the
+ * chat table.
+ *
+ * Only these two fields. The schema used to omit just `id` and `timestamp`,
+ * which left `userId` required: the client never sends one (the server takes
+ * it from the session), so every save was refused with a 400 the client did
+ * not surface. The metadata columns (kind, proposal, safety notice, retrieval,
+ * focus) are the server's to write.
  */
 export const insertChatMessageSchema = createInsertSchema(chatMessages)
-  .omit({
-    id: true,
-    timestamp: true,
-  })
+  .pick({ role: true, content: true })
   .extend({
     role: z.enum(["user", "assistant"]),
     content: z.string().min(1).max(50_000),
   });
 
-export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type ChatMessageBody = z.infer<typeof insertChatMessageSchema>;
+/** A chat row as the server writes it; the user id is always the session's. */
+export type InsertChatMessage = typeof chatMessages.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Request Validation Schemas

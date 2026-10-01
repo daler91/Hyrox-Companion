@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { type ChatIntentResult, chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type ChatIntentResult, type ChatMessageBody,chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -545,7 +545,7 @@ router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 6
     res.json(messages);
   }));
 
-protectedPost(router, "/api/v1/chat/message", { limiter: rateLimiter("chatMessage", 20), middleware: [validateBody(insertChatMessageSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, InsertChatMessage>, res: Response) => {
+protectedPost(router, "/api/v1/chat/message", { limiter: rateLimiter("chatMessage", 20), middleware: [validateBody(insertChatMessageSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, ChatMessageBody>, res: Response) => {
     const userId = getUserId(req);
     const { role, content } = req.body;
 

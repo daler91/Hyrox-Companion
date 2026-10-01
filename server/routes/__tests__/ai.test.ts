@@ -944,6 +944,15 @@ describe("Chat History and Messages Routes", () => {
     });
   });
 
+  it("saves a turn sent without a userId, taking it from the session", async () => {
+    vi.mocked(storage.users.saveChatMessage).mockResolvedValue({ id: "m2", role: "assistant", content: "Hi", timestamp: new Date("2025-01-01T00:00:00Z") });
+
+    const response = await request(app).post(CHAT_MESSAGE_ENDPOINT).send({ role: "assistant", content: "Hi" });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith({ userId: "test_user_id", role: "assistant", content: "Hi" });
+  });
+
   it("should return 400 when missing role or content", async () => {
     const response = await request(app)
       .post(CHAT_MESSAGE_ENDPOINT)
