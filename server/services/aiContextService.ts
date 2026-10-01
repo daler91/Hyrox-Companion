@@ -1,10 +1,11 @@
-import type { ChatMessage,RagInfo } from "@shared/schema";
+import type { RagInfo } from "@shared/schema";
 import type { Logger } from "pino";
 
 import type { TrainingContext } from "../gemini/index";
 import { logger as rootLogger } from "../logger";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
 import { buildTrainingContext } from "./ai";
+import type { ConversationTurn } from "./chatConversation";
 import { retrieveCoachingContext } from "./ragRetrieval";
 
 type AIContextLogger = Pick<Logger, "warn" | "error">;
@@ -55,5 +56,5 @@ export function extractCoachingMaterialsText(ctx: AIContext): string | undefined
 
 export interface ChatInput {
   message: string;
-  history: Pick<ChatMessage, "role" | "content">[];
+  history: ConversationTurn[];
 }

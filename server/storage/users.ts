@@ -389,6 +389,28 @@ export class UserStorage {
     return chatMessage;
   }
 
+  /**
+   * Insert a chat row under the id its client gave it, once: a retried send
+   * reuses its message id, so a second insert is a no-op. Returns whether
+   * this call wrote it. The row's user id is part of every read, so an id
+   * that collides with another athlete's row simply isn't written here.
+   */
+  async saveChatMessageOnce(message: InsertChatMessage & { id: string }): Promise<boolean> {
+    const rows = await db
+      .insert(chatMessages)
+      .values(message)
+      .onConflictDoNothing({ target: chatMessages.id })
+      .returning({ id: chatMessages.id });
+    return rows.length > 0;
+  }
+
+  /** Delete one of the athlete's coach replies (a failed reply a retry replaces). */
+  async deleteAssistantChatMessage(userId: string, id: string): Promise<void> {
+    await db
+      .delete(chatMessages)
+      .where(and(eq(chatMessages.id, id), eq(chatMessages.userId, userId), eq(chatMessages.role, "assistant")));
+  }
+
   async clearChatHistory(userId: string): Promise<boolean> {
     await db.delete(chatMessages).where(eq(chatMessages.userId, userId));
     return true;

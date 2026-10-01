@@ -77,7 +77,22 @@ export const chatRequestSchema = z.object({
   // loads them, ownership-checked, into the chat prompt's FOCUSED WORKOUT.
   focusPlanDayId: z.string().max(255).optional(),
   focusWorkoutLogId: z.string().max(255).optional(),
-});
+  // The server-owned conversation (server/services/chatConversation.ts): a
+  // client that sends its message ids has the server save both turns and read
+  // the history from the database, ignoring `history`. A retry sends the same
+  // userMessageId (saved once) and the failed reply's id to replace.
+  userMessageId: z.uuid().optional(),
+  assistantMessageId: z.uuid().optional(),
+  replaceAssistantId: z.uuid().optional(),
+})
+  .refine((body) => (body.userMessageId === undefined) === (body.assistantMessageId === undefined), {
+    message: "Send userMessageId and assistantMessageId together",
+    path: ["assistantMessageId"],
+  })
+  .refine((body) => body.userMessageId === undefined || body.userMessageId !== body.assistantMessageId, {
+    message: "userMessageId and assistantMessageId must differ",
+    path: ["assistantMessageId"],
+  });
 
 export const parseExercisesRequestSchema = z.object({
   text: z

@@ -89,6 +89,35 @@ describe("chatService", () => {
   });
 });
 
+describe("chat turns as the coach reads them", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(generateText).mockResolvedValue({ text: "Noted.", model: "test-model" });
+  });
+
+  it("puts the server's notes ahead of an athlete turn, outside the athlete's words", async () => {
+    await chatWithCoach(
+      "What now?",
+      [
+        { role: "assistant", content: "Here is a proposal." },
+        { role: "user", content: "thanks", notes: ["5 hours later", "The athlete applied the plan changes the coach proposed."] },
+      ],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { messageNotes: ["2 hours later"] },
+    );
+
+    const { messages } = vi.mocked(generateText).mock.calls[0][0];
+    expect(messages[1].content).toBe(
+      '(5 hours later)\n(The athlete applied the plan changes the coach proposed.)\n"""\nthanks\n"""',
+    );
+    expect(messages[2].content.startsWith("(2 hours later)\nUser Message")).toBe(true);
+    expect(messages[0].content).toBe("Here is a proposal.");
+  });
+});
+
 describe("chat reasoning effort", () => {
   beforeEach(() => {
     vi.clearAllMocks();

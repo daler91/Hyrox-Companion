@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { type ChatIntentResult, type ChatMessageBody,chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type ChatIntentResult, type ChatMessage, type ChatMessageBody, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -14,6 +14,7 @@ import { type AIContext, buildAIContext, type ChatInput } from "../services/aiCo
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
+import { type CoachReply, type Conversation, type ConversationTurn, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
@@ -96,16 +97,24 @@ protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: r
     res.json(parsed);
   });
 
+/** The per-message parts of the coach's prompt: the open workout, the earlier sessions, the notes on the new message. */
+type ChatPromptOptions = Pick<ChatCallOptions, "focusedWorkout" | "earlierConversation" | "messageNotes">;
+
 // validateBody(chatRequestSchema) guarantees req.body conforms, so the
 // handler can read it directly without a second safeParse pass.
 async function prepareChatContext(
   req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>,
-): Promise<{ input: ChatInput; aiContext: AIContext; focusedWorkout?: string }> {
-  const { message, history, focusPlanDayId, focusWorkoutLogId } = req.body;
+  conversation: Conversation,
+): Promise<{ input: ChatInput; aiContext: AIContext; promptOptions: ChatPromptOptions }> {
+  const { message, focusPlanDayId, focusWorkoutLogId } = req.body;
   const userId = getUserId(req);
-  const [aiContext, focused] = await Promise.all([
-    buildAIContext(userId, chatRetrievalQuery(message, history || []), reqLogger(req)),
+  const history = conversation.turns;
+  // The first message after a break writes the earlier sessions' summary;
+  // it runs alongside the context build rather than in front of it.
+  const [aiContext, focused, earlierConversation] = await Promise.all([
+    buildAIContext(userId, chatRetrievalQuery(message, history), reqLogger(req)),
     loadFocusedWorkout(userId, { planDayId: focusPlanDayId, workoutLogId: focusWorkoutLogId }),
+    conversation.earlier,
   ]);
   const { trainingContext } = aiContext;
   const focusedWorkout = focused
@@ -115,15 +124,49 @@ async function prepareChatContext(
         currentDate: trainingContext?.currentDate,
       })
     : undefined;
-  return { input: { message, history: history || [] }, aiContext, focusedWorkout };
+  return {
+    input: { message, history },
+    aiContext,
+    promptOptions: {
+      focusedWorkout,
+      earlierConversation,
+      ...(conversation.notes.length > 0 ? { messageNotes: conversation.notes } : {}),
+    },
+  };
+}
+
+/**
+ * What the coach reads: the saved conversation when the server owns the turn,
+ * else the history the client sent (an old client, open across a deploy).
+ */
+function conversationFor(
+  userId: string,
+  turn: ServerOwnedTurn | null,
+  body: z.infer<typeof chatRequestSchema>,
+): Promise<Conversation> | Conversation {
+  if (turn) return loadConversation(userId, turn);
+  return { turns: body.history, notes: [], earlier: Promise.resolve(undefined) };
+}
+
+function turnFocus(body: z.infer<typeof chatRequestSchema>): TurnFocus {
+  return { focusPlanDayId: body.focusPlanDayId, focusWorkoutLogId: body.focusWorkoutLogId };
 }
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
-    const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
-    const { input, aiContext, focusedWorkout } = await prepareChatContext(req);
-    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, focusedWorkout });
+    const turn = serverOwnedTurn(req.body);
+    const conversation = await conversationFor(userId, turn, req.body);
+    const chatSafety = analyzeChatSafety(req.body.message, conversation.turns);
+    const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
+    const acceptedAt = new Date();
+    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, ...promptOptions });
     const safetyNotice = buildChatSafetyNotice(chatSafety);
+    if (turn) {
+      // Both turns once the reply exists: a failed request leaves nothing behind.
+      const focus = turnFocus(req.body);
+      await saveUserTurn(userId, turn, input.message, focus, acceptedAt);
+      await saveCoachReply(userId, turn, { content: response, ragInfo: aiContext.ragInfo, safetyNotice: safetyNotice ?? undefined }, focus);
+    }
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(safetyNotice ? { safetyNotice } : {}) });
   });
 
@@ -288,6 +331,8 @@ interface PlanEditBranchOptions {
   readonly planEditIntent: Promise<ChatIntentResult> | null;
   readonly controller: AbortController;
   readonly safeWrite: SseWriter;
+  /** Filled with what was sent, for saving when the server owns the turn. */
+  readonly reply: CoachReply;
 }
 
 const NOT_A_PLAN_EDIT: ChatIntentResult = { intent: "normal_chat", confidence: 0 };
@@ -303,8 +348,9 @@ function startPlanEditIntent(
   req: ChatStreamRequest,
   userId: string,
   chatSafety: ChatSafetySignals,
+  history: ConversationTurn[],
 ): Promise<ChatIntentResult> | null {
-  const { message, history, planEditing } = req.body;
+  const { message, planEditing } = req.body;
   // Red-flag symptoms in the athlete's own words mean no AI plan change —
   // the policy createPlanAdjustmentProposal already applies to workout text.
   // The message goes to normal chat, which is told to put medical care first.
@@ -355,7 +401,7 @@ async function sendPlanProposalReply(
  * to the normal chat stream (including on `generation_failed`).
  */
 async function handlePlanEditRequest(
-  { req, res, userId, input, aiContext, controller, safeWrite }: PlanEditBranchOptions,
+  { req, res, userId, input, aiContext, controller, safeWrite, reply }: PlanEditBranchOptions,
   planEditIntent: Promise<ChatIntentResult>,
 ): Promise<boolean> {
   const intent = await planEditIntent;
@@ -380,6 +426,8 @@ async function handlePlanEditRequest(
       ? await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req))
       : null;
   const summaryText = result.kind === "proposal" ? result.proposal.summaryMessage : result.text;
+  reply.content = summaryText;
+  reply.proposalId = proposal?.id;
   await sendPlanProposalReply(res, controller, safeWrite, summaryText, proposal);
   return true;
 }
@@ -409,14 +457,20 @@ async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boole
   }
 }
 
+/** The open stream a reply goes out on, and the reply as sent so far. */
+interface CoachStream {
+  readonly controller: AbortController;
+  readonly safeWrite: SseWriter;
+  readonly reply: CoachReply;
+}
+
 async function streamCoachReply(
   req: ChatStreamRequest,
   input: ChatInput,
   aiContext: AIContext,
   userId: string,
   chatOptions: ChatCallOptions,
-  controller: AbortController,
-  safeWrite: SseWriter,
+  { controller, safeWrite, reply }: CoachStream,
 ): Promise<void> {
   const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { ...chatOptions, signal: controller.signal });
 
@@ -426,6 +480,8 @@ async function streamCoachReply(
       break;
     }
     await safeWrite(sseEvent({ text: chunk }));
+    // Only what was sent: a cut-off reply is saved as the athlete saw it.
+    reply.content += chunk;
   }
 }
 
@@ -458,11 +514,17 @@ function sendSseTerminalEvent(
 
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     const userId = getUserId(req);
+    const turn = serverOwnedTurn(req.body);
+    const conversation = await conversationFor(userId, turn, req.body);
     // The athlete's own words, scanned for red-flag symptoms and heart-rate
     // medication (analyzeSafetySignals only ever reads workout text).
-    const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
-    const planEditIntent = startPlanEditIntent(req, userId, chatSafety);
-    const { input, aiContext, focusedWorkout } = await prepareChatContext(req);
+    const chatSafety = analyzeChatSafety(req.body.message, conversation.turns);
+    const planEditIntent = startPlanEditIntent(req, userId, chatSafety, conversation.turns);
+    const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
+    const focus = turnFocus(req.body);
+    // Accepted from here: the athlete's turn is saved before the first byte, so
+    // any reply the client sees has its question in the history.
+    if (turn) await saveUserTurn(userId, turn, input.message, focus);
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -482,12 +544,13 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     const abortState: SseAbortState = { reason: "generic" };
     const clearDeadline = startSseDeadline(req, res, controller, abortState);
     const safeWrite = createSseWriter(res, controller);
+    const safetyNotice = buildChatSafetyNotice(chatSafety) ?? undefined;
+    const reply: CoachReply = { content: "", ragInfo: aiContext.ragInfo, safetyNotice };
 
     try {
       await safeWrite(sseEvent({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) }));
       // Ahead of any text, so the client shows it above the reply. Fixed copy,
       // independent of what the model goes on to write.
-      const safetyNotice = buildChatSafetyNotice(chatSafety);
       if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
       const handledAsPlanEdit = await tryPlanEditRequest({
@@ -499,10 +562,11 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
         planEditIntent,
         controller,
         safeWrite,
+        reply,
       });
       if (handledAsPlanEdit) return;
 
-      await streamCoachReply(req, input, aiContext, userId, { chatSafety, focusedWorkout }, controller, safeWrite);
+      await streamCoachReply(req, input, aiContext, userId, { chatSafety, ...promptOptions }, { controller, safeWrite, reply });
 
       sendSseTerminalEvent(res, controller, abortState);
       res.end();
@@ -514,6 +578,8 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     } finally {
       clearDeadline();
       unregister();
+      // Finished, cut off, or a proposal: whatever reached the athlete.
+      if (turn) await saveCoachReply(userId, turn, reply, focus);
     }
   });
 
@@ -542,8 +608,23 @@ router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 6
       res.setHeader("X-Next-Cursor", nextCursor.timestamp);
       res.setHeader("X-Next-Cursor-Id", nextCursor.id);
     }
-    res.json(messages);
+    res.json(await withProposals(userId, messages));
   }));
+
+/**
+ * A proposal reply carries its proposal with its current status, so the card
+ * renders at the turn that produced it, applied or not (I3).
+ */
+async function withProposals(userId: string, messages: ChatMessage[]) {
+  const ids = messages.flatMap((message) => (message.proposalId ? [message.proposalId] : []));
+  if (ids.length === 0) return messages;
+  const proposals = await storage.planProposals.getByIds(ids, userId);
+  const views = new Map(proposals.map((proposal) => [proposal.id, serializePlanProposal(proposal)]));
+  return messages.map((message) => {
+    const proposal = message.proposalId ? views.get(message.proposalId) : undefined;
+    return proposal ? { ...message, proposal } : message;
+  });
+}
 
 protectedPost(router, "/api/v1/chat/message", { limiter: rateLimiter("chatMessage", 20), middleware: [validateBody(insertChatMessageSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, ChatMessageBody>, res: Response) => {
     const userId = getUserId(req);

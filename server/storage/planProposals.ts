@@ -4,7 +4,7 @@ import {
   planAdjustmentProposals,
   type PlanProposalStatus,
 } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 
@@ -57,6 +57,20 @@ export class PlanProposalStorage {
       )
       .limit(1);
     return row;
+  }
+
+  /** The athlete's proposals among `ids`: the chat history and the coach's conversation read their outcomes. */
+  async getByIds(ids: readonly string[], userId: string): Promise<PlanAdjustmentProposal[]> {
+    if (ids.length === 0) return [];
+    return db
+      .select()
+      .from(planAdjustmentProposals)
+      .where(
+        and(
+          inArray(planAdjustmentProposals.id, [...ids]),
+          eq(planAdjustmentProposals.userId, userId),
+        ),
+      );
   }
 
   /**
