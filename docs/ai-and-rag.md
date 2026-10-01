@@ -67,7 +67,7 @@ keep working:
 | Model | Used For | Rationale |
 |-------|----------|-----------|
 | `gemini-2.5-flash-lite` | Exercise parsing | Fast and low-cost. Parsing is a structured extraction task that maps free-text to a fixed JSON schema -- it does not require deep reasoning or nuanced coaching knowledge. |
-| `gemini-3.1-pro-preview` | Coaching chat, workout suggestions, plan generation | Higher quality with `ThinkingLevel.HIGH` enabled. These tasks require deeper reasoning about training periodization, fatigue management, and personalized coaching decisions based on complex athlete context. |
+| `gemini-3.1-pro-preview` | Coaching chat, workout suggestions, plan generation | Higher quality with thinking enabled: `ThinkingLevel.HIGH` for suggestions and plan generation, at most `MEDIUM` for chat replies (see [Reasoning effort](#reasoning-effort)). These tasks require deeper reasoning about training periodization, fatigue management, and personalized coaching decisions based on complex athlete context. |
 
 ### Circuit Breaker
 
@@ -138,12 +138,27 @@ See also: [API Reference -- AI Routes](api-reference.md#ai-and-chat-routes)
 
 `chatWithCoach()` sends the full conversation history to the configured text provider and returns a complete response. Gemini remains the default; non-Gemini providers are selected through `AI_TEXT_PROVIDER`.
 
+### Reasoning effort
+
+Chat replies (`chatWithCoach`, `streamChatWithCoach`) take `resolveChatReasoningEffort()` (`server/ai/providers/config.ts`): the lower of `AI_TEXT_REASONING_EFFORT` and `medium`, or exactly `AI_CHAT_REASONING_EFFORT` when that is set. The global default, `high`, is sized for plan generation and plan adjustment, which keep it; every chat turn used to pay that thinking time before its first token. It is a cap, not a setting, so an operator who lowered the global effort is never overridden upward. Coach insights, which also goes through `chatWithCoach`, passes the global effort explicitly. The plan-edit intent classifier runs on the fast model with `reasoningEffort: "none"`, like the exercise and meal parsers.
+
+### Safety
+
+The red-flag symptom and heart-rate-medication patterns in `server/services/aiSafety.ts` also run on the conversation: `analyzeChatSafety()` scans the athlete's message and their previous turn (never the coach's replies, which can quote the escalation). On a match:
+
+- the server sends a `safetyNotice` (`{ level: "urgent" | "caution", message }`) before any text: the fixed escalation message for a red flag, or the medication disclaimer. The client shows it above the reply, the urgent one as `role="alert"`. It adds to the reply rather than replacing it, so a pattern false positive costs a banner, not the answer;
+- `buildSystemPrompt()` appends `CHAT_RED_FLAG_GUIDANCE` / `CHAT_HR_MEDICATION_GUIDANCE` after everything else, so the reply agrees with the notice;
+- a red flag skips plan editing, as red flags in workout text already do.
+
+`BASE_SYSTEM_PROMPT` also carries standing MEDICAL SAFETY rules (no diagnosis, no medication advice, stop and seek care for alarming symptoms) and a PLAN CHANGES rule: a prose reply cannot change the plan and must never claim to, and the athlete is told to ask directly to get a proposal.
+
 ### Streaming Chat
 
 `streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. It accepts an optional `AbortSignal` parameter, allowing the caller to cancel provider generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
 
 ```
 data: {"ragInfo": {"source": "rag", "chunkCount": 3}}   // First event
+data: {"safetyNotice": {"level": "urgent", ...}}         // Only on a safety match (see Safety)
 data: {"text": "Based on your recent..."}                 // Text chunks
 data: {"text": " training data, I recommend..."}
 data: {"done": true}                                      // Stream complete
@@ -178,6 +193,8 @@ On the client side, text chunks are buffered and rendered via `requestAnimationF
 - `DELETE /api/v1/chat/history` -- Clear all messages
 - History is truncated to the last 20 messages in chat requests via `chatRequestSchema`
 
+The client persists turns itself (`useChatSession`). It saves the athlete's turn only once the server accepts the request, then the reply after it, so a send the server refuses (rate limit, daily AI limit, AI coaching off, a message over `CHAT_MESSAGE_MAX_LENGTH`) leaves no unanswered turn in history. A failed reply keeps any text that arrived and carries its failure as a UI-only note, worded by `describeChatFailure()` (`client/src/lib/chatErrors.ts`), with **Try again** when a retry could help; retrying drops the failed exchange and does not save an accepted turn twice. Failed replies are left out of the history sent with later messages.
+
 ### RagInfo
 
 Every chat response includes `RagInfo` metadata:
@@ -200,7 +217,7 @@ In production, `chunks` and `fallbackReason` are stripped by `sanitizeRagInfo()`
 
 On the streaming route (`POST /api/v1/chat/stream`), a message asking for a plan change gets a structured proposal instead of a prose reply:
 
-1. **Intent gate.** A free keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", and so on) decides whether to classify at all; `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, and any error in this branch falls back to the normal chat stream.
+1. **Intent gate.** A free keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", and so on) decides whether to classify at all; `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context. It needs nothing from the training context, so the route starts it alongside `buildAIContext()` rather than after. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, a red-flag safety match skips the gate entirely (see [Safety](#safety)), and any error in this branch falls back to the normal chat stream.
 2. **Proposal.** `createPlanAdjustmentProposal()` shows the reasoning model (`PLAN_ADJUSTMENT_PROMPT`) up to 28 upcoming planned days. Changes to days outside that set are dropped, as are `focus`/`mainWorkout`/`accessory` edits to structure-block (EMOM/AMRAP) days. A red-flag safety signal answers with the safety escalation note instead; no upcoming days, or no change surviving the checks, answers in plain text; a failed generation falls back to the normal chat stream. Otherwise the proposal is stored as `pending` in `plan_adjustment_proposals` (superseding any earlier pending one) and the stream sends its summary text plus a `planProposal` event.
 3. **Apply or dismiss.** The athlete decides via `POST /api/v1/plan-proposals/:id/apply` or `/dismiss` (see [API Reference → Plan Proposal Routes](api-reference.md#plan-proposal-routes)). Apply re-checks every targeted day first: if any is no longer `planned` or has changed since the proposal was built, the whole proposal is marked `invalidated` (409 `stale`). Otherwise table-backed days whose `mainWorkout`/`accessory` text changes are re-parsed into structured rows, all changes are written in one transaction, and the proposal becomes `applied`.
 4. **Auto-apply.** With the `coachAutoApplyPlanChanges` preference on (Settings → "Auto-Apply Chat Plan Changes", default off), the proposal is applied as soon as it is created; if applying fails it keeps its status (pending, or invalidated) for the athlete to retry or dismiss.

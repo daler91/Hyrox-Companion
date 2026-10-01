@@ -97,7 +97,7 @@ above and the source.
 
 | Document                                                              | Date                                                                                      |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [AI Coach Chat Review](AI_COACH_CHAT_REVIEW_2026-10-01.md)           | 2026-10-01 — the conversational coach end to end: six defects to fix first, then improvements ranked into three waves; read from the code, not run against a live model |
+| [AI Coach Chat Review](AI_COACH_CHAT_REVIEW_2026-10-01.md)           | 2026-10-01 — the conversational coach end to end: six defects to fix first, then improvements ranked into three waves; read from the code, not run against a live model; carries a remediation section for wave 1 |
 | [Onboarding Audit](ONBOARDING_AUDIT_2026-09-23.md)                   | 2026-09-23 — first-run flow, reproduced end to end in the running app; carries a remediation section: every finding's fix, the behaviour changes, and what was left, with reasons |
 | [Refactoring Review](REFACTORING_REVIEW_2026-09-23.md)               | 2026-09-23 — what its branch changed, behaviour changes left for the owner, and deferred refactors ranked by risk |
 | [Security Audit](SECURITY_AUDIT_2026-09-19.md)                       | 2026-09-19 — carries a remediation section: what was fixed, and what was deliberately left alone with reasons |

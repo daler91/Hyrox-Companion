@@ -31,6 +31,47 @@ staleness. The gaps are in the conversation itself:
 
 ---
 
+## Remediation status (updated 2026-10-01)
+
+Wave 1 is fixed on `claude/amazing-rubin-zz0w63`. The rest of this document describes the code as
+it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
+configurations, ESLint on the whole repo (no errors; the only warning in a touched file, the length
+of `server/routes/__tests__/ai.test.ts`, predates this work), the full unit suite with coverage
+thresholds, and `pnpm build` followed by `pnpm check:bundle`. Not run: Cypress (the binary download
+is blocked in this environment), the running app, or any live model.
+
+| ID      | Fix                                                                                                                                                                                                                                                                                                                                                                         |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1(b)   | `BASE_SYSTEM_PROMPT` gains a PLAN CHANGES rule: a prose reply cannot change the plan and must never claim to, and the coach tells the athlete to ask directly ("Move my long run to Saturday") instead of offering to do it. Earlier proposal summaries in the history are named as the exception.                                                                            |
+| D2      | `analyzeChatSafety` scans the athlete's message and previous turn with the existing patterns. A match sends a `safetyNotice` event before any text (the escalation as `urgent`, the medication disclaimer as `caution`), shown above the reply; the prompt gets matching guidance last; a red flag skips plan editing. `BASE_SYSTEM_PROMPT` gains standing MEDICAL SAFETY rules. |
+| D3      | Every locally built message goes through `createLocalMessage` (`client/src/lib/chatMessage.ts`), which stamps `createdAtMs`; the field is now required, so a missing stamp is a type error.                                                                                                                                                                                  |
+| D4      | `describeChatFailure` names the daily limit, rate limit, refused requests (with the server's own message), the server's stream endings (with its reason, now carried by `SSEStreamError`) and the two known 503s. The athlete's turn is saved once the server accepts the request. A failed reply keeps any text, carries a UI-only note and offers Try again when retryable, and stays out of later history. The chat input counts characters near the limit with the shared `CharacterCount` and blocks sending over it rather than truncating. A one-time toast follows `X-AI-Budget-Warning`. |
+| D6      | Chat recent workouts carry RPE and duration; upcoming sessions carry the auto-coach's last review, modification and fatigue reduction through the shared `server/prompts/priorAiContext.ts`; max weight and distance are labelled in the athlete's units in both prompts; a Units line; "n/a" instead of a 0/0 "0%" completion rate in both prompts; the upcoming list is no longer called "next 7 days". |
+| I9      | The stream route starts the plan-edit classifier alongside `buildAIContext`.                                                                                                                                                                                                                                                                                               |
+| I10     | Chat replies use `resolveChatReasoningEffort()`: the lower of `AI_TEXT_REASONING_EFFORT` and `medium`, or the new `AI_CHAT_REASONING_EFFORT` when set. Coach insights keeps the global effort. The classifier passes `reasoningEffort: "none"`.                                                                                                                           |
+| I17     | Chat replies render GFM via `remark-gfm` 4.0.1; wide tables scroll horizontally; `rehype-sanitize` still runs after it.                                                                                                                                                                                                                                                      |
+
+**Behaviour changes worth knowing:**
+
+- Chat replies think at `medium` instead of `high` by default. Set `AI_CHAT_REASONING_EFFORT=high` to
+  restore the old behaviour.
+- A message the server refuses is no longer saved to history. Neither is one the athlete stops before
+  the server accepted it (after acceptance, a stopped partial reply is still kept, as before).
+- The chat system prompt is somewhat longer: the PLAN CHANGES and MEDICAL SAFETY paragraphs, the
+  Units line, RPE and duration per recent session, and prior-AI context per upcoming session.
+
+**Deliberately not changed:**
+
+- D1(a), routing a bare "yes please" to the classifier with the coach's offer as context, is wave 2.
+  With D1(b) the coach should no longer make that offer, but the gate still can't follow a
+  confirmation.
+- The safety notice is not saved with the message, so it is gone after a reload (the reply, which
+  the prompt tells to put medical care first, stays). Saving it needs message metadata (I3).
+- The other markdown surfaces (coach insights, race predictor, chart explanations, nutrition
+  insights) still render without GFM.
+
+---
+
 ## How a chat turn works today
 
 ```

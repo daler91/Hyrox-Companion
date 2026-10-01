@@ -168,7 +168,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useChatSession` | `useChatSession.ts` | Full chat session management. Handles message history, SSE streaming with `requestAnimationFrame` batching for smooth UI updates, RAG info tracking, and auto-scroll. |
+| `useChatSession` | `useChatSession.ts` | Full chat session management. Handles message history, SSE streaming with `requestAnimationFrame` batching for smooth UI updates, RAG info and safety-notice tracking, auto-scroll, and failed sends (turns saved once the server accepts them, failure notes worded by `describeChatFailure`, and `retryMessage`). |
 
 ### Analytics
 
