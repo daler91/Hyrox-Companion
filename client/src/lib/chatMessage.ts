@@ -1,5 +1,6 @@
-import type { ChatSafetyNotice, RagInfo } from "@shared/schema";
+import type { ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
 
+import type { PlanProposalView } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 
 /**
@@ -13,10 +14,11 @@ export interface MessageFailure {
   retry?: {
     /** The athlete's message, to send again. */
     content: string;
-    /** The bubble holding it, removed on retry so the resend doesn't duplicate it. */
+    /**
+     * Its id: the resend reuses it, so the server saves the turn once however
+     * many attempts it takes, and the old bubble is replaced rather than duplicated.
+     */
     userMessageId: string;
-    /** The server accepted that turn and the client saved it, so a resend must not save it twice. */
-    userSaved: boolean;
   };
 }
 
@@ -30,6 +32,15 @@ export interface Message {
   ragInfo?: RagInfo;
   /** Fixed safety copy the server attached to this reply (aiSafety.buildChatSafetyNotice). */
   safetyNotice?: ChatSafetyNotice;
+  /** The plan proposal this reply carried; its card shows the proposal's current status. */
+  proposal?: PlanProposalView;
+  /**
+   * What the saved row is. `summary` is the note the coach carried into a new
+   * session after a break: shown as a divider, not as something the coach said.
+   */
+  kind?: ChatMessageKind;
+  /** When it was sent, for the date separators (the welcome message has none). */
+  sentAtMs?: number;
   failure?: MessageFailure;
   /**
    * Epoch ms the Coach panel sorts by when it merges the chat hook's messages
@@ -53,5 +64,6 @@ export function createLocalMessage(
   content: string,
   id: string = crypto.randomUUID(),
 ): Message {
-  return { id, role, content, timestamp: getCurrentTimeString(), createdAtMs: Date.now() };
+  const now = Date.now();
+  return { id, role, content, timestamp: getCurrentTimeString(), createdAtMs: now, sentAtMs: now };
 }

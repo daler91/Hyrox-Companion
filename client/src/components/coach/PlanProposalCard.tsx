@@ -2,6 +2,7 @@ import type {
   EnrichedPlanAdjustmentChange,
   PlanAdjustmentChangeKind,
   PlanAdjustmentUpdatedFields,
+  PlanProposalStatus,
 } from "@shared/schema";
 import { ArrowRight, CalendarClock, Check, ChevronDown, Loader2, Wand2, XIcon } from "lucide-react";
 import { useState } from "react";
@@ -15,8 +16,9 @@ import { cn } from "@/lib/utils";
 interface PlanProposalCardProps {
   readonly proposal: PlanProposalView;
   readonly isApplying: boolean;
-  readonly onApply: (proposal: PlanProposalView) => void;
-  readonly onDismiss: (id: string) => void;
+  /** Apply and Dismiss show on a pending proposal when the surface handles them. */
+  readonly onApply?: (proposal: PlanProposalView) => void;
+  readonly onDismiss?: (id: string) => void;
 }
 
 const KIND_LABELS: Record<PlanAdjustmentChangeKind, string> = {
@@ -141,31 +143,62 @@ function ChangeRow({ change }: { readonly change: EnrichedPlanAdjustmentChange }
   );
 }
 
+/** The header for a proposal the athlete can no longer act on. */
+const CLOSED_LABELS: Record<Exclude<PlanProposalStatus, "pending" | "applied">, string> = {
+  dismissed: "Dismissed — plan not changed",
+  superseded: "Replaced by a newer proposal",
+  invalidated: "Out of date — not applied",
+};
+
+function headerLabel(status: PlanProposalStatus, count: number): string {
+  const days = `${count} ${count === 1 ? "day" : "days"}`;
+  if (status === "pending") return `Proposed plan changes (${days})`;
+  if (status === "applied") return `Applied — ${days} updated`;
+  return CLOSED_LABELS[status];
+}
+
+function StatusIcon({ status }: { readonly status: PlanProposalStatus }) {
+  if (status === "applied") return <Check className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />;
+  if (status === "pending") return <Wand2 className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />;
+  return <XIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />;
+}
+
+/**
+ * A proposal's card, at the chat turn that produced it. Pending, it offers
+ * Apply and Dismiss; applied, it lists what changed; dismissed, replaced or
+ * out of date, it says so and folds its changes away.
+ */
 export function PlanProposalCard({
   proposal,
   isApplying,
   onApply,
   onDismiss,
 }: Readonly<PlanProposalCardProps>) {
-  const isAppliedView = proposal.status === "applied";
-  const count = proposal.changes.length;
-  const dayNoun = count === 1 ? "day" : "days";
+  const isPending = proposal.status === "pending";
+  const isClosed = !isPending && proposal.status !== "applied";
+  const [showClosedChanges, setShowClosedChanges] = useState(false);
+  const showChanges = !isClosed || showClosedChanges;
 
   return (
     <Card
-      className="relative p-3 pl-4 space-y-2 border-l-4 border-l-primary bg-primary/5 dark:bg-primary/10 shadow-sm"
+      className={cn(
+        "relative p-3 pl-4 space-y-2 border-l-4 shadow-sm",
+        isClosed
+          ? "border-l-muted-foreground/40 bg-muted/30"
+          : "border-l-primary bg-primary/5 dark:bg-primary/10",
+      )}
       data-testid={`plan-proposal-card-${proposal.id}`}
+      data-status={proposal.status}
     >
       <div className="flex items-center gap-1.5">
-        {isAppliedView ? (
-          <Check className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-        ) : (
-          <Wand2 className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
-        )}
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
-          {isAppliedView
-            ? `Applied — ${count} ${dayNoun} updated`
-            : `Proposed plan changes (${count} ${dayNoun})`}
+        <StatusIcon status={proposal.status} />
+        <span
+          className={cn(
+            "text-[10px] font-semibold uppercase tracking-wide",
+            isClosed ? "text-muted-foreground" : "text-primary",
+          )}
+        >
+          {headerLabel(proposal.status, proposal.changes.length)}
         </span>
         <CalendarClock
           className="h-3 w-3 text-muted-foreground ml-auto shrink-0"
@@ -173,13 +206,31 @@ export function PlanProposalCard({
         />
       </div>
 
-      <div className="space-y-2">
-        {proposal.changes.map((change) => (
-          <ChangeRow key={change.planDayId} change={change} />
-        ))}
-      </div>
+      {isClosed && proposal.changes.length > 0 && (
+        <button
+          type="button"
+          className="flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          onClick={() => setShowClosedChanges((v) => !v)}
+          aria-expanded={showClosedChanges}
+          data-testid="button-toggle-proposal-changes"
+        >
+          <ChevronDown
+            className={cn("h-3 w-3 transition-transform", showClosedChanges && "rotate-180")}
+            aria-hidden="true"
+          />
+          {showClosedChanges ? "Hide the changes" : "Show the changes"}
+        </button>
+      )}
 
-      {!isAppliedView && (
+      {showChanges && (
+        <div className="space-y-2">
+          {proposal.changes.map((change) => (
+            <ChangeRow key={change.planDayId} change={change} />
+          ))}
+        </div>
+      )}
+
+      {isPending && onApply && onDismiss && (
         <div className="flex items-center gap-2 pt-1">
           <Button
             size="sm"

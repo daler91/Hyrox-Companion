@@ -1351,7 +1351,10 @@ Send a message to the AI coach and receive a complete response.
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** `{ message: string (1-1000 chars), history?: ChatMessage[], focusPlanDayId?: string, focusWorkoutLogId?: string }` — a longer history is accepted but only its last 20 messages are kept. The two focus ids (max 255 each) name the workout the athlete is chatting from; the server loads them, ownership-checked, into the prompt's FOCUSED WORKOUT block and ignores ids that aren't theirs
+- **Body:** `{ message: string (1-1000 chars), userMessageId?: uuid, assistantMessageId?: uuid, replaceAssistantId?: uuid, focusPlanDayId?: string, focusWorkoutLogId?: string, history?: ChatMessage[] }`.
+  - **The message ids** hand the conversation to the server, and the current client always sends them. They must come together and differ. The server reads the history from its own saved conversation (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)) and, once the reply exists, saves both turns under these ids. A retry sends the same `userMessageId`, which is saved once, and the failed reply's id as `replaceAssistantId`; the server deletes that reply first.
+  - **`history`** is read only from a request without the ids (a tab opened before the server owned the conversation), keeping its last 20 messages; nothing is saved for such a request.
+  - **The focus ids** (max 255 each) name the workout the athlete is chatting from; the server loads them, ownership-checked, into the prompt's FOCUSED WORKOUT block, ignores ids that aren't theirs, and stores them with both turns.
 - **Validation:** `chatRequestSchema`
 - **Response:** `{ response: string, ragInfo: RagInfo, safetyNotice?: ChatSafetyNotice }` — `safetyNotice` (`{ level: "urgent" | "caution", message }`) is present when the athlete's message, or their previous one, matches the red-flag symptom (`urgent`) or heart-rate-medication (`caution`) patterns in `server/services/aiSafety.ts`. It is fixed copy, shown above the reply whatever the model wrote.
 
@@ -1362,6 +1365,7 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
 - **Body:** Same as `/api/v1/chat`, plus `planEditing?: boolean` (default `true`; `false` skips plan proposals). `focusPlanDayId` is also passed to the proposal generator
+- **Saving (with the message ids):** the athlete's turn is saved before the first event; if that fails, the request ends in a 500 and is not answered. The reply is saved when the stream ends, whether finished, cut off or a proposal, with the text that was sent, its `ragInfo` (without excerpts), its `safetyNotice` and, for a proposal, `kind: "proposal"` and the `proposalId`.
 - **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. Any failure in this branch falls back to the normal chat stream. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first.
 - **Response headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - **SSE events:**
@@ -1379,10 +1383,8 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 ```json
 {
   "message": "How should I pace my sled push at competition?",
-  "history": [
-    { "role": "user", "content": "I have a Hyrox race in 6 weeks" },
-    { "role": "assistant", "content": "Great! Let me help you prepare..." }
-  ]
+  "userMessageId": "4f1c8a2e-5b7d-4e0a-9c3f-1a2b3c4d5e6f",
+  "assistantMessageId": "9b2e7d41-0c6a-4f3e-8a15-2d7c9e0b4a68"
 }
 ```
 
@@ -1414,10 +1416,14 @@ Retrieve saved chat messages for the current user, cursor-paginated.
 - **Rate limit:** `chatHistory` category, 60/min
 - **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together
 - **Response:** `ChatMessage[]` (plain array for backward compatibility). When more rows exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back on the next request.
+- **Row fields:** `id, role, content, timestamp`, plus:
+  - `kind`: `text`, `proposal` or `summary`. A `summary` row is the note the coach carried into a new session after a break, not something it said to the athlete.
+  - `proposalId`, `safetyNotice`, `ragInfo` (source, excerpt count and material titles), `focusPlanDayId` and `focusWorkoutLogId`.
+  - `proposal`: on a proposal reply whose proposal still exists, the proposal (same shape as `GET /api/v1/plan-proposals/pending`) with its **current** status.
 
 ### POST /api/v1/chat/message
 
-Save a chat message to history.
+Save a chat message to history: a turn the chat routes don't save themselves (the Coach panel's suggestions request and apply confirmations), or either turn from a client that predates the message ids.
 
 - **Auth:** Required
 - **Rate limit:** `chatMessage` category, 20/min
@@ -1569,6 +1575,15 @@ The athlete's currently pending proposal, if any.
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
 - **Response:** `{ proposal: { id, planId, status, summaryMessage, changes, createdAt } | null }`
+
+### GET /api/v1/plan-proposals/:id
+
+One of the athlete's proposals with its current status, for its card at the chat turn that produced it (it may have been applied, dismissed or replaced since).
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 60/min
+- **Response:** `{ proposal: { id, planId, status, summaryMessage, changes, createdAt } }`
+- **Errors:** `404` (no such proposal, or not the athlete's)
 
 ### POST /api/v1/plan-proposals/:id/apply
 

@@ -24,6 +24,10 @@ export const planProposals = {
   getPending: () =>
     typedRequest<{ proposal: PlanProposalView | null }>("GET", "/api/v1/plan-proposals/pending"),
 
+  /** One proposal with its current status, for a card at the chat turn that produced it. */
+  get: (id: string) =>
+    typedRequest<{ proposal: PlanProposalView }>("GET", `/api/v1/plan-proposals/${encodeURIComponent(id)}`),
+
   // The apply can trigger one more AI parse for table-backed days, so give it
   // the same generous budget as the suggestions apply flow.
   apply: (id: string) =>

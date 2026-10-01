@@ -1,23 +1,25 @@
-import { api, type ChatFocus, type PlanProposalView, QUERY_KEYS, type RagInfo } from "@/lib/api";
+import { api, type ChatFocus, type ChatTurnIds, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { queryClient } from "@/lib/queryClient";
 import { consumeSSEStream } from "@/lib/sseStream";
 
 import {
   createMessageUpdater,
-  type HistoryTurn,
   ignoreResult,
   isChatSafetyNotice,
+  isPlanProposalView,
   type SetMessages,
 } from "./chatSessionModel";
 
-/** One chat request: the message, the history the model gets, and the bubble its reply fills. */
+/**
+ * One chat request: the message, the workout in view, and the ids the server
+ * saves both turns under. The reply fills the bubble with `ids.assistantMessageId`.
+ */
 export interface ChatReplyRequest {
   content: string;
-  history: HistoryTurn[];
   /** The workout in view in the workout-detail chat. */
   focus?: ChatFocus;
-  assistantMessageId: string;
+  ids: ChatTurnIds;
 }
 
 export interface StreamChatReplyOptions extends ChatReplyRequest {
@@ -31,8 +33,8 @@ export interface StreamChatReplyOptions extends ChatReplyRequest {
   onReviewingPlan: () => void;
   /**
    * The text so far, on every flush. The caller keeps it so a Stop or a
-   * dropped connection — which reject before this resolves — can still save
-   * the partial reply.
+   * dropped connection — which reject before this resolves — still leave the
+   * partial reply in its bubble.
    */
   onText: (content: string) => void;
 }
@@ -45,11 +47,22 @@ export function supportsResponseStreaming(): boolean {
   return typeof ReadableStream !== "undefined";
 }
 
+/**
+ * The server saved this send's turns. Any chat surface mounted from now on
+ * loads them; the ones already open keep their own buffer.
+ */
+export function refreshSavedConversation(): void {
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.chatHistory }).catch(ignoreResult);
+}
+
 /** Refresh proposal/plan queries when a stream carried a planProposal frame. */
 function handleStreamPlanProposal(extras: Record<string, unknown>): void {
-  const proposal = extras.planProposal as PlanProposalView | undefined;
-  if (!proposal) return;
+  const proposal = extras.planProposal;
+  if (!isPlanProposalView(proposal)) return;
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposalPending }).catch(ignoreResult);
+  // A new proposal replaces the pending one: its card, wherever it is in the
+  // chat, re-reads its status.
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposalPrefix }).catch(ignoreResult);
   if (proposal.status === "applied") {
     // Auto-apply mode already mutated the plan during the stream.
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(ignoreResult);
@@ -63,8 +76,8 @@ function handleStreamPlanProposal(extras: Record<string, unknown>): void {
  * a dropped connection, a server error event, or a Stop.
  */
 export async function streamChatReply(options: StreamChatReplyOptions): Promise<string> {
-  const { content, history, focus, assistantMessageId, signal, setMessages } = options;
-  const response = await api.chat.sendStream({ message: content, history, ...focus }, { signal });
+  const { content, focus, ids, signal, setMessages } = options;
+  const response = await api.chat.sendStream({ message: content, ...focus, ...ids }, { signal });
   options.onAccepted(response);
 
   const reader = response.body?.getReader();
@@ -72,7 +85,7 @@ export async function streamChatReply(options: StreamChatReplyOptions): Promise<
     throw new Error("No response body");
   }
 
-  const updateMessage = createMessageUpdater(assistantMessageId, setMessages);
+  const updateMessage = createMessageUpdater(ids.assistantMessageId, setMessages);
   const result = await consumeSSEStream<RagInfo>(reader, {
     metaKey: "ragInfo",
     extraKeys: ["planProposal", "planProposalPending", "safetyNotice"],
@@ -91,10 +104,10 @@ export async function streamChatReply(options: StreamChatReplyOptions): Promise<
 }
 
 /** The non-streaming fallback (S9): one request, the whole reply as a message. */
-export async function fetchChatReply({ content, history, focus, assistantMessageId }: ChatReplyRequest): Promise<Message> {
-  const data = await api.chat.send({ message: content, history, ...focus });
+export async function fetchChatReply({ content, focus, ids }: ChatReplyRequest): Promise<Message> {
+  const data = await api.chat.send({ message: content, ...focus, ...ids });
   return {
-    ...createLocalMessage("assistant", data.response, assistantMessageId),
+    ...createLocalMessage("assistant", data.response, ids.assistantMessageId),
     ragInfo: data.ragInfo,
     ...(isChatSafetyNotice(data.safetyNotice) ? { safetyNotice: data.safetyNotice } : {}),
   };

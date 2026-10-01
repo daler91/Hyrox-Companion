@@ -3,8 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 
-import { buildHistory, createTurnSaver, handleSendFailure, ignoreResult } from "./chat/chatSessionModel";
-import { fetchChatReply, streamChatReply, supportsResponseStreaming } from "./chat/chatStream";
+import { handleSendFailure, ignoreResult } from "./chat/chatSessionModel";
+import {
+  fetchChatReply,
+  refreshSavedConversation,
+  streamChatReply,
+  supportsResponseStreaming,
+} from "./chat/chatStream";
 import { useBudgetWarning } from "./chat/useBudgetWarning";
 import { useChatAutoScroll } from "./chat/useChatAutoScroll";
 import { useChatHistory } from "./chat/useChatHistory";
@@ -23,17 +28,21 @@ interface UseChatSessionOptions {
 }
 
 interface SendMessageOptions {
-  /** The server accepted, and the client saved, this turn on an earlier attempt. */
-  userAlreadySaved?: boolean;
+  /** A retry: resend under the failed attempt's message id, so the server saves the turn once. */
+  userMessageId?: string;
+  /** A retry: the failed reply the server drops, if it saved any of it. */
+  replaceAssistantId?: string;
 }
 
 const DEFAULT_WELCOME = "hey. i'm your ai training coach. ask me about pacing, sessions, or anything you're training for — running, functional fitness, hyrox, the lot.";
 
 /**
- * One coach chat surface: the message buffer and sending into it. Loading and
- * saving the conversation (useChatHistory), keeping the viewport pinned
- * (useChatAutoScroll), the SSE request itself (chat/chatStream.ts) and the
- * pure history and failure rules (chat/chatSessionModel.ts) live beside it.
+ * One coach chat surface: the message buffer and sending into it. The server
+ * owns the conversation — it saves both turns under the ids each send carries
+ * and reads the history itself. Loading the saved conversation
+ * (useChatHistory), keeping the viewport pinned (useChatAutoScroll), the SSE
+ * request itself (chat/chatStream.ts) and the pure message and failure rules
+ * (chat/chatSessionModel.ts) live beside it.
  */
 export function useChatSession(options: UseChatSessionOptions = {}) {
   const {
@@ -72,7 +81,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   // state (W14).
   const streamGenerationRef = useRef(0);
 
-  const { historyLoading, saveTurn, clearHistory, isClearingHistory } = useChatHistory({
+  const { historyLoading, clearHistory, isClearingHistory } = useChatHistory({
     welcomeMessage: welcomeMessageObj,
     setMessages,
   });
@@ -96,7 +105,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     // Claim this send's stream generation; later flushes check it (W14).
     const generationId = ++streamGenerationRef.current;
 
-    const userMessage = createLocalMessage("user", content);
+    const userMessage = createLocalMessage("user", content, sendOptions.userMessageId);
     setMessages((prev) => [...prev, userMessage]);
     pinAutoScroll();
     setIsLoading(true);
@@ -105,21 +114,22 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     setStreamError(null);
 
     const assistantMessageId = crypto.randomUUID();
-    // The athlete's turn is saved once the server accepts the request, not
-    // before: a send it refuses (rate limit, daily cap, AI coaching off) must
-    // not leave an unanswered turn in history. Each message's client id is its
-    // idempotency key, so a retried save can't persist a turn twice (S7).
-    const turns = createTurnSaver(saveTurn, userMessage, assistantMessageId, sendOptions.userAlreadySaved ?? false);
     // The latest streamed text, kept on every flush so the catch below can
-    // persist a partial reply after a Stop or a dropped connection.
+    // leave a partial reply in its bubble after a Stop or a dropped connection.
     let fullResponse = "";
 
     try {
+      // The server saves the athlete's turn once it accepts the request — a
+      // send it refuses leaves nothing behind — and the reply when it ends,
+      // even if this tab has gone by then.
       const request = {
         content,
-        history: buildHistory(messagesRef.current),
         focus: { focusPlanDayId, focusWorkoutLogId },
-        assistantMessageId,
+        ids: {
+          userMessageId: userMessage.id,
+          assistantMessageId,
+          replaceAssistantId: sendOptions.replaceAssistantId,
+        },
       };
 
       if (useStreaming && supportsResponseStreaming()) {
@@ -134,21 +144,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           signal: controller.signal,
           setMessages,
           isCurrent: () => streamGenerationRef.current === generationId,
-          onAccepted: (response) => {
-            turns.saveUser().catch(ignoreResult);
-            warnIfNearBudget(response);
-          },
+          onAccepted: warnIfNearBudget,
           onReviewingPlan: () => setIsReviewingPlan(true),
           onText: (text) => {
             fullResponse = text;
           },
         });
-
-        if (fullResponse) turns.saveAssistant(fullResponse);
       } else {
         const assistantMessage = await fetchChatReply(request);
         setMessages((prev) => [...prev, assistantMessage]);
-        turns.saveAssistant(assistantMessage.content);
       }
     } catch (err) {
       handleSendFailure({
@@ -156,35 +160,37 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         fullResponse,
         assistantMessageId,
         userMessage,
-        turns,
         setMessages,
         setStreamError,
       });
     } finally {
+      refreshSavedConversation();
       streamControllerRef.current = null;
       setIsStreaming(false);
       setIsLoading(false);
       setIsReviewingPlan(false);
       isSubmittingRef.current = false;
     }
-  }, [useStreaming, saveTurn, warnIfNearBudget, focusPlanDayId, focusWorkoutLogId, pinAutoScroll]);
+  }, [useStreaming, warnIfNearBudget, focusPlanDayId, focusWorkoutLogId, pinAutoScroll]);
 
   /**
-   * Send a failed message again. The failed exchange is dropped first: the
-   * resend adds its own bubble, and the history it sends must not carry the
-   * attempt that failed. A turn the server already accepted isn't saved twice.
+   * Send a failed message again. The failed exchange is dropped first, since
+   * the resend adds its own bubbles. It goes under the same message id, so a
+   * turn the server already saved isn't saved twice, and names the failed
+   * reply, which the server replaces.
    */
   const retryMessage = useCallback((failedMessageId: string) => {
     if (isSubmittingRef.current) return;
     const retry = messagesRef.current.find((m) => m.id === failedMessageId)?.failure?.retry;
     if (!retry) return;
     const isFailedExchange = (m: Message) => m.id === failedMessageId || m.id === retry.userMessageId;
-    // sendMessage reads the history from the ref synchronously, before the
-    // state update below has rendered.
     messagesRef.current = messagesRef.current.filter((m) => !isFailedExchange(m));
     setMessages((prev) => prev.filter((m) => !isFailedExchange(m)));
     // sendMessage reports its own failures on the reply it adds.
-    sendMessage(retry.content, { userAlreadySaved: retry.userSaved }).catch(ignoreResult);
+    sendMessage(retry.content, {
+      userMessageId: retry.userMessageId,
+      replaceAssistantId: failedMessageId,
+    }).catch(ignoreResult);
   }, [sendMessage]);
 
   const cancelStream = useCallback(() => {

@@ -1,11 +1,14 @@
-import { forwardRef, type UIEventHandler } from "react";
+import { forwardRef, Fragment, type UIEventHandler, useMemo } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
+import { ChatDaySeparator, SessionSummaryNote } from "@/components/coach/ChatTranscriptMarkers";
+import { InlinePlanProposal } from "@/components/coach/InlinePlanProposal";
 import { PlanProposalCard } from "@/components/coach/PlanProposalCard";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Message } from "@/hooks/useChatSession";
 import type { PlanProposalView, RagInfo, Suggestion } from "@/lib/api";
+import { buildTranscript } from "@/lib/chatTranscript";
 import { cn } from "@/lib/utils";
 
 interface CoachPanelChatAreaProps {
@@ -21,7 +24,11 @@ interface CoachPanelChatAreaProps {
   readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
-  /** Pending conversational plan-adjustment proposal, when one exists. */
+  /**
+   * Pending conversational plan-adjustment proposal, when one exists. Its
+   * card sits at the turn that carried it; it trails the chat only when that
+   * turn isn't in view (an older page, or a reply saved before it carried one).
+   */
   readonly planProposal?: PlanProposalView | null;
   readonly isApplyingProposal?: boolean;
   readonly onApplyProposal?: (proposal: PlanProposalView) => void;
@@ -52,6 +59,10 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
     },
     ref
   ) => {
+    const transcript = useMemo(() => buildTranscript(messages), [messages]);
+    const pendingCardInChat = planProposal
+      ? messages.some((message) => message.proposal?.id === planProposal.id)
+      : false;
     return (
       <>
         {/* Dedicated assertive region for stream interruptions (W8). Kept
@@ -66,25 +77,41 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
           viewportProps={{ onScroll: onViewportScroll }}
         >
         <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              role={message.role}
-              content={message.content}
-              timestamp={message.timestamp}
-              ragInfo={message.ragInfo}
-              safetyNotice={message.safetyNotice}
-              failure={message.failure}
-              // Only a failed reply gets a handler (a fresh closure each
-              // render), so every other message keeps its memoized render
-              // through a stream. Hidden while another send is in flight.
-              onRetry={
-                message.failure?.retry && onRetryMessage && !isProcessing
-                  ? () => onRetryMessage(message.id)
-                  : undefined
-              }
-            />
-          ))}
+          {transcript.map((item) => {
+            if (item.type === "day") return <ChatDaySeparator key={item.key} label={item.label} />;
+            if (item.type === "summary") {
+              return <SessionSummaryNote key={item.message.id} summary={item.message.content} />;
+            }
+            const { message } = item;
+            return (
+              <Fragment key={message.id}>
+                <ChatMessage
+                  role={message.role}
+                  content={message.content}
+                  timestamp={message.timestamp}
+                  ragInfo={message.ragInfo}
+                  safetyNotice={message.safetyNotice}
+                  failure={message.failure}
+                  // Only a failed reply gets a handler (a fresh closure each
+                  // render), so every other message keeps its memoized render
+                  // through a stream. Hidden while another send is in flight.
+                  onRetry={
+                    message.failure?.retry && onRetryMessage && !isProcessing
+                      ? () => onRetryMessage(message.id)
+                      : undefined
+                  }
+                />
+                {message.proposal && (
+                  <InlinePlanProposal
+                    snapshot={message.proposal}
+                    isApplying={isApplyingProposal}
+                    onApply={onApplyProposal}
+                    onDismiss={onDismissProposal}
+                  />
+                )}
+              </Fragment>
+            );
+          })}
           <SuggestionsList
             suggestions={pendingSuggestions}
             applyingId={applyingId}
@@ -92,7 +119,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
             onApply={onApplySuggestion}
             onDismiss={onDismissSuggestion}
           />
-          {planProposal && onApplyProposal && onDismissProposal && (
+          {planProposal && !pendingCardInChat && onApplyProposal && onDismissProposal && (
             <PlanProposalCard
               proposal={planProposal}
               isApplying={isApplyingProposal}

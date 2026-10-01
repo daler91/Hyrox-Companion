@@ -136,7 +136,7 @@ See also: [API Reference -- AI Routes](api-reference.md#ai-and-chat-routes)
 
 ### Regular Chat
 
-`chatWithCoach()` sends the full conversation history to the configured text provider and returns a complete response. Gemini remains the default; non-Gemini providers are selected through `AI_TEXT_PROVIDER`.
+`chatWithCoach()` sends the conversation (see [Chat History](#chat-history) for what it holds) to the configured text provider and returns a complete response. Gemini remains the default; non-Gemini providers are selected through `AI_TEXT_PROVIDER`.
 
 ### Reasoning effort
 
@@ -198,12 +198,33 @@ On the client side, text chunks are buffered and rendered via `requestAnimationF
 
 ### Chat History
 
-- `GET /api/v1/chat/history` -- Retrieve saved messages
-- `POST /api/v1/chat/message` -- Save a message (max 50,000 chars)
-- `DELETE /api/v1/chat/history` -- Clear all messages
-- History is truncated to the last 20 messages in chat requests via `chatRequestSchema`
+**Files:** `server/services/chatConversation.ts`, `server/routes/ai.ts`, `client/src/hooks/useChatSession.ts`
 
-The client persists turns itself (`useChatSession`). It saves the athlete's turn only once the server accepts the request, then the reply after it, so a send the server refuses (rate limit, daily AI limit, AI coaching off, a message over `CHAT_MESSAGE_MAX_LENGTH`) leaves no unanswered turn in history. A failed reply keeps any text that arrived and carries its failure as a UI-only note, worded by `describeChatFailure()` (`client/src/lib/chatErrors.ts`), with **Try again** when a retry could help; retrying drops the failed exchange and does not save an accepted turn twice. Failed replies are left out of the history sent with later messages.
+The server owns the conversation. Each send carries two client-made UUIDs, `userMessageId` and `assistantMessageId`, and the chat routes save both turns under them:
+
+- **The athlete's turn** is saved once the server accepts the request: on the stream route just before the first byte, so a send it refuses (rate limit, daily AI limit, AI coaching off, a message over `CHAT_MESSAGE_MAX_LENGTH`) leaves nothing behind. If it can't be saved, the turn isn't answered.
+- **The coach's reply** is saved when the stream ends: finished, cut off by a Stop, a dropped connection or an error, or answered with a proposal. What is saved is the text that was sent. A reply that finishes after the tab has closed is still saved, which the client-saved history never managed.
+- **A retry** resends under the same `userMessageId`, which is saved once (`saveChatMessageOnce` is an insert that does nothing on a conflict), and names the failed reply as `replaceAssistantId`. The server deletes it, if any of it was saved, before reading the history.
+- The non-streaming route saves both turns only once the reply exists.
+
+A request without the ids (a tab opened before the deploy) keeps the old path: its own `history`, which the server sanitises, and saves through `POST /api/v1/chat/message`. The Coach panel still saves its own messages that way (a suggestions request, an apply confirmation), and the coach now reads them too.
+
+**What the coach reads.** `loadConversation()` reads the last 60 rows and keeps the current session: the turns since the last break of 12 hours or more (`SESSION_GAP_MS`), at most 20 turns and 30,000 characters. Ahead of an athlete turn, and ahead of the new message, it adds app notes in brackets, outside the quoted athlete text:
+
+- the time since the previous turn, when it was an hour or more ("5 hours later");
+- what became of each proposal in the session, placed before the first athlete turn after it was decided: applied, dismissed, replaced by a newer proposal, out of date, or still waiting. Dismissing used to be silent, and apply confirmations never reached the history, so the coach could not tell whether its proposal was taken. `BASE_SYSTEM_PROMPT` says that only an applied proposal changed the plan.
+
+**A new session.** The first message after a break starts a new session. The coach gets a short handover note instead of the earlier turns: a fast-model call (`CHAT_SESSION_SUMMARY_PROMPT`, no thinking, feature `chat_summary`) over the previous session and the note that session started with, so older context carries forward. The note is saved as a `kind: "summary"` row, which every later message in the session reuses, and goes into the system prompt as an EARLIER CONVERSATION block, marked as data. The call runs alongside the context build rather than in front of it. If it fails, the note falls back to the athlete's last three messages plus the earlier note.
+
+**What each row keeps** (migration `0111_chat_message_metadata`): `kind` (`text`, `proposal` or `summary`), the `proposal_id` a proposal reply carried (set to null if the proposal is deleted), the `safety_notice` shown above the reply, its `rag_info` (source, excerpt count and material titles, never the excerpts) and the workout the athlete was chatting from (`focus_plan_day_id`, `focus_workout_log_id`). A reload therefore shows the safety notice and the "From your coaching notes" chip again.
+
+**The client** (`useChatSession`) sends the ids and no history, saves nothing itself, and refreshes the saved-history query after each send so the next surface that mounts sees the turns. `GET /api/v1/chat/history` returns each proposal reply with its proposal and current status, so its card renders at that turn: Apply and Dismiss while pending, a list of the changes once applied, and folded away once dismissed, replaced or out of date (`useLiveProposal` re-reads one after an apply, a dismiss or a newer proposal). The pending card trails the chat only when its turn isn't loaded. Day separators ("Today", "Yesterday", "Tue, 29 Sep") mark where the date changes, since bubbles show only the time, and a summary row renders as a "New conversation" divider whose note the athlete can open.
+
+A failed reply keeps any text that arrived and carries its failure as a UI-only note, worded by `describeChatFailure()` (`client/src/lib/chatErrors.ts`), with **Try again** when a retry could help.
+
+- `GET /api/v1/chat/history`: saved messages, cursor-paginated
+- `POST /api/v1/chat/message`: save a message the chat routes don't save themselves (max 50,000 chars)
+- `DELETE /api/v1/chat/history`: clear all messages
 
 ### RagInfo
 
