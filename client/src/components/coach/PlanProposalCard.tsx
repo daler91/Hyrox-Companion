@@ -5,7 +5,7 @@ import type {
   PlanProposalStatus,
 } from "@shared/schema";
 import { ArrowRight, CalendarClock, Check, ChevronDown, Loader2, Wand2, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -163,6 +163,107 @@ function StatusIcon({ status }: { readonly status: PlanProposalStatus }) {
   return <XIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />;
 }
 
+function ProposalHeader({ status, count }: { readonly status: PlanProposalStatus; readonly count: number }) {
+  const closed = status !== "pending" && status !== "applied";
+  return (
+    <div className="flex items-center gap-1.5">
+      <StatusIcon status={status} />
+      <span
+        className={cn(
+          "text-[10px] font-semibold uppercase tracking-wide",
+          closed ? "text-muted-foreground" : "text-primary",
+        )}
+      >
+        {headerLabel(status, count)}
+      </span>
+      <CalendarClock
+        className="h-3 w-3 text-muted-foreground ml-auto shrink-0"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
+interface ProposalChangesProps {
+  readonly changes: EnrichedPlanAdjustmentChange[];
+  /** The proposal changed nothing, so its changes start folded away. */
+  readonly folded: boolean;
+}
+
+function ProposalChanges({ changes, folded }: ProposalChangesProps) {
+  const [expanded, setExpanded] = useState(false);
+  const toggle = useCallback(() => setExpanded((open) => !open), []);
+  return (
+    <>
+      {folded && changes.length > 0 && (
+        <button
+          type="button"
+          className="flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          onClick={toggle}
+          aria-expanded={expanded}
+          data-testid="button-toggle-proposal-changes"
+        >
+          <ChevronDown
+            className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")}
+            aria-hidden="true"
+          />
+          {expanded ? "Hide the changes" : "Show the changes"}
+        </button>
+      )}
+      {(!folded || expanded) && (
+        <div className="space-y-2">
+          {changes.map((change) => (
+            <ChangeRow key={change.planDayId} change={change} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+interface ProposalActionsProps {
+  readonly proposal: PlanProposalView;
+  readonly isApplying: boolean;
+  readonly onApply: (proposal: PlanProposalView) => void;
+  readonly onDismiss: (id: string) => void;
+}
+
+function ProposalActions({ proposal, isApplying, onApply, onDismiss }: ProposalActionsProps) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Button
+        size="sm"
+        className="min-h-11 md:min-h-8"
+        onClick={() => onApply(proposal)}
+        disabled={isApplying}
+        aria-busy={isApplying}
+        data-testid="button-apply-plan-proposal"
+      >
+        {isApplying ? (
+          <Loader2 className="h-3 w-3 animate-spin mr-1" aria-hidden="true" />
+        ) : (
+          <Check className="h-3 w-3 mr-1" aria-hidden="true" />
+        )}
+        {isApplying ? "Applying…" : `Apply all changes`}
+      </Button>
+      <span role="status" aria-live="polite" className="sr-only">
+        {isApplying ? "Applying plan changes" : ""}
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="min-h-11 md:min-h-8"
+        onClick={() => onDismiss(proposal.id)}
+        disabled={isApplying}
+        data-testid="button-dismiss-plan-proposal"
+      >
+        <XIcon className="h-3 w-3 mr-1" aria-hidden="true" />
+        Dismiss
+      </Button>
+    </div>
+  );
+}
+
 /**
  * A proposal's card, at the chat turn that produced it. Pending, it offers
  * Apply and Dismiss; applied, it lists what changed; dismissed, replaced or
@@ -176,8 +277,6 @@ export function PlanProposalCard({
 }: Readonly<PlanProposalCardProps>) {
   const isPending = proposal.status === "pending";
   const isClosed = !isPending && proposal.status !== "applied";
-  const [showClosedChanges, setShowClosedChanges] = useState(false);
-  const showChanges = !isClosed || showClosedChanges;
 
   return (
     <Card
@@ -190,78 +289,10 @@ export function PlanProposalCard({
       data-testid={`plan-proposal-card-${proposal.id}`}
       data-status={proposal.status}
     >
-      <div className="flex items-center gap-1.5">
-        <StatusIcon status={proposal.status} />
-        <span
-          className={cn(
-            "text-[10px] font-semibold uppercase tracking-wide",
-            isClosed ? "text-muted-foreground" : "text-primary",
-          )}
-        >
-          {headerLabel(proposal.status, proposal.changes.length)}
-        </span>
-        <CalendarClock
-          className="h-3 w-3 text-muted-foreground ml-auto shrink-0"
-          aria-hidden="true"
-        />
-      </div>
-
-      {isClosed && proposal.changes.length > 0 && (
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-          onClick={() => setShowClosedChanges((v) => !v)}
-          aria-expanded={showClosedChanges}
-          data-testid="button-toggle-proposal-changes"
-        >
-          <ChevronDown
-            className={cn("h-3 w-3 transition-transform", showClosedChanges && "rotate-180")}
-            aria-hidden="true"
-          />
-          {showClosedChanges ? "Hide the changes" : "Show the changes"}
-        </button>
-      )}
-
-      {showChanges && (
-        <div className="space-y-2">
-          {proposal.changes.map((change) => (
-            <ChangeRow key={change.planDayId} change={change} />
-          ))}
-        </div>
-      )}
-
+      <ProposalHeader status={proposal.status} count={proposal.changes.length} />
+      <ProposalChanges changes={proposal.changes} folded={isClosed} />
       {isPending && onApply && onDismiss && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            size="sm"
-            className="min-h-11 md:min-h-8"
-            onClick={() => onApply(proposal)}
-            disabled={isApplying}
-            aria-busy={isApplying}
-            data-testid="button-apply-plan-proposal"
-          >
-            {isApplying ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" aria-hidden="true" />
-            ) : (
-              <Check className="h-3 w-3 mr-1" aria-hidden="true" />
-            )}
-            {isApplying ? "Applying…" : `Apply all changes`}
-          </Button>
-          <span role="status" aria-live="polite" className="sr-only">
-            {isApplying ? "Applying plan changes" : ""}
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="min-h-11 md:min-h-8"
-            onClick={() => onDismiss(proposal.id)}
-            disabled={isApplying}
-            data-testid="button-dismiss-plan-proposal"
-          >
-            <XIcon className="h-3 w-3 mr-1" aria-hidden="true" />
-            Dismiss
-          </Button>
-        </div>
+        <ProposalActions proposal={proposal} isApplying={isApplying} onApply={onApply} onDismiss={onDismiss} />
       )}
     </Card>
   );
