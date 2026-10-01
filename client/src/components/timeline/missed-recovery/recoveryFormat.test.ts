@@ -7,6 +7,7 @@ import {
   formatLoadChange,
   formatMinutes,
   formatWeekLabel,
+  priorityLabel,
   weekContains,
 } from "./recoveryFormat";
 
@@ -55,5 +56,20 @@ describe("recovery sheet wording", () => {
     expect(describeKept(1, 50, 50)).toBe("Keeps all of it (50 min)");
     expect(describeKept(0.6, 30, 50)).toBe("Keeps about 60% (30 min of 50 min)");
     expect(describeKept(0, 0, 50)).toBe("Drops it (50 min)");
+  });
+
+  it("names each session priority", () => {
+    expect(priorityLabel("key")).toBe("Key session");
+    expect(priorityLabel("supporting")).toBe("Supporting session");
+    expect(priorityLabel("optional")).toBe("Optional session");
+  });
+
+  it("counts several sessions on a day instead of naming one", () => {
+    const session = { focus: "Easy run", priority: "optional", durationMin: 40, status: "planned" } as const;
+    expect(describeDay([session, session])).toBe("2 sessions");
+  });
+
+  it("reads a load change after a week with no prior load as unchanged when nothing is added", () => {
+    expect(formatLoadChange({ loadBefore: 0, loadAfter: 0 })).toBe("unchanged");
   });
 });

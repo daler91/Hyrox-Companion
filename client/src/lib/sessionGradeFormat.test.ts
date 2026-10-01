@@ -46,4 +46,31 @@ describe("sessionGradeFormat", () => {
     expect(formatGradePace(292, "miles")).toBe("7:50/mi");
     expect(formatGradePace(null, "km")).toBeNull();
   });
+
+  it("gives every verdict a short chip label", () => {
+    expect(getGradeLabel("easy", "crept_up")).toBe("Crept up");
+    expect(getGradeLabel("easy", "too_hard")).toBe("Too hard");
+    expect(getGradeLabel("threshold", "under")).toBe("Under threshold");
+    expect(getGradeLabel("threshold", "inconclusive")).toBe("Can't tell");
+    expect(getGradeLabel("easy", "ungradeable")).toBe("Not graded");
+  });
+
+  it("gives no pace for a missing or non-positive value", () => {
+    expect(formatGradePace(0, "km")).toBeNull();
+    expect(formatGradePace(-5, "miles")).toBeNull();
+  });
+
+  it("pads the seconds of a pace", () => {
+    expect(formatGradePace(305, "km")).toBe("5:05/km");
+  });
+
+  it("has no basis line without a data source", () => {
+    expect(describeGradeBasis({ dataSource: null, confidence: "high", streamStatus: "ok" })).toBeNull();
+  });
+
+  it("labels medium confidence", () => {
+    expect(describeGradeBasis({ dataSource: "stream", confidence: "medium", streamStatus: "ok" })).toBe(
+      "From the heart-rate and pace stream · Medium confidence",
+    );
+  });
 });
