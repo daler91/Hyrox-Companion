@@ -73,6 +73,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
               content={message.content}
               timestamp={message.timestamp}
               ragInfo={message.ragInfo}
+              safetyNotice={message.safetyNotice}
               failure={message.failure}
               // Only a failed reply gets a handler (a fresh closure each
               // render), so every other message keeps its memoized render

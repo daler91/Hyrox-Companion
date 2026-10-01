@@ -119,4 +119,34 @@ describe('ChatMessage', () => {
       expect(onRetry).toHaveBeenCalledTimes(1);
     });
   });
+  describe('safety notices', () => {
+    it('announces the urgent escalation as an alert, above the reply', () => {
+      render(
+        <ChatMessage
+          role="assistant"
+          content="Please get checked before training."
+          safetyNotice={{ level: 'urgent', message: 'Pause hard training and seek prompt medical care.' }}
+        />,
+      );
+      const banner = screen.getByRole('alert');
+      expect(banner).toHaveTextContent('Pause hard training and seek prompt medical care.');
+      expect(banner).toHaveAttribute('data-testid', 'safety-notice-urgent');
+      expect(
+        banner.compareDocumentPosition(screen.getByText('Please get checked before training.')) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('shows the medication disclaimer as a note, not an alert', () => {
+      render(
+        <ChatMessage
+          role="assistant"
+          content="Use RPE."
+          safetyNotice={{ level: 'caution', message: 'Heart-rate zones can be unreliable.' }}
+        />,
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('note')).toHaveTextContent('Heart-rate zones can be unreliable.');
+    });
+  });
 });

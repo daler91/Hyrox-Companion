@@ -367,4 +367,46 @@ describe('useChatSession', () => {
 
     expect(streamRequest(1).history).toEqual([{ role: 'user', content: 'First try' }]);
   });
+  it("puts the server's safety notice on the reply it arrived with", async () => {
+    const notice = { level: 'urgent', message: 'Pause hard training and seek prompt medical care.' };
+    mockStreamEndpoint(async () =>
+      new Response(sseStream({ ragInfo: { source: 'none', chunkCount: 0 } }, { safetyNotice: notice }, { text: 'Get checked first.' }, { done: true })),
+    );
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('I had chest pain on my run');
+    });
+
+    expect(result.current.messages[2].content).toBe('Get checked first.');
+    expect(result.current.messages[2].safetyNotice).toEqual(notice);
+  });
+
+  it('ignores a malformed safety notice', async () => {
+    mockStreamEndpoint(async () =>
+      new Response(sseStream({ safetyNotice: { level: 'panic', message: 'x' } }, { text: 'Hi.' }, { done: true })),
+    );
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Hello');
+    });
+
+    expect(result.current.messages[2].safetyNotice).toBeUndefined();
+  });
+
+  it('carries the safety notice on the non-streaming path too', async () => {
+    const notice = { level: 'caution', message: 'Heart-rate zones can be unreliable.' };
+    vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
+      new Response(JSON.stringify(url === '/api/v1/chat' ? { response: 'Use RPE.', safetyNotice: notice } : {})),
+    );
+    const { result } = renderHook(() => useChatSession({ useStreaming: false }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('On bisoprolol, which zones?');
+    });
+
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+    expect(result.current.messages[2].safetyNotice).toEqual(notice);
+  });
 });

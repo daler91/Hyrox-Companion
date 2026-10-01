@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { TrainingContext, WorkoutSuggestion } from "../gemini";
-import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
+import {
+  analyzeChatSafety,
+  analyzeSafetySignals,
+  applySafetyLayerToSuggestions,
+  buildChatSafetyNotice,
+  buildSafetyReviewNote,
+} from "./aiSafety";
 
 const baseTrainingContext: TrainingContext = {
   totalWorkouts: 0,
@@ -111,5 +117,63 @@ describe("aiSafety", () => {
       [],
     );
     expect(dated.redFlagDetected).toBe(true);
+  });
+});
+
+describe("analyzeChatSafety", () => {
+  it("flags red-flag symptoms in the athlete's chat message", () => {
+    const signals = analyzeChatSafety("I had chest pain on my last two runs, should I still do intervals?", []);
+    expect(signals).toEqual({ redFlagDetected: true, hrMedicationDetected: false });
+  });
+
+  it("keeps the flag for the follow-up to that message", () => {
+    const signals = analyzeChatSafety("ok, so what should I do tomorrow?", [
+      { role: "user", content: "I nearly fainted at the end of my tempo run" },
+      { role: "assistant", content: "That needs checking before anything else." },
+    ]);
+    expect(signals.redFlagDetected).toBe(true);
+  });
+
+  it("looks back only one athlete turn", () => {
+    const signals = analyzeChatSafety("what about my long run on Sunday?", [
+      { role: "user", content: "I had chest pain on Monday" },
+      { role: "assistant", content: "Please get that checked." },
+      { role: "user", content: "Saw the GP, all clear." },
+      { role: "assistant", content: "Great news." },
+    ]);
+    expect(signals.redFlagDetected).toBe(false);
+  });
+
+  it("never reads the coach's own replies, which can quote the escalation", () => {
+    const signals = analyzeChatSafety("thanks", [
+      { role: "user", content: "how do I pace a 5k?" },
+      { role: "assistant", content: "If you ever get chest pain or shortness of breath, stop and get checked." },
+    ]);
+    expect(signals).toEqual({ redFlagDetected: false, hrMedicationDetected: false });
+  });
+
+  it("flags heart-rate medication separately", () => {
+    expect(analyzeChatSafety("I'm on bisoprolol, which zones should I use?", [])).toEqual({
+      redFlagDetected: false,
+      hrMedicationDetected: true,
+    });
+  });
+});
+
+describe("buildChatSafetyNotice", () => {
+  it("returns no notice for a clean conversation", () => {
+    expect(buildChatSafetyNotice({ redFlagDetected: false, hrMedicationDetected: false })).toBeNull();
+  });
+
+  it("shows the urgent escalation, which outranks the medication disclaimer", () => {
+    const notice = buildChatSafetyNotice({ redFlagDetected: true, hrMedicationDetected: true });
+    expect(notice?.level).toBe("urgent");
+    expect(notice?.message).toMatch(/seek prompt medical care/i);
+  });
+
+  it("shows the medication disclaimer as a caution", () => {
+    const notice = buildChatSafetyNotice({ redFlagDetected: false, hrMedicationDetected: true });
+    expect(notice?.level).toBe("caution");
+    expect(notice?.message).toMatch(/Heart-rate zones can be unreliable/);
   });
 });

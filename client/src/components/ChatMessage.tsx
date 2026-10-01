@@ -1,4 +1,5 @@
-import { AlertCircle, Bot, RotateCcw, User } from "lucide-react";
+import type { ChatSafetyNotice } from "@shared/schema";
+import { AlertCircle, Bot, HeartPulse, RotateCcw, ShieldAlert, User } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
@@ -15,10 +16,36 @@ interface ChatMessageProps {
   readonly content: string;
   readonly timestamp?: string;
   readonly ragInfo?: RagInfo;
+  /** Fixed safety copy shown above the reply, whatever the model wrote. */
+  readonly safetyNotice?: ChatSafetyNotice;
   /** Set on a reply that did not complete. */
   readonly failure?: MessageFailure;
   /** Offered only on a failed reply that can be sent again. */
   readonly onRetry?: () => void;
+}
+
+/**
+ * The urgent escalation is an alert, so it is announced as soon as it lands
+ * (it arrives before any reply text); the medication disclaimer is a note.
+ */
+function SafetyNoticeBanner({ notice }: { readonly notice: ChatSafetyNotice }) {
+  const urgent = notice.level === "urgent";
+  const Icon = urgent ? ShieldAlert : HeartPulse;
+  return (
+    <div
+      role={urgent ? "alert" : "note"}
+      className={cn(
+        "mb-2 flex gap-2 rounded-md border p-2 text-sm",
+        urgent
+          ? "border-destructive/40 bg-destructive/10 text-destructive"
+          : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100",
+      )}
+      data-testid={`safety-notice-${notice.level}`}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <p>{notice.message}</p>
+    </div>
+  );
 }
 
 interface ReplyFailureNoteProps {
@@ -68,6 +95,7 @@ export const ChatMessage = memo(function ChatMessage({
   content,
   timestamp,
   ragInfo,
+  safetyNotice,
   failure,
   onRetry,
 }: Readonly<ChatMessageProps>) {
@@ -94,6 +122,7 @@ export const ChatMessage = memo(function ChatMessage({
             <p className="text-sm whitespace-pre-wrap">{content}</p>
           ) : (
             <>
+              {safetyNotice && <SafetyNoticeBanner notice={safetyNotice} />}
               {showText && (
                 <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2">
                   {/* AI output is rendered as markdown; rehype-sanitize strips

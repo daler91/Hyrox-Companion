@@ -1,4 +1,4 @@
-import type { ChatMessage as DBChatMessage } from "@shared/schema";
+import type { ChatMessage as DBChatMessage,ChatSafetyNotice } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo,useRef, useState } from "react";
 
@@ -15,15 +15,27 @@ import { useClearHistoryMutation,useSaveMessageMutation } from "./useChatMutatio
 export type { RagInfo } from "@/lib/api";
 export type { Message } from "@/lib/chatMessage";
 
+function isChatSafetyNotice(value: unknown): value is ChatSafetyNotice {
+  if (typeof value !== "object" || value === null) return false;
+  const { level, message } = value as Record<string, unknown>;
+  return (level === "urgent" || level === "caution") && typeof message === "string" && message !== "";
+}
+
 function createMessageUpdater(
   assistantMessageId: string,
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
 ) {
-  return (snapshot: { content: string; meta?: RagInfo }) => {
+  return (snapshot: { content: string; meta?: RagInfo; extras?: Record<string, unknown> }) => {
+    const safetyNotice = snapshot.extras?.safetyNotice;
     setMessages((prev) =>
       prev.map((m) =>
         m.id === assistantMessageId
-          ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
+          ? {
+              ...m,
+              content: snapshot.content,
+              ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}),
+              ...(isChatSafetyNotice(safetyNotice) ? { safetyNotice } : {}),
+            }
           : m,
       ),
     );
@@ -393,7 +405,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         const updateMessage = createMessageUpdater(assistantMessageId, setMessages);
         const result = await consumeSSEStream<RagInfo>(reader, {
           metaKey: "ragInfo",
-          extraKeys: ["planProposal", "planProposalPending"],
+          extraKeys: ["planProposal", "planProposalPending", "safetyNotice"],
           signal: controller.signal,
           onFlush: (snapshot) => {
             // Drop flushes from a superseded stream so a stale rAF flush after
@@ -417,6 +429,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         const assistantMessage: Message = {
           ...createLocalMessage("assistant", data.response, assistantMessageId),
           ragInfo: data.ragInfo,
+          ...(isChatSafetyNotice(data.safetyNotice) ? { safetyNotice: data.safetyNotice } : {}),
         };
 
         setMessages((prev) => [...prev, assistantMessage]);

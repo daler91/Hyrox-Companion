@@ -1,4 +1,4 @@
-import type { RagInfo } from "@shared/schema";
+import type { ChatSafetyNotice, RagInfo } from "@shared/schema";
 
 import { getCurrentTimeString } from "@/lib/dateUtils";
 
@@ -28,6 +28,8 @@ export interface Message {
   content: string;
   timestamp: string;
   ragInfo?: RagInfo;
+  /** Fixed safety copy the server attached to this reply (aiSafety.buildChatSafetyNotice). */
+  safetyNotice?: ChatSafetyNotice;
   failure?: MessageFailure;
   /**
    * Epoch ms the Coach panel sorts by when it merges the chat hook's messages

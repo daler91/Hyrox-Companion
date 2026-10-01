@@ -3,7 +3,7 @@ import type { ChatMessage } from "@shared/schema";
 import { generateText, streamText, type TextAiMessage } from "../ai/providers";
 import { AppError, classifyAiError } from "../errors";
 import { logger } from "../logger";
-import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
+import { buildSystemPrompt, type CoachingMaterialInput, type SystemPromptOptions } from "../prompts";
 import { createStreamingOutputValidator, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -39,10 +39,11 @@ export async function chatWithCoach(
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
   userId?: string,
+  promptOptions?: SystemPromptOptions,
 ): Promise<string> {
   try {
     const response = await generateText({
-      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks),
+      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, promptOptions),
       messages: buildCoachMessages(userMessage, conversationHistory),
       modelRole: "reasoning",
       label: "chat",
@@ -68,13 +69,14 @@ export async function* streamChatWithCoach(
   retrievedChunks?: string[],
   signal?: AbortSignal,
   userId?: string,
+  promptOptions?: SystemPromptOptions,
 ): AsyncGenerator<string> {
   try {
     // Chunk-boundary-safe: a restricted phrase split across two SSE chunks is
     // caught on the chunk that completes it (S4).
     const validateChunk = createStreamingOutputValidator();
     for await (const text of streamText({
-      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks),
+      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, promptOptions),
       messages: buildCoachMessages(userMessage, conversationHistory),
       modelRole: "reasoning",
       label: "chat-stream",

@@ -19,6 +19,7 @@ import aiRouter from "../ai";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
+const NO_CHAT_SAFETY = { chatSafety: { redFlagDetected: false, hrMedicationDetected: false } };
 const CHAT_STREAM_ENDPOINT = "/api/v1/chat/stream";
 const CHAT_ENDPOINT = "/api/v1/chat";
 
@@ -580,8 +581,25 @@ describe("POST /api/chat", () => {
     expect(response.status).toBe(200);
     expect(response.body.response).toBe("Coach response");
     expect(response.body.ragInfo).toBeDefined();
+    expect(response.body.safetyNotice).toBeUndefined();
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, [], undefined, "test_user_id");
+    expect(chatWithCoach).toHaveBeenCalledWith("Hello", [], MOCK_TRAINING_CONTEXT, [], undefined, "test_user_id", NO_CHAT_SAFETY);
+  });
+
+  it("returns the heart-rate-medication notice when the athlete mentions one", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("Use RPE.");
+
+    const response = await postChat(app, "I'm on beta blockers, which zones should I use?");
+
+    expect(response.status).toBe(200);
+    expect(response.body.safetyNotice).toEqual({
+      level: "caution",
+      message: expect.stringMatching(/Heart-rate zones can be unreliable/),
+    });
+    expect(vi.mocked(chatWithCoach).mock.calls[0][6]).toEqual({
+      chatSafety: { redFlagDetected: false, hrMedicationDetected: true },
+    });
   });
 
   it("should return 400 if message is missing", async () => {
@@ -635,7 +653,42 @@ describe("POST /api/chat/stream", () => {
     expect(chunks[3]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, expect.any(AbortSignal), "test_user_id");
+    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, expect.any(AbortSignal), "test_user_id", NO_CHAT_SAFETY);
+  });
+
+  it("sends the urgent safety notice ahead of the reply, and skips plan editing, for a red-flag message", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Please get checked first.";
+    });
+
+    // "skip" and "tomorrow" would otherwise send this to the plan-edit classifier.
+    const response = await postChatStream(app, "I had chest pain on my run, should I skip tomorrow's intervals?");
+
+    expect(response.status).toBe(200);
+    const chunks = parseStreamResponse(response.text);
+    expect(chunks[0]).toContain('"ragInfo"');
+    expect(chunks[1]).toContain('"safetyNotice":{"level":"urgent"');
+    expect(chunks[1]).toContain("seek prompt medical care");
+    expect(chunks[2]).toContain('{"text":"Please get checked first."}');
+    expect(chunks[3]).toContain('{"done":true}');
+    expect(generateJsonText).not.toHaveBeenCalled();
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][7]).toEqual({
+      chatSafety: { redFlagDetected: true, hrMedicationDetected: false },
+    });
+  });
+
+  it("still consults the plan-edit classifier for the same request without a red flag", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Sure.";
+    });
+
+    const response = await postChatStream(app, "Should I skip tomorrow's intervals?");
+
+    expect(response.status).toBe(200);
+    expect(response.text).not.toContain("safetyNotice");
+    expect(generateJsonText).toHaveBeenCalledWith(expect.objectContaining({ feature: "chat_intent" }));
   });
 
   it("should handle stream errors gracefully", async () => {
@@ -1033,6 +1086,7 @@ describe("RAG pipeline in chat endpoints", () => {
       undefined,
       ["chunk about squats", "chunk about programming"],
       "test_user_id",
+      NO_CHAT_SAFETY,
     );
     // Should NOT fall back to legacy materials
     expect(storage.coaching.listCoachingMaterials).not.toHaveBeenCalled();
@@ -1098,6 +1152,7 @@ describe("RAG pipeline in chat endpoints", () => {
       ["relevant chunk"],
       expect.any(AbortSignal),
       "test_user_id",
+      NO_CHAT_SAFETY,
     );
   });
 });

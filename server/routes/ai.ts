@@ -10,6 +10,7 @@ import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
+import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { classifyPlanEditIntent, hasPlanEditKeywords, isPlanEditIntent } from "../services/chatIntentService";
@@ -105,9 +106,11 @@ async function prepareChatContext(
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
+    const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
     const { input, aiContext } = await prepareChatContext(req);
-    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId);
-    res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
+    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety });
+    const safetyNotice = buildChatSafetyNotice(chatSafety);
+    res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(safetyNotice ? { safetyNotice } : {}) });
   });
 
 // Belt-and-suspenders ceiling for SSE stream duration. Both caps fire
@@ -267,6 +270,7 @@ interface PlanEditBranchOptions {
   readonly userId: string;
   readonly input: ChatInput;
   readonly aiContext: AIContext;
+  readonly chatSafety: ChatSafetySignals;
   readonly controller: AbortController;
   readonly safeWrite: SseWriter;
 }
@@ -353,8 +357,11 @@ async function handlePlanEditRequest({
  * plain conversation.
  */
 async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
-  const { req, res, input, controller } = options;
-  if (req.body.planEditing === false || !hasPlanEditKeywords(input.message)) return false;
+  const { req, res, input, chatSafety, controller } = options;
+  // Red-flag symptoms in the athlete's own words mean no AI plan change —
+  // the policy createPlanAdjustmentProposal already applies to workout text.
+  // The message goes to normal chat, which is told to put medical care first.
+  if (req.body.planEditing === false || chatSafety.redFlagDetected || !hasPlanEditKeywords(input.message)) return false;
   try {
     return await handlePlanEditRequest(options);
   } catch (planEditError) {
@@ -375,10 +382,11 @@ async function streamCoachReply(
   input: ChatInput,
   aiContext: AIContext,
   userId: string,
+  chatSafety: ChatSafetySignals,
   controller: AbortController,
   safeWrite: SseWriter,
 ): Promise<void> {
-  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
+  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId, { chatSafety });
 
   for await (const chunk of stream) {
     if (controller.signal.aborted) {
@@ -418,6 +426,9 @@ function sendSseTerminalEvent(
 
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     const userId = getUserId(req);
+    // The athlete's own words, scanned for red-flag symptoms and heart-rate
+    // medication (analyzeSafetySignals only ever reads workout text).
+    const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
     const { input, aiContext } = await prepareChatContext(req);
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -441,6 +452,10 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
 
     try {
       await safeWrite(sseEvent({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) }));
+      // Ahead of any text, so the client shows it above the reply. Fixed copy,
+      // independent of what the model goes on to write.
+      const safetyNotice = buildChatSafetyNotice(chatSafety);
+      if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
       const handledAsPlanEdit = await tryPlanEditRequest({
         req,
@@ -448,12 +463,13 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
         userId,
         input,
         aiContext,
+        chatSafety,
         controller,
         safeWrite,
       });
       if (handledAsPlanEdit) return;
 
-      await streamCoachReply(req, input, aiContext, userId, controller, safeWrite);
+      await streamCoachReply(req, input, aiContext, userId, chatSafety, controller, safeWrite);
 
       sendSseTerminalEvent(res, controller, abortState);
       res.end();
