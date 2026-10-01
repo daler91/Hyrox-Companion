@@ -1,4 +1,5 @@
-﻿import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
+﻿import { CHAT_MESSAGE_MAX_LENGTH } from "../../chat";
+import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
 import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
@@ -51,9 +52,6 @@ export const chatMessageSchema = z.object({
     .min(1, "Message content cannot be empty")
     .max(50000, "Message must be 50000 characters or less"),
 });
-
-/** Longest chat message the coach accepts; the chat input counts against it. */
-export const CHAT_MESSAGE_MAX_LENGTH = 1000;
 
 export const chatRequestSchema = z.object({
   message: z

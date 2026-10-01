@@ -1,4 +1,4 @@
-import { CHAT_MESSAGE_MAX_LENGTH } from "@shared/schema";
+import { CHAT_MESSAGE_MAX_LENGTH } from "@shared/chat";
 import { Loader2, Send, Square } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 
