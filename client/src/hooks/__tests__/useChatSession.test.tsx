@@ -87,8 +87,8 @@ function sseStream(...events: object[]): ReadableStream<Uint8Array> {
 
 /** Route the mocked apiRequest: `stream` answers /chat/stream, saves succeed. */
 function mockStreamEndpoint(stream: () => Promise<Response>) {
-  vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
-    url === '/api/v1/chat/stream' ? stream() : new Response(JSON.stringify({})),
+  vi.mocked(queryClient.apiRequest).mockImplementation((_method, url) =>
+    url === '/api/v1/chat/stream' ? stream() : Promise.resolve(new Response(JSON.stringify({}))),
   );
 }
 
@@ -214,7 +214,7 @@ describe('useChatSession', () => {
     expect(result.current.messages[0].id).toBe('welcome');
   });
   it('saves the turns only once the server accepts the request, user first', async () => {
-    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Easy run, 40 min.' }, { done: true })));
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Easy run, 40 min.' }, { done: true }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -229,9 +229,7 @@ describe('useChatSession', () => {
   });
 
   it('does not save the turn the server refused, and names the rate limit with a retry', async () => {
-    mockStreamEndpoint(async () => {
-      throw new queryClient.RateLimitError('Too many requests', 8);
-    });
+    mockStreamEndpoint(() => Promise.reject(new queryClient.RateLimitError('Too many requests', 8)));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -252,9 +250,7 @@ describe('useChatSession', () => {
   });
 
   it('names the daily AI limit and offers no retry', async () => {
-    mockStreamEndpoint(async () => {
-      throw new queryClient.AiBudgetExceededError('limit', 205, 200);
-    });
+    mockStreamEndpoint(() => Promise.reject(new queryClient.AiBudgetExceededError('limit', 205, 200)));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -266,8 +262,8 @@ describe('useChatSession', () => {
   });
 
   it("shows the server's reason when it ends the stream, and offers no retry for an expired session", async () => {
-    mockStreamEndpoint(async () =>
-      new Response(sseStream({ error: 'auth-expired', reason: 'Your session expired — please sign in again.' })),
+    mockStreamEndpoint(() =>
+      Promise.resolve(new Response(sseStream({ error: 'auth-expired', reason: 'Your session expired — please sign in again.' }))),
     );
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -281,7 +277,7 @@ describe('useChatSession', () => {
   });
 
   it('keeps text that arrived before a mid-stream failure, and marks the accepted turn as saved', async () => {
-    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Start with a' }, { error: 'Stream error' })));
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Start with a' }, { error: 'Stream error' }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -296,9 +292,7 @@ describe('useChatSession', () => {
   });
 
   it('retries a failed send in place: the failed exchange goes, the new one is saved once', async () => {
-    mockStreamEndpoint(async () => {
-      throw new Error('500: {"error":"Internal Server Error"}');
-    });
+    mockStreamEndpoint(() => Promise.reject(new Error('500: {"error":"Internal Server Error"}')));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -306,8 +300,8 @@ describe('useChatSession', () => {
     });
     const failedId = result.current.messages[2].id;
 
-    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Cut volume by a third.' }, { done: true })));
-    await act(async () => {
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Cut volume by a third.' }, { done: true }))));
+    await act(() => {
       result.current.retryMessage(failedId);
     });
 
@@ -328,7 +322,7 @@ describe('useChatSession', () => {
   });
 
   it('does not save the athlete turn again when retrying one the server had accepted', async () => {
-    mockStreamEndpoint(async () => new Response(sseStream({ error: 'Stream error' })));
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ error: 'Stream error' }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -337,8 +331,8 @@ describe('useChatSession', () => {
     const failedId = result.current.messages[2].id;
     await waitFor(() => expect(savedTurns()).toHaveLength(1));
 
-    mockStreamEndpoint(async () => new Response(sseStream({ text: '6 x 60 s hills.' }, { done: true })));
-    await act(async () => {
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: '6 x 60 s hills.' }, { done: true }))));
+    await act(() => {
       result.current.retryMessage(failedId);
     });
 
@@ -350,9 +344,7 @@ describe('useChatSession', () => {
   });
 
   it('leaves a failed reply out of the history sent with the next message', async () => {
-    mockStreamEndpoint(async () => {
-      throw new TypeError('Failed to fetch');
-    });
+    mockStreamEndpoint(() => Promise.reject(new TypeError('Failed to fetch')));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
@@ -360,7 +352,7 @@ describe('useChatSession', () => {
     });
     expect(result.current.messages[2].failure?.message).toMatch(/connection dropped/i);
 
-    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Here you go.' }, { done: true })));
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Here you go.' }, { done: true }))));
     await act(async () => {
       await result.current.sendMessage('Second try');
     });
@@ -369,8 +361,8 @@ describe('useChatSession', () => {
   });
   it("puts the server's safety notice on the reply it arrived with", async () => {
     const notice = { level: 'urgent', message: 'Pause hard training and seek prompt medical care.' };
-    mockStreamEndpoint(async () =>
-      new Response(sseStream({ ragInfo: { source: 'none', chunkCount: 0 } }, { safetyNotice: notice }, { text: 'Get checked first.' }, { done: true })),
+    mockStreamEndpoint(() =>
+      Promise.resolve(new Response(sseStream({ ragInfo: { source: 'none', chunkCount: 0 } }, { safetyNotice: notice }, { text: 'Get checked first.' }, { done: true }))),
     );
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -383,8 +375,8 @@ describe('useChatSession', () => {
   });
 
   it('ignores a malformed safety notice', async () => {
-    mockStreamEndpoint(async () =>
-      new Response(sseStream({ safetyNotice: { level: 'panic', message: 'x' } }, { text: 'Hi.' }, { done: true })),
+    mockStreamEndpoint(() =>
+      Promise.resolve(new Response(sseStream({ safetyNotice: { level: 'panic', message: 'x' } }, { text: 'Hi.' }, { done: true }))),
     );
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -397,8 +389,10 @@ describe('useChatSession', () => {
 
   it('carries the safety notice on the non-streaming path too', async () => {
     const notice = { level: 'caution', message: 'Heart-rate zones can be unreliable.' };
-    vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
-      new Response(JSON.stringify(url === '/api/v1/chat' ? { response: 'Use RPE.', safetyNotice: notice } : {})),
+    vi.mocked(queryClient.apiRequest).mockImplementation((_method, url) =>
+      Promise.resolve(
+        new Response(JSON.stringify(url === '/api/v1/chat' ? { response: 'Use RPE.', safetyNotice: notice } : {})),
+      ),
     );
     const { result } = renderHook(() => useChatSession({ useStreaming: false }), { wrapper });
 

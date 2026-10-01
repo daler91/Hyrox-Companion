@@ -42,7 +42,7 @@ vi.mock("@/hooks/useChatSession", () => ({
     updateAutoScrollMode: vi.fn(),
     scrollToBottomIfPinned: vi.fn(),
     pinAutoScroll: vi.fn(),
-    sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendMessage: vi.fn(() => Promise.resolve()),
     cancelStream: vi.fn(),
     clearHistory: vi.fn(),
     isClearingHistory: false,
@@ -87,7 +87,7 @@ describe("CoachPanel message order", () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={queryClient}>
-        <CoachPanel isOpen={true} onClose={vi.fn()} timeline={[]} />
+        <CoachPanel isOpen onClose={vi.fn()} timeline={[]} />
       </QueryClientProvider>,
     );
 

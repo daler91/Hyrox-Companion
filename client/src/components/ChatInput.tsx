@@ -62,7 +62,7 @@ export function ChatInput({
   // server refuses the request, so sending is blocked here instead.
   const tooLong = message.length > maxLength;
   const showCounter = message.length > maxLength * COUNTER_THRESHOLD;
-  const cannotSend = message.trim() === "" || !!isLoading || tooLong;
+  const cannotSend = message.trim() === "" || Boolean(isLoading) || tooLong;
 
   // Re-seed the textarea whenever the caller bumps the nonce, so clicking
   // "Ask coach" repeatedly pre-fills each time even when the text matches
@@ -191,8 +191,8 @@ export function ChatInput({
             </TooltipTrigger>
             <TooltipContent>
               {getSendTooltip({
-                isLoading: !!isLoading,
-                canStop: !!onStop,
+                isLoading: Boolean(isLoading),
+                canStop: Boolean(onStop),
                 hasText: message.trim().length > 0,
                 tooLong,
               })}
