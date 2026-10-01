@@ -1,9 +1,11 @@
 import { dayDiff } from "@shared/dateUtils";
+import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
 import { formatExerciseSetsForPrompt } from "./exerciseSetFormatter";
+import { priorAiContextParts } from "./priorAiContext";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,6 +35,30 @@ export function buildCurrentDateContext(trainingContext: TrainingContext): strin
   return `\nToday's date: ${trainingContext.currentDate}. Treat this as "today" when discussing workout timing — the dated workouts below are annotated relative to it.`;
 }
 
+/**
+ * The athlete's units, stated outright. The prompt asks for loads "in the
+ * athlete's unit", but without this line the model had to infer it from the
+ * set data — and an athlete with no logged sets (or none yet) gave it nothing
+ * to infer from.
+ */
+export function buildUnitsContext(trainingContext: TrainingContext): string {
+  const { weightUnit, distanceUnit } = trainingContext;
+  if (!weightUnit && !distanceUnit) return "";
+  const units = [weightUnit, distanceUnit].filter(Boolean).join(" and ");
+  return `\nUnits: the athlete uses ${units} — give every load and distance in ${weightUnit && distanceUnit ? "these units" : "this unit"}.`;
+}
+
+/**
+ * The completion rate, or "n/a" when no session has been due yet. The rate is
+ * completed / (completed + missed + skipped), which is 0 / 0 for a brand-new
+ * plan — rendered as "0%", it invited a day-one lecture about consistency.
+ */
+export function formatCompletionRate(trainingContext: TrainingContext): string {
+  const due =
+    trainingContext.completedWorkouts + trainingContext.missedWorkouts + trainingContext.skippedWorkouts;
+  return due === 0 ? "n/a (no sessions have been due yet)" : `${trainingContext.completionRate}%`;
+}
+
 /** Missed sessions the athlete chose to let go, when there are any. Already out of "Missed" and the rate. */
 function letGoLine(letGoWorkouts: number | undefined): string {
   if (!letGoWorkouts) return "";
@@ -46,7 +72,7 @@ export function buildOverallStats(trainingContext: TrainingContext): string {
 - Planned (upcoming): ${trainingContext.plannedWorkouts}
 - Missed: ${trainingContext.missedWorkouts}${letGoLine(trainingContext.letGoWorkouts)}
 - Skipped: ${trainingContext.skippedWorkouts}
-- Completion rate: ${trainingContext.completionRate}%
+- Completion rate: ${formatCompletionRate(trainingContext)}
 - Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak === 1 ? "" : "s"}`;
 
   if (trainingContext.activePlan) {
@@ -84,16 +110,28 @@ export function buildExerciseFocus(trainingContext: TrainingContext): string {
 export function buildStructuredPerformance(trainingContext: TrainingContext): string {
   if (!trainingContext.structuredExerciseStats || Object.keys(trainingContext.structuredExerciseStats).length === 0) return "";
 
+  // Stored weight and distance follow the athlete's own unit (docs/adr-units.md),
+  // so label them as exerciseSetFormatter labels each set (REFACTORING_REVIEW D1).
+  const weightUnit = trainingContext.weightUnit || "kg";
+  const distanceUnit = getStoredDistanceUnit(trainingContext.distanceUnit);
   let section = `\n\nStructured Exercise Performance:`;
   for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
     let line = `\n- ${exercise}: trained ${stats.count}x`;
-    if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
-    if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}`;
+    if (stats.maxWeight) line += `, max weight: ${stats.maxWeight} ${weightUnit}`;
+    if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}${distanceUnit}`;
     if (stats.bestTime) line += `, best time: ${formatMinutes(minutes(stats.bestTime))}`;
     if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
     section += line;
   }
   return section;
+}
+
+/** "completed; RPE: 7, Duration: 45min" — how hard and how long, beside the status. */
+function recentWorkoutOutcome(workout: TrainingContext["recentWorkouts"][number]): string {
+  const meta: string[] = [];
+  if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
+  if (workout.duration != null) meta.push(`Duration: ${formatMinutes(minutes(workout.duration))}`);
+  return meta.length > 0 ? `${workout.status}; ${meta.join(", ")}` : workout.status;
 }
 
 export function buildRecentWorkouts(trainingContext: TrainingContext): string {
@@ -108,7 +146,7 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
     const workoutDetails = exerciseSummary
       ? `Exercises: ${exerciseSummary}`
       : sanitizeUserInput(workout.mainWorkout || "No details");
-    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus || "General")} - ${workoutDetails} (${workout.status})`;
+    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus || "General")} - ${workoutDetails} (${recentWorkoutOutcome(workout)})`;
     if (workout.athleteNote?.trim()) line += ` | Athlete note: ${sanitizeUserInput(workout.athleteNote.trim())}`;
     section += line;
   }
@@ -118,8 +156,14 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
 export function buildUpcomingWorkouts(trainingContext: TrainingContext): string {
   if (!trainingContext.upcomingWorkouts || trainingContext.upcomingWorkouts.length === 0) return "";
 
-  let section = `\n\nUpcoming Planned Workouts (next 7 days):`;
-  for (const workout of trainingContext.upcomingWorkouts) {
+  const upcoming = trainingContext.upcomingWorkouts;
+  // The next N plan days, whatever dates they fall on — not a calendar week.
+  let section = `\n\nUpcoming Planned Workouts (next ${upcoming.length} on the plan):`;
+  const priorAi = upcoming.map(priorAiContextParts);
+  if (priorAi.some((parts) => parts.length > 0)) {
+    section += `\n(A "Prior AI review" or "Last AI modification" is what the auto-coach last did to that session — use it when the athlete asks why a session looks the way it does.)`;
+  }
+  for (const [index, workout] of upcoming.entries()) {
     const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
       weightUnit: trainingContext.weightUnit,
       distanceUnit: trainingContext.distanceUnit,
@@ -133,6 +177,7 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
       if (workout.accessory) line += ` | Accessory: ${sanitizeUserInput(workout.accessory)}`;
       if (workout.notes) line += ` | Notes: ${sanitizeUserInput(workout.notes)}`;
     }
+    for (const part of priorAi[index] ?? []) line += ` | ${part}`;
     section += line;
   }
   return section;

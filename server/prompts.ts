@@ -9,6 +9,7 @@ import {
   buildOverallStats,
   buildRecentWorkouts,
   buildStructuredPerformance,
+  buildUnitsContext,
   buildUpcomingWorkouts,
 } from "./prompts/coachingContext";
 import { buildExerciseMenu, formatExerciseSelectionBrief } from "./prompts/exerciseSelection";
@@ -623,6 +624,9 @@ function buildNoDataPrompt(
   let prompt =
     BASE_SYSTEM_PROMPT +
     `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
+  // The units are set at onboarding, so the day-one coach can already use them.
+  const noDataUnits = trainingContext ? buildUnitsContext(trainingContext) : "";
+  if (noDataUnits) prompt += noDataUnits;
   // Constraints still apply with zero logged workouts — more so, if anything.
   // An athlete who has just told the plan wizard "recovering from knee
   // surgery" and gone straight to the chat is the single most likely person
@@ -674,6 +678,7 @@ export function buildSystemPrompt(
   let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
 
   contextSection += buildCurrentDateContext(trainingContext);
+  contextSection += buildUnitsContext(trainingContext);
   // Ahead of the stats on purpose: an injury the athlete declared changes how
   // every number below should be read, so the coach needs it before it sees a
   // completion rate to be disappointed by.

@@ -8,7 +8,7 @@ import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { formatAthleteConstraints } from "../prompts/athleteConstraints";
 import { formatCoachingAnalysis } from "../prompts/coachingAnalysis";
-import { relativeDayLabel } from "../prompts/coachingContext";
+import { formatCompletionRate, relativeDayLabel } from "../prompts/coachingContext";
 import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import {
   formatExerciseSetsForPrompt,
@@ -16,6 +16,7 @@ import {
 } from "../prompts/exerciseSetFormatter";
 import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
+import { priorAiContextParts } from "../prompts/priorAiContext";
 import { formatTrainingTargets } from "../prompts/workoutEngine";
 import { formatZodIssues, sanitizeForLog, sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
@@ -139,7 +140,7 @@ function formatExerciseFrequency(breakdown: Record<string, number>): string {
 
 function formatExerciseStatLine(
   exercise: string,
-  distanceUnit: string,
+  units: { weightUnit: string; distanceUnit: string },
   stats: {
     count: number;
     maxWeight?: number;
@@ -149,20 +150,24 @@ function formatExerciseStatLine(
   },
 ): string {
   const parts = [`- ${exercise}: trained ${stats.count}x`];
-  if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight}`);
-  // Stored distance follows the athlete's preference, not metres (audit H16).
-  if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}${getStoredDistanceUnit(distanceUnit)}`);
+  // Stored weight and distance follow the athlete's preference, not kg and
+  // metres (docs/adr-units.md; audit H16, M8).
+  if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight} ${units.weightUnit}`);
+  if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}${getStoredDistanceUnit(units.distanceUnit)}`);
   if (stats.bestTime) parts.push(`best time: ${formatMinutes(minutes(stats.bestTime))}`);
   if (stats.avgReps) parts.push(`avg reps: ${stats.avgReps}`);
   return parts.join(", ");
 }
 
-function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"], distanceUnit: string): string {
+function formatPerformanceStats(
+  stats: TrainingContext["structuredExerciseStats"],
+  units: { weightUnit: string; distanceUnit: string },
+): string {
   if (!stats || Object.keys(stats).length === 0) return "";
   return (
     "\nExercise performance stats:\n" +
     Object.entries(stats)
-      .map(([ex, s]) => formatExerciseStatLine(ex, distanceUnit, s))
+      .map(([ex, s]) => formatExerciseStatLine(ex, units, s))
       .join("\n") +
     "\n"
   );
@@ -199,55 +204,8 @@ function formatRecentWorkouts(trainingContext: TrainingContext): string {
   );
 }
 
-function formatModificationContext(
-  label: string,
-  modification: NonNullable<UpcomingWorkout["aiInputsUsed"]>["lastModification"],
-): string | undefined {
-  if (!modification) return undefined;
-  const details = [`kind=${modification.kind}`];
-  if (typeof modification.completedWorkoutCount === "number") {
-    details.push(`completedWorkoutsAtEdit=${modification.completedWorkoutCount}`);
-  }
-  if (modification.rpeTrend) details.push(`rpeTrendAtEdit=${modification.rpeTrend}`);
-  if (typeof modification.fatigueFlag === "boolean") {
-    details.push(`fatigueFlagAtEdit=${modification.fatigueFlag}`);
-  }
-  // modification.reason is `rationale` from the POST /timeline/ai-suggestions/apply
-  // and plan-adjustment-proposal request bodies (see aiModificationGuard.ts), so it is
-  // athlete-controllable free text that reaches this prompt on the *next* suggestion
-  // call — same prompt-injection risk as aiRationale above, sanitize before interpolating.
-  if (modification.reason) details.push(`reason=${sanitizeUserInput(modification.reason)}`);
-  return `${label}: ${details.join("; ")}`;
-}
-
 function formatPriorAiContext(workout: UpcomingWorkout): string {
-  const prior: string[] = [];
-  if (workout.aiRationale?.trim()) {
-    // Despite the name this is NOT model output: `rationale` is a field on
-    // the POST /timeline/ai-suggestions/apply body, so an athlete can write
-    // it directly and have it replayed into the next prompt. Sanitized like
-    // the focus/main/accessory/notes fields on the same rendered line.
-    prior.push(`Prior AI review: ${sanitizeUserInput(workout.aiRationale.trim())}`);
-  }
-
-  const lastModificationContext = formatModificationContext(
-    "Last AI modification",
-    workout.aiInputsUsed?.lastModification,
-  );
-  if (lastModificationContext) prior.push(lastModificationContext);
-
-  const lastFatigueReductionContext = formatModificationContext(
-    "Last fatigue reduction",
-    workout.aiInputsUsed?.lastFatigueReduction,
-  );
-  if (
-    lastFatigueReductionContext &&
-    lastFatigueReductionContext !==
-      lastModificationContext?.replace("Last AI modification", "Last fatigue reduction")
-  ) {
-    prior.push(lastFatigueReductionContext);
-  }
-
+  const prior = priorAiContextParts(workout);
   return prior.length > 0 ? `, ${prior.join(", ")}` : "";
 }
 
@@ -298,7 +256,7 @@ export function buildPromptDataSections(
       ? [`Today's date: ${trainingContext.currentDate} (use this as "today"; workout dates below are annotated relative to it)`]
       : []),
     ...(planGoal ? [`Athlete's goal: ${sanitizeUserInput(planGoal)}`] : []),
-    `Completion rate: ${trainingContext.completionRate}%`,
+    `Completion rate: ${formatCompletionRate(trainingContext)}`,
     `Current streak: ${trainingContext.currentStreak} days`,
     `Completed workouts: ${trainingContext.completedWorkouts}`,
     ...(trainingContext.weeklyGoal
@@ -314,7 +272,10 @@ export function buildPromptDataSections(
     formatAthleteConstraints(trainingContext),
     formatMafContext(trainingContext),
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
-    formatPerformanceStats(trainingContext.structuredExerciseStats, trainingContext.distanceUnit ?? "km"),
+    formatPerformanceStats(trainingContext.structuredExerciseStats, {
+      weightUnit: trainingContext.weightUnit || "kg",
+      distanceUnit: trainingContext.distanceUnit ?? "km",
+    }),
     formatRecentWorkouts(trainingContext),
   ];
 
