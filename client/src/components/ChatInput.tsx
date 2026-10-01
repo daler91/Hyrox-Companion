@@ -3,12 +3,12 @@ import { Loader2, Send, Square } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CharacterCount } from "@/components/ui/character-count";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
-import { cn } from "@/lib/utils";
 
 /**
  * Carrier for an externally-seeded prefill. The `nonce` field lets callers
@@ -145,18 +145,7 @@ export function ChatInput({
           </p>
         )}
         {showCounter && (
-          <p
-            id={counterId}
-            className={cn(
-              "px-1 pt-0.5 text-right text-[10px] tabular-nums",
-              tooLong ? "font-medium text-destructive" : "text-muted-foreground",
-            )}
-            data-testid="text-chat-length"
-          >
-            {tooLong
-              ? `${message.length - maxLength} over the ${maxLength}-character limit`
-              : `${message.length}/${maxLength}`}
-          </p>
+          <CharacterCount id={counterId} value={message} max={maxLength} className="mt-0 px-1 pt-0.5 text-[10px]" />
         )}
       </div>
       <div className="flex flex-col gap-1">
