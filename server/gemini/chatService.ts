@@ -1,11 +1,23 @@
 import type { ChatMessage } from "@shared/schema";
 
 import { generateText, streamText, type TextAiMessage } from "../ai/providers";
+import { resolveChatReasoningEffort } from "../ai/providers/config";
+import type { TextAiReasoningEffort } from "../ai/providers/types";
 import { AppError, classifyAiError } from "../errors";
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput, type SystemPromptOptions } from "../prompts";
 import { createStreamingOutputValidator, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
+
+export interface ChatCallOptions extends SystemPromptOptions {
+  /**
+   * Reasoning effort for this call. Defaults to the chat effort
+   * (resolveChatReasoningEffort: at most "medium" unless the operator says
+   * otherwise). Coach insights, an analysis rather than a turn someone is
+   * waiting on, passes the global effort.
+   */
+  reasoningEffort?: TextAiReasoningEffort;
+}
 
 function buildCoachMessages(
   userMessage: string,
@@ -39,13 +51,14 @@ export async function chatWithCoach(
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
   userId?: string,
-  promptOptions?: SystemPromptOptions,
+  options: ChatCallOptions = {},
 ): Promise<string> {
   try {
     const response = await generateText({
-      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, promptOptions),
+      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options),
       messages: buildCoachMessages(userMessage, conversationHistory),
       modelRole: "reasoning",
+      reasoningEffort: options.reasoningEffort ?? resolveChatReasoningEffort(),
       label: "chat",
       feature: "chat",
       userId,
@@ -69,16 +82,17 @@ export async function* streamChatWithCoach(
   retrievedChunks?: string[],
   signal?: AbortSignal,
   userId?: string,
-  promptOptions?: SystemPromptOptions,
+  options: ChatCallOptions = {},
 ): AsyncGenerator<string> {
   try {
     // Chunk-boundary-safe: a restricted phrase split across two SSE chunks is
     // caught on the chunk that completes it (S4).
     const validateChunk = createStreamingOutputValidator();
     for await (const text of streamText({
-      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, promptOptions),
+      systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks, options),
       messages: buildCoachMessages(userMessage, conversationHistory),
       modelRole: "reasoning",
+      reasoningEffort: options.reasoningEffort ?? resolveChatReasoningEffort(),
       label: "chat-stream",
       feature: "chat_stream",
       userId,

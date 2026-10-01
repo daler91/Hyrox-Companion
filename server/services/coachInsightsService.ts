@@ -13,6 +13,7 @@
 import type { RagInfo } from "@shared/schema";
 import type { Logger } from "pino";
 
+import { getTextAiConfig } from "../ai/providers/config";
 import { env } from "../env";
 import { chatWithCoach } from "../gemini/index";
 import { logger as defaultLogger } from "../logger";
@@ -66,6 +67,9 @@ export async function generateCoachInsights(
     aiContext.coachingMaterials,
     aiContext.retrievedChunks,
     userId,
+    // A whole-progress analysis, not a chat turn: it keeps the global effort
+    // rather than the chat cap.
+    { reasoningEffort: getTextAiConfig().reasoningEffort },
   );
   // userId is already bound on a child logger by the route; logging it again
   // trips Bearer's "leakage of information in logger message" rule. Stick to

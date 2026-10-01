@@ -106,3 +106,27 @@ describe("text AI provider config", () => {
     expect(configured.getTextAiConfig().openAiCompatibleBaseUrl).toBe("https://example.test/v1");
   });
 });
+
+describe("resolveChatReasoningEffort", () => {
+  afterEach(() => {
+    vi.doUnmock("../../env");
+    vi.resetModules();
+  });
+
+  it("caps chat at medium under the default global effort", async () => {
+    const config = await loadConfigWithEnv({ AI_TEXT_REASONING_EFFORT: "high", AI_CHAT_REASONING_EFFORT: undefined });
+    expect(config.resolveChatReasoningEffort()).toBe("medium");
+  });
+
+  it("never raises chat above a lower global effort", async () => {
+    const low = await loadConfigWithEnv({ AI_TEXT_REASONING_EFFORT: "low", AI_CHAT_REASONING_EFFORT: undefined });
+    expect(low.resolveChatReasoningEffort()).toBe("low");
+    const none = await loadConfigWithEnv({ AI_TEXT_REASONING_EFFORT: "none", AI_CHAT_REASONING_EFFORT: undefined });
+    expect(none.resolveChatReasoningEffort()).toBe("none");
+  });
+
+  it("lets AI_CHAT_REASONING_EFFORT win outright, upward too", async () => {
+    const config = await loadConfigWithEnv({ AI_TEXT_REASONING_EFFORT: "medium", AI_CHAT_REASONING_EFFORT: "high" });
+    expect(config.resolveChatReasoningEffort()).toBe("high");
+  });
+});

@@ -89,6 +89,35 @@ describe("chatService", () => {
   });
 });
 
+describe("chat reasoning effort", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("thinks at the chat effort (medium under the default high global), streamed or not", async () => {
+    vi.mocked(generateText).mockResolvedValue({ text: "Easy run.", model: "test-model" });
+    vi.mocked(streamText).mockImplementation(async function* () {
+      yield "Easy run.";
+    });
+
+    await chatWithCoach("What today?");
+    for await (const chunk of streamChatWithCoach("What today?")) void chunk;
+
+    expect(generateText).toHaveBeenCalledWith(expect.objectContaining({ reasoningEffort: "medium" }));
+    expect(streamText).toHaveBeenCalledWith(expect.objectContaining({ reasoningEffort: "medium" }));
+  });
+
+  it("uses an explicit effort when the caller passes one", async () => {
+    vi.mocked(generateText).mockResolvedValue({ text: "Analysis.", model: "test-model" });
+
+    await chatWithCoach("Analyse my progress", [], undefined, undefined, undefined, "user-1", {
+      reasoningEffort: "high",
+    });
+
+    expect(generateText).toHaveBeenCalledWith(expect.objectContaining({ reasoningEffort: "high" }));
+  });
+});
+
 describe("streamChatWithCoach", () => {
   it("cuts the stream when a restricted phrase is split across chunks", async () => {
     vi.mocked(streamText).mockImplementation(async function* () {

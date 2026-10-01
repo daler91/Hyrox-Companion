@@ -740,6 +740,7 @@ assumes every athlete maxes out their $2, which none will.
 | `AI_TEXT_FAST_MODEL` | `AI_TEXT_MODEL`; Gemini: then `GEMINI_MODEL` | Fast parser model override |
 | `AI_TEXT_REASONING_MODEL` | `AI_TEXT_MODEL`; Gemini: then `GEMINI_SUGGESTIONS_MODEL` | Coaching/planning model override |
 | `AI_TEXT_REASONING_EFFORT` | `high` | Reasoning effort hint (`none`, `low`, `medium`, `high`) where supported |
+| `AI_CHAT_REASONING_EFFORT` | lower of `AI_TEXT_REASONING_EFFORT` and `medium` | Reasoning effort for coach chat replies only; see [AI Coach Chat](#ai-coach-chat) |
 | `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | `openai` | OpenAI-compatible profile (`openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, `custom`) for base URL and key lookup |
 | `AI_TEXT_BASE_URL` | profile default | Overrides the OpenAI-compatible base URL (required for `custom`) |
 | `AI_TEXT_API_KEY` | profile/provider key | Overrides the API key for the active non-Gemini provider |

@@ -100,6 +100,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | `AI_TEXT_FAST_MODEL` | Optional | `AI_TEXT_MODEL` | Fast parser model override. Falls back to `AI_TEXT_MODEL`, then (Gemini only) `GEMINI_MODEL`. |
 | `AI_TEXT_REASONING_MODEL` | Optional | `AI_TEXT_MODEL` | Coaching/planning model override. Falls back to `AI_TEXT_MODEL`, then (Gemini only) `GEMINI_SUGGESTIONS_MODEL`. |
 | `AI_TEXT_REASONING_EFFORT` | Optional | `high` | Reasoning effort hint: `none`, `low`, `medium`, `high`. Applied only where supported. |
+| `AI_CHAT_REASONING_EFFORT` | Optional | lower of `AI_TEXT_REASONING_EFFORT` and `medium` | Reasoning effort for coach chat replies only (`none`, `low`, `medium`, `high`). Unset, chat never thinks harder than `medium`, nor harder than the global effort; set it to `high` to match plan generation. |
 | `AI_TEXT_API_KEY` | Optional | - | Generic key fallback for Anthropic or OpenAI-compatible providers. |
 | `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | Optional | `openai` | OpenAI-compatible profile: `openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, or `custom`. |
 | `AI_TEXT_BASE_URL` | Optional | profile default | Base URL override for OpenAI-compatible providers. Required for `custom`. |

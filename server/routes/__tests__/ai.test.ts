@@ -678,6 +678,30 @@ describe("POST /api/chat/stream", () => {
     });
   });
 
+  it("starts the plan-edit classifier while the context is still being built", async () => {
+    const order: string[] = [];
+    vi.mocked(generateJsonText).mockImplementation(async () => {
+      order.push("classifier");
+      return { text: JSON.stringify({ intent: "normal_chat", confidence: 0.9 }), model: "fast" };
+    });
+    vi.mocked(buildTrainingContext).mockImplementation(async () => {
+      order.push("context:start");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      order.push("context:end");
+      return MOCK_TRAINING_CONTEXT;
+    });
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Sure.";
+    });
+
+    const response = await postChatStream(app, "Can I move tomorrow's session?");
+
+    expect(response.status).toBe(200);
+    expect(order.indexOf("classifier")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("classifier")).toBeLessThan(order.indexOf("context:end"));
+    expect(response.text).toContain('{"text":"Sure."}');
+  });
+
   it("still consults the plan-edit classifier for the same request without a red flag", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(streamChatWithCoach).mockImplementation(async function* () {

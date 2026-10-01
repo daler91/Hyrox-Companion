@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type ChatIntentResult, chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -270,9 +270,35 @@ interface PlanEditBranchOptions {
   readonly userId: string;
   readonly input: ChatInput;
   readonly aiContext: AIContext;
-  readonly chatSafety: ChatSafetySignals;
+  /** The classifier, already running (startPlanEditIntent); null when the message can't be a plan edit. */
+  readonly planEditIntent: Promise<ChatIntentResult> | null;
   readonly controller: AbortController;
   readonly safeWrite: SseWriter;
+}
+
+const NOT_A_PLAN_EDIT: ChatIntentResult = { intent: "normal_chat", confidence: 0 };
+
+/**
+ * Start the plan-edit intent classifier, or return null when this message
+ * cannot be a plan edit. The classifier needs only the message and history,
+ * so it runs alongside the context build instead of after it — on the many
+ * messages the keyword gate lets through, its round trip no longer sits in
+ * front of the first token.
+ */
+function startPlanEditIntent(
+  req: ChatStreamRequest,
+  userId: string,
+  chatSafety: ChatSafetySignals,
+): Promise<ChatIntentResult> | null {
+  const { message, history, planEditing } = req.body;
+  // Red-flag symptoms in the athlete's own words mean no AI plan change —
+  // the policy createPlanAdjustmentProposal already applies to workout text.
+  // The message goes to normal chat, which is told to put medical care first.
+  if (planEditing === false || chatSafety.redFlagDetected || !hasPlanEditKeywords(message)) return null;
+  // classifyPlanEditIntent already fails open to normal chat; the catch only
+  // guarantees no unhandled rejection if the context build fails first and
+  // nothing ever awaits this.
+  return classifyPlanEditIntent(message, history, userId).catch(() => NOT_A_PLAN_EDIT);
 }
 
 /**
@@ -314,16 +340,11 @@ async function sendPlanProposalReply(
  * true when it answered the request and closed the stream; false falls through
  * to the normal chat stream (including on `generation_failed`).
  */
-async function handlePlanEditRequest({
-  req,
-  res,
-  userId,
-  input,
-  aiContext,
-  controller,
-  safeWrite,
-}: PlanEditBranchOptions): Promise<boolean> {
-  const intent = await classifyPlanEditIntent(input.message, input.history, userId);
+async function handlePlanEditRequest(
+  { req, res, userId, input, aiContext, controller, safeWrite }: PlanEditBranchOptions,
+  planEditIntent: Promise<ChatIntentResult>,
+): Promise<boolean> {
+  const intent = await planEditIntent;
   if (!isPlanEditIntent(intent) || controller.signal.aborted) return false;
 
   // Lets the client swap "Thinking..." for a plan-review status.
@@ -357,13 +378,10 @@ async function handlePlanEditRequest({
  * plain conversation.
  */
 async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
-  const { req, res, input, chatSafety, controller } = options;
-  // Red-flag symptoms in the athlete's own words mean no AI plan change —
-  // the policy createPlanAdjustmentProposal already applies to workout text.
-  // The message goes to normal chat, which is told to put medical care first.
-  if (req.body.planEditing === false || chatSafety.redFlagDetected || !hasPlanEditKeywords(input.message)) return false;
+  const { req, res, planEditIntent, controller } = options;
+  if (!planEditIntent) return false;
   try {
-    return await handlePlanEditRequest(options);
+    return await handlePlanEditRequest(options, planEditIntent);
   } catch (planEditError) {
     if (controller.signal.aborted) {
       res.end();
@@ -429,6 +447,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     // The athlete's own words, scanned for red-flag symptoms and heart-rate
     // medication (analyzeSafetySignals only ever reads workout text).
     const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
+    const planEditIntent = startPlanEditIntent(req, userId, chatSafety);
     const { input, aiContext } = await prepareChatContext(req);
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -463,7 +482,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
         userId,
         input,
         aiContext,
-        chatSafety,
+        planEditIntent,
         controller,
         safeWrite,
       });
