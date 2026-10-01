@@ -66,8 +66,10 @@ export function EmbeddedWorkoutCoachChat({
     cancelStream,
   } = useChatSession({
     useStreaming: true,
-    // Lets "make this day easier" resolve to the workout being viewed.
+    // The coach sees the workout being viewed, and "make this day easier"
+    // resolves to its plan day.
     focusPlanDayId: entry.planDayId ?? undefined,
+    focusWorkoutLogId: entry.workoutLogId ?? undefined,
   });
 
   // Plan-adjustment proposals work here too; confirmation messages are

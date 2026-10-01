@@ -64,10 +64,13 @@ export const chatRequestSchema = z.object({
     .default([])
     .transform((h) => h.slice(-20)),
   // Conversational plan editing: opt-out flag for chat surfaces that don't
-  // render proposal cards, plus the plan day the athlete is viewing when
-  // chatting from the workout-detail dialog ("make this day easier").
+  // render proposal cards.
   planEditing: z.boolean().optional().default(true),
+  // The workout the athlete is viewing when chatting from the workout-detail
+  // dialog: its plan day ("make this day easier") and/or its log. The server
+  // loads them, ownership-checked, into the chat prompt's FOCUSED WORKOUT.
   focusPlanDayId: z.string().max(255).optional(),
+  focusWorkoutLogId: z.string().max(255).optional(),
 });
 
 export const parseExercisesRequestSchema = z.object({

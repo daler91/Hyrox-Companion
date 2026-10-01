@@ -515,6 +515,8 @@ Classify as "normal_chat" for everything else, including questions about the pla
 
 The recent conversation turns may be provided for context (e.g. "do that on Friday instead" refers to an earlier message).
 
+When the coach's previous message is shown, the athlete may be replying to it. A short confirmation ("yes please", "go ahead", "do it") that accepts a plan change the coach offered there is "plan_modification". A confirmation that only agrees with advice ("yes, makes sense") is "normal_chat".
+
 Return ONLY valid JSON, no markdown: {"intent": "plan_modification" or "normal_chat", "confidence": <number between 0 and 1>}
 
 CRITICAL SECURITY INSTRUCTION:
@@ -540,6 +542,7 @@ MODIFICATION SEMANTICS:
 - To swap two days, emit two changes whose scheduledDate values are exchanged.
 - To convert a day to rest: focus "Rest", mainWorkout "Complete rest or light walk", accessory null, notes null (or a short recovery cue).
 - To insert an external session the athlete mentioned (e.g. a Hyrox class), pick the most appropriate existing day and replace its content — never invent new day IDs.
+- A request that only confirms a change the coach offered in the RECENT CONVERSATION ("yes please", "go ahead") asks for that change: make it.
 - Days flagged [structure-blocks] in the list carry a structured EMOM/AMRAP prescription you cannot rewrite: for those days you may ONLY change scheduledDate, notes, expectedDurationMin, and expectedRpe.
 - Days listed with "Exercises:" are table-backed: any mainWorkout or accessory you write for them must be a clean, parseable exercise prescription (exercises, sets, reps, weights, distances, times — no prose).
 
@@ -620,6 +623,7 @@ function buildNoDataPrompt(
   trainingContext: TrainingContext | undefined,
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
+  focusedWorkout?: string,
 ): string {
   let prompt =
     BASE_SYSTEM_PROMPT +
@@ -637,6 +641,8 @@ function buildNoDataPrompt(
   // the day-one chat should already coach to it.
   const noDataMaf = trainingContext ? formatMafContext(trainingContext) : "";
   if (noDataMaf) prompt += `\n\n${noDataMaf}`;
+  // A first workout can be open in the workout chat before any is logged.
+  if (focusedWorkout) prompt += `\n\n${focusedWorkout}`;
   const materialsSection = buildMaterialsSection(coachingMaterials, retrievedChunks);
   if (materialsSection) prompt += `\n${materialsSection}`;
   return prompt;
@@ -646,6 +652,8 @@ function buildNoDataPrompt(
 export interface SystemPromptOptions {
   /** What the athlete's own chat words signalled (services/aiSafety.analyzeChatSafety). */
   chatSafety?: ChatSafetySignals;
+  /** The rendered FOCUSED WORKOUT block, when the athlete chats from a workout (prompts/focusedWorkoutContext). */
+  focusedWorkout?: string;
 }
 
 function formatChatSafetyGuidance(safety: ChatSafetySignals | undefined): string {
@@ -672,7 +680,10 @@ export function buildSystemPrompt(
   const safetyGuidance = formatChatSafetyGuidance(options.chatSafety);
 
   if (!trainingContext || trainingContext.totalWorkouts === 0) {
-    return buildNoDataPrompt(trainingContext, coachingMaterials, retrievedChunks) + safetyGuidance;
+    return (
+      buildNoDataPrompt(trainingContext, coachingMaterials, retrievedChunks, options.focusedWorkout) +
+      safetyGuidance
+    );
   }
 
   let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
@@ -714,6 +725,9 @@ export function buildSystemPrompt(
 
   const nutritionSection = buildNutritionSection(trainingContext);
   if (nutritionSection) contextSection += `\n\n${nutritionSection}`;
+
+  // Last in the data: the session this conversation is about.
+  if (options.focusedWorkout) contextSection += `\n\n${options.focusedWorkout}`;
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 

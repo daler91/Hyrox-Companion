@@ -18,6 +18,7 @@ vi.mock("../storage", () => ({
       searchChunksByEmbedding: vi.fn(),
       listPrincipleMaterialIds: vi.fn(),
       listChunksForMaterials: vi.fn(),
+      getMaterialTitles: vi.fn(),
     },
   },
 }));
@@ -247,21 +248,25 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue([]);
     vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([]);
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([]);
+    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map());
   });
+
+  /** The retrieved text, without sources. */
+  const contents = (chunks: Awaited<ReturnType<typeof retrieveRelevantChunks>>) => chunks.map((chunk) => chunk.content);
 
   it("should embed query and search for similar chunks", async () => {
     const queryEmbedding = [0.1, 0.2, 0.3];
     vi.mocked(generateEmbedding).mockResolvedValue(queryEmbedding);
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
-      { id: "c1", materialId: "m1", userId: "u1", content: "chunk 1", chunkIndex: 0, embedding: null, createdAt: new Date() },
-      { id: "c2", materialId: "m1", userId: "u1", content: "chunk 2", chunkIndex: 1, embedding: null, createdAt: new Date() },
+      { id: "c1", materialId: "m1", userId: "u1", content: "chunk 1", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
+      { id: "c2", materialId: "m1", userId: "u1", content: "chunk 2", chunkIndex: 1, embedding: null, createdAt: new Date(), distance: 0.3 },
     ]);
 
     const result = await retrieveRelevantChunks("u1", "how to train");
 
     expect(generateEmbedding).toHaveBeenCalledWith("how to train");
     expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledWith("u1", queryEmbedding, 6);
-    expect(result).toEqual(["chunk 1", "chunk 2"]);
+    expect(contents(result)).toEqual(["chunk 1", "chunk 2"]);
   });
 
   it("should respect custom topK parameter", async () => {
@@ -283,13 +288,13 @@ describe("retrieveRelevantChunks", () => {
       { id: "p1", materialId: "m-principles", userId: "u1", content: "no sled at my gym", chunkIndex: 0, embedding: null, createdAt: new Date() },
     ]);
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
-      { id: "c1", materialId: "m1", userId: "u1", content: "semantic hit", chunkIndex: 0, embedding: null, createdAt: new Date() },
+      { id: "c1", materialId: "m1", userId: "u1", content: "semantic hit", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
     ]);
 
     const result = await retrieveRelevantChunks("u1", "pin-order query");
 
-    expect(result[0]).toBe("no sled at my gym");
-    expect(result).toContain("semantic hit");
+    expect(result[0].content).toBe("no sled at my gym");
+    expect(contents(result)).toContain("semantic hit");
   });
 
   it("keeps the total at topK, so prompt size and cost do not change", async () => {
@@ -302,13 +307,14 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue(
       Array.from({ length: 6 }, (_v, i) => ({
         id: `c${i}`, materialId: "m1", userId: "u1", content: `c${i}`, chunkIndex: i, embedding: null, createdAt: new Date(),
+        distance: 0.1 + i * 0.05,
       })),
     );
 
     const result = await retrieveRelevantChunks("u1", "topk-budget query");
 
     expect(result).toHaveLength(6);
-    expect(result.slice(0, 2)).toEqual(["p1", "p2"]);
+    expect(contents(result).slice(0, 2)).toEqual(["p1", "p2"]);
   });
 
   it("caps the pin so a long document pasted as principles cannot crowd out the search", async () => {
@@ -326,11 +332,11 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue(["m-principles"]);
     const pinnedChunk = { id: "p1", materialId: "m-principles", userId: "u1", content: "no sled", chunkIndex: 0, embedding: null, createdAt: new Date() };
     vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([pinnedChunk]);
-    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([pinnedChunk]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([{ ...pinnedChunk, distance: 0.1 }]);
 
     const result = await retrieveRelevantChunks("u1", "dedupe query");
 
-    expect(result).toEqual(["no sled"]);
+    expect(contents(result)).toEqual(["no sled"]);
   });
 
   it("degrades to an unpinned search when the principles read fails", async () => {
@@ -338,10 +344,53 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
     vi.mocked(storage.coaching.listPrincipleMaterialIds).mockRejectedValue(new Error("vector db down"));
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
-      { id: "c1", materialId: "m1", userId: "u1", content: "semantic hit", chunkIndex: 0, embedding: null, createdAt: new Date() },
+      { id: "c1", materialId: "m1", userId: "u1", content: "semantic hit", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
     ]);
 
-    await expect(retrieveRelevantChunks("u1", "degrade query")).resolves.toEqual(["semantic hit"]);
+    expect(contents(await retrieveRelevantChunks("u1", "degrade query"))).toEqual(["semantic hit"]);
+  });
+
+  it("drops semantic results beyond the distance cut-off, but never a pinned principle", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue(["m-principles"]);
+    vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([
+      { id: "p1", materialId: "m-principles", userId: "u1", content: "no sled at my gym", chunkIndex: 0, embedding: null, createdAt: new Date() },
+    ]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m1", userId: "u1", content: "near", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.35 },
+      { id: "c2", materialId: "m1", userId: "u1", content: "unrelated", chunkIndex: 1, embedding: null, createdAt: new Date(), distance: 0.9 },
+    ]);
+
+    const result = await retrieveRelevantChunks("u1", "cut-off query");
+
+    expect(contents(result)).toEqual(["no sled at my gym", "near"]);
+  });
+
+  it("names the material each chunk came from, scoped to the athlete", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m1", userId: "u1", content: "Short steps on the sled.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
+      { id: "c2", materialId: "m2", userId: "u1", content: "Orphaned chunk.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.3 },
+    ]);
+    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map([["m1", "Sled technique"]]));
+
+    const result = await retrieveRelevantChunks("u1", "sources query");
+
+    expect(storage.coaching.getMaterialTitles).toHaveBeenCalledWith("u1", ["m1", "m2"]);
+    expect(result).toEqual([
+      { content: "Short steps on the sled.", source: "Sled technique" },
+      { content: "Orphaned chunk.", source: null },
+    ]);
+  });
+
+  it("still returns the chunks, uncited, when the titles read fails", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m1", userId: "u1", content: "Short steps on the sled.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
+    ]);
+    vi.mocked(storage.coaching.getMaterialTitles).mockRejectedValue(new Error("db down"));
+
+    expect(await retrieveRelevantChunks("u1", "titles-fail query")).toEqual([{ content: "Short steps on the sled.", source: null }]);
   });
 
   it("should propagate errors to caller", async () => {

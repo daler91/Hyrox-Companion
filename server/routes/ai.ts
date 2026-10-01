@@ -4,17 +4,20 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
-import { chatWithCoach, parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromImage, parseWorkoutStructureFromText,streamChatWithCoach } from "../gemini/index";
+import { type ChatCallOptions, chatWithCoach, parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromImage, parseWorkoutStructureFromText,streamChatWithCoach } from "../gemini/index";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
+import { formatFocusedWorkout } from "../prompts/focusedWorkoutContext";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
-import { classifyPlanEditIntent, hasPlanEditKeywords, isPlanEditIntent } from "../services/chatIntentService";
+import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
+import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
+import { loadFocusedWorkout } from "../services/focusedWorkoutService";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../services/planAdjustmentService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
@@ -97,18 +100,29 @@ protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: r
 // handler can read it directly without a second safeParse pass.
 async function prepareChatContext(
   req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>,
-): Promise<{ input: ChatInput; aiContext: AIContext }> {
-  const { message, history } = req.body;
+): Promise<{ input: ChatInput; aiContext: AIContext; focusedWorkout?: string }> {
+  const { message, history, focusPlanDayId, focusWorkoutLogId } = req.body;
   const userId = getUserId(req);
-  const aiContext = await buildAIContext(userId, message, reqLogger(req));
-  return { input: { message, history: history || [] }, aiContext };
+  const [aiContext, focused] = await Promise.all([
+    buildAIContext(userId, chatRetrievalQuery(message, history || []), reqLogger(req)),
+    loadFocusedWorkout(userId, { planDayId: focusPlanDayId, workoutLogId: focusWorkoutLogId }),
+  ]);
+  const { trainingContext } = aiContext;
+  const focusedWorkout = focused
+    ? formatFocusedWorkout(focused, {
+        weightUnit: trainingContext?.weightUnit,
+        distanceUnit: trainingContext?.distanceUnit,
+        currentDate: trainingContext?.currentDate,
+      })
+    : undefined;
+  return { input: { message, history: history || [] }, aiContext, focusedWorkout };
 }
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
-    const { input, aiContext } = await prepareChatContext(req);
-    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety });
+    const { input, aiContext, focusedWorkout } = await prepareChatContext(req);
+    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, focusedWorkout });
     const safetyNotice = buildChatSafetyNotice(chatSafety);
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(safetyNotice ? { safetyNotice } : {}) });
   });
@@ -294,7 +308,7 @@ function startPlanEditIntent(
   // Red-flag symptoms in the athlete's own words mean no AI plan change —
   // the policy createPlanAdjustmentProposal already applies to workout text.
   // The message goes to normal chat, which is told to put medical care first.
-  if (planEditing === false || chatSafety.redFlagDetected || !hasPlanEditKeywords(message)) return null;
+  if (planEditing === false || chatSafety.redFlagDetected || !mayRequestPlanEdit(message, history)) return null;
   // classifyPlanEditIntent already fails open to normal chat; the catch only
   // guarantees no unhandled rejection if the context build fails first and
   // nothing ever awaits this.
@@ -400,11 +414,11 @@ async function streamCoachReply(
   input: ChatInput,
   aiContext: AIContext,
   userId: string,
-  chatSafety: ChatSafetySignals,
+  chatOptions: ChatCallOptions,
   controller: AbortController,
   safeWrite: SseWriter,
 ): Promise<void> {
-  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, signal: controller.signal });
+  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { ...chatOptions, signal: controller.signal });
 
   for await (const chunk of stream) {
     if (controller.signal.aborted) {
@@ -448,7 +462,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     // medication (analyzeSafetySignals only ever reads workout text).
     const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
     const planEditIntent = startPlanEditIntent(req, userId, chatSafety);
-    const { input, aiContext } = await prepareChatContext(req);
+    const { input, aiContext, focusedWorkout } = await prepareChatContext(req);
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -488,7 +502,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       });
       if (handledAsPlanEdit) return;
 
-      await streamCoachReply(req, input, aiContext, userId, chatSafety, controller, safeWrite);
+      await streamCoachReply(req, input, aiContext, userId, { chatSafety, focusedWorkout }, controller, safeWrite);
 
       sendSseTerminalEvent(res, controller, abortState);
       res.end();

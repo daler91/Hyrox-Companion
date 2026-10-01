@@ -205,10 +205,18 @@ const MAX_PINNED_PRINCIPLE_CHUNKS = 3;
 // whenever new coaching material is embedded.
 const RAG_CACHE_TTL_MS = 120_000;
 const MAX_RAG_CACHE_ENTRIES = 2_000;
-type CachedRagResult = { chunks: string[]; at: number };
+
+/** A retrieved excerpt, and the title of the material it came from. */
+export interface RetrievedChunk {
+  content: string;
+  /** Null when the material's title couldn't be read. */
+  source: string | null;
+}
+
+type CachedRagResult = { chunks: RetrievedChunk[]; at: number };
 const ragCache = new Map<string, CachedRagResult>();
 
-function setRagCache(key: string, chunks: string[]) {
+function setRagCache(key: string, chunks: RetrievedChunk[]) {
   // Delete-then-set so an existing key moves to the tail (most-recently-used).
   ragCache.delete(key);
   if (ragCache.size >= MAX_RAG_CACHE_ENTRIES) {
@@ -224,7 +232,7 @@ function setRagCache(key: string, chunks: string[]) {
 // entry so it becomes most-recently-used and survives eviction under churn
 // (W13). `at` is the cache time for TTL and is intentionally not refreshed on
 // access, so a hot key still expires on schedule.
-function getRagCache(key: string): string[] | undefined {
+function getRagCache(key: string): RetrievedChunk[] | undefined {
   const entry = ragCache.get(key);
   if (!entry) return undefined;
   if (Date.now() - entry.at >= RAG_CACHE_TTL_MS) {
@@ -237,7 +245,9 @@ function getRagCache(key: string): string[] | undefined {
 }
 
 function ragCacheKey(userId: string, query: string, topK: number): string {
-  const queryKey = `${topK}::${query}`;
+  // v2: entries carry each chunk's source, so a string-only entry cached
+  // before it is never read back.
+  const queryKey = `v2::${topK}::${query}`;
   return `${ragCachePrefix(userId)}${hashRuntimeKey(queryKey)}`;
 }
 
@@ -292,11 +302,29 @@ async function listPinnedPrincipleChunks(userId: string, limit: number) {
   }
 }
 
+/**
+ * The titles to cite chunks by. Only labels, so a failed read leaves the
+ * excerpts uncited rather than failing the retrieval.
+ */
+async function materialTitles(
+  userId: string,
+  chunks: readonly { materialId: string }[],
+): Promise<Map<string, string>> {
+  try {
+    return await storage.coaching.getMaterialTitles(userId, [...new Set(chunks.map((c) => c.materialId))]);
+  } catch (err) {
+    // userId is an opaque uuid and err a DB failure; no material content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err, userId }, "[rag] Failed to read material titles — excerpts go uncited");
+    return new Map();
+  }
+}
+
 export async function retrieveRelevantChunks(
   userId: string,
   query: string,
   topK: number = TOP_K,
-): Promise<string[]> {
+): Promise<RetrievedChunk[]> {
   const key = ragCacheKey(userId, query, topK);
   const cached = getRagCache(key);
   if (cached) {
@@ -306,7 +334,7 @@ export async function retrieveRelevantChunks(
 
   if (env.NODE_ENV !== "test") {
     try {
-      const shared = await getRuntimeCache<{ chunks: string[] }>(key);
+      const shared = await getRuntimeCache<{ chunks: RetrievedChunk[] }>(key);
       if (shared) {
         setRagCache(key, shared.chunks);
         logger.debug({ userId, topK, cacheHit: true, shared: true }, "[rag] Returning cached chunks");
@@ -321,9 +349,9 @@ export async function retrieveRelevantChunks(
   //
   // Without this, "no sled at my gym" reaches the coach only when the query
   // happens to embed near it — and stops reaching it at all once the athlete's
-  // corpus grows past topK, because the search has no similarity threshold and
-  // simply returns the nearest six. Guidance the athlete wrote as always-true
-  // should not drop out of the prompt because they later uploaded a PDF.
+  // corpus grows past topK, or the distance cut-off below drops it. Guidance
+  // the athlete wrote as always-true should not drop out of the prompt because
+  // they later uploaded a PDF, or asked about something else.
   //
   // The pin is taken OUT of the topK budget rather than added to it, so prompt
   // size and cost are unchanged — this changes which chunks are chosen, not how
@@ -338,18 +366,26 @@ export async function retrieveRelevantChunks(
   // bearer:disable javascript_lang_logger_leak
   logger.info({ userId, queryDim: queryEmbedding.length, topK, pinned: pinned.length }, "[rag] Searching chunks by embedding");
   // Over-fetch by the pinned count so dedupe cannot leave us short of topK.
-  const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
-  logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
-  const content = [...pinned, ...chunks.filter((c) => !pinnedIds.has(c.id))]
-    .slice(0, topK)
-    .map((c) => c.content);
-  setRagCache(key, content);
+  const found = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
+  // The nearest six are not necessarily near: "thanks!" or an off-topic
+  // question still fetched six. Pinned principles are exempt.
+  const maxDistance = env.RAG_MAX_COSINE_DISTANCE;
+  const chunks = found.filter((chunk) => chunk.distance <= maxDistance);
+  // Counts and distances only, never chunk content.
+  logger.info(
+    { userId, found: found.length, kept: chunks.length, bestDistance: found[0]?.distance, maxDistance },
+    "[rag] Search returned chunks",
+  );
+  const selected = [...pinned, ...chunks.filter((c) => !pinnedIds.has(c.id))].slice(0, topK);
+  const titles = await materialTitles(userId, selected);
+  const retrieved = selected.map((c) => ({ content: c.content, source: titles.get(c.materialId) ?? null }));
+  setRagCache(key, retrieved);
   if (env.NODE_ENV !== "test") {
-    void setRuntimeCache(key, { chunks: content }, RAG_CACHE_TTL_MS).catch((err: unknown) => {
+    setRuntimeCache(key, { chunks: retrieved }, RAG_CACHE_TTL_MS).catch((err: unknown) => {
       logger.warn({ err, userId, topK }, "[rag] Failed to write shared retrieval cache");
     });
   }
-  return content;
+  return retrieved;
 }
 
 export async function getRagStatus(userId: string) {

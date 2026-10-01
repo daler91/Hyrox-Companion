@@ -111,6 +111,11 @@ const envSchema = z
     TRUST_PROXY: z.enum(["0", "1", "loopback"]).default("1"),
     RAG_CHUNK_SIZE: z.coerce.number().default(600),
     RAG_CHUNK_OVERLAP: z.coerce.number().default(100),
+    // Semantic search results further than this cosine distance from the
+    // query are dropped (pinned principles never are). Loose by default: it
+    // cuts unrelated chunks; the "[rag] Search returned chunks" log line
+    // carries the distances to tighten it against.
+    RAG_MAX_COSINE_DISTANCE: z.coerce.number().min(0).max(2).default(0.6),
     GEMINI_MODEL: z.string().default("gemini-2.5-flash-lite"),
     GEMINI_SUGGESTIONS_MODEL: z.string().default("gemini-3.1-pro-preview"),
     GEMINI_VISION_MODEL: z.string().default("gemini-2.5-flash"),

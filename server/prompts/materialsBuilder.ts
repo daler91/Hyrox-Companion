@@ -48,7 +48,7 @@ export function buildRetrievedChunksSection(chunks: string[]): string {
   if (chunks.length === 0) return "";
 
   let section = `\n--- COACHING REFERENCE MATERIALS ---\n`;
-  section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions.\n\n`;
+  section += `Use these relevant excerpts from the athlete's coaching materials to guide your coaching decisions. Each names the material it comes from: when your advice rests on one, say so in passing (e.g. "your pacing notes say…") so the athlete knows it comes from their own materials.\n\n`;
 
   for (let i = 0; i < chunks.length; i++) {
     // 🛡️ Sentinel: Sanitize retrieved chunks to mitigate prompt injection via user-uploaded materials

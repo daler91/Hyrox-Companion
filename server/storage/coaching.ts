@@ -11,6 +11,9 @@ import { db } from "../db";
 import { EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { vectorPool } from "../vectorDb";
 
+/** A search result: the chunk and its cosine distance to the query. */
+export type ScoredDocumentChunk = DocumentChunk & { distance: number };
+
 export class CoachingStorage {
   async listCoachingMaterials(userId: string): Promise<CoachingMaterial[]> {
     return await db
@@ -176,6 +179,19 @@ export class CoachingStorage {
   }
 
   /**
+   * Titles of the athlete's materials among `materialIds`, by id. The ids come
+   * from the vector database, so they are scoped to the user here as well.
+   */
+  async getMaterialTitles(userId: string, materialIds: string[]): Promise<Map<string, string>> {
+    if (materialIds.length === 0) return new Map();
+    const rows = await db
+      .select({ id: coachingMaterials.id, title: coachingMaterials.title })
+      .from(coachingMaterials)
+      .where(and(eq(coachingMaterials.userId, userId), inArray(coachingMaterials.id, materialIds)));
+    return new Map(rows.map((row) => [row.id, row.title]));
+  }
+
+  /**
    * Chunks belonging to `materialIds`, oldest chunk first, capped.
    *
    * Scoped by user id as well as material id: the caller resolved those ids
@@ -198,11 +214,12 @@ export class CoachingStorage {
     return result.rows;
   }
 
+  /** Nearest first, each with its cosine distance to the query (0 = same direction, 2 = opposite). */
   async searchChunksByEmbedding(
     userId: string,
     queryEmbedding: number[],
     topK: number,
-  ): Promise<DocumentChunk[]> {
+  ): Promise<ScoredDocumentChunk[]> {
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
     // Order by cosine distance using the `halfvec` cast so the planner can use
     // the half-precision HNSW index (idx_document_chunks_embedding_hnsw). The
@@ -210,8 +227,9 @@ export class CoachingStorage {
     // creation in server/maintenance.ts for why halfvec is required (3072 dims
     // exceeds pgvector's 2000-dim limit for native `vector` HNSW indexes).
     // EMBEDDING_DIMENSIONS is a trusted numeric constant, safe to interpolate.
-    const result = await vectorPool.query<DocumentChunk>(
-      `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
+    const result = await vectorPool.query<ScoredDocumentChunk>(
+      `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt",
+              embedding::halfvec(${EMBEDDING_DIMENSIONS}) <=> $2::halfvec(${EMBEDDING_DIMENSIONS}) AS distance
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
        ORDER BY embedding::halfvec(${EMBEDDING_DIMENSIONS}) <=> $2::halfvec(${EMBEDDING_DIMENSIONS})

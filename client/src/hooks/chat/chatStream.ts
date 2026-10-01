@@ -1,4 +1,4 @@
-import { api, type PlanProposalView, QUERY_KEYS, type RagInfo } from "@/lib/api";
+import { api, type ChatFocus, type PlanProposalView, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { queryClient } from "@/lib/queryClient";
 import { consumeSSEStream } from "@/lib/sseStream";
@@ -15,8 +15,8 @@ import {
 export interface ChatReplyRequest {
   content: string;
   history: HistoryTurn[];
-  /** Plan day in view in the workout-detail chat; plan-edit only. */
-  focusPlanDayId?: string;
+  /** The workout in view in the workout-detail chat. */
+  focus?: ChatFocus;
   assistantMessageId: string;
 }
 
@@ -63,11 +63,8 @@ function handleStreamPlanProposal(extras: Record<string, unknown>): void {
  * a dropped connection, a server error event, or a Stop.
  */
 export async function streamChatReply(options: StreamChatReplyOptions): Promise<string> {
-  const { content, history, focusPlanDayId, assistantMessageId, signal, setMessages } = options;
-  const response = await api.chat.sendStream(
-    { message: content, history, ...(focusPlanDayId ? { focusPlanDayId } : {}) },
-    { signal },
-  );
+  const { content, history, focus, assistantMessageId, signal, setMessages } = options;
+  const response = await api.chat.sendStream({ message: content, history, ...focus }, { signal });
   options.onAccepted(response);
 
   const reader = response.body?.getReader();
@@ -94,8 +91,8 @@ export async function streamChatReply(options: StreamChatReplyOptions): Promise<
 }
 
 /** The non-streaming fallback (S9): one request, the whole reply as a message. */
-export async function fetchChatReply({ content, history, assistantMessageId }: ChatReplyRequest): Promise<Message> {
-  const data = await api.chat.send({ message: content, history });
+export async function fetchChatReply({ content, history, focus, assistantMessageId }: ChatReplyRequest): Promise<Message> {
+  const data = await api.chat.send({ message: content, history, ...focus });
   return {
     ...createLocalMessage("assistant", data.response, assistantMessageId),
     ragInfo: data.ragInfo,

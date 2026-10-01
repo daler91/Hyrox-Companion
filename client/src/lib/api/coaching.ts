@@ -45,6 +45,14 @@ export interface CoachInsightsResponse {
   stale?: boolean;
 }
 
+/** The workout in view when chatting from the workout-detail dialog. */
+export interface ChatFocus {
+  /** Its plan day, so "make this day easier" resolves to it. */
+  focusPlanDayId?: string;
+  /** Its log, when the session has been done. */
+  focusWorkoutLogId?: string;
+}
+
 export const chat = {
   sendStream: (
     data: {
@@ -52,9 +60,7 @@ export const chat = {
       history?: Array<{ role: string; content: string }>;
       /** Opt-out for surfaces without proposal-card UI (server defaults true). */
       planEditing?: boolean;
-      /** Plan day in view when chatting from the workout-detail dialog. */
-      focusPlanDayId?: string;
-    },
+    } & ChatFocus,
     options?: { signal?: AbortSignal },
   ) =>
     rawRequest("POST", "/api/v1/chat/stream", data, {
@@ -65,7 +71,7 @@ export const chat = {
       signal: options?.signal,
     }),
 
-  send: (data: { message: string; history?: Array<{ role: string; content: string }> }) =>
+  send: (data: { message: string; history?: Array<{ role: string; content: string }> } & ChatFocus) =>
     typedRequest<ChatResponse>("POST", "/api/v1/chat", data),
 
   // The per-message idempotencyKey (the client message id) is sent as

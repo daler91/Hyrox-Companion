@@ -5,7 +5,7 @@ export type {
   Suggestion,
 } from "./analytics";
 export { analytics, timeline } from "./analytics";
-export type { RagInfo, RagStatus } from "./coaching";
+export type { ChatFocus, RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
 export {

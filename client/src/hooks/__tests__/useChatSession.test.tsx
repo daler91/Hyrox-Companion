@@ -403,4 +403,34 @@ describe('useChatSession', () => {
     await waitFor(() => expect(result.current.messages).toHaveLength(3));
     expect(result.current.messages[2].safetyNotice).toEqual(notice);
   });
+  it('sends the workout in view with the message', async () => {
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Solid.' }, { done: true }))));
+    const { result } = renderHook(
+      () => useChatSession({ focusPlanDayId: 'day-1', focusWorkoutLogId: 'log-1' }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.sendMessage('How did that go?');
+    });
+
+    expect(streamRequest(0)).toMatchObject({ focusPlanDayId: 'day-1', focusWorkoutLogId: 'log-1' });
+  });
+
+  it('sends the workout in view on the non-streaming path too', async () => {
+    vi.mocked(queryClient.apiRequest).mockImplementation((_method, url) =>
+      Promise.resolve(new Response(JSON.stringify(url === '/api/v1/chat' ? { response: 'Solid.' } : {}))),
+    );
+    const { result } = renderHook(
+      () => useChatSession({ useStreaming: false, focusWorkoutLogId: 'log-1' }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.sendMessage('How did that go?');
+    });
+
+    const body = vi.mocked(queryClient.apiRequest).mock.calls.find(([, url]) => url === '/api/v1/chat')?.[2];
+    expect(body).toMatchObject({ focusWorkoutLogId: 'log-1' });
+  });
 });

@@ -156,3 +156,25 @@ describe("chat system prompt — parity with the auto-coach prompt", () => {
     expect(buildSystemPrompt({ ...fresh, missedWorkouts: 3 })).toContain("Completion rate: 0%");
   });
 });
+
+describe("chat system prompt — the workout the athlete is chatting from", () => {
+  const FOCUS = "--- FOCUSED WORKOUT ---\nWorkout: Threshold Run on 2026-09-29\n--- END FOCUSED WORKOUT ---";
+
+  it("sits inside the training data, after everything else in it", () => {
+    const prompt = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }), undefined, undefined, {
+      focusedWorkout: FOCUS,
+    });
+    expect(prompt.indexOf(FOCUS)).toBeGreaterThan(prompt.indexOf("--- ATHLETE'S TRAINING DATA ---"));
+    expect(prompt.indexOf(FOCUS)).toBeLessThan(prompt.indexOf("--- END TRAINING DATA ---"));
+  });
+
+  it("reaches an athlete with nothing logged yet", () => {
+    expect(
+      buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 0 }), undefined, undefined, { focusedWorkout: FOCUS }),
+    ).toContain(FOCUS);
+  });
+
+  it("is absent from an ordinary chat", () => {
+    expect(buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }))).not.toContain("FOCUSED WORKOUT");
+  });
+});

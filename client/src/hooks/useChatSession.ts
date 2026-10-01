@@ -15,9 +15,11 @@ export type { Message } from "@/lib/chatMessage";
 interface UseChatSessionOptions {
   welcomeMessage?: string;
   useStreaming?: boolean;
-  /** Plan day in view when chatting from the workout-detail dialog, so
-   * "make this day easier" resolves to the right day server-side. */
+  /** The workout in view when chatting from the workout-detail dialog: its
+   * plan day (so "make this day easier" resolves to it) and its log. The
+   * server loads both into the coach's FOCUSED WORKOUT context. */
   focusPlanDayId?: string;
+  focusWorkoutLogId?: string;
 }
 
 interface SendMessageOptions {
@@ -38,6 +40,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     welcomeMessage = DEFAULT_WELCOME,
     useStreaming = true,
     focusPlanDayId,
+    focusWorkoutLogId,
   } = options;
 
   const welcomeMessageObj: Message = useMemo(() => ({
@@ -112,7 +115,12 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     let fullResponse = "";
 
     try {
-      const request = { content, history: buildHistory(messagesRef.current), focusPlanDayId, assistantMessageId };
+      const request = {
+        content,
+        history: buildHistory(messagesRef.current),
+        focus: { focusPlanDayId, focusWorkoutLogId },
+        assistantMessageId,
+      };
 
       if (useStreaming && supportsResponseStreaming()) {
         setMessages((prev) => [...prev, createLocalMessage("assistant", "", assistantMessageId)]);
@@ -159,7 +167,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       setIsReviewingPlan(false);
       isSubmittingRef.current = false;
     }
-  }, [useStreaming, saveTurn, warnIfNearBudget, focusPlanDayId, pinAutoScroll]);
+  }, [useStreaming, saveTurn, warnIfNearBudget, focusPlanDayId, focusWorkoutLogId, pinAutoScroll]);
 
   /**
    * Send a failed message again. The failed exchange is dropped first: the

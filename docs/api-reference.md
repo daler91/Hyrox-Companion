@@ -1351,7 +1351,7 @@ Send a message to the AI coach and receive a complete response.
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** `{ message: string (1-1000 chars), history?: ChatMessage[] }` — a longer history is accepted but only its last 20 messages are kept
+- **Body:** `{ message: string (1-1000 chars), history?: ChatMessage[], focusPlanDayId?: string, focusWorkoutLogId?: string }` — a longer history is accepted but only its last 20 messages are kept. The two focus ids (max 255 each) name the workout the athlete is chatting from; the server loads them, ownership-checked, into the prompt's FOCUSED WORKOUT block and ignores ids that aren't theirs
 - **Validation:** `chatRequestSchema`
 - **Response:** `{ response: string, ragInfo: RagInfo, safetyNotice?: ChatSafetyNotice }` — `safetyNotice` (`{ level: "urgent" | "caution", message }`) is present when the athlete's message, or their previous one, matches the red-flag symptom (`urgent`) or heart-rate-medication (`caution`) patterns in `server/services/aiSafety.ts`. It is fixed copy, shown above the reply whatever the model wrote.
 
@@ -1361,7 +1361,7 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
-- **Body:** Same as `/api/v1/chat`, plus two plan-editing fields from `chatRequestSchema`: `planEditing?: boolean` (default `true`; `false` skips plan proposals) and `focusPlanDayId?: string` (max 255 — the plan day being viewed, passed to the proposal generator)
+- **Body:** Same as `/api/v1/chat`, plus `planEditing?: boolean` (default `true`; `false` skips plan proposals). `focusPlanDayId` is also passed to the proposal generator
 - **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. Any failure in this branch falls back to the normal chat stream. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first.
 - **Response headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - **SSE events:**
