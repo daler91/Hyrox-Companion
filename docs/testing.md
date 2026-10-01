@@ -14,13 +14,14 @@ This document describes the testing infrastructure for the fitai.coach applicati
 6. [Cypress E2E Tests](#cypress-e2e-tests)
 7. [Production Smoke Tests](#production-smoke-tests)
 8. [Documentation Sync Tests](#documentation-sync-tests)
-9. [CI/CD Test Workflows](#cicd-test-workflows)
-10. [SonarCloud Quality Gate](#sonarcloud-quality-gate)
-11. [Code Review Skill Profiles](#code-review-skill-profiles)
-12. [Running Tests](#running-tests)
-13. [Debugging Failed Tests](#debugging-failed-tests)
-14. [Coverage Enforcement](#coverage-enforcement)
-15. [Test File Organization](#test-file-organization)
+9. [Chat Scenario Evals](#chat-scenario-evals)
+10. [CI/CD Test Workflows](#cicd-test-workflows)
+11. [SonarCloud Quality Gate](#sonarcloud-quality-gate)
+12. [Code Review Skill Profiles](#code-review-skill-profiles)
+13. [Running Tests](#running-tests)
+14. [Debugging Failed Tests](#debugging-failed-tests)
+15. [Coverage Enforcement](#coverage-enforcement)
+16. [Test File Organization](#test-file-organization)
 
 ---
 
@@ -526,6 +527,25 @@ This is the same idea as `shared/schema/checkConstraints.test.ts`, which pins a 
 
 ---
 
+## Chat Scenario Evals
+
+**Files:** `test/evals/chatScenarios.ts` (the scenarios), `test/evals/runChatScenario.ts` (asks the coach), `test/evals/judge.ts` (grades the reply), `test/evals/chatScenarios.eval.test.ts` (the live run)
+
+Golden conversations for the coach chat, each graded by an LLM judge against its own criteria (AI coach chat review, I22). They cover what a unit test can't see because it depends on the model: red-flag escalation, the load governor's danger zone and the race-week taper holding in chat, never claiming a plan change that wasn't applied (a direct request, "yes please" after an offer, a dismissed proposal), the athlete's units, "this one" meaning the focused workout, and refusing to reveal the prompt. Most run in two modes: `classic` (`chatWithCoach`, the prompt as shipped) and `tools` (`streamChatWithCoachTools` with canned read-tool results, the `AI_CHAT_TOOLS` path), and tools-mode scenarios also check which tools were called, e.g. that "yes please" after an offer calls `propose_plan_changes`.
+
+Each run builds the request the chat route would (the same safety scan, focused-workout block and app notes) and sends it to the configured text provider. The judge, the reasoning model at low effort, gets the facts the coach had, the conversation, the reply as data and the numbered criteria, and returns a verdict per criterion; a criterion it skips, or an answer that isn't the JSON asked for, fails. A reply the output validator refuses fails too: the athlete would have seen an error.
+
+They are off by default, since they cost money and depend on a live model. Run them on every prompt or model change, with the provider keys in `.env`:
+
+```bash
+pnpm eval:chat                       # both modes
+AI_EVAL_MODES=tools pnpm eval:chat   # one mode
+```
+
+The run prints a pass/fail table and, for each failure, the criterion, the judge's reason and the reply. The scenario fixtures are checked without a model in CI (`test/evals/*.test.ts`): each scenario's situation must actually reach the system prompt (the governor block, the plan phase, the units line, the focused workout), so a prompt change can't quietly make an eval meaningless. `server/services/aiEval.test.ts`, the older keyword checks, sits behind the same `RUN_AI_EVAL=true`.
+
+---
+
 ## CI/CD Test Workflows
 
 All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners. Node-based workflows use Node.js 22 via pnpm.
@@ -654,6 +674,7 @@ Invoke a profile inside Claude Code with `/review:<profile>` (for example, `/rev
 | `pnpm exec vitest run --config vitest.integration.config.ts` | Run integration tests (requires a running PostgreSQL database)          |
 | `pnpm exec cypress open`                                     | Open Cypress interactive runner (requires the app running on port 5000) |
 | `pnpm exec cypress run`                                      | Run Cypress tests headlessly                                            |
+| `pnpm eval:chat`                                             | Run the chat scenario evals against a live model (see [Chat Scenario Evals](#chat-scenario-evals)) |
 
 ### Coverage reporting
 
@@ -888,6 +909,10 @@ test/
     criticals.audit.test.ts          # Characterisation tests for the calculation audit
   docs/
     docsSync.test.ts                 # Pins doc catalogues to the code they enumerate
+  evals/
+    chatScenarios.ts                 # Golden chat conversations and their criteria
+    chatScenarios.eval.test.ts       # Live run with an LLM judge (RUN_AI_EVAL=true)
+    judge.ts / runChatScenario.ts    # The judge, and asking the coach as the route would
 ```
 
 ### Conventions

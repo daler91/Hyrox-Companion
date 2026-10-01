@@ -46,6 +46,7 @@
     "test:watch": "vitest",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:coverage": "vitest run --coverage",
+    "eval:chat": "cross-env RUN_AI_EVAL=true node --env-file=.env node_modules/vitest/vitest.mjs run test/evals/chatScenarios.eval.test.ts",
     "coach:influence": "tsx --env-file=.env script/coach-influence/harness.ts",
     "db:decode-entities": "tsx --env-file=.env script/decode-text-entities.ts",
     "docs:openapi": "tsx script/generate-openapi.ts",
