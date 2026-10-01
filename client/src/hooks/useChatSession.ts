@@ -2,8 +2,10 @@ import type { ChatMessage as DBChatMessage } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo,useRef, useState } from "react";
 
+import { useToast } from "@/hooks/use-toast";
 import { api, type PlanProposalView, QUERY_KEYS, type RagInfo } from "@/lib/api";
-import type { Message } from "@/lib/chatMessage";
+import { describeChatFailure } from "@/lib/chatErrors";
+import { createLocalMessage, type Message, type MessageFailure } from "@/lib/chatMessage";
 import { formatTime,getCurrentTimeString } from "@/lib/dateUtils";
 import { queryClient } from "@/lib/queryClient";
 import { consumeSSEStream } from "@/lib/sseStream";
@@ -28,8 +30,6 @@ function createMessageUpdater(
   };
 }
 
-type StreamErrorKind = "abort" | "network" | "other";
-
 // S9 — the streaming path relies on fetch + Response.body (ReadableStream),
 // which is absent on very old WebKit (iOS Safari < 10.3). Feature-detect so
 // those clients fall back to the non-streaming /api/v1/chat request instead of
@@ -38,78 +38,95 @@ function supportsResponseStreaming(): boolean {
   return typeof ReadableStream !== "undefined";
 }
 
-function classifyStreamError(err: unknown): StreamErrorKind {
-  if (err instanceof DOMException && err.name === "AbortError") return "abort";
-  // fetch surfaces network failures as TypeError
-  if (err instanceof TypeError) return "network";
-  return "other";
+interface SavedTurn {
+  role: "user" | "assistant";
+  content: string;
+  idempotencyKey: string;
 }
 
-const STREAM_ERROR_SUFFIX: Record<StreamErrorKind, string> = {
-  abort: "\n\n(Stopped)",
-  network: "\n\n(Connection lost — check your internet)",
-  other: "\n\n(Stream interrupted)",
-};
+/** Saves one send's two turns, in order, once the server has accepted it. */
+interface TurnSaver {
+  /** Save the athlete's turn (at most once). Call when the server accepts the request. */
+  saveUser: () => Promise<void>;
+  /** Save the coach's reply, after the athlete's turn. */
+  saveAssistant: (reply: string) => void;
+  /** Whether the athlete's turn has been saved, now or on an earlier attempt. */
+  userSaved: () => boolean;
+}
 
-const STREAM_ERROR_BODY: Record<StreamErrorKind, string> = {
-  abort: "Stopped.",
-  network: "Your connection dropped. Check your internet and try again.",
-  other: "Something went wrong on our side. Please try again.",
-};
+function createTurnSaver(
+  saveTurn: (turn: SavedTurn) => Promise<void>,
+  userMessage: Message,
+  assistantMessageId: string,
+  userAlreadySaved: boolean,
+): TurnSaver {
+  let userSave: Promise<void> | null = userAlreadySaved ? Promise.resolve() : null;
+  const saveUser = () => {
+    userSave ??= saveTurn({ role: "user", content: userMessage.content, idempotencyKey: userMessage.id });
+    return userSave;
+  };
+  return {
+    saveUser,
+    saveAssistant: (reply) => {
+      void saveUser().then(() =>
+        saveTurn({ role: "assistant", content: reply, idempotencyKey: assistantMessageId }),
+      );
+    },
+    userSaved: () => userSave !== null,
+  };
+}
 
-interface HandleStreamErrorArgs {
+interface HandleSendFailureArgs {
   err: unknown;
   fullResponse: string;
   assistantMessageId: string;
+  userMessage: Message;
+  turns: TurnSaver;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  saveAssistantMessage: (content: string) => void;
   setStreamError: (message: string | null) => void;
 }
 
 /**
- * Reconcile chat UI + persistence when the streaming pipeline rejects.
- * Pulled out of `sendMessage` so the latter stays under the cognitive-
- * complexity ceiling — there are three distinct branches (abort with
- * partial, abort without partial, network/other) plus the optimistic-
- * placeholder cleanup, and inlining all of them dwarfed the happy path.
+ * Reconcile chat UI + persistence when a send rejects, before or during the
+ * stream. The reply keeps whatever text arrived and carries the failure as a
+ * note (with Retry when sending again could help); the note is UI only, so it
+ * never reaches the model as something the coach said.
  */
-function handleStreamError({
+function handleSendFailure({
   err,
   fullResponse,
   assistantMessageId,
+  userMessage,
+  turns,
   setMessages,
-  saveAssistantMessage,
   setStreamError,
-}: HandleStreamErrorArgs): void {
-  const kind = classifyStreamError(err);
+}: HandleSendFailureArgs): void {
+  const description = describeChatFailure(err);
 
-  // Announce the interruption assertively (W8). STREAM_ERROR_BODY is already
-  // phrased for a human ("Your connection dropped…"), so it doubles as the
-  // spoken announcement regardless of whether a partial response survived.
-  setStreamError(STREAM_ERROR_BODY[kind]);
+  // Announce the interruption assertively (W8). The description is already
+  // phrased for a human, so it doubles as the spoken announcement.
+  setStreamError(description.message);
 
-  if (fullResponse) {
-    const finalContent = fullResponse + STREAM_ERROR_SUFFIX[kind];
-    setMessages((prev) =>
-      prev.map((m) => (m.id === assistantMessageId ? { ...m, content: finalContent } : m)),
-    );
-    if (kind === "abort") {
-      // Persist the partial so the user doesn't lose it on reload.
-      saveAssistantMessage(fullResponse);
-    }
-    return;
-  }
+  // Keep a reply the athlete stopped part-way, so it survives a reload.
+  if (description.aborted && fullResponse) turns.saveAssistant(fullResponse);
 
-  const errorMessage: Message = {
-    id: assistantMessageId,
-    role: "assistant",
-    content: STREAM_ERROR_BODY[kind],
-    timestamp: getCurrentTimeString(),
-    createdAtMs: Date.now(),
+  const failure: MessageFailure = {
+    message: description.message,
+    ...(description.retryable
+      ? {
+          retry: {
+            content: userMessage.content,
+            userMessageId: userMessage.id,
+            userSaved: turns.userSaved(),
+          },
+        }
+      : {}),
   };
   setMessages((prev) => {
-    const withoutPlaceholder = prev.filter((m) => m.id !== assistantMessageId);
-    return [...withoutPlaceholder, errorMessage];
+    if (!prev.some((m) => m.id === assistantMessageId)) {
+      return [...prev, { ...createLocalMessage("assistant", fullResponse, assistantMessageId), failure }];
+    }
+    return prev.map((m) => (m.id === assistantMessageId ? { ...m, content: fullResponse, failure } : m));
   });
 }
 
@@ -119,6 +136,11 @@ interface UseChatSessionOptions {
   /** Plan day in view when chatting from the workout-detail dialog, so
    * "make this day easier" resolves to the right day server-side. */
   focusPlanDayId?: string;
+}
+
+interface SendMessageOptions {
+  /** The server accepted, and the client saved, this turn on an earlier attempt. */
+  userAlreadySaved?: boolean;
 }
 
 /** Refresh proposal/plan queries when a stream carried a planProposal frame. */
@@ -162,6 +184,22 @@ function truncateHistory(history: { role: string; content: string }[]): { role: 
   }
   return result;
 }
+
+/**
+ * The conversation as the model should see it: no welcome, and no reply that
+ * failed before any text arrived — its failure note is UI, not something the
+ * coach said (and the server rejects empty turns).
+ */
+function buildHistory(messages: Message[]): { role: string; content: string }[] {
+  return truncateHistory(
+    messages
+      .filter((m) => m.id !== "welcome" && m.content.trim() !== "")
+      .map((m) => ({ role: m.role, content: m.content }))
+      .slice(-MAX_HISTORY_MESSAGES),
+  );
+}
+
+const noop = () => {};
 
 export function useChatSession(options: UseChatSessionOptions = {}) {
   const {
@@ -247,6 +285,28 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [chatHistory, historyLoading, historyLoaded, welcomeMessageObj]);
 
   const saveMessageMutation = useSaveMessageMutation();
+  // Saves never fail the chat turn: a lost save costs that turn on reload, as
+  // it always has, not the reply the athlete is reading.
+  const saveTurn = useCallback(
+    (turn: SavedTurn): Promise<void> => saveMessageMutation.mutateAsync(turn).then(noop, noop),
+    [saveMessageMutation],
+  );
+
+  const { toast } = useToast();
+  const budgetWarnedRef = useRef(false);
+  // aiBudgetCheck sets this header once the athlete has spent most of their
+  // rolling 24-hour allowance; say so once, before the limit stops the chat.
+  const warnIfNearBudget = useCallback(
+    (response: Response) => {
+      if (budgetWarnedRef.current || response.headers.get("X-AI-Budget-Warning") !== "true") return;
+      budgetWarnedRef.current = true;
+      toast({
+        title: "Nearly at today's AI limit",
+        description: "Your AI allowance resets on a rolling 24-hour basis.",
+      });
+    },
+    [toast],
+  );
 
   const clearHistoryMutation = useClearHistoryMutation(() => {
     setMessages([welcomeMessageObj]);
@@ -281,20 +341,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     scrollToBottomIfPinned();
   }, [messages, scrollToBottomIfPinned]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, sendOptions: SendMessageOptions = {}) => {
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     // Claim this send's stream generation; later flushes check it (W14).
     const generationId = ++streamGenerationRef.current;
 
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-      timestamp: getCurrentTimeString(),
-      createdAtMs: Date.now(),
-    };
-
+    const userMessage = createLocalMessage("user", content);
     setMessages((prev) => [...prev, userMessage]);
     shouldAutoScrollRef.current = true;
     setIsLoading(true);
@@ -302,31 +355,19 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     // fires on a fresh failure (W8).
     setStreamError(null);
 
-    // Pass each message's stable client id as an idempotency key so a retried
-    // save (React Query retry, double-fire, offline replay) doesn't persist the
-    // turn twice; the user/assistant ids differ so the pair stays ordered (S7).
-    saveMessageMutation.mutate({ role: "user", content, idempotencyKey: userMessage.id });
-
     const assistantMessageId = crypto.randomUUID();
+    // The athlete's turn is saved once the server accepts the request, not
+    // before: a send it refuses (rate limit, daily cap, AI coaching off) must
+    // not leave an unanswered turn in history. Each message's client id is its
+    // idempotency key, so a retried save can't persist a turn twice (S7).
+    const turns = createTurnSaver(saveTurn, userMessage, assistantMessageId, sendOptions.userAlreadySaved ?? false);
     let fullResponse = "";
 
     try {
-      const history = truncateHistory(
-        messagesRef.current
-          .filter((m) => m.id !== "welcome")
-          .map((m) => ({ role: m.role, content: m.content }))
-          .slice(-MAX_HISTORY_MESSAGES)
-      );
+      const history = buildHistory(messagesRef.current);
 
       if (useStreaming && supportsResponseStreaming()) {
-        const placeholderMessage: Message = {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-          timestamp: getCurrentTimeString(),
-          createdAtMs: Date.now(),
-        };
-        setMessages((prev) => [...prev, placeholderMessage]);
+        setMessages((prev) => [...prev, createLocalMessage("assistant", "", assistantMessageId)]);
 
         const controller = new AbortController();
         streamControllerRef.current = controller;
@@ -336,6 +377,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           { message: content, history, ...(focusPlanDayId ? { focusPlanDayId } : {}) },
           { signal: controller.signal },
         );
+        void turns.saveUser();
+        warnIfNearBudget(response);
 
         const reader = response.body?.getReader();
 
@@ -364,9 +407,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         fullResponse = result.content;
         handleStreamPlanProposal(result.extras);
 
-        if (fullResponse) {
-          saveMessageMutation.mutate({ role: "assistant", content: fullResponse, idempotencyKey: assistantMessageId });
-        }
+        if (fullResponse) turns.saveAssistant(fullResponse);
       } else {
         const data = await api.chat.send({
           message: content,
@@ -374,25 +415,21 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         });
 
         const assistantMessage: Message = {
-          id: assistantMessageId,
-          role: "assistant",
-          content: data.response,
-          timestamp: getCurrentTimeString(),
+          ...createLocalMessage("assistant", data.response, assistantMessageId),
           ragInfo: data.ragInfo,
-          createdAtMs: Date.now(),
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
-        saveMessageMutation.mutate({ role: "assistant", content: data.response, idempotencyKey: assistantMessageId });
+        turns.saveAssistant(data.response);
       }
     } catch (err) {
-      handleStreamError({
+      handleSendFailure({
         err,
         fullResponse,
         assistantMessageId,
+        userMessage,
+        turns,
         setMessages,
-        saveAssistantMessage: (content) =>
-          saveMessageMutation.mutate({ role: "assistant", content, idempotencyKey: assistantMessageId }),
         setStreamError,
       });
     } finally {
@@ -402,7 +439,24 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       setIsReviewingPlan(false);
       isSubmittingRef.current = false;
     }
-  }, [useStreaming, saveMessageMutation, focusPlanDayId]);
+  }, [useStreaming, saveTurn, warnIfNearBudget, focusPlanDayId]);
+
+  /**
+   * Send a failed message again. The failed exchange is dropped first: the
+   * resend adds its own bubble, and the history it sends must not carry the
+   * attempt that failed. A turn the server already accepted isn't saved twice.
+   */
+  const retryMessage = useCallback((failedMessageId: string) => {
+    if (isSubmittingRef.current) return;
+    const retry = messagesRef.current.find((m) => m.id === failedMessageId)?.failure?.retry;
+    if (!retry) return;
+    const isFailedExchange = (m: Message) => m.id === failedMessageId || m.id === retry.userMessageId;
+    // sendMessage reads the history from the ref synchronously, before the
+    // state update below has rendered.
+    messagesRef.current = messagesRef.current.filter((m) => !isFailedExchange(m));
+    setMessages((prev) => prev.filter((m) => !isFailedExchange(m)));
+    void sendMessage(retry.content, { userAlreadySaved: retry.userSaved });
+  }, [sendMessage]);
 
   const cancelStream = useCallback(() => {
     streamControllerRef.current?.abort();
@@ -424,6 +478,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     scrollToBottomIfPinned,
     pinAutoScroll,
     sendMessage,
+    retryMessage,
     cancelStream,
     clearHistory,
     isClearingHistory: clearHistoryMutation.isPending,

@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom';
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect,it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ChatMessage } from '../ChatMessage';
 
@@ -86,6 +87,36 @@ describe('ChatMessage', () => {
       );
       expect(container.innerHTML).not.toMatch(/onerror=/i);
       expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+    });
+  });
+  describe('failed replies', () => {
+    it('shows only the failure note when no text arrived', () => {
+      render(<ChatMessage role="assistant" content="" failure={{ message: 'Your connection dropped.' }} />);
+      expect(screen.getByTestId('message-failure')).toHaveTextContent('Your connection dropped.');
+      expect(screen.queryByTestId('button-retry-message')).not.toBeInTheDocument();
+    });
+
+    it('keeps the text that arrived above the failure note', () => {
+      render(<ChatMessage role="assistant" content="Start with a" failure={{ message: 'Stopped.' }} />);
+      expect(screen.getByText('Start with a')).toBeInTheDocument();
+      expect(screen.getByTestId('message-failure')).toHaveTextContent('Stopped.');
+    });
+
+    it('offers Try again when a retry handler is given', async () => {
+      const onRetry = vi.fn();
+      render(
+        <ChatMessage
+          role="assistant"
+          content=""
+          failure={{
+            message: 'Something went wrong on our side. Please try again.',
+            retry: { content: 'Hi', userMessageId: 'u1', userSaved: false },
+          }}
+          onRetry={onRetry}
+        />,
+      );
+      await userEvent.click(screen.getByTestId('button-retry-message'));
+      expect(onRetry).toHaveBeenCalledTimes(1);
     });
   });
 });

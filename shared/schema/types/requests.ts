@@ -52,11 +52,14 @@ export const chatMessageSchema = z.object({
     .max(50000, "Message must be 50000 characters or less"),
 });
 
+/** Longest chat message the coach accepts; the chat input counts against it. */
+export const CHAT_MESSAGE_MAX_LENGTH = 1000;
+
 export const chatRequestSchema = z.object({
   message: z
     .string()
     .min(1, "Message is required")
-    .max(1000, "Message must be 1000 characters or less"),
+    .max(CHAT_MESSAGE_MAX_LENGTH, `Message must be ${CHAT_MESSAGE_MAX_LENGTH} characters or less`),
   history: z
     .array(chatMessageSchema)
     .optional()

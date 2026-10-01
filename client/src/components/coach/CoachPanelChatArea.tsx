@@ -26,6 +26,8 @@ interface CoachPanelChatAreaProps {
   readonly isApplyingProposal?: boolean;
   readonly onApplyProposal?: (proposal: PlanProposalView) => void;
   readonly onDismissProposal?: (id: string) => void;
+  /** Send a failed message again (see useChatSession.retryMessage). */
+  readonly onRetryMessage?: (messageId: string) => void;
 }
 
 export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaProps>(
@@ -46,6 +48,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       isApplyingProposal = false,
       onApplyProposal,
       onDismissProposal,
+      onRetryMessage,
     },
     ref
   ) => {
@@ -70,6 +73,15 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
               content={message.content}
               timestamp={message.timestamp}
               ragInfo={message.ragInfo}
+              failure={message.failure}
+              // Only a failed reply gets a handler (a fresh closure each
+              // render), so every other message keeps its memoized render
+              // through a stream. Hidden while another send is in flight.
+              onRetry={
+                message.failure?.retry && onRetryMessage && !isProcessing
+                  ? () => onRetryMessage(message.id)
+                  : undefined
+              }
             />
           ))}
           <SuggestionsList

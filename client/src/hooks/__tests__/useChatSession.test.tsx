@@ -15,7 +15,10 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={testQueryClient}>{children}</QueryClientProvider>
 );
 
-vi.mock('@/lib/queryClient', () => ({
+// The real module, so the hook's error handling sees the real
+// RateLimitError / AiBudgetExceededError classes.
+vi.mock('@/lib/queryClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/queryClient')>()),
   apiRequest: vi.fn(),
   queryClient: {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
@@ -31,8 +34,8 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
       invalidateQueries: queryClient.queryClient.invalidateQueries,
     })),
     useQuery: vi.fn(() => ({ data: [], isLoading: false })),
-    useMutation: vi.fn(({ mutationFn, onSuccess }: { mutationFn?: (...args: unknown[]) => Promise<unknown>; onSuccess?: () => void }) => ({
-      mutate: async (...args: unknown[]) => {
+    useMutation: vi.fn(({ mutationFn, onSuccess }: { mutationFn?: (...args: unknown[]) => Promise<unknown>; onSuccess?: () => void }) => {
+      const run = async (...args: unknown[]) => {
         if (mutationFn) {
           try {
             await mutationFn(...args);
@@ -41,9 +44,9 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
           }
         }
         if (onSuccess) onSuccess();
-      },
-      isPending: false,
-    })),
+      };
+      return { mutate: run, mutateAsync: run, isPending: false };
+    }),
   };
 });
 
@@ -64,8 +67,43 @@ async function sendAfterApiFailure(message: string, error: Error) {
 function expectAssistantErrorReply(result: Awaited<ReturnType<typeof sendAfterApiFailure>>) {
   expect(result.current.messages).toHaveLength(3);
   expect(result.current.messages[2].role).toBe('assistant');
-  expect(result.current.messages[2].content).toBe('Something went wrong on our side. Please try again.');
+  // No text arrived, so the reply is only its failure note.
+  expect(result.current.messages[2].content).toBe('');
+  expect(result.current.messages[2].failure?.message).toBe('Something went wrong on our side. Please try again.');
   expect(result.current.isLoading).toBe(false);
+}
+
+const encoder = new TextEncoder();
+
+/** A ReadableStream of SSE `data:` events. */
+function sseStream(...events: object[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      for (const event of events) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      controller.close();
+    },
+  });
+}
+
+/** Route the mocked apiRequest: `stream` answers /chat/stream, saves succeed. */
+function mockStreamEndpoint(stream: () => Promise<Response>) {
+  vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
+    url === '/api/v1/chat/stream' ? stream() : new Response(JSON.stringify({})),
+  );
+}
+
+/** The bodies POSTed to /api/v1/chat/message so far. */
+function savedTurns(): Array<{ role: string; content: string }> {
+  return vi
+    .mocked(queryClient.apiRequest)
+    .mock.calls.filter(([, url]) => url === '/api/v1/chat/message')
+    .map(([, , body]) => body as { role: string; content: string });
+}
+
+/** The body POSTed to /api/v1/chat/stream on the nth send (0-based). */
+function streamRequest(n: number): { message: string; history: Array<{ role: string; content: string }> } {
+  const calls = vi.mocked(queryClient.apiRequest).mock.calls.filter(([, url]) => url === '/api/v1/chat/stream');
+  return calls[n][2] as { message: string; history: Array<{ role: string; content: string }> };
 }
 
 describe('useChatSession', () => {
@@ -174,5 +212,159 @@ describe('useChatSession', () => {
     expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/chat/history"] });
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].id).toBe('welcome');
+  });
+  it('saves the turns only once the server accepts the request, user first', async () => {
+    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Easy run, 40 min.' }, { done: true })));
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('What should I do today?');
+    });
+
+    await waitFor(() => expect(savedTurns()).toHaveLength(2));
+    expect(savedTurns()).toEqual([
+      { role: 'user', content: 'What should I do today?' },
+      { role: 'assistant', content: 'Easy run, 40 min.' },
+    ]);
+  });
+
+  it('does not save the turn the server refused, and names the rate limit with a retry', async () => {
+    mockStreamEndpoint(async () => {
+      throw new queryClient.RateLimitError('Too many requests', 8);
+    });
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Hello?');
+    });
+
+    const reply = result.current.messages[2];
+    expect(reply.failure?.message).toBe(
+      "You're sending messages too quickly. Please wait about 8 seconds and try again.",
+    );
+    expect(reply.failure?.retry).toEqual({
+      content: 'Hello?',
+      userMessageId: result.current.messages[1].id,
+      userSaved: false,
+    });
+    expect(result.current.streamError).toBe(reply.failure?.message);
+    expect(savedTurns()).toEqual([]);
+  });
+
+  it('names the daily AI limit and offers no retry', async () => {
+    mockStreamEndpoint(async () => {
+      throw new queryClient.AiBudgetExceededError('limit', 205, 200);
+    });
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('One more question');
+    });
+
+    expect(result.current.messages[2].failure?.message).toMatch(/daily AI usage limit/i);
+    expect(result.current.messages[2].failure?.retry).toBeUndefined();
+  });
+
+  it("shows the server's reason when it ends the stream, and offers no retry for an expired session", async () => {
+    mockStreamEndpoint(async () =>
+      new Response(sseStream({ error: 'auth-expired', reason: 'Your session expired — please sign in again.' })),
+    );
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Still there?');
+    });
+
+    expect(result.current.messages[2].failure).toEqual({
+      message: 'Your session expired — please sign in again.',
+    });
+  });
+
+  it('keeps text that arrived before a mid-stream failure, and marks the accepted turn as saved', async () => {
+    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Start with a' }, { error: 'Stream error' })));
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Warm-up ideas?');
+    });
+
+    const reply = result.current.messages[2];
+    expect(reply.content).toBe('Start with a');
+    expect(reply.failure?.message).toBe('Something went wrong on our side. Please try again.');
+    expect(reply.failure?.retry?.userSaved).toBe(true);
+    await waitFor(() => expect(savedTurns()).toEqual([{ role: 'user', content: 'Warm-up ideas?' }]));
+  });
+
+  it('retries a failed send in place: the failed exchange goes, the new one is saved once', async () => {
+    mockStreamEndpoint(async () => {
+      throw new Error('500: {"error":"Internal Server Error"}');
+    });
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Taper advice?');
+    });
+    const failedId = result.current.messages[2].id;
+
+    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Cut volume by a third.' }, { done: true })));
+    await act(async () => {
+      result.current.retryMessage(failedId);
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.messages.map((m) => [m.role, m.content])).toEqual([
+      ['assistant', result.current.messages[0].content],
+      ['user', 'Taper advice?'],
+      ['assistant', 'Cut volume by a third.'],
+    ]);
+    // The resend carries no trace of the failed attempt.
+    expect(streamRequest(1).history).toEqual([]);
+    await waitFor(() =>
+      expect(savedTurns()).toEqual([
+        { role: 'user', content: 'Taper advice?' },
+        { role: 'assistant', content: 'Cut volume by a third.' },
+      ]),
+    );
+  });
+
+  it('does not save the athlete turn again when retrying one the server had accepted', async () => {
+    mockStreamEndpoint(async () => new Response(sseStream({ error: 'Stream error' })));
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Hill session?');
+    });
+    const failedId = result.current.messages[2].id;
+    await waitFor(() => expect(savedTurns()).toHaveLength(1));
+
+    mockStreamEndpoint(async () => new Response(sseStream({ text: '6 x 60 s hills.' }, { done: true })));
+    await act(async () => {
+      result.current.retryMessage(failedId);
+    });
+
+    await waitFor(() => expect(savedTurns()).toHaveLength(2));
+    expect(savedTurns()).toEqual([
+      { role: 'user', content: 'Hill session?' },
+      { role: 'assistant', content: '6 x 60 s hills.' },
+    ]);
+  });
+
+  it('leaves a failed reply out of the history sent with the next message', async () => {
+    mockStreamEndpoint(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('First try');
+    });
+    expect(result.current.messages[2].failure?.message).toMatch(/connection dropped/i);
+
+    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Here you go.' }, { done: true })));
+    await act(async () => {
+      await result.current.sendMessage('Second try');
+    });
+
+    expect(streamRequest(1).history).toEqual([{ role: 'user', content: 'First try' }]);
   });
 });

@@ -143,4 +143,44 @@ describe("ChatInput", () => {
     render(<ChatInput onSend={vi.fn()} isLoading />);
     expect(screen.getByTestId("input-chat-message")).toBeDisabled();
   });
+
+  it("shows the character count only once a message nears the limit", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput onSend={vi.fn()} maxLength={20} />);
+    const input = screen.getByTestId("input-chat-message");
+
+    await user.type(input, "sixteen chars ok");
+    expect(screen.queryByTestId("text-chat-length")).not.toBeInTheDocument();
+
+    await user.type(input, "!");
+    expect(screen.getByTestId("text-chat-length")).toHaveTextContent("17/20");
+    expect(input).toHaveAttribute("aria-describedby", screen.getByTestId("text-chat-length").id);
+  });
+
+  it("blocks sending, without truncating, a message over the limit", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} maxLength={10} />);
+    const input = screen.getByTestId("input-chat-message");
+
+    await user.click(input);
+    await user.paste("twelve chars");
+    expect(input).toHaveValue("twelve chars");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByTestId("text-chat-length")).toHaveTextContent("2 over the 10-character limit");
+    expect(screen.getByTestId("button-send-message")).toHaveAttribute("aria-disabled", "true");
+
+    await user.click(screen.getByTestId("button-send-message"));
+    await user.type(input, "{Enter}");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("counts against the coach chat's limit by default", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput onSend={vi.fn()} />);
+
+    await user.click(screen.getByTestId("input-chat-message"));
+    await user.paste("x".repeat(801));
+    expect(screen.getByTestId("text-chat-length")).toHaveTextContent("801/1000");
+  });
 });
