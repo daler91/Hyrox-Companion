@@ -154,7 +154,7 @@ The red-flag symptom and heart-rate-medication patterns in `server/services/aiSa
 
 ### Streaming Chat
 
-`streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. It accepts an optional `AbortSignal` parameter, allowing the caller to cancel provider generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
+`streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. Its options take an optional `signal` (`AbortSignal`), allowing the caller to cancel provider generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
 
 ```
 data: {"ragInfo": {"source": "rag", "chunkCount": 3}}   // First event

@@ -404,7 +404,7 @@ async function streamCoachReply(
   controller: AbortController,
   safeWrite: SseWriter,
 ): Promise<void> {
-  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId, { chatSafety });
+  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, signal: controller.signal });
 
   for await (const chunk of stream) {
     if (controller.signal.aborted) {

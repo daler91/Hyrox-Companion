@@ -653,7 +653,7 @@ describe("POST /api/chat/stream", () => {
     expect(chunks[3]).toContain('{"done":true}');
 
     expect(buildTrainingContext).toHaveBeenCalledWith("test_user_id");
-    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, expect.any(AbortSignal), "test_user_id", NO_CHAT_SAFETY);
+    expect(streamChatWithCoach).toHaveBeenCalledWith("Hello stream", [], MOCK_TRAINING_CONTEXT, [], undefined, "test_user_id", { ...NO_CHAT_SAFETY, signal: expect.any(AbortSignal) });
   });
 
   it("sends the urgent safety notice ahead of the reply, and skips plan editing, for a red-flag message", async () => {
@@ -673,8 +673,9 @@ describe("POST /api/chat/stream", () => {
     expect(chunks[2]).toContain('{"text":"Please get checked first."}');
     expect(chunks[3]).toContain('{"done":true}');
     expect(generateJsonText).not.toHaveBeenCalled();
-    expect(vi.mocked(streamChatWithCoach).mock.calls[0][7]).toEqual({
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]).toEqual({
       chatSafety: { redFlagDetected: true, hrMedicationDetected: false },
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -1174,9 +1175,8 @@ describe("RAG pipeline in chat endpoints", () => {
       MOCK_TRAINING_CONTEXT,
       undefined,
       ["relevant chunk"],
-      expect.any(AbortSignal),
       "test_user_id",
-      NO_CHAT_SAFETY,
+      { ...NO_CHAT_SAFETY, signal: expect.any(AbortSignal) },
     );
   });
 });

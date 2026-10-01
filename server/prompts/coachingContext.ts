@@ -153,6 +153,18 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
   return section;
 }
 
+/** "Exercises: …" for a structured session; otherwise its text, accessory work and notes. */
+function plannedSessionDetails(
+  workout: NonNullable<TrainingContext["upcomingWorkouts"]>[number],
+  exerciseSummary: string,
+): string {
+  if (exerciseSummary) return `Exercises: ${exerciseSummary}`;
+  let details = sanitizeUserInput(workout.mainWorkout || "No details");
+  if (workout.accessory) details += ` | Accessory: ${sanitizeUserInput(workout.accessory)}`;
+  if (workout.notes) details += ` | Notes: ${sanitizeUserInput(workout.notes)}`;
+  return details;
+}
+
 export function buildUpcomingWorkouts(trainingContext: TrainingContext): string {
   if (!trainingContext.upcomingWorkouts || trainingContext.upcomingWorkouts.length === 0) return "";
 
@@ -169,14 +181,7 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
       distanceUnit: trainingContext.distanceUnit,
     });
     const tier = workout.priority ? ` [${workout.priority} session]` : "";
-    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}${tier}: ${sanitizeUserInput(workout.focus || "General")} - `;
-    if (exerciseSummary) {
-      line += `Exercises: ${exerciseSummary}`;
-    } else {
-      line += sanitizeUserInput(workout.mainWorkout || "No details");
-      if (workout.accessory) line += ` | Accessory: ${sanitizeUserInput(workout.accessory)}`;
-      if (workout.notes) line += ` | Notes: ${sanitizeUserInput(workout.notes)}`;
-    }
+    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}${tier}: ${sanitizeUserInput(workout.focus || "General")} - ${plannedSessionDetails(workout, exerciseSummary)}`;
     for (const part of priorAi[index] ?? []) line += ` | ${part}`;
     section += line;
   }

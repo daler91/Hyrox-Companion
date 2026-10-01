@@ -19,6 +19,11 @@ export interface ChatCallOptions extends SystemPromptOptions {
   reasoningEffort?: TextAiReasoningEffort;
 }
 
+export interface ChatStreamOptions extends ChatCallOptions {
+  /** Cancels provider generation mid-stream, e.g. when the client disconnects. */
+  signal?: AbortSignal;
+}
+
 function buildCoachMessages(
   userMessage: string,
   conversationHistory: Pick<ChatMessage, "role" | "content">[],
@@ -106,9 +111,8 @@ export async function* streamChatWithCoach(
   trainingContext?: TrainingContext,
   coachingMaterials?: CoachingMaterialInput[],
   retrievedChunks?: string[],
-  signal?: AbortSignal,
   userId?: string,
-  options: ChatCallOptions = {},
+  { signal, ...options }: ChatStreamOptions = {},
 ): AsyncGenerator<string> {
   try {
     // Chunk-boundary-safe: a restricted phrase split across two SSE chunks is
