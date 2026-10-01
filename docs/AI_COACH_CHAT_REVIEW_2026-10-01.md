@@ -37,11 +37,14 @@ Wave 1 is fixed (daler91/Hyrox-Companion#2085). Wave 2's first batch (D1(a), D5,
 second batch (I1, I2, I3, I7) are fixed (daler91/Hyrox-Companion#2086), and its last two items, I6
 and I19, on `claude/amazing-rubin-zz0w63`. Wave 3 is done on the same branch, apart from I5's chat-proposed athlete facts (see I5): I12, I4, I5's rolling summary, I8 behind a flag, I22 and I23. The
 rest of this document describes the code as it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
-configurations, ESLint on the whole repo (no errors; the only warning in a touched file, the length
-of `server/routes/__tests__/ai.test.ts`, predates this work), the full unit suite with coverage
-thresholds, and `pnpm build` followed by `pnpm check:bundle`. Not run: Cypress (the binary download
-is blocked in this environment) or any live model. The running app was driven only for wave 2's
-second batch, without a model (see below).
+configurations, ESLint on the whole repo (no errors; the only warnings in touched files, the lengths
+of `server/routes/__tests__/ai.test.ts` and `shared/schema/tables.ts`, predate this work), the full
+unit suite with coverage thresholds (6,537 tests), the storage integration suites against Postgres 16
+with pgvector (71 tests), all 115 migrations applied to a fresh database and re-run as a no-op, and
+`pnpm build` followed by `pnpm check:bundle`. Not run: Cypress (the binary download is blocked in
+this environment) or any live model, so neither the scenario evals (I22) nor the tools path (I8)
+has met a real one. The running app was driven, without a model, for wave 2's second batch and for
+wave 3's UI (see below).
 
 | ID      | Fix                                                                                                                                                                                                                                                                                                                                                                         |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
