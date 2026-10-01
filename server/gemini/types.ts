@@ -1,4 +1,5 @@
 import type {
+  AthleteFactCategory,
   BodySystemLoadOverview,
   CoachNoteInputs,
   PlanDayPriority,
@@ -25,6 +26,17 @@ export interface CoachAbsence {
   active: boolean;
   /** `injury` or `illness`, as opposed to the circumstantial travel/rest. */
   medical: boolean;
+}
+
+/**
+ * A fact from the athlete card (coach-memory spec, Path C) as the coach reads
+ * it: the athlete's own words, what it is about, and when they are next
+ * asked whether it is still true.
+ */
+export interface CoachAthleteFact {
+  fact: string;
+  category: AthleteFactCategory;
+  reviewOn: string;
 }
 
 /**
@@ -119,6 +131,14 @@ export interface TrainingContext {
    * true until they clear it, unlike the dated `absences` below.
    */
   trainingConstraints?: string | null;
+  /**
+   * The athlete card: the active facts the athlete told us are true every
+   * week. Top level rather than inside coachingInsights (coach-memory spec §4):
+   * the zero-workout chat prompt has to render it too, and coachingInsights is
+   * flattened into the persisted ai_inputs_used audit, where athlete free text
+   * doesn't belong.
+   */
+  athleteFacts?: CoachAthleteFact[];
   /**
    * Declared absences overlapping the window the coach reasons about. Dated,
    * and they expire on their own; a healed injury stops being mentioned without

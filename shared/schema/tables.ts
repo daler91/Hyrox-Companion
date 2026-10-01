@@ -19,7 +19,9 @@ import {
 
 import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
+  type AthleteFactCategory,
   athleteFactCategoryEnum,
+  type AthleteFactSource,
   athleteFactSourceEnum,
   chatFeedbackEnum,
   chatMessageKindEnum,
@@ -1229,9 +1231,9 @@ export const athleteFacts = pgTable(
     fact: text("fact").notNull(),
     dedupeKey: varchar("dedupe_key", { length: 160 }).notNull(),
     /** See athleteFactCategoryEnum. */
-    category: varchar("category", { length: 24 }).notNull(),
+    category: varchar("category", { length: 24 }).$type<AthleteFactCategory>().notNull(),
     /** See athleteFactSourceEnum. */
-    source: varchar("source", { length: 24 }).notNull().default("athlete"),
+    source: varchar("source", { length: 24 }).$type<AthleteFactSource>().notNull().default("athlete"),
     /** False once the athlete retires it: kept, so stating it again brings it back rather than duplicating it. */
     active: boolean("active").notNull().default(true),
     /** When to ask whether it is still true. The server sets it from the athlete's own today. */

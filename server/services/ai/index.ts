@@ -484,6 +484,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     loadExerciseSets,
     loadTags,
     annotations,
+    activeFacts,
   ] = await Promise.all([
     // Bound to recent history: this internal caller has no caller-supplied
     // limit, so an unbounded getTimeline() would hydrate the user's entire
@@ -499,6 +500,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     // the windowing is done in selectAbsencesForContext rather than paying for
     // a range predicate. Same reasoning as TimelineStorage.fetchAbsences.
     storage.timelineAnnotations.list(userId),
+    // The athlete card: at most 20 active rows, read alongside the rest.
+    storage.athleteFacts.listActive(userId),
   ]);
 
   const absences = selectAbsencesForContext(annotations, today);
@@ -740,6 +743,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     // renderer already self-suppresses on empty, so a conditional spread here
     // would buy nothing but branches.
     trainingConstraints,
+    athleteFacts: activeFacts.map(({ fact, category, reviewOn }) => ({ fact, category, reviewOn })),
     absences,
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),
