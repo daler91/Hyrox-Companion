@@ -156,9 +156,11 @@ function describeLoadCalibration(
 }
 
 /**
- * The constraints this plan is written for. The route saves the wizard's box
- * to the profile before queueing, so the two normally agree; the input wins
- * because it is what the athlete just confirmed for THIS plan.
+ * The constraints this plan is written for, when the caller didn't read the
+ * athlete card (executePlanGeneration does, and passes the card's text): the
+ * wizard's box, or the older stored note from a client that never sends the
+ * box. The input wins because it is what the athlete just confirmed for THIS
+ * plan.
  */
 function generationConstraints(
   input: GenerationSelectionInput,
@@ -195,9 +197,9 @@ export function buildGenerationSelection(
   user: GenerationUser,
   today: string,
   history: Pick<GenerationHistory, "workoutLogs" | "sets"> | null,
+  constraints: string | null = generationConstraints(input, user),
 ): ExerciseSelectionBrief | null {
   try {
-    const constraints = generationConstraints(input, user);
     const { workoutLogs: trainingLogs, sets } = trainingHistory(history);
     // Same suppression as the coach's computeExerciseGaps, so a station the
     // athlete can't train is never reported as a gap to close.
@@ -240,6 +242,7 @@ export function buildGenerationEngine(
   today: string,
   history: Pick<GenerationHistory, "workoutLogs" | "sets"> | null,
   brief: ExerciseSelectionBrief | null,
+  constraints: string | null = generationConstraints(input, user),
 ): WorkoutEnginePlan | null {
   if (!brief) return null;
   try {
@@ -250,7 +253,7 @@ export function buildGenerationEngine(
       primaryLifts: brief.primaryLifts,
       goal: input.goal,
       focusAreas: input.focusAreas,
-      constraints: generationConstraints(input, user),
+      constraints,
       totalWeeks: input.totalWeeks,
       daysPerWeek: input.daysPerWeek,
       restDays: input.restDays,
@@ -275,6 +278,7 @@ export async function computeGenerationCalibration(
   userId: string,
   user: GenerationUser,
   input: GenerationEngineInput,
+  constraints: string | null = generationConstraints(input, user),
 ): Promise<GenerationCalibration> {
   // The athlete's calendar date, not the server's: a UTC "today" put the
   // load window a day off for everyone west of Greenwich, so the posture and
@@ -282,11 +286,11 @@ export async function computeGenerationCalibration(
   // against (resolveUserTodayForPlan makes the same call for the schedule).
   const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const history = await loadGenerationHistory(userId, today);
-  const exerciseSelection = buildGenerationSelection(input, user, today, history);
+  const exerciseSelection = buildGenerationSelection(input, user, today, history, constraints);
   return {
     ...describeLoadCalibration(history, user, today),
     exerciseSelection,
-    engine: buildGenerationEngine(input, user, today, history, exerciseSelection),
+    engine: buildGenerationEngine(input, user, today, history, exerciseSelection, constraints),
     reflectedLogIds: reflectedLogIds(history, today),
   };
 }

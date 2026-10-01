@@ -1,4 +1,4 @@
-import { athleteFactReviewOn, MAX_ACTIVE_ATHLETE_FACTS, splitIntoFacts } from "@shared/athleteFacts";
+import { athleteFactReviewOn, MAX_ACTIVE_ATHLETE_FACTS } from "@shared/athleteFacts";
 import {
   type AthleteFactImportResult,
   type CreateAthleteFact,
@@ -11,6 +11,7 @@ import { type Request, type Response, Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { ErrorCode } from "../errors";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
+import { moveStatementsToCard } from "../services/athleteFactsService";
 import { storage } from "../storage";
 import type { AthleteFactWrite } from "../storage/athleteFacts";
 import { getLocalDateStrSafe } from "../timezone";
@@ -81,20 +82,12 @@ protectedPost(
   { limiter: rateLimiter("athleteFacts", 20) },
   async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const user = await storage.users.getUser(userId);
-    const note = user?.trainingConstraints?.trim();
+    const note = (await storage.users.getUser(userId))?.trainingConstraints?.trim();
     if (!note) {
       res.json({ added: 0, skipped: 0 } satisfies AthleteFactImportResult);
       return;
     }
-    const facts = splitIntoFacts(note).map((fact) => ({ fact, category: "constraint" as const, source: "plan_generation" as const }));
-    const result = await storage.athleteFacts.seed(
-      userId,
-      facts,
-      athleteFactReviewOn(getLocalDateStrSafe(new Date(), user?.userTimezone)),
-    );
-    if (result.skipped === 0) await storage.users.updateUserPreferences(userId, { trainingConstraints: null });
-    res.json(result satisfies AthleteFactImportResult);
+    res.json((await moveStatementsToCard(userId, note, "plan_generation")) satisfies AthleteFactImportResult);
   },
 );
 
