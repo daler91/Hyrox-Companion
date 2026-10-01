@@ -24,7 +24,7 @@ describe("anthropic text provider", () => {
     }));
 
     const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
-    expect(provider.capabilities).toEqual({ jsonMode: false, streaming: true, reasoningEffort: false });
+    expect(provider.capabilities).toEqual({ jsonMode: false, streaming: true, reasoningEffort: false, tools: true });
     const response = await provider.generateText({ ...baseRequest, json: true });
 
     expect(response).toEqual({
@@ -99,6 +99,77 @@ describe("anthropic text provider", () => {
 
     expect(chunks.map((chunk) => chunk.text).filter(Boolean)).toEqual(["Hi"]);
     expect(chunks.at(-1)?.usage).toEqual({ inputTokens: 17, outputTokens: 5 });
+  });
+
+  const TOOLS = [{ name: "get_workouts", description: "Logged sessions", parameters: { type: "object", properties: {} } }];
+
+  it("sends tools, and a conversation's calls and results, as tool_use and tool_result blocks", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("", { status: 200 }));
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+
+    await collectTextChunks(provider.streamText({
+      ...baseRequest,
+      tools: TOOLS,
+      messages: [
+        { role: "user", content: "What did I squat in July?" },
+        {
+          role: "assistant",
+          content: "Let me look.",
+          toolCalls: [
+            { id: "toolu_1", name: "get_workouts", arguments: { from: "2026-07-01" } },
+            { id: "toolu_2", name: "get_personal_records", arguments: {} },
+          ],
+        },
+        { role: "tool", toolCallId: "toolu_1", name: "get_workouts", content: "[]" },
+        { role: "tool", toolCallId: "toolu_2", name: "get_personal_records", content: "{}" },
+      ],
+    }));
+
+    expect(requestJsonBody(fetchSpy.mock.calls[0][1])).toMatchObject({
+      tools: [{ name: "get_workouts", description: "Logged sessions", input_schema: { type: "object", properties: {} } }],
+      tool_choice: { type: "auto" },
+      messages: [
+        { role: "user", content: "What did I squat in July?" },
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Let me look." },
+            { type: "tool_use", id: "toolu_1", name: "get_workouts", input: { from: "2026-07-01" } },
+            { type: "tool_use", id: "toolu_2", name: "get_personal_records", input: {} },
+          ],
+        },
+        // Both results in one user turn, as the API requires.
+        {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "toolu_1", content: "[]" },
+            { type: "tool_result", tool_use_id: "toolu_2", content: "{}" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("assembles a streamed tool_use block into a call", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Checking.\"}}\n\n" +
+      "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_7\",\"name\":\"get_workouts\",\"input\":{}}}\n\n" +
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"from\\\": \\\"2026-07\"}}\n\n" +
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"-01\\\"}\"}}\n\n" +
+      "data: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+      { status: 200 },
+    ));
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+
+    const chunks: TextAiStreamChunk[] = [];
+    for await (const chunk of provider.streamText({ ...baseRequest, tools: TOOLS })) chunks.push(chunk);
+
+    expect(chunks.map((chunk) => chunk.text).filter(Boolean)).toEqual(["Checking."]);
+    expect(chunks.flatMap((chunk) => chunk.toolCalls ?? [])).toEqual([
+      { id: "toolu_7", name: "get_workouts", arguments: { from: "2026-07-01" } },
+    ]);
   });
 
   it("fails clearly when no API key is configured", async () => {

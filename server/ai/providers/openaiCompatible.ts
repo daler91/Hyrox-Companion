@@ -1,11 +1,20 @@
 import { retryWithBackoff } from "../retry";
-import { combineSignals, contentPartText, readJsonPayload, streamSseTextChunks, trimTrailingSlashes } from "./http";
+import {
+  combineSignals,
+  contentPartText,
+  type ParsedSseTextEvent,
+  parseToolArguments,
+  readJsonPayload,
+  streamSseTextChunks,
+  trimTrailingSlashes,
+} from "./http";
 import type {
   ResolvedTextAiRequest,
-  TextAiMessage,
+  TextAiConversationMessage,
   TextAiOpenAiCompatibleProfile,
   TextAiProvider,
   TextAiResponse,
+  TextAiToolCall,
   TextAiUsage,
 } from "./types";
 
@@ -51,14 +60,40 @@ function textFromOpenAiContent(content: unknown): string {
     .join("");
 }
 
-function openAiMessages(systemInstruction: string | undefined, messages: TextAiMessage[]) {
+function openAiMessage(message: TextAiConversationMessage) {
+  if (message.role === "tool") {
+    return { role: "tool" as const, tool_call_id: message.toolCallId, content: message.content };
+  }
+  if (message.role === "assistant" && message.toolCalls?.length) {
+    return {
+      role: "assistant" as const,
+      content: message.content || null,
+      tool_calls: message.toolCalls.map((call) => ({
+        id: call.id,
+        type: "function" as const,
+        function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+      })),
+    };
+  }
+  return { role: message.role, content: message.content };
+}
+
+function openAiMessages(systemInstruction: string | undefined, messages: TextAiConversationMessage[]) {
   return [
     ...(systemInstruction ? [{ role: "system" as const, content: systemInstruction }] : []),
-    ...messages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
+    ...messages.map(openAiMessage),
   ];
+}
+
+function openAiTools(request: ResolvedTextAiRequest) {
+  if (!request.tools?.length) return {};
+  return {
+    tools: request.tools.map((tool) => ({
+      type: "function" as const,
+      function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+    })),
+    tool_choice: request.toolChoice ?? "auto",
+  };
 }
 
 function requestBody(request: ResolvedTextAiRequest, options: OpenAiCompatibleAdapterOptions, stream: boolean) {
@@ -70,6 +105,7 @@ function requestBody(request: ResolvedTextAiRequest, options: OpenAiCompatibleAd
     ...(stream ? { stream_options: { include_usage: true } } : {}),
     ...(request.json ? { response_format: { type: "json_object" } } : {}),
     ...(options.supportsReasoningEffort && reasoningEffort !== "none" ? { reasoning_effort: reasoningEffort } : {}),
+    ...openAiTools(request),
   };
 }
 
@@ -114,13 +150,60 @@ async function postJson(
   return response;
 }
 
-function streamTextFromPayload(payload: unknown): { text?: string; usage?: TextAiUsage } {
+interface ToolCallDelta {
+  index?: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+interface StreamChoice {
+  delta?: { content?: unknown; tool_calls?: ToolCallDelta[] };
+  text?: unknown;
+  finish_reason?: string | null;
+}
+
+/**
+ * Tool calls arrive in pieces: an id and name first, then the arguments as
+ * string fragments, keyed by index. They are complete once the stream says
+ * it stopped to call them, or when it ends.
+ */
+function createToolCallAssembler() {
+  const pending = new Map<number, { id: string; name: string; args: string }>();
+  return {
+    add(deltas: ToolCallDelta[] | undefined): void {
+      for (const delta of deltas ?? []) {
+        const index = delta.index ?? 0;
+        const call = pending.get(index) ?? { id: "", name: "", args: "" };
+        call.id ||= delta.id ?? "";
+        call.name ||= delta.function?.name ?? "";
+        call.args += delta.function?.arguments ?? "";
+        pending.set(index, call);
+      }
+    },
+    drain(): TextAiToolCall[] {
+      const calls = [...pending.entries()]
+        .sort(([a], [b]) => a - b)
+        .filter(([, call]) => call.name)
+        .map(([index, call]) => ({ id: call.id || `call_${index}`, name: call.name, arguments: parseToolArguments(call.args) }));
+      pending.clear();
+      return calls;
+    },
+  };
+}
+
+function streamEventFromPayload(
+  payload: unknown,
+  toolCalls: ReturnType<typeof createToolCallAssembler>,
+): ParsedSseTextEvent {
   const choices = (payload as { choices?: unknown[] } | undefined)?.choices;
-  const first = choices?.[0] as { delta?: { content?: unknown }; text?: unknown } | undefined;
+  const first = choices?.[0] as StreamChoice | undefined;
+  toolCalls.add(first?.delta?.tool_calls);
   const content = first?.delta?.content ?? first?.text;
+  const finished = first?.finish_reason === "tool_calls" ? toolCalls.drain() : [];
   return {
     text: textFromOpenAiContent(content) || undefined,
     usage: usageFromOpenAiCompatible(payload),
+    ...(finished.length > 0 ? { toolCalls: finished } : {}),
   };
 }
 
@@ -131,6 +214,7 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
       jsonMode: true,
       streaming: true,
       reasoningEffort: options.supportsReasoningEffort,
+      tools: true,
     },
 
     async generateText(request): Promise<TextAiResponse> {
@@ -151,10 +235,18 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
     },
 
     async *streamText(request) {
-      yield* streamSseTextChunks(request, postJson(request, options, true), (event) => {
-        if (event === "[DONE]") return { done: true };
-        return streamTextFromPayload(JSON.parse(event) as unknown);
-      });
+      const toolCalls = createToolCallAssembler();
+      // A provider that ends without saying it stopped for tools still gets its calls.
+      const flush = (): ParsedSseTextEvent => ({ toolCalls: toolCalls.drain() });
+      yield* streamSseTextChunks(
+        request,
+        postJson(request, options, true),
+        (event) => {
+          if (event === "[DONE]") return { ...flush(), done: true };
+          return streamEventFromPayload(JSON.parse(event) as unknown, toolCalls);
+        },
+        flush,
+      );
     },
   };
 }

@@ -1,6 +1,14 @@
 import type { ChatMessage } from "@shared/schema";
 
-import { generateText, streamText, type TextAiMessage } from "../ai/providers";
+import {
+  generateText,
+  streamText,
+  streamTextEvents,
+  type TextAiConversationMessage,
+  type TextAiMessage,
+  type TextAiTool,
+  type TextAiToolCall,
+} from "../ai/providers";
 import { resolveChatReasoningEffort } from "../ai/providers/config";
 import type { TextAiReasoningEffort, TextAiRequest } from "../ai/providers/types";
 import { AppError, classifyAiError } from "../errors";
@@ -149,6 +157,113 @@ export async function* streamChatWithCoach(
   } catch (error) {
     const classified = classifyAiError(error);
     logger.error("AI provider streaming request failed");
+    throw new AppError(classified.code, classified.message, classified.status);
+  }
+}
+
+/** How many rounds of tool calls a reply may take before the coach must answer (I8). */
+const MAX_TOOL_ROUNDS = 3;
+
+/**
+ * The tools a streamed reply may call, and how to run them. A call to the
+ * `handoff` tool ends the reply instead: the caller takes over (the route
+ * turns a plan-change call into a proposal).
+ */
+export interface CoachToolset {
+  readonly tools: TextAiTool[];
+  readonly run: (call: TextAiToolCall) => Promise<string>;
+  readonly handoff?: string;
+}
+
+/** What a streamed reply with tools produces: its text as it comes, or a handed-off call. */
+export type CoachStreamEvent = { type: "text"; text: string } | { type: "handoff"; call: TextAiToolCall };
+
+interface ToolRound {
+  text: string;
+  calls: TextAiToolCall[];
+  providerParts?: unknown[];
+}
+
+/** The calling turn and its results, as the next round's extra messages. */
+async function toolRoundMessages(turn: ToolRound, toolset: CoachToolset): Promise<TextAiConversationMessage[]> {
+  const results = await Promise.all(
+    turn.calls.map(async (call) => ({
+      role: "tool" as const,
+      toolCallId: call.id,
+      name: call.name,
+      content: await toolset.run(call),
+    })),
+  );
+  return [{ role: "assistant", content: turn.text, toolCalls: turn.calls, providerParts: turn.providerParts }, ...results];
+}
+
+/**
+ * One round of a reply with tools: its text as it streams, then what it said
+ * and called. Undefined when the request was cancelled.
+ */
+async function* streamToolRound(
+  request: TextAiRequest,
+  validateChunk: (text: string) => void,
+): AsyncGenerator<CoachStreamEvent, ToolRound | undefined> {
+  const turn: ToolRound = { text: "", calls: [] };
+  for await (const event of streamTextEvents(request)) {
+    if (request.signal?.aborted) return undefined;
+    if (event.text) {
+      validateChunk(event.text);
+      turn.text += event.text;
+      yield { type: "text", text: event.text };
+    }
+    if (event.toolCalls) turn.calls.push(...event.toolCalls);
+    if (event.providerParts) turn.providerParts = event.providerParts;
+  }
+  return turn;
+}
+
+/**
+ * Stream a reply with tools (AI coach chat review, I8). Each round streams
+ * the model's text; when it calls read tools, their results go back and the
+ * next round continues the reply. After {@link MAX_TOOL_ROUNDS} rounds the
+ * tools stay declared but the model is asked for text.
+ */
+export async function* streamChatWithCoachTools(
+  userMessage: string,
+  conversationHistory: CoachHistoryTurn[],
+  trainingContext: TrainingContext | undefined,
+  coachingMaterials: CoachingMaterialInput[] | undefined,
+  retrievedChunks: string[] | undefined,
+  userId: string | undefined,
+  { signal, toolset, ...options }: ChatStreamOptions & { toolset: CoachToolset },
+): AsyncGenerator<CoachStreamEvent> {
+  try {
+    const request = buildCoachRequest({ userMessage, conversationHistory, trainingContext, coachingMaterials, retrievedChunks, options });
+    let messages: TextAiConversationMessage[] = request.messages;
+    // One validator for the whole reply: the athlete reads the rounds as one text.
+    const validateChunk = createStreamingOutputValidator();
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const turn = yield* streamToolRound(
+        {
+          ...request,
+          messages,
+          tools: toolset.tools,
+          toolChoice: round < MAX_TOOL_ROUNDS ? "auto" : "none",
+          label: "chat-stream",
+          feature: "chat_stream",
+          userId,
+          signal,
+        },
+        validateChunk,
+      );
+      if (!turn || turn.calls.length === 0 || round === MAX_TOOL_ROUNDS) return;
+      const handoff = turn.calls.find((call) => call.name === toolset.handoff);
+      if (handoff) {
+        yield { type: "handoff", call: handoff };
+        return;
+      }
+      messages = [...messages, ...(await toolRoundMessages(turn, toolset))];
+    }
+  } catch (error) {
+    const classified = classifyAiError(error);
+    logger.error("AI provider streaming request with tools failed");
     throw new AppError(classified.code, classified.message, classified.status);
   }
 }

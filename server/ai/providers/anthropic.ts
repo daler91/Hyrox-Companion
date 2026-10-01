@@ -1,9 +1,19 @@
 import { retryWithBackoff } from "../retry";
-import { combineSignals, contentPartText, readJsonPayload, streamSseTextChunks } from "./http";
+import {
+  combineSignals,
+  contentPartText,
+  type ParsedSseTextEvent,
+  parseToolArguments,
+  readJsonPayload,
+  streamSseTextChunks,
+} from "./http";
 import type {
   ResolvedTextAiRequest,
+  TextAiConversationMessage,
   TextAiProvider,
   TextAiResponse,
+  TextAiToolCall,
+  TextAiToolResultMessage,
   TextAiUsage,
 } from "./types";
 
@@ -111,16 +121,63 @@ export function stripJsonCodeFence(text: string): string {
   return body.trim();
 }
 
+type AnthropicContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string };
+
+interface AnthropicMessage {
+  role: "user" | "assistant";
+  content: string | AnthropicContentBlock[];
+}
+
+function toolResultBlock(message: TextAiToolResultMessage): AnthropicContentBlock {
+  return { type: "tool_result", tool_use_id: message.toolCallId, content: message.content };
+}
+
+/**
+ * Messages in Anthropic's shape: an assistant turn that called tools carries
+ * `tool_use` blocks, and the results go back in ONE user turn of
+ * `tool_result` blocks, as the API requires.
+ */
+function anthropicMessages(messages: TextAiConversationMessage[]): AnthropicMessage[] {
+  const out: AnthropicMessage[] = [];
+  for (const message of messages) {
+    if (message.role === "tool") {
+      const previous = out.at(-1);
+      if (previous?.role === "user" && Array.isArray(previous.content)) previous.content.push(toolResultBlock(message));
+      else out.push({ role: "user", content: [toolResultBlock(message)] });
+    } else if (message.role === "assistant" && message.toolCalls?.length) {
+      out.push({
+        role: "assistant",
+        content: [
+          ...(message.content ? [{ type: "text" as const, text: message.content }] : []),
+          ...message.toolCalls.map((call) => ({ type: "tool_use" as const, id: call.id, name: call.name, input: call.arguments })),
+        ],
+      });
+    } else {
+      out.push({ role: message.role, content: message.content });
+    }
+  }
+  return out;
+}
+
+function anthropicTools(request: ResolvedTextAiRequest) {
+  if (!request.tools?.length) return {};
+  return {
+    tools: request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })),
+    tool_choice: { type: request.toolChoice ?? "auto" },
+  };
+}
+
 function requestBody(request: ResolvedTextAiRequest, stream: boolean) {
   return {
     model: request.model,
     max_tokens: DEFAULT_MAX_TOKENS,
     stream,
     ...(anthropicSystemInstruction(request) ? { system: anthropicSystemInstruction(request) } : {}),
-    messages: request.messages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
+    messages: anthropicMessages(request.messages),
+    ...anthropicTools(request),
   };
 }
 
@@ -151,17 +208,46 @@ async function postAnthropic(
   return response;
 }
 
+interface AnthropicStreamEvent {
+  type?: string;
+  index?: number;
+  content_block?: { type?: string; id?: string; name?: string };
+  delta?: { type?: string; text?: unknown; partial_json?: unknown };
+}
+
+/**
+ * A `tool_use` block streams as a start (id, name), `input_json_delta`
+ * fragments, and a stop, keyed by block index; its call is complete at the stop.
+ */
+function createToolUseAssembler() {
+  const pending = new Map<number, { id: string; name: string; json: string }>();
+  return {
+    accept(event: AnthropicStreamEvent): TextAiToolCall | undefined {
+      const index = event.index ?? 0;
+      if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
+        pending.set(index, { id: event.content_block.id ?? `call_${index}`, name: event.content_block.name ?? "", json: "" });
+      } else if (event.type === "content_block_delta" && typeof event.delta?.partial_json === "string") {
+        const call = pending.get(index);
+        if (call) call.json += event.delta.partial_json;
+      } else if (event.type === "content_block_stop") {
+        const call = pending.get(index);
+        pending.delete(index);
+        if (call?.name) return { id: call.id, name: call.name, arguments: parseToolArguments(call.json) };
+      }
+      return undefined;
+    },
+  };
+}
+
 function streamChunkFromAnthropicEvent(
   payload: unknown,
   previousUsage: TextAiUsage | undefined,
-): { text?: string; usage?: TextAiUsage } {
-  const record = payload as {
-    type?: string;
-    delta?: { text?: unknown };
-    usage?: { input_tokens?: number; output_tokens?: number };
-    message?: { usage?: { input_tokens?: number; output_tokens?: number } };
-  };
+  toolUses: ReturnType<typeof createToolUseAssembler>,
+): ParsedSseTextEvent {
+  const record = payload as AnthropicStreamEvent;
   const usage = mergeAnthropicUsage(previousUsage, payload);
+  const toolCall = toolUses.accept(record);
+  if (toolCall) return { usage, toolCalls: [toolCall] };
   if (record.type === "content_block_delta" && typeof record.delta?.text === "string") {
     return { text: record.delta.text, usage };
   }
@@ -175,6 +261,7 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
       jsonMode: false,
       streaming: true,
       reasoningEffort: false,
+      tools: true,
     },
 
     async generateText(request): Promise<TextAiResponse> {
@@ -197,8 +284,9 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
 
     async *streamText(request) {
       let usage: TextAiUsage | undefined;
+      const toolUses = createToolUseAssembler();
       yield* streamSseTextChunks(request, postAnthropic(request, options, true), (event) => {
-        const chunk = streamChunkFromAnthropicEvent(JSON.parse(event) as unknown, usage);
+        const chunk = streamChunkFromAnthropicEvent(JSON.parse(event) as unknown, usage, toolUses);
         if (chunk.usage) usage = chunk.usage;
         return chunk;
       });

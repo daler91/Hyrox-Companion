@@ -3,8 +3,10 @@ import { type ChatIntentResult, type ChatMessage, type ChatMessageBody, chatRequ
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
+import type { TextAiToolCall } from "../ai/providers";
 import { isAuthenticated } from "../clerkAuth";
-import { type ChatCallOptions, chatWithCoach, parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromImage, parseWorkoutStructureFromText,streamChatWithCoach } from "../gemini/index";
+import { env } from "../env";
+import { type ChatCallOptions, chatWithCoach, type CoachToolset, parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromImage, parseWorkoutStructureFromText,streamChatWithCoach, streamChatWithCoachTools } from "../gemini/index";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
@@ -17,6 +19,7 @@ import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regene
 import { type CoachReply, type Conversation, type ConversationTurn, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
+import { type ChatToolContext, chatToolsFor, PROPOSE_PLAN_CHANGES, runChatTool } from "../services/chatTools";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { getCoachWelcome } from "../services/coachWelcome";
 import { loadFocusedWorkout } from "../services/focusedWorkoutService";
@@ -24,6 +27,7 @@ import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../se
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
 import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
@@ -138,6 +142,10 @@ async function prepareChatContext(
   };
 }
 
+function turnFocus(body: z.infer<typeof chatRequestSchema>): TurnFocus {
+  return { focusPlanDayId: body.focusPlanDayId, focusWorkoutLogId: body.focusWorkoutLogId };
+}
+
 /**
  * What the coach reads: the saved conversation when the server owns the turn,
  * else the history the client sent (an old client, open across a deploy).
@@ -149,10 +157,6 @@ function conversationFor(
 ): Promise<Conversation> | Conversation {
   if (turn) return loadConversation(userId, turn, turnFocus(body));
   return { turns: body.history, notes: [] };
-}
-
-function turnFocus(body: z.infer<typeof chatRequestSchema>): TurnFocus {
-  return { focusPlanDayId: body.focusPlanDayId, focusWorkoutLogId: body.focusWorkoutLogId };
 }
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
@@ -366,8 +370,9 @@ function startPlanEditIntent(
 
 /**
  * Apply the proposal immediately when the athlete opted into auto-apply. On
- * failure the proposal stays pending (or was invalidated); the card renders
- * with its live status and the athlete can retry or dismiss manually.
+ * failure, whether the apply declined or threw, the proposal stays pending (or
+ * was invalidated); the card renders with its live status and the athlete can
+ * retry or dismiss manually.
  */
 async function maybeAutoApplyProposal(
   proposal: PlanAdjustmentProposal,
@@ -376,8 +381,15 @@ async function maybeAutoApplyProposal(
 ): Promise<PlanAdjustmentProposal> {
   const user = await storage.users.getUser(userId);
   if (!user?.coachAutoApplyPlanChanges) return proposal;
-  const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, { log });
-  if (!applyResult?.applied) return proposal;
+  try {
+    const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, { log });
+    if (!applyResult?.applied) return proposal;
+  } catch (error) {
+    // The apply error and the proposal id; no plan content.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn({ err: error, proposalId: proposal.id }, "[plan-adjustment] Auto-apply failed; the proposal stays pending");
+    return proposal;
+  }
   // Re-read, so the card that arrives with the reply can offer Undo.
   return (await storage.planProposals.getById(proposal.id, userId)) ?? { ...proposal, status: "applied" };
 }
@@ -469,6 +481,117 @@ interface CoachStream {
   readonly reply: CoachReply;
 }
 
+/** Function calling for the chat (I8), behind AI_CHAT_TOOLS until it has been evaluated. */
+function chatToolsEnabled(): boolean {
+  return env.AI_CHAT_TOOLS === "true";
+}
+
+/**
+ * The coach may propose plan changes itself unless the surface can't show a
+ * proposal, or the athlete described a red-flag symptom (the same policy the
+ * classifier path applies).
+ */
+function canProposePlanChanges(req: ChatStreamRequest, chatSafety: ChatSafetySignals): boolean {
+  return req.body.planEditing !== false && !chatSafety.redFlagDetected;
+}
+
+async function toolContextFor(req: ChatStreamRequest, userId: string, aiContext: AIContext): Promise<ChatToolContext> {
+  const { trainingContext } = aiContext;
+  // Every training-context builder sets the athlete's date; the lookup is a fallback.
+  const today =
+    trainingContext.currentDate ?? getLocalDateStrSafe(new Date(), (await storage.users.getUser(userId))?.userTimezone);
+  return {
+    userId,
+    today,
+    weightUnit: trainingContext.weightUnit ?? "kg",
+    distanceUnit: trainingContext.distanceUnit ?? "km",
+    log: reqLogger(req),
+  };
+}
+
+/**
+ * Stream the reply with tools (I8): the model reads the athlete's history as
+ * it needs to and decides for itself whether the message asks for a plan
+ * change. Returns the plan-change call when it made one; the reply so far is
+ * already sent.
+ */
+async function streamCoachReplyWithTools(
+  req: ChatStreamRequest,
+  input: ChatInput,
+  aiContext: AIContext,
+  userId: string,
+  chatOptions: ChatCallOptions,
+  { controller, safeWrite, reply }: CoachStream,
+  planChanges: boolean,
+): Promise<TextAiToolCall | undefined> {
+  const toolContext = await toolContextFor(req, userId, aiContext);
+  const toolset: CoachToolset = {
+    tools: chatToolsFor({ planChanges }),
+    run: (call) => runChatTool(call, toolContext),
+    ...(planChanges ? { handoff: PROPOSE_PLAN_CHANGES } : {}),
+  };
+  const stream = streamChatWithCoachTools(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, {
+    ...chatOptions,
+    chatTools: { planChanges },
+    signal: controller.signal,
+    toolset,
+  });
+  for await (const event of stream) {
+    if (controller.signal.aborted) {
+      reqLogger(req).info("Client disconnected mid-stream, stopping AI generation");
+      return undefined;
+    }
+    if (event.type === "handoff") return event.call;
+    await safeWrite(sseEvent({ text: event.text }));
+    reply.content += event.text;
+  }
+  return undefined;
+}
+
+const TOOL_PROPOSAL_FAILED_TEXT =
+  "I couldn't draft that change just now. Ask me again in a moment, or tell me exactly which session to change.";
+
+/**
+ * The coach called propose_plan_changes: draft the proposal from the
+ * athlete's message and the coach's own summary of the change, and answer
+ * with it (and its card) after whatever the coach already said.
+ */
+async function replyWithToolProposal(
+  { req, res, userId, input, aiContext, controller, safeWrite, reply }: Omit<PlanEditBranchOptions, "planEditIntent">,
+  call: TextAiToolCall,
+): Promise<void> {
+  await safeWrite(sseEvent({ planProposalPending: true }));
+  const summary = typeof call.arguments.request === "string" ? call.arguments.request.trim().slice(0, 1_000) : "";
+  let proposal: PlanAdjustmentProposal | null = null;
+  let text = TOOL_PROPOSAL_FAILED_TEXT;
+  try {
+    const result = await createPlanAdjustmentProposal(
+      {
+        userId,
+        message: summary ? `${input.message}\n\nThe coach's summary of the change: ${summary}` : input.message,
+        history: input.history,
+        aiContext,
+        focusPlanDayId: req.body.focusPlanDayId,
+      },
+      reqLogger(req),
+    );
+    if (result.kind === "proposal") {
+      proposal = await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req));
+      text = result.proposal.summaryMessage;
+    } else if (result.kind === "chat_fallback") {
+      text = result.text;
+    }
+  } catch (error) {
+    // The plan-adjustment error; no message content.
+    // bearer:disable javascript_lang_logger_leak
+    reqLogger(req).warn({ err: error }, "[plan-adjustment] Tool-called proposal failed");
+  }
+  const sent = reply.content ? `\n\n${text}` : text;
+  reply.content += sent;
+  reply.proposalId = proposal?.id;
+  await sendPlanProposalReply(res, controller, safeWrite, sent, proposal);
+}
+
 async function streamCoachReply(
   req: ChatStreamRequest,
   input: ChatInput,
@@ -517,6 +640,30 @@ function sendSseTerminalEvent(
   }
 }
 
+/** How a reply ended: streamed prose, or a proposal reply that already closed the stream. */
+type ChatAnswer = "prose" | "proposal";
+
+/** The classifier path: a plan-change request becomes a proposal, anything else streamed prose. */
+async function answerWithoutTools(branch: PlanEditBranchOptions, chatOptions: ChatCallOptions): Promise<ChatAnswer> {
+  if (await tryPlanEditRequest(branch)) return "proposal";
+  const { req, input, aiContext, userId, controller, safeWrite, reply } = branch;
+  await streamCoachReply(req, input, aiContext, userId, chatOptions, { controller, safeWrite, reply });
+  return "prose";
+}
+
+/** The tools path (I8): one model call streams the reply, and a plan-change call becomes a proposal. */
+async function answerWithTools(
+  branch: Omit<PlanEditBranchOptions, "planEditIntent">,
+  chatOptions: ChatCallOptions,
+  planChanges: boolean,
+): Promise<ChatAnswer> {
+  const { req, input, aiContext, userId, controller, safeWrite, reply } = branch;
+  const call = await streamCoachReplyWithTools(req, input, aiContext, userId, chatOptions, { controller, safeWrite, reply }, planChanges);
+  if (!call || controller.signal.aborted) return "prose";
+  await replyWithToolProposal(branch, call);
+  return "proposal";
+}
+
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     const userId = getUserId(req);
     const turn = serverOwnedTurn(req.body);
@@ -524,7 +671,9 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     // The athlete's own words, scanned for red-flag symptoms and heart-rate
     // medication (analyzeSafetySignals only ever reads workout text).
     const chatSafety = analyzeChatSafety(req.body.message, conversation.turns);
-    const planEditIntent = startPlanEditIntent(req, userId, chatSafety, conversation.turns);
+    const useTools = chatToolsEnabled();
+    // With tools the reply model decides itself, so the classifier never runs.
+    const planEditIntent = useTools ? null : startPlanEditIntent(req, userId, chatSafety, conversation.turns);
     const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
     const focus = turnFocus(req.body);
     // Accepted from here: the athlete's turn is saved before the first byte, so
@@ -558,20 +707,11 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       // independent of what the model goes on to write.
       if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
-      const handledAsPlanEdit = await tryPlanEditRequest({
-        req,
-        res,
-        userId,
-        input,
-        aiContext,
-        planEditIntent,
-        controller,
-        safeWrite,
-        reply,
-      });
-      if (handledAsPlanEdit) return;
-
-      await streamCoachReply(req, input, aiContext, userId, { chatSafety, ...promptOptions }, { controller, safeWrite, reply });
+      const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply };
+      const answered = useTools
+        ? await answerWithTools(branch, { chatSafety, ...promptOptions }, canProposePlanChanges(req, chatSafety))
+        : await answerWithoutTools({ ...branch, planEditIntent }, { chatSafety, ...promptOptions });
+      if (answered === "proposal") return;
 
       sendSseTerminalEvent(res, controller, abortState);
       res.end();
@@ -587,6 +727,21 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       if (turn) await saveCoachReply(userId, turn, reply, focus);
     }
   });
+
+/**
+ * A proposal reply carries its proposal with its current status, so the card
+ * renders at the turn that produced it, applied or not (I3).
+ */
+async function withProposals(userId: string, messages: ChatMessage[]) {
+  const ids = messages.flatMap((message) => (message.proposalId ? [message.proposalId] : []));
+  if (ids.length === 0) return messages;
+  const proposals = await storage.planProposals.getByIds(ids, userId);
+  const views = new Map(proposals.map((proposal) => [proposal.id, serializePlanProposal(proposal)]));
+  return messages.map((message) => {
+    const proposal = message.proposalId ? views.get(message.proposalId) : undefined;
+    return proposal ? { ...message, proposal } : message;
+  });
+}
 
 // Cursor-paginated to cap memory/bandwidth growth as chat history accumulates.
 // Response body stays a plain ChatMessage[] for backward compatibility; the
@@ -632,21 +787,6 @@ router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 6
 router.get("/api/v1/chat/welcome", isAuthenticated, rateLimiter("chatWelcome", 30), asyncHandler(async (req: ExpressRequest, res: Response) => {
     res.json(await getCoachWelcome(getUserId(req)));
   }));
-
-/**
- * A proposal reply carries its proposal with its current status, so the card
- * renders at the turn that produced it, applied or not (I3).
- */
-async function withProposals(userId: string, messages: ChatMessage[]) {
-  const ids = messages.flatMap((message) => (message.proposalId ? [message.proposalId] : []));
-  if (ids.length === 0) return messages;
-  const proposals = await storage.planProposals.getByIds(ids, userId);
-  const views = new Map(proposals.map((proposal) => [proposal.id, serializePlanProposal(proposal)]));
-  return messages.map((message) => {
-    const proposal = message.proposalId ? views.get(message.proposalId) : undefined;
-    return proposal ? { ...message, proposal } : message;
-  });
-}
 
 protectedPost(router, "/api/v1/chat/message", { limiter: rateLimiter("chatMessage", 20), middleware: [validateBody(insertChatMessageSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, ChatMessageBody>, res: Response) => {
     const userId = getUserId(req);

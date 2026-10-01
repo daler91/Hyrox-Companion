@@ -18,10 +18,13 @@ import type {
   TextAiProvider,
   TextAiRequest,
   TextAiResponse,
+  TextAiStreamChunk,
+  TextAiToolCall,
   TextAiUsage,
 } from "./types";
 
 export type {
+  TextAiConversationMessage,
   TextAiMessage,
   TextAiModelRole,
   TextAiOpenAiCompatibleProfile,
@@ -29,8 +32,19 @@ export type {
   TextAiReasoningEffort,
   TextAiRequest,
   TextAiResponse,
+  TextAiTool,
+  TextAiToolCall,
+  TextAiToolResultMessage,
   TextAiUsage,
 } from "./types";
+
+/** What a streamed request with tools produces: text as it comes, then any calls. */
+export interface TextAiStreamEvent {
+  text?: string;
+  toolCalls?: TextAiToolCall[];
+  /** Gemini: the turn's parts, to send back with its calls. */
+  providerParts?: unknown[];
+}
 
 let textAiProvider: TextAiProvider | null = null;
 
@@ -98,7 +112,7 @@ export async function generateJsonText(request: Omit<TextAiRequest, "json">): Pr
   return generateText({ ...request, json: true });
 }
 
-export async function* streamText(request: TextAiRequest): AsyncGenerator<string> {
+async function* streamChunks(request: TextAiRequest): AsyncGenerator<TextAiStreamChunk> {
   const resolved = resolveRequest(request);
   // Streaming cannot go through retryWithBackoff — a retry would re-emit text
   // the caller has already received — but it still has to take part in the
@@ -113,7 +127,7 @@ export async function* streamText(request: TextAiRequest): AsyncGenerator<string
     for await (const chunk of getTextAiProvider().streamText(resolved)) {
       model = chunk.model;
       if (chunk.usage) latestUsage = chunk.usage;
-      if (chunk.text) yield chunk.text;
+      yield chunk;
     }
     recordBreakerSuccess();
   } catch (error) {
@@ -121,5 +135,24 @@ export async function* streamText(request: TextAiRequest): AsyncGenerator<string
     throw error;
   } finally {
     trackTextUsage(resolved.userId, resolved.feature, model, latestUsage);
+  }
+}
+
+export async function* streamText(request: TextAiRequest): AsyncGenerator<string> {
+  for await (const chunk of streamChunks(request)) {
+    if (chunk.text) yield chunk.text;
+  }
+}
+
+/**
+ * Like {@link streamText}, for a request with tools: the text as it streams,
+ * and the calls the model made once their arguments are complete.
+ */
+export async function* streamTextEvents(request: TextAiRequest): AsyncGenerator<TextAiStreamEvent> {
+  for await (const chunk of streamChunks(request)) {
+    if (chunk.text) yield { text: chunk.text };
+    if (chunk.toolCalls?.length) {
+      yield { toolCalls: chunk.toolCalls, ...(chunk.providerParts ? { providerParts: chunk.providerParts } : {}) };
+    }
   }
 }

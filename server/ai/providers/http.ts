@@ -1,11 +1,24 @@
 import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
 import { withTimeout } from "../retry";
-import type { ResolvedTextAiRequest, TextAiStreamChunk, TextAiUsage } from "./types";
+import type { ResolvedTextAiRequest, TextAiStreamChunk, TextAiToolCall, TextAiUsage } from "./types";
 
 export interface ParsedSseTextEvent {
   readonly text?: string;
   readonly usage?: TextAiUsage;
+  /** Tool calls the event completed; yielded even on the final event. */
+  readonly toolCalls?: TextAiToolCall[];
   readonly done?: boolean;
+}
+
+/** Turn a call's streamed argument text into its arguments; a malformed or empty string is no arguments. */
+export function parseToolArguments(json: string): Record<string, unknown> {
+  if (!json.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -63,25 +76,39 @@ function parseSseDataBlocks(buffer: string, flush = false): { events: string[]; 
   return { events, remainder };
 }
 
+function streamChunk(request: ResolvedTextAiRequest, event: ParsedSseTextEvent): TextAiStreamChunk | undefined {
+  if (!event.text && !event.usage && !event.toolCalls?.length) return undefined;
+  return {
+    text: event.text,
+    usage: event.usage,
+    model: request.model,
+    ...(event.toolCalls?.length ? { toolCalls: event.toolCalls } : {}),
+  };
+}
+
 function* textChunksFromEvents(
   request: ResolvedTextAiRequest,
   events: string[],
   parseEvent: (event: string) => ParsedSseTextEvent,
 ): Generator<TextAiStreamChunk, boolean> {
   for (const event of events) {
-    const chunk = parseEvent(event);
-    if (chunk.done) return true;
-    if (chunk.text || chunk.usage) {
-      yield { text: chunk.text, usage: chunk.usage, model: request.model };
-    }
+    const parsed = parseEvent(event);
+    const chunk = streamChunk(request, parsed);
+    if (chunk) yield chunk;
+    if (parsed.done) return true;
   }
   return false;
 }
 
+/**
+ * Stream an SSE response as chunks. `finish`, when given, runs once the
+ * stream ends without a final event, for calls still being assembled.
+ */
 export async function* streamSseTextChunks(
   request: ResolvedTextAiRequest,
   responsePromise: Promise<Response>,
   parseEvent: (event: string) => ParsedSseTextEvent,
+  finish?: () => ParsedSseTextEvent | undefined,
 ): AsyncGenerator<TextAiStreamChunk> {
   const response = await withTimeout(responsePromise, AI_REQUEST_TIMEOUT_MS, request.label);
   const reader = response.body?.getReader();
@@ -109,6 +136,9 @@ export async function* streamSseTextChunks(
       if (next.value) return;
       if (done) break;
     }
+    const last = finish?.();
+    const chunk = last ? streamChunk(request, last) : undefined;
+    if (chunk) yield chunk;
   } finally {
     reader.releaseLock();
   }

@@ -33,7 +33,7 @@ describe("openai-compatible text provider", () => {
       supportsReasoningEffort: true,
     });
 
-    expect(provider.capabilities).toEqual({ jsonMode: true, streaming: true, reasoningEffort: true });
+    expect(provider.capabilities).toEqual({ jsonMode: true, streaming: true, reasoningEffort: true, tools: true });
     const response = await provider.generateText({ ...baseRequest, json: true, reasoningEffort: "high" });
 
     expect(response).toEqual({
@@ -141,6 +141,68 @@ describe("openai-compatible text provider", () => {
 
     expect(chunks.map((chunk) => chunk.text).filter(Boolean)).toEqual(["Hel", "lo"]);
     expect(chunks.at(-1)?.usage).toEqual({ inputTokens: 3, outputTokens: 2 });
+  });
+
+  const TOOLS = [{ name: "get_workouts", description: "Logged sessions", parameters: { type: "object", properties: {} } }];
+
+  it("sends tools, and a conversation's calls and results, in the chat completions shape", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("data: [DONE]\n\n", { status: 200 }));
+    const provider = createOpenAiCompatibleTextProvider({ apiKey: TEST_KEY, baseUrl: "https://api.x.ai/v1", profile: "xai", supportsReasoningEffort: false });
+
+    await collectTextChunks(provider.streamText({
+      ...baseRequest,
+      tools: TOOLS,
+      toolChoice: "none",
+      messages: [
+        { role: "user", content: "What did I squat in July?" },
+        { role: "assistant", content: "", toolCalls: [{ id: "call_1", name: "get_workouts", arguments: { from: "2026-07-01" } }] },
+        { role: "tool", toolCallId: "call_1", name: "get_workouts", content: "{\"workouts\":[]}" },
+      ],
+    }));
+
+    expect(requestJsonBody(fetchSpy.mock.calls[0][1])).toMatchObject({
+      tools: [{ type: "function", function: { name: "get_workouts", description: "Logged sessions", parameters: { type: "object", properties: {} } } }],
+      tool_choice: "none",
+      messages: [
+        { role: "system", content: "System rules" },
+        { role: "user", content: "What did I squat in July?" },
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [{ id: "call_1", type: "function", function: { name: "get_workouts", arguments: "{\"from\":\"2026-07-01\"}" } }],
+        },
+        { role: "tool", tool_call_id: "call_1", content: "{\"workouts\":[]}" },
+      ],
+    });
+  });
+
+  it("assembles a streamed tool call from its pieces", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_9\",\"function\":{\"name\":\"get_workouts\",\"arguments\":\"{\\\"from\\\":\"}}]}}]}\n\n" +
+      "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"2026-07-01\\\"}\"}}]}}]}\n\n" +
+      "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" +
+      "data: [DONE]\n\n",
+      { status: 200 },
+    ));
+    const provider = createOpenAiCompatibleTextProvider({ apiKey: TEST_KEY, baseUrl: "https://api.x.ai/v1", profile: "xai", supportsReasoningEffort: false });
+
+    const calls = [];
+    for await (const chunk of provider.streamText({ ...baseRequest, tools: TOOLS })) calls.push(...(chunk.toolCalls ?? []));
+
+    expect(calls).toEqual([{ id: "call_9", name: "get_workouts", arguments: { from: "2026-07-01" } }]);
+  });
+
+  it("still hands over a tool call when the stream ends without saying why", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_2\",\"function\":{\"name\":\"get_personal_records\",\"arguments\":\"\"}}]}}]}",
+      { status: 200 },
+    ));
+    const provider = createOpenAiCompatibleTextProvider({ apiKey: TEST_KEY, baseUrl: "https://api.x.ai/v1", profile: "xai", supportsReasoningEffort: false });
+
+    const calls = [];
+    for await (const chunk of provider.streamText({ ...baseRequest, tools: TOOLS })) calls.push(...(chunk.toolCalls ?? []));
+
+    expect(calls).toEqual([{ id: "call_2", name: "get_personal_records", arguments: {} }]);
   });
 
   it("fails clearly when no compatible API key is configured", async () => {
