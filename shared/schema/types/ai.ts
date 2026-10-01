@@ -55,6 +55,18 @@ export interface RagInfo {
   fallbackReason?: string;
 }
 
+/**
+ * A fixed safety message the server attaches to a coach chat reply when the
+ * athlete's own words match the red-flag symptom or heart-rate-medication
+ * patterns (server/services/aiSafety.ts). Deterministic: it is shown whatever
+ * the model writes. `urgent` is the medical escalation; `caution` the
+ * heart-rate medication disclaimer.
+ */
+export interface ChatSafetyNotice {
+  level: "urgent" | "caution";
+  message: string;
+}
+
 export interface WorkoutSuggestion {
   workoutId: string;
   workoutDate: string;

@@ -73,6 +73,10 @@ export async function classifyPlanEditIntent(
       systemInstruction: CHAT_INTENT_PROMPT,
       messages: [{ role: "user", content: buildClassifierMessage(message, recentHistory) }],
       modelRole: "fast",
+      // A two-field JSON classification on the fast model, like the exercise
+      // and meal parsers: no thinking. It inherited the global "high" effort,
+      // which an athlete waited on before every keyword-matching reply.
+      reasoningEffort: "none",
       label: "chat-intent",
       feature: "chat_intent",
       userId,

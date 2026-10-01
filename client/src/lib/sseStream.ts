@@ -13,6 +13,21 @@ export interface SSEData<TMeta = unknown> {
   meta?: TMeta;
 }
 
+/**
+ * The server ended the stream with an error event. `message` is the server's
+ * code ("auth-expired", "timeout", "Stream error"); `reason`, when the server
+ * sent one, is a sentence written to be shown to the user.
+ */
+export class SSEStreamError extends Error {
+  readonly reason?: string;
+
+  constructor(code: string, reason?: string) {
+    super(code);
+    this.name = "SSEStreamError";
+    this.reason = reason;
+  }
+}
+
 /** Type guard for raw parsed JSON. */
 function isSSERecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -57,7 +72,8 @@ function applySSEPayload<TMeta>(
     acc.content += data.text;
   }
   if (typeof data.error === "string" && data.error) {
-    throw new Error(data.error);
+    const reason = typeof data.reason === "string" && data.reason ? data.reason : undefined;
+    throw new SSEStreamError(data.error, reason);
   }
 }
 

@@ -1,4 +1,4 @@
-import type { ChatMessage, CoachingMaterial, RagInfo } from "@shared/schema";
+import type { ChatMessage, ChatSafetyNotice, CoachingMaterial, RagInfo } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 
@@ -32,6 +32,7 @@ interface ReEmbedResponse {
 interface ChatResponse {
   response: string;
   ragInfo?: RagInfo;
+  safetyNotice?: ChatSafetyNotice;
 }
 
 export interface CoachInsightsResponse {

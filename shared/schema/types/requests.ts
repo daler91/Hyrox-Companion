@@ -1,4 +1,5 @@
-﻿import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
+﻿import { CHAT_MESSAGE_MAX_LENGTH } from "../../chat";
+import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
 import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
@@ -56,7 +57,7 @@ export const chatRequestSchema = z.object({
   message: z
     .string()
     .min(1, "Message is required")
-    .max(1000, "Message must be 1000 characters or less"),
+    .max(CHAT_MESSAGE_MAX_LENGTH, `Message must be ${CHAT_MESSAGE_MAX_LENGTH} characters or less`),
   history: z
     .array(chatMessageSchema)
     .optional()

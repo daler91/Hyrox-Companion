@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type ChatIntentResult, chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
+import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { classifyPlanEditIntent, hasPlanEditKeywords, isPlanEditIntent } from "../services/chatIntentService";
@@ -105,9 +106,11 @@ async function prepareChatContext(
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
+    const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
     const { input, aiContext } = await prepareChatContext(req);
-    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId);
-    res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo) });
+    const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety });
+    const safetyNotice = buildChatSafetyNotice(chatSafety);
+    res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(safetyNotice ? { safetyNotice } : {}) });
   });
 
 // Belt-and-suspenders ceiling for SSE stream duration. Both caps fire
@@ -267,8 +270,35 @@ interface PlanEditBranchOptions {
   readonly userId: string;
   readonly input: ChatInput;
   readonly aiContext: AIContext;
+  /** The classifier, already running (startPlanEditIntent); null when the message can't be a plan edit. */
+  readonly planEditIntent: Promise<ChatIntentResult> | null;
   readonly controller: AbortController;
   readonly safeWrite: SseWriter;
+}
+
+const NOT_A_PLAN_EDIT: ChatIntentResult = { intent: "normal_chat", confidence: 0 };
+
+/**
+ * Start the plan-edit intent classifier, or return null when this message
+ * cannot be a plan edit. The classifier needs only the message and history,
+ * so it runs alongside the context build instead of after it — on the many
+ * messages the keyword gate lets through, its round trip no longer sits in
+ * front of the first token.
+ */
+function startPlanEditIntent(
+  req: ChatStreamRequest,
+  userId: string,
+  chatSafety: ChatSafetySignals,
+): Promise<ChatIntentResult> | null {
+  const { message, history, planEditing } = req.body;
+  // Red-flag symptoms in the athlete's own words mean no AI plan change —
+  // the policy createPlanAdjustmentProposal already applies to workout text.
+  // The message goes to normal chat, which is told to put medical care first.
+  if (planEditing === false || chatSafety.redFlagDetected || !hasPlanEditKeywords(message)) return null;
+  // classifyPlanEditIntent already fails open to normal chat; the catch only
+  // guarantees no unhandled rejection if the context build fails first and
+  // nothing ever awaits this.
+  return classifyPlanEditIntent(message, history, userId).catch(() => NOT_A_PLAN_EDIT);
 }
 
 /**
@@ -310,16 +340,11 @@ async function sendPlanProposalReply(
  * true when it answered the request and closed the stream; false falls through
  * to the normal chat stream (including on `generation_failed`).
  */
-async function handlePlanEditRequest({
-  req,
-  res,
-  userId,
-  input,
-  aiContext,
-  controller,
-  safeWrite,
-}: PlanEditBranchOptions): Promise<boolean> {
-  const intent = await classifyPlanEditIntent(input.message, input.history, userId);
+async function handlePlanEditRequest(
+  { req, res, userId, input, aiContext, controller, safeWrite }: PlanEditBranchOptions,
+  planEditIntent: Promise<ChatIntentResult>,
+): Promise<boolean> {
+  const intent = await planEditIntent;
   if (!isPlanEditIntent(intent) || controller.signal.aborted) return false;
 
   // Lets the client swap "Thinking..." for a plan-review status.
@@ -353,10 +378,10 @@ async function handlePlanEditRequest({
  * plain conversation.
  */
 async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
-  const { req, res, input, controller } = options;
-  if (req.body.planEditing === false || !hasPlanEditKeywords(input.message)) return false;
+  const { req, res, planEditIntent, controller } = options;
+  if (!planEditIntent) return false;
   try {
-    return await handlePlanEditRequest(options);
+    return await handlePlanEditRequest(options, planEditIntent);
   } catch (planEditError) {
     if (controller.signal.aborted) {
       res.end();
@@ -375,10 +400,11 @@ async function streamCoachReply(
   input: ChatInput,
   aiContext: AIContext,
   userId: string,
+  chatSafety: ChatSafetySignals,
   controller: AbortController,
   safeWrite: SseWriter,
 ): Promise<void> {
-  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
+  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, signal: controller.signal });
 
   for await (const chunk of stream) {
     if (controller.signal.aborted) {
@@ -418,6 +444,10 @@ function sendSseTerminalEvent(
 
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     const userId = getUserId(req);
+    // The athlete's own words, scanned for red-flag symptoms and heart-rate
+    // medication (analyzeSafetySignals only ever reads workout text).
+    const chatSafety = analyzeChatSafety(req.body.message, req.body.history);
+    const planEditIntent = startPlanEditIntent(req, userId, chatSafety);
     const { input, aiContext } = await prepareChatContext(req);
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -441,6 +471,10 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
 
     try {
       await safeWrite(sseEvent({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) }));
+      // Ahead of any text, so the client shows it above the reply. Fixed copy,
+      // independent of what the model goes on to write.
+      const safetyNotice = buildChatSafetyNotice(chatSafety);
+      if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
       const handledAsPlanEdit = await tryPlanEditRequest({
         req,
@@ -448,12 +482,13 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
         userId,
         input,
         aiContext,
+        planEditIntent,
         controller,
         safeWrite,
       });
       if (handledAsPlanEdit) return;
 
-      await streamCoachReply(req, input, aiContext, userId, controller, safeWrite);
+      await streamCoachReply(req, input, aiContext, userId, chatSafety, controller, safeWrite);
 
       sendSseTerminalEvent(res, controller, abortState);
       res.end();

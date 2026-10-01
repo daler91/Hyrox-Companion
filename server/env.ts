@@ -48,6 +48,9 @@ const envSchema = z
     AI_TEXT_FAST_MODEL: z.string().optional(),
     AI_TEXT_REASONING_MODEL: z.string().optional(),
     AI_TEXT_REASONING_EFFORT: z.enum(["none", "low", "medium", "high"]).default("high"),
+    // Coach chat replies only. Unset: the lower of AI_TEXT_REASONING_EFFORT
+    // and "medium" (resolveChatReasoningEffort, server/ai/providers/config.ts).
+    AI_CHAT_REASONING_EFFORT: z.enum(["none", "low", "medium", "high"]).optional(),
     AI_TEXT_BASE_URL: z
       .url()
       .refine(

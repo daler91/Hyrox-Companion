@@ -12,6 +12,7 @@ import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message, useChatSession } from "@/hooks/useChatSession";
 import { usePlanProposal } from "@/hooks/usePlanProposal";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { createLocalMessage } from "@/lib/chatMessage";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import { calculateStats } from "@/lib/statsUtils";
 
@@ -85,6 +86,7 @@ export function CoachPanel({
     scrollToBottomIfPinned,
     pinAutoScroll,
     sendMessage,
+    retryMessage,
     cancelStream,
     clearHistory,
     isClearingHistory,
@@ -168,13 +170,7 @@ export function CoachPanel({
   const handleQuickAction = (action: { id: string; label: string }) => {
     if (action.id === "suggestions") {
       pinAutoScroll();
-      addLocalMessage({
-        id: Date.now().toString(),
-        role: "user",
-        content: action.label,
-        timestamp: getCurrentTimeString(),
-        createdAtMs: Date.now(),
-      });
+      addLocalMessage(createLocalMessage("user", action.label));
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();
     } else {
@@ -218,6 +214,7 @@ export function CoachPanel({
         isApplyingProposal={isApplyingProposal}
         onApplyProposal={applyProposal}
         onDismissProposal={dismissProposal}
+        onRetryMessage={retryMessage}
       />
       <CoachPanelFooter
         quickActions={selectQuickActions(timeline.some((entry) => entry.status === "completed"))}

@@ -74,6 +74,27 @@ export function getTextAiConfig(): TextAiConfig {
   };
 }
 
+const REASONING_EFFORT_ORDER: readonly TextAiReasoningEffort[] = ["none", "low", "medium", "high"];
+
+/** Chat replies think at most this hard unless AI_CHAT_REASONING_EFFORT says otherwise. */
+const CHAT_REASONING_EFFORT_CAP: TextAiReasoningEffort = "medium";
+
+/**
+ * Reasoning effort for coach chat replies. The global AI_TEXT_REASONING_EFFORT
+ * (default "high") is sized for plan generation and plan adjustment, and every
+ * chat turn paid the same thinking time before its first token. Unset, chat
+ * takes the lower of the global effort and "medium": capped rather than set,
+ * so an operator who lowered the global effort is never overridden upward.
+ * AI_CHAT_REASONING_EFFORT, when set, wins outright.
+ */
+export function resolveChatReasoningEffort(): TextAiReasoningEffort {
+  if (env.AI_CHAT_REASONING_EFFORT) return env.AI_CHAT_REASONING_EFFORT;
+  const global = env.AI_TEXT_REASONING_EFFORT;
+  return REASONING_EFFORT_ORDER.indexOf(global) < REASONING_EFFORT_ORDER.indexOf(CHAT_REASONING_EFFORT_CAP)
+    ? global
+    : CHAT_REASONING_EFFORT_CAP;
+}
+
 export function resolveTextAiModel(provider: TextAiProviderId, role: TextAiModelRole): string {
   if (role === "fast") {
     const fast = env.AI_TEXT_FAST_MODEL || env.AI_TEXT_MODEL;

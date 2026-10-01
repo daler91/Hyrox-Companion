@@ -62,6 +62,7 @@ export function EmbeddedWorkoutCoachChat({
     scrollRef,
     updateAutoScrollMode,
     sendMessage,
+    retryMessage,
     cancelStream,
   } = useChatSession({
     useStreaming: true,
@@ -134,6 +135,7 @@ export function EmbeddedWorkoutCoachChat({
         isApplyingProposal={isApplyingProposal}
         onApplyProposal={applyProposal}
         onDismissProposal={dismissProposal}
+        onRetryMessage={retryMessage}
       />
 
       <div className="shrink-0 border-t border-border p-2">

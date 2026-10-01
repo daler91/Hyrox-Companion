@@ -168,7 +168,10 @@ Timeline annotation queries and mutations are composed directly from the `client
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useChatSession` | `useChatSession.ts` | Full chat session management. Handles message history, SSE streaming with `requestAnimationFrame` batching for smooth UI updates, RAG info tracking, and auto-scroll. |
+| `useChatSession` | `useChatSession.ts` | One coach chat surface: the message buffer, `sendMessage` (SSE streaming with `requestAnimationFrame` batching, RAG info and safety-notice tracking) and failed sends (turns saved once the server accepts them, failure notes worded by `describeChatFailure`, and `retryMessage`). Composes the three hooks below; the SSE request lives in `chat/chatStream.ts` and the pure history, turn-saving and failure rules in `chat/chatSessionModel.ts`. |
+| `useChatHistory` | `chat/useChatHistory.ts` | Loads the saved conversation once into the chat buffer, saves turns, and clears it. |
+| `useChatAutoScroll` | `chat/useChatAutoScroll.ts` | Keeps the chat viewport pinned to the newest message while the athlete is at the bottom. |
+| `useBudgetWarning` | `chat/useBudgetWarning.ts` | One toast per session when a chat response carries `X-AI-Budget-Warning`. |
 
 ### Analytics
 
@@ -223,7 +226,8 @@ flowchart TD
     USWM --> |offline fallback| API6["/api/v1/workouts"]
     UWVF[useWorkoutVoiceForm] --> UVI
     
-    UCS[useChatSession] --> UCM[useChatMutations]
+    UCS[useChatSession] --> UCH[useChatHistory]
+    UCH --> UCM[useChatMutations]
     UCS --> |SSE stream| API4["/api/v1/chat/stream"]
     
     UA[useAuth] --> |polling| API5["/api/v1/auth/user"]

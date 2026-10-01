@@ -1,7 +1,9 @@
+import { CHAT_MESSAGE_MAX_LENGTH } from "@shared/chat";
 import { Loader2, Send, Square } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CharacterCount } from "@/components/ui/character-count";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VoiceButton } from "@/components/VoiceButton";
@@ -25,10 +27,21 @@ interface ChatInputProps {
   readonly isLoading?: boolean;
   readonly placeholder?: string;
   readonly seed?: ChatInputSeed | null;
+  /** Longest message the server accepts; defaults to the coach chat's limit. */
+  readonly maxLength?: number;
 }
 
-function getSendTooltip(args: { isLoading: boolean; canStop: boolean; hasText: boolean }): string {
+/** Show the character count once a message is this close to the limit. */
+const COUNTER_THRESHOLD = 0.8;
+
+function getSendTooltip(args: {
+  isLoading: boolean;
+  canStop: boolean;
+  hasText: boolean;
+  tooLong: boolean;
+}): string {
   if (args.isLoading && args.canStop) return "Stop response";
+  if (args.tooLong) return "Message is too long to send";
   if (args.hasText) return "Send message";
   return "Type a message to send";
 }
@@ -39,10 +52,17 @@ export function ChatInput({
   isLoading,
   placeholder = "Ask about your training...",
   seed,
+  maxLength = CHAT_MESSAGE_MAX_LENGTH,
 }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
-  const cannotSend = message.trim() === "" || !!isLoading;
+  const counterId = useId();
+  // Counted, not truncated: a native maxLength would silently cut a pasted
+  // message (and doesn't apply to voice input or a seed). Over the limit, the
+  // server refuses the request, so sending is blocked here instead.
+  const tooLong = message.length > maxLength;
+  const showCounter = message.length > maxLength * COUNTER_THRESHOLD;
+  const cannotSend = message.trim() === "" || Boolean(isLoading) || tooLong;
 
   // Re-seed the textarea whenever the caller bumps the nonce, so clicking
   // "Ask coach" repeatedly pre-fills each time even when the text matches
@@ -74,7 +94,7 @@ export function ChatInput({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim() && !isLoading) {
+    if (message.trim() && !isLoading && !tooLong) {
       if (isListening) stopListening();
       onSend(message.trim());
       setMessage("");
@@ -100,6 +120,8 @@ export function ChatInput({
           disabled={isLoading}
           enterKeyHint="send"
           aria-label="Chat message"
+          aria-invalid={tooLong || undefined}
+          aria-describedby={showCounter ? counterId : undefined}
           data-testid="input-chat-message"
         />
         {isListening && interimTranscript && (
@@ -121,6 +143,9 @@ export function ChatInput({
           >
             <kbd className="font-mono">↵</kbd> send · <kbd className="font-mono">⇧↵</kbd> new line
           </p>
+        )}
+        {showCounter && (
+          <CharacterCount id={counterId} value={message} max={maxLength} className="mt-0 px-1 pt-0.5 text-[10px]" />
         )}
       </div>
       <div className="flex flex-col gap-1">
@@ -166,9 +191,10 @@ export function ChatInput({
             </TooltipTrigger>
             <TooltipContent>
               {getSendTooltip({
-                isLoading: !!isLoading,
-                canStop: !!onStop,
+                isLoading: Boolean(isLoading),
+                canStop: Boolean(onStop),
                 hasText: message.trim().length > 0,
+                tooLong,
               })}
             </TooltipContent>
           </Tooltip>

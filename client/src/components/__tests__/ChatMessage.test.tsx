@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom';
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect,it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ChatMessage } from '../ChatMessage';
 
@@ -86,6 +87,105 @@ describe('ChatMessage', () => {
       );
       expect(container.innerHTML).not.toMatch(/onerror=/i);
       expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+    });
+  });
+  describe('failed replies', () => {
+    it('shows only the failure note when no text arrived', () => {
+      render(<ChatMessage role="assistant" content="" failure={{ message: 'Your connection dropped.' }} />);
+      expect(screen.getByTestId('message-failure')).toHaveTextContent('Your connection dropped.');
+      expect(screen.queryByTestId('button-retry-message')).not.toBeInTheDocument();
+    });
+
+    it('keeps the text that arrived above the failure note', () => {
+      render(<ChatMessage role="assistant" content="Start with a" failure={{ message: 'Stopped.' }} />);
+      expect(screen.getByText('Start with a')).toBeInTheDocument();
+      expect(screen.getByTestId('message-failure')).toHaveTextContent('Stopped.');
+    });
+
+    it('offers Try again when a retry handler is given', async () => {
+      const onRetry = vi.fn();
+      render(
+        <ChatMessage
+          role="assistant"
+          content=""
+          failure={{
+            message: 'Something went wrong on our side. Please try again.',
+            retry: { content: 'Hi', userMessageId: 'u1', userSaved: false },
+          }}
+          onRetry={onRetry}
+        />,
+      );
+      await userEvent.click(screen.getByTestId('button-retry-message'));
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe('safety notices', () => {
+    it('announces the urgent escalation as an alert, above the reply', () => {
+      render(
+        <ChatMessage
+          role="assistant"
+          content="Please get checked before training."
+          safetyNotice={{ level: 'urgent', message: 'Pause hard training and seek prompt medical care.' }}
+        />,
+      );
+      const banner = screen.getByRole('alert');
+      expect(banner).toHaveTextContent('Pause hard training and seek prompt medical care.');
+      expect(banner).toHaveAttribute('data-testid', 'safety-notice-urgent');
+      expect(
+        banner.compareDocumentPosition(screen.getByText('Please get checked before training.')) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('shows the medication disclaimer as a note, not an alert', () => {
+      render(
+        <ChatMessage
+          role="assistant"
+          content="Use RPE."
+          safetyNotice={{ level: 'caution', message: 'Heart-rate zones can be unreliable.' }}
+        />,
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('note')).toHaveTextContent('Heart-rate zones can be unreliable.');
+    });
+  });
+  describe('GitHub-flavoured markdown', () => {
+    const table = [
+      '| Split | Pace |',
+      '| --- | --- |',
+      '| 1 km | 4:05 |',
+      '| 2 km | 4:02 |',
+    ].join('\n');
+
+    it('renders a table as a table, in a horizontal scroll wrapper', () => {
+      const { container } = render(<ChatMessage role="assistant" content={table} />);
+      const rendered = container.querySelector('table');
+      expect(rendered).not.toBeNull();
+      expect(screen.getByRole('columnheader', { name: 'Pace' })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: '4:02' })).toBeInTheDocument();
+      expect(rendered?.parentElement).toHaveClass('overflow-x-auto');
+      expect(container.textContent).not.toContain('| ---');
+    });
+
+    it('renders strikethrough', () => {
+      const { container } = render(<ChatMessage role="assistant" content="~~6 x 800 m~~ 5 x 800 m" />);
+      expect(container.querySelector('del')).toHaveTextContent('6 x 800 m');
+    });
+
+    it('still sanitizes raw HTML inside a table cell', () => {
+      const { container } = render(
+        <ChatMessage
+          role="assistant"
+          content={'| a | b |\n| --- | --- |\n| <img src=x onerror="window.__xssMarker = true"> | ok |'}
+        />,
+      );
+      expect(container.innerHTML).not.toMatch(/onerror=/i);
+      expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+    });
+
+    it('does not turn a javascript: autolink into a live link', () => {
+      const { container } = render(<ChatMessage role="assistant" content="see javascript:alert(1) and www.example.com" />);
+      expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
     });
   });
 });

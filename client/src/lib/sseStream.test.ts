@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { consumeSSEStream, type SSEStreamResult } from "./sseStream";
+import { consumeSSEStream, SSEStreamError, type SSEStreamResult } from "./sseStream";
 
 // ---------------------------------------------------------------------------
 // Test harness
@@ -282,6 +282,29 @@ describe("consumeSSEStream — server error events", () => {
 
     await expect(consumeSSEStream(reader, { onFlush })).rejects.toThrow("boom");
     expect(onFlush).toHaveBeenCalledWith(expect.objectContaining({ content: "partial" }));
+  });
+
+  it("carries the server's readable reason alongside the error code", async () => {
+    const { reader } = makeReader([
+      enc(dataEvent({ error: "auth-expired", reason: "Your session expired — please sign in again." })),
+    ]);
+
+    const error: unknown = await consumeSSEStream(reader, { onFlush: vi.fn() }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SSEStreamError);
+    expect(error).toMatchObject({
+      message: "auth-expired",
+      reason: "Your session expired — please sign in again.",
+    });
+  });
+
+  it("leaves reason undefined when the server sends none, or sends a non-string", async () => {
+    const plain = makeReader([enc(dataEvent({ error: "Stream error" }))]);
+    const odd = makeReader([enc(dataEvent({ error: "Stream error", reason: 42 }))]);
+
+    const plainError = await consumeSSEStream(plain.reader, { onFlush: vi.fn() }).catch((e: unknown) => e);
+    const oddError = await consumeSSEStream(odd.reader, { onFlush: vi.fn() }).catch((e: unknown) => e);
+    expect(plainError).toMatchObject({ message: "Stream error", reason: undefined });
+    expect(oddError).toMatchObject({ message: "Stream error", reason: undefined });
   });
 });
 

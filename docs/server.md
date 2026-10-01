@@ -366,6 +366,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `AI_TEXT_FAST_MODEL` | No | Fast text model override for parsing-style calls |
 | `AI_TEXT_REASONING_MODEL` | No | Reasoning text model override for coaching and plan generation |
 | `AI_TEXT_REASONING_EFFORT` | No | Reasoning effort hint (`none`, `low`, `medium`, `high`; default `high`) |
+| `AI_CHAT_REASONING_EFFORT` | No | Reasoning effort for coach chat replies only (default: lower of `AI_TEXT_REASONING_EFFORT` and `medium`) |
 | `AI_TEXT_API_KEY` | No | Generic API key for non-Gemini text providers |
 | `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | No | OpenAI-compatible profile (`openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, or `custom`) |
 | `AI_TEXT_BASE_URL` | No | Base URL for OpenAI-compatible providers |

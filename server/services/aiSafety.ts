@@ -1,3 +1,5 @@
+import type { ChatSafetyNotice } from "@shared/schema";
+
 import type { UpcomingWorkout, WorkoutSuggestion } from "../gemini/suggestionService";
 import type { TrainingContext } from "../gemini/types";
 
@@ -143,5 +145,51 @@ export function applySafetyLayerToSuggestions(
 export function buildSafetyReviewNote(safety: { redFlagDetected: boolean; hrMedicationDetected: boolean }): string | null {
   if (safety.redFlagDetected) return ESCALATION_MESSAGE;
   if (safety.hrMedicationDetected) return HR_MED_DISCLAIMER;
+  return null;
+}
+
+/** The same two signals as analyzeSafetySignals, read from the conversation. */
+export interface ChatSafetySignals {
+  redFlagDetected: boolean;
+  hrMedicationDetected: boolean;
+}
+
+/**
+ * Scan what the athlete typed into the coach chat — this message and their
+ * previous one — with the patterns the auto-coach applies to workout text.
+ * analyzeSafetySignals never sees the chat, so before this "I had chest pain
+ * on my run, should I still do intervals?" got whatever the model chose to say.
+ *
+ * The previous user turn is included so the follow-up ("ok, so what about
+ * tomorrow?") keeps the safety framing for one more reply. Only the athlete's
+ * turns are read: the coach's own replies can quote the escalation.
+ */
+export function analyzeChatSafety(
+  message: string,
+  history: ReadonlyArray<{ role: string; content: string }>,
+): ChatSafetySignals {
+  let previousUserTurn = "";
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === "user") {
+      previousUserTurn = history[i].content;
+      break;
+    }
+  }
+  const corpus = `${message}\n${previousUserTurn}`;
+  return {
+    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(corpus)),
+    hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(corpus)),
+  };
+}
+
+/**
+ * The fixed notice shown above the chat reply for those signals, or null. It
+ * adds to the reply rather than replacing it, so a pattern false positive
+ * ("a faint chance") costs a banner, not the answer. The escalation outranks
+ * the medication disclaimer, as in buildSafetyReviewNote.
+ */
+export function buildChatSafetyNotice(signals: ChatSafetySignals): ChatSafetyNotice | null {
+  if (signals.redFlagDetected) return { level: "urgent", message: ESCALATION_MESSAGE };
+  if (signals.hrMedicationDetected) return { level: "caution", message: HR_MED_DISCLAIMER };
   return null;
 }

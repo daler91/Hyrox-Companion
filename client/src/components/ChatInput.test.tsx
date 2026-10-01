@@ -143,4 +143,49 @@ describe("ChatInput", () => {
     render(<ChatInput onSend={vi.fn()} isLoading />);
     expect(screen.getByTestId("input-chat-message")).toBeDisabled();
   });
+
+  /** The counter the textarea points at, or null while it is hidden. */
+  function lengthCounter(): HTMLElement | null {
+    const id = screen.getByTestId("input-chat-message").getAttribute("aria-describedby");
+    return id ? document.getElementById(id) : null;
+  }
+
+  it("shows the character count only once a message nears the limit", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput onSend={vi.fn()} maxLength={20} />);
+    const input = screen.getByTestId("input-chat-message");
+
+    await user.type(input, "sixteen chars ok");
+    expect(lengthCounter()).toBeNull();
+
+    await user.type(input, "!");
+    expect(lengthCounter()).toHaveTextContent("17/20");
+  });
+
+  it("blocks sending, without truncating, a message over the limit", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} maxLength={10} />);
+    const input = screen.getByTestId("input-chat-message");
+
+    await user.click(input);
+    await user.paste("twelve chars");
+    expect(input).toHaveValue("twelve chars");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(lengthCounter()).toHaveTextContent("2 characters over the limit");
+    expect(screen.getByTestId("button-send-message")).toHaveAttribute("aria-disabled", "true");
+
+    await user.click(screen.getByTestId("button-send-message"));
+    await user.type(input, "{Enter}");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("counts against the coach chat's limit by default", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput onSend={vi.fn()} />);
+
+    await user.click(screen.getByTestId("input-chat-message"));
+    await user.paste("x".repeat(801));
+    expect(lengthCounter()).toHaveTextContent("801/1000");
+  });
 });

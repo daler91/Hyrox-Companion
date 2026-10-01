@@ -52,7 +52,12 @@ describe("classifyPlanEditIntent", () => {
 
     expect(result).toEqual({ intent: "plan_modification", confidence: 0.92 });
     expect(generateJsonText).toHaveBeenCalledWith(
-      expect.objectContaining({ modelRole: "fast", feature: "chat_intent", userId: "user-1" }),
+      expect.objectContaining({
+        modelRole: "fast",
+        reasoningEffort: "none",
+        feature: "chat_intent",
+        userId: "user-1",
+      }),
     );
   });
 

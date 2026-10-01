@@ -28,4 +28,12 @@ describe("CharacterCount", () => {
     rerender(<CharacterCount id="c" value={"x".repeat(490)} max={500} />);
     expect(screen.getByTestId("character-count-c").className).toContain("text-amber-600");
   });
+
+  it("says by how much an input without a native maxLength is over", () => {
+    render(<CharacterCount id="c" value={"x".repeat(512)} max={500} />);
+
+    expect(screen.getByText("512/500")).toBeInTheDocument();
+    expect(screen.getByText(/12 characters over the limit/)).toBeInTheDocument();
+    expect(screen.getByTestId("character-count-c").className).toContain("text-destructive");
+  });
 });
