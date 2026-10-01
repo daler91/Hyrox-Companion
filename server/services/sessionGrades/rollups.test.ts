@@ -93,4 +93,41 @@ describe("buildSessionGradeRollups", () => {
     expect(weeks.map((week) => week.weekNumber)).toEqual([0, 1, 2]);
     expect(weeks[0]?.counts.onTarget).toBe(1);
   });
+  it("tallies crept-up, under and ungradeable runs and folds them into blocks and totals", () => {
+    const { weeks, blocks, totals } = buildSessionGradeRollups({
+      totalWeeks: 8,
+      startDate: null,
+      days: days(8),
+      grades: [
+        makeGrade({ workoutLogId: "a", weekNumber: 1, intent: "easy", verdict: "crept_up" }),
+        makeGrade({ workoutLogId: "b", weekNumber: 2, intent: "threshold", verdict: "under" }),
+        makeGrade({ workoutLogId: "c", weekNumber: 6, intent: "easy", verdict: "ungradeable" }),
+        makeGrade({ workoutLogId: "d", weekNumber: 6, intent: "easy", verdict: "inconclusive" }),
+      ],
+    });
+    expect(weeks[0]?.counts.easy).toMatchObject({ creptUp: 1 });
+    expect(weeks[0]?.counts.easyTooHard).toBe(1);
+    expect(weeks[1]?.counts.threshold).toMatchObject({ under: 1 });
+    // Definite verdicts only: "under" counts as graded, "ungradeable"/"inconclusive" do not.
+    expect(weeks[1]?.counts.graded).toBe(1);
+    expect(weeks[5]?.counts).toMatchObject({ graded: 0, ungradeable: 1, onTargetRate: null });
+    expect(weeks[5]?.counts.easy).toMatchObject({ ungradeable: 1, inconclusive: 1 });
+
+    expect(blocks[0]?.counts.easy).toMatchObject({ creptUp: 1 });
+    expect(blocks[0]?.counts.threshold).toMatchObject({ under: 1 });
+    expect(blocks[1]?.counts.easy).toMatchObject({ ungradeable: 1, inconclusive: 1 });
+    expect(totals.easy).toMatchObject({ creptUp: 1, ungradeable: 1, inconclusive: 1 });
+    expect(totals.threshold).toMatchObject({ under: 1 });
+    expect(totals).toMatchObject({ graded: 2, ungradeable: 1, easyTooHard: 1, onTarget: 0, onTargetRate: 0 });
+  });
+
+  it("skips grades that are not tied to a plan week", () => {
+    const { totals } = buildSessionGradeRollups({
+      totalWeeks: 2,
+      startDate: null,
+      days: days(2),
+      grades: [makeGrade({ workoutLogId: "loose", weekNumber: null })],
+    });
+    expect(totals.graded).toBe(0);
+  });
 });

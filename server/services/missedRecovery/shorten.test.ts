@@ -111,4 +111,53 @@ describe("planShortenedPrescription", () => {
     expect(plan.notes.map((note) => note.code)).toEqual(["not_trimmable"]);
     expect(plan.needsInstruction).toBe(true);
   });
+  it("scales a legacy logged time on a row with no planned time or distance", () => {
+    const plan = planShortenedPrescription([set("row", { exerciseName: "rowing", time: 30 })], KM);
+    expect(plan.setUpdates).toEqual([{ id: "row", time: 18 }]);
+    expect(plan.changes).toEqual([{ label: "Rowing", from: "30 min", to: "18 min" }]);
+  });
+
+  it("leaves a heavy single alone and tells the athlete to stop early instead", () => {
+    const plan = planShortenedPrescription([set("dl", { exerciseName: "deadlift", plannedReps: 5 })], KM);
+    expect(plan.setUpdates).toEqual([]);
+    expect(plan.changes).toEqual([]);
+    expect(plan.remainingSets.map((s) => s.id)).toEqual(["dl"]);
+    expect(plan.needsInstruction).toBe(true);
+  });
+
+  it("does not round a tiny distance up to the original", () => {
+    const tiny = planShortenedPrescription([set("c", { exerciseName: "custom", plannedDistance: 15 })], KM);
+    expect(tiny.setUpdates).toEqual([{ id: "c", plannedDistance: 10 }]);
+    const floor = planShortenedPrescription([set("c", { exerciseName: "custom", plannedDistance: 10 })], KM);
+    expect(floor.setUpdates).toEqual([]);
+    expect(floor.needsInstruction).toBe(true);
+  });
+
+  it("rounds a short stamped-feet distance to tens of feet", () => {
+    const run = set("run", { exerciseName: "easy_run", distance: 2005, distanceUnit: "ft" });
+    const plan = planShortenedPrescription([run], { blockCount: 0, distanceUnit: "miles" });
+    expect(plan.setUpdates).toEqual([{ id: "run", distance: 1200 }]);
+  });
+
+  it("breaks set-number ties by sort order and honours a custom keep fraction", () => {
+    const sets = [
+      set("late", { setNumber: 1, sortOrder: 2, plannedReps: 5 }),
+      set("early", { setNumber: 1, sortOrder: 1, plannedReps: 5 }),
+    ];
+    const plan = planShortenedPrescription(sets, { blockCount: 0, distanceUnit: "km", keep: 0.5 });
+    expect(plan.keepFraction).toBe(0.5);
+    expect(plan.deleteSetIds).toEqual(["late"]);
+  });
+
+  it("keeps non-block sets cuttable while blocks stay, and reports the block note", () => {
+    const sets = [
+      set("blk", { blockId: "emom", plannedReps: 10 }),
+      ...[1, 2, 3, 4].map((n) => set(`s${n}`, { exerciseName: "sled_push", setNumber: n, plannedDistance: 50 })),
+    ];
+    const plan = planShortenedPrescription(sets, { blockCount: 1, distanceUnit: "km" });
+    expect(plan.deleteSetIds).toEqual(["s3", "s4"]);
+    expect(plan.remainingSets.map((s) => s.id)).toEqual(["blk", "s1", "s2"]);
+    expect(plan.notes.map((n) => n.code)).toEqual(["blocks_not_trimmed"]);
+    expect(plan.needsInstruction).toBe(true);
+  });
 });
