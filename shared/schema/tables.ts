@@ -19,6 +19,7 @@ import {
 
 import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
+  chatMessageKindEnum,
   deviceLinkSourceEnum,
   MEAL_TYPES,
   planDayPriorityEnum,
@@ -30,10 +31,12 @@ import {
 } from "./enums";
 import type { SessionStreamSamples } from "./sessionStream";
 import type {
+  ChatSafetyNotice,
   CoachNoteInputs,
   PlanAdjustmentProposalPayload,
   PlanDayRecoveryUndo,
   PlanEngineState,
+  RagInfo,
   RecycleBinPayload,
 } from "./types";
 
@@ -1325,6 +1328,20 @@ export const chatMessages = pgTable(
     role: varchar("role", { length: 20 }).notNull(),
     content: text("content").notNull(),
     timestamp: timestamp("timestamp").defaultNow(),
+    /** See chatMessageKindEnum. */
+    kind: varchar("kind", { length: 20 }).notNull().default("text"),
+    /** The proposal a `proposal` reply carried; its status is the outcome. */
+    proposalId: varchar("proposal_id", { length: 255 }).references(
+      (): AnyPgColumn => planAdjustmentProposals.id,
+      { onDelete: "set null" },
+    ),
+    /** The fixed safety notice shown above this reply (server/services/aiSafety.ts). */
+    safetyNotice: jsonb("safety_notice").$type<ChatSafetyNotice>(),
+    /** Retrieval for this reply: source, excerpt count and material titles, never the excerpts. */
+    ragInfo: jsonb("rag_info").$type<RagInfo>(),
+    /** The workout the athlete was chatting from, when it was the workout-detail chat. */
+    focusPlanDayId: varchar("focus_plan_day_id", { length: 255 }),
+    focusWorkoutLogId: varchar("focus_workout_log_id", { length: 255 }),
   },
   (table) => [
     // idx_chat_messages_user_id (single-column, on user_id) was dropped:
@@ -1334,6 +1351,7 @@ export const chatMessages = pgTable(
     // costing an extra btree maintained on every insert/delete to this
     // high-write-volume table.
     index("idx_chat_messages_user_time").on(table.userId, table.timestamp),
+    check("chat_messages_kind_check", sql`kind IN (${inValues(chatMessageKindEnum)})`),
   ],
 );
 
