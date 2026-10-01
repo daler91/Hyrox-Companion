@@ -33,12 +33,14 @@ staleness. The gaps are in the conversation itself:
 
 ## Remediation status (updated 2026-10-01)
 
-Wave 1 is fixed on `claude/amazing-rubin-zz0w63`. The rest of this document describes the code as
-it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
+Wave 1 is fixed (daler91/Hyrox-Companion#2085). Wave 2's first batch (D1(a), D5, I14, I15, I16) and
+second batch (I1, I2, I3, I7) are fixed on `claude/amazing-rubin-zz0w63`; I6 and I19 are still
+open. The rest of this document describes the code as it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
 configurations, ESLint on the whole repo (no errors; the only warning in a touched file, the length
 of `server/routes/__tests__/ai.test.ts`, predates this work), the full unit suite with coverage
 thresholds, and `pnpm build` followed by `pnpm check:bundle`. Not run: Cypress (the binary download
-is blocked in this environment), the running app, or any live model.
+is blocked in this environment) or any live model. The running app was driven only for wave 2's
+second batch, without a model (see below).
 
 | ID      | Fix                                                                                                                                                                                                                                                                                                                                                                         |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -60,15 +62,52 @@ is blocked in this environment), the running app, or any live model.
 - The chat system prompt is somewhat longer: the PLAN CHANGES and MEDICAL SAFETY paragraphs, the
   Units line, RPE and duration per recent session, and prior-AI context per upcoming session.
 
+**Wave 2, first batch:**
+
+| ID      | Fix |
+| ------- | --- |
+| D1(a)   | `mayRequestPlanEdit` lets a short confirmation ("yes please", "go ahead") through the gate when the coach's last turn offered a change: one sentence with an offer phrase and an edit verb. The classifier then sees that offer, and `PLAN_ADJUSTMENT_PROMPT` says a confirmation asks for the change offered in the conversation it already receives. |
+| D5      | Both chat routes accept `focusPlanDayId` and `focusWorkoutLogId`. `loadFocusedWorkout` reads them through the ownership-checked getters (failing open), and `formatFocusedWorkout` adds a FOCUSED WORKOUT block at the end of the training data. It shows the prescription beside the logged sets, duration, RPE, distance, heart rate and pace, plus the athlete note, adherence, session grade and the coach's notes. The non-streaming fallback sends the ids too. |
+| I14     | `chatRetrievalQuery` retrieves nothing for a message that is only thanks or emoji, and semantic results further than `RAG_MAX_COSINE_DISTANCE` (default 0.6, deliberately loose) are dropped. Pinned principles always stay. The search log records the best distance and the kept count, to tune the cut-off against. |
+| I15     | A short or pronoun-led follow-up searches with the previous athlete turn in front of it. |
+| I16     | Each excerpt opens with its material's title, and the prompt asks the coach to name it. `ragInfo.sources` lists the titles, which survive production's `sanitizeRagInfo`, and the reply's chip reads "From your coaching notes" and expands to them. |
+
+Behaviour changes: "thanks!" no longer spends an embedding call; a far-off excerpt can now be left
+out where it used to fill a slot; the classifier runs for "yes please" after an offer.
+
+**Wave 2, second batch:**
+
+| ID      | Fix |
+| ------- | --- |
+| I1      | Each send carries `userMessageId` and `assistantMessageId` (client UUIDs), and the chat routes save both turns under them. The athlete's turn is saved once the request is accepted; the reply is saved when the stream ends, whether finished, cut off or a proposal, so a reply that finishes after the tab closes is kept. A retry reuses its message id, so the turn is saved once, and names the failed reply, which the server deletes. The coach's history is read from the database (`server/services/chatConversation.ts`); the client sends none and saves nothing. A request without the ids keeps the old path, so a tab open across the deploy saves nothing twice. |
+| I2      | A break of 12 hours starts a new session. Its first message writes a short handover note of the earlier conversation (fast model, carrying the previous note forward, falling back to the athlete's last words), saved as a `summary` row; the coach reads it as an EARLIER CONVERSATION block instead of the old turns. Within a session, a pause of an hour or more is noted ahead of the next athlete turn ("5 hours later"). The chat shows day separators, and a "New conversation" divider whose note the athlete can open. |
+| I3      | `chat_messages` gains `kind` (`text`, `proposal`, `summary`, CHECK-constrained), `proposal_id` (ON DELETE SET NULL), `safety_notice`, `rag_info` (titles, never excerpts) and the focus workout ids (migration 0111). A reload shows the safety notice and the coaching-notes chip again. `GET /chat/history` returns each proposal reply with its proposal and current status, and the card renders at that turn: actionable while pending, listing its changes once applied, folded away once dismissed, replaced or out of date. `GET /plan-proposals/:id` keeps a card's status live. |
+| I7      | The coach's history notes what became of each proposal, ahead of the first athlete turn after it was decided: applied, dismissed, replaced, out of date, or still waiting. `BASE_SYSTEM_PROMPT` says only an applied proposal changed the plan. The Coach panel's apply confirmations, which were saved but never read, now reach the coach too. |
+
+Checked beyond the unit suite:
+
+- **Migration chain:** on a local Postgres 16 with pgvector, all 112 migrations apply to a fresh database and re-run as a no-op, and `\d chat_messages` shows the new columns, CHECK and FK.
+- **Storage SQL:** a new integration suite (`chatMessages.integration.test.ts`) runs the save-once, owner-only delete, metadata, CHECK and ON DELETE SET NULL paths against that database.
+- **The built app:** run against it with seeded history and driven in Chromium. It showed:
+  - day separators, the applied, dismissed and pending cards in place, the persisted safety notice and the session note, at desktop and phone width;
+  - Dismiss turning the inline card to "Dismissed" in place;
+  - a failed send retried under the same `userMessageId` with `replaceAssistantId` and saved once;
+  - after the chat was aged by a day, the fallback handover note saved ahead of the new session's first turn.
+
+Behaviour changes:
+
+- **The coach forgets raw turns at a session break.** After a 12-hour break it sees a few bullet points of the earlier conversation instead of up to 20 raw turns.
+- **One more AI call per break.** The first message after a break makes one extra fast-model call, billed as `chat_summary`. It runs alongside the context build.
+- **More of the conversation is saved.** A reply cut off by a dropped connection or a stream error is now saved as far as it got (only a Stop was before), and so is a reply that finishes after the tab closes.
+- **The client sends no history.** The server reads the last 60 rows, as before trimmed to 20 turns and 30,000 characters, but only from the current session.
+
 **Deliberately not changed:**
 
-- D1(a), routing a bare "yes please" to the classifier with the coach's offer as context, is wave 2.
-  With D1(b) the coach should no longer make that offer, but the gate still can't follow a
-  confirmation.
-- The safety notice is not saved with the message, so it is gone after a reload (the reply, which
-  the prompt tells to put medical care first, stays). Saving it needs message metadata (I3).
-- The other markdown surfaces (coach insights, race predictor, chart explanations, nutrition
-  insights) still render without GFM.
+- **I1 uses message ids, not a `conversationId`.** There is still one thread per athlete; separate threads per workout are I4.
+- **I3 is partial.** The `suggestions`, `safety` and `system` kinds, and the model, latency and feedback columns, are not added. Suggestion cards still float at the end of the Coach panel: they are not chat turns.
+- **No rolling summary.** The note is written once per session break, not refreshed during a long session (I5).
+- **The workout-detail chat still shares the global thread** (I4).
+- **No GFM elsewhere.** The other markdown surfaces (coach insights, race predictor, chart explanations, nutrition insights) still render without GFM.
 
 ---
 

@@ -3,6 +3,7 @@ import { getTableConfig,PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import {
+  chatMessageKindEnum,
   deviceLinkSourceEnum,
   MEAL_TYPES,
   planDaySkipReasonEnum,
@@ -11,6 +12,7 @@ import {
   workoutStatusEnum,
 } from "./enums";
 import {
+  chatMessages,
   FOOD_SOURCES,
   foodLogEntries,
   foods,
@@ -48,6 +50,11 @@ function checkSql(table: Parameters<typeof getTableConfig>[0], name: string): st
 }
 
 describe("enum-backed CHECK constraints", () => {
+  it("renders chat_messages.kind from chatMessageKindEnum", () => {
+    expect(checkSql(chatMessages, "chat_messages_kind_check")).toBe("kind IN ('text', 'proposal', 'summary')");
+    expect(chatMessageKindEnum).toEqual(["text", "proposal", "summary"]);
+  });
+
   it("renders plan_days.status from workoutStatusEnum", () => {
     expect(checkSql(planDays, "status_check")).toBe(
       "status IN ('planned', 'completed', 'missed', 'skipped')",

@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generateJsonText } from "../ai/providers";
 import {
   classifyPlanEditIntent,
+  findCoachOffer,
   hasPlanEditKeywords,
   isPlanEditIntent,
+  isShortConfirmation,
+  mayRequestPlanEdit,
   PLAN_EDIT_INTENT_CONFIDENCE_THRESHOLD,
 } from "./chatIntentService";
 
@@ -35,6 +38,61 @@ describe("hasPlanEditKeywords — high-recall gate", () => {
     "explain RPE to me",
   ])("stays silent on plain coaching questions: %s", (message) => {
     expect(hasPlanEditKeywords(message)).toBe(false);
+  });
+});
+
+const COACH_OFFER = {
+  role: "assistant" as const,
+  content: "Your legs sound heavy after Tuesday. Want me to move your long run to Saturday?",
+};
+const COACH_ADVICE = {
+  role: "assistant" as const,
+  content: "I can see your RPE climbing this week, so keep the easy runs truly easy.",
+};
+
+describe("isShortConfirmation", () => {
+  it.each(["yes please", "Yes, do it", "go ahead", "sounds good!", "ok", "let's do that", "Sure thing"])(
+    "recognises: %s",
+    (message) => {
+      expect(isShortConfirmation(message)).toBe(true);
+    },
+  );
+
+  it.each([
+    "no thanks",
+    "what about Friday?",
+    "yes, and while you're at it can you explain why my wall balls feel so slow at the end of every session?",
+  ])("rejects: %s", (message) => {
+    expect(isShortConfirmation(message)).toBe(false);
+  });
+});
+
+describe("findCoachOffer", () => {
+  it("returns the coach's last turn when it offered a plan change", () => {
+    expect(findCoachOffer([{ role: "user", content: "legs are dead" }, COACH_OFFER])).toBe(COACH_OFFER.content);
+  });
+
+  it("ignores advice that only uses offer-like words", () => {
+    expect(findCoachOffer([COACH_ADVICE])).toBeUndefined();
+  });
+
+  it("looks only at the last turn, and only when the coach wrote it", () => {
+    expect(findCoachOffer([COACH_OFFER, { role: "user", content: "hmm" }])).toBeUndefined();
+    expect(findCoachOffer([])).toBeUndefined();
+  });
+});
+
+describe("mayRequestPlanEdit", () => {
+  it("lets a confirmation of an offered change through", () => {
+    expect(mayRequestPlanEdit("yes please", [COACH_OFFER])).toBe(true);
+  });
+
+  it("keeps a confirmation of plain advice out", () => {
+    expect(mayRequestPlanEdit("yes please", [COACH_ADVICE])).toBe(false);
+  });
+
+  it("still fires on the message's own keywords", () => {
+    expect(mayRequestPlanEdit("move my long run to Saturday", [])).toBe(true);
   });
 });
 
@@ -106,6 +164,28 @@ describe("classifyPlanEditIntent", () => {
     const call = vi.mocked(generateJsonText).mock.calls[0][0];
     expect(call.messages[0].content).toContain("should I do a tempo run this week?");
     expect(call.messages[0].content).toContain("do that on Friday instead");
+  });
+
+  it("shows the coach's offer when the message confirms it", async () => {
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.9 }),
+    } as Awaited<ReturnType<typeof generateJsonText>>);
+
+    await classifyPlanEditIntent("yes please", [COACH_OFFER], "user-1");
+
+    const content = vi.mocked(generateJsonText).mock.calls[0][0].messages[0].content;
+    expect(content).toContain("<coach_message>");
+    expect(content).toContain("move your long run to Saturday");
+  });
+
+  it("leaves the coach's turn out for anything but a confirmation", async () => {
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "normal_chat", confidence: 0.9 }),
+    } as Awaited<ReturnType<typeof generateJsonText>>);
+
+    await classifyPlanEditIntent("why Saturday though?", [COACH_OFFER], "user-1");
+
+    expect(vi.mocked(generateJsonText).mock.calls[0][0].messages[0].content).not.toContain("<coach_message>");
   });
 });
 

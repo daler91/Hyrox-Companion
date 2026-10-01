@@ -110,7 +110,7 @@ describe('ChatMessage', () => {
           content=""
           failure={{
             message: 'Something went wrong on our side. Please try again.',
-            retry: { content: 'Hi', userMessageId: 'u1', userSaved: false },
+            retry: { content: 'Hi', userMessageId: 'u1' },
           }}
           onRetry={onRetry}
         />,

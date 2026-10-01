@@ -5,7 +5,7 @@ import { EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { logger } from "../logger";
 import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type CoachingMaterialInput } from "../prompts";
 import { storage } from "../storage";
-import { retrieveRelevantChunks } from "./ragService";
+import { type RetrievedChunk, retrieveRelevantChunks } from "./ragService";
 
 /** Minimal logger interface for request-scoped logging. */
 type Log = Pick<typeof logger, "warn" | "error">;
@@ -25,6 +25,16 @@ export interface RagContextResult {
 export interface CoachingTextResult {
   text: string | undefined;
   source: "rag" | "legacy" | null;
+}
+
+/** An excerpt as the prompt shows it: the material it came from, then the text. */
+function excerptText(chunk: RetrievedChunk): string {
+  return chunk.source ? `Source: ${chunk.source}\n${chunk.content}` : chunk.content;
+}
+
+/** The materials the excerpts came from, each once, for the reply's citation chip. */
+function excerptSources(chunks: readonly RetrievedChunk[]): string[] {
+  return [...new Set(chunks.map((chunk) => chunk.source).filter((source) => source !== null))];
 }
 
 /**
@@ -59,9 +69,10 @@ export async function retrieveCoachingContext(
       } else {
         const chunks = await retrieveRelevantChunks(userId, query);
         if (chunks.length > 0) {
+          const excerpts = chunks.map(excerptText);
           return {
-            retrievedChunks: chunks,
-            ragInfo: { source: "rag", chunkCount: chunks.length, chunks },
+            retrievedChunks: excerpts,
+            ragInfo: { source: "rag", chunkCount: chunks.length, chunks: excerpts, sources: excerptSources(chunks) },
           };
         }
         fallbackReason = storedDim === null

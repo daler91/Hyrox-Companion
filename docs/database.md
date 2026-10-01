@@ -630,7 +630,15 @@ Persisted AI coach conversation history.
 | `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
 | `role` | `varchar(20)` | NOT NULL |
 | `content` | `text` | NOT NULL |
-| `timestamp` | `timestamp` | default `now()` |
+| `timestamp` | `timestamp` | default `now()`; the chat routes stamp both turns on the app's clock |
+| `kind` | `varchar(20)` | NOT NULL, default `'text'`; CHECK `chat_messages_kind_check`: `text`, `proposal` or `summary` (the note a new session carries forward) |
+| `proposal_id` | `varchar(255)` | FK -> `plan_adjustment_proposals.id` ON DELETE SET NULL; the proposal a `proposal` reply carried |
+| `safety_notice` | `jsonb` | The fixed safety notice shown above the reply |
+| `rag_info` | `jsonb` | The reply's retrieval: source, excerpt count and material titles, never the excerpts |
+| `focus_plan_day_id` | `varchar(255)` | The workout the athlete was chatting from, if any (not a FK: the turn outlives the day) |
+| `focus_workout_log_id` | `varchar(255)` | As above, for a logged session |
+
+The chat routes save rows under ids the client generates, once each (`saveChatMessageOnce`), so a retried send never saves a turn twice (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)).
 
 **Indexes:**
 - `idx_chat_messages_user_time` on (`user_id`, `timestamp`) -- composite; also serves `user_id`-only lookups since it's the leading column

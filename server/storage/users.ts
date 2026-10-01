@@ -30,6 +30,28 @@ import { db } from "../db";
 import { isUniqueViolation } from "../dbErrors";
 import { logger } from "../logger";
 
+/**
+ * Insert a chat row under the id its client gave it, once: a retried send
+ * reuses its message id, so a second insert is a no-op. Returns whether this
+ * call wrote it. The row's user id is part of every read, so an id that
+ * collides with another athlete's row simply isn't written here.
+ */
+async function saveChatMessageOnce(message: InsertChatMessage & { id: string }): Promise<boolean> {
+  const rows = await db
+    .insert(chatMessages)
+    .values(message)
+    .onConflictDoNothing({ target: chatMessages.id })
+    .returning({ id: chatMessages.id });
+  return rows.length > 0;
+}
+
+/** Delete one of the athlete's coach replies (a failed reply a retry replaces). */
+async function deleteAssistantChatMessage(userId: string, id: string): Promise<void> {
+  await db
+    .delete(chatMessages)
+    .where(and(eq(chatMessages.id, id), eq(chatMessages.userId, userId), eq(chatMessages.role, "assistant")));
+}
+
 export class UserStorage {
   async getUsers(ids: string[]): Promise<User[]> {
     if (ids.length === 0) return [];
@@ -388,6 +410,11 @@ export class UserStorage {
       .returning();
     return chatMessage;
   }
+
+  // Neither uses the instance, so they are module functions bound here, as
+  // NutritionStorage binds its own: storage.users.X() and its mocks still work.
+  readonly saveChatMessageOnce = saveChatMessageOnce;
+  readonly deleteAssistantChatMessage = deleteAssistantChatMessage;
 
   async clearChatHistory(userId: string): Promise<boolean> {
     await db.delete(chatMessages).where(eq(chatMessages.userId, userId));

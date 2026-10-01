@@ -6,6 +6,8 @@ import { api, type PlanProposalView, QUERY_KEYS } from "@/lib/api";
 import { createLocalMessage } from "@/lib/chatMessage";
 import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
 
+import { ignoreResult } from "./chat/chatSessionModel";
+
 interface UsePlanProposalOptions {
   /** Push a local assistant message into the chat log (optional — the
    * embedded workout chat omits it and relies on the card disappearing). */
@@ -38,6 +40,26 @@ function invalidatePendingProposal(): void {
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposalPending }).catch(() => {});
 }
 
+/** The proposal's card in the chat re-reads its status: applied, dismissed, or gone stale. */
+function invalidateProposal(id: string): void {
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposal(id) }).catch(ignoreResult);
+}
+
+/**
+ * A proposal's current status, for its card at the chat turn that produced
+ * it. Starts from the copy the chat message carried and re-reads only when
+ * an apply, a dismiss or a newer proposal invalidates it.
+ */
+export function useLiveProposal(snapshot: PlanProposalView): PlanProposalView {
+  const { data } = useQuery({
+    queryKey: QUERY_KEYS.planProposal(snapshot.id),
+    queryFn: async () => (await api.planProposals.get(snapshot.id)).proposal,
+    initialData: snapshot,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  return data;
+}
+
 function humanizeApplyError(error: unknown): string {
   if (error instanceof AiBudgetExceededError) {
     return "You've reached your daily AI usage limit, so I couldn't apply the changes. Please try again later.";
@@ -65,7 +87,9 @@ function humanizeApplyError(error: unknown): string {
 /**
  * Pending plan-adjustment proposal state + apply/dismiss actions.
  * Query-driven (like the suggestions cards) so a pending proposal
- * automatically reappears after a reload.
+ * automatically reappears after a reload. Its card sits at the chat turn
+ * that produced it when that turn is in view (useLiveProposal), and at the
+ * end of the chat otherwise.
  */
 export function usePlanProposal(options: UsePlanProposalOptions = {}) {
   const { addLocalMessage, saveMessage } = options;
@@ -109,12 +133,16 @@ export function usePlanProposal(options: UsePlanProposalOptions = {}) {
       invalidatePendingProposal();
       pushAssistantMessage(humanizeApplyError(error), false);
     },
+    onSettled: (_result, _error, toApply) => {
+      invalidateProposal(toApply.id);
+    },
   });
 
   const dismissMutation = useMutation({
     mutationFn: (id: string) => api.planProposals.dismiss(id),
-    onSettled: () => {
+    onSettled: (_result, _error, id) => {
       invalidatePendingProposal();
+      invalidateProposal(id);
     },
   });
 

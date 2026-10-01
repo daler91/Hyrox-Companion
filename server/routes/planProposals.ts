@@ -38,6 +38,23 @@ router.get(
   }),
 );
 
+// One proposal and its current status, for a card shown at the chat turn
+// that produced it (it may have been applied or replaced since).
+router.get(
+  "/api/v1/plan-proposals/:id",
+  isAuthenticated,
+  rateLimiter("analytics", 60),
+  asyncHandler(async (req: ExpressRequest<{ id: string }>, res: Response) => {
+    const userId = getUserId(req);
+    const proposal = await storage.planProposals.getById(req.params.id, userId);
+    if (!proposal) {
+      sendNotFound(res, "Proposal not found");
+      return;
+    }
+    res.json({ proposal: serializePlanProposal(proposal) });
+  }),
+);
+
 // aiBudgetCheck is deliberately absent here (same rationale as the
 // suggestions apply route): the budget is checked internally only when a
 // structured re-parse is actually needed.

@@ -5,7 +5,7 @@ export type {
   Suggestion,
 } from "./analytics";
 export { analytics, timeline } from "./analytics";
-export type { RagInfo, RagStatus } from "./coaching";
+export type { ChatFocus, ChatHistoryMessage, ChatTurnIds, RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
 export {
@@ -123,6 +123,10 @@ export const QUERY_KEYS = {
   coachInsights: ["/api/v1/coach-insights"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,
   planProposalPending: ["/api/v1/plan-proposals/pending"] as const,
+  // One proposal's live status, for its card in the chat. The prefix matches
+  // every proposal's key and not planProposalPending (its first element differs).
+  planProposal: (id: string) => ["/api/v1/plan-proposals", id] as const,
+  planProposalPrefix: ["/api/v1/plan-proposals"] as const,
   coachingMaterials: ["/api/v1/coaching-materials"] as const,
   ragStatus: ["/api/v1/coaching-materials/rag-status"] as const,
   stravaStatus: ["/api/v1/strava/status"] as const,

@@ -65,6 +65,13 @@ describe("buildAIContext", () => {
     expect(retrieveMock).toHaveBeenCalledWith("user-1", "my query", logger);
   });
 
+  it("retrieves nothing for a null query, and says so", async () => {
+    const result = await buildAIContext("user-1", null);
+
+    expect(retrieveMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ trainingContext: TRAINING_CONTEXT, ragInfo: { source: "none", chunkCount: 0 } });
+  });
+
   it("threads a custom logger through to RAG retrieval", async () => {
     const customLog = { warn: vi.fn(), error: vi.fn() };
     await buildAIContext("user-1", "my query", customLog);

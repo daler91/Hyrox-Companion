@@ -50,7 +50,10 @@ export type GeneratePlanInput = z.infer<typeof generatePlanInputSchema>;
 export interface RagInfo {
   source: "rag" | "legacy" | "none";
   chunkCount: number;
+  /** The excerpts themselves; development only (sanitizeRagInfo strips them). */
   chunks?: string[];
+  /** Titles of the athlete's materials the excerpts came from, each once. */
+  sources?: string[];
   materialCount?: number;
   fallbackReason?: string;
 }

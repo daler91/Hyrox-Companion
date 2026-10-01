@@ -4,7 +4,7 @@ import {
   planAdjustmentProposals,
   type PlanProposalStatus,
 } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 
@@ -15,6 +15,20 @@ import { db, type DbExecutor } from "../db";
  * concurrent apply/dismiss races lose cleanly (rowCount 0) instead of
  * double-writing.
  */
+/** The athlete's proposals among `ids`: the chat history and the coach's conversation read their outcomes. */
+async function getProposalsByIds(ids: readonly string[], userId: string): Promise<PlanAdjustmentProposal[]> {
+  if (ids.length === 0) return [];
+  return await db
+    .select()
+    .from(planAdjustmentProposals)
+    .where(
+      and(
+        inArray(planAdjustmentProposals.id, [...ids]),
+        eq(planAdjustmentProposals.userId, userId),
+      ),
+    );
+}
+
 export class PlanProposalStorage {
   async create(
     proposal: Omit<InsertPlanAdjustmentProposal, "id" | "status" | "createdAt" | "resolvedAt">,
@@ -58,6 +72,11 @@ export class PlanProposalStorage {
       .limit(1);
     return row;
   }
+
+  // Uses no instance state, so it is a module function bound here, as
+  // NutritionStorage binds its own: storage.planProposals.getByIds() and its
+  // mocks still work.
+  readonly getByIds = getProposalsByIds;
 
   /**
    * Move a pending proposal to a terminal status. Returns the updated row, or

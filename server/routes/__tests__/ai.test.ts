@@ -716,6 +716,123 @@ describe("POST /api/chat/stream", () => {
     expect(generateJsonText).toHaveBeenCalledWith(expect.objectContaining({ feature: "chat_intent" }));
   });
 
+  it("consults the plan-edit classifier for a \"yes please\" to a change the coach offered", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Sure.";
+    });
+
+    const response = await request(app)
+      .post(CHAT_STREAM_ENDPOINT)
+      .send({
+        message: "yes please",
+        history: [
+          { role: "user", content: "My legs are wrecked after Tuesday." },
+          { role: "assistant", content: "That's normal after intervals. Want me to move your long run to Saturday?" },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(generateJsonText).toHaveBeenCalledWith(expect.objectContaining({ feature: "chat_intent" }));
+  });
+
+  it("keeps a \"yes please\" to plain advice away from the classifier", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Great.";
+    });
+
+    const response = await request(app)
+      .post(CHAT_STREAM_ENDPOINT)
+      .send({
+        message: "yes please",
+        history: [{ role: "assistant", content: "Keep the easy runs truly easy this week. Want a pacing guide?" }],
+      });
+
+    expect(response.status).toBe(200);
+    expect(generateJsonText).not.toHaveBeenCalledWith(expect.objectContaining({ feature: "chat_intent" }));
+  });
+
+  it("tells the coach which workout the athlete is chatting from", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
+      id: "day-9",
+      focus: "Threshold Run",
+      mainWorkout: "3 x 10 min @ threshold",
+      scheduledDate: "2026-09-29",
+      status: "completed",
+    });
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Solid work.";
+    });
+
+    const response = await request(app)
+      .post(CHAT_STREAM_ENDPOINT)
+      .send({ message: "How did that go?", history: [], focusPlanDayId: "day-9" });
+
+    expect(response.status).toBe(200);
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("day-9", "test_user_id");
+    const focusedWorkout = vi.mocked(streamChatWithCoach).mock.calls[0][6]?.focusedWorkout;
+    expect(focusedWorkout).toContain("--- FOCUSED WORKOUT ---");
+    expect(focusedWorkout).toContain("Planned: 3 x 10 min @ threshold");
+  });
+
+  it("skips coaching-material retrieval for a thank-you", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Any time.";
+    });
+
+    const response = await postChatStream(app, "thanks!");
+
+    expect(response.status).toBe(200);
+    expect(retrieveRelevantChunks).not.toHaveBeenCalled();
+    expect(parseStreamResponse(response.text)[0]).toContain('"source":"none"');
+  });
+
+  it("searches the coaching materials with the previous question for a follow-up", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([{ content: "Sled: short, choppy steps.", source: null }]);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Keep the steps short.";
+    });
+
+    const response = await request(app)
+      .post(CHAT_STREAM_ENDPOINT)
+      .send({
+        message: "what about the sled?",
+        history: [
+          { role: "user", content: "How should I pace the run legs of a Hyrox?" },
+          { role: "assistant", content: "Start the first km slower than you think." },
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(retrieveRelevantChunks).toHaveBeenCalledWith(
+      "test_user_id",
+      "How should I pace the run legs of a Hyrox?\nwhat about the sled?",
+    );
+  });
+
+  it("leaves the focus out for a workout that isn't the athlete's", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Sure.";
+    });
+
+    // getPlanDay, reset before each test, finds no day: it isn't the athlete's.
+    const response = await request(app)
+      .post(CHAT_STREAM_ENDPOINT)
+      .send({ message: "How did that go?", history: [], focusPlanDayId: "someone-elses-day" });
+
+    expect(response.status).toBe(200);
+    expect(storage.plans.getPlanDay).toHaveBeenCalledWith("someone-elses-day", "test_user_id");
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.focusedWorkout).toBeUndefined();
+  });
+
   it("should handle stream errors gracefully", async () => {
 
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
@@ -828,6 +945,15 @@ describe("Chat History and Messages Routes", () => {
     });
   });
 
+  it("saves a turn sent without a userId, taking it from the session", async () => {
+    vi.mocked(storage.users.saveChatMessage).mockResolvedValue({ id: "m2", role: "assistant", content: "Hi", timestamp: new Date("2025-01-01T00:00:00Z") });
+
+    const response = await request(app).post(CHAT_MESSAGE_ENDPOINT).send({ role: "assistant", content: "Hi" });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.saveChatMessage).toHaveBeenCalledWith({ userId: "test_user_id", role: "assistant", content: "Hi" });
+  });
+
   it("should return 400 when missing role or content", async () => {
     const response = await request(app)
       .post(CHAT_MESSAGE_ENDPOINT)
@@ -936,7 +1062,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "lbs" });
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(3072);
-    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about heavier squats"]);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([{ content: "chunk about heavier squats", source: null }]);
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {
@@ -1096,7 +1222,10 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockResolvedValue("RAG response");
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
-    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about squats", "chunk about programming"]);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([
+      { content: "chunk about squats", source: null },
+      { content: "chunk about programming", source: null },
+    ]);
 
     const response = await postChat(app, "How should I train squats?");
 
@@ -1158,10 +1287,31 @@ describe("RAG pipeline in chat endpoints", () => {
     expect(storage.coaching.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
   });
 
+  it("labels each excerpt with its material and names the materials in ragInfo", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([
+      { content: "Short steps on the sled.", source: "Sled technique" },
+      { content: "Drive through the hips.", source: "Sled technique" },
+    ]);
+    vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
+      yield "Short steps.";
+    });
+
+    const response = await postChatStream(app, "How do I push the sled faster?");
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][4]).toEqual([
+      "Source: Sled technique\nShort steps on the sled.",
+      "Source: Sled technique\nDrive through the hips.",
+    ]);
+    expect(parseStreamResponse(response.text)[0]).toContain('"sources":["Sled technique"]');
+  });
+
   it("should use RAG retrieval for streaming endpoint", async () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
-    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["relevant chunk"]);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([{ content: "relevant chunk", source: null }]);
     vi.mocked(streamChatWithCoach).mockImplementation(async function* () {
       yield "Streamed";
     });

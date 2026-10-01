@@ -136,7 +136,10 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext);
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(3072);
-    vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk 1", "chunk 2"]);
+    vi.mocked(retrieveRelevantChunks).mockResolvedValue([
+      { content: "chunk 1", source: null },
+      { content: "chunk 2", source: null },
+    ]);
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
       makeSuggestion({ targetField: "notes", recommendation: "Focus on form", priority: "low" }),
     ]);

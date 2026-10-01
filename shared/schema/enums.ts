@@ -117,3 +117,15 @@ export const sessionStreamStatusEnum = [
   "skipped",
 ] as const;
 export type SessionStreamStatus = (typeof sessionStreamStatusEnum)[number];
+
+/**
+ * What a chat_messages row is.
+ *
+ * - `text`: an ordinary turn, from the athlete or the coach.
+ * - `proposal`: the coach's reply that carried a plan-change proposal
+ *   (`proposal_id`); its outcome is read from the proposal itself.
+ * - `summary`: the hidden summary of earlier sessions that the coach reads at
+ *   the start of a new session instead of their raw turns. Never shown.
+ */
+export const chatMessageKindEnum = ["text", "proposal", "summary"] as const;
+export type ChatMessageKind = (typeof chatMessageKindEnum)[number];

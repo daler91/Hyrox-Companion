@@ -30,26 +30,23 @@ function getDevBadgeLabel(ragInfo: RagInfo): string {
   return "No coaching data";
 }
 
-function getProductionLabel(ragInfo: RagInfo): string | null {
-  // In production we only surface a citation affordance when the suggestion
-  // actually cited RAG chunks from the user's uploaded coaching materials.
+function usedCoachingNotes(ragInfo: RagInfo): boolean {
+  // In production we only surface a citation affordance when the reply
+  // actually drew on excerpts from the athlete's uploaded coaching materials.
   // Legacy / none paths are debug-only.
-  if (ragInfo.source !== "rag") return null;
-  const count = ragInfo.chunkCount ?? ragInfo.chunks?.length ?? 0;
-  if (count === 0) return null;
-  const noun = count === 1 ? "source" : "sources";
-  return `Cited ${count} ${noun}`;
+  if (ragInfo.source !== "rag") return false;
+  return (ragInfo.chunkCount ?? ragInfo.chunks?.length ?? 0) > 0;
 }
 
 function buildProductionConfig(ragInfo: RagInfo): BadgeConfig | null {
-  const label = getProductionLabel(ragInfo);
-  if (!label) return null;
+  if (!usedCoachingNotes(ragInfo)) return null;
   return {
-    label,
+    label: "From your coaching notes",
     icon: Database,
     color: BADGE_COLORS.rag,
-    chunks: ragInfo.chunks,
-    ariaSuffix: "coaching sources",
+    // Production strips the excerpts themselves; the material titles stay.
+    chunks: ragInfo.sources,
+    ariaSuffix: "the materials it drew on",
     testId: "button-rag-citations",
   };
 }

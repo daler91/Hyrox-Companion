@@ -112,6 +112,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`), and nutrition meal-photo parsing (`POST /api/v1/nutrition/parse/photo`) and label scans (`POST /api/v1/nutrition/parse/label`) via `server/services/nutrition/visionParsing.ts`. |
 | `RAG_CHUNK_SIZE` | Optional | `600` | Characters per chunk during coaching-material embedding. |
 | `RAG_CHUNK_OVERLAP` | Optional | `100` | Character overlap between adjacent chunks. |
+| `RAG_MAX_COSINE_DISTANCE` | Optional | `0.6` | Semantic search results further than this cosine distance from the query (0 to 2) are dropped; pinned principles always stay. The default only cuts chunks unrelated to the question. The `[rag] Search returned chunks` log line records the best distance and how many were kept, to tune it against. |
 
 ---
 

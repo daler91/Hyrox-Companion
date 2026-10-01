@@ -778,6 +778,13 @@
       "when": 1790540584963,
       "tag": "0110_black_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1790872777733,
+      "tag": "0111_chat_message_metadata",
+      "breakpoints": true
     }
   ]
 }

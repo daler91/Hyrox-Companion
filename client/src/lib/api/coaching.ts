@@ -1,6 +1,7 @@
 import type { ChatMessage, ChatSafetyNotice, CoachingMaterial, RagInfo } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
+import type { PlanProposalView } from "./planProposals";
 
 export type { RagInfo } from "@shared/schema";
 
@@ -45,16 +46,37 @@ export interface CoachInsightsResponse {
   stale?: boolean;
 }
 
+/**
+ * The ids that hand a chat turn to the server (AI coach chat review, I1). It
+ * saves the athlete's message and the coach's reply under them and reads the
+ * conversation from its own history, so the client sends neither the history
+ * nor the turns. A retry sends the same userMessageId and the failed reply's
+ * id, which the server replaces.
+ */
+export interface ChatTurnIds {
+  userMessageId: string;
+  assistantMessageId: string;
+  replaceAssistantId?: string;
+}
+
+/** A saved chat row as GET /chat/history returns it: a proposal reply carries its proposal, with its current status. */
+export type ChatHistoryMessage = ChatMessage & { proposal?: PlanProposalView };
+
+/** The workout in view when chatting from the workout-detail dialog. */
+export interface ChatFocus {
+  /** Its plan day, so "make this day easier" resolves to it. */
+  focusPlanDayId?: string;
+  /** Its log, when the session has been done. */
+  focusWorkoutLogId?: string;
+}
+
 export const chat = {
   sendStream: (
     data: {
       message: string;
-      history?: Array<{ role: string; content: string }>;
       /** Opt-out for surfaces without proposal-card UI (server defaults true). */
       planEditing?: boolean;
-      /** Plan day in view when chatting from the workout-detail dialog. */
-      focusPlanDayId?: string;
-    },
+    } & ChatFocus & ChatTurnIds,
     options?: { signal?: AbortSignal },
   ) =>
     rawRequest("POST", "/api/v1/chat/stream", data, {
@@ -65,10 +87,12 @@ export const chat = {
       signal: options?.signal,
     }),
 
-  send: (data: { message: string; history?: Array<{ role: string; content: string }> }) =>
+  send: (data: { message: string } & ChatFocus & ChatTurnIds) =>
     typedRequest<ChatResponse>("POST", "/api/v1/chat", data),
 
-  // The per-message idempotencyKey (the client message id) is sent as
+  // Turns the chat routes don't save themselves: the Coach panel's own
+  // messages (a suggestions request, an apply confirmation). The per-message
+  // idempotencyKey (the client message id) is sent as
   // X-Idempotency-Key so a retried/duplicated save is de-duplicated by the
   // existing idempotency middleware rather than persisting the turn twice (S7).
   saveMessage: (msg: { role: string; content: string }, idempotencyKey?: string) =>

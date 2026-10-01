@@ -100,10 +100,18 @@ function savedTurns(): Array<{ role: string; content: string }> {
     .map(([, , body]) => body as { role: string; content: string });
 }
 
+interface StreamBody {
+  message: string;
+  history?: unknown;
+  userMessageId: string;
+  assistantMessageId: string;
+  replaceAssistantId?: string;
+}
+
 /** The body POSTed to /api/v1/chat/stream on the nth send (0-based). */
-function streamRequest(n: number): { message: string; history: Array<{ role: string; content: string }> } {
+function streamRequest(n: number): StreamBody {
   const calls = vi.mocked(queryClient.apiRequest).mock.calls.filter(([, url]) => url === '/api/v1/chat/stream');
-  return calls[n][2] as { message: string; history: Array<{ role: string; content: string }> };
+  return calls[n][2] as StreamBody;
 }
 
 describe('useChatSession', () => {
@@ -213,7 +221,7 @@ describe('useChatSession', () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].id).toBe('welcome');
   });
-  it('saves the turns only once the server accepts the request, user first', async () => {
+  it('hands both turns to the server under their ids, and sends no history', async () => {
     mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Easy run, 40 min.' }, { done: true }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -221,14 +229,20 @@ describe('useChatSession', () => {
       await result.current.sendMessage('What should I do today?');
     });
 
-    await waitFor(() => expect(savedTurns()).toHaveLength(2));
-    expect(savedTurns()).toEqual([
-      { role: 'user', content: 'What should I do today?' },
-      { role: 'assistant', content: 'Easy run, 40 min.' },
-    ]);
+    const body = streamRequest(0);
+    expect(body).toMatchObject({
+      message: 'What should I do today?',
+      userMessageId: result.current.messages[1].id,
+      assistantMessageId: result.current.messages[2].id,
+    });
+    expect(body.history).toBeUndefined();
+    expect(body.replaceAssistantId).toBeUndefined();
+    // The server saved them; the client saves nothing itself.
+    expect(savedTurns()).toEqual([]);
+    expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['/api/v1/chat/history'] });
   });
 
-  it('does not save the turn the server refused, and names the rate limit with a retry', async () => {
+  it('names the rate limit, and offers a retry', async () => {
     mockStreamEndpoint(() => Promise.reject(new queryClient.RateLimitError('Too many requests', 8)));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -243,10 +257,8 @@ describe('useChatSession', () => {
     expect(reply.failure?.retry).toEqual({
       content: 'Hello?',
       userMessageId: result.current.messages[1].id,
-      userSaved: false,
     });
     expect(result.current.streamError).toBe(reply.failure?.message);
-    expect(savedTurns()).toEqual([]);
   });
 
   it('names the daily AI limit and offers no retry', async () => {
@@ -276,7 +288,7 @@ describe('useChatSession', () => {
     });
   });
 
-  it('keeps text that arrived before a mid-stream failure, and marks the accepted turn as saved', async () => {
+  it('keeps text that arrived before a mid-stream failure', async () => {
     mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Start with a' }, { error: 'Stream error' }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -287,17 +299,17 @@ describe('useChatSession', () => {
     const reply = result.current.messages[2];
     expect(reply.content).toBe('Start with a');
     expect(reply.failure?.message).toBe('Something went wrong on our side. Please try again.');
-    expect(reply.failure?.retry?.userSaved).toBe(true);
-    await waitFor(() => expect(savedTurns()).toEqual([{ role: 'user', content: 'Warm-up ideas?' }]));
+    expect(reply.failure?.retry?.content).toBe('Warm-up ideas?');
   });
 
-  it('retries a failed send in place: the failed exchange goes, the new one is saved once', async () => {
+  it('retries a failed send in place, under the same message id, replacing the failed reply', async () => {
     mockStreamEndpoint(() => Promise.reject(new Error('500: {"error":"Internal Server Error"}')));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
       await result.current.sendMessage('Taper advice?');
     });
+    const firstAttempt = streamRequest(0);
     const failedId = result.current.messages[2].id;
 
     mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Cut volume by a third.' }, { done: true }))));
@@ -311,53 +323,35 @@ describe('useChatSession', () => {
       ['user', 'Taper advice?'],
       ['assistant', 'Cut volume by a third.'],
     ]);
-    // The resend carries no trace of the failed attempt.
-    expect(streamRequest(1).history).toEqual([]);
-    await waitFor(() =>
-      expect(savedTurns()).toEqual([
-        { role: 'user', content: 'Taper advice?' },
-        { role: 'assistant', content: 'Cut volume by a third.' },
-      ]),
+    // Saved once by the server however many attempts it takes, and the
+    // failed reply is replaced.
+    const retry = streamRequest(1);
+    expect(retry.userMessageId).toBe(firstAttempt.userMessageId);
+    expect(retry.replaceAssistantId).toBe(failedId);
+    expect(retry.assistantMessageId).not.toBe(failedId);
+    expect(result.current.messages[1].id).toBe(firstAttempt.userMessageId);
+  });
+
+  it('puts a drafted proposal on the reply it arrived with', async () => {
+    const proposal = {
+      id: 'proposal-1',
+      planId: 'plan-1',
+      status: 'pending',
+      summaryMessage: 'Moved your long run to Saturday.',
+      changes: [],
+      createdAt: '2026-10-01T10:00:00.000Z',
+    };
+    mockStreamEndpoint(() =>
+      Promise.resolve(new Response(sseStream({ planProposalPending: true }, { text: 'Moved your long run to Saturday.' }, { planProposal: proposal }, { done: true }))),
     );
-  });
-
-  it('does not save the athlete turn again when retrying one the server had accepted', async () => {
-    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ error: 'Stream error' }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {
-      await result.current.sendMessage('Hill session?');
-    });
-    const failedId = result.current.messages[2].id;
-    await waitFor(() => expect(savedTurns()).toHaveLength(1));
-
-    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: '6 x 60 s hills.' }, { done: true }))));
-    await act(() => {
-      result.current.retryMessage(failedId);
+      await result.current.sendMessage('Move my long run to Saturday');
     });
 
-    await waitFor(() => expect(savedTurns()).toHaveLength(2));
-    expect(savedTurns()).toEqual([
-      { role: 'user', content: 'Hill session?' },
-      { role: 'assistant', content: '6 x 60 s hills.' },
-    ]);
-  });
-
-  it('leaves a failed reply out of the history sent with the next message', async () => {
-    mockStreamEndpoint(() => Promise.reject(new TypeError('Failed to fetch')));
-    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
-
-    await act(async () => {
-      await result.current.sendMessage('First try');
-    });
-    expect(result.current.messages[2].failure?.message).toMatch(/connection dropped/i);
-
-    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Here you go.' }, { done: true }))));
-    await act(async () => {
-      await result.current.sendMessage('Second try');
-    });
-
-    expect(streamRequest(1).history).toEqual([{ role: 'user', content: 'First try' }]);
+    expect(result.current.messages[2]).toMatchObject({ kind: 'proposal', proposal: { id: 'proposal-1' } });
+    expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['/api/v1/plan-proposals'] });
   });
   it("puts the server's safety notice on the reply it arrived with", async () => {
     const notice = { level: 'urgent', message: 'Pause hard training and seek prompt medical care.' };
@@ -402,5 +396,35 @@ describe('useChatSession', () => {
 
     await waitFor(() => expect(result.current.messages).toHaveLength(3));
     expect(result.current.messages[2].safetyNotice).toEqual(notice);
+  });
+  it('sends the workout in view with the message', async () => {
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Solid.' }, { done: true }))));
+    const { result } = renderHook(
+      () => useChatSession({ focusPlanDayId: 'day-1', focusWorkoutLogId: 'log-1' }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.sendMessage('How did that go?');
+    });
+
+    expect(streamRequest(0)).toMatchObject({ focusPlanDayId: 'day-1', focusWorkoutLogId: 'log-1' });
+  });
+
+  it('sends the workout in view on the non-streaming path too', async () => {
+    vi.mocked(queryClient.apiRequest).mockImplementation((_method, url) =>
+      Promise.resolve(new Response(JSON.stringify(url === '/api/v1/chat' ? { response: 'Solid.' } : {}))),
+    );
+    const { result } = renderHook(
+      () => useChatSession({ useStreaming: false, focusWorkoutLogId: 'log-1' }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.sendMessage('How did that go?');
+    });
+
+    const body = vi.mocked(queryClient.apiRequest).mock.calls.find(([, url]) => url === '/api/v1/chat')?.[2];
+    expect(body).toMatchObject({ focusWorkoutLogId: 'log-1' });
   });
 });

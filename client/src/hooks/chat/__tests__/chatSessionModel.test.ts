@@ -1,99 +1,137 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { ChatHistoryMessage, PlanProposalView } from "@/lib/api";
 import type { Message } from "@/lib/chatMessage";
 
-import { buildHistory, createTurnSaver, type SavedTurn, truncateHistory } from "../chatSessionModel";
+import { createMessageUpdater, handleSendFailure, messageFromHistory, type SetMessages } from "../chatSessionModel";
 
 function message(overrides: Partial<Message>): Message {
   return { id: "m", role: "user", content: "", timestamp: "", createdAtMs: 1, ...overrides };
 }
 
-describe("buildHistory", () => {
-  it("drops the welcome and any reply that failed before text arrived", () => {
-    const history = buildHistory([
-      message({ id: "welcome", role: "assistant", content: "hey" }),
-      message({ id: "u1", content: "First try" }),
-      message({ id: "a1", role: "assistant", content: "", failure: { message: "Connection dropped." } }),
-      message({ id: "u2", content: "Second try" }),
-      message({ id: "a2", role: "assistant", content: "Here you go." }),
-    ]);
-    expect(history).toEqual([
-      { role: "user", content: "First try" },
-      { role: "user", content: "Second try" },
-      { role: "assistant", content: "Here you go." },
-    ]);
-  });
+/** A setMessages that applies each update to a local buffer. */
+function messageBuffer(initial: Message[]) {
+  let messages = initial;
+  const setMessages: SetMessages = (update) => {
+    messages = typeof update === "function" ? update(messages) : update;
+  };
+  return { setMessages, current: () => messages };
+}
 
-  it("keeps text that arrived before a failure", () => {
-    const history = buildHistory([
-      message({ id: "a1", role: "assistant", content: "Start with a", failure: { message: "Stopped." } }),
-    ]);
-    expect(history).toEqual([{ role: "assistant", content: "Start with a" }]);
-  });
+function savedRow(overrides: Partial<ChatHistoryMessage>): ChatHistoryMessage {
+  return {
+    id: "row-1",
+    userId: "user-1",
+    role: "assistant",
+    content: "Easy run, 40 min.",
+    timestamp: new Date("2026-09-29T08:30:00Z"),
+    kind: "text",
+    proposalId: null,
+    safetyNotice: null,
+    ragInfo: null,
+    focusPlanDayId: null,
+    focusWorkoutLogId: null,
+    ...overrides,
+  };
+}
 
-  it("sends at most the last 20 turns", () => {
-    const many = Array.from({ length: 25 }, (_, i) => message({ id: `u${i}`, content: `turn ${i}` }));
-    const history = buildHistory(many);
-    expect(history).toHaveLength(20);
-    expect(history[0].content).toBe("turn 5");
-  });
-});
+const PROPOSAL: PlanProposalView = {
+  id: "proposal-1",
+  planId: "plan-1",
+  status: "applied",
+  summaryMessage: "Moved your long run to Saturday.",
+  changes: [],
+  createdAt: "2026-09-29T08:30:00.000Z",
+};
 
-describe("truncateHistory", () => {
-  it("leaves a history under the character budget alone", () => {
-    const turns = [{ role: "user", content: "short" }];
-    expect(truncateHistory(turns)).toBe(turns);
-  });
+describe("messageFromHistory", () => {
+  it("keeps a saved reply's safety notice, retrieval and proposal, and when it was sent", () => {
+    const hydrated = messageFromHistory(
+      savedRow({
+        kind: "proposal",
+        proposalId: "proposal-1",
+        safetyNotice: { level: "caution", message: "Heart-rate zones can be unreliable." },
+        ragInfo: { source: "rag", chunkCount: 2, sources: ["Pacing notes"] },
+        proposal: PROPOSAL,
+      }),
+    );
 
-  it("keeps recent turns whole and cuts older ones once over budget", () => {
-    const old = { role: "user", content: "o".repeat(20_000) };
-    const recent = { role: "assistant", content: "r".repeat(15_000) };
-    const [cutOld, keptRecent] = truncateHistory([old, recent]);
-    expect(keptRecent).toEqual(recent);
-    expect(cutOld.content).toBe(`${"o".repeat(200)} [truncated]`);
-  });
-});
-
-describe("createTurnSaver", () => {
-  const user = message({ id: "u1", content: "Taper advice?" });
-
-  function recordingSaver() {
-    const saved: SavedTurn[] = [];
-    const saveTurn = vi.fn((turn: SavedTurn) => {
-      saved.push(turn);
-      return Promise.resolve();
+    expect(hydrated).toMatchObject({
+      id: "row-1",
+      role: "assistant",
+      kind: "proposal",
+      createdAtMs: 0,
+      sentAtMs: Date.parse("2026-09-29T08:30:00Z"),
+      safetyNotice: { level: "caution", message: "Heart-rate zones can be unreliable." },
+      ragInfo: { source: "rag", chunkCount: 2, sources: ["Pacing notes"] },
+      proposal: PROPOSAL,
     });
-    return { saved, saveTurn };
-  }
-
-  it("saves the athlete's turn once, however often it is asked", async () => {
-    const { saved, saveTurn } = recordingSaver();
-    const turns = createTurnSaver(saveTurn, user, "a1", false);
-
-    expect(turns.userSaved()).toBe(false);
-    await turns.saveUser();
-    await turns.saveUser();
-    expect(turns.userSaved()).toBe(true);
-    expect(saved).toEqual([{ role: "user", content: "Taper advice?", idempotencyKey: "u1" }]);
+    expect(hydrated.timestamp).not.toBe("");
   });
 
-  it("saves the reply after the athlete's turn, saving that first if needed", async () => {
-    const { saved, saveTurn } = recordingSaver();
-    const turns = createTurnSaver(saveTurn, user, "a1", false);
-
-    turns.saveAssistant("Cut volume by a third.");
-    await vi.waitFor(() => expect(saved).toHaveLength(2));
-    expect(saved.map((t) => t.role)).toEqual(["user", "assistant"]);
-    expect(saved[1]).toEqual({ role: "assistant", content: "Cut volume by a third.", idempotencyKey: "a1" });
+  it("reads a timestamp that arrived as JSON text", () => {
+    const row = savedRow({ timestamp: "2026-09-29T08:30:00.000Z" as unknown as Date });
+    expect(messageFromHistory(row).sentAtMs).toBe(Date.parse("2026-09-29T08:30:00Z"));
   });
 
-  it("never saves an athlete turn that an earlier attempt already saved", async () => {
-    const { saved, saveTurn } = recordingSaver();
-    const turns = createTurnSaver(saveTurn, user, "a2", true);
+  it("marks the note a new session carried, and leaves out what isn't there", () => {
+    const hydrated = messageFromHistory(savedRow({ kind: "summary", content: "- The athlete has a sore knee." }));
+    expect(hydrated.kind).toBe("summary");
+    expect(hydrated).not.toHaveProperty("safetyNotice");
+    expect(hydrated).not.toHaveProperty("proposal");
+    expect(hydrated).not.toHaveProperty("ragInfo");
+  });
+});
 
-    expect(turns.userSaved()).toBe(true);
-    turns.saveAssistant("6 x 60 s hills.");
-    await vi.waitFor(() => expect(saved).toHaveLength(1));
-    expect(saved[0].role).toBe("assistant");
+describe("createMessageUpdater", () => {
+  it("puts the stream's text, safety notice and drafted proposal on the reply", () => {
+    const buffer = messageBuffer([message({ id: "u1" }), message({ id: "a1", role: "assistant" })]);
+
+    createMessageUpdater("a1", buffer.setMessages)({
+      content: "Here is the change.",
+      extras: {
+        safetyNotice: { level: "urgent", message: "Get checked." },
+        planProposal: { ...PROPOSAL, status: "pending" },
+      },
+    });
+
+    const messages = buffer.current();
+    expect(messages[1]).toMatchObject({
+      content: "Here is the change.",
+      safetyNotice: { level: "urgent", message: "Get checked." },
+      kind: "proposal",
+      proposal: { id: "proposal-1", status: "pending" },
+    });
+    expect(messages[0]).toEqual(message({ id: "u1" }));
+  });
+
+  it("ignores a malformed proposal frame", () => {
+    const buffer = messageBuffer([message({ id: "a1", role: "assistant" })]);
+
+    createMessageUpdater("a1", buffer.setMessages)({ content: "Hi.", extras: { planProposal: { id: 3 } } });
+
+    expect(buffer.current()[0]).not.toHaveProperty("proposal");
+  });
+});
+
+describe("handleSendFailure", () => {
+  it("keeps the text that arrived, and offers a retry under the same message id", () => {
+    const user = message({ id: "u1", content: "Taper advice?" });
+    const buffer = messageBuffer([user, message({ id: "a1", role: "assistant" })]);
+    const setStreamError = vi.fn();
+
+    handleSendFailure({
+      err: new Error("500: {\"error\":\"Internal Server Error\"}"),
+      fullResponse: "Cut volume",
+      assistantMessageId: "a1",
+      userMessage: user,
+      setMessages: buffer.setMessages,
+      setStreamError,
+    });
+
+    const messages = buffer.current();
+    expect(messages[1].content).toBe("Cut volume");
+    expect(messages[1].failure?.retry).toEqual({ content: "Taper advice?", userMessageId: "u1" });
+    expect(setStreamError).toHaveBeenCalledWith(messages[1].failure?.message);
   });
 });
