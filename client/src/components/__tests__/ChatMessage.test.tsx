@@ -149,4 +149,43 @@ describe('ChatMessage', () => {
       expect(screen.getByRole('note')).toHaveTextContent('Heart-rate zones can be unreliable.');
     });
   });
+  describe('GitHub-flavoured markdown', () => {
+    const table = [
+      '| Split | Pace |',
+      '| --- | --- |',
+      '| 1 km | 4:05 |',
+      '| 2 km | 4:02 |',
+    ].join('\n');
+
+    it('renders a table as a table, in a horizontal scroll wrapper', () => {
+      const { container } = render(<ChatMessage role="assistant" content={table} />);
+      const rendered = container.querySelector('table');
+      expect(rendered).not.toBeNull();
+      expect(screen.getByRole('columnheader', { name: 'Pace' })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: '4:02' })).toBeInTheDocument();
+      expect(rendered?.parentElement).toHaveClass('overflow-x-auto');
+      expect(container.textContent).not.toContain('| ---');
+    });
+
+    it('renders strikethrough', () => {
+      const { container } = render(<ChatMessage role="assistant" content="~~6 x 800 m~~ 5 x 800 m" />);
+      expect(container.querySelector('del')).toHaveTextContent('6 x 800 m');
+    });
+
+    it('still sanitizes raw HTML inside a table cell', () => {
+      const { container } = render(
+        <ChatMessage
+          role="assistant"
+          content={'| a | b |\n| --- | --- |\n| <img src=x onerror="window.__xssMarker = true"> | ok |'}
+        />,
+      );
+      expect(container.innerHTML).not.toMatch(/onerror=/i);
+      expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+    });
+
+    it('does not turn a javascript: autolink into a live link', () => {
+      const { container } = render(<ChatMessage role="assistant" content="see javascript:alert(1) and www.example.com" />);
+      expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
+    });
+  });
 });

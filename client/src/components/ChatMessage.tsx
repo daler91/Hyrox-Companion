@@ -1,8 +1,9 @@
 import type { ChatSafetyNotice } from "@shared/schema";
 import { AlertCircle, Bot, HeartPulse, RotateCcw, ShieldAlert, User } from "lucide-react";
 import { memo } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
 import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -23,6 +24,20 @@ interface ChatMessageProps {
   /** Offered only on a failed reply that can be sent again. */
   readonly onRetry?: () => void;
 }
+
+/**
+ * GFM gives the coach tables (pacing splits, a week's sessions), strikethrough
+ * and task lists, which plain CommonMark printed as pipes and tildes. A table
+ * wider than the bubble scrolls instead of squashing its columns on a phone.
+ */
+const MARKDOWN_PLUGINS = [remarkGfm];
+const MARKDOWN_COMPONENTS: Components = {
+  table: ({ node: _node, ...props }) => (
+    <div className="my-2 max-w-full overflow-x-auto">
+      <table {...props} />
+    </div>
+  ),
+};
 
 /**
  * The urgent escalation is an alert, so it is announced as soon as it lands
@@ -129,7 +144,13 @@ export const ChatMessage = memo(function ChatMessage({
                       script tags, event handlers, and javascript:/data: URLs so a
                       compromised provider or prompt-injection attempt can't run
                       arbitrary JS in the user's session (C2). */}
-                  <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{content}</ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={MARKDOWN_PLUGINS}
+                    rehypePlugins={[rehypeSanitize]}
+                    components={MARKDOWN_COMPONENTS}
+                  >
+                    {content}
+                  </ReactMarkdown>
                 </div>
               )}
               {failure && (
