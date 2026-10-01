@@ -1,6 +1,7 @@
 ﻿export * from "./types/ai";
 export * from "./types/analytics";
 export * from "./types/annotations";
+export * from "./types/athleteFacts";
 export * from "./types/coaching";
 export * from "./types/connections";
 export * from "./types/planProposals";

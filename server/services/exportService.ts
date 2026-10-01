@@ -178,6 +178,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
     coachingMaterials,
     customExercises,
     timelineAnnotations,
+    athleteFacts,
     stravaConn,
     garminConn,
     pushSubs,
@@ -191,6 +192,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
     storage.coaching.listCoachingMaterials(userId),
     storage.users.getCustomExercises(userId),
     storage.timelineAnnotations.list(userId),
+    storage.athleteFacts.list(userId),
     storage.users.getStravaConnection(userId),
     storage.users.getGarminConnection(userId),
     storage.push.getSubscriptionsForUser(userId),
@@ -235,6 +237,8 @@ export async function generateJSON(userId: string, storage: IStorage) {
     coachingMaterials,
     customExercises,
     timelineAnnotations,
+    // The athlete card, retired facts included: all of it is the athlete's own words.
+    athleteFacts,
     connections: {
       strava: stravaConn ? scrubStravaConnection(stravaConn) : null,
       garmin: garminConn ? scrubGarminConnection(garminConn) : null,

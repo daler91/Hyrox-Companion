@@ -1,6 +1,7 @@
 import type { AiUsageStorage } from "./aiUsage";
 import type { AnalyticsStorage } from "./analytics";
 import type { AnalyticsResultsStorage } from "./analyticsResults";
+import type { AthleteFactsStorage } from "./athleteFacts";
 import type { CoachingStorage } from "./coaching";
 import type { ConsentStorage } from "./consent";
 import type { IdempotencyStorage } from "./idempotency";
@@ -24,6 +25,7 @@ import type { WorkoutStorage } from "./workouts";
  *   storage.plans.getActivePlan(...)
  *   storage.timeline.getTimeline(...)
  *   storage.timelineAnnotations.list(...)
+ *   storage.athleteFacts.listActive(...)
  *   storage.analytics.getWeeklyStats(...)
  *   storage.coaching.listCoachingMaterials(...)
  *   storage.aiUsage.getDailyTotalCents(...)
@@ -37,6 +39,7 @@ export interface IStorage {
   planProposals: PlanProposalStorage;
   timeline: TimelineStorage;
   timelineAnnotations: TimelineAnnotationsStorage;
+  athleteFacts: AthleteFactsStorage;
   analytics: AnalyticsStorage;
   analyticsResults: AnalyticsResultsStorage;
   coaching: CoachingStorage;

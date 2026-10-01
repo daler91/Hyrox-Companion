@@ -3,6 +3,8 @@ import { getTableConfig,PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import {
+  athleteFactCategoryEnum,
+  athleteFactSourceEnum,
   chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
@@ -13,6 +15,7 @@ import {
   workoutStatusEnum,
 } from "./enums";
 import {
+  athleteFacts,
   chatMessages,
   FOOD_SOURCES,
   foodLogEntries,
@@ -54,6 +57,18 @@ describe("enum-backed CHECK constraints", () => {
   it("renders chat_messages.kind from chatMessageKindEnum", () => {
     expect(checkSql(chatMessages, "chat_messages_kind_check")).toBe("kind IN ('text', 'proposal', 'summary', 'rolling')");
     expect(chatMessageKindEnum).toEqual(["text", "proposal", "summary", "rolling"]);
+  });
+
+  it("renders athlete_facts' category and source from their enums, and bounds the fact", () => {
+    expect(checkSql(athleteFacts, "athlete_facts_category_check")).toBe(
+      "category IN ('constraint', 'equipment', 'schedule', 'preference', 'other')",
+    );
+    expect(checkSql(athleteFacts, "athlete_facts_source_check")).toBe(
+      "source IN ('athlete', 'plan_generation', 'onboarding', 'chat')",
+    );
+    expect(checkSql(athleteFacts, "athlete_facts_fact_length_check")).toBe("char_length(fact) BETWEEN 1 AND 140");
+    expect(athleteFactCategoryEnum).toEqual(["constraint", "equipment", "schedule", "preference", "other"]);
+    expect(athleteFactSourceEnum).toEqual(["athlete", "plan_generation", "onboarding", "chat"]);
   });
 
   it("renders chat_messages.feedback from chatFeedbackEnum", () => {

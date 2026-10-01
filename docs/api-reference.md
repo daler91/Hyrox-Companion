@@ -29,6 +29,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 - [MAF Test Routes](#maf-test-routes)
 - [Training Plan Routes](#training-plan-routes)
 - [Timeline Annotation Routes](#timeline-annotation-routes)
+- [Athlete Fact Routes](#athlete-fact-routes)
 - [Recycle Bin Routes](#recycle-bin-routes)
 - [Analytics Routes](#analytics-routes)
 - [AI and Chat Routes](#ai-and-chat-routes)
@@ -1041,6 +1042,56 @@ Delete an annotation.
 - **Auth:** Required
 - **Rate limit:** `annotations` category, 20/min
 - **Response:** `{ success: true }` (or 404 when the id doesn't belong to the user)
+
+---
+
+## Athlete Fact Routes
+
+**File:** `server/routes/athleteFacts.ts`
+
+The athlete card (coach-memory spec, Path C): short statements that are true every week, read by every coach prompt and the plan generator (see [Database → athlete_facts](database.md#athlete_facts)). No `aiConsent` or `aiBudget`: these routes call no model, and an athlete can record a fact with the AI coach off; consent applies where facts are read. Writes go through the per-athlete training-context cache invalidation like any other `/api/v1` write.
+
+### GET /api/v1/athlete-facts
+
+Every fact the athlete has, retired ones included, oldest first.
+
+- **Auth:** Required
+- **Rate limit:** `athleteFacts` category, 60/min
+- **Response:** `AthleteFact[]`
+
+### POST /api/v1/athlete-facts
+
+Add a fact. One the athlete already has (same server-derived key) is re-confirmed instead: active again, the new wording and category, review date 90 days after their own today.
+
+- **Auth:** Required
+- **Rate limit:** `athleteFacts` category, 20/min
+- **Body:** `{ fact: string (1-140 chars, trimmed), category: "constraint" | "equipment" | "schedule" | "preference" | "other", source?: "athlete" | "chat" }` (`createAthleteFactSchema`; `chat` marks a coach proposal the athlete saved, and the server's own sources can't be sent)
+- **Response:** `201 AthleteFact` when added, `200 AthleteFact` when re-confirmed; `409 ATHLETE_FACT_LIMIT` when 20 facts are already active
+
+### POST /api/v1/athlete-facts/import
+
+Move the older free-text "Injuries & Limitations" note (`users.training_constraints`) into the card, a fact per sentence or line (category `constraint`, source `plan_generation`). The note is cleared only when all of it fits under the cap.
+
+- **Auth:** Required
+- **Rate limit:** `athleteFacts` category, 20/min
+- **Response:** `{ added: number, skipped: number }` (`added` counts re-confirmed facts too)
+
+### PATCH /api/v1/athlete-facts/:id
+
+Change a fact's wording or category, retire or restore it, or confirm it is still true. Confirming (`confirm: true`) and restoring (`active: true`) both set the review date 90 days out.
+
+- **Auth:** Required
+- **Rate limit:** `athleteFacts` category, 20/min
+- **Body:** `{ fact?, category?, active?: boolean, confirm?: true }`, at least one (`updateAthleteFactSchema`)
+- **Response:** `AthleteFact`; `409 ATHLETE_FACT_DUPLICATE` when the new wording is another fact's, `409 ATHLETE_FACT_LIMIT` when restoring past the cap, `404` when the id isn't the athlete's
+
+### DELETE /api/v1/athlete-facts/:id
+
+Delete a fact for good (retiring keeps it).
+
+- **Auth:** Required
+- **Rate limit:** `athleteFacts` category, 20/min
+- **Response:** `{ success: true }`, or `404` when the id isn't the athlete's
 
 ---
 

@@ -751,6 +751,34 @@ User-authored bands that mark date ranges as injury, illness, travel, or rest so
 **Indexes:**
 - `idx_timeline_annotations_user_range` on (`user_id`, `start_date`, `end_date`) -- composite, used for overlap queries against the visible timeline window and, since `user_id` is its leading column, also serves bare `user_id` lookups
 
+### athlete_facts
+
+The athlete card (coach-memory spec, Path C, `docs/coach-memory-spec.md`): short statements that are true every week, such as "bad left knee", "no sled at my gym" or "night shifts on Tuesdays". The athlete states them once, in Settings, in the plan wizard's injuries box, or by saving one the coach proposed in chat; every coach prompt and the plan generator read the active ones.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `fact` | `text` | NOT NULL; one line, 1 to 140 characters (zod and CHECK) |
+| `dedupe_key` | `varchar(160)` | NOT NULL; derived on the server (`athleteFactKey`: lower case, spacing collapsed, a closing full stop dropped), never taken from a request |
+| `category` | `varchar(24)` | NOT NULL; `constraint`, `equipment`, `schedule`, `preference` or `other` |
+| `source` | `varchar(24)` | NOT NULL, default `'athlete'`; `athlete`, `plan_generation`, `onboarding` or `chat` (a coach proposal the athlete saved) |
+| `active` | `boolean` | NOT NULL, default `true`; false once retired. A retired row is kept, so stating the fact again brings it back instead of duplicating it |
+| `review_on` | `date` | NOT NULL, default `CURRENT_DATE + 90`; the server sets it 90 days after the athlete's own today, and again when they confirm or restore the fact. A fact past it still reaches the coach, flagged as unconfirmed |
+| `created_at` | `timestamptz` | NOT NULL, default `now()` |
+| `updated_at` | `timestamptz` | NOT NULL, default `now()` |
+
+Stating a fact the athlete already has (same `dedupe_key`) re-confirms that row: active again, the new wording and category, a new review date, its original `source` kept. At most 20 facts are active per athlete, enforced on write with a 409 (`ATHLETE_FACT_LIMIT`) under a per-athlete advisory transaction lock, never at render. Migration `0115`.
+
+**Check constraints:**
+- `athlete_facts_fact_length_check`: `char_length(fact) BETWEEN 1 AND 140`
+- `athlete_facts_category_check`: `category IN ('constraint', 'equipment', 'schedule', 'preference', 'other')`
+- `athlete_facts_source_check`: `source IN ('athlete', 'plan_generation', 'onboarding', 'chat')`
+
+**Indexes:**
+- `uq_athlete_facts_user_dedupe` UNIQUE on (`user_id`, `dedupe_key`) -- the conflict target of the re-confirming upsert
+- `idx_athlete_facts_user_active` on (`user_id`, `active`)
+
 ---
 
 ### idempotency_keys
@@ -1313,6 +1341,7 @@ export const storage: IStorage = {
   planProposals: new PlanProposalStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
+  athleteFacts: new AthleteFactsStorage(),
   analytics: new AnalyticsStorage(),
   analyticsResults: new AnalyticsResultsStorage(),
   coaching: new CoachingStorage(),

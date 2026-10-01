@@ -178,7 +178,7 @@ describe("user-owned tables cascade on DELETE", () => {
     expect(violations).toEqual([]);
     // Guards the guard: if the schema is refactored such that this sweep stops
     // seeing tables, it must fail rather than vacuously pass.
-    expect(checked).toBeGreaterThanOrEqual(27);
+    expect(checked).toBeGreaterThanOrEqual(31);
   });
 
   for (const { label, table, parent } of transitivelyOwnedTables) {

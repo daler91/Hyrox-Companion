@@ -136,3 +136,20 @@ export type ChatMessageKind = (typeof chatMessageKindEnum)[number];
 /** The athlete's thumbs on a coach reply (AI coach chat review, I23). */
 export const chatFeedbackEnum = ["up", "down"] as const;
 export type ChatFeedback = (typeof chatFeedbackEnum)[number];
+
+/**
+ * What an athlete fact is about (coach-memory spec §3): a standing constraint
+ * (an injury, a movement to avoid), equipment they have or lack, their
+ * schedule, a preference, or anything else.
+ */
+export const athleteFactCategoryEnum = ["constraint", "equipment", "schedule", "preference", "other"] as const;
+export type AthleteFactCategory = (typeof athleteFactCategoryEnum)[number];
+
+/**
+ * Where an athlete fact came from: typed in Settings, seeded from the plan
+ * wizard's injuries box, captured at onboarding, or proposed by the coach in
+ * chat and saved by the athlete. Every one is the athlete's own statement:
+ * nothing is written without them.
+ */
+export const athleteFactSourceEnum = ["athlete", "plan_generation", "onboarding", "chat"] as const;
+export type AthleteFactSource = (typeof athleteFactSourceEnum)[number];

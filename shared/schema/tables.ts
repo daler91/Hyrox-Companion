@@ -19,6 +19,8 @@ import {
 
 import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
+  athleteFactCategoryEnum,
+  athleteFactSourceEnum,
   chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
@@ -1196,6 +1198,55 @@ export const timelineAnnotations = pgTable(
     // .jules/bolt.md 2026-09-25). Every caller filters on userId either
     // bare or ANDed with startDate/endDate, both servable by this index.
     index("idx_timeline_annotations_user_range").on(table.userId, table.startDate, table.endDate),
+  ],
+);
+
+/**
+ * The athlete card (coach-memory spec, Path C): short statements that are
+ * true every week ("bad left knee", "no sled at my gym", "night shifts on
+ * Tuesdays"), told once and read by every coach prompt and the plan
+ * generator.
+ *
+ * Every row has a review date (spec §2). A fact past it still reaches the
+ * coach, flagged as unconfirmed, and Settings asks whether it is still true:
+ * the card corrects itself instead of letting a healed knee cap the plan
+ * forever.
+ *
+ * `dedupe_key` is derived on the server (athleteFactKey), never taken from a
+ * request, so the same sentence stated twice (in the wizard, in chat, in
+ * Settings) re-confirms one row instead of adding a second. The text is
+ * bounded twice, as house style: by zod and by the CHECK.
+ */
+export const athleteFacts = pgTable(
+  "athlete_facts",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fact: text("fact").notNull(),
+    dedupeKey: varchar("dedupe_key", { length: 160 }).notNull(),
+    /** See athleteFactCategoryEnum. */
+    category: varchar("category", { length: 24 }).notNull(),
+    /** See athleteFactSourceEnum. */
+    source: varchar("source", { length: 24 }).notNull().default("athlete"),
+    /** False once the athlete retires it: kept, so stating it again brings it back rather than duplicating it. */
+    active: boolean("active").notNull().default(true),
+    /** When to ask whether it is still true. The server sets it from the athlete's own today. */
+    reviewOn: date("review_on")
+      .notNull()
+      .default(sql`(CURRENT_DATE + 90)`),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("athlete_facts_fact_length_check", sql`char_length(fact) BETWEEN 1 AND 140`),
+    check("athlete_facts_category_check", sql`category IN (${inValues(athleteFactCategoryEnum)})`),
+    check("athlete_facts_source_check", sql`source IN (${inValues(athleteFactSourceEnum)})`),
+    uniqueIndex("uq_athlete_facts_user_dedupe").on(table.userId, table.dedupeKey),
+    index("idx_athlete_facts_user_active").on(table.userId, table.active),
   ],
 );
 

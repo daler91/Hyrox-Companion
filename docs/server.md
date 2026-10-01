@@ -115,6 +115,7 @@ Listed in mount order:
 | Consent | `server/routes/consent.ts` |
 | Push | `server/routes/push.ts` |
 | Timeline annotations | `server/routes/timelineAnnotations.ts` |
+| Athlete facts (the athlete card) | `server/routes/athleteFacts.ts` |
 | Recycle bin | `server/routes/recycleBin.ts` |
 | Nutrition | `server/routes/nutrition/` (composite router: `index.ts` mounts the `NUTRITION_ENABLED` 404 gate, then `nutrition.routes.ts` registers the foods, favorites, logs, summary, parse, targets, insights, and recipes sub-route modules) |
 

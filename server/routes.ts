@@ -8,6 +8,7 @@ import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
 import accountRoutes from "./routes/account";
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
+import athleteFactsRoutes from "./routes/athleteFacts";
 import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
@@ -76,6 +77,7 @@ export async function registerRoutes(
   app.use(consentRoutes);
   app.use(pushRoutes);
   app.use(timelineAnnotationsRoutes);
+  app.use(athleteFactsRoutes);
   app.use(recycleBinRoutes);
   app.use(nutritionRoutes);
 

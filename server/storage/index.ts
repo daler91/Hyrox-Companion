@@ -1,6 +1,7 @@
 import { AiUsageStorage } from "./aiUsage";
 import { AnalyticsStorage } from "./analytics";
 import { AnalyticsResultsStorage } from "./analyticsResults";
+import { AthleteFactsStorage } from "./athleteFacts";
 import { CoachingStorage } from "./coaching";
 import { ConsentStorage } from "./consent";
 import { IdempotencyStorage } from "./idempotency";
@@ -29,6 +30,7 @@ export const storage: IStorage = {
   planProposals: new PlanProposalStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
+  athleteFacts: new AthleteFactsStorage(),
   analytics: new AnalyticsStorage(),
   analyticsResults: new AnalyticsResultsStorage(),
   coaching: new CoachingStorage(),
