@@ -18,6 +18,7 @@ import { type CoachReply, type Conversation, type ConversationTurn, loadConversa
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
+import { getCoachWelcome } from "../services/coachWelcome";
 import { loadFocusedWorkout } from "../services/focusedWorkoutService";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../services/planAdjustmentService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
@@ -112,7 +113,7 @@ async function prepareChatContext(
   // The first message after a break writes the earlier sessions' summary;
   // it runs alongside the context build rather than in front of it.
   const [aiContext, focused, earlierConversation] = await Promise.all([
-    buildAIContext(userId, chatRetrievalQuery(message, history), reqLogger(req)),
+    buildAIContext(userId, chatRetrievalQuery(message, history), reqLogger(req), { cachedTrainingContext: true }),
     loadFocusedWorkout(userId, { planDayId: focusPlanDayId, workoutLogId: focusWorkoutLogId }),
     conversation.earlier,
   ]);
@@ -611,6 +612,12 @@ router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 6
       res.setHeader("X-Next-Cursor-Id", nextCursor.id);
     }
     res.json(await withProposals(userId, messages));
+  }));
+
+// The coach's opening line and prompt chips, from the athlete's training (I19).
+// No model call: the panel asks every time it opens.
+router.get("/api/v1/chat/welcome", isAuthenticated, rateLimiter("chatWelcome", 30), asyncHandler(async (req: ExpressRequest, res: Response) => {
+    res.json(await getCoachWelcome(getUserId(req)));
   }));
 
 /**

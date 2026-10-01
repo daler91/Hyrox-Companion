@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSafetyNotice, CoachingMaterial, RagInfo } from "@shared/schema";
+import type { ChatMessage, ChatSafetyNotice, CoachingMaterial, CoachWelcome, RagInfo } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import type { PlanProposalView } from "./planProposals";
@@ -104,6 +104,9 @@ export const chat = {
     ),
 
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
+
+  /** The coach's opening line and prompt chips, from the athlete's training. */
+  getWelcome: () => typedRequest<CoachWelcome>("GET", "/api/v1/chat/welcome"),
 
   // Fetch the LAST stored insights (no AI spend) so the tab paints instantly on
   // open. Returns `{ insights: null }` when never generated.

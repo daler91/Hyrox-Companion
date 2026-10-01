@@ -18,6 +18,7 @@ vi.mock("./services/coachService", () => ({ triggerAutoCoach: vi.fn() }));
 vi.mock("./services/planGenerationService", () => ({ executePlanGeneration: vi.fn() }));
 vi.mock("./services/ragService", () => ({ embedCoachingMaterial: vi.fn() }));
 vi.mock("./db", () => ({ pool: { query: vi.fn().mockResolvedValue({ rowCount: 0 }) } }));
+vi.mock("./services/trainingContextCache", () => ({ invalidateTrainingContext: vi.fn() }));
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { pool } from "./db";
@@ -30,6 +31,7 @@ import {
   withTrace,
 } from "./queue";
 import { runWithRequestContext } from "./requestContext";
+import { invalidateTrainingContext } from "./services/trainingContextCache";
 
 describe("buildQueueConnectionString (W12)", () => {
   it("appends a PG statement_timeout option matching PGBOSS_STATEMENT_TIMEOUT_MS", () => {
@@ -165,5 +167,25 @@ describe("runBatch", () => {
     ).rejects.toThrow("Batch processing failed for 1/3 test-queue jobs");
     // Promise.allSettled semantics: one poison job doesn't stop the others.
     expect(processed.sort()).toEqual(["1", "2", "3"]);
+  });
+
+  it("drops the coach chat's cached context for each athlete a job ran for, even a failed one", async () => {
+    vi.mocked(invalidateTrainingContext).mockClear();
+    const jobs = [
+      { id: "1", data: { userId: "user-1" } },
+      { id: "2", data: { userId: "user-2" } },
+      { id: "3", data: {} },
+    ] as Job[];
+
+    await expect(
+      runBatch("test-queue", jobs, async (job) => {
+        if (job.id === "2") throw new Error("boom");
+      }),
+    ).rejects.toThrow();
+
+    expect(vi.mocked(invalidateTrainingContext).mock.calls.map(([userId]) => userId).sort()).toEqual([
+      "user-1",
+      "user-2",
+    ]);
   });
 });

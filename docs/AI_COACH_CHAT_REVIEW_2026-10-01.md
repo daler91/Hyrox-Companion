@@ -34,8 +34,9 @@ staleness. The gaps are in the conversation itself:
 ## Remediation status (updated 2026-10-01)
 
 Wave 1 is fixed (daler91/Hyrox-Companion#2085). Wave 2's first batch (D1(a), D5, I14, I15, I16) and
-second batch (I1, I2, I3, I7) are fixed on `claude/amazing-rubin-zz0w63`; I6 and I19 are still
-open. The rest of this document describes the code as it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
+second batch (I1, I2, I3, I7) are fixed (daler91/Hyrox-Companion#2086), and its last two items, I6
+and I19, on `claude/amazing-rubin-zz0w63`. Wave 3 is under way on the same branch (I12 so far). The
+rest of this document describes the code as it was reviewed, before these fixes. Checks run on the final code: typecheck in all three
 configurations, ESLint on the whole repo (no errors; the only warning in a touched file, the length
 of `server/routes/__tests__/ai.test.ts`, predates this work), the full unit suite with coverage
 thresholds, and `pnpm build` followed by `pnpm check:bundle`. Not run: Cypress (the binary download
@@ -100,6 +101,22 @@ Behaviour changes:
 - **One more AI call per break.** The first message after a break makes one extra fast-model call, billed as `chat_summary`. It runs alongside the context build.
 - **More of the conversation is saved.** A reply cut off by a dropped connection or a stream error is now saved as far as it got (only a Stop was before), and so is a reply that finishes after the tab closes.
 - **The client sends no history.** The server reads the last 60 rows, as before trimmed to 20 turns and 30,000 characters, but only from the current session.
+
+**Wave 2, last items, and wave 3:**
+
+| ID      | Fix |
+| ------- | --- |
+| I6      | A proposal holds at most one change per day, and a card with more than one change has an Include toggle on each; `POST /plan-proposals/:id/apply` takes the pick (`planDayIds`) and writes only those changes. The apply records what each day's write replaced and wrote (`plan_adjustment_proposals.apply_undo`, migration 0112): the fields, the coach note, and, where it replaced or cleared the exercise table, the old rows whole. `POST /plan-proposals/:id/undo` puts them back for a week, but only what still reads what the apply wrote; an athlete's later edit, a newer coach note, a changed table or a day no longer planned stays, and the reply names those days. The proposal becomes `reverted`. The card shows "Applied — 2 of 4 changes" and offers Undo, including on an auto-applied proposal, and the coach's history names a partial apply's days and notes an undo. |
+| I19     | `GET /api/v1/chat/welcome` builds the Coach panel's opening line and chips from the athlete's training, with no model call: their first name, a race in the next three weeks, today's session (or the one just done, or the next one), a load spike or hard sessions, new bests, and a missed session still undecided. Chips carry the message they send ("Pacing for today's Intervals" sends "How should I pace today's Intervals?"), filled to four with standing ones. The fixed text and chips stay as the fallback. |
+| I12     | The chat reads its training context through a per-athlete cache (`server/services/trainingContextCache.ts`, five minutes, concurrent builds shared, the athlete-local date in the key). It is dropped after any successful write request by the athlete outside the chat, after any background job for them (the auto-coach, syncs, plan generation), and when a proposal is applied or undone. The auto-coach, suggestions and insights still build their own. Opening the panel warms it through the welcome. |
+
+Checked beyond the unit suite: an integration test against Postgres applies a proposal, edits a day, undoes it and finds the cleared exercise table back row for row and the athlete's edit kept; and the built app, seeded with a real plan and a two-change proposal, was driven in Chromium at desktop and phone width: the welcome ("Hi Sam! Race day is 17 days away. Today: Intervals.") and its chips, a change toggled off, "Apply 1 change", the applied card with "Not applied" and Undo, the timeline moving the long run, and Undo putting it back.
+
+Behaviour changes:
+
+- **An applied proposal can be taken back** for a week after the apply, from its card. Proposals applied before migration 0112 can't be.
+- **The chat's training context can be up to five minutes old** when nothing dropped it. Writes in the same instance drop it at once; on a deployment with more than one instance, a write on another instance shows up when the five minutes run out.
+- **Opening the Coach panel makes one more request** (`GET /chat/welcome`), which builds the training context or reuses the cached one.
 
 **Deliberately not changed:**
 

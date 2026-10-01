@@ -1421,6 +1421,14 @@ Retrieve saved chat messages for the current user, cursor-paginated.
   - `proposalId`, `safetyNotice`, `ragInfo` (source, excerpt count and material titles), `focusPlanDayId` and `focusWorkoutLogId`.
   - `proposal`: on a proposal reply whose proposal still exists, the proposal (same shape as `GET /api/v1/plan-proposals/pending`) with its **current** status.
 
+### GET /api/v1/chat/welcome
+
+The Coach panel's opening line and prompt chips, built from the athlete's training without a model call: their first name, a race in the next three weeks, today's session, load trend, new bests and a missed session to decide on (`server/services/coachWelcome.ts`).
+
+- **Auth:** Required
+- **Rate limit:** `chatWelcome` category, 30/min
+- **Response:** `{ greeting: string, quickActions: Array<{ id, label, message? }> }` — at most four chips; `message` is what sending a chip says (its label when absent), and the `suggestions` chip runs the workout-suggestions flow instead.
+
 ### POST /api/v1/chat/message
 
 Save a chat message to history: a turn the chat routes don't save themselves (the Coach panel's suggestions request and apply confirmations), or either turn from a client that predates the message ids.

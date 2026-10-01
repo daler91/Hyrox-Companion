@@ -143,6 +143,19 @@ describe('useChatSession', () => {
     expect(result.current.messages[0].role).toBe('assistant');
   });
 
+  it('swaps in a welcome that arrives after mount', () => {
+    const { result, rerender } = renderHook(
+      ({ welcome }: { welcome?: string }) => useChatSession({ welcomeMessage: welcome }),
+      { wrapper, initialProps: {} },
+    );
+    expect(result.current.messages[0].id).toBe('welcome');
+
+    rerender({ welcome: 'Hi Sam! Today: Intervals.' });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]).toMatchObject({ id: 'welcome', content: 'Hi Sam! Today: Intervals.' });
+  });
+
   it('should handle successful non-streaming chat', async () => {
     const mockResponse = { response: 'Hello from assistant' };
     vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>

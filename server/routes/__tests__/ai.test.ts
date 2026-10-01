@@ -105,6 +105,12 @@ vi.mock("../../gemini", () => ({
 vi.mock("../../services/ai", () => ({
   buildTrainingContext: vi.fn(),
 }));
+// The chat reads its training context through a per-athlete cache; here it
+// builds every time, so one test's context never answers the next.
+vi.mock("../../services/trainingContextCache", () => ({
+  getCachedTrainingContext: (userId: string, build: (id: string) => Promise<unknown>) => build(userId),
+  invalidateTrainingContext: vi.fn(),
+}));
 
 vi.mock("../../services/ragService", () => ({
   retrieveRelevantChunks: vi.fn(),

@@ -63,6 +63,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }), [welcomeMessage]);
 
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
+  // A welcome that arrives after mount (the Coach panel fetches one built
+  // from the athlete's training) replaces the one already in the buffer.
+  // Adjusted during render, as React advises for state that follows a prop.
+  const [shownWelcome, setShownWelcome] = useState(welcomeMessageObj);
+  if (shownWelcome !== welcomeMessageObj) {
+    setShownWelcome(welcomeMessageObj);
+    setMessages((prev) => prev.map((message) => (message.id === welcomeMessageObj.id ? welcomeMessageObj : message)));
+  }
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   // True while the server is generating a plan-adjustment proposal for the

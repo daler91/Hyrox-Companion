@@ -18,6 +18,7 @@ import {
 } from "./planAdjustmentService";
 import { setsFingerprint } from "./planProposalUndo";
 import { applyStructuredPlanDaySuggestionRows, parseStructuredPlanDaySuggestionRows } from "./structuredPlanDaySuggestion";
+import { invalidateTrainingContext } from "./trainingContextCache";
 
 const dbMockState = vi.hoisted(() => {
   const deleteWhere = vi.fn().mockResolvedValue(undefined);
@@ -71,6 +72,8 @@ vi.mock("./aiSafety", () => ({
 vi.mock("./aiSuggestionService", () => ({
   getStructuredApplyBlocker: vi.fn().mockResolvedValue(null),
 }));
+
+vi.mock("./trainingContextCache", () => ({ invalidateTrainingContext: vi.fn() }));
 
 vi.mock("./structuredPlanDaySuggestion", () => ({
   parseStructuredPlanDaySuggestionRows: vi.fn(),
@@ -479,6 +482,8 @@ describe("applyPlanAdjustmentProposal", () => {
     );
     expect(storage.planProposals.resolve).not.toHaveBeenCalled();
     expect(parseStructuredPlanDaySuggestionRows).not.toHaveBeenCalled();
+    // The coach chat's cached context no longer matches the plan.
+    expect(invalidateTrainingContext).toHaveBeenCalledWith("user-1");
   });
 
   it("records what each day's apply replaced and wrote, for the undo", async () => {
@@ -704,6 +709,7 @@ describe("undoPlanAdjustmentProposal", () => {
       dbMockState.tx,
     );
     expect(storage.planProposals.markReverted).toHaveBeenCalledWith("prop-1", "user-1", dbMockState.tx);
+    expect(invalidateTrainingContext).toHaveBeenCalledWith("user-1");
   });
 
   it("leaves what the athlete changed since, and says so", async () => {

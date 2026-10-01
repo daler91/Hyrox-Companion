@@ -1,9 +1,9 @@
+import type { CoachQuickAction } from "@shared/schema";
+
 import { Button } from "@/components/ui/button";
 
-export interface QuickAction {
-  id: string;
-  label: string;
-}
+/** A prompt chip: sending it says `message`, or the label when there is none. */
+export type QuickAction = CoachQuickAction;
 
 interface QuickActionsProps {
   readonly actions: QuickAction[];

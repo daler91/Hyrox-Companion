@@ -122,6 +122,7 @@ export const QUERY_KEYS = {
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,
+  chatWelcome: ["/api/v1/chat/welcome"] as const,
   planProposalPending: ["/api/v1/plan-proposals/pending"] as const,
   // One proposal's live status, for its card in the chat. The prefix matches
   // every proposal's key and not planProposalPending (its first element differs).

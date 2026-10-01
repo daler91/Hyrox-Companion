@@ -23,6 +23,7 @@ import { triggerAutoCoach } from "./services/coachService";
 import { executePlanGeneration } from "./services/planGenerationService";
 import { embedCoachingMaterial } from "./services/ragService";
 import { dispatchRecomputeAnalytics } from "./services/recomputeAnalyticsDispatch";
+import { invalidateTrainingContext } from "./services/trainingContextCache";
 import { storage } from "./storage";
 
 if (!env.DATABASE_URL) {
@@ -218,7 +219,15 @@ export async function runBatch<T>(
   const limit = pLimit(IN_BATCH_CONCURRENCY);
   const results = await Promise.allSettled(
     jobs.map((job) =>
-      limit(() => runWithRequestContext({ requestId: jobRequestId(job) }, () => processJob(job))),
+      limit(() =>
+        runWithRequestContext({ requestId: jobRequestId(job) }, () => processJob(job)).finally(() => {
+          // A job for an athlete may have written their training data (the
+          // auto-coach, a device sync, a new plan), so the coach chat's cached
+          // context for them is dropped, whether the job succeeded or not.
+          const userId = getUserIdFromJob(job);
+          if (userId) invalidateTrainingContext(userId);
+        }),
+      ),
     ),
   );
   const failed = results.filter((r) => r.status === "rejected");

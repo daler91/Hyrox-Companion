@@ -23,6 +23,7 @@ import recycleBinRoutes from "./routes/recycleBin";
 import sessionGradesRoutes from "./routes/sessionGrades";
 import timelineAnnotationsRoutes from "./routes/timelineAnnotations";
 import workoutRoutes from "./routes/workouts/index";
+import { invalidateTrainingContextOnWrite } from "./services/trainingContextCache";
 import { registerStravaRoutes } from "./strava";
 import { registerStravaWebhookRoutes } from "./stravaWebhook";
 
@@ -53,6 +54,9 @@ export async function registerRoutes(
   // matching x-csrf-token header. Safe methods pass through via the
   // middleware's built-in ignoredMethods list.
   app.use("/api/v1", csrfProtection);
+
+  // A successful write drops the athlete's cached coach-chat training context.
+  app.use("/api/v1", invalidateTrainingContextOnWrite);
 
   registerStravaRoutes(app);
   registerGarminRoutes(app);

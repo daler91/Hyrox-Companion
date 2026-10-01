@@ -551,14 +551,33 @@ Instructions for generating multi-week training plans with day-by-day structure.
 
 **File:** `server/services/aiContextService.ts`
 
-`buildAIContext(userId, query, log)` is the shared context builder used by both chat and suggestion endpoints. It parallelizes two independent data fetches:
+`buildAIContext(userId, query, log, options)` is the shared context builder used by both chat and suggestion endpoints. It parallelizes two independent data fetches:
 
 ```typescript
 const [trainingContext, coachingContext] = await Promise.all([
-  buildTrainingContext(userId),                     // Latest 400 timeline entries + 70-day load window
+  cachedTrainingContext                             // chat only (see below)
+    ? getCachedTrainingContext(userId, buildTrainingContext)
+    : buildTrainingContext(userId),                 // Latest 400 timeline entries + 70-day load window
   retrieveCoachingContext(userId, query, log),      // RAG or legacy materials
 ]);
 ```
+
+### The chat's training-context cache
+
+`buildTrainingContext()` is the heaviest read on a chat turn (about eight queries, 70 days of sets among them), and a conversation used to pay it on every message. The chat routes and the welcome now pass `{ cachedTrainingContext: true }` and read it through `server/services/trainingContextCache.ts`, which keeps one context per athlete for up to five minutes (`TRAINING_CONTEXT_CACHE_TTL_MS`) and shares a build already under way. The auto-coach, workout suggestions and coach insights still build their own, because they run straight after a write and must see it.
+
+An athlete's entry is dropped:
+
+- after any successful write request by them outside `/api/v1/chat` (`invalidateTrainingContextOnWrite`, mounted on `/api/v1`): logging, plan edits, settings, nutrition, proposals;
+- after any background job for them finishes (`runBatch` in `server/queue.ts`): the auto-coach, Strava and stream syncs, plan generation;
+- when a plan proposal is applied or undone, because the chat stream can auto-apply one;
+- at their local midnight, since the athlete-local date is part of the key and "today" is part of the context.
+
+The cache is in process, like the analytics route caches: with more than one instance, a write on one leaves the others' copy until the TTL runs out.
+
+### The coach's welcome
+
+When the Coach panel opens it asks `GET /api/v1/chat/welcome` (`server/services/coachWelcome.ts`) for its opening line and prompt chips, built from the cached training context, the athlete's first name and the plan's race date. No model is called. The line greets the athlete by name, leads with a race in the next three weeks, then today's session (or the one just done, or the next one), and flags at most one thing about recent training: a load spike (ACWR zone `danger` or `yellow`), hard recent sessions, or new personal bests this week. The chips come from the same signals (pacing or form cues for today's session by its kind, race prep, "Should I ease off?", how today's session went, a missed session still undecided, the new bests), filled up to four with standing ones (workout suggestions, tomorrow, last week, the plan goal). A chip carries the message it sends, which can be longer than its label. Until the welcome arrives, or if it fails, the panel keeps its fixed text and chips. Fetching it also warms the cache for the first message.
 
 ### TrainingContext (from `server/services/ai/`)
 

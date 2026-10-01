@@ -7,6 +7,7 @@ import { CoachPanelFooter } from "@/components/coach/CoachPanelFooter";
 import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
 import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { useSuggestions } from "@/components/coach/SuggestionsTab";
+import type { QuickAction } from "@/components/QuickActions";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message, useChatSession } from "@/hooks/useChatSession";
@@ -19,29 +20,32 @@ import { calculateStats } from "@/lib/statsUtils";
 const WELCOME_TEXT =
   "Welcome to fitai.coach! I'm your AI training coach, here to help you reach your fitness goals.\n\nTo get started, you can:\n- **Generate an AI training plan** - recommended for a personalized schedule built around your goal and experience\n- **Use the 8-week template** - a structured program covering running, strength, and functional exercises\n- **Import your own plan** - if you have a CSV training plan\n- **Log individual workouts** - track sessions as you complete them\n\nWhen you're ready, add Coaching Knowledge in Settings so I can ground suggestions in your training principles or reference docs. Once you have some training data, I can analyze your progress, suggest improvements, and help optimize your training. What are you working towards?";
 
-const BASE_QUICK_ACTIONS = [
+const BASE_QUICK_ACTIONS: QuickAction[] = [
   { id: "suggestions", label: "Get workout suggestions" },
   { id: "analyze", label: "Analyze my training" },
   { id: "pacing", label: "Pacing tips" },
   { id: "form", label: "Exercise form tips" },
 ];
 
-const PLAN_AWARE_ACTIONS = [
+const PLAN_AWARE_ACTIONS: QuickAction[] = [
   { id: "tomorrow", label: "What should I do tomorrow?" },
   { id: "weekly-review", label: "How did last week go?" },
   { id: "on-track", label: "Am I on track for my goal?" },
 ];
 
 /**
- * Pick a set of quick actions appropriate for the user's current state:
- * first-time users get the generic prompts; athletes with at least one
- * completed workout get plan-aware prompts that the coach can answer
- * with context.
+ * The chips until the welcome built from the athlete's training arrives (or
+ * if it can't be built): first-time users get the generic prompts; athletes
+ * with at least one completed workout get plan-aware prompts that the coach
+ * can answer with context.
  */
-function selectQuickActions(hasHistory: boolean): { id: string; label: string }[] {
+function selectQuickActions(hasHistory: boolean): QuickAction[] {
   if (!hasHistory) return BASE_QUICK_ACTIONS;
   return [...PLAN_AWARE_ACTIONS, ...BASE_QUICK_ACTIONS.slice(0, 2)];
 }
+
+/** The welcome is rebuilt when the panel opens again after this long. */
+const WELCOME_STALE_MS = 5 * 60 * 1000;
 
 interface CoachPanelProps {
   readonly isOpen: boolean;
@@ -75,6 +79,15 @@ export function CoachPanel({
     [timelineStats, summary?.currentStreak],
   );
 
+  // The coach's opening line and chips, from today's session, load, a race
+  // coming up, new bests (AI coach chat review, I19).
+  const { data: welcome } = useQuery({
+    queryKey: QUERY_KEYS.chatWelcome,
+    queryFn: () => api.chat.getWelcome(),
+    enabled: isOpen,
+    staleTime: WELCOME_STALE_MS,
+  });
+
   const {
     messages: hookMessages,
     isLoading,
@@ -91,7 +104,7 @@ export function CoachPanel({
     clearHistory,
     isClearingHistory,
     scrollToBottom,
-  } = useChatSession({ useStreaming: true });
+  } = useChatSession({ useStreaming: true, welcomeMessage: welcome?.greeting });
 
   const messages = useMemo(() => {
     // ⚡ Perf: Use Set for O(1) ID lookups instead of .some() which is O(N),
@@ -165,14 +178,14 @@ export function CoachPanel({
     scrollToBottomIfPinned();
   }, [messages, scrollToBottomIfPinned]);
 
-  const handleQuickAction = (action: { id: string; label: string }) => {
+  const handleQuickAction = (action: QuickAction) => {
     if (action.id === "suggestions") {
       pinAutoScroll();
       addLocalMessage(createLocalMessage("user", action.label));
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();
     } else {
-      sendMessage(action.label).catch(() => {});
+      sendMessage(action.message ?? action.label).catch(() => {});
     }
   };
 
@@ -217,7 +230,7 @@ export function CoachPanel({
         onRetryMessage={retryMessage}
       />
       <CoachPanelFooter
-        quickActions={selectQuickActions(timeline.some((entry) => entry.status === "completed"))}
+        quickActions={welcome?.quickActions ?? selectQuickActions(timeline.some((entry) => entry.status === "completed"))}
         onQuickAction={handleQuickAction}
         onSendMessage={sendMessage}
         // Only expose Stop while a chat stream is actually cancellable.

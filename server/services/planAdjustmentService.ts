@@ -38,6 +38,7 @@ import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
+import { invalidateTrainingContext } from "./trainingContextCache";
 
 type PlanAdjustmentLogger = Pick<Logger, "info" | "warn" | "error">;
 
@@ -861,6 +862,10 @@ export async function applyPlanAdjustmentProposal(
     throw err;
   }
 
+  // The chat stream can auto-apply, and the chat paths don't drop the cached
+  // context on their own.
+  invalidateTrainingContext(userId);
+
   // Deliberately NOT enqueuing auto-coach for rescheduled days here (unlike
   // updatePlanDayWithCleanup): the proposal itself already performed the
   // rebalancing that the auto-coach pass would otherwise redo.
@@ -946,6 +951,7 @@ export async function undoPlanAdjustmentProposal(
     throw err;
   }
 
+  invalidateTrainingContext(userId);
   const labels = new Map(proposal.payload.changes.map((change) => [change.planDayId, change.dayLabel]));
   const keptDays = restores
     .filter((restore) => restore.kept)
