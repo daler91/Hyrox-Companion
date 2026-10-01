@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyRunPurpose, gradingIntentFor } from "./sessionIntent";
+import { classifyRunPurpose, gradingIntentFor, type RunPurpose, runPurposeLabel } from "./sessionIntent";
 
 function purposeOf(focus: string, mainWorkout = "", exerciseNames: string[] = []) {
   return classifyRunPurpose({ focus, mainWorkout, exerciseNames }).purpose;
@@ -84,5 +84,22 @@ describe("gradingIntentFor", () => {
     expect(gradingIntentFor("steady")).toBeNull();
     expect(gradingIntentFor("race")).toBeNull();
     expect(gradingIntentFor(null)).toBeNull();
+  });
+});
+
+describe("runPurposeLabel", () => {
+  it("words every run purpose for the grade card", () => {
+    const labels: Record<RunPurpose, string> = {
+      easy: "Easy run",
+      recovery: "Recovery run",
+      long: "Long run",
+      threshold: "Threshold run",
+      intervals: "Intervals",
+      steady: "Steady run",
+      race: "Race effort",
+    };
+    for (const [purpose, label] of Object.entries(labels)) {
+      expect(runPurposeLabel(purpose as RunPurpose)).toBe(label);
+    }
   });
 });
