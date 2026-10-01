@@ -51,8 +51,8 @@ function checkSql(table: Parameters<typeof getTableConfig>[0], name: string): st
 
 describe("enum-backed CHECK constraints", () => {
   it("renders chat_messages.kind from chatMessageKindEnum", () => {
-    expect(checkSql(chatMessages, "chat_messages_kind_check")).toBe("kind IN ('text', 'proposal', 'summary')");
-    expect(chatMessageKindEnum).toEqual(["text", "proposal", "summary"]);
+    expect(checkSql(chatMessages, "chat_messages_kind_check")).toBe("kind IN ('text', 'proposal', 'summary', 'rolling')");
+    expect(chatMessageKindEnum).toEqual(["text", "proposal", "summary", "rolling"]);
   });
 
   it("renders plan_days.status from workoutStatusEnum", () => {
