@@ -7,7 +7,7 @@ settings:
 overrides:
   esbuild: 0.28.2
   yauzl: ^3.2.1
-  serialize-javascript: '>=7.0.3'
+  serialize-javascript: '>=7.1.2'
   hono: '>=4.13.5'
   '@hono/node-server': ^2.0.10
   protobufjs: ^7.6.3
@@ -23,7 +23,7 @@ overrides:
   form-data: ^4.0.6
   '@babel/core': ^7.29.6
   undici: ^7.29.1
-  axios: ^1.18.0
+  axios: ^1.20.0
   body-parser: ^2.3.0
   fast-uri: ^3.1.8
   brace-expansion@^5.0.5: ^5.0.12
@@ -3266,8 +3266,8 @@ packages:
     resolution: {integrity: sha512-s7iGf5GaVMxEG0ENN9x+xTr7GFZCb1ZP/1uATUpCEK2X78nDB3RwbtFCo9pGAf9ru+VwoQ464DkaLEeRM08wJA==}
     engines: {node: '>=4'}
 
-  axios@1.18.1:
-    resolution: {integrity: sha512-3nTvFlvpn9Zu/RkHUqtc7/+al4UpRW5az71ap5zccp6e8RAYEzhMTecX8Dz1wWDYrPpUoB1HAQEGEAEvUr7S9g==}
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
   babel-plugin-polyfill-corejs2@0.4.17:
     resolution: {integrity: sha512-aTyf30K/rqAsNwN76zYrdtx8obu0E4KoUME29B1xj+B3WxgvWkp943vYQ+z8Mv3lw9xHXMHpvSPOBxzAkIa94w==}
@@ -5908,8 +5908,8 @@ packages:
     resolution: {integrity: sha512-bBZaRwLH9PN5HbLCjPId4dP5bNGEtumcErgOX952IsvOhVPrm3/AeK1y0UHA/QaPG701eg0yEnOKsCOC6X/kaA==}
     engines: {node: '>=20'}
 
-  serialize-javascript@7.1.1:
-    resolution: {integrity: sha512-k3CMsaIvvdSwm8oLB4MXSl0wH2/cwlH7xGcnRd2DaeRmBkbzYmyT8j0tsX60DwD1eRwHTpNpH8ljKu9oUT1MeQ==}
+  serialize-javascript@7.1.2:
+    resolution: {integrity: sha512-GL2BWwVa6JydKO6l/ljVgjAZF4QJ3S7dWDWi53s5GZT8PJzD2fNxi67HANQGKAqPrwEpL5ba7gUBGi0Ls/sEoQ==}
     engines: {node: '>=20.0.0'}
 
   serve-static@2.2.1:
@@ -7779,7 +7779,7 @@ snapshots:
   '@flow-js/garmin-connect@1.6.18':
     dependencies:
       app-root-path: 3.1.0
-      axios: 1.18.1
+      axios: 1.20.0
       crypto: 1.0.1
       form-data: 4.0.6
       lodash: 4.18.1
@@ -8642,7 +8642,7 @@ snapshots:
 
   '@rollup/plugin-terser@1.0.0(rollup@4.63.3)':
     dependencies:
-      serialize-javascript: 7.1.1
+      serialize-javascript: 7.1.2
       smob: 1.6.2
       terser: 5.51.2
     optionalDependencies:
@@ -9635,7 +9635,7 @@ snapshots:
 
   axe-core@4.12.1: {}
 
-  axios@1.18.1:
+  axios@1.20.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.6
@@ -12656,7 +12656,7 @@ snapshots:
       non-error: 0.1.0
       type-fest: 5.9.0
 
-  serialize-javascript@7.1.1: {}
+  serialize-javascript@7.1.2: {}
 
   serve-static@2.2.1:
     dependencies:
