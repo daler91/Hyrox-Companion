@@ -1,3 +1,4 @@
+import { standingConstraintsText } from "@shared/athleteFacts";
 import type { ChatSafetyNotice } from "@shared/schema";
 
 import type { UpcomingWorkout, WorkoutSuggestion } from "../gemini/suggestionService";
@@ -94,17 +95,19 @@ export function analyzeSafetySignals(trainingContext: TrainingContext, upcomingW
 } {
   const datedBlob = collectSafetySignalCorpus(trainingContext, upcomingWorkouts);
 
-  // The athlete's standing constraints join the MEDICATION scan only. That
-  // disclaimer appends and is idempotent, so a durable "on beta blockers"
-  // keeping it permanently applied is exactly right — whereas the same text
-  // sitting in every prompt while the deterministic disclaimer never fires
-  // would make the app look like it was told and ignored it.
+  // The athlete's standing constraints (the older note and every active fact
+  // on the athlete card) join the MEDICATION scan only. That disclaimer
+  // appends and is idempotent, so a durable "on beta blockers" keeping it
+  // permanently applied is exactly right — whereas the same text sitting in
+  // every prompt while the deterministic disclaimer never fires would make the
+  // app look like it was told and ignored it.
   //
   // Deliberately NOT in the red-flag corpus: a red flag REPLACES every
-  // suggestion with an escalation, and a durable constraint mentioning past
-  // chest pain would brick auto-coach forever. Red flags stay on dated workout
-  // text, which ages out of the context on its own (coach-memory-spec §5.2).
-  const medicationBlob = `${datedBlob}\n${trainingContext.trainingConstraints ?? ""}`;
+  // suggestion with an escalation, and a durable fact mentioning past chest
+  // pain would brick auto-coach forever. Red flags stay on dated workout text,
+  // which ages out of the context on its own (coach-memory-spec §5.2).
+  const standing = standingConstraintsText(trainingContext.trainingConstraints, trainingContext.athleteFacts);
+  const medicationBlob = `${datedBlob}\n${standing ?? ""}`;
 
   return {
     redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(datedBlob)),

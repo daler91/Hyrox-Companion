@@ -49,6 +49,21 @@ export function isAthleteFactDue(reviewOn: string, today: string): boolean {
   return reviewOn <= today;
 }
 
+/**
+ * Everything the athlete has said always holds, as one text: the older
+ * free-text note, then each active fact on the card. The deterministic checks
+ * read this (station-gap suppression, the exercise selection, the
+ * heart-rate-medication disclaimer); the prompts render the two separately.
+ * Null when the athlete has said nothing.
+ */
+export function standingConstraintsText(
+  note: string | null | undefined,
+  facts: readonly { readonly fact: string }[] | undefined,
+): string | null {
+  const parts = [note?.trim() ?? "", ...(facts ?? []).map(({ fact }) => fact)].filter((part) => part !== "");
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
 /** A piece longer than a fact, cut at the last word that fits, marked as cut. */
 function fitToFact(piece: string): string {
   if (piece.length <= ATHLETE_FACT_MAX_LENGTH) return piece;

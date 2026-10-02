@@ -7,6 +7,7 @@ import {
   isAthleteFactDue,
   normalizeFactText,
   splitIntoFacts,
+  standingConstraintsText,
 } from "./athleteFacts";
 
 describe("athlete fact keys", () => {
@@ -53,5 +54,19 @@ describe("splitIntoFacts", () => {
 
     expect(fact.length).toBeLessThanOrEqual(ATHLETE_FACT_MAX_LENGTH);
     expect(fact.endsWith("very…")).toBe(true);
+  });
+});
+
+describe("standingConstraintsText", () => {
+  it("is the older note, then every fact, one per line", () => {
+    expect(standingConstraintsText(" Bad left knee. ", [{ fact: "No sled at my gym" }, { fact: "On beta blockers" }])).toBe(
+      "Bad left knee.\nNo sled at my gym\nOn beta blockers",
+    );
+    expect(standingConstraintsText(null, [{ fact: "No sled at my gym" }])).toBe("No sled at my gym");
+  });
+
+  it("is null for an athlete who has said nothing", () => {
+    expect(standingConstraintsText(null, [])).toBeNull();
+    expect(standingConstraintsText("   ", undefined)).toBeNull();
   });
 });
