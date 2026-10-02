@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUpdateAthleteFact } from "@/hooks/useAthleteFacts";
 
 import { athleteFactCategoryLabel } from "./athleteCardModel";
@@ -104,27 +105,43 @@ export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
           <p className="break-words text-sm">{fact.fact}</p>
           <Badge variant="secondary">{athleteFactCategoryLabel(fact.category)}</Badge>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Edit "${fact.fact}"`}
-            onClick={() => {
-              setEditing(true);
-            }}
-          >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Retire "${fact.fact}"`}
-            onClick={retire}
-            disabled={update.isPending}
-          >
-            <Archive className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </div>
+        <TooltipProvider>
+          <div className="flex shrink-0 gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Edit "${fact.fact}"`}
+                  onClick={() => {
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Retire "${fact.fact}"`}
+                  onClick={retire}
+                  disabled={update.isPending}
+                >
+                  <Archive className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Retire</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
       {due ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted p-2 text-sm">

@@ -3,6 +3,7 @@ import { ChevronDown, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDeleteAthleteFact, useUpdateAthleteFact } from "@/hooks/useAthleteFacts";
 
 interface RetiredFactListProps {
@@ -51,17 +52,26 @@ export function RetiredFactList({ facts, atCap }: RetiredFactListProps) {
                 >
                   Restore
                 </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Delete "${fact.fact}"`}
-                  onClick={() => {
-                    remove.mutate(fact.id);
-                  }}
-                  disabled={remove.isPending}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete "${fact.fact}"`}
+                        onClick={() => {
+                          remove.mutate(fact.id);
+                        }}
+                        disabled={remove.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Delete forever</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </li>
           ))}
