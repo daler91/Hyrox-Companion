@@ -246,7 +246,7 @@ function App() {
   }
 
   return (
-    <ClerkProvider publishableKey={clerkPubKey!}>
+    <ClerkProvider publishableKey={clerkPubKey}>
       <BaseProviders>{appShell}</BaseProviders>
     </ClerkProvider>
   );

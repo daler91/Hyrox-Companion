@@ -31,8 +31,20 @@ function start(): void {
     release:
       (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) ??
       (import.meta.env.SENTRY_RELEASE as string | undefined),
-    sendDefaultPii: false,
-    // sendDefaultPii only stops the SDK attaching identity; it does not stop
+    // Sentry v11 removed `sendDefaultPii` in favour of `dataCollection`, whose
+    // defaults are permissive (infer the user's IP, attach cookies, headers and
+    // HTTP bodies, keep URL query strings). Switch every category off so an SDK
+    // upgrade can never widen what leaves the device. The SDK then never gathers
+    // what scrubClientSentryEvent strips below, which stays as the second layer.
+    // Leaving this block out is not a no-op: it re-enables all of the above.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+    },
+    // dataCollection only governs what the SDK itself gathers; it does not stop
     // OUR payloads reaching Sentry. apiRequest puts the raw 4xx response body
     // in the exception message, and navigation/fetch breadcrumbs carry query
     // strings — both are scrubbed here, mirroring the server's beforeSend.
