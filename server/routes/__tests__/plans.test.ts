@@ -3,6 +3,8 @@ import request from "supertest";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
+import { moveStatementsToCard } from "../../services/athleteFactsService";
+import { createPendingPlan } from "../../services/planGenerationService";
 import { createSamplePlan } from "../../services/planService";
 import { storage } from "../../storage";
 import plansRouter from "../plans";
@@ -16,6 +18,10 @@ vi.mock("../../middleware/aibudget", async () => (await import("./testUtils")).m
 
 vi.mock("../../services/planGenerationService", () => ({
   createPendingPlan: vi.fn(),
+}));
+
+vi.mock("../../services/athleteFactsService", () => ({
+  moveStatementsToCard: vi.fn(),
 }));
 
 const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
@@ -475,38 +481,37 @@ describe("POST /api/v1/plans/generate", () => {
     expect(response.status).toBe(500);
   });
 
-  it("remembers the athlete's injuries on their profile", async () => {
-    // The generator has always asked for this and always discarded it, so every
-    // regeneration asked again.
+  it("puts the athlete's injuries on their card, where every coach prompt and later plan reads them", async () => {
+    // The generator once asked for this and threw it away; then it kept one
+    // free-text note. Now each sentence is a fact on the athlete card
+    // (moveStatementsToCard is tested on its own).
+    vi.mocked(moveStatementsToCard).mockResolvedValue({ added: 1, skipped: 0 });
+
     await request(app)
       .post("/api/v1/plans/generate")
       .send({ ...generatePlanPayload, injuries: "  Recovering from knee injury  " });
 
-    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
-      trainingConstraints: "Recovering from knee injury",
-    });
+    expect(moveStatementsToCard).toHaveBeenCalledWith("test_user_id", "  Recovering from knee injury  ", "plan_generation");
   });
 
-  it("forgets them when the athlete clears the box", async () => {
-    // A resolved constraint has to be forgettable. Storing "" or skipping the
-    // write would leave a healed injury shaping every future plan.
-    await request(app)
-      .post("/api/v1/plans/generate")
-      .send({ ...generatePlanPayload, injuries: "   " });
+  it("hands even an empty box over, so a cleared older note is dropped, but nothing from a client that never sends one", async () => {
+    // The box arrives prefilled with the older free-text note; clearing it is
+    // how the athlete says it no longer applies. A client that never sends the
+    // field must change nothing.
+    vi.mocked(moveStatementsToCard).mockResolvedValue({ added: 0, skipped: 0 });
+    await request(app).post("/api/v1/plans/generate").send({ ...generatePlanPayload, injuries: "   " });
+    // generatePlanPayload carries no injuries field at all.
+    await request(app).post("/api/v1/plans/generate").send(generatePlanPayload);
 
-    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
-      trainingConstraints: null,
-    });
+    expect(vi.mocked(moveStatementsToCard).mock.calls).toEqual([["test_user_id", "   ", "plan_generation"]]);
   });
 
-  it("leaves the profile untouched when the field is absent", async () => {
-    // An older client that never sends the field must not clear what the
-    // athlete already told us.
-    const { injuries: _omitted, ...withoutInjuries } = { ...generatePlanPayload, injuries: "x" };
+  it("still generates the plan when the card can't be written", async () => {
+    vi.mocked(moveStatementsToCard).mockRejectedValue(new Error("db down"));
 
-    await request(app).post("/api/v1/plans/generate").send(withoutInjuries);
+    await request(app).post("/api/v1/plans/generate").send({ ...generatePlanPayload, injuries: "Bad left knee" });
 
-    expect(storage.users.updateUserPreferences).not.toHaveBeenCalled();
+    expect(createPendingPlan).toHaveBeenCalled();
   });
 
   it("returns 409 and does not enqueue a job when a generation is already in flight (W13)", async () => {

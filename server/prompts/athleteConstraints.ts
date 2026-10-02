@@ -1,9 +1,11 @@
 import type { CoachAbsence, TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
+import { formatAthleteFactLines } from "./athleteFacts";
 
 /**
- * Shared renderer for the ATHLETE CONSTRAINTS block: the standing limitations
- * the athlete wrote about themselves, and the dated absences they declared.
+ * Shared renderer for the ATHLETE CONSTRAINTS block: the athlete card's facts
+ * (athleteFacts.ts), the older free-text note of standing limitations, and the
+ * dated absences the athlete declared.
  *
  * Used by BOTH the conversational chat / Coach-Insights prompt
  * (server/prompts.ts buildSystemPrompt) and the auto-coach suggestion /
@@ -52,17 +54,21 @@ function currentAbsenceGuidance(current: CoachAbsence[]): string {
  */
 export function formatAthleteConstraints(context?: TrainingContext): string {
   if (!context) return "";
-  const lines: string[] = [];
+  // The athlete card first (coach-memory spec, Path C), then the older
+  // free-text note for an athlete who hasn't moved it into the card yet.
+  const lines = formatAthleteFactLines(context.athleteFacts, context.currentDate);
 
   const constraints = context.trainingConstraints?.trim();
   if (constraints) {
+    lines.push(`STANDING CONSTRAINTS (the athlete's own words — these always apply): ${sanitizeUserInput(constraints)}`);
+  }
+  if (lines.length > 0) {
     // Belt to the suppression's braces: computeExerciseGaps drops stations the
     // constraints rule out, but that matching is keyword-based and the other
     // computed signals (coverage stats, progression flags) have no equipment
     // model at all. Stating the precedence costs one line and covers whatever
     // the keywords miss.
     lines.push(
-      `STANDING CONSTRAINTS (the athlete's own words — these always apply): ${sanitizeUserInput(constraints)}`,
       `If any computed signal elsewhere in this context (exercise gaps, station coverage, progression flags) conflicts with these constraints, the constraints win — program a substitute, not the excluded work.`,
     );
   }

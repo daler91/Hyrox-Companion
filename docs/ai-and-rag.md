@@ -31,6 +31,7 @@ require `GEMINI_API_KEY`.
 - [AI Plan Generation](#ai-plan-generation)
 - [Prompt Templates](#prompt-templates)
 - [Context Building](#context-building)
+- [The Athlete Card](#the-athlete-card)
 - [Exercise Selection Brief](#exercise-selection-brief)
 - [Workout Engine](#workout-engine)
 - [Security](#security)
@@ -209,10 +210,12 @@ The server owns the conversation. Each send carries two client-made UUIDs, `user
 
 A request without the ids (a tab opened before the deploy) keeps the old path: its own `history`, which the server sanitises, and saves through `POST /api/v1/chat/message`. The Coach panel still saves its own messages that way (a suggestions request, an apply confirmation), and the coach now reads them too.
 
-**What the coach reads.** `loadConversation()` reads the last 60 rows and keeps the current session: the turns since the last break of 12 hours or more (`SESSION_GAP_MS`), at most 20 turns and 30,000 characters. Ahead of an athlete turn, and ahead of the new message, it adds app notes in brackets, outside the quoted athlete text:
+**Threads.** Each workout has its own conversation. A message from the workout-detail chat is saved with that workout's plan day and log (`focus_plan_day_id`, `focus_workout_log_id`), and the coach reads only the rows for that workout: a row matches either id, so a planned day's thread carries on once the day is logged. The Coach panel's general conversation is every row with neither. The workout chat loads its own thread (`GET /api/v1/chat/history?focusPlanDayId=…&focusWorkoutLogId=…`), and its header names the session and its day. Before this, the workout chat showed and sent the whole global history, so a question about Tuesday's session came with unrelated conversations. A session's handover note is saved into the thread it summarises. Clearing the chat history clears every thread.
+
+**What the coach reads.** `loadConversation()` reads the thread's last 60 rows and keeps the current session: the turns since the last break of 12 hours or more (`SESSION_GAP_MS`), within a 30,000-character budget. A long session no longer loses its start once it outgrows the window: the coach reads up to 30 turns in full, and when a session passes that, all but its last 20 turns are folded into a rolling note (`sessionWindow()`, `CHAT_ROLLING_SUMMARY_PROMPT`, fast model, no thinking, feature `chat_rolling_summary`) that carries the previous note forward. The note is saved as a `kind: "rolling"` row timestamped just after the last turn it covers, which is how later messages know where it ends, so it is refreshed about every ten turns rather than on every message. The coach reads it as an EARLIER IN THIS CONVERSATION block after the EARLIER CONVERSATION one; it falls back to the athlete's last messages if the call fails, and the next session's handover note is written from it plus the turns after it. Rolling rows are never shown. Ahead of an athlete turn, and ahead of the new message, it adds app notes in brackets, outside the quoted athlete text:
 
 - the time since the previous turn, when it was an hour or more ("5 hours later");
-- what became of each proposal in the session, placed before the first athlete turn after it was decided: applied, dismissed, replaced by a newer proposal, out of date, or still waiting. Dismissing used to be silent, and apply confirmations never reached the history, so the coach could not tell whether its proposal was taken. `BASE_SYSTEM_PROMPT` says that only an applied proposal changed the plan.
+- what became of each proposal in the session, placed before the first athlete turn after it was decided: applied (naming the days when the athlete applied only some of the changes), dismissed, replaced by a newer proposal, out of date, or still waiting; an undo adds a second note where it happened. Dismissing used to be silent, and apply confirmations never reached the history, so the coach could not tell whether its proposal was taken. `BASE_SYSTEM_PROMPT` says that only an applied proposal changed the plan.
 
 **A new session.** The first message after a break starts a new session. The coach gets a short handover note instead of the earlier turns: a fast-model call (`CHAT_SESSION_SUMMARY_PROMPT`, no thinking, feature `chat_summary`) over the previous session and the note that session started with, so older context carries forward. The note is saved as a `kind: "summary"` row, which every later message in the session reuses, and goes into the system prompt as an EARLIER CONVERSATION block, marked as data. The call runs alongside the context build rather than in front of it. If it fails, the note falls back to the athlete's last three messages plus the earlier note.
 
@@ -251,8 +254,39 @@ On the streaming route (`POST /api/v1/chat/stream`), a message asking for a plan
 
 1. **Intent gate.** A free check (`mayRequestPlanEdit()`) decides whether to classify at all: a keyword scan (`hasPlanEditKeywords()`: day names, "move", "skip", "easier", "travel", and so on), or a short confirmation ("yes please", "go ahead") when the coach's last turn offered a change ("Want me to move your long run to Saturday?"). `classifyPlanEditIntent()` then asks the fast model, with the last two user turns as context, plus the coach's offer for a confirmation. The proposal generator already sees the recent conversation, so it makes the change that was offered. It needs nothing from the training context, so the route starts it alongside `buildAIContext()` rather than after. Only `plan_modification` at confidence ≥ 0.7 proceeds. A request can opt out with `planEditing: false`, a red-flag safety match skips the gate entirely (see [Safety](#safety)), and any error in this branch falls back to the normal chat stream.
 2. **Proposal.** `createPlanAdjustmentProposal()` shows the reasoning model (`PLAN_ADJUSTMENT_PROMPT`) up to 28 upcoming planned days. Changes to days outside that set are dropped, as are `focus`/`mainWorkout`/`accessory` edits to structure-block (EMOM/AMRAP) days. A red-flag safety signal answers with the safety escalation note instead; no upcoming days, or no change surviving the checks, answers in plain text; a failed generation falls back to the normal chat stream. Otherwise the proposal is stored as `pending` in `plan_adjustment_proposals` (superseding any earlier pending one) and the stream sends its summary text plus a `planProposal` event.
-3. **Apply or dismiss.** The athlete decides via `POST /api/v1/plan-proposals/:id/apply` or `/dismiss` (see [API Reference → Plan Proposal Routes](api-reference.md#plan-proposal-routes)). Apply re-checks every targeted day first: if any is no longer `planned` or has changed since the proposal was built, the whole proposal is marked `invalidated` (409 `stale`). Otherwise table-backed days whose `mainWorkout`/`accessory` text changes are re-parsed into structured rows, all changes are written in one transaction, and the proposal becomes `applied`.
-4. **Auto-apply.** With the `coachAutoApplyPlanChanges` preference on (Settings → "Auto-Apply Chat Plan Changes", default off), the proposal is applied as soon as it is created; if applying fails it keeps its status (pending, or invalidated) for the athlete to retry or dismiss.
+3. **Apply or dismiss.** The athlete decides via `POST /api/v1/plan-proposals/:id/apply` or `/dismiss` (see [API Reference → Plan Proposal Routes](api-reference.md#plan-proposal-routes)). A proposal holds at most one change per day, and with more than one change the card has an Include toggle on each, so the athlete can apply only some (`planDayIds`). Apply re-checks every day it will write first: if any is no longer `planned` or has changed since the proposal was built, the whole proposal is marked `invalidated` (409 `stale`). Otherwise table-backed days whose `mainWorkout`/`accessory` text changes are re-parsed into structured rows, the changes are written in one transaction, and the proposal becomes `applied`, with a record of what each day's write replaced (`apply_undo`).
+4. **Undo.** For a week after an apply, the card offers Undo (`POST /api/v1/plan-proposals/:id/undo`). Each day's fields, coach note and exercise table go back to what they were, but only where they still read what the apply wrote: a field the athlete has edited since, a newer coach note, an exercise table changed since, or a day that is no longer planned stays as it is, and the reply names those days. The proposal becomes `reverted`. This is the rule missed-session recovery's undo follows (`server/services/missedRecovery/undo.ts`); the proposal's version is `server/services/planProposalUndo.ts`.
+5. **Auto-apply.** With the `coachAutoApplyPlanChanges` preference on (Settings → "Auto-Apply Chat Plan Changes", default off), the proposal is applied as soon as it is created; if applying declines or throws, the reply still carries the card with its status (pending, or invalidated) for the athlete to retry or dismiss. An auto-applied proposal arrives with its Undo, since it changed the plan without a click.
+
+### Chat Tools
+
+**Files:** `server/services/chatTools.ts`, `server/gemini/chatService.ts` (`streamChatWithCoachTools`), `server/ai/providers/` (tool support per adapter), `server/routes/ai.ts`
+
+Behind `AI_CHAT_TOOLS` (default `false`, see [Environment Reference](env-reference.md#feature-flags)), the streaming chat gives the reasoning model tools instead of deciding everything before it runs:
+
+| Tool | What it returns |
+|---|---|
+| `get_workouts` | Logged sessions (focus, duration, RPE, sets or the workout text, the athlete's note) and still-planned sessions between two dates at most 92 days apart. |
+| `get_exercise_history` | Every logged session of one exercise over the last 6 months (up to 24 on request), newest first, matched by name or custom label. |
+| `get_personal_records` | Each exercise's headline best (e1RM, max weight, best time or max distance) with its date, in the athlete's units. |
+| `search_coaching_materials` | Excerpts from the athlete's coaching notes for a query, through the same retrieval as the prompt's materials. |
+| `propose_plan_changes` | Not run: hands the reply over to the proposal flow (below). Offered only when the surface can show a proposal (`planEditing` is not `false`) and the athlete's words tripped no red-flag symptom. |
+
+- **Scope.** Every tool reads only the athlete the request is for: the user id is bound by the route, never a tool argument. Arguments are validated (zod), ranges and rows are capped, a result is cut to 8,000 characters by halving its lists, and the athlete's own text in a result is escaped like everywhere else it reaches a prompt. A tool never throws: bad arguments and failed reads come back as an error object the model can work around, and the prompt tells it tool results are data, not instructions.
+- **The loop.** Each round streams the model's text to the athlete as it arrives. When the round ends with read-tool calls, their results go back (Gemini's `functionResponse` parts with the turn's own parts and thought signatures; Anthropic's `tool_result` blocks in one user turn; OpenAI-compatible `tool` messages) and the next round continues the reply. After three rounds of calls the tools stay declared but `toolChoice: "none"` asks for an answer. One streaming output validator covers the whole reply, and each round goes through the circuit breaker and records its own usage.
+- **Plan changes.** The keyword gate and the intent classifier never run. When the model calls `propose_plan_changes` with the change in plain words, the reply so far stays sent, `planProposalPending` is streamed, and `createPlanAdjustmentProposal()` drafts the proposal from the athlete's message plus the coach's summary of the change, with the conversation as before. The proposal summary (or a plain-text fallback) follows what the coach already said, then the `planProposal` card; auto-apply works as in step 5 above. If drafting fails, the reply says the change could not be drafted rather than falling back to prose.
+- **Prompt.** With tools, the PLAN CHANGES rule in `BASE_SYSTEM_PROMPT` is swapped: call `propose_plan_changes` (offering a change is fine), or, without that tool, say the change must be asked for from the Coach panel. A TOOLS section tells the coach to look things up rather than guess about anything outside the training data.
+- **Not covered.** The non-streamed `POST /api/v1/chat` and coach insights never use tools. Live behaviour (when the model chooses to call, the quality of its summaries) has not been evaluated yet, which is why the flag is off: run the scenario evals in tools mode (`AI_EVAL_MODES=tools pnpm eval:chat`, see [Chat Scenario Evals](testing.md#chat-scenario-evals)) before turning it on.
+
+### Chat Quality: Telemetry and Feedback
+
+**Files:** `server/services/chatTurnTelemetry.ts`, `server/routes/ai.ts`, `client/src/hooks/chat/useMessageFeedback.ts`, `script/chat-quality-report.ts`
+
+`ai_usage_logs` records what each chat call cost. Three things record whether it helped (AI coach chat review, I23):
+
+- **The `[chat] turn` log line.** Every streamed reply logs one info line when it ends, with no message text: `mode` (`classic` or `tools`), `outcome` (`prose`, `proposal`, `error` or `aborted`), `regenerate` (a retry of a failed reply), `ttftMs` (request to first reply text, or to the proposal summary), `contextMs` (request to the training context and retrieval being ready), `totalMs`, `planEditGate` (`closed`, or `open` with `planEditIntent` and `planEditConfidence`: the classifier's verdict), `toolCalls`, `proposal` (what drafting returned: `proposal`, `chat_fallback`, `generation_failed` or `error`) with `proposalId`, `replyChars`, `retrieval`, `safetyNotice` and `factOffered` (the category of a fact offered for the [athlete card](#the-athlete-card), never its words). The classifier's hit rate is the share of open gates it called a plan edit; its false positives show as `chat_fallback` drafts and as proposals later dismissed.
+- **Thumbs.** A coach reply the server saved, loaded from the history or finished in this session, shows Helpful and Not helpful buttons; pressing the chosen one again clears it. `PATCH /api/v1/chat/messages/:id` stores it in `chat_messages.feedback` (migration `0114`); the UI updates at once and puts the old rating back with a toast if the save fails.
+- **The report.** `pnpm tsx script/chat-quality-report.ts [--days N]` (default 30) prints, for proposals drafted in the window, how many were applied (and how many only partly, and how many undone), dismissed, went out of date or were replaced, and, for coach replies, how many were rated and how. Read-only and aggregate.
 
 ---
 
@@ -409,7 +443,7 @@ Generates structured multi-week training plans via the configured text provider.
 | `endDateIsRaceDate` | boolean? | Default `true`: the end date is the race the plan peaks for (stored as the plan's `raceDate`) |
 | `restDays` | string[]? | Days of the week that must be rest days |
 | `focusAreas` | string[]? | Priority training areas (max 10) |
-| `injuries` | string? | Injuries/limitations to avoid (max 500 chars); also saved to the athlete's profile as `trainingConstraints` |
+| `injuries` | string? | Injuries/limitations to avoid (max 500 chars). The route puts it on the [athlete card](#the-athlete-card), a fact per sentence, before queueing; the plan is written around the card |
 | `supersedePlanIds` | string[]? | Up to 5 plans the athlete is switching away from; retired only if this plan generates successfully |
 
 ### Flow
@@ -550,14 +584,33 @@ Instructions for generating multi-week training plans with day-by-day structure.
 
 **File:** `server/services/aiContextService.ts`
 
-`buildAIContext(userId, query, log)` is the shared context builder used by both chat and suggestion endpoints. It parallelizes two independent data fetches:
+`buildAIContext(userId, query, log, options)` is the shared context builder used by both chat and suggestion endpoints. It parallelizes two independent data fetches:
 
 ```typescript
 const [trainingContext, coachingContext] = await Promise.all([
-  buildTrainingContext(userId),                     // Latest 400 timeline entries + 70-day load window
+  cachedTrainingContext                             // chat only (see below)
+    ? getCachedTrainingContext(userId, buildTrainingContext)
+    : buildTrainingContext(userId),                 // Latest 400 timeline entries + 70-day load window
   retrieveCoachingContext(userId, query, log),      // RAG or legacy materials
 ]);
 ```
+
+### The chat's training-context cache
+
+`buildTrainingContext()` is the heaviest read on a chat turn (about eight queries, 70 days of sets among them), and a conversation used to pay it on every message. The chat routes and the welcome now pass `{ cachedTrainingContext: true }` and read it through `server/services/trainingContextCache.ts`, which keeps one context per athlete for up to five minutes (`TRAINING_CONTEXT_CACHE_TTL_MS`) and shares a build already under way. The auto-coach, workout suggestions and coach insights still build their own, because they run straight after a write and must see it.
+
+An athlete's entry is dropped:
+
+- after any successful write request by them outside `/api/v1/chat` (`invalidateTrainingContextOnWrite`, mounted on `/api/v1`): logging, plan edits, settings, nutrition, proposals;
+- after any background job for them finishes (`runBatch` in `server/queue.ts`): the auto-coach, Strava and stream syncs, plan generation;
+- when a plan proposal is applied or undone, because the chat stream can auto-apply one;
+- at their local midnight, since the athlete-local date is part of the key and "today" is part of the context.
+
+The cache is in process, like the analytics route caches: with more than one instance, a write on one leaves the others' copy until the TTL runs out.
+
+### The coach's welcome
+
+When the Coach panel opens it asks `GET /api/v1/chat/welcome` (`server/services/coachWelcome.ts`) for its opening line and prompt chips, built from the cached training context, the athlete's first name and the plan's race date. No model is called. The line greets the athlete by name, leads with a race in the next three weeks, then today's session (or the one just done, or the next one), and flags at most one thing about recent training: a load spike (ACWR zone `danger` or `yellow`), hard recent sessions, or new personal bests this week. The chips come from the same signals (pacing or form cues for today's session by its kind, race prep, "Should I ease off?", how today's session went, a missed session still undecided, the new bests), filled up to four with standing ones (workout suggestions, tomorrow, last week, the plan goal). A chip carries the message it sends, which can be longer than its label. Until the welcome arrives, or if it fails, the panel keeps its fixed text and chips. Fetching it also warms the cache for the first message.
 
 ### TrainingContext (from `server/services/ai/`)
 
@@ -575,7 +628,8 @@ The context carries:
 - Structured exercise stats (max weight, max distance, best time per exercise)
 - Active plan info (name, weeks, current week, goal)
 - **Coaching insights:** RPE trends, fatigue/undertraining flags, station gaps, recent skips with their reasons (`recentSkips`, up to 5), recent missed key and supporting sessions with whether the athlete let each go (`recentMisses`, up to 5 — the prompt says a let-go session is the athlete's decision and not to add it back), plan phase, weekly volume trends, progression flags per exercise, the training-load governor overview (`loadGovernor`, from `calculateTrainingLoad()` over the last 70 days), and the rule-based training-state decision (`decisionTree` from `decideTrainingState()`: phase, allowed workout types, whether intensity is permitted, rationale codes). When the data supports them, it also carries personal records, PRs this week, plan compliance, neglected movement patterns and muscle groups, race readiness, and load by body system (`bodySystemLoad`, from `calculateBodySystemLoad()` over the same window's training sessions — the numbers the Analytics card shows). The body-system block reaches the prompt only when a system is above its usual week, new, or at a six-week high, and names what spares the flagged system.
-- **Exercise selection brief** (`exerciseSelection`): built from the same 70-day training sets, the active plan's goal, the athlete's standing constraints, the station gaps and the upcoming planned days — see [Exercise Selection Brief](#exercise-selection-brief). Rendered after the COACHING ANALYSIS block in the auto-coach, review-note, chat plan-edit and chat prompts; a failure to build it is logged and leaves the context without it.
+- **The athlete card** (`athleteFacts`): the active facts, each with its category and review date — see [The Athlete Card](#the-athlete-card). Top level rather than in `coachingInsights`, which is persisted into `plan_days.ai_inputs_used`, so the athlete's free text stays out of that audit.
+- **Exercise selection brief** (`exerciseSelection`): built from the same 70-day training sets, the active plan's goal, the athlete's standing constraints (the older note and the card's facts), the station gaps and the upcoming planned days — see [Exercise Selection Brief](#exercise-selection-brief). Rendered after the COACHING ANALYSIS block in the auto-coach, review-note, chat plan-edit and chat prompts; a failure to build it is logged and leaves the context without it.
 - **Training targets** (`trainingTargets`): the athlete's estimated 1RMs on up to 6 lifts (the plan's primary lifts first), each with its 5- and 8-rep working loads at RPE 8, and their run paces — computed by the [workout engine](#workout-engine) from the same 70-day window. Rendered as TRAINING TARGETS after the brief in the auto-coach and chat prompts, so a load or pace the coach suggests agrees with the plan.
 
 ---
@@ -608,7 +662,7 @@ Detection uses two strategies:
 1. **Exercise sets:** Maps each logged set's `exerciseName` (canonical name or registered alias) to a station. The interval variants `ski_erg_intervals` and `rowing_intervals` count for `skierg` and `rowing`, and every exercise defined with category `running` counts for `running`.
 2. **Focus text:** Scans the workout focus string for the keywords in `STATION_KEYWORDS`, as a case-insensitive substring match. For example, "ski erg" and "ski-erg" both map to `skierg`, "row" to `rowing` and "run" to `running`.
 
-Stations the athlete's training constraints rule out are dropped. `stationsRuledOutByConstraints()` matches whole words in the `trainingConstraints` text, so "no sled at my gym" drops both sled stations and "can't do burpees" drops `burpee_broad_jump`. The drop is coach-side only: the analytics coverage still shows every station.
+Stations the athlete's training constraints rule out are dropped. `stationsRuledOutByConstraints()` matches whole words in the constraint text (the older `trainingConstraints` note and every active fact on the [athlete card](#the-athlete-card), joined by `standingConstraintsText()`), so "no sled at my gym" drops both sled stations and "can't do burpees" drops `burpee_broad_jump`. The drop is coach-side only: the analytics coverage still shows every station.
 
 Returns an array of `{ station, daysSinceLastTrained }` for the remaining stations. Days are counted to the athlete-local date that `buildTrainingContext()` passes in as `today`. `daysSinceLastTrained` is `null` when no completed entry in the timeline window trained the station.
 
@@ -657,6 +711,22 @@ The checks run in order (weight, then pace, then time) and the first that produc
 Calculated from the active plan's `startDate` to the athlete-local `today` that `buildTrainingContext()` passes in: `max(1, ceil((daysSinceStart + 1) / 7))` (`computeCurrentWeek()` in `shared/planPhase.ts`). It is not clamped to `totalWeeks`. Once the plan has ended, the week runs past `totalWeeks` and [Plan Phase](#plan-phase) returns `undefined`. A plan with no `startDate`, or one that has not started yet, reads as week 1.
 
 ---
+
+## The Athlete Card
+
+**Files:** `shared/athleteFacts.ts`, `server/storage/athleteFacts.ts`, `server/prompts/athleteFacts.ts`, `server/services/athleteFactsService.ts`, `server/services/chatFactProposal.ts` · spec: [`coach-memory-spec.md`](coach-memory-spec.md) (Path C)
+
+Short statements the athlete says are true every week ("bad left knee", "no sled at my gym", "night shifts on Tuesdays"), stored one row each in [`athlete_facts`](database.md#athlete_facts), at most 20 active. The athlete adds, edits, retires and deletes them in Settings → Training → Athlete card; the plan wizard's injuries box adds one per sentence; and the chat offers ones the athlete states. A fact gets a review date 90 days after the athlete's own today, and again whenever they confirm it ("Still true?" in Settings) or restore it.
+
+**Where it is read:**
+
+- **Every coach prompt.** `formatAthleteFactLines()` renders an ATHLETE CARD block at the top of ATHLETE CONSTRAINTS (`server/prompts/athleteConstraints.ts`), ahead of the older free-text note, under one precedence line. That block reaches the chat prompt in both its branches and the auto-coach prompt, and `server/prompts/athleteFacts.test.ts` holds both assemblers to it. Each fact goes through `sanitizeUserInput`. One past its review date still renders, flagged "(unconfirmed since …)", with a line telling the coach to check it in conversation: dropping it would be worse than keeping a stale one.
+- **Plan generation.** `buildGenerationCard()` (`server/services/planGenerationCard.ts`) takes the active facts plus any sentence of the wizard's box the card had no room for (a sentence matching a retired fact stays out), and every chunk's prompt carries them with an instruction to program around them in every week. The same text is the constraint the exercise selection and the workout engine match.
+- **Deterministic checks.** `standingConstraintsText()` joins the older note and the active facts for what can't read prose: station-gap suppression ([Exercise Gaps](#exercise-gaps-station-gaps)), the exercise selection brief, and the heart-rate-medication disclaimer in `analyzeSafetySignals()`. Facts never feed the red-flag scan, which replaces every suggestion with an escalation and would never clear for a fact with no end date (spec §5.2).
+
+**The older note.** `users.training_constraints`, written by the plan wizard before the card existed, keeps rendering as STANDING CONSTRAINTS until it is moved. Settings shows it with "Add to card" (`POST /api/v1/athlete-facts/import`) and "Remove note"; the wizard's box arrives prefilled with it, and generating moves it. Either way the note is cleared only once all of it fits on the card. A Settings preferences save never sends it.
+
+**Facts offered in chat (I5b).** When the athlete's message may state something lasting (a keyword gate in `mayStateLastingFact()`), `extractFactCandidate()` reads it on the fast model alongside the reply, with the coach's previous turn for context, and returns at most one fact in the athlete's words. A fact the card doesn't already hold (by its dedupe key) is offered under the reply as its last stream event (`factProposal`), saved on the reply row, and rendered as a "Save to your athlete card?" card with Save to card / Not now. Nothing is written until the athlete saves it (`POST /api/v1/chat/messages/:id/fact`), which also drops the cached training context so the next reply reads it. Never after a red-flag symptom, and a reply never waits more than 2 seconds on the read. The tools path uses the same read rather than a tool, so the offer doesn't depend on the model choosing to call one.
 
 ## Exercise Selection Brief
 

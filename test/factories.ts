@@ -1,4 +1,13 @@
-import type { InsertWorkoutLog, PlanDay, SessionGrade, TimelineEntry, TrainingPlan, TrainingPlanWithDays, User } from "@shared/schema";
+import type {
+  AthleteFact,
+  InsertWorkoutLog,
+  PlanDay,
+  SessionGrade,
+  TimelineEntry,
+  TrainingPlan,
+  TrainingPlanWithDays,
+  User,
+} from "@shared/schema";
 
 import type { MissedWorkoutData, WeeklySummaryData } from "../server/emailTemplates";
 import type { UpcomingWorkout } from "../server/gemini/suggestionService";
@@ -287,6 +296,23 @@ export function createMockSessionGrade(overrides: Partial<SessionGrade> = {}): S
     easy: null,
     threshold: null,
     countsInRollup: true,
+    ...overrides,
+  };
+}
+
+/** An active fact on the athlete card, a while from its review date. */
+export function createMockAthleteFact(overrides: Partial<AthleteFact> = {}): AthleteFact {
+  return {
+    id: "fact-1",
+    userId: "user-1",
+    fact: "No sled at my gym",
+    dedupeKey: "no sled at my gym",
+    category: "equipment",
+    source: "athlete",
+    active: true,
+    reviewOn: "2026-03-01",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
   };
 }

@@ -1,4 +1,5 @@
-import type { ChatSafetyNotice } from "@shared/schema";
+import type { ChatFactProposal, ChatSafetyNotice } from "@shared/schema";
+import { athleteFactCategoryEnum, chatFactProposalStatusEnum } from "@shared/schema/enums";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { ChatHistoryMessage, PlanProposalView, RagInfo } from "@/lib/api";
@@ -28,6 +29,23 @@ export function isChatSafetyNotice(value: unknown): value is ChatSafetyNotice {
   return (level === "urgent" || level === "caution") && typeof message === "string" && message !== "";
 }
 
+const FACT_CATEGORIES: ReadonlySet<string> = new Set<string>(athleteFactCategoryEnum);
+const FACT_PROPOSAL_STATUSES: ReadonlySet<string> = new Set<string>(chatFactProposalStatusEnum);
+
+/** A fact the coach offered for the athlete card, well-formed enough to show. */
+export function isChatFactProposal(value: unknown): value is ChatFactProposal {
+  if (typeof value !== "object" || value === null) return false;
+  const { fact, category, status } = value as Record<string, unknown>;
+  return (
+    typeof fact === "string" &&
+    fact !== "" &&
+    typeof category === "string" &&
+    FACT_CATEGORIES.has(category) &&
+    typeof status === "string" &&
+    FACT_PROPOSAL_STATUSES.has(status)
+  );
+}
+
 /** Enough of a proposal to render its card; the rest is the server's own serializer. */
 export function isPlanProposalView(value: unknown): value is PlanProposalView {
   if (typeof value !== "object" || value === null) return false;
@@ -55,16 +73,31 @@ export function messageFromHistory(row: ChatHistoryMessage): Message {
     ...(row.ragInfo ? { ragInfo: row.ragInfo } : {}),
     ...(isChatSafetyNotice(row.safetyNotice) ? { safetyNotice: row.safetyNotice } : {}),
     ...(isPlanProposalView(row.proposal) ? { proposal: row.proposal } : {}),
+    ...(isChatFactProposal(row.factProposal) ? { factProposal: row.factProposal } : {}),
+    ...(row.role === "assistant" && (row.kind === "text" || row.kind === "proposal") ? { rateable: true } : {}),
+    ...(row.feedback === "up" || row.feedback === "down" ? { feedback: row.feedback } : {}),
   };
 }
 
-/** What a stream's extra events put on the reply: the safety notice, and the proposal it drafted. */
+/** A reply that arrived in full: the server has saved it under its id, so the athlete can rate it. */
+export function markReplyRateable(setMessages: SetMessages, id: string): void {
+  setMessages((prev) =>
+    prev.map((m) => (m.id === id && !m.failure && m.content !== "" ? { ...m, rateable: true } : m)),
+  );
+}
+
+/**
+ * What a stream's extra events put on the reply: the safety notice, the
+ * proposal it drafted, and a fact offered for the athlete card.
+ */
 function streamExtras(extras: Record<string, unknown> | undefined): Partial<Message> {
   const safetyNotice = extras?.safetyNotice;
   const proposal = extras?.planProposal;
+  const factProposal = extras?.factProposal;
   return {
     ...(isChatSafetyNotice(safetyNotice) ? { safetyNotice } : {}),
     ...(isPlanProposalView(proposal) ? { proposal, kind: "proposal" as const } : {}),
+    ...(isChatFactProposal(factProposal) ? { factProposal } : {}),
   };
 }
 

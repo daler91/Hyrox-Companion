@@ -1,5 +1,8 @@
 import { calculateMafHr } from "@shared/maf";
 import {
+  type ChatFactProposal,
+  type ChatFactProposalStatus,
+  type ChatFeedback,
   type ChatMessage,
   chatMessages,
   type CustomExercise,
@@ -36,6 +39,27 @@ import { logger } from "../logger";
  * call wrote it. The row's user id is part of every read, so an id that
  * collides with another athlete's row simply isn't written here.
  */
+/**
+ * Which conversation chat rows belong to (AI coach chat review, I4): a
+ * workout's, by the plan day or the log it was chatted about from (a row
+ * matches either, so a planned day's thread carries on once it is logged),
+ * or, with neither, the general one, which holds every row without a workout.
+ */
+export interface ChatThread {
+  readonly planDayId?: string;
+  readonly workoutLogId?: string;
+}
+
+function chatThreadCondition({ planDayId, workoutLogId }: ChatThread) {
+  if (!planDayId && !workoutLogId) {
+    return and(isNull(chatMessages.focusPlanDayId), isNull(chatMessages.focusWorkoutLogId));
+  }
+  return or(
+    planDayId ? eq(chatMessages.focusPlanDayId, planDayId) : undefined,
+    workoutLogId ? eq(chatMessages.focusWorkoutLogId, workoutLogId) : undefined,
+  );
+}
+
 async function saveChatMessageOnce(message: InsertChatMessage & { id: string }): Promise<boolean> {
   const rows = await db
     .insert(chatMessages)
@@ -50,6 +74,64 @@ async function deleteAssistantChatMessage(userId: string, id: string): Promise<v
   await db
     .delete(chatMessages)
     .where(and(eq(chatMessages.id, id), eq(chatMessages.userId, userId), eq(chatMessages.role, "assistant")));
+}
+
+/**
+ * Rate one of the athlete's coach replies, or clear the rating (I23). Only a
+ * reply they can see is rated: never another athlete's row, an athlete turn,
+ * or a hidden summary. Returns whether there was such a reply.
+ */
+async function setChatMessageFeedback(userId: string, id: string, feedback: ChatFeedback | null): Promise<boolean> {
+  const rows = await db
+    .update(chatMessages)
+    .set({ feedback, feedbackAt: feedback ? new Date() : null })
+    .where(
+      and(
+        eq(chatMessages.id, id),
+        eq(chatMessages.userId, userId),
+        eq(chatMessages.role, "assistant"),
+        inArray(chatMessages.kind, ["text", "proposal"]),
+      ),
+    )
+    .returning({ id: chatMessages.id });
+  return rows.length > 0;
+}
+
+/** One of the athlete's coach replies whose offered fact still waits for their answer (I5b). */
+function pendingFactProposalRow(userId: string, id: string) {
+  return and(
+    eq(chatMessages.id, id),
+    eq(chatMessages.userId, userId),
+    eq(chatMessages.role, "assistant"),
+    sql`${chatMessages.factProposal}->>'status' = 'pending'`,
+  );
+}
+
+/** The fact the coach offered on one of the athlete's replies, while it waits for their answer. */
+async function getPendingChatFactProposal(userId: string, id: string): Promise<ChatFactProposal | null> {
+  const [row] = await db
+    .select({ factProposal: chatMessages.factProposal })
+    .from(chatMessages)
+    .where(pendingFactProposalRow(userId, id))
+    .limit(1);
+  return row?.factProposal ?? null;
+}
+
+/**
+ * Record the athlete's answer to an offered fact. Only a proposal still
+ * pending moves, so two answers can't both land. Returns whether it moved.
+ */
+async function settleChatFactProposal(
+  userId: string,
+  id: string,
+  status: Exclude<ChatFactProposalStatus, "pending">,
+): Promise<boolean> {
+  const rows = await db
+    .update(chatMessages)
+    .set({ factProposal: sql`jsonb_set(${chatMessages.factProposal}, '{status}', to_jsonb(${status}::text))` })
+    .where(pendingFactProposalRow(userId, id))
+    .returning({ id: chatMessages.id });
+  return rows.length > 0;
 }
 
 export class UserStorage {
@@ -380,10 +462,13 @@ export class UserStorage {
   // together.
   async getChatMessages(
     userId: string,
-    options: { limit?: number; beforeTimestamp?: Date; beforeId?: string } = {},
+    options: { limit?: number; beforeTimestamp?: Date; beforeId?: string; thread?: ChatThread } = {},
   ): Promise<ChatMessage[]> {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
     const conditions = [eq(chatMessages.userId, userId)];
+    // Without a thread, every row: the export and other whole-history readers.
+    const threadClause = options.thread ? chatThreadCondition(options.thread) : undefined;
+    if (threadClause) conditions.push(threadClause);
     if (options.beforeTimestamp && options.beforeId) {
       const cursorClause = or(
         lt(chatMessages.timestamp, options.beforeTimestamp),
@@ -411,10 +496,13 @@ export class UserStorage {
     return chatMessage;
   }
 
-  // Neither uses the instance, so they are module functions bound here, as
+  // None uses the instance, so they are module functions bound here, as
   // NutritionStorage binds its own: storage.users.X() and its mocks still work.
   readonly saveChatMessageOnce = saveChatMessageOnce;
   readonly deleteAssistantChatMessage = deleteAssistantChatMessage;
+  readonly setChatMessageFeedback = setChatMessageFeedback;
+  readonly getPendingChatFactProposal = getPendingChatFactProposal;
+  readonly settleChatFactProposal = settleChatFactProposal;
 
   async clearChatHistory(userId: string): Promise<boolean> {
     await db.delete(chatMessages).where(eq(chatMessages.userId, userId));

@@ -212,6 +212,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     coachingMaterials: unknown[];
     customExercises: unknown[];
     timelineAnnotations: unknown[];
+    athleteFacts: unknown[];
     stravaConnection: unknown;
     garminConnection: unknown;
     pushSubscriptions: unknown[];
@@ -230,6 +231,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       analytics: { getAllExerciseSetsWithDates: vi.fn().mockResolvedValue(overrides.exerciseSets ?? []) },
       coaching: { listCoachingMaterials: vi.fn().mockResolvedValue(overrides.coachingMaterials ?? []) },
       timelineAnnotations: { list: vi.fn().mockResolvedValue(overrides.timelineAnnotations ?? []) },
+      athleteFacts: { list: vi.fn().mockResolvedValue(overrides.athleteFacts ?? []) },
       push: { getSubscriptionsForUser: vi.fn().mockResolvedValue(overrides.pushSubscriptions ?? []) },
       aiUsage: { listForUser: vi.fn().mockResolvedValue(overrides.aiUsageLogs ?? []) },
     } as unknown as IStorage;
@@ -249,6 +251,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       coachingMaterials: [],
       customExercises: [],
       timelineAnnotations: [],
+      athleteFacts: [],
       connections: { strava: null, garmin: null },
       pushSubscriptions: [],
       aiUsageLogs: [],
@@ -359,22 +362,25 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     expect(serialized).not.toContain('p256dh');
   });
 
-  it('includes chat messages, coaching materials, custom exercises, annotations, and AI usage logs verbatim', async () => {
+  it('includes chat messages, coaching materials, custom exercises, annotations, athlete facts, and AI usage logs verbatim', async () => {
     const chatMessages = [{ id: 'm1', role: 'user', content: 'hello', timestamp: new Date() }];
     const coachingMaterials = [{ id: 'cm1', title: 'My Programming', content: 'lift heavy', type: 'principles' }];
     const customExercises = [{ id: 'ce1', name: 'Kettlebell Halo', category: 'conditioning' }];
     const timelineAnnotations = [{ id: 'a1', startDate: '2026-04-01', endDate: '2026-04-07', type: 'travel', note: 'work trip' }];
     const aiUsageLogs = [{ id: 'al1', model: 'gemini-2.0-flash', feature: 'chat', inputTokens: 100, outputTokens: 50, estimatedCostCents: 0.1, createdAt: new Date() }];
+    // Retired facts too: they are still the athlete's own words.
+    const athleteFacts = [{ id: 'f1', fact: 'No sled at my gym', category: 'equipment', active: false }];
 
     const result = await generateJSON(
       mockUserId,
-      createMockStorage({ chatMessages, coachingMaterials, customExercises, timelineAnnotations, aiUsageLogs }),
+      createMockStorage({ chatMessages, coachingMaterials, customExercises, timelineAnnotations, athleteFacts, aiUsageLogs }),
     );
 
     expect(result.chatMessages).toEqual(chatMessages);
     expect(result.coachingMaterials).toEqual(coachingMaterials);
     expect(result.customExercises).toEqual(customExercises);
     expect(result.timelineAnnotations).toEqual(timelineAnnotations);
+    expect(result.athleteFacts).toEqual(athleteFacts);
     expect(result.aiUsageLogs).toEqual(aiUsageLogs);
   });
 });

@@ -30,6 +30,10 @@ export enum ErrorCode {
   // Recycle-bin restore refused: the record (or its device activity) already exists again.
   RECYCLE_BIN_CONFLICT = "RECYCLE_BIN_CONFLICT",
   PLAN_GENERATION_IN_PROGRESS = "PLAN_GENERATION_IN_PROGRESS",
+  /** The athlete card already holds its maximum of active facts. */
+  ATHLETE_FACT_LIMIT = "ATHLETE_FACT_LIMIT",
+  /** Another fact on the athlete card already says the same thing. */
+  ATHLETE_FACT_DUPLICATE = "ATHLETE_FACT_DUPLICATE",
   AI_TIMEOUT = "AI_TIMEOUT",
   AI_ERROR = "AI_ERROR",
   AI_QUOTA_EXCEEDED = "AI_QUOTA_EXCEEDED",

@@ -10,6 +10,7 @@ import { registerRoutes } from "./routes";
 import accountRoutes from "./routes/account";
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
+import athleteFactsRoutes from "./routes/athleteFacts";
 import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
@@ -42,6 +43,7 @@ vi.mock("./middleware/csrf", () => ({
 vi.mock("./routes/account", () => ({ default: { name: "accountRoutes" } }));
 vi.mock("./routes/ai", () => ({ default: { name: "aiRoutes" } }));
 vi.mock("./routes/analytics", () => ({ default: { name: "analyticsRoutes" } }));
+vi.mock("./routes/athleteFacts", () => ({ default: { name: "athleteFactsRoutes" } }));
 vi.mock("./routes/auth", () => ({ default: { name: "authRoutes" } }));
 vi.mock("./routes/coaching", () => ({ default: { name: "coachingRoutes" } }));
 vi.mock("./routes/consent", () => ({ default: { name: "consentRoutes" } }));
@@ -142,6 +144,7 @@ describe("registerRoutes", () => {
     expect(app.use).toHaveBeenCalledWith(consentRoutes);
     expect(app.use).toHaveBeenCalledWith(pushRoutes);
     expect(app.use).toHaveBeenCalledWith(timelineAnnotationsRoutes);
+    expect(app.use).toHaveBeenCalledWith(athleteFactsRoutes);
     expect(app.use).toHaveBeenCalledWith(recycleBinRoutes);
     expect(app.use).toHaveBeenCalledWith(sessionGradesRoutes);
     expect(app.use).toHaveBeenCalledWith(nutritionRoutes);

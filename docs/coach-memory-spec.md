@@ -1,11 +1,14 @@
 # Coach memory — the durable athlete card
 
-**Status.** **Paths A and B shipped**; the §5 collisions are closed and the prompt-wiring
-remainder (skip reasons, absences → plan generation, MAF context) has landed. **Path C — the
-athlete-facts card itself (§2–§6) — is the open scope**, gated on the §7 measurement:
-run `pnpm tsx script/coach-memory-usage.ts` against production before deciding. Register entry:
+**Status.** **Paths A, B and C shipped.** Path C (§2–§6) went in as the five PRs in §6, built
+ahead of the §7 measurement at the owner's call, so `pnpm tsx script/coach-memory-usage.ts`
+against production is now the way to see whether athletes use the card rather than a gate on
+building it. The chat-proposed facts §8 deferred ("v1 has no AI writes") shipped too, as
+proposals the athlete saves or turns down, never writes (AI coach chat review, I5). Where each
+piece lives: [AI and RAG → The Athlete Card](ai-and-rag.md#the-athlete-card). Register entry:
 recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before
-costing this** — two load-bearing claims in that register entry are wrong, and they were mine.
+costing anything here** — two load-bearing claims in that register entry are wrong, and they
+were mine.
 
 **One-line pitch.** Tell the coach the things that are true every week — bad left knee, no sled
 at my gym, shift work on Tuesdays — once, and have it remember.

@@ -1,12 +1,14 @@
 import type { ChatMessage, PlanAdjustmentProposal } from "@shared/schema";
 import type express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generateJsonText, generateText } from "../../ai/providers";
-import { chatWithCoach, streamChatWithCoach } from "../../gemini";
+import { env } from "../../env";
+import { chatWithCoach, type CoachStreamEvent, streamChatWithCoach, streamChatWithCoachTools } from "../../gemini";
+import { logger } from "../../logger";
 import { buildTrainingContext } from "../../services/ai";
-import { createPlanAdjustmentProposal } from "../../services/planAdjustmentService";
+import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../../services/planAdjustmentService";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -28,16 +30,21 @@ vi.mock("../../storage", () => ({
       saveChatMessage: vi.fn(() => Promise.resolve({})),
       saveChatMessageOnce: vi.fn(() => Promise.resolve(true)),
       deleteAssistantChatMessage: vi.fn(() => Promise.resolve()),
+      setChatMessageFeedback: vi.fn(() => Promise.resolve(true)),
+      getPendingChatFactProposal: vi.fn(() => Promise.resolve(null)),
+      settleChatFactProposal: vi.fn(() => Promise.resolve(true)),
     },
+    athleteFacts: { add: vi.fn() },
     coaching: {
       listCoachingMaterials: vi.fn(() => Promise.resolve([])),
       hasChunksForUser: vi.fn(() => Promise.resolve(false)),
       getStoredEmbeddingDimension: vi.fn(() => Promise.resolve(3072)),
     },
     aiUsage: { getDailyTotalCents: vi.fn(() => Promise.resolve(0)) },
-    planProposals: { getByIds: vi.fn(() => Promise.resolve([])) },
+    planProposals: { getByIds: vi.fn(() => Promise.resolve([])), getById: vi.fn() },
     plans: { getPlanDay: vi.fn() },
     workouts: { getWorkoutLog: vi.fn() },
+    analytics: { getExerciseSetsForPersonalRecords: vi.fn(() => Promise.resolve([])) },
   },
 }));
 
@@ -54,11 +61,18 @@ vi.mock("../../gemini", () => ({
   parseWorkoutStructureFromImage: vi.fn(),
   chatWithCoach: vi.fn(),
   streamChatWithCoach: vi.fn(),
+  streamChatWithCoachTools: vi.fn(),
   generateWorkoutSuggestions: vi.fn(),
   EMBEDDING_DIMENSIONS: 3072,
 }));
 
 vi.mock("../../services/ai", () => ({ buildTrainingContext: vi.fn() }));
+// The chat reads its training context through a per-athlete cache; here it
+// builds every time, so one test's context never answers the next.
+vi.mock("../../services/trainingContextCache", () => ({
+  getCachedTrainingContext: (userId: string, build: (id: string) => Promise<unknown>) => build(userId),
+  invalidateTrainingContext: vi.fn(),
+}));
 vi.mock("../../services/ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
 vi.mock("../../services/planAdjustmentService", () => ({
   createPlanAdjustmentProposal: vi.fn(),
@@ -85,6 +99,9 @@ function savedRow(role: "user" | "assistant", content: string, minutesAgo: numbe
     ragInfo: null,
     focusPlanDayId: null,
     focusWorkoutLogId: null,
+    feedback: null,
+    feedbackAt: null,
+    factProposal: null,
     ...extra,
   };
 }
@@ -224,6 +241,64 @@ describe("the server-owned chat conversation", () => {
     );
   });
 
+  it("sends an auto-applied proposal as it now stands, so its card can offer Undo", async () => {
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    const pending = {
+      id: "proposal-1",
+      planId: "plan-1",
+      status: "pending",
+      summaryMessage: "Moved your long run to Saturday.",
+      payload: { changes: [{ planDayId: "day-1" }] },
+      createdAt: new Date(),
+      resolvedAt: null,
+      applyUndo: null,
+    } as unknown as PlanAdjustmentProposal;
+    vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({ kind: "proposal", proposal: pending });
+    vi.mocked(applyPlanAdjustmentProposal).mockResolvedValue({ applied: true, changeCount: 1 });
+    vi.mocked(storage.planProposals).getById.mockResolvedValue({
+      ...pending,
+      status: "applied",
+      resolvedAt: new Date(),
+      applyUndo: { days: [{ planDayId: "day-1" }] },
+    } as unknown as PlanAdjustmentProposal);
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    expect(applyPlanAdjustmentProposal).toHaveBeenCalledWith("test_user_id", "proposal-1", expect.anything());
+    expect(response.text).toContain('"status":"applied"');
+    expect(response.text).toContain('"undoable":true');
+  });
+
+  it("still sends the drafted proposal when auto-apply throws, for the athlete to apply", async () => {
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({
+      kind: "proposal",
+      proposal: {
+        id: "proposal-1",
+        planId: "plan-1",
+        status: "pending",
+        summaryMessage: "Moved your long run to Saturday.",
+        payload: { changes: [] },
+        createdAt: new Date(),
+      } as unknown as PlanAdjustmentProposal,
+    });
+    vi.mocked(applyPlanAdjustmentProposal).mockRejectedValue(new Error("db down"));
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    expect(response.text).toContain('"status":"pending"');
+    expect(streamChatWithCoach).not.toHaveBeenCalled();
+    expect(savesOnce().at(-1)).toEqual(expect.objectContaining({ kind: "proposal", proposalId: "proposal-1" }));
+  });
+
   it("gives the coach a summary of the earlier conversation after a break", async () => {
     vi.mocked(storage.users.getChatMessages).mockResolvedValue([
       savedRow("user", "My knee hurts.", 30 * 60),
@@ -241,6 +316,22 @@ describe("the server-owned chat conversation", () => {
       endedAgo: "1 day",
     });
     expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "summary" }));
+  });
+
+  it("gives the coach a note on the start of a long session it no longer reads in full", async () => {
+    // 31 turns a minute apart: past the 30 the coach reads before the note is written.
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue(
+      Array.from({ length: 31 }, (_, i) => savedRow(i % 2 === 0 ? "user" : "assistant", `turn ${i + 1}`, 40 - i)),
+    );
+    vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked about pacing.", model: "fast" });
+    streamReply("Sure.");
+
+    const response = await request(app).post(STREAM).send({ message: "And the sled?", ...IDS });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][1]).toHaveLength(20);
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.earlierInSession).toBe("- The athlete asked about pacing.");
+    expect(vi.mocked(storage.users).saveChatMessage.mock.calls).toContainEqual([expect.objectContaining({ kind: "rolling" })]);
   });
 
   it("saves both turns of a non-streamed reply once it exists", async () => {
@@ -284,5 +375,354 @@ describe("the server-owned chat conversation", () => {
     expect(response.status).toBe(200);
     expect(storage.planProposals.getByIds).toHaveBeenCalledWith(["proposal-1"], "test_user_id");
     expect(response.body[0].proposal).toEqual(expect.objectContaining({ id: "proposal-1", status: "applied", changes: [] }));
+  });
+});
+
+describe("the coach with tools (AI_CHAT_TOOLS)", () => {
+  let app: express.Express;
+
+  const PROPOSAL = {
+    id: "proposal-1",
+    planId: "plan-1",
+    status: "pending",
+    summaryMessage: "Moved your long run to Saturday.",
+    payload: { changes: [] },
+    createdAt: new Date(),
+  } as unknown as PlanAdjustmentProposal;
+
+  function coachSays(...events: CoachStreamEvent[]) {
+    vi.mocked(streamChatWithCoachTools).mockImplementation(async function* () {
+      for (const event of events) yield event;
+    });
+  }
+
+  const handoff = (request: string): CoachStreamEvent => ({
+    type: "handoff",
+    call: { id: "call-1", name: "propose_plan_changes", arguments: { request } },
+  });
+  const toolOptions = () => vi.mocked(streamChatWithCoachTools).mock.calls[0][6];
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+    vi.mocked(buildTrainingContext).mockResolvedValue({ currentDate: "2026-10-01", weightUnit: "kg", distanceUnit: "km" } as never);
+    env.AI_CHAT_TOOLS = "true";
+  });
+
+  afterEach(() => {
+    env.AI_CHAT_TOOLS = "false";
+  });
+
+  it("streams the reply in one model call, without the plan-change classifier", async () => {
+    coachSays({ type: "text", text: "Keep it " }, { type: "text", text: "where it is." });
+
+    const response = await request(app).post(STREAM).send({ message: "Should I move my long run to Saturday?", ...IDS });
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('"text":"Keep it "');
+    expect(generateJsonText).not.toHaveBeenCalled();
+    expect(streamChatWithCoach).not.toHaveBeenCalled();
+    expect(toolOptions().chatTools).toEqual({ planChanges: true });
+    expect(toolOptions().toolset.handoff).toBe("propose_plan_changes");
+    expect(toolOptions().toolset.tools.map((tool) => tool.name)).toContain("propose_plan_changes");
+    expect(savesOnce().at(-1)).toEqual(
+      expect.objectContaining({ id: REPLY_ID, content: "Keep it where it is.", kind: "text", proposalId: null }),
+    );
+  });
+
+  it("runs the read tools for the athlete the request is for", async () => {
+    coachSays({ type: "text", text: "Here are your bests." });
+
+    await request(app).post(STREAM).send({ message: "What are my PRs?", ...IDS });
+    const result = await toolOptions().toolset.run({ id: "call-1", name: "get_personal_records", arguments: {} });
+
+    expect(vi.mocked(storage.analytics).getExerciseSetsForPersonalRecords.mock.calls).toContainEqual([
+      "test_user_id",
+      undefined,
+      undefined,
+      { onlyTraining: true },
+    ]);
+    expect(JSON.parse(result)).toEqual({ records: [] });
+  });
+
+  it("turns the coach's plan-change call into a proposal reply after what it already said", async () => {
+    coachSays({ type: "text", text: "Good call." }, handoff("Move Sunday's long run to Saturday"));
+    vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({ kind: "proposal", proposal: PROPOSAL });
+
+    const response = await request(app).post(STREAM).send({ message: "Yes, do that", ...IDS });
+
+    expect(createPlanAdjustmentProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "test_user_id",
+        message: "Yes, do that\n\nThe coach's summary of the change: Move Sunday's long run to Saturday",
+      }),
+      expect.anything(),
+    );
+    expect(response.text).toContain('"planProposalPending":true');
+    expect(response.text).toContain('"text":"\\n\\nMoved your long run to Saturday."');
+    expect(response.text).toContain('"planProposal"');
+    expect(savesOnce().at(-1)).toEqual(
+      expect.objectContaining({
+        id: REPLY_ID,
+        content: "Good call.\n\nMoved your long run to Saturday.",
+        kind: "proposal",
+        proposalId: "proposal-1",
+      }),
+    );
+  });
+
+  it("still shows a drafted proposal when auto-apply fails", async () => {
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    coachSays(handoff("Move Sunday's long run to Saturday"));
+    vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({ kind: "proposal", proposal: PROPOSAL });
+    vi.mocked(applyPlanAdjustmentProposal).mockRejectedValue(new Error("db down"));
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    expect(response.text).toContain('"status":"pending"');
+    expect(savesOnce().at(-1)).toEqual(expect.objectContaining({ kind: "proposal", proposalId: "proposal-1" }));
+  });
+
+  it("says so when the change can't be drafted, and saves no proposal", async () => {
+    coachSays(handoff("Move Sunday's long run to Saturday"));
+    vi.mocked(createPlanAdjustmentProposal).mockRejectedValue(new Error("model down"));
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    expect(response.text).toContain("I couldn't draft that change just now.");
+    expect(response.text).not.toContain('"planProposal":');
+    expect(savesOnce().at(-1)).toEqual(expect.objectContaining({ kind: "text", proposalId: null }));
+  });
+
+  it("offers no plan changes where the surface can't show a proposal, or after a red-flag symptom", async () => {
+    coachSays({ type: "text", text: "Rest today." });
+
+    await request(app).post(STREAM).send({ message: "Move my long run", planEditing: false, ...IDS });
+    await request(app).post(STREAM).send({ message: "I had chest pain on my run, move it", ...IDS });
+
+    for (const [, , , , , , options] of vi.mocked(streamChatWithCoachTools).mock.calls) {
+      expect(options.chatTools).toEqual({ planChanges: false });
+      expect(options.toolset.handoff).toBeUndefined();
+      expect(options.toolset.tools.map((tool) => tool.name)).not.toContain("propose_plan_changes");
+    }
+    expect(streamChatWithCoachTools).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("rating a coach reply (I23)", () => {
+  let app: express.Express;
+  const RATE = `/api/v1/chat/messages/${REPLY_ID}`;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+  });
+
+  it("saves the athlete's thumbs on their reply, and clears it with null", async () => {
+    const up = await request(app).patch(RATE).send({ feedback: "up" });
+    const cleared = await request(app).patch(RATE).send({ feedback: null });
+
+    expect(up.status).toBe(200);
+    expect(up.body).toEqual({ id: REPLY_ID, feedback: "up" });
+    expect(cleared.body).toEqual({ id: REPLY_ID, feedback: null });
+    expect(vi.mocked(storage.users.setChatMessageFeedback).mock.calls).toEqual([
+      ["test_user_id", REPLY_ID, "up"],
+      ["test_user_id", REPLY_ID, null],
+    ]);
+  });
+
+  it("finds nothing to rate outside the athlete's own coach replies", async () => {
+    vi.mocked(storage.users.setChatMessageFeedback).mockResolvedValue(false);
+
+    const response = await request(app).patch(RATE).send({ feedback: "down" });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("accepts only up, down or null", async () => {
+    const response = await request(app).patch(RATE).send({ feedback: "meh" });
+
+    expect(response.status).toBe(400);
+    expect(storage.users.setChatMessageFeedback).not.toHaveBeenCalled();
+  });
+});
+
+describe("a lasting fact the athlete states in chat (I5b)", () => {
+  let app: express.Express;
+  const KNEE = "My left knee is bad, deep lunges hurt.";
+  const OFFER = { fact: "Bad left knee: deep lunges hurt", category: "constraint", status: "pending" };
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+    vi.mocked(buildTrainingContext).mockResolvedValue({ athleteFacts: [] } as never);
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ fact: OFFER.fact, category: OFFER.category }),
+    } as never);
+  });
+
+  it("is offered for the card as the reply's last event, and saved with the reply", async () => {
+    streamReply("Noted: ", "we'll keep lunges shallow.");
+
+    const response = await request(app).post(STREAM).send({ message: KNEE, ...IDS });
+
+    expect(response.status).toBe(200);
+    const offer = response.text.indexOf(`data: ${JSON.stringify({ factProposal: OFFER })}`);
+    expect(offer).toBeGreaterThan(response.text.indexOf("lunges shallow"));
+    expect(offer).toBeLessThan(response.text.indexOf('"done":true'));
+    expect(savesOnce()).toContainEqual(expect.objectContaining({ id: REPLY_ID, role: "assistant", factProposal: OFFER }));
+  });
+
+  it("is not offered when the card already holds it", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue({
+      athleteFacts: [{ fact: "bad left knee: deep lunges hurt.", category: "constraint", reviewOn: "2026-12-30" }],
+    } as never);
+    streamReply("Noted.");
+
+    const response = await request(app).post(STREAM).send({ message: KNEE, ...IDS });
+
+    expect(response.text).not.toContain("factProposal");
+    expect(savesOnce()).toContainEqual(expect.objectContaining({ role: "assistant", factProposal: null }));
+  });
+
+  it("is never read for after a red-flag symptom", async () => {
+    streamReply("Please stop and get checked.");
+
+    const response = await request(app).post(STREAM).send({ message: "Chest pain and my knee gave out", ...IDS });
+
+    expect(response.text).not.toContain("factProposal");
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+});
+
+describe("answering a fact the coach offered (I5b)", () => {
+  let app: express.Express;
+  const DECIDE = `/api/v1/chat/messages/${REPLY_ID}/fact`;
+  const PENDING = { fact: "No sled at my gym", category: "equipment" as const, status: "pending" as const };
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+    vi.mocked(storage.users.getPendingChatFactProposal).mockResolvedValue(PENDING);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, userTimezone: "UTC" } as never);
+  });
+
+  it("saves it to the card and marks it saved", async () => {
+    const fact = { id: "fact-1", fact: PENDING.fact, category: PENDING.category, source: "chat", active: true };
+    vi.mocked(storage.athleteFacts.add).mockResolvedValue({ ok: true, fact, created: true } as never);
+
+    const response = await request(app).post(DECIDE).send({ decision: "save" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ factProposal: { ...PENDING, status: "saved" }, fact });
+    expect(storage.users.settleChatFactProposal).toHaveBeenCalledWith("test_user_id", REPLY_ID, "saved");
+  });
+
+  it("says the card is full, and leaves the offer waiting", async () => {
+    vi.mocked(storage.athleteFacts.add).mockResolvedValue({ ok: false, reason: "limit" });
+
+    const response = await request(app).post(DECIDE).send({ decision: "save" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({ code: "ATHLETE_FACT_LIMIT" });
+    expect(storage.users.settleChatFactProposal).not.toHaveBeenCalled();
+  });
+
+  it("turns it down, finds nothing on a reply without an offer, and takes only save or dismiss", async () => {
+    const dismissed = await request(app).post(DECIDE).send({ decision: "dismiss" });
+    expect(dismissed.body).toEqual({ factProposal: { ...PENDING, status: "dismissed" } });
+
+    vi.mocked(storage.users.getPendingChatFactProposal).mockResolvedValue(null);
+    expect((await request(app).post(DECIDE).send({ decision: "save" })).status).toBe(404);
+    expect((await request(app).post(DECIDE).send({ decision: "maybe" })).status).toBe(400);
+    expect(storage.athleteFacts.add).not.toHaveBeenCalled();
+  });
+});
+
+describe("the [chat] turn log line (I23)", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+    vi.mocked(buildTrainingContext).mockResolvedValue({ currentDate: "2026-10-01" } as never);
+  });
+
+  afterEach(() => {
+    env.AI_CHAT_TOOLS = "false";
+    vi.restoreAllMocks();
+  });
+
+  /** The fields of the turn's log line. */
+  function turnLog(info: { mock: { calls: unknown[][] } }): Record<string, unknown> {
+    const call = info.mock.calls.find((args) => args[1] === "[chat] turn");
+    if (!call) throw new Error("No [chat] turn log line");
+    return call[0] as Record<string, unknown>;
+  }
+
+  it("reports a classified plan change, its proposal, a regenerate and the timings, without the text", async () => {
+    const info = vi.spyOn(logger, "info");
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({
+      kind: "proposal",
+      proposal: {
+        id: "proposal-1",
+        planId: "plan-1",
+        status: "pending",
+        summaryMessage: "Moved your long run to Saturday.",
+        payload: { changes: [] },
+        createdAt: new Date(),
+      } as unknown as PlanAdjustmentProposal,
+    });
+
+    await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS, replaceAssistantId: FAILED_REPLY_ID });
+
+    const fields = turnLog(info);
+    expect(fields).toMatchObject({
+      userId: "test_user_id",
+      mode: "classic",
+      outcome: "proposal",
+      regenerate: true,
+      planEditGate: "open",
+      planEditIntent: "plan_modification",
+      planEditConfidence: 0.95,
+      proposal: "proposal",
+      proposalId: "proposal-1",
+      replyChars: "Moved your long run to Saturday.".length,
+    });
+    expect(fields.ttftMs).toEqual(expect.any(Number));
+    expect(JSON.stringify(fields)).not.toContain("long run");
+  });
+
+  it("reports a closed gate on a plain question", async () => {
+    const info = vi.spyOn(logger, "info");
+    streamReply("Even splits.");
+
+    await request(app).post(STREAM).send({ message: "How should I pace a 5k?", ...IDS });
+
+    expect(turnLog(info)).toMatchObject({ mode: "classic", outcome: "prose", planEditGate: "closed", regenerate: false });
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("lists the tools a coach with tools called", async () => {
+    env.AI_CHAT_TOOLS = "true";
+    const info = vi.spyOn(logger, "info");
+    vi.mocked(streamChatWithCoachTools).mockImplementation(async function* (...args) {
+      await args[6].toolset.run({ id: "call-1", name: "get_personal_records", arguments: {} });
+      yield { type: "text", text: "Your bests." };
+    });
+
+    await request(app).post(STREAM).send({ message: "What are my PRs?", ...IDS });
+
+    expect(turnLog(info)).toMatchObject({ mode: "tools", outcome: "prose", toolCalls: ["get_personal_records"] });
+    expect(turnLog(info)).not.toHaveProperty("planEditGate");
   });
 });

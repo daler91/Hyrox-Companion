@@ -7,6 +7,7 @@ import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type Coachi
 import { buildTrainingContext } from "./ai";
 import type { ConversationTurn } from "./chatConversation";
 import { retrieveCoachingContext } from "./ragRetrieval";
+import { getCachedTrainingContext } from "./trainingContextCache";
 
 type AIContextLogger = Pick<Logger, "warn" | "error">;
 
@@ -20,6 +21,15 @@ export interface AIContext {
 /** What a turn with nothing to retrieve for carries: no materials, and says so. */
 const NO_RETRIEVAL = { ragInfo: { source: "none", chunkCount: 0 } } as const satisfies Pick<AIContext, "ragInfo">;
 
+export interface BuildAIContextOptions {
+  /**
+   * Reuse the athlete's training context from the last few minutes
+   * (trainingContextCache.ts). The chat does; callers that run straight
+   * after a write must not.
+   */
+  readonly cachedTrainingContext?: boolean;
+}
+
 /**
  * Build shared AI context (training stats + RAG coaching materials)
  * used by both chat and suggestion endpoints. A null query retrieves nothing
@@ -29,9 +39,10 @@ export async function buildAIContext(
   userId: string,
   query: string | null,
   log: AIContextLogger = rootLogger,
+  { cachedTrainingContext = false }: BuildAIContextOptions = {},
 ): Promise<AIContext> {
   const [trainingContext, coachingContext] = await Promise.all([
-    buildTrainingContext(userId),
+    cachedTrainingContext ? getCachedTrainingContext(userId, buildTrainingContext) : buildTrainingContext(userId),
     query === null ? NO_RETRIEVAL : retrieveCoachingContext(userId, query, log),
   ]);
 

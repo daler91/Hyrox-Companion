@@ -8,6 +8,7 @@ import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
 import accountRoutes from "./routes/account";
 import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
+import athleteFactsRoutes from "./routes/athleteFacts";
 import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
@@ -23,6 +24,7 @@ import recycleBinRoutes from "./routes/recycleBin";
 import sessionGradesRoutes from "./routes/sessionGrades";
 import timelineAnnotationsRoutes from "./routes/timelineAnnotations";
 import workoutRoutes from "./routes/workouts/index";
+import { invalidateTrainingContextOnWrite } from "./services/trainingContextCache";
 import { registerStravaRoutes } from "./strava";
 import { registerStravaWebhookRoutes } from "./stravaWebhook";
 
@@ -54,6 +56,9 @@ export async function registerRoutes(
   // middleware's built-in ignoredMethods list.
   app.use("/api/v1", csrfProtection);
 
+  // A successful write drops the athlete's cached coach-chat training context.
+  app.use("/api/v1", invalidateTrainingContextOnWrite);
+
   registerStravaRoutes(app);
   registerGarminRoutes(app);
 
@@ -72,6 +77,7 @@ export async function registerRoutes(
   app.use(consentRoutes);
   app.use(pushRoutes);
   app.use(timelineAnnotationsRoutes);
+  app.use(athleteFactsRoutes);
   app.use(recycleBinRoutes);
   app.use(nutritionRoutes);
 

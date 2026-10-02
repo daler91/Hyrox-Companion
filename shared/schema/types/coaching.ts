@@ -28,3 +28,20 @@ export type CoachingMaterial = typeof coachingMaterials.$inferSelect;
 export type DocumentChunk = typeof documentChunks.$inferSelect;
 export type InsertDocumentChunk = typeof documentChunks.$inferInsert;
 
+
+/**
+ * A prompt chip under the coach chat. `message` is what sending it says; the
+ * label alone when absent. The `suggestions` id runs the workout-suggestions
+ * flow instead of sending a message.
+ */
+export interface CoachQuickAction {
+  id: string;
+  label: string;
+  message?: string;
+}
+
+/** `GET /api/v1/chat/welcome`: the coach's opening line and prompt chips, built from the athlete's training. */
+export interface CoachWelcome {
+  greeting: string;
+  quickActions: CoachQuickAction[];
+}

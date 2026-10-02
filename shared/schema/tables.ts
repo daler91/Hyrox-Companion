@@ -19,6 +19,11 @@ import {
 
 import type { DeviceActivitySnapshot } from "./deviceActivity";
 import {
+  type AthleteFactCategory,
+  athleteFactCategoryEnum,
+  type AthleteFactSource,
+  athleteFactSourceEnum,
+  chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
   MEAL_TYPES,
@@ -31,11 +36,13 @@ import {
 } from "./enums";
 import type { SessionStreamSamples } from "./sessionStream";
 import type {
+  ChatFactProposal,
   ChatSafetyNotice,
   CoachNoteInputs,
   PlanAdjustmentProposalPayload,
   PlanDayRecoveryUndo,
   PlanEngineState,
+  PlanProposalApplyUndo,
   RagInfo,
   RecycleBinPayload,
 } from "./types";
@@ -1198,6 +1205,55 @@ export const timelineAnnotations = pgTable(
 );
 
 /**
+ * The athlete card (coach-memory spec, Path C): short statements that are
+ * true every week ("bad left knee", "no sled at my gym", "night shifts on
+ * Tuesdays"), told once and read by every coach prompt and the plan
+ * generator.
+ *
+ * Every row has a review date (spec §2). A fact past it still reaches the
+ * coach, flagged as unconfirmed, and Settings asks whether it is still true:
+ * the card corrects itself instead of letting a healed knee cap the plan
+ * forever.
+ *
+ * `dedupe_key` is derived on the server (athleteFactKey), never taken from a
+ * request, so the same sentence stated twice (in the wizard, in chat, in
+ * Settings) re-confirms one row instead of adding a second. The text is
+ * bounded twice, as house style: by zod and by the CHECK.
+ */
+export const athleteFacts = pgTable(
+  "athlete_facts",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fact: text("fact").notNull(),
+    dedupeKey: varchar("dedupe_key", { length: 160 }).notNull(),
+    /** See athleteFactCategoryEnum. */
+    category: varchar("category", { length: 24 }).$type<AthleteFactCategory>().notNull(),
+    /** See athleteFactSourceEnum. */
+    source: varchar("source", { length: 24 }).$type<AthleteFactSource>().notNull().default("athlete"),
+    /** False once the athlete retires it: kept, so stating it again brings it back rather than duplicating it. */
+    active: boolean("active").notNull().default(true),
+    /** When to ask whether it is still true. The server sets it from the athlete's own today. */
+    reviewOn: date("review_on")
+      .notNull()
+      .default(sql`(CURRENT_DATE + 90)`),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("athlete_facts_fact_length_check", sql`char_length(fact) BETWEEN 1 AND 140`),
+    check("athlete_facts_category_check", sql`category IN (${inValues(athleteFactCategoryEnum)})`),
+    check("athlete_facts_source_check", sql`source IN (${inValues(athleteFactSourceEnum)})`),
+    uniqueIndex("uq_athlete_facts_user_dedupe").on(table.userId, table.dedupeKey),
+    index("idx_athlete_facts_user_active").on(table.userId, table.active),
+  ],
+);
+
+/**
  * The athlete's intent for a week — one line they write on the weekly review
  * and see again at the top of the next one.
  *
@@ -1342,11 +1398,16 @@ export const planAdjustmentProposals = pgTable(
     aiSource: text("ai_source"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    // What the apply wrote, day by day, so the athlete can undo it. NULL until
+    // applied, and on proposals applied before undo existed (those can't be undone).
+    applyUndo: jsonb("apply_undo").$type<PlanProposalApplyUndo>(),
+    // When the athlete undid the apply (status `reverted`); resolvedAt stays the apply time.
+    revertedAt: timestamp("reverted_at", { withTimezone: true }),
   },
   (table) => [
     check(
       "plan_adjustment_proposals_status_check",
-      sql`status IN ('pending','applied','dismissed','superseded','invalidated')`,
+      sql`status IN ('pending','applied','dismissed','superseded','invalidated','reverted')`,
     ),
     index("idx_plan_proposals_user_status").on(table.userId, table.status),
   ],
@@ -1378,6 +1439,11 @@ export const chatMessages = pgTable(
     /** The workout the athlete was chatting from, when it was the workout-detail chat. */
     focusPlanDayId: varchar("focus_plan_day_id", { length: 255 }),
     focusWorkoutLogId: varchar("focus_workout_log_id", { length: 255 }),
+    /** The athlete's thumbs on a coach reply (chatFeedbackEnum), and when they gave it. */
+    feedback: varchar("feedback", { length: 10 }),
+    feedbackAt: timestamp("feedback_at"),
+    /** A lasting fact the coach offered to put on the athlete card, and the athlete's answer (I5b). */
+    factProposal: jsonb("fact_proposal").$type<ChatFactProposal>(),
   },
   (table) => [
     // idx_chat_messages_user_id (single-column, on user_id) was dropped:
@@ -1388,6 +1454,7 @@ export const chatMessages = pgTable(
     // high-write-volume table.
     index("idx_chat_messages_user_time").on(table.userId, table.timestamp),
     check("chat_messages_kind_check", sql`kind IN (${inValues(chatMessageKindEnum)})`),
+    check("chat_messages_feedback_check", sql`feedback IS NULL OR feedback IN (${inValues(chatFeedbackEnum)})`),
   ],
 );
 

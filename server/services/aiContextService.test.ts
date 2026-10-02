@@ -7,9 +7,11 @@ import { buildCoachingMaterialsSection, buildRetrievedChunksSection } from "../p
 import { buildTrainingContext } from "./ai";
 import { type AIContext, buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { retrieveCoachingContext } from "./ragRetrieval";
+import { getCachedTrainingContext } from "./trainingContextCache";
 
 vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
 vi.mock("./ragRetrieval", () => ({ retrieveCoachingContext: vi.fn() }));
+vi.mock("./trainingContextCache", () => ({ getCachedTrainingContext: vi.fn() }));
 vi.mock("../prompts", () => ({
   buildRetrievedChunksSection: vi.fn(),
   buildCoachingMaterialsSection: vi.fn(),
@@ -76,6 +78,22 @@ describe("buildAIContext", () => {
     const customLog = { warn: vi.fn(), error: vi.fn() };
     await buildAIContext("user-1", "my query", customLog);
     expect(retrieveMock).toHaveBeenCalledWith("user-1", "my query", customLog);
+  });
+
+  it("reads the training context through the cache only when asked to", async () => {
+    vi.mocked(getCachedTrainingContext).mockResolvedValue(TRAINING_CONTEXT);
+    retrieveMock.mockResolvedValue({ ragInfo: RAG_INFO });
+
+    const cached = await buildAIContext("user-1", "q", logger, { cachedTrainingContext: true });
+
+    expect(cached.trainingContext).toBe(TRAINING_CONTEXT);
+    expect(getCachedTrainingContext).toHaveBeenCalledWith("user-1", trainingMock);
+    expect(trainingMock).not.toHaveBeenCalled();
+
+    trainingMock.mockResolvedValue(TRAINING_CONTEXT);
+    await buildAIContext("user-1", "q");
+    expect(getCachedTrainingContext).toHaveBeenCalledTimes(1);
+    expect(trainingMock).toHaveBeenCalledWith("user-1");
   });
 
   it("rejects when the training-context build fails", async () => {

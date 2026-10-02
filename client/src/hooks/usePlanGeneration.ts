@@ -57,6 +57,13 @@ export function useGeneratePlan(): UseGeneratePlanResult {
     mutationFn: (input: GeneratePlanInput) => api.plans.generate(input),
     onSuccess: (stub) => {
       setPendingPlanId(stub.id);
+      // The route has put the injuries box on the athlete card and may have
+      // dropped the older note the box was prefilled with, so the next wizard
+      // and Settings show the card as it is now.
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.athleteFacts }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }),
+      ]);
     },
     onError: (error: Error) => {
       if (error instanceof AiBudgetExceededError) {

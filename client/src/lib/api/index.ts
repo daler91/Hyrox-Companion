@@ -5,6 +5,7 @@ export type {
   Suggestion,
 } from "./analytics";
 export { analytics, timeline } from "./analytics";
+export { athleteFacts } from "./athleteFacts";
 export type { ChatFocus, ChatHistoryMessage, ChatTurnIds, RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
@@ -25,7 +26,7 @@ export type {
 } from "./mafTests";
 export { mafTests } from "./mafTests";
 export { nutrition } from "./nutrition";
-export type { ApplyPlanProposalResponse, PlanProposalView } from "./planProposals";
+export type { ApplyPlanProposalResponse, PlanProposalView, UndoPlanProposalResponse } from "./planProposals";
 export { planProposals } from "./planProposals";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
@@ -57,6 +58,7 @@ export { workouts } from "./workouts";
 // Re-assembled api object (preserves existing import shape)
 // ---------------------------------------------------------------------------
 import { analytics, timeline } from "./analytics";
+import { athleteFacts } from "./athleteFacts";
 import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { mafTests } from "./mafTests";
@@ -77,6 +79,7 @@ export const api = {
   exercises,
   timeline,
   timelineAnnotations,
+  athleteFacts,
   analytics,
   strava,
   garmin,
@@ -97,6 +100,7 @@ export const QUERY_KEYS = {
   plan: (id: string) => ["/api/v1/plans", id] as const,
   timeline: ["/api/v1/timeline"] as const,
   timelineAnnotations: ["/api/v1/timeline-annotations"] as const,
+  athleteFacts: ["/api/v1/athlete-facts"] as const,
   recycleBin: ["/api/v1/recycle-bin"] as const,
   workouts: ["/api/v1/workouts"] as const,
   workout: (id: string) => ["/api/v1/workouts", id] as const,
@@ -122,6 +126,11 @@ export const QUERY_KEYS = {
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,
+  // A workout's own conversation (I4). Under chatHistory, so invalidating
+  // that key refreshes every thread.
+  chatThreadHistory: (planDayId: string | undefined, workoutLogId: string | undefined) =>
+    ["/api/v1/chat/history", { planDayId: planDayId ?? null, workoutLogId: workoutLogId ?? null }] as const,
+  chatWelcome: ["/api/v1/chat/welcome"] as const,
   planProposalPending: ["/api/v1/plan-proposals/pending"] as const,
   // One proposal's live status, for its card in the chat. The prefix matches
   // every proposal's key and not planProposalPending (its first element differs).

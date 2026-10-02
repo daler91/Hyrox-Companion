@@ -1,4 +1,4 @@
-import type { ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
+import type { ChatFactProposal, ChatFeedback, ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
 
 import type { PlanProposalView } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
@@ -34,6 +34,8 @@ export interface Message {
   safetyNotice?: ChatSafetyNotice;
   /** The plan proposal this reply carried; its card shows the proposal's current status. */
   proposal?: PlanProposalView;
+  /** A lasting fact the coach offered to put on the athlete card, and the athlete's answer (I5b). */
+  factProposal?: ChatFactProposal;
   /**
    * What the saved row is. `summary` is the note the coach carried into a new
    * session after a break: shown as a divider, not as something the coach said.
@@ -42,6 +44,13 @@ export interface Message {
   /** When it was sent, for the date separators (the welcome message has none). */
   sentAtMs?: number;
   failure?: MessageFailure;
+  /**
+   * A coach reply the server saved under this id, so the athlete can rate it:
+   * one loaded from the history, or one that finished arriving here (I23).
+   */
+  rateable?: boolean;
+  /** The athlete's thumbs on the reply, when they gave one. */
+  feedback?: ChatFeedback | null;
   /**
    * Epoch ms the Coach panel sorts by when it merges the chat hook's messages
    * with its own local ones (suggestion replies, plan-proposal confirmations).

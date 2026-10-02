@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
@@ -143,6 +143,29 @@ describe('useChatSession', () => {
     expect(result.current.messages[0].role).toBe('assistant');
   });
 
+  it("loads a workout's own thread in the workout chat, and the general one elsewhere", () => {
+    vi.mocked(useQuery).mockClear();
+    renderHook(() => useChatSession({ focusPlanDayId: 'day-1', focusWorkoutLogId: 'log-1' }), { wrapper });
+    renderHook(() => useChatSession(), { wrapper });
+
+    const keys = vi.mocked(useQuery).mock.calls.map(([options]) => options.queryKey);
+    expect(keys).toContainEqual(['/api/v1/chat/history', { planDayId: 'day-1', workoutLogId: 'log-1' }]);
+    expect(keys).toContainEqual(['/api/v1/chat/history']);
+  });
+
+  it('swaps in a welcome that arrives after mount', () => {
+    const { result, rerender } = renderHook(
+      ({ welcome }: { welcome?: string }) => useChatSession({ welcomeMessage: welcome }),
+      { wrapper, initialProps: {} },
+    );
+    expect(result.current.messages[0].id).toBe('welcome');
+
+    rerender({ welcome: 'Hi Sam! Today: Intervals.' });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]).toMatchObject({ id: 'welcome', content: 'Hi Sam! Today: Intervals.' });
+  });
+
   it('should handle successful non-streaming chat', async () => {
     const mockResponse = { response: 'Hello from assistant' };
     vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
@@ -207,6 +230,20 @@ describe('useChatSession', () => {
     expect(result.current.messages[2].role).toBe('assistant');
     expect(result.current.messages[2].content).toBe('Streaming response');
     expect(result.current.isLoading).toBe(false);
+  });
+
+  it('lets the athlete rate a reply once it has arrived in full, but not one that failed', async () => {
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Run easy.' }, { done: true }))));
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Today?');
+    });
+    expect(result.current.messages[2]).toMatchObject({ content: 'Run easy.', rateable: true });
+    expect(result.current.messages[1].rateable).toBeUndefined();
+
+    const failed = await sendAfterApiFailure('Again?', new Error('500: Internal Server Error'));
+    expect(failed.current.messages[2].rateable).toBeUndefined();
   });
 
   it('should handle clear history', async () => {

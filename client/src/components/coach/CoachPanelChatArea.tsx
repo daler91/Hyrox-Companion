@@ -1,11 +1,13 @@
+import type { ChatFeedback } from "@shared/schema";
 import { forwardRef, Fragment, type UIEventHandler, useMemo } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatDaySeparator, SessionSummaryNote } from "@/components/coach/ChatTranscriptMarkers";
+import { FactProposalCard } from "@/components/coach/FactProposalCard";
 import { InlinePlanProposal } from "@/components/coach/InlinePlanProposal";
-import { PlanProposalCard } from "@/components/coach/PlanProposalCard";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { FactProposalDecision } from "@/hooks/chat/useFactProposalDecision";
 import type { Message } from "@/hooks/useChatSession";
 import type { PlanProposalView, RagInfo, Suggestion } from "@/lib/api";
 import { buildTranscript } from "@/lib/chatTranscript";
@@ -25,16 +27,23 @@ interface CoachPanelChatAreaProps {
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
   /**
-   * Pending conversational plan-adjustment proposal, when one exists. Its
-   * card sits at the turn that carried it; it trails the chat only when that
-   * turn isn't in view (an older page, or a reply saved before it carried one).
+   * The pending conversational plan-adjustment proposal, or the one this
+   * surface just applied (usePlanProposal). Its card sits at the turn that
+   * carried it; it trails the chat only when that turn isn't in view (an
+   * older page, or a reply saved before it carried one).
    */
   readonly planProposal?: PlanProposalView | null;
   readonly isApplyingProposal?: boolean;
-  readonly onApplyProposal?: (proposal: PlanProposalView) => void;
+  readonly onApplyProposal?: (proposal: PlanProposalView, planDayIds?: readonly string[]) => void;
   readonly onDismissProposal?: (id: string) => void;
+  readonly onUndoProposal?: (proposal: PlanProposalView) => void;
+  readonly undoingProposalId?: string | null;
   /** Send a failed message again (see useChatSession.retryMessage). */
   readonly onRetryMessage?: (messageId: string) => void;
+  /** Rate a saved coach reply (see useChatSession.rateMessage). */
+  readonly onRateMessage?: (messageId: string, feedback: ChatFeedback | null) => void;
+  /** Answer a fact the coach offered for the athlete card (see useChatSession.decideFactProposal). */
+  readonly onDecideFactProposal?: (messageId: string, decision: FactProposalDecision) => void;
 }
 
 export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaProps>(
@@ -55,7 +64,11 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       isApplyingProposal = false,
       onApplyProposal,
       onDismissProposal,
+      onUndoProposal,
+      undoingProposalId = null,
       onRetryMessage,
+      onRateMessage,
+      onDecideFactProposal,
     },
     ref
   ) => {
@@ -100,13 +113,25 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                       ? () => onRetryMessage(message.id)
                       : undefined
                   }
+                  messageId={message.id}
+                  feedback={message.feedback}
+                  onFeedback={message.rateable ? onRateMessage : undefined}
                 />
+                {message.factProposal && !message.failure && onDecideFactProposal && (
+                  <FactProposalCard
+                    messageId={message.id}
+                    proposal={message.factProposal}
+                    onDecide={onDecideFactProposal}
+                  />
+                )}
                 {message.proposal && (
                   <InlinePlanProposal
                     snapshot={message.proposal}
                     isApplying={isApplyingProposal}
                     onApply={onApplyProposal}
                     onDismiss={onDismissProposal}
+                    onUndo={onUndoProposal}
+                    undoingId={undoingProposalId}
                   />
                 )}
               </Fragment>
@@ -120,11 +145,13 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
             onDismiss={onDismissSuggestion}
           />
           {planProposal && !pendingCardInChat && onApplyProposal && onDismissProposal && (
-            <PlanProposalCard
-              proposal={planProposal}
+            <InlinePlanProposal
+              snapshot={planProposal}
               isApplying={isApplyingProposal}
               onApply={onApplyProposal}
               onDismiss={onDismissProposal}
+              onUndo={onUndoProposal}
+              undoingId={undoingProposalId}
             />
           )}
           {isProcessing && (

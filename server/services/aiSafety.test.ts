@@ -118,6 +118,20 @@ describe("aiSafety", () => {
     );
     expect(dated.redFlagDetected).toBe(true);
   });
+
+  it("reads the athlete card the same way: the medication scan, never the red-flag scan", () => {
+    const fact = (text: string) => ({ fact: text, category: "constraint" as const, reviewOn: "2026-12-30" });
+    const workouts = [{ id: "w1", date: "2026-05-02", focus: "run", mainWorkout: "easy", notes: "" }];
+
+    const medicated = analyzeSafetySignals({ ...baseTrainingContext, athleteFacts: [fact("On beta blockers")] }, workouts);
+    expect(medicated.hrMedicationDetected).toBe(true);
+
+    const history = analyzeSafetySignals(
+      { ...baseTrainingContext, athleteFacts: [fact("Had chest pain in 2024, cleared by my cardiologist")] },
+      workouts,
+    );
+    expect(history.redFlagDetected).toBe(false);
+  });
 });
 
 describe("analyzeChatSafety", () => {

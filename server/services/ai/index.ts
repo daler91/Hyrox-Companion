@@ -1,3 +1,4 @@
+import { standingConstraintsText } from "@shared/athleteFacts";
 import { hasBodySystemLoadData } from "@shared/bodySystemLoad";
 import { addDaysToISODate as addDays, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
@@ -484,6 +485,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     loadExerciseSets,
     loadTags,
     annotations,
+    activeFacts,
   ] = await Promise.all([
     // Bound to recent history: this internal caller has no caller-supplied
     // limit, so an unbounded getTimeline() would hydrate the user's entire
@@ -499,8 +501,14 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     // the windowing is done in selectAbsencesForContext rather than paying for
     // a range predicate. Same reasoning as TimelineStorage.fetchAbsences.
     storage.timelineAnnotations.list(userId),
+    // The athlete card: at most 20 active rows, read alongside the rest.
+    storage.athleteFacts.listActive(userId),
   ]);
 
+  // The note and the card as one text, for the checks that can't read prose
+  // as the model does: a station the athlete can't train is never a "gap",
+  // and the exercise selection avoids what they ruled out (spec §5.1).
+  const standingConstraints = standingConstraintsText(trainingConstraints, activeFacts);
   const absences = selectAbsencesForContext(annotations, today);
   const activeMedicalAbsence = hasActiveMedicalAbsence(absences);
 
@@ -531,7 +539,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
-  const stationGaps = computeExerciseGaps(timeline, today, trainingConstraints);
+  const stationGaps = computeExerciseGaps(timeline, today, standingConstraints);
   const weeklyGoal = user?.weeklyGoal ?? 0;
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)
@@ -637,7 +645,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const exerciseSelectionField = coachExerciseSelectionField({
     plan: activePlanRecord,
     experienceLevel,
-    constraints: trainingConstraints,
+    constraints: standingConstraints,
     today,
     user,
     sets: trainingSets,
@@ -740,6 +748,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     // renderer already self-suppresses on empty, so a conditional spread here
     // would buy nothing but branches.
     trainingConstraints,
+    athleteFacts: activeFacts.map(({ fact, category, reviewOn }) => ({ fact, category, reviewOn })),
     absences,
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),

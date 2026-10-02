@@ -9,8 +9,8 @@ import { resetIntegrationDb, seedUser } from "./integrationDb";
 /**
  * The server-owned chat conversation against the REAL schema: a message saved
  * once under its client id, a failed reply deleted for its owner only, a
- * reply's metadata columns, the kind CHECK, and the proposal link that
- * unlinks rather than deletes. The route and service tests mock all of this.
+ * reply's metadata columns, the kind and feedback CHECKs, the athlete's
+ * rating, and the proposal link that unlinks rather than deletes. The route and service tests mock all of this.
  */
 describe("chat messages and their proposals (real Postgres)", () => {
   const ALICE = "chat-alice";
@@ -87,6 +87,58 @@ describe("chat messages and their proposals (real Postgres)", () => {
     await expect(
       storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "x", kind: "bogus" }),
     ).rejects.toThrow();
+    // A long session's rolling note (migration 0113).
+    await expect(
+      storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "- note", kind: "rolling" }),
+    ).resolves.toMatchObject({ kind: "rolling" });
+  });
+
+  it("rates only the athlete's own visible coach replies, and refuses a rating it doesn't know", async () => {
+    const reply = await storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "Easy today." });
+    const question = await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "Today?" });
+    const summary = await storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "- notes", kind: "summary" });
+
+    expect(await storage.users.setChatMessageFeedback(BOB, reply.id, "down")).toBe(false);
+    expect(await storage.users.setChatMessageFeedback(ALICE, question.id, "up")).toBe(false);
+    expect(await storage.users.setChatMessageFeedback(ALICE, summary.id, "up")).toBe(false);
+    expect(await storage.users.setChatMessageFeedback(ALICE, reply.id, "up")).toBe(true);
+
+    const rated = (await storage.users.getChatMessages(ALICE)).find((row) => row.id === reply.id);
+    expect(rated?.feedback).toBe("up");
+    expect(rated?.feedbackAt).toBeInstanceOf(Date);
+
+    expect(await storage.users.setChatMessageFeedback(ALICE, reply.id, null)).toBe(true);
+    const cleared = (await storage.users.getChatMessages(ALICE)).find((row) => row.id === reply.id);
+    expect(cleared).toMatchObject({ feedback: null, feedbackAt: null });
+
+    await expect(
+      storage.users.saveChatMessage({ userId: ALICE, role: "assistant", content: "x", feedback: "meh" }),
+    ).rejects.toThrow();
+  });
+
+  it("keeps each workout's conversation in its own thread", async () => {
+    const at = (minute: number) => new Date(`2026-10-01T10:${String(minute).padStart(2, "0")}:00Z`);
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "general", timestamp: at(0) });
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "planned day", timestamp: at(1), focusPlanDayId: "day-1" });
+    await storage.users.saveChatMessage({
+      userId: ALICE,
+      role: "user",
+      content: "same day, logged",
+      timestamp: at(2),
+      focusPlanDayId: "day-1",
+      focusWorkoutLogId: "log-1",
+    });
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "ad-hoc log", timestamp: at(3), focusWorkoutLogId: "log-2" });
+
+    const contents = async (thread?: { planDayId?: string; workoutLogId?: string }) =>
+      (await storage.users.getChatMessages(ALICE, { thread })).map((row) => row.content);
+
+    expect(await contents({})).toEqual(["general"]);
+    expect(await contents({ planDayId: "day-1" })).toEqual(["planned day", "same day, logged"]);
+    // Once logged, the day's thread is found by either id.
+    expect(await contents({ planDayId: "day-1", workoutLogId: "log-1" })).toEqual(["planned day", "same day, logged"]);
+    expect(await contents({ workoutLogId: "log-2" })).toEqual(["ad-hoc log"]);
+    expect(await contents()).toHaveLength(4);
   });
 
   it("reads proposals by id for their owner only, and unlinks a deleted proposal from its reply", async () => {
@@ -116,5 +168,27 @@ describe("chat messages and their proposals (real Postgres)", () => {
     await db.delete(planAdjustmentProposals).where(eq(planAdjustmentProposals.id, proposal.id));
     const [reply] = await storage.users.getChatMessages(ALICE);
     expect(reply).toMatchObject({ kind: "proposal", proposalId: null, content: "Moved your long run to Saturday." });
+  });
+
+  it("keeps a fact the coach offered, and moves it once, for the athlete who owns the reply (I5b)", async () => {
+    const offer = { fact: "No sled at my gym", category: "equipment" as const, status: "pending" as const };
+    await storage.users.saveChatMessageOnce({
+      id: MESSAGE_ID,
+      userId: ALICE,
+      role: "assistant",
+      content: "Noted.",
+      factProposal: offer,
+    });
+
+    expect(await storage.users.getPendingChatFactProposal(BOB, MESSAGE_ID)).toBeNull();
+    expect(await storage.users.settleChatFactProposal(BOB, MESSAGE_ID, "saved")).toBe(false);
+    expect(await storage.users.getPendingChatFactProposal(ALICE, MESSAGE_ID)).toEqual(offer);
+
+    expect(await storage.users.settleChatFactProposal(ALICE, MESSAGE_ID, "saved")).toBe(true);
+    // Answered once: a second answer finds nothing waiting.
+    expect(await storage.users.settleChatFactProposal(ALICE, MESSAGE_ID, "dismissed")).toBe(false);
+    expect(await storage.users.getPendingChatFactProposal(ALICE, MESSAGE_ID)).toBeNull();
+    const [reply] = await storage.users.getChatMessages(ALICE);
+    expect(reply?.factProposal).toEqual({ ...offer, status: "saved" });
   });
 });

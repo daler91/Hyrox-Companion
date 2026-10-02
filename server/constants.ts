@@ -10,6 +10,13 @@ export const RATE_LIMIT_WINDOW_15M_MS = 15 * 60 * 1000;
 /** Analytics cache time-to-live (5 minutes) */
 export const ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * How long the coach chat reuses an athlete's training context (5 minutes).
+ * Writes drop it sooner (server/services/trainingContextCache.ts); this is the
+ * backstop for a write on another instance.
+ */
+export const TRAINING_CONTEXT_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /** Maximum age for Strava OAuth state tokens (10 minutes) */
 export const STRAVA_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 

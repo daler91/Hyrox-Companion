@@ -51,6 +51,11 @@ const envSchema = z
     // Coach chat replies only. Unset: the lower of AI_TEXT_REASONING_EFFORT
     // and "medium" (resolveChatReasoningEffort, server/ai/providers/config.ts).
     AI_CHAT_REASONING_EFFORT: z.enum(["none", "low", "medium", "high"]).optional(),
+    // Function calling for the coach chat (AI coach chat review, I8): the
+    // reasoning model reads the athlete's history through tools and proposes
+    // plan changes itself, instead of the keyword gate and classifier. Off
+    // until it has been evaluated against a live model.
+    AI_CHAT_TOOLS: z.enum(["true", "false"]).default("false"),
     AI_TEXT_BASE_URL: z
       .url()
       .refine(

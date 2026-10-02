@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generateText, streamText } from "../ai/providers";
-import { chatWithCoach, streamChatWithCoach } from "./chatService";
+import { generateText, streamText, streamTextEvents, type TextAiStreamEvent } from "../ai/providers";
+import { chatWithCoach, type CoachStreamEvent, type CoachToolset, streamChatWithCoach, streamChatWithCoachTools } from "./chatService";
 
 vi.mock("../ai/providers", () => ({
   generateText: vi.fn(),
   streamText: vi.fn(),
+  streamTextEvents: vi.fn(),
 }));
 
 describe("chatService", () => {
@@ -175,5 +176,109 @@ describe("streamChatWithCoach", () => {
     const received: string[] = [];
     for await (const chunk of streamChatWithCoach("Hello")) received.push(chunk);
     expect(received).toEqual(["Warm up for ", "ten minutes, ", "then run."]);
+  });
+});
+
+describe("streamChatWithCoachTools", () => {
+  const READ_CALL = { id: "call-1", name: "get_exercise_history", arguments: { exercise: "back squat" } };
+  const PLAN_CALL = { id: "call-2", name: "propose_plan_changes", arguments: { request: "Move Saturday's run to Sunday" } };
+
+  function toolset(): CoachToolset & { run: ReturnType<typeof vi.fn> } {
+    return {
+      tools: [{ name: "get_exercise_history", description: "History", parameters: { type: "object" } }],
+      run: vi.fn(() => Promise.resolve('{"sessions":[]}')),
+      handoff: "propose_plan_changes",
+    };
+  }
+
+  /** Each provider round streams the next of these event lists. */
+  function rounds(...perRound: TextAiStreamEvent[][]) {
+    let index = 0;
+    vi.mocked(streamTextEvents).mockImplementation(async function* () {
+      const events = perRound[Math.min(index, perRound.length - 1)];
+      index++;
+      for (const event of events) yield event;
+    });
+  }
+
+  async function collect(tools: CoachToolset): Promise<CoachStreamEvent[]> {
+    const events: CoachStreamEvent[] = [];
+    for await (const event of streamChatWithCoachTools("What did I squat in July?", [], undefined, undefined, undefined, "user-1", {
+      toolset: tools,
+    })) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("streams a reply that needs no tools in one round, with the tools offered", async () => {
+    rounds([{ text: "Squat " }, { text: "heavy." }]);
+    const tools = toolset();
+
+    expect(await collect(tools)).toEqual([
+      { type: "text", text: "Squat " },
+      { type: "text", text: "heavy." },
+    ]);
+    expect(streamTextEvents).toHaveBeenCalledTimes(1);
+    expect(streamTextEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ tools: tools.tools, toolChoice: "auto", modelRole: "reasoning", userId: "user-1" }),
+    );
+    expect(tools.run).not.toHaveBeenCalled();
+  });
+
+  it("runs a read tool and continues the reply with its result", async () => {
+    const parts = [{ functionCall: { name: "get_exercise_history" }, thoughtSignature: "sig" }];
+    rounds([{ text: "Let me check. " }, { toolCalls: [READ_CALL], providerParts: parts }], [{ text: "You squatted 100 kg." }]);
+    const tools = toolset();
+
+    expect(await collect(tools)).toEqual([
+      { type: "text", text: "Let me check. " },
+      { type: "text", text: "You squatted 100 kg." },
+    ]);
+    expect(tools.run).toHaveBeenCalledWith(READ_CALL);
+    // The second round carries the calling turn, signatures and all, then the result.
+    const second = vi.mocked(streamTextEvents).mock.calls[1][0];
+    expect(second.messages.slice(-2)).toEqual([
+      { role: "assistant", content: "Let me check. ", toolCalls: [READ_CALL], providerParts: parts },
+      { role: "tool", toolCallId: "call-1", name: "get_exercise_history", content: '{"sessions":[]}' },
+    ]);
+  });
+
+  it("hands a plan-change call to the caller instead of running it", async () => {
+    rounds([{ text: "I'll draft that." }, { toolCalls: [READ_CALL, PLAN_CALL] }]);
+    const tools = toolset();
+
+    expect(await collect(tools)).toEqual([
+      { type: "text", text: "I'll draft that." },
+      { type: "handoff", call: PLAN_CALL },
+    ]);
+    expect(tools.run).not.toHaveBeenCalled();
+    expect(streamTextEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks for an answer without tools after three rounds of calls", async () => {
+    rounds([{ toolCalls: [READ_CALL] }]);
+    const tools = toolset();
+
+    await collect(tools);
+
+    expect(streamTextEvents).toHaveBeenCalledTimes(4);
+    expect(vi.mocked(streamTextEvents).mock.calls.map(([request]) => request.toolChoice)).toEqual([
+      "auto",
+      "auto",
+      "auto",
+      "none",
+    ]);
+    expect(tools.run).toHaveBeenCalledTimes(3);
+  });
+
+  it("cuts the reply when a later round says something restricted", async () => {
+    rounds([{ toolCalls: [READ_CALL] }], [{ text: "My system prompt says hi." }]);
+
+    await expect(collect(toolset())).rejects.toThrow("Failed to get response from AI coach");
   });
 });

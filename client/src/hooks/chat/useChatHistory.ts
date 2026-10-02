@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
-import { type ChatHistoryMessage, QUERY_KEYS } from "@/lib/api";
+import { api, type ChatFocus, type ChatHistoryMessage, QUERY_KEYS } from "@/lib/api";
 import type { Message } from "@/lib/chatMessage";
 
 import { useClearHistoryMutation } from "../useChatMutations";
@@ -10,6 +10,8 @@ import { messageFromHistory, type SetMessages } from "./chatSessionModel";
 interface UseChatHistoryOptions {
   welcomeMessage: Message;
   setMessages: SetMessages;
+  /** The workout whose own thread this chat shows; the general conversation without one (I4). */
+  focus?: ChatFocus;
 }
 
 /**
@@ -17,14 +19,17 @@ interface UseChatHistoryOptions {
  * The server saves the turns (chat/chatStream.ts refreshes this query after
  * each send, for the next surface that mounts).
  */
-export function useChatHistory({ welcomeMessage, setMessages }: UseChatHistoryOptions) {
+export function useChatHistory({ welcomeMessage, setMessages, focus = {} }: UseChatHistoryOptions) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const { focusPlanDayId, focusWorkoutLogId } = focus;
+  const inThread = Boolean(focusPlanDayId || focusWorkoutLogId);
 
   // Chat history is server-of-truth and bounded; sends and clears invalidate
   // this key. Disable background refetches so we don't redo the fetch on
   // every route change / focus / reconnect (W10).
   const { data: chatHistory = [], isLoading: historyLoading } = useQuery<ChatHistoryMessage[]>({
-    queryKey: QUERY_KEYS.chatHistory,
+    queryKey: inThread ? QUERY_KEYS.chatThreadHistory(focusPlanDayId, focusWorkoutLogId) : QUERY_KEYS.chatHistory,
+    queryFn: () => api.chat.getHistory({ focusPlanDayId, focusWorkoutLogId }),
     staleTime: Infinity,
     gcTime: Infinity,
   });

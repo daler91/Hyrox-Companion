@@ -27,6 +27,10 @@ export type WeightGoalDirectionValue = "lose" | "maintain" | "gain";
 // them, and an absent key leaves an older account's stored answers untouched
 // server-side, where they remain the fallback for athletes who have not yet
 // answered the category question (audit M6).
+// The older free-text injuries note is not a preference at all here: GET
+// /preferences never returned it, so a form that carried it saved it back as
+// null and wiped it. The athlete card moves it onto the card or removes it
+// with requests of its own.
 export type SavePayload = Omit<
   UserPreferences,
   | "weeklyGoal"
@@ -62,11 +66,8 @@ export interface PreferencesSnapshot extends Omit<
   | "activityLevel"
   | "weightGoalDirection"
   | "weightGoalRateKgPerWeek"
-  | "trainingConstraints"
 > {
   weeklyGoal: string;
-  /** Empty string rather than null, so the textarea stays controlled. */
-  trainingConstraints: string;
   mealSchedule: 3 | 4 | 5;
   division: string;
   gender: string;
@@ -105,8 +106,6 @@ export interface PreferencesDraft {
   weightGoalDirection: string;
   weightGoalRateKgPerWeek: number | null;
   weeklyGoal: string;
-  /** Empty string rather than null, so the textarea stays controlled. */
-  trainingConstraints: string;
   mealSchedule: 3 | 4 | 5;
   emailNotifications: boolean;
   emailWeeklySummary: boolean;
@@ -169,7 +168,6 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   weightGoalDirection: "",
   weightGoalRateKgPerWeek: null,
   weeklyGoal: "5",
-  trainingConstraints: "",
   mealSchedule: 4,
   emailNotifications: false,
   emailWeeklySummary: false,
@@ -194,7 +192,6 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
 
 export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
   return {
-    trainingConstraints: draft.trainingConstraints,
     weightUnit: draft.weightUnit,
     distanceUnit: draft.distanceUnit,
     division: draft.division,
@@ -267,7 +264,6 @@ function passThroughFields(snapshot: PreferencesSnapshot) {
 
 export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft {
   return {
-    trainingConstraints: snapshot.trainingConstraints,
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,
@@ -289,14 +285,9 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
   };
 }
 
-// Accepts a SavePayload too: it shares every field read here (it only strips
-// server-owned fields like userTimezone and re-types weeklyGoal), so the
-// same normalization covers both server state and outgoing saves.
-export function preferencesToSnapshot(
-  preferences: UserPreferences | SavePayload,
-): PreferencesSnapshot {
+// The profile and body numbers, as an account that never set them reads.
+function profileSnapshot(preferences: UserPreferences | SavePayload) {
   return {
-    trainingConstraints: preferences.trainingConstraints ?? "",
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
     division: preferences.division || "open",
@@ -310,8 +301,12 @@ export function preferencesToSnapshot(
     activityLevel: preferences.activityLevel ?? null,
     weightGoalDirection: preferences.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
-    weeklyGoal: String(preferences.weeklyGoal || 5),
-    mealSchedule: preferences.mealSchedule ?? 4,
+  } satisfies Partial<PreferencesSnapshot>;
+}
+
+// The emails and reminder hours: off, at the default hour, until changed.
+function notificationSnapshot(preferences: UserPreferences | SavePayload) {
+  return {
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
     emailMissedReminder: preferences.emailMissedReminder ?? false,
@@ -324,6 +319,21 @@ export function preferencesToSnapshot(
     notifyHourWeeklyReviewReminder: preferences.notifyHourWeeklyReviewReminder ?? null,
     notifyHourTodaySession: preferences.notifyHourTodaySession ?? null,
     notifyHourAnalysisDigest: preferences.notifyHourAnalysisDigest ?? null,
+  } satisfies Partial<PreferencesSnapshot>;
+}
+
+// Accepts a SavePayload too: it shares every field read here (it only strips
+// server-owned fields like userTimezone and re-types weeklyGoal), so the
+// same normalization covers both server state and outgoing saves.
+// The parts are spread in field order: the form compares snapshots as JSON.
+export function preferencesToSnapshot(
+  preferences: UserPreferences | SavePayload,
+): PreferencesSnapshot {
+  return {
+    ...profileSnapshot(preferences),
+    weeklyGoal: String(preferences.weeklyGoal || 5),
+    mealSchedule: preferences.mealSchedule ?? 4,
+    ...notificationSnapshot(preferences),
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
     coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
@@ -343,8 +353,6 @@ export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot
 
 export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
   return {
-    // Empty box clears the remembered constraints rather than storing "".
-    trainingConstraints: snapshot.trainingConstraints.trim() || null,
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,

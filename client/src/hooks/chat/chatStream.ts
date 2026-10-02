@@ -88,7 +88,7 @@ export async function streamChatReply(options: StreamChatReplyOptions): Promise<
   const updateMessage = createMessageUpdater(ids.assistantMessageId, setMessages);
   const result = await consumeSSEStream<RagInfo>(reader, {
     metaKey: "ragInfo",
-    extraKeys: ["planProposal", "planProposalPending", "safetyNotice"],
+    extraKeys: ["planProposal", "planProposalPending", "safetyNotice", "factProposal"],
     signal,
     onFlush: (snapshot) => {
       // Drop flushes from a superseded stream so a stale rAF flush after a

@@ -105,6 +105,12 @@ vi.mock("../../gemini", () => ({
 vi.mock("../../services/ai", () => ({
   buildTrainingContext: vi.fn(),
 }));
+// The chat reads its training context through a per-athlete cache; here it
+// builds every time, so one test's context never answers the next.
+vi.mock("../../services/trainingContextCache", () => ({
+  getCachedTrainingContext: (userId: string, build: (id: string) => Promise<unknown>) => build(userId),
+  invalidateTrainingContext: vi.fn(),
+}));
 
 vi.mock("../../services/ragService", () => ({
   retrieveRelevantChunks: vi.fn(),
@@ -875,13 +881,40 @@ describe("Chat History and Messages Routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
+    // Without a workout, the general conversation (I4).
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
       limit: undefined,
       beforeTimestamp: undefined,
       beforeId: undefined,
+      thread: { planDayId: undefined, workoutLogId: undefined },
     });
     expect(response.headers["x-next-cursor"]).toBe("2025-01-01T00:00:00.000Z");
     expect(response.headers["x-next-cursor-id"]).toBe("m1");
+  });
+
+  it("never shows a long session's rolling notes", async () => {
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([
+      { id: "m1", role: "user", content: "Hi", kind: "text", timestamp: new Date("2025-01-01T00:00:00Z") },
+      { id: "m2", role: "assistant", content: "- note", kind: "rolling", timestamp: new Date("2025-01-01T00:00:01Z") },
+    ] as never);
+
+    const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
+
+    expect((response.body as Array<{ id: string }>).map((message) => message.id)).toEqual(["m1"]);
+  });
+
+  it("reads a workout's own conversation when one is named", async () => {
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([]);
+
+    const response = await request(app)
+      .get(CHAT_HISTORY_ENDPOINT)
+      .query({ focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(storage.users).getChatMessages.mock.calls).toContainEqual([
+      "test_user_id",
+      expect.objectContaining({ thread: { planDayId: "day-1", workoutLogId: "log-1" } }),
+    ]);
   });
 
   it("passes composite cursor through to storage", async () => {
@@ -897,6 +930,7 @@ describe("Chat History and Messages Routes", () => {
       limit: 20,
       beforeTimestamp: new Date(before),
       beforeId: "m2",
+      thread: { planDayId: undefined, workoutLogId: undefined },
     });
   });
 

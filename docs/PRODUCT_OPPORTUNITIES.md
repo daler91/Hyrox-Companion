@@ -658,6 +658,12 @@ all; sessions modified or downgraded following a poor check-in; RPE on the day a
 
 ### 8. Coach memory — the durable athlete card · **D** · M
 
+**Status (2026-10).** Shipped as coach-memory Path C: the `athlete_facts` table (at most 20
+active, review dates), every coach prompt and the plan generator reading it, the Settings card,
+the plan wizard's injuries box seeding it, and chat-proposed facts the athlete saves or turns
+down, never written for them. See [`coach-memory-spec.md`](coach-memory-spec.md) and
+[AI and RAG → The Athlete Card](ai-and-rag.md#the-athlete-card).
+
 **Pitch.** Tell the coach the things that are true every week — bad left knee, no sled at my
 gym, shift work on Tuesdays, hate burpees — once, and have it remember.
 

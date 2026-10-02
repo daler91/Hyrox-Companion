@@ -58,7 +58,7 @@ User accounts and preferences.
 | `activity_level` | `varchar(24)` | nullable — Mifflin–St Jeor multiplier bucket (`sedentary`/`light`/`moderate`/`active`/`very_active`) |
 | `weight_goal_direction` | `varchar(16)` | nullable — `lose`/`maintain`/`gain`; null ⇒ no calorie adjustment |
 | `weight_goal_rate_kg_per_week` | `real` | nullable — magnitude only; the sign comes from `weight_goal_direction` |
-| `training_constraints` | `text` | nullable — durable injuries, equipment and scheduling limits in the athlete's own words; cleared to null when emptied |
+| `training_constraints` | `text` | nullable — the older free-text note of injuries, equipment and scheduling limits, from before the [athlete card](#athlete_facts). Still read by the coach until the athlete moves it onto the card (Settings, or generating a plan with the wizard's box) or removes it; nothing writes a new one |
 | `maf_age` | `integer` | nullable |
 | `maf_injury_illness_medication` | `boolean` | nullable |
 | `maf_consistency` | `text` | nullable |
@@ -631,12 +631,15 @@ Persisted AI coach conversation history.
 | `role` | `varchar(20)` | NOT NULL |
 | `content` | `text` | NOT NULL |
 | `timestamp` | `timestamp` | default `now()`; the chat routes stamp both turns on the app's clock |
-| `kind` | `varchar(20)` | NOT NULL, default `'text'`; CHECK `chat_messages_kind_check`: `text`, `proposal` or `summary` (the note a new session carries forward) |
+| `kind` | `varchar(20)` | NOT NULL, default `'text'`; CHECK `chat_messages_kind_check`: `text`, `proposal`, `summary` (the note a new session carries forward) or `rolling` (the note on the start of a long session, timestamped just after the last turn it covers; migration `0113`) |
 | `proposal_id` | `varchar(255)` | FK -> `plan_adjustment_proposals.id` ON DELETE SET NULL; the proposal a `proposal` reply carried |
 | `safety_notice` | `jsonb` | The fixed safety notice shown above the reply |
 | `rag_info` | `jsonb` | The reply's retrieval: source, excerpt count and material titles, never the excerpts |
 | `focus_plan_day_id` | `varchar(255)` | The workout the athlete was chatting from, if any (not a FK: the turn outlives the day) |
 | `focus_workout_log_id` | `varchar(255)` | As above, for a logged session |
+| `feedback` | `varchar(10)` | The athlete's thumbs on a coach reply; CHECK `chat_messages_feedback_check`: NULL, `up` or `down` (migration `0114`) |
+| `feedback_at` | `timestamp` | When the athlete gave it; NULL once cleared |
+| `fact_proposal` | `jsonb` | A lasting fact the coach offered under the reply for the athlete card, `{ fact, category, status }` (`ChatFactProposal`); `status` is `pending` until the athlete saves it (then `saved`, and the fact is in `athlete_facts` with source `chat`) or turns it down (`dismissed`). Only a pending offer moves, so it is answered once (migration `0116`) |
 
 The chat routes save rows under ids the client generates, once each (`saveChatMessageOnce`), so a retried send never saves a turn twice (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)).
 
@@ -749,6 +752,34 @@ User-authored bands that mark date ranges as injury, illness, travel, or rest so
 **Indexes:**
 - `idx_timeline_annotations_user_range` on (`user_id`, `start_date`, `end_date`) -- composite, used for overlap queries against the visible timeline window and, since `user_id` is its leading column, also serves bare `user_id` lookups
 
+### athlete_facts
+
+The athlete card (coach-memory spec, Path C, `docs/coach-memory-spec.md`): short statements that are true every week, such as "bad left knee", "no sled at my gym" or "night shifts on Tuesdays". The athlete states them once, in Settings, in the plan wizard's injuries box, or by saving one the coach proposed in chat; every coach prompt and the plan generator read the active ones.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `fact` | `text` | NOT NULL; one line, 1 to 140 characters (zod and CHECK) |
+| `dedupe_key` | `varchar(160)` | NOT NULL; derived on the server (`athleteFactKey`: lower case, spacing collapsed, a closing full stop dropped), never taken from a request |
+| `category` | `varchar(24)` | NOT NULL; `constraint`, `equipment`, `schedule`, `preference` or `other` |
+| `source` | `varchar(24)` | NOT NULL, default `'athlete'`; `athlete`, `plan_generation`, `onboarding` or `chat` (a coach proposal the athlete saved) |
+| `active` | `boolean` | NOT NULL, default `true`; false once retired. A retired row is kept, so stating the fact again brings it back instead of duplicating it |
+| `review_on` | `date` | NOT NULL, default `CURRENT_DATE + 90`; the server sets it 90 days after the athlete's own today, and again when they confirm or restore the fact. A fact past it still reaches the coach, flagged as unconfirmed |
+| `created_at` | `timestamptz` | NOT NULL, default `now()` |
+| `updated_at` | `timestamptz` | NOT NULL, default `now()` |
+
+Stating a fact the athlete already has (same `dedupe_key`) re-confirms that row: active again, the new wording and category, a new review date, its original `source` kept. At most 20 facts are active per athlete, enforced on write with a 409 (`ATHLETE_FACT_LIMIT`) under a per-athlete advisory transaction lock, never at render. Migration `0115`.
+
+**Check constraints:**
+- `athlete_facts_fact_length_check`: `char_length(fact) BETWEEN 1 AND 140`
+- `athlete_facts_category_check`: `category IN ('constraint', 'equipment', 'schedule', 'preference', 'other')`
+- `athlete_facts_source_check`: `source IN ('athlete', 'plan_generation', 'onboarding', 'chat')`
+
+**Indexes:**
+- `uq_athlete_facts_user_dedupe` UNIQUE on (`user_id`, `dedupe_key`) -- the conflict target of the re-confirming upsert
+- `idx_athlete_facts_user_active` on (`user_id`, `active`)
+
 ---
 
 ### idempotency_keys
@@ -856,13 +887,15 @@ A proposed rewrite of the athlete's upcoming plan, raised by the AI coach rather
 | `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
 | `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
 | `plan_id` | varchar(255) | Not null, FK → `training_plans.id` ON DELETE CASCADE |
-| `status` | text | Not null, default `'pending'`, CHECK `status IN ('pending','applied','dismissed','superseded','invalidated')` |
+| `status` | text | Not null, default `'pending'`, CHECK `status IN ('pending','applied','dismissed','superseded','invalidated','reverted')`; `reverted` is an apply the athlete undid |
 | `summary_message` | text | Not null -- the one-line description shown to the athlete |
 | `user_request` | text | Not null -- the triggering chat message, kept so AI plan writes stay auditable |
 | `payload` | jsonb | Not null -- `PlanAdjustmentProposalPayload`; the changes plus their baselines |
 | `ai_source` | text | Nullable |
 | `created_at` | timestamp with time zone | Not null, default `now()` |
 | `resolved_at` | timestamp with time zone | Nullable -- set when applied or dismissed |
+| `apply_undo` | jsonb | Nullable -- `PlanProposalApplyUndo`, written by the apply: for each day it changed (only the athlete's pick, on a partial apply), the fields it replaced and wrote, the coach note it replaced, and, where it replaced or cleared the exercise table, the old rows whole plus a fingerprint of the table it left. Null until applied, and on proposals applied before migration `0112`, which cannot be undone |
+| `reverted_at` | timestamp with time zone | Nullable -- when the athlete undid the apply; `resolved_at` stays the apply time |
 
 **Indexes:**
 - Primary key on `id`
@@ -1309,6 +1342,7 @@ export const storage: IStorage = {
   planProposals: new PlanProposalStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
+  athleteFacts: new AthleteFactsStorage(),
   analytics: new AnalyticsStorage(),
   analyticsResults: new AnalyticsResultsStorage(),
   coaching: new CoachingStorage(),

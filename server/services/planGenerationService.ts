@@ -34,6 +34,7 @@ import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 import { describeLoadAnchorLines } from "./loadAnchors";
 import { describeProgramBlueprintLines, planDeloadWeeks } from "./planBlueprint";
 import { computeGenerationCalibration, type GenerationCalibration } from "./planGenerationCalibration";
+import { athleteCardLines, buildGenerationCard, type GenerationCard, generationCardConstraints } from "./planGenerationCard";
 import { loadIncrement } from "./workoutEngine/loadMath";
 import { repairPrimaryLifts } from "./workoutEngine/planRepair";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
@@ -189,7 +190,14 @@ export function buildGenerationAbsences(
     });
 }
 
-export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>, calibration?: GenerationCalibration | null, absences?: readonly GenerationAbsence[]): string {
+export function buildGenerationPrompt(
+  input: NormalizedGeneratePlanInput,
+  range: WeekRange,
+  unitPreferences: Required<UnitPreferences>,
+  calibration?: GenerationCalibration | null,
+  absences?: readonly GenerationAbsence[],
+  card?: GenerationCard,
+): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
     `Generate ${formatWeekRange(range)} of a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
@@ -214,15 +222,14 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
     lines.push(`- Focus Areas: ${input.focusAreas.join(", ")} (prioritize these in programming)`);
   }
 
-  if (input.injuries) {
-    // Sanitised like every other free-text interpolation in the prompt builders
-    // (see server/prompts/coachingContext.ts) — this one was the exception.
-    lines.push(`- Injuries/Limitations: ${sanitizeUserInput(input.injuries)} (avoid exercises that aggravate these)`);
-  }
-
   if (input.restDays && input.restDays.length > 0) {
     lines.push(`- Rest Days: ${input.restDays.join(", ")} (these MUST be rest days every week, schedule all training on the remaining days)`);
   }
+
+  // The athlete card replaces the raw injuries line: the wizard's box is on
+  // the card now, alongside the equipment and schedule facts that bind
+  // hardest here. Every fact is sanitised by the shared renderer.
+  lines.push(...athleteCardLines(card));
 
   // Current load posture only calibrates the opening week, so attach it to the
   // chunk that contains week 1; later chunks follow the normal phase structure.
@@ -720,16 +727,22 @@ function validateAndOrderGeneratedDays(days: GeneratedDay[], totalWeeks: number)
     });
 }
 
+/** What a plan is written around beyond the athlete's loads: their dated absences and their card. */
+interface GenerationAthlete {
+  readonly absences: readonly GenerationAbsence[];
+  readonly card: GenerationCard;
+}
+
 async function generatePlanChunk(
   input: NormalizedGeneratePlanInput,
   userId: string,
   range: WeekRange,
   unitPreferences: Required<UnitPreferences>,
   calibration: GenerationCalibration | null,
-  absences: readonly GenerationAbsence[],
+  athlete: GenerationAthlete,
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
-  const prompt = buildGenerationPrompt(input, range, unitPreferences, calibration, absences);
+  const prompt = buildGenerationPrompt(input, range, unitPreferences, calibration, athlete.absences, athlete.card);
   const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
 
   const response = await generateJsonText({
@@ -752,7 +765,7 @@ async function generatePlanDays(
   userId: string,
   unitPreferences: Required<UnitPreferences>,
   calibration: GenerationCalibration | null,
-  absences: readonly GenerationAbsence[],
+  athlete: GenerationAthlete,
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
@@ -765,7 +778,7 @@ async function generatePlanDays(
   const limit = pLimit(PLAN_CHUNK_CONCURRENCY);
   const dayChunks = await Promise.all(
     ranges.map((range) =>
-      limit(() => generatePlanChunk(input, userId, range, unitPreferences, calibration, absences, signal)),
+      limit(() => generatePlanChunk(input, userId, range, unitPreferences, calibration, athlete, signal)),
     ),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
@@ -955,7 +968,15 @@ export async function executePlanGeneration(
       weightUnit: standardizeWeightUnit(user?.weightUnit),
       distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
     };
-    const calibration = await computeGenerationCalibration(userId, user, normalized);
+    // The athlete card, every fact: the active ones are what the plan is
+    // written around, and the retired ones keep the older note from bringing
+    // back what the athlete took off it.
+    const card = buildGenerationCard(
+      await storage.athleteFacts.list(userId),
+      normalized.injuries ?? user?.trainingConstraints,
+      getLocalDateStrSafe(new Date(), user?.userTimezone),
+    );
+    const calibration = await computeGenerationCalibration(userId, user, normalized, generationCardConstraints(card));
     // Declared absences inside the plan window, so the generator schedules
     // around a booked travel week instead of programming straight over it.
     // startDate is absent only for a legacy queued job (same guard as
@@ -967,7 +988,7 @@ export async function executePlanGeneration(
           normalized.totalWeeks,
         )
       : [];
-    const days = await generatePlanDays(normalized, userId, unitPreferences, calibration, absences, signal);
+    const days = await generatePlanDays(normalized, userId, unitPreferences, calibration, { absences, card }, signal);
 
     // Plan days and their structured exercise sets are written inside a single
     // transaction so a failure in any step rolls the whole insertion back.

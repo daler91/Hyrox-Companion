@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 
-import { handleSendFailure, ignoreResult } from "./chat/chatSessionModel";
+import { handleSendFailure, ignoreResult, markReplyRateable } from "./chat/chatSessionModel";
 import {
   fetchChatReply,
   refreshSavedConversation,
@@ -13,6 +13,8 @@ import {
 import { useBudgetWarning } from "./chat/useBudgetWarning";
 import { useChatAutoScroll } from "./chat/useChatAutoScroll";
 import { useChatHistory } from "./chat/useChatHistory";
+import { useFactProposalDecision } from "./chat/useFactProposalDecision";
+import { useMessageFeedback } from "./chat/useMessageFeedback";
 
 export type { RagInfo } from "@/lib/api";
 export type { Message } from "@/lib/chatMessage";
@@ -63,6 +65,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }), [welcomeMessage]);
 
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
+  // A welcome that arrives after mount (the Coach panel fetches one built
+  // from the athlete's training) replaces the one already in the buffer.
+  // Adjusted during render, as React advises for state that follows a prop.
+  const [shownWelcome, setShownWelcome] = useState(welcomeMessageObj);
+  if (shownWelcome !== welcomeMessageObj) {
+    setShownWelcome(welcomeMessageObj);
+    setMessages((prev) => prev.map((message) => (message.id === welcomeMessageObj.id ? welcomeMessageObj : message)));
+  }
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   // True while the server is generating a plan-adjustment proposal for the
@@ -84,6 +94,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const { historyLoading, clearHistory, isClearingHistory } = useChatHistory({
     welcomeMessage: welcomeMessageObj,
     setMessages,
+    focus: { focusPlanDayId, focusWorkoutLogId },
   });
   const { scrollRef, scrollToBottom, updateAutoScrollMode, scrollToBottomIfPinned, pinAutoScroll } =
     useChatAutoScroll(messages);
@@ -150,9 +161,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             fullResponse = text;
           },
         });
+        markReplyRateable(setMessages, assistantMessageId);
       } else {
         const assistantMessage = await fetchChatReply(request);
-        setMessages((prev) => [...prev, assistantMessage]);
+        // The non-streamed route saves both turns before it answers.
+        setMessages((prev) => [...prev, { ...assistantMessage, rateable: true }]);
       }
     } catch (err) {
       handleSendFailure({
@@ -197,6 +210,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     streamControllerRef.current?.abort();
   }, []);
 
+  const rateMessage = useMessageFeedback(setMessages, messagesRef);
+  const decideFactProposal = useFactProposalDecision(setMessages, messagesRef);
+
   return {
     messages,
     isLoading,
@@ -210,6 +226,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     pinAutoScroll,
     sendMessage,
     retryMessage,
+    rateMessage,
+    decideFactProposal,
     cancelStream,
     clearHistory,
     isClearingHistory,

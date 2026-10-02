@@ -9,6 +9,7 @@ import { AppError, classifyAiError, ErrorCode, isLikelyAiProviderFailure } from 
 import { reqLogger } from "../logger";
 import { sendJobNoRetry } from "../queue";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
+import { moveStatementsToCard } from "../services/athleteFactsService";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { createPendingPlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
@@ -177,14 +178,23 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
     }
     const input = req.body as GeneratePlanInput;
 
-    // Remember the athlete's injuries/limitations on their profile. The
-    // generator has always asked for this and always thrown it away, so every
-    // regeneration asked for it again. Presence is authoritative: an empty
-    // string means the athlete cleared the box, and a resolved constraint must
-    // be forgettable, so it writes null rather than being skipped.
+    // Put what the athlete wrote in the injuries box on their card (coach-memory
+    // spec, Path C), a fact per sentence, where every coach prompt and every
+    // later plan reads it. A sentence already on the card is re-confirmed, so
+    // regenerating with the same text adds nothing, and the older free-text
+    // note the box arrives prefilled with is dropped once it is all on the
+    // card. Presence is still authoritative: a client that never sends the box
+    // changes nothing. Best effort: a fact the card has no room for still
+    // reaches THIS plan, which reads the box too, and a failed write must never
+    // cost the athlete their plan.
     if (typeof input.injuries === "string") {
-      const trimmed = input.injuries.trim();
-      await storage.users.updateUserPreferences(userId, { trainingConstraints: trimmed === "" ? null : trimmed });
+      try {
+        await moveStatementsToCard(userId, input.injuries, "plan_generation");
+      } catch (error) {
+        // A storage error; no athlete text.
+        // bearer:disable javascript_lang_logger_leak
+        reqLogger(req).warn({ err: error }, "[plans] Could not put the injuries box on the athlete card");
+      }
     }
 
     // The SELECT above is check-then-act: two concurrent requests can both pass

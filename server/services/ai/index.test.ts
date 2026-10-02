@@ -62,6 +62,7 @@ vi.mock("../../storage", () => ({
     },
     mafTests: { listTestResults: vi.fn(), listWorkoutAnalysis: vi.fn(), countTestResults: vi.fn() },
     timelineAnnotations: { list: vi.fn() },
+    athleteFacts: { listActive: vi.fn() },
   },
 }));
 
@@ -161,6 +162,7 @@ beforeEach(() => {
   vi.mocked(storage.mafTests.listWorkoutAnalysis).mockResolvedValue([]);
   vi.mocked(storage.mafTests.countTestResults).mockResolvedValue(0);
   vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
+  vi.mocked(storage.athleteFacts.listActive).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -767,6 +769,53 @@ describe("buildTrainingContext declared absences", () => {
 
     expect(ctx.trainingConstraints).toBeNull();
     expect(ctx.absences).toEqual([]);
+    expect(ctx.athleteFacts).toEqual([]);
+  });
+
+  it("carries the athlete card's active facts at the top level, out of the persisted insights", async () => {
+    vi.mocked(storage.athleteFacts.listActive).mockResolvedValue([
+      {
+        id: "fact-1",
+        userId: USER_ID,
+        fact: "No sled at my gym",
+        dedupeKey: "no sled at my gym",
+        category: "equipment",
+        source: "athlete",
+        active: true,
+        reviewOn: "2026-09-13",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(storage.athleteFacts.listActive).toHaveBeenCalledWith(USER_ID);
+    expect(ctx.athleteFacts).toEqual([{ fact: "No sled at my gym", category: "equipment", reviewOn: "2026-09-13" }]);
+    // coachingInsights is flattened into plan_days.ai_inputs_used; athlete free text stays out of it.
+    expect(JSON.stringify(ctx.coachingInsights)).not.toContain("No sled");
+  });
+
+  it("rules stations out of the gaps by the note and the card together (spec §5.1)", async () => {
+    vi.mocked(storage.users).getUser.mockResolvedValue(makeUser({ trainingConstraints: "Bad left knee." }));
+    vi.mocked(storage.athleteFacts.listActive).mockResolvedValue([
+      {
+        id: "fact-1",
+        userId: USER_ID,
+        fact: "No sled at my gym",
+        dedupeKey: "no sled at my gym",
+        category: "equipment",
+        source: "athlete",
+        active: true,
+        reviewOn: "2026-09-13",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(gapsMock).toHaveBeenCalledWith(expect.any(Array), expect.any(String), "Bad left knee.\nNo sled at my gym");
   });
 
   it("marks a range covering today as active, and flags the medical ones", async () => {

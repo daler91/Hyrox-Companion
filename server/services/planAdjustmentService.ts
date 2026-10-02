@@ -10,6 +10,7 @@ import {
   type PlanAdjustmentProposal,
   type PlanAdjustmentUpdatedFields,
   type PlanDay,
+  type PlanProposalDayUndo,
   type UpdatePlanDay,
 } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
@@ -22,6 +23,7 @@ import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import type { UpcomingPlannedDay } from "../storage/timeline";
+import { inSequence } from "../utils/inSequence";
 import type { AIContext } from "./aiContextService";
 import { extractCoachingMaterialsText } from "./aiContextService";
 import {
@@ -32,10 +34,12 @@ import {
 } from "./aiModificationGuard";
 import { analyzeSafetySignals, buildSafetyReviewNote } from "./aiSafety";
 import { getStructuredApplyBlocker } from "./aiSuggestionService";
+import { captureDayUndo, type DayRestore, isUndoable, planDayRestore, type SetsWrite } from "./planProposalUndo";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
+import { invalidateTrainingContext } from "./trainingContextCache";
 
 type PlanAdjustmentLogger = Pick<Logger, "info" | "warn" | "error">;
 
@@ -51,6 +55,7 @@ export type PlanAdjustmentProposalResult =
 
 export type ApplyPlanProposalFailureReason =
   | "not_pending"
+  | "invalid_selection"
   | "stale"
   | "structured_parse_failed"
   | "ai_budget_exceeded"
@@ -64,6 +69,18 @@ export type ApplyPlanProposalResult =
       message: string;
       staleChanges?: Array<{ planDayId: string; dayLabel: string }>;
     };
+
+export type UndoPlanProposalFailureReason = "not_applied" | "not_undoable" | "expired" | "changed_since";
+
+export type UndoPlanProposalResult =
+  | {
+      undone: true;
+      /** Days the undo put back, wholly or in part. */
+      restoredCount: number;
+      /** Days where something changed since the apply, which the undo left as it is. */
+      keptDays: Array<{ planDayId: string; dayLabel: string }>;
+    }
+  | { undone: false; reason: UndoPlanProposalFailureReason; message: string };
 
 const NO_PLAN_FALLBACK_TEXT =
   "You have no upcoming planned workouts for me to adjust. Start or schedule a plan and I can rearrange days for you.";
@@ -204,7 +221,20 @@ function clampProposedChanges(
   log: PlanAdjustmentLogger,
 ): PlanAdjustmentChange[] {
   const clampedChanges: PlanAdjustmentChange[] = [];
+  const seenDayIds = new Set<string>();
   for (const change of changes) {
+    // One change per day: the athlete picks changes by day, and undo restores by day.
+    if (seenDayIds.has(change.planDayId)) {
+      // internal identifiers only (user id, plan-day id), no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn(
+        { userId, planDayId: change.planDayId },
+        "[plan-adjustment] Dropping a second change for the same day",
+      );
+      continue;
+    }
+    seenDayIds.add(change.planDayId);
     if (!offeredDayIds.has(change.planDayId)) {
       // internal identifiers only (user id, plan-day id), no message or
       // workout content.
@@ -406,6 +436,7 @@ class ProposalNoLongerPendingError extends Error {
 
 const APPLY_FAILURE_MESSAGES: Record<ApplyPlanProposalFailureReason, string> = {
   not_pending: "That proposal was already applied, dismissed, or replaced by a newer one.",
+  invalid_selection: "Pick at least one of the proposed changes to apply.",
   stale:
     "Your plan changed since I proposed this, so I didn't apply anything. Ask me again and I'll work from the latest plan.",
   structured_parse_failed:
@@ -675,7 +706,35 @@ interface WriteProposalChangesOptions {
   readonly userId: string;
 }
 
-/** The whole write side of an apply, inside the caller's transaction. */
+/**
+ * Replace or clear the day's exercise table where the change calls for it,
+ * and return the table before and after, for the undo. Undefined when the
+ * table was left alone.
+ */
+async function writeChangeSets(
+  tx: Tx,
+  change: EnrichedPlanAdjustmentChange,
+  live: LivePlanDay,
+  structuredRows: StructuredRows | undefined,
+): Promise<SetsWrite | undefined> {
+  if (structuredRows) {
+    await applyStructuredPlanDaySuggestionRows(change.planDayId, "replace", structuredRows, tx);
+  } else if (change.structured && change.kind === "rest_conversion") {
+    // Rest conversion on a table-backed day clears its prescription
+    // rows (applyStructuredPlanDaySuggestionRows early-returns on []).
+    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, change.planDayId));
+  } else {
+    return undefined;
+  }
+  // Read back what was stored, so the undo compares like with like.
+  const after = await tx.select().from(exerciseSets).where(eq(exerciseSets.planDayId, change.planDayId));
+  return { before: live.sets, after };
+}
+
+/**
+ * The whole write side of an apply, inside the caller's transaction. Returns
+ * what each day's write replaced and wrote, so the apply can be undone.
+ */
 async function writeProposalChanges(
   tx: Tx,
   {
@@ -686,8 +745,8 @@ async function writeProposalChanges(
     unitPreferences,
     userId,
   }: WriteProposalChangesOptions,
-): Promise<void> {
-  for (const change of changes) {
+): Promise<PlanProposalDayUndo[]> {
+  return await inSequence(changes, async (change) => {
     const live = liveDays.get(change.planDayId);
     if (!live) throw new Error(`missing live day for ${change.planDayId}`);
 
@@ -695,27 +754,44 @@ async function writeProposalChanges(
     const updated = await storage.plans.updatePlanDay(change.planDayId, updates, userId, tx);
     if (!updated) throw new Error(`plan day ${change.planDayId} disappeared during apply`);
 
-    const structuredRows = structuredRowsByDayId.get(change.planDayId);
-    if (structuredRows) {
-      await applyStructuredPlanDaySuggestionRows(change.planDayId, "replace", structuredRows, tx);
-    } else if (change.structured && change.kind === "rest_conversion") {
-      // Rest conversion on a table-backed day clears its prescription
-      // rows (applyStructuredPlanDaySuggestionRows early-returns on []).
-      await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, change.planDayId));
-    }
-  }
+    const sets = await writeChangeSets(tx, change, live, structuredRowsByDayId.get(change.planDayId));
+    return captureDayUndo(live.day, updated, updates, sets);
+  });
+}
+
+/**
+ * The changes to apply: all of them, or the athlete's pick. Null when the
+ * pick is empty or names a day the proposal doesn't change.
+ */
+function selectChanges(
+  changes: EnrichedPlanAdjustmentChange[],
+  planDayIds: readonly string[] | undefined,
+): EnrichedPlanAdjustmentChange[] | null {
+  if (!planDayIds) return changes;
+  const picked = new Set(planDayIds);
+  const selected = changes.filter((change) => picked.has(change.planDayId));
+  return selected.length > 0 && selected.length === picked.size ? selected : null;
+}
+
+export interface ApplyPlanProposalOptions {
+  /** The changes to apply, by plan day; all of them when absent. */
+  readonly planDayIds?: readonly string[];
+  readonly log?: PlanAdjustmentLogger;
 }
 
 export async function applyPlanAdjustmentProposal(
   userId: string,
   proposalId: string,
-  log: PlanAdjustmentLogger = defaultLogger,
+  { planDayIds, log = defaultLogger }: ApplyPlanProposalOptions = {},
 ): Promise<ApplyPlanProposalResult | undefined> {
   const proposal = await storage.planProposals.getById(proposalId, userId);
   if (!proposal) return undefined;
   if (proposal.status !== "pending") return applyFailure("not_pending");
 
-  const changes = proposal.payload.changes;
+  // Only the changes the athlete picked are revalidated, re-parsed and
+  // written; the rest are simply never applied.
+  const changes = selectChanges(proposal.payload.changes, planDayIds);
+  if (!changes) return applyFailure("invalid_selection");
   const { liveDays, staleChanges } = await revalidateProposalChanges(changes, userId);
 
   if (staleChanges.length > 0) {
@@ -756,7 +832,7 @@ export async function applyPlanAdjustmentProposal(
   const aiSource = proposal.aiSource;
   try {
     await db.transaction(async (tx) => {
-      await writeProposalChanges(tx, {
+      const undoDays = await writeProposalChanges(tx, {
         changes,
         liveDays,
         structuredRowsByDayId,
@@ -765,8 +841,8 @@ export async function applyPlanAdjustmentProposal(
         userId,
       });
 
-      const resolved = await storage.planProposals.resolve(proposalId, userId, "applied", tx);
-      if (!resolved) throw new ProposalNoLongerPendingError();
+      const applied = await storage.planProposals.markApplied(proposalId, userId, { days: undoDays }, tx);
+      if (!applied) throw new ProposalNoLongerPendingError();
     });
   } catch (err) {
     if (err instanceof ProposalNoLongerPendingError) {
@@ -785,16 +861,118 @@ export async function applyPlanAdjustmentProposal(
     throw err;
   }
 
+  // The chat stream can auto-apply, and the chat paths don't drop the cached
+  // context on their own.
+  invalidateTrainingContext(userId);
+
   // Deliberately NOT enqueuing auto-coach for rescheduled days here (unlike
   // updatePlanDayWithCleanup): the proposal itself already performed the
   // rebalancing that the auto-coach pass would otherwise redo.
   // internal identifiers and a count only, no message or workout content.
   // bearer:disable javascript_lang_logger_leak
   log.info(
-    { userId, proposalId, changeCount: changes.length },
+    { userId, proposalId, changeCount: changes.length, proposedCount: proposal.payload.changes.length },
     "[plan-adjustment] Proposal applied",
   );
   return { applied: true, changeCount: changes.length };
+}
+
+/** Thrown inside the undo transaction when a concurrent undo already reverted the proposal. */
+class ProposalNoLongerAppliedError extends Error {
+  constructor() {
+    super("proposal no longer applied");
+    this.name = "ProposalNoLongerAppliedError";
+  }
+}
+
+function undoFailureMessage(reason: UndoPlanProposalFailureReason): string {
+  switch (reason) {
+    case "not_applied":
+      return "Those changes aren't applied, so there is nothing to undo.";
+    case "not_undoable":
+      return "Those changes were applied before undo was available, so I can't take them back automatically.";
+    case "expired":
+      return "Those changes were applied more than a week ago, so they can no longer be undone from here.";
+    case "changed_since":
+      return "You've changed those days since, so there was nothing left to undo.";
+    default:
+      return "Those changes can't be undone from here.";
+  }
+}
+
+function undoFailure(reason: UndoPlanProposalFailureReason): UndoPlanProposalResult {
+  return { undone: false, reason, message: undoFailureMessage(reason) };
+}
+
+/** One day of an undo: its fields back, then its exercise table. */
+async function restoreDay(tx: Tx, restore: DayRestore, userId: string): Promise<void> {
+  if (restore.update) {
+    const updated = await storage.plans.updatePlanDay(restore.planDayId, restore.update, userId, tx);
+    if (!updated) throw new Error(`plan day ${restore.planDayId} disappeared during undo`);
+  }
+  if (restore.sets) {
+    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, restore.planDayId));
+    if (restore.sets.length > 0) await tx.insert(exerciseSets).values(restore.sets);
+  }
+}
+
+/** Put the restorable days back, then mark the proposal reverted, in one transaction. */
+async function writeDayRestores(
+  restores: readonly DayRestore[],
+  proposalId: string,
+  userId: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await inSequence(restores, (restore) => restoreDay(tx, restore, userId));
+    const reverted = await storage.planProposals.markReverted(proposalId, userId, tx);
+    if (!reverted) throw new ProposalNoLongerAppliedError();
+  });
+}
+
+/**
+ * Take an applied proposal back: each day's fields, coach note and exercise
+ * table return to what they were, except where something changed since the
+ * apply, which stays (see planProposalUndo.ts). Undefined for an unknown
+ * proposal.
+ */
+export async function undoPlanAdjustmentProposal(
+  userId: string,
+  proposalId: string,
+  log: PlanAdjustmentLogger = defaultLogger,
+): Promise<UndoPlanProposalResult | undefined> {
+  const proposal = await storage.planProposals.getById(proposalId, userId);
+  if (!proposal) return undefined;
+  if (proposal.status !== "applied") return undoFailure("not_applied");
+  if (!proposal.applyUndo) return undoFailure("not_undoable");
+  if (!isUndoable(proposal)) return undoFailure("expired");
+
+  const undoDays = proposal.applyUndo.days;
+  const { dayById, setsByDay } = await batchReadChangePlanDays(undoDays, userId);
+  const restores = undoDays.map((undo) =>
+    planDayRestore(undo, dayById.get(undo.planDayId), setsByDay.get(undo.planDayId) ?? []),
+  );
+  const restorable = restores.filter((restore) => restore.update || restore.sets);
+  if (restorable.length === 0) return undoFailure("changed_since");
+
+  try {
+    await writeDayRestores(restorable, proposalId, userId);
+  } catch (err) {
+    if (err instanceof ProposalNoLongerAppliedError) return undoFailure("not_applied");
+    throw err;
+  }
+
+  invalidateTrainingContext(userId);
+  const labels = new Map(proposal.payload.changes.map((change) => [change.planDayId, change.dayLabel]));
+  const keptDays = restores
+    .filter((restore) => restore.kept)
+    .map((restore) => ({ planDayId: restore.planDayId, dayLabel: labels.get(restore.planDayId) ?? "" }));
+  // internal identifiers and counts only, no message or workout content.
+  // bearer:disable javascript_lang_logger_leak
+  log.info(
+    { userId, proposalId, restoredCount: restorable.length, keptCount: keptDays.length },
+    "[plan-adjustment] Proposal undone",
+  );
+  return { undone: true, restoredCount: restorable.length, keptDays };
 }
 
 export async function dismissPlanAdjustmentProposal(

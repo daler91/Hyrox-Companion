@@ -126,6 +126,37 @@ export type SessionStreamStatus = (typeof sessionStreamStatusEnum)[number];
  *   (`proposal_id`); its outcome is read from the proposal itself.
  * - `summary`: the hidden summary of earlier sessions that the coach reads at
  *   the start of a new session instead of their raw turns. Never shown.
+ * - `rolling`: the note on the start of a long session that no longer fits in
+ *   the turns the coach reads, refreshed as the session grows. Its timestamp
+ *   is just after the last turn it covers. Never shown.
  */
-export const chatMessageKindEnum = ["text", "proposal", "summary"] as const;
+export const chatMessageKindEnum = ["text", "proposal", "summary", "rolling"] as const;
 export type ChatMessageKind = (typeof chatMessageKindEnum)[number];
+
+/** The athlete's thumbs on a coach reply (AI coach chat review, I23). */
+export const chatFeedbackEnum = ["up", "down"] as const;
+export type ChatFeedback = (typeof chatFeedbackEnum)[number];
+
+/**
+ * Where a fact the coach offered in chat stands (AI coach chat review, I5b):
+ * waiting for the athlete, saved to their card, or turned down.
+ */
+export const chatFactProposalStatusEnum = ["pending", "saved", "dismissed"] as const;
+export type ChatFactProposalStatus = (typeof chatFactProposalStatusEnum)[number];
+
+/**
+ * What an athlete fact is about (coach-memory spec §3): a standing constraint
+ * (an injury, a movement to avoid), equipment they have or lack, their
+ * schedule, a preference, or anything else.
+ */
+export const athleteFactCategoryEnum = ["constraint", "equipment", "schedule", "preference", "other"] as const;
+export type AthleteFactCategory = (typeof athleteFactCategoryEnum)[number];
+
+/**
+ * Where an athlete fact came from: typed in Settings, seeded from the plan
+ * wizard's injuries box, captured at onboarding, or proposed by the coach in
+ * chat and saved by the athlete. Every one is the athlete's own statement:
+ * nothing is written without them.
+ */
+export const athleteFactSourceEnum = ["athlete", "plan_generation", "onboarding", "chat"] as const;
+export type AthleteFactSource = (typeof athleteFactSourceEnum)[number];

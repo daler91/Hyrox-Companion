@@ -43,6 +43,10 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 vi.mock("@/components/settings/AccountDangerZone", () => ({ AccountDangerZone: () => null }));
+// Its own requests and tests (athlete-card/AthleteCardSection.test.tsx).
+vi.mock("@/components/settings/athlete-card/AthleteCardSection", () => ({
+  AthleteCardSection: () => <div data-testid="athlete-card-section" />,
+}));
 vi.mock("@/components/settings/CoachingSection", () => ({ CoachingSection: () => null }));
 vi.mock("@/components/settings/DataToolsSection", () => ({
   DataToolsSection: () => <div data-testid="data-tools-section" />,
