@@ -180,7 +180,7 @@ export async function deleteRecipe(userId: string, id: string): Promise<boolean>
 
 
 export async function listRecipes(userId: string): Promise<RecipeListItem[]> {
-  return db
+  return await db
     .select({
       id: recipes.id,
       name: recipes.name,

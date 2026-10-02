@@ -77,7 +77,7 @@ async function recomputeAdherenceIfPlanLinked(
   workoutLogId: string,
   userId: string,
 ): Promise<boolean> {
-  return db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [log] = await tx
       .select({ planDayId: workoutLogs.planDayId })
       .from(workoutLogs)

@@ -35,6 +35,7 @@
  *   --quiet          Summary only; skip the per-athlete lines.
  */
 
+import { inSequence } from "@shared/inSequence";
 import { stampForPreferences } from "@shared/unitConversion";
 
 import { logger } from "../server/logger";
@@ -148,7 +149,7 @@ async function main(): Promise<void> {
   const athletes = await loadAthletes(flags.userId);
   const tally = { stamped: 0, weightRows: 0, distanceRows: 0, skipped: 0, nothingToDo: 0 };
 
-  for (const athlete of athletes) {
+  await inSequence(athletes, async (athlete) => {
     const outcome = await processAthlete(athlete, flags);
     if (outcome.kind === "skipped") tally.skipped++;
     else if (outcome.kind === "nothing_to_do") tally.nothingToDo++;
@@ -157,7 +158,7 @@ async function main(): Promise<void> {
       tally.weightRows += outcome.weightRows;
       tally.distanceRows += outcome.distanceRows;
     }
-  }
+  });
 
   const summary = {
     mode: flags.apply ? "APPLIED" : "DRY RUN — nothing written",

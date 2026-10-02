@@ -10,6 +10,7 @@
  * number that came from the athlete's own training log.
  */
 import { addDaysToISODate } from "@shared/dateUtils";
+import { inSequence } from "@shared/inSequence";
 import { standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
 
 import type { DbExecutor } from "../db";
@@ -127,7 +128,7 @@ export async function applyPlanAdaptation(
 ): Promise<number> {
   if (!adaptation) return 0;
   let adapted = 0;
-  for (const day of adaptation.result.days) {
+  await inSequence(adaptation.result.days, async (day) => {
     const updated = await storage.plans.updatePlanDay(
       day.planDayId,
       {
@@ -142,10 +143,10 @@ export async function applyPlanAdaptation(
       userId,
       tx,
     );
-    if (!updated) continue;
+    if (!updated) return;
     await storage.plans.updatePlanDaySets(day.planDayId, day.setUpdates, tx);
     adapted += 1;
-  }
+  });
   await storage.plans.updateEngineState(
     adaptation.planId,
     userId,

@@ -17,7 +17,7 @@ import { db } from "../db";
  */
 export class TimelineAnnotationsStorage {
   async list(userId: string): Promise<TimelineAnnotation[]> {
-    return db
+    return await db
       .select()
       .from(timelineAnnotations)
       .where(eq(timelineAnnotations.userId, userId))

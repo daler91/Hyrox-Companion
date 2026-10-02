@@ -142,7 +142,7 @@ export async function auditAthlete(user: AthleteUnitRow): Promise<AthleteUnitRep
 }
 
 export async function loadAthletes(userId?: string): Promise<AthleteUnitRow[]> {
-  return db
+  return await db
     .select({ id: users.id, weightUnit: users.weightUnit, distanceUnit: users.distanceUnit })
     .from(users)
     .where(userId ? eq(users.id, userId) : undefined);

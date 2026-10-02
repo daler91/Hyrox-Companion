@@ -1,4 +1,5 @@
 import type { GenerateContentResponse } from "@google/genai";
+import { inChunks, inSequence } from "@shared/inSequence";
 
 import { getAiClient } from "../ai/geminiSdk";
 import { retryWithBackoff } from "../ai/retry";
@@ -106,17 +107,14 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   // Process in parallel batches of 5 to avoid rate limits
   const batchSize = 5;
-  const results: number[][] = [];
-  for (let i = 0; i < texts.length; i += batchSize) {
-    const batch = texts.slice(i, i + batchSize);
-    const embeddings = await Promise.all(batch.map(generateEmbedding));
-    results.push(...embeddings);
+  const batches = await inSequence(inChunks(texts, batchSize), async (batch, index) => {
     // Small delay between batches to avoid burst rate-limiting
-    if (i + batchSize < texts.length) {
+    if (index > 0) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-  }
-  return results;
+    return await Promise.all(batch.map(generateEmbedding));
+  });
+  return batches.flat();
 }
 
 // ---------------------------------------------------------------------------

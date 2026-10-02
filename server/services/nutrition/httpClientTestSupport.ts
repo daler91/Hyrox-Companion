@@ -6,9 +6,9 @@
  */
 
 export function ok(body: unknown) {
-  return { ok: true, status: 200, json: async () => body, headers: { get: () => null } };
+  return { ok: true, status: 200, json: () => Promise.resolve(body), headers: { get: () => null } };
 }
 
 export function errResponse(status: number) {
-  return { ok: false, status, json: async () => ({}), headers: { get: () => null } };
+  return { ok: false, status, json: () => Promise.resolve({}), headers: { get: () => null } };
 }

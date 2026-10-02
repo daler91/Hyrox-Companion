@@ -29,6 +29,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { inSequence } from "@shared/inSequence";
 import * as schema from "@shared/schema";
 import { getTableName, is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
@@ -196,25 +197,23 @@ async function checkSchemaCompleteness(client: Queryable): Promise<CheckResult> 
 }
 
 async function checkRowCounts(client: Queryable): Promise<CheckResult[]> {
-  const results: CheckResult[] = [];
-  for (const table of SPOT_CHECK_TABLES) {
+  // One query at a time: every check runs on the drill's single client.
+  return await inSequence(SPOT_CHECK_TABLES, async (table): Promise<CheckResult> => {
     let n: number;
     try {
       const { rows } = await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM "${table}"`);
       n = rows[0]?.n ?? 0;
     } catch (err) {
-      results.push({ name: `Row count: ${table}`, status: "fail", detail: err instanceof Error ? err.message : String(err) });
-      continue;
+      return { name: `Row count: ${table}`, status: "fail", detail: err instanceof Error ? err.message : String(err) };
     }
     // An empty `users` is the signature of a restore that created the schema
     // but never loaded the dump — the failure this drill most needs to catch.
-    results.push({
+    return {
       name: `Row count: ${table}`,
       status: table === "users" && n === 0 ? "fail" : "pass",
       detail: `${n} row(s)${table === "users" && n === 0 ? " — an empty users table means no data was restored" : ""}`,
-    });
-  }
-  return results;
+    };
+  });
 }
 
 interface ForeignKeyRef {
@@ -282,32 +281,30 @@ async function checkForeignKeyIntegrity(client: Queryable): Promise<CheckResult>
     return { name: "No orphaned rows across any foreign key", status: "fail", detail: "no foreign keys found at all — the schema is not what the app expects" };
   }
   const broken: string[] = [];
-  for (const fk of fks) {
+  await inSequence(fks, async (fk) => {
     const { rows } = await client.query<{ n: number }>(buildOrphanQuery(fk));
     const n = rows[0]?.n ?? 0;
     if (n > 0) broken.push(`${fk.child}.${fk.childCols.join("+")} → ${fk.parent} (${n})`);
-  }
+  });
   return broken.length > 0
     ? { name: "No orphaned rows across any foreign key", status: "fail", detail: broken.join("; ") }
     : { name: "No orphaned rows across any foreign key", status: "pass", detail: `${fks.length} foreign key(s) checked` };
 }
 
 async function checkNullOwnerLeaks(client: Queryable): Promise<CheckResult[]> {
-  const results: CheckResult[] = [];
-  for (const probe of NULL_OWNER_PROBES) {
+  return await inSequence(NULL_OWNER_PROBES, async (probe): Promise<CheckResult> => {
     try {
       const { rows } = await client.query<{ n: number }>(probe.sql);
       const n = rows[0]?.n ?? 0;
-      results.push({
+      return {
         name: probe.name,
         status: n === 0 ? "pass" : "fail",
         detail: n === 0 ? "0 rows" : `${n} offending row(s)/group(s) — run the matching statement in docs/operations/pending-manual-steps.md`,
-      });
+      };
     } catch (err) {
-      results.push({ name: probe.name, status: "fail", detail: err instanceof Error ? err.message : String(err) });
+      return { name: probe.name, status: "fail", detail: err instanceof Error ? err.message : String(err) };
     }
-  }
-  return results;
+  });
 }
 
 /**

@@ -39,11 +39,11 @@ export function usePushNotifications() {
     // Check if already subscribed. permission is already seeded from
     // the lazy initializer above; nothing else here needs a sync
     // setState in the effect body.
-    void navigator.serviceWorker.ready.then((reg) => {
-      void reg.pushManager.getSubscription().then((sub) => {
+    void navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => {
         setIsSubscribed(sub !== null);
       });
-    });
   }, [isSupported]);
 
   const subscribe = useCallback(async () => {

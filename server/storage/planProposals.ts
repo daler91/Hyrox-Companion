@@ -108,7 +108,7 @@ export class PlanProposalStorage {
   async create(
     proposal: Omit<InsertPlanAdjustmentProposal, "id" | "status" | "createdAt" | "resolvedAt">,
   ): Promise<PlanAdjustmentProposal> {
-    return db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       await tx
         .update(planAdjustmentProposals)
         .set({ status: "superseded", resolvedAt: new Date() })

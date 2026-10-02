@@ -25,6 +25,7 @@
  * Idempotent: rows with no entities to decode are untouched. Safe to re-run.
  */
 
+import { inSequence } from "@shared/inSequence";
 import { sql } from "drizzle-orm";
 
 import { db } from "../server/db";
@@ -116,11 +117,12 @@ try {
 
   const summary: Record<string, { updated: number; needed: number }> = {};
 
-  for (const target of TARGETS) {
+  // One table at a time: each is a table-wide UPDATE.
+  await inSequence(TARGETS, async (target) => {
     const res = await decodeTable(target, flags.dryRun);
     summary[target.table] = res;
     logger.info({ table: target.table, ...res, dryRun: flags.dryRun }, "[decode-entities] table processed");
-  }
+  });
 
   logger.info({ summary, dryRun: flags.dryRun }, "[decode-entities] done");
   process.exit(0);

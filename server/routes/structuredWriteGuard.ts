@@ -51,7 +51,7 @@ function getRoutePath(req: Request): string {
   return req.path;
 }
 
-export async function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, ownerType: "workout_log" | "plan_day"): Promise<boolean> {
+export function rejectTextOnlyWriteIfNeeded(req: Request, res: Response, ownerType: "workout_log" | "plan_day"): boolean {
   refreshFallbackWindow();
 
   if (!structuredBlocksGateOpen()) {

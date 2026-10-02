@@ -13,6 +13,7 @@
  * and the DB delete reports `deleted: false` when the row already went.
  */
 import { clerkClient } from "@clerk/express";
+import { inSequence } from "@shared/inSequence";
 import type { Logger } from "pino";
 
 import { evictUserFromSeenCache } from "../clerkAuth";
@@ -229,15 +230,14 @@ export async function runStrandedErasureSweep(
 ): Promise<{ swept: number; failed: number }> {
   const cutoff = new Date(now.getTime() - STRANDED_ERASURE_THRESHOLD_MS);
   const stranded = await storage.users.listStrandedErasures(cutoff, SWEEP_BATCH_SIZE);
-  let swept = 0;
-  let failed = 0;
 
-  for (const account of stranded) {
+  // One account at a time: each erasure calls Clerk and Strava and deletes
+  // across both databases, which a background sweep should not fan out.
+  const erased = await inSequence(stranded, async (account) => {
     try {
       await eraseAccount(account.id, log);
-      swept++;
+      return true;
     } catch (err) {
-      failed++;
       // userId is the correlation id already logged throughout erasure; the
       // age is a duration. No secrets.
       // bearer:disable javascript_lang_logger_leak
@@ -245,8 +245,10 @@ export async function runStrandedErasureSweep(
         { err, userId: account.id, strandedSinceMs: now.getTime() - account.erasureRequestedAt.getTime() },
         "Stranded account erasure failed again — account still holds user data",
       );
+      return false;
     }
-  }
+  });
 
-  return { swept, failed };
+  const swept = erased.filter(Boolean).length;
+  return { swept, failed: erased.length - swept };
 }

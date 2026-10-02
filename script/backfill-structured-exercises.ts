@@ -31,6 +31,7 @@
  * initial migration.
  */
 
+import { inSequence } from "@shared/inSequence";
 import {
   exerciseSets,
   type InsertExerciseSet,
@@ -316,10 +317,10 @@ async function runPass(
   const result = emptyResult();
   const candidates = await loader();
   const reportRows: BackfillReportRow[] = [];
-  for (const cand of candidates) {
+  await inSequence(candidates, async (cand) => {
     result.scanned++;
     await processCandidate(cand, flags, result, reportRows);
-  }
+  });
   if (flags.reportFile) {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");

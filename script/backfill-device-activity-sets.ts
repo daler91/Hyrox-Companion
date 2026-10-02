@@ -41,6 +41,8 @@
  *   --quiet          Summary only; skip the per-athlete lines.
  */
 
+import { inSequence } from "@shared/inSequence";
+
 import {
   backfillDeviceActivitySets,
   listBackfillAthletes,
@@ -54,7 +56,7 @@ async function main(flags: BackfillFlags): Promise<void> {
   let totalWritten = 0;
   let athletesTouched = 0;
 
-  for (const athlete of athletes) {
+  await inSequence(athletes, async (athlete) => {
     // The dry run resolves exactly the rows the write would, so "would write N"
     // is the same number `--apply` goes on to write — not an estimate from the
     // candidate count, which is larger (it includes the sports we skip).
@@ -71,7 +73,7 @@ async function main(flags: BackfillFlags): Promise<void> {
           ` (${candidates - written} skipped — sport not describable as a set)`,
       );
     }
-  }
+  });
 
   say(
     `${flags.apply ? "Backfill complete" : "Dry run (re-run with --apply to write)"}: ` +

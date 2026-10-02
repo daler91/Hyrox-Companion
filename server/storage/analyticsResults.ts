@@ -51,7 +51,7 @@ export class AnalyticsResultsStorage {
    */
   async getMany(userIds: string[]): Promise<AnalyticsResult[]> {
     if (userIds.length === 0) return [];
-    return db.select().from(analyticsResults).where(inArray(analyticsResults.userId, userIds));
+    return await db.select().from(analyticsResults).where(inArray(analyticsResults.userId, userIds));
   }
 
   async upsert(input: UpsertAnalyticsResultInput): Promise<void> {

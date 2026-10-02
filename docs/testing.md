@@ -642,6 +642,17 @@ they take effect only if the project switches to the CI scanner. A failing
 gate posts a "Quality Gate failed" comment listing the failed conditions; a
 passing gate may still list non-blocking new issues worth cleaning up.
 
+Three async rules come up most in production code: `await` inside a loop, an
+`async` function with no `await`, and a `.then`/`.catch` chained inside another
+promise's callback. Run work that has to go one item at a time (writes on one
+transaction client, calls to a rate-limited provider, an ordered replay) through
+`inSequence` from `shared/inSequence.ts`, with `inChunks` to batch a long IN
+list. Use `Promise.all` for independent work. Write a retry or a poll
+recursively, since each step waits on the one before it. An `async` function
+that returns a Drizzle query should `return await` it: Sonar can't resolve
+Drizzle's types, so a bare `return` reads as an `async` function with nothing to
+await.
+
 ---
 
 ## Code Review Skill Profiles

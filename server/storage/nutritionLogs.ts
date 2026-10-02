@@ -87,7 +87,7 @@ export async function createLogEntriesBatch(
     parseConfidence: item.parseConfidence ?? null,
     pendingReview: false,
   }));
-  return db.insert(foodLogEntries).values(rows).returning();
+  return await db.insert(foodLogEntries).values(rows).returning();
 }
 
 

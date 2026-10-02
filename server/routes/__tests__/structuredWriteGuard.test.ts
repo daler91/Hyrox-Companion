@@ -63,30 +63,30 @@ describe("structuredWriteGuard", () => {
       };
     });
 
-    it("should allow legacy import routes to pass without rejection", async () => {
+    it("should allow legacy import routes to pass without rejection", () => {
       req.path = "/api/v1/plans/import";
       req.route = { path: "/api/v1/plans/import" };
       req.body = { mainWorkout: "text without rows" };
 
-      const result = await rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
       expect(result).toBe(false);
       expect(statusMock).not.toHaveBeenCalled();
     });
 
-    it("should allow writes with a planDayId link to pass", async () => {
+    it("should allow writes with a planDayId link to pass", () => {
       req.body = { planDayId: "plan_day_123", mainWorkout: "text without rows" };
 
-      const result = await rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
       expect(result).toBe(false);
       expect(statusMock).not.toHaveBeenCalled();
     });
 
-    it("should reject writes with text but no structured rows", async () => {
+    it("should reject writes with text but no structured rows", () => {
       req.body = { mainWorkout: "Did some running today", accessory: "and stretching" };
 
-      const result = await rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
       expect(result).toBe(true);
       expect(statusMock).toHaveBeenCalledWith(422);
@@ -98,13 +98,13 @@ describe("structuredWriteGuard", () => {
       );
     });
 
-    it("should allow writes with exercises rows even if text is present", async () => {
+    it("should allow writes with exercises rows even if text is present", () => {
       req.body = {
         mainWorkout: "Did some running today",
         exercises: [{ id: 1, name: "Run" }]
       };
 
-      const result = await rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
       expect(result).toBe(false);
       expect(statusMock).not.toHaveBeenCalled();
@@ -113,22 +113,22 @@ describe("structuredWriteGuard", () => {
       );
     });
 
-    it("should allow writes with structureBlocks even if text is present", async () => {
+    it("should allow writes with structureBlocks even if text is present", () => {
       req.body = {
         mainWorkout: "Did some running today",
         structureBlocks: [{ id: 1, type: "circuit" }]
       };
 
-      const result = await rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
       expect(result).toBe(false);
       expect(statusMock).not.toHaveBeenCalled();
     });
 
-    it("should allow empty writes (no text, no rows)", async () => {
+    it("should allow empty writes (no text, no rows)", () => {
       req.body = {};
 
-      const result = await rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
+      const result = rejectTextOnlyWriteIfNeeded(req, res, "workout_log");
 
       expect(result).toBe(false);
       expect(statusMock).not.toHaveBeenCalled();

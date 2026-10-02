@@ -41,7 +41,7 @@ export async function getCurrentTarget(userId: string, onDate: string): Promise<
 
 /** All target versions for the user, newest effective date first. */
 export async function listTargets(userId: string): Promise<NutritionTarget[]> {
-  return db
+  return await db
     .select()
     .from(nutritionTargets)
     .where(eq(nutritionTargets.userId, userId))
@@ -75,7 +75,7 @@ export async function replaceTargetVersion(
   userId: string,
   data: UpsertNutritionTargetInput & { effectiveFrom: string },
 ): Promise<NutritionTarget> {
-  return db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     await tx
       .delete(nutritionTargets)
       .where(
@@ -150,7 +150,7 @@ export async function replaceMealTargetVersion(
   userId: string,
   data: UpsertMealTargetInput & { effectiveFrom: string },
 ): Promise<MealTarget> {
-  return db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     await tx
       .delete(mealTargets)
       .where(

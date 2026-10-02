@@ -625,7 +625,7 @@ export class WorkoutStorage {
     // The set row and its structure-step mirror commit together: a sync
     // failure rolls the insert back rather than leaving a set whose step
     // still shows the previous prescription.
-    return db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       if (!(await adapter.lockOwnedContainer(tx, context.id, context.userId))) return undefined;
       const [created] = await tx
         .insert(exerciseSets)

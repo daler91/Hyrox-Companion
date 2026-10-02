@@ -1,3 +1,4 @@
+import { inSequence } from "@shared/inSequence";
 import {
   type ChatMessage,
   type CoachNoteInputs,
@@ -23,7 +24,6 @@ import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import type { UpcomingPlannedDay } from "../storage/timeline";
-import { inSequence } from "../utils/inSequence";
 import type { AIContext } from "./aiContextService";
 import { extractCoachingMaterialsText } from "./aiContextService";
 import {

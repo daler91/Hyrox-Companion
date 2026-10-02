@@ -100,24 +100,26 @@ export function useEmbeddedCoachRouting({
 
   const handleAIConsentAccept = useCallback(() => {
     setShowAIConsent(false);
-    api.preferences
-      .update({ aiCoachEnabled: true })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-        if (pendingCoachIntent?.kind === "embedded") {
-          setEmbeddedCoachEntryId(pendingCoachIntent.entryId);
-          setEmbeddedCoachSeedText(pendingCoachIntent.seedText);
-          setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
-          setMobileCoachPanelOpen(true);
-          setCoachOpen(false);
-        } else {
-          setCoachOpen(true);
-        }
-        setPendingCoachIntent(null);
-      })
-      .catch(() => {
+    const enableCoachThenOpen = async () => {
+      try {
+        await api.preferences.update({ aiCoachEnabled: true });
+      } catch {
         toast({ title: "Could not enable AI Coach", description: "Please try again." });
-      });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+      if (pendingCoachIntent?.kind === "embedded") {
+        setEmbeddedCoachEntryId(pendingCoachIntent.entryId);
+        setEmbeddedCoachSeedText(pendingCoachIntent.seedText);
+        setEmbeddedCoachSeedNonce((nonce) => nonce + 1);
+        setMobileCoachPanelOpen(true);
+        setCoachOpen(false);
+      } else {
+        setCoachOpen(true);
+      }
+      setPendingCoachIntent(null);
+    };
+    void enableCoachThenOpen();
   }, [pendingCoachIntent, setCoachOpen, setShowAIConsent, toast]);
 
   return {

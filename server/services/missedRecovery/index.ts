@@ -221,17 +221,23 @@ function plannerWindow(missedDate: string, today: string): { from: string; to: s
  * which would then read as free.
  */
 async function loadTimelineWindow(userId: string, from: string, to: string): Promise<TimelineEntry[]> {
-  const entries: TimelineEntry[] = [];
-  let before: string | null = addDaysToISODate(to, 1);
-  for (let page = 0; page < WINDOW_MAX_PAGES && before !== null; page++) {
-    // Sequential by nature: each page starts where the previous one ended.
-    const result = await storage.timeline.getTimelinePage(userId, { limit: WINDOW_PAGE_SIZE, before });
-    entries.push(...result.entries);
-    const oldest = result.entries.at(-1)?.date;
-    // Pages never split a date, so reaching `from` means its whole day is in.
-    before = oldest !== undefined && oldest > from ? result.nextCursor : null;
-  }
+  const entries = await loadTimelinePages(userId, from, addDaysToISODate(to, 1), 0);
   return entries.filter((entry) => entry.date >= from && entry.date <= to);
+}
+
+/**
+ * Page `page` of the window — the entries dated before `before` — followed by
+ * the pages after it, until one reaches back to `from` or the page cap.
+ * Recursive rather than a loop: sequential by nature, each page starts where
+ * the previous one ended.
+ */
+async function loadTimelinePages(userId: string, from: string, before: string, page: number): Promise<TimelineEntry[]> {
+  const result = await storage.timeline.getTimelinePage(userId, { limit: WINDOW_PAGE_SIZE, before });
+  const oldest = result.entries.at(-1)?.date;
+  // Pages never split a date, so reaching `from` means its whole day is in.
+  const next = oldest !== undefined && oldest > from ? result.nextCursor : null;
+  if (next === null || page + 1 >= WINDOW_MAX_PAGES) return result.entries;
+  return [...result.entries, ...(await loadTimelinePages(userId, from, next, page + 1))];
 }
 
 async function loadRecoveryContext(userId: string, planDayId: string): Promise<RecoveryContext> {

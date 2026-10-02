@@ -1,3 +1,4 @@
+import { inChunks, inSequence } from "@shared/inSequence";
 import { exerciseSets, type InsertExerciseSet, type ParsedExercise, type StructureBlockInput, workoutLogs } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
 import { eq, sql } from "drizzle-orm";
@@ -89,33 +90,39 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
       .catch((err: unknown) => {
         logger.warn({ context: "health-metrics", event: "auto_hydration_attempt_counter_failed", lockKey, err }, "Auto hydration attempt telemetry increment failed");
       });
-    return reparseFromText(target, owner, unitPreferences, context, source)
-      .then((result) => {
-        const acceptedRowCount = result?.exercises.length ?? 0;
-        const rejectedRowCount = result?.rejectedCount ?? 0;
-        const fallbackUsed = result?.fallbackUsed ?? false;
-        const qualityState = resolveHydrationQualityState(acceptedRowCount, rejectedRowCount);
+    try {
+      const result = await reparseFromText(target, owner, unitPreferences, context, source);
+      const acceptedRowCount = result?.exercises.length ?? 0;
+      const rejectedRowCount = result?.rejectedCount ?? 0;
+      const fallbackUsed = result?.fallbackUsed ?? false;
+      const qualityState = resolveHydrationQualityState(acceptedRowCount, rejectedRowCount);
 
-        if (qualityState === "ok") {
-          logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");
-        } else {
-          logger.warn({ context: "health-metrics", event: "exercise_set_auto_hydration_success_degraded", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration completed with degraded parse quality");
-        }
+      // Telemetry: the lock key (owner ids), counts and the error; no workout text.
+      if (qualityState === "ok") {
+        // bearer:disable javascript_lang_logger_leak
+        logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");
+      } else {
+        // bearer:disable javascript_lang_logger_leak
+        logger.warn({ context: "health-metrics", event: "exercise_set_auto_hydration_success_degraded", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration completed with degraded parse quality");
+      }
 
-        void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
-          .catch((err: unknown) => {
-            logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
-          });
-        return result;
-      })
-      .catch((err: unknown) => {
-        logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
-        void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed")
-          .catch((counterErr: unknown) => {
-            logger.warn({ context: "health-metrics", event: "auto_hydration_failure_counter_failed", lockKey, err: counterErr }, "Auto hydration failure telemetry increment failed");
-          });
-        throw err;
-      });
+      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
+        .catch((err: unknown) => {
+          // bearer:disable javascript_lang_logger_leak
+          logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
+        });
+      return result;
+    } catch (err: unknown) {
+      // Telemetry: the lock key (owner ids) and the error; no workout text.
+      // bearer:disable javascript_lang_logger_leak
+      logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
+      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed")
+        .catch((counterErr: unknown) => {
+          // bearer:disable javascript_lang_logger_leak
+          logger.warn({ context: "health-metrics", event: "auto_hydration_failure_counter_failed", lockKey, err: counterErr }, "Auto hydration failure telemetry increment failed");
+        });
+      throw err;
+    }
   })().finally(() => hydrationLocks.delete(lockKey));
   hydrationLocks.set(lockKey, lockPromise);
   return lockPromise;
@@ -371,18 +378,16 @@ export async function batchReparseWorkouts(
   ]);
   const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
 
-  let totalParsed = 0;
-  let totalFailed = 0;
-
   // Process workouts concurrently in chunks to improve performance
   // while preventing overload of the AI provider and database
   const CONCURRENCY_LIMIT = 5;
-  for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
-    const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);
-    const { parsed, failed } = await processBatchChunk(chunk, unitPreferences);
-    totalParsed += parsed;
-    totalFailed += failed;
-  }
+  const chunkResults = await inSequence(inChunks(workouts, CONCURRENCY_LIMIT), (chunk) =>
+    processBatchChunk(chunk, unitPreferences),
+  );
 
-  return { total: workouts.length, parsed: totalParsed, failed: totalFailed };
+  return {
+    total: workouts.length,
+    parsed: chunkResults.reduce((sum, result) => sum + result.parsed, 0),
+    failed: chunkResults.reduce((sum, result) => sum + result.failed, 0),
+  };
 }
