@@ -356,10 +356,18 @@ export async function retrieveRelevantChunks(
   // The pin is taken OUT of the topK budget rather than added to it, so prompt
   // size and cost are unchanged — this changes which chunks are chosen, not how
   // many.
-  const pinned = await listPinnedPrincipleChunks(userId, Math.min(MAX_PINNED_PRINCIPLE_CHUNKS, topK));
+  //
+  // Perf: the pinned-chunk DB reads (two sequential queries) and the embedding
+  // API call are independent, so run them concurrently — the chat turn waits
+  // for max(DB, embed) instead of DB + embed (saves the pinned-read latency,
+  // typically tens of ms, on every uncached retrieval).
+  // listPinnedPrincipleChunks never rejects, so Promise.all can't mask it.
+  const [pinned, queryEmbedding] = await Promise.all([
+    listPinnedPrincipleChunks(userId, Math.min(MAX_PINNED_PRINCIPLE_CHUNKS, topK)),
+    generateEmbedding(query),
+  ]);
   const pinnedIds = new Set(pinned.map((c) => c.id));
 
-  const queryEmbedding = await generateEmbedding(query);
   trackEmbeddingUsage(userId, 1);
   // An opaque uuid and three counts. The query text and the retrieved chunk
   // contents are deliberately never logged.
