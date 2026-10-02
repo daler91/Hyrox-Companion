@@ -58,6 +58,7 @@ function row(
     focusWorkoutLogId: null,
     feedback: null,
     feedbackAt: null,
+    factProposal: null,
     ...extra,
   };
 }

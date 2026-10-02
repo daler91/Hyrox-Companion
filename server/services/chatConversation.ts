@@ -1,4 +1,5 @@
 import type {
+  ChatFactProposal,
   ChatMessage,
   ChatSafetyNotice,
   PlanAdjustmentProposal,
@@ -82,6 +83,8 @@ export interface CoachReply {
   proposalId?: string;
   ragInfo?: RagInfo;
   safetyNotice?: ChatSafetyNotice;
+  /** A lasting fact the coach offered to put on the athlete card (I5b). */
+  factProposal?: ChatFactProposal;
 }
 
 /**
@@ -607,6 +610,7 @@ export async function saveCoachReply(
       proposalId: reply.proposalId ?? null,
       ragInfo: reply.ragInfo ? storedRagInfo(reply.ragInfo) : null,
       safetyNotice: reply.safetyNotice ?? null,
+      factProposal: reply.factProposal ?? null,
       timestamp: new Date(),
       ...focusColumns(focus),
     });

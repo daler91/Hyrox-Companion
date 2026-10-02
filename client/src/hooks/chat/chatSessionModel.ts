@@ -1,4 +1,5 @@
-import type { ChatSafetyNotice } from "@shared/schema";
+import type { ChatFactProposal, ChatSafetyNotice } from "@shared/schema";
+import { athleteFactCategoryEnum, chatFactProposalStatusEnum } from "@shared/schema/enums";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { ChatHistoryMessage, PlanProposalView, RagInfo } from "@/lib/api";
@@ -28,6 +29,18 @@ export function isChatSafetyNotice(value: unknown): value is ChatSafetyNotice {
   return (level === "urgent" || level === "caution") && typeof message === "string" && message !== "";
 }
 
+/** A fact the coach offered for the athlete card, well-formed enough to show. */
+export function isChatFactProposal(value: unknown): value is ChatFactProposal {
+  if (typeof value !== "object" || value === null) return false;
+  const { fact, category, status } = value as Record<string, unknown>;
+  return (
+    typeof fact === "string" &&
+    fact !== "" &&
+    athleteFactCategoryEnum.some((value) => value === category) &&
+    chatFactProposalStatusEnum.some((value) => value === status)
+  );
+}
+
 /** Enough of a proposal to render its card; the rest is the server's own serializer. */
 export function isPlanProposalView(value: unknown): value is PlanProposalView {
   if (typeof value !== "object" || value === null) return false;
@@ -55,6 +68,7 @@ export function messageFromHistory(row: ChatHistoryMessage): Message {
     ...(row.ragInfo ? { ragInfo: row.ragInfo } : {}),
     ...(isChatSafetyNotice(row.safetyNotice) ? { safetyNotice: row.safetyNotice } : {}),
     ...(isPlanProposalView(row.proposal) ? { proposal: row.proposal } : {}),
+    ...(isChatFactProposal(row.factProposal) ? { factProposal: row.factProposal } : {}),
     ...(row.role === "assistant" && (row.kind === "text" || row.kind === "proposal") ? { rateable: true } : {}),
     ...(row.feedback === "up" || row.feedback === "down" ? { feedback: row.feedback } : {}),
   };
@@ -67,13 +81,18 @@ export function markReplyRateable(setMessages: SetMessages, id: string): void {
   );
 }
 
-/** What a stream's extra events put on the reply: the safety notice, and the proposal it drafted. */
+/**
+ * What a stream's extra events put on the reply: the safety notice, the
+ * proposal it drafted, and a fact offered for the athlete card.
+ */
 function streamExtras(extras: Record<string, unknown> | undefined): Partial<Message> {
   const safetyNotice = extras?.safetyNotice;
   const proposal = extras?.planProposal;
+  const factProposal = extras?.factProposal;
   return {
     ...(isChatSafetyNotice(safetyNotice) ? { safetyNotice } : {}),
     ...(isPlanProposalView(proposal) ? { proposal, kind: "proposal" as const } : {}),
+    ...(isChatFactProposal(factProposal) ? { factProposal } : {}),
   };
 }
 

@@ -19,6 +19,9 @@ export const ATHLETE_FACT_MAX_LENGTH = 140;
  */
 export const MAX_ACTIVE_ATHLETE_FACTS = 20;
 
+/** What the athlete is told when a new or restored fact would go over the cap. */
+export const ATHLETE_FACT_LIMIT_MESSAGE = `Your card holds up to ${MAX_ACTIVE_ATHLETE_FACTS} facts. Retire one that no longer applies first.`;
+
 /** How long a fact stands before the athlete is asked whether it is still true (spec §2). */
 export const ATHLETE_FACT_REVIEW_DAYS = 90;
 

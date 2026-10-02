@@ -25,6 +25,7 @@ function renderChat(
   messages: Message[],
   planProposal: PlanProposalView | null = null,
   onRateMessage?: (messageId: string, feedback: "up" | "down" | null) => void,
+  onDecideFactProposal?: (messageId: string, decision: "save" | "dismiss") => void,
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
@@ -40,6 +41,7 @@ function renderChat(
       onApplyProposal={vi.fn()}
       onDismissProposal={vi.fn()}
       onRateMessage={onRateMessage}
+      onDecideFactProposal={onDecideFactProposal}
     />,
     { wrapper },
   );
@@ -106,5 +108,24 @@ describe("CoachPanelChatArea", () => {
     expect(feedback).toHaveLength(1);
     within(feedback[0]).getByRole("button", { name: "Helpful" }).click();
     expect(onRateMessage).toHaveBeenCalledWith("reply-1", null);
+  });
+
+  it("offers a fact for the athlete card under the reply that heard it, never under a failed one (I5b)", () => {
+    const onDecide = vi.fn();
+    const offer = { fact: "No sled at my gym", category: "equipment" as const, status: "pending" as const };
+    renderChat(
+      [
+        message("reply-1", { content: "Noted.", factProposal: offer }),
+        message("reply-2", { content: "", factProposal: offer, failure: { message: "Stopped." } }),
+      ],
+      null,
+      undefined,
+      onDecide,
+    );
+
+    const card = screen.getByRole("region", { name: "Save to your athlete card?" });
+    within(card).getByRole("button", { name: "Save to card" }).click();
+    expect(onDecide).toHaveBeenCalledWith("reply-1", "save");
+    expect(screen.getAllByTestId("fact-proposal")).toHaveLength(1);
   });
 });

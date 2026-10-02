@@ -36,6 +36,7 @@ import {
 } from "./enums";
 import type { SessionStreamSamples } from "./sessionStream";
 import type {
+  ChatFactProposal,
   ChatSafetyNotice,
   CoachNoteInputs,
   PlanAdjustmentProposalPayload,
@@ -1441,6 +1442,8 @@ export const chatMessages = pgTable(
     /** The athlete's thumbs on a coach reply (chatFeedbackEnum), and when they gave it. */
     feedback: varchar("feedback", { length: 10 }),
     feedbackAt: timestamp("feedback_at"),
+    /** A lasting fact the coach offered to put on the athlete card, and the athlete's answer (I5b). */
+    factProposal: jsonb("fact_proposal").$type<ChatFactProposal>(),
   },
   (table) => [
     // idx_chat_messages_user_id (single-column, on user_id) was dropped:

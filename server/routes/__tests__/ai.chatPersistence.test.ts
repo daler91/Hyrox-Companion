@@ -31,7 +31,10 @@ vi.mock("../../storage", () => ({
       saveChatMessageOnce: vi.fn(() => Promise.resolve(true)),
       deleteAssistantChatMessage: vi.fn(() => Promise.resolve()),
       setChatMessageFeedback: vi.fn(() => Promise.resolve(true)),
+      getPendingChatFactProposal: vi.fn(() => Promise.resolve(null)),
+      settleChatFactProposal: vi.fn(() => Promise.resolve(true)),
     },
+    athleteFacts: { add: vi.fn() },
     coaching: {
       listCoachingMaterials: vi.fn(() => Promise.resolve([])),
       hasChunksForUser: vi.fn(() => Promise.resolve(false)),
@@ -98,6 +101,7 @@ function savedRow(role: "user" | "assistant", content: string, minutesAgo: numbe
     focusWorkoutLogId: null,
     feedback: null,
     feedbackAt: null,
+    factProposal: null,
     ...extra,
   };
 }
@@ -539,6 +543,100 @@ describe("rating a coach reply (I23)", () => {
 
     expect(response.status).toBe(400);
     expect(storage.users.setChatMessageFeedback).not.toHaveBeenCalled();
+  });
+});
+
+describe("a lasting fact the athlete states in chat (I5b)", () => {
+  let app: express.Express;
+  const KNEE = "My left knee is bad, deep lunges hurt.";
+  const OFFER = { fact: "Bad left knee: deep lunges hurt", category: "constraint", status: "pending" };
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+    vi.mocked(buildTrainingContext).mockResolvedValue({ athleteFacts: [] } as never);
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ fact: OFFER.fact, category: OFFER.category }),
+    } as never);
+  });
+
+  it("is offered for the card as the reply's last event, and saved with the reply", async () => {
+    streamReply("Noted: ", "we'll keep lunges shallow.");
+
+    const response = await request(app).post(STREAM).send({ message: KNEE, ...IDS });
+
+    expect(response.status).toBe(200);
+    const offer = response.text.indexOf(`data: ${JSON.stringify({ factProposal: OFFER })}`);
+    expect(offer).toBeGreaterThan(response.text.indexOf("lunges shallow"));
+    expect(offer).toBeLessThan(response.text.indexOf('"done":true'));
+    expect(savesOnce()).toContainEqual(expect.objectContaining({ id: REPLY_ID, role: "assistant", factProposal: OFFER }));
+  });
+
+  it("is not offered when the card already holds it", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue({
+      athleteFacts: [{ fact: "bad left knee: deep lunges hurt.", category: "constraint", reviewOn: "2026-12-30" }],
+    } as never);
+    streamReply("Noted.");
+
+    const response = await request(app).post(STREAM).send({ message: KNEE, ...IDS });
+
+    expect(response.text).not.toContain("factProposal");
+    expect(savesOnce()).toContainEqual(expect.objectContaining({ role: "assistant", factProposal: null }));
+  });
+
+  it("is never read for after a red-flag symptom", async () => {
+    streamReply("Please stop and get checked.");
+
+    const response = await request(app).post(STREAM).send({ message: "Chest pain and my knee gave out", ...IDS });
+
+    expect(response.text).not.toContain("factProposal");
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+});
+
+describe("answering a fact the coach offered (I5b)", () => {
+  let app: express.Express;
+  const DECIDE = `/api/v1/chat/messages/${REPLY_ID}/fact`;
+  const PENDING = { fact: "No sled at my gym", category: "equipment" as const, status: "pending" as const };
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+    vi.mocked(storage.users.getPendingChatFactProposal).mockResolvedValue(PENDING);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, userTimezone: "UTC" } as never);
+  });
+
+  it("saves it to the card and marks it saved", async () => {
+    const fact = { id: "fact-1", fact: PENDING.fact, category: PENDING.category, source: "chat", active: true };
+    vi.mocked(storage.athleteFacts.add).mockResolvedValue({ ok: true, fact, created: true } as never);
+
+    const response = await request(app).post(DECIDE).send({ decision: "save" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ factProposal: { ...PENDING, status: "saved" }, fact });
+    expect(storage.users.settleChatFactProposal).toHaveBeenCalledWith("test_user_id", REPLY_ID, "saved");
+  });
+
+  it("says the card is full, and leaves the offer waiting", async () => {
+    vi.mocked(storage.athleteFacts.add).mockResolvedValue({ ok: false, reason: "limit" });
+
+    const response = await request(app).post(DECIDE).send({ decision: "save" });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("ATHLETE_FACT_LIMIT");
+    expect(storage.users.settleChatFactProposal).not.toHaveBeenCalled();
+  });
+
+  it("turns it down, finds nothing on a reply without an offer, and takes only save or dismiss", async () => {
+    const dismissed = await request(app).post(DECIDE).send({ decision: "dismiss" });
+    expect(dismissed.body).toEqual({ factProposal: { ...PENDING, status: "dismissed" } });
+
+    vi.mocked(storage.users.getPendingChatFactProposal).mockResolvedValue(null);
+    expect((await request(app).post(DECIDE).send({ decision: "save" })).status).toBe(404);
+    expect((await request(app).post(DECIDE).send({ decision: "maybe" })).status).toBe(400);
+    expect(storage.athleteFacts.add).not.toHaveBeenCalled();
   });
 });
 

@@ -169,4 +169,26 @@ describe("chat messages and their proposals (real Postgres)", () => {
     const [reply] = await storage.users.getChatMessages(ALICE);
     expect(reply).toMatchObject({ kind: "proposal", proposalId: null, content: "Moved your long run to Saturday." });
   });
+
+  it("keeps a fact the coach offered, and moves it once, for the athlete who owns the reply (I5b)", async () => {
+    const offer = { fact: "No sled at my gym", category: "equipment" as const, status: "pending" as const };
+    await storage.users.saveChatMessageOnce({
+      id: MESSAGE_ID,
+      userId: ALICE,
+      role: "assistant",
+      content: "Noted.",
+      factProposal: offer,
+    });
+
+    expect(await storage.users.getPendingChatFactProposal(BOB, MESSAGE_ID)).toBeNull();
+    expect(await storage.users.settleChatFactProposal(BOB, MESSAGE_ID, "saved")).toBe(false);
+    expect(await storage.users.getPendingChatFactProposal(ALICE, MESSAGE_ID)).toEqual(offer);
+
+    expect(await storage.users.settleChatFactProposal(ALICE, MESSAGE_ID, "saved")).toBe(true);
+    // Answered once: a second answer finds nothing waiting.
+    expect(await storage.users.settleChatFactProposal(ALICE, MESSAGE_ID, "dismissed")).toBe(false);
+    expect(await storage.users.getPendingChatFactProposal(ALICE, MESSAGE_ID)).toBeNull();
+    const [reply] = await storage.users.getChatMessages(ALICE);
+    expect(reply?.factProposal).toEqual({ ...offer, status: "saved" });
+  });
 });

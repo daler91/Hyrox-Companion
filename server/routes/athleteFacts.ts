@@ -1,4 +1,4 @@
-import { athleteFactReviewOn, MAX_ACTIVE_ATHLETE_FACTS } from "@shared/athleteFacts";
+import { ATHLETE_FACT_LIMIT_MESSAGE, athleteFactReviewOn } from "@shared/athleteFacts";
 import {
   type AthleteFactImportResult,
   type CreateAthleteFact,
@@ -35,10 +35,7 @@ async function reviewOnForToday(userId: string): Promise<string> {
 function sendRefusal(res: Response, reason: Extract<AthleteFactWrite, { ok: false }>["reason"]) {
   if (reason === "not_found") return sendNotFound(res, "Fact not found");
   if (reason === "limit") {
-    return res.status(409).json({
-      error: `Your card holds up to ${MAX_ACTIVE_ATHLETE_FACTS} facts. Retire one that no longer applies first.`,
-      code: ErrorCode.ATHLETE_FACT_LIMIT,
-    });
+    return res.status(409).json({ error: ATHLETE_FACT_LIMIT_MESSAGE, code: ErrorCode.ATHLETE_FACT_LIMIT });
   }
   return res.status(409).json({ error: "Your card already has that fact.", code: ErrorCode.ATHLETE_FACT_DUPLICATE });
 }

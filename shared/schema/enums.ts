@@ -138,6 +138,13 @@ export const chatFeedbackEnum = ["up", "down"] as const;
 export type ChatFeedback = (typeof chatFeedbackEnum)[number];
 
 /**
+ * Where a fact the coach offered in chat stands (AI coach chat review, I5b):
+ * waiting for the athlete, saved to their card, or turned down.
+ */
+export const chatFactProposalStatusEnum = ["pending", "saved", "dismissed"] as const;
+export type ChatFactProposalStatus = (typeof chatFactProposalStatusEnum)[number];
+
+/**
  * What an athlete fact is about (coach-memory spec §3): a standing constraint
  * (an injury, a movement to avoid), equipment they have or lack, their
  * schedule, a preference, or anything else.

@@ -64,6 +64,7 @@ export function EmbeddedWorkoutCoachChat({
     sendMessage,
     retryMessage,
     rateMessage,
+    decideFactProposal,
     cancelStream,
   } = useChatSession({
     useStreaming: true,
@@ -148,6 +149,7 @@ export function EmbeddedWorkoutCoachChat({
         undoingProposalId={undoingProposalId}
         onRetryMessage={retryMessage}
         onRateMessage={rateMessage}
+        onDecideFactProposal={decideFactProposal}
       />
 
       <div className="shrink-0 border-t border-border p-2">

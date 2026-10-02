@@ -1,11 +1,13 @@
 import { getAuth } from "@clerk/express";
-import { type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { ATHLETE_FACT_LIMIT_MESSAGE } from "@shared/athleteFacts";
+import { type ChatFactDecisionBody, chatFactDecisionSchema, type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
 import type { TextAiToolCall } from "../ai/providers";
 import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
+import { ErrorCode } from "../errors";
 import { type ChatCallOptions, chatWithCoach, type CoachToolset, parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromImage, parseWorkoutStructureFromText,streamChatWithCoach, streamChatWithCoachTools } from "../gemini/index";
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
@@ -17,6 +19,7 @@ import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { type CoachReply, type Conversation, type ConversationTurn, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
+import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
 import { type ChatToolContext, chatToolsFor, PROPOSE_PLAN_CHANGES, runChatTool } from "../services/chatTools";
@@ -343,6 +346,8 @@ interface PlanEditBranchOptions {
   readonly reply: CoachReply;
   /** What the turn's log line reports (I23). */
   readonly telemetry: ChatTurnTelemetry;
+  /** Offers the lasting fact the athlete stated, if any, just before the reply closes (I5b). */
+  readonly offerFact: () => Promise<void>;
 }
 
 const NOT_A_PLAN_EDIT: ChatIntentResult = { intent: "normal_chat", confidence: 0 };
@@ -404,12 +409,14 @@ async function sendPlanProposalReply(
   safeWrite: SseWriter,
   summaryText: string,
   proposal: PlanAdjustmentProposal | null,
+  offerFact: () => Promise<void>,
 ): Promise<void> {
   if (!controller.signal.aborted) {
     await safeWrite(sseEvent({ text: summaryText }));
     if (proposal) {
       await safeWrite(sseEvent({ planProposal: serializePlanProposal(proposal) }));
     }
+    await offerFact();
     res.write(sseEvent({ done: true }));
   }
   res.end();
@@ -421,7 +428,7 @@ async function sendPlanProposalReply(
  * to the normal chat stream (including on `generation_failed`).
  */
 async function handlePlanEditRequest(
-  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry }: PlanEditBranchOptions,
+  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact }: PlanEditBranchOptions,
   planEditIntent: Promise<ChatIntentResult>,
 ): Promise<boolean> {
   const intent = await planEditIntent;
@@ -451,7 +458,7 @@ async function handlePlanEditRequest(
   reply.content = summaryText;
   reply.proposalId = proposal?.id;
   markFirstText(telemetry);
-  await sendPlanProposalReply(res, controller, safeWrite, summaryText, proposal);
+  await sendPlanProposalReply(res, controller, safeWrite, summaryText, proposal, offerFact);
   return true;
 }
 
@@ -572,7 +579,7 @@ const TOOL_PROPOSAL_FAILED_TEXT =
  * with it (and its card) after whatever the coach already said.
  */
 async function replyWithToolProposal(
-  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry }: Omit<PlanEditBranchOptions, "planEditIntent">,
+  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact }: Omit<PlanEditBranchOptions, "planEditIntent">,
   call: TextAiToolCall,
 ): Promise<void> {
   await safeWrite(sseEvent({ planProposalPending: true }));
@@ -607,7 +614,7 @@ async function replyWithToolProposal(
   reply.content += sent;
   reply.proposalId = proposal?.id;
   markFirstText(telemetry);
-  await sendPlanProposalReply(res, controller, safeWrite, sent, proposal);
+  await sendPlanProposalReply(res, controller, safeWrite, sent, proposal, offerFact);
 }
 
 async function streamCoachReply(
@@ -659,6 +666,25 @@ function sendSseTerminalEvent(
   }
 }
 
+/**
+ * Offer the lasting fact the athlete stated, if the read found one the card
+ * doesn't hold, as the reply's last event (I5b). It is saved with the reply,
+ * so the athlete can answer it after a reload too. Only on a reply that went
+ * out: an offer under a failed or stopped reply would read as the coach
+ * filing away what it never answered.
+ */
+async function offerFactProposal(
+  { controller, safeWrite, reply }: Pick<CoachStream, "controller" | "safeWrite" | "reply">,
+  candidate: Promise<FactCandidate | null> | null,
+  aiContext: AIContext,
+): Promise<void> {
+  if (!candidate || controller.signal.aborted || !reply.content.trim()) return;
+  const factProposal = await settleFactProposal(candidate, aiContext.trainingContext.athleteFacts);
+  if (!factProposal || controller.signal.aborted) return;
+  reply.factProposal = factProposal;
+  await safeWrite(sseEvent({ factProposal }));
+}
+
 /** How a reply ended: streamed prose, or a proposal reply that already closed the stream. */
 type ChatAnswer = "prose" | "proposal";
 
@@ -695,6 +721,14 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     // With tools the reply model decides itself, so the classifier never runs.
     const planEditIntent = useTools ? null : startPlanEditIntent(req, userId, chatSafety, conversation.turns);
     if (!useTools && !planEditIntent) telemetry.planEdit = { gate: "closed" };
+    // Read alongside the reply for a lasting fact to offer for the athlete card (I5b).
+    const factCandidate = startFactProposal({
+      message: req.body.message,
+      history: conversation.turns,
+      userId,
+      chatSafety,
+      serverOwned: turn !== null,
+    });
     const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
     telemetry.contextReadyAt = Date.now();
     const focus = turnFocus(req.body);
@@ -729,13 +763,15 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       // independent of what the model goes on to write.
       if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
-      const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry };
+      const offerFact = () => offerFactProposal({ controller, safeWrite, reply }, factCandidate, aiContext);
+      const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact };
       const answered = useTools
         ? await answerWithTools(branch, { chatSafety, ...promptOptions }, canProposePlanChanges(req, chatSafety))
         : await answerWithoutTools({ ...branch, planEditIntent }, { chatSafety, ...promptOptions });
       telemetry.outcome = controller.signal.aborted ? "aborted" : answered;
       if (answered === "proposal") return;
 
+      await offerFact();
       sendSseTerminalEvent(res, controller, abortState);
       res.end();
     } catch (streamError) {
@@ -835,6 +871,22 @@ protectedPatch(router, "/api/v1/chat/messages/:id", { limiter: rateLimiter("chat
     // The rating and the reply's id; never its content.
     reqLogger(req).info({ messageId: req.params.id, feedback }, "[chat] feedback");
     res.json({ id: req.params.id, feedback });
+  });
+
+// The athlete's answer to a fact the coach offered under a reply (I5b): save it
+// to their athlete card, or not now. No AI consent needed: this calls no model,
+// and the card's own routes take none either.
+protectedPost(router, "/api/v1/chat/messages/:id/fact", { limiter: rateLimiter("athleteFacts", 20), validation: [validateBody(chatFactDecisionSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, ChatFactDecisionBody>, res: Response) => {
+    const result = await decideChatFactProposal(getUserId(req), req.params.id, req.body.decision);
+    if (result.kind === "not_found") {
+      sendNotFound(res, "No fact is waiting for an answer on that reply");
+      return;
+    }
+    if (result.kind === "limit") {
+      res.status(409).json({ error: ATHLETE_FACT_LIMIT_MESSAGE, code: ErrorCode.ATHLETE_FACT_LIMIT });
+      return;
+    }
+    res.json({ factProposal: result.factProposal, ...(result.fact ? { fact: result.fact } : {}) });
   });
 
 protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHistoryDelete", 5) }, async (req: ExpressRequest, res: Response) => {

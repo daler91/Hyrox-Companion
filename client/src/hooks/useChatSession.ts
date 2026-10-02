@@ -13,6 +13,7 @@ import {
 import { useBudgetWarning } from "./chat/useBudgetWarning";
 import { useChatAutoScroll } from "./chat/useChatAutoScroll";
 import { useChatHistory } from "./chat/useChatHistory";
+import { useFactProposalDecision } from "./chat/useFactProposalDecision";
 import { useMessageFeedback } from "./chat/useMessageFeedback";
 
 export type { RagInfo } from "@/lib/api";
@@ -210,6 +211,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, []);
 
   const rateMessage = useMessageFeedback(setMessages, messagesRef);
+  const decideFactProposal = useFactProposalDecision(setMessages, messagesRef);
 
   return {
     messages,
@@ -225,6 +227,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     sendMessage,
     retryMessage,
     rateMessage,
+    decideFactProposal,
     cancelStream,
     clearHistory,
     isClearingHistory,

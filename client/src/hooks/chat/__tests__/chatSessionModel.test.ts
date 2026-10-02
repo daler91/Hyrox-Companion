@@ -33,6 +33,7 @@ function savedRow(overrides: Partial<ChatHistoryMessage>): ChatHistoryMessage {
     focusWorkoutLogId: null,
     feedback: null,
     feedbackAt: null,
+    factProposal: null,
     ...overrides,
   };
 }
@@ -93,6 +94,15 @@ describe("messageFromHistory", () => {
   });
 });
 
+describe("messageFromHistory — a fact offered for the athlete card (I5b)", () => {
+  it("keeps the offer and the athlete's answer to it", () => {
+    const factProposal = { fact: "No sled at my gym", category: "equipment" as const, status: "saved" as const };
+
+    expect(messageFromHistory(savedRow({ factProposal })).factProposal).toEqual(factProposal);
+    expect(messageFromHistory(savedRow({}))).not.toHaveProperty("factProposal");
+  });
+});
+
 describe("markReplyRateable", () => {
   it("opens a reply to rating once it arrived in full, never a failed or empty one", () => {
     const buffer = messageBuffer([
@@ -135,6 +145,20 @@ describe("createMessageUpdater", () => {
     createMessageUpdater("a1", buffer.setMessages)({ content: "Hi.", extras: { planProposal: { id: 3 } } });
 
     expect(buffer.current()[0]).not.toHaveProperty("proposal");
+  });
+
+  it("puts a fact offered for the athlete card on the reply, and ignores a malformed one (I5b)", () => {
+    const offer = { fact: "No sled at my gym", category: "equipment", status: "pending" };
+    const buffer = messageBuffer([message({ id: "a1", role: "assistant" }), message({ id: "a2", role: "assistant" })]);
+
+    createMessageUpdater("a1", buffer.setMessages)({ content: "Noted.", extras: { factProposal: offer } });
+    createMessageUpdater("a2", buffer.setMessages)({
+      content: "Noted.",
+      extras: { factProposal: { ...offer, category: "medical" } },
+    });
+
+    expect(buffer.current()[0]?.factProposal).toEqual(offer);
+    expect(buffer.current()[1]).not.toHaveProperty("factProposal");
   });
 });
 

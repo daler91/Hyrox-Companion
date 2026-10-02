@@ -1,4 +1,4 @@
-import type { ChatFeedback, ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
+import type { ChatFactProposal, ChatFeedback, ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
 
 import type { PlanProposalView } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
@@ -34,6 +34,8 @@ export interface Message {
   safetyNotice?: ChatSafetyNotice;
   /** The plan proposal this reply carried; its card shows the proposal's current status. */
   proposal?: PlanProposalView;
+  /** A lasting fact the coach offered to put on the athlete card, and the athlete's answer (I5b). */
+  factProposal?: ChatFactProposal;
   /**
    * What the saved row is. `summary` is the note the coach carried into a new
    * session after a break: shown as a divider, not as something the coach said.

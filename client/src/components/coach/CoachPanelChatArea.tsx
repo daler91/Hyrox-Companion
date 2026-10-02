@@ -3,9 +3,11 @@ import { forwardRef, Fragment, type UIEventHandler, useMemo } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatDaySeparator, SessionSummaryNote } from "@/components/coach/ChatTranscriptMarkers";
+import { FactProposalCard } from "@/components/coach/FactProposalCard";
 import { InlinePlanProposal } from "@/components/coach/InlinePlanProposal";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { FactProposalDecision } from "@/hooks/chat/useFactProposalDecision";
 import type { Message } from "@/hooks/useChatSession";
 import type { PlanProposalView, RagInfo, Suggestion } from "@/lib/api";
 import { buildTranscript } from "@/lib/chatTranscript";
@@ -40,6 +42,8 @@ interface CoachPanelChatAreaProps {
   readonly onRetryMessage?: (messageId: string) => void;
   /** Rate a saved coach reply (see useChatSession.rateMessage). */
   readonly onRateMessage?: (messageId: string, feedback: ChatFeedback | null) => void;
+  /** Answer a fact the coach offered for the athlete card (see useChatSession.decideFactProposal). */
+  readonly onDecideFactProposal?: (messageId: string, decision: FactProposalDecision) => void;
 }
 
 export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaProps>(
@@ -64,6 +68,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       undoingProposalId = null,
       onRetryMessage,
       onRateMessage,
+      onDecideFactProposal,
     },
     ref
   ) => {
@@ -112,6 +117,13 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                   feedback={message.feedback}
                   onFeedback={message.rateable ? onRateMessage : undefined}
                 />
+                {message.factProposal && !message.failure && onDecideFactProposal && (
+                  <FactProposalCard
+                    messageId={message.id}
+                    proposal={message.factProposal}
+                    onDecide={onDecideFactProposal}
+                  />
+                )}
                 {message.proposal && (
                   <InlinePlanProposal
                     snapshot={message.proposal}

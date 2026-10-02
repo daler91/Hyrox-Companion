@@ -813,6 +813,13 @@
       "when": 1790896591564,
       "tag": "0115_athlete_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1790899844274,
+      "tag": "0116_chat_message_fact_proposal",
+      "breakpoints": true
     }
   ]
 }

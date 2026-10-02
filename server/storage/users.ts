@@ -1,5 +1,7 @@
 import { calculateMafHr } from "@shared/maf";
 import {
+  type ChatFactProposal,
+  type ChatFactProposalStatus,
   type ChatFeedback,
   type ChatMessage,
   chatMessages,
@@ -91,6 +93,43 @@ async function setChatMessageFeedback(userId: string, id: string, feedback: Chat
         inArray(chatMessages.kind, ["text", "proposal"]),
       ),
     )
+    .returning({ id: chatMessages.id });
+  return rows.length > 0;
+}
+
+/** One of the athlete's coach replies whose offered fact still waits for their answer (I5b). */
+function pendingFactProposalRow(userId: string, id: string) {
+  return and(
+    eq(chatMessages.id, id),
+    eq(chatMessages.userId, userId),
+    eq(chatMessages.role, "assistant"),
+    sql`${chatMessages.factProposal}->>'status' = 'pending'`,
+  );
+}
+
+/** The fact the coach offered on one of the athlete's replies, while it waits for their answer. */
+async function getPendingChatFactProposal(userId: string, id: string): Promise<ChatFactProposal | null> {
+  const [row] = await db
+    .select({ factProposal: chatMessages.factProposal })
+    .from(chatMessages)
+    .where(pendingFactProposalRow(userId, id))
+    .limit(1);
+  return row?.factProposal ?? null;
+}
+
+/**
+ * Record the athlete's answer to an offered fact. Only a proposal still
+ * pending moves, so two answers can't both land. Returns whether it moved.
+ */
+async function settleChatFactProposal(
+  userId: string,
+  id: string,
+  status: Exclude<ChatFactProposalStatus, "pending">,
+): Promise<boolean> {
+  const rows = await db
+    .update(chatMessages)
+    .set({ factProposal: sql`jsonb_set(${chatMessages.factProposal}, '{status}', to_jsonb(${status}::text))` })
+    .where(pendingFactProposalRow(userId, id))
     .returning({ id: chatMessages.id });
   return rows.length > 0;
 }
@@ -462,6 +501,8 @@ export class UserStorage {
   readonly saveChatMessageOnce = saveChatMessageOnce;
   readonly deleteAssistantChatMessage = deleteAssistantChatMessage;
   readonly setChatMessageFeedback = setChatMessageFeedback;
+  readonly getPendingChatFactProposal = getPendingChatFactProposal;
+  readonly settleChatFactProposal = settleChatFactProposal;
 
   async clearChatHistory(userId: string): Promise<boolean> {
     await db.delete(chatMessages).where(eq(chatMessages.userId, userId));

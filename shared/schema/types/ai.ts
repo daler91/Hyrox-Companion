@@ -1,4 +1,5 @@
 ﻿import { dayDiff, MAX_PLAN_WEEKS, MIN_PLAN_WEEKS } from "../../dateUtils";
+import type { AthleteFactCategory, ChatFactProposalStatus } from "../enums";
 import { z } from "../zod";
 import { dateStringSchema } from "./requests";
 // AI Plan Generation
@@ -68,6 +69,17 @@ export interface RagInfo {
 export interface ChatSafetyNotice {
   level: "urgent" | "caution";
   message: string;
+}
+
+/**
+ * A lasting fact the coach heard in the athlete's message and offers to put
+ * on their athlete card (AI coach chat review, I5b). Nothing is written to the
+ * card until the athlete saves it.
+ */
+export interface ChatFactProposal {
+  fact: string;
+  category: AthleteFactCategory;
+  status: ChatFactProposalStatus;
 }
 
 export interface WorkoutSuggestion {

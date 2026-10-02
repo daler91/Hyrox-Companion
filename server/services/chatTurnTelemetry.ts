@@ -1,4 +1,4 @@
-import type { ChatIntentResult, ChatSafetyNotice, RagInfo } from "@shared/schema";
+import type { ChatFactProposal, ChatIntentResult, ChatSafetyNotice, RagInfo } from "@shared/schema";
 
 import type { PlanAdjustmentProposalResult } from "./planAdjustmentService";
 
@@ -48,6 +48,7 @@ interface TurnReply {
   readonly proposalId?: string;
   readonly ragInfo?: RagInfo;
   readonly safetyNotice?: ChatSafetyNotice;
+  readonly factProposal?: ChatFactProposal;
 }
 
 const since = (start: number, at: number | undefined) => (at === undefined ? null : at - start);
@@ -70,5 +71,7 @@ export function chatTurnLogFields(turn: ChatTurnTelemetry, reply: TurnReply, now
     replyChars: reply.content.length,
     retrieval: reply.ragInfo?.source ?? "none",
     ...(reply.safetyNotice ? { safetyNotice: reply.safetyNotice.level } : {}),
+    // What kind of fact was offered for the card (I5b); never its words.
+    ...(reply.factProposal ? { factOffered: reply.factProposal.category } : {}),
   };
 }

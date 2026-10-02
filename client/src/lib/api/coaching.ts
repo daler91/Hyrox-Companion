@@ -1,4 +1,13 @@
-import type { ChatFeedback, ChatMessage, ChatSafetyNotice, CoachingMaterial, CoachWelcome, RagInfo } from "@shared/schema";
+import type {
+  AthleteFact,
+  ChatFactProposal,
+  ChatFeedback,
+  ChatMessage,
+  ChatSafetyNotice,
+  CoachingMaterial,
+  CoachWelcome,
+  RagInfo,
+} from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import type { PlanProposalView } from "./planProposals";
@@ -127,6 +136,14 @@ export const chat = {
       "PATCH",
       `/api/v1/chat/messages/${encodeURIComponent(id)}`,
       { feedback },
+    ),
+
+  /** The athlete's answer to a fact the coach offered under a reply: save it to their card, or not now (I5b). */
+  decideFactProposal: (id: string, decision: "save" | "dismiss") =>
+    typedRequest<{ factProposal: ChatFactProposal; fact?: AthleteFact }>(
+      "POST",
+      `/api/v1/chat/messages/${encodeURIComponent(id)}/fact`,
+      { decision },
     ),
 
   // Fetch the LAST stored insights (no AI spend) so the tab paints instantly on
