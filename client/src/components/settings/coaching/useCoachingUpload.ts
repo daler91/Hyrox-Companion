@@ -81,13 +81,12 @@ async function extractPdfText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await getDocument({ data: arrayBuffer }).promise;
   const pageNumbers = Array.from({ length: pdf.numPages }, (_, index) => index + 1);
-  const pages = await Promise.all(
-    pageNumbers.map(async (pageNumber) => {
-      const page = await pdf.getPage(pageNumber);
-      const textContent = await page.getTextContent();
-      return textContent.items.map((item) => ("str" in item ? item.str : "")).join(" ");
-    }),
-  );
+  // One page at a time: a large PDF read all at once can spike memory.
+  const pages = await inSequence(pageNumbers, async (pageNumber) => {
+    const page = await pdf.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    return textContent.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+  });
   return sanitizeText(pages.join("\n\n"));
 }
 
