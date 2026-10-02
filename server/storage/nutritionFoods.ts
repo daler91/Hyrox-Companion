@@ -84,7 +84,7 @@ export async function searchLocalFoods(
     orSeparator,
   )})`;
 
-  return db
+  return await db
     .select({ ...getTableColumns(foods), _localSim: sim })
     .from(foods)
     .where(and(match, visibleTo(userId)))
@@ -133,7 +133,7 @@ export async function upsertFoods(mapped: MappedFood[], executor: DbExecutor = d
     lastFetchedAt: now,
   }));
 
-  return executor
+  return await executor
     .insert(foods)
     .values(values)
     .onConflictDoUpdate({
@@ -239,7 +239,7 @@ export async function getRecentFoods(userId: string, limit = 20): Promise<FoodWi
 // --- custom foods (FR-2.2) ------------------------------------------------
 
 export async function createCustomFood(userId: string, data: CreateCustomFoodInput): Promise<Food> {
-  return db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [food] = await tx
       .insert(foods)
       .values({
@@ -363,7 +363,7 @@ export async function listCustomFoods(userId: string): Promise<Food[]> {
 /** A food's servings visible to the user: shared seed/USDA portions (NULL owner)
  *  plus the user's own personal portions. Ordered by grams for a stable picker. */
 export async function getServings(foodId: string, userId: string): Promise<FoodServing[]> {
-  return db
+  return await db
     .select()
     .from(foodServings)
     .where(
@@ -382,7 +382,7 @@ export async function cacheServings(
   servings: { label: string; grams: number }[],
 ): Promise<FoodServing[]> {
   if (servings.length === 0) return [];
-  return db
+  return await db
     .insert(foodServings)
     .values(servings.map((s) => ({ foodId, label: s.label, grams: s.grams })))
     .returning();

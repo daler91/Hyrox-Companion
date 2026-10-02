@@ -23,7 +23,7 @@ export class ConsentStorage {
   async getConsents(
     userId: string,
   ): Promise<Array<{ consentType: string; granted: boolean; consentedAt: Date }>> {
-    return db
+    return await db
       .select({
         consentType: userConsents.consentType,
         granted: userConsents.granted,

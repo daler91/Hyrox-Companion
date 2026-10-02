@@ -107,13 +107,12 @@ export function useGeneratePlan(): UseGeneratePlanResult {
     }
 
     if (generationStatus === "failed") {
-      void (async () => {
-        const errMsg = statusQuery.data?.error ?? "Plan generation failed";
-        const toastContent = getGeneratePlanErrorToast(new Error(errMsg));
-        toast({ variant: "destructive", ...toastContent });
-        setPendingPlanId(null);
-        setSuccessCallback(null);
-      })();
+      const errMsg = statusQuery.data?.error ?? "Plan generation failed";
+      const toastContent = getGeneratePlanErrorToast(new Error(errMsg));
+      toast({ variant: "destructive", ...toastContent });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- stops polling once the server reports the job failed
+      setPendingPlanId(null);
+      setSuccessCallback(null);
     }
   // Only react when generationStatus changes, not on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps

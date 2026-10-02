@@ -1,3 +1,4 @@
+import { inSequence } from "@shared/inSequence";
 import { garminConnections, stravaConnections } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -45,11 +46,13 @@ async function reencryptStrava(): Promise<TableSweepResult> {
 
   let updated = 0;
   let failed = 0;
-  for (const row of rows) {
+  // One row at a time, so a boot-time sweep over every stored credential
+  // never takes the whole pool.
+  await inSequence(rows, async (row) => {
     try {
       const access = remap(row.accessToken);
       const refresh = remap(row.refreshToken);
-      if (!access.changed && !refresh.changed) continue;
+      if (!access.changed && !refresh.changed) return;
       await db
         .update(stravaConnections)
         .set({
@@ -71,7 +74,7 @@ async function reencryptStrava(): Promise<TableSweepResult> {
         "Skipping credential row that failed re-encryption",
       );
     }
-  }
+  });
   return { updated, failed };
 }
 
@@ -88,13 +91,14 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
 
   let updated = 0;
   let failed = 0;
-  for (const row of rows) {
+  // One row at a time, as in the Strava sweep above.
+  await inSequence(rows, async (row) => {
     try {
       const email = remap(row.encryptedEmail);
       const password = remap(row.encryptedPassword);
       const oauth1 = remap(row.encryptedOauth1Token);
       const oauth2 = remap(row.encryptedOauth2Token);
-      if (!email.changed && !password.changed && !oauth1.changed && !oauth2.changed) continue;
+      if (!email.changed && !password.changed && !oauth1.changed && !oauth2.changed) return;
       await db
         .update(garminConnections)
         .set({
@@ -115,7 +119,7 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
         "Skipping credential row that failed re-encryption",
       );
     }
-  }
+  });
   return { updated, failed };
 }
 

@@ -81,7 +81,7 @@ export class PushStorage {
   async getSubscriptionsForUser(
     userId: string,
   ): Promise<Array<{ id: string; endpoint: string; p256dh: string; auth: string }>> {
-    return db
+    return await db
       .select({
         id: pushSubscriptions.id,
         endpoint: pushSubscriptions.endpoint,

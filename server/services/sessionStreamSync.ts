@@ -251,11 +251,8 @@ export async function runSessionStreamBackfillScan(
   const userIds = await storage.sessionStreams.listUsersWithPendingStreams(
     pendingWindow(now, SESSION_STREAM_SCAN_USERS_PER_TICK),
   );
-  let enqueued = 0;
-  for (const userId of userIds) {
-    const result = await enqueueSessionStreams(userId, "scan");
-    if (result.enqueued) enqueued += 1;
-  }
+  const results = await Promise.all(userIds.map((userId) => enqueueSessionStreams(userId, "scan")));
+  const enqueued = results.filter((result) => result.enqueued).length;
   return { usersChecked: userIds.length, enqueued, skipped: null };
 }
 

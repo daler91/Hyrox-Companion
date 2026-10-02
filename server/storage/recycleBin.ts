@@ -1,3 +1,4 @@
+import { inChunks, inSequence } from "@shared/inSequence";
 import {
   exerciseSets,
   mafWorkoutAnalysis,
@@ -84,9 +85,9 @@ async function insertChunked<T extends PgTable>(
   table: T,
   rows: T["$inferInsert"][],
 ): Promise<void> {
-  for (let start = 0; start < rows.length; start += INSERT_CHUNK_SIZE) {
-    await tx.insert(table).values(rows.slice(start, start + INSERT_CHUNK_SIZE));
-  }
+  await inSequence(inChunks(rows, INSERT_CHUNK_SIZE), async (chunk) => {
+    await tx.insert(table).values(chunk);
+  });
 }
 
 async function ownsPlan(tx: DbExecutor, userId: string, planId: string): Promise<boolean> {
@@ -328,9 +329,7 @@ async function restoreTrainingPlan(
       planOnly.push(log.id);
     }
   }
-  for (const [dayId, logIds] of byDay) {
-    await relinkLogsToDay(tx, userId, { id: dayId, planId }, logIds);
-  }
+  await inSequence([...byDay], ([dayId, logIds]) => relinkLogsToDay(tx, userId, { id: dayId, planId }, logIds));
   if (planOnly.length) {
     await tx
       .update(workoutLogs)
@@ -518,12 +517,12 @@ export class RecycleBinStorage {
         );
         const restored: Array<{ entityType: RecycleBinEntityType; entityId: string }> = [];
         const warnings: string[] = [];
-        for (const item of items) {
+        await inSequence(items, async (item) => {
           const result = await restoreItemInTx(tx, userId, item);
           if (!result.ok) throw new RestoreAbort(result);
           restored.push({ entityType: result.entityType, entityId: result.entityId });
           warnings.push(...result.warnings);
-        }
+        });
         await tx.delete(recycleBinItems).where(
           inArray(
             recycleBinItems.id,

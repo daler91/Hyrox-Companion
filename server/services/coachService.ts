@@ -1,4 +1,5 @@
 import { appendCoachBlock, appendCoachCue } from "@shared/coachNotes";
+import { inSequence } from "@shared/inSequence";
 import { type CoachNoteInputs, type InsertExerciseSet, type UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
@@ -488,12 +489,11 @@ async function applyAutoCoachChanges({
   reviewNotes,
   adaptation,
 }: AutoCoachApplyInput): Promise<{ adjusted: number; noted: number }> {
-  return db.transaction(async (tx) => {
-    const modResults: AppliedSuggestionResult[] = [];
+  return await db.transaction(async (tx) => {
     const inputsByWorkoutId = new Map<string, CoachNoteInputs>();
     // Keep duplicate suggestions for the same plan day ordered so structured
     // appends re-read sortOrder after any earlier insert in this transaction.
-    for (const prepared of preparedSuggestions) {
+    const modResults = await inSequence(preparedSuggestions, async (prepared) => {
       const currentInputs = inputsByWorkoutId.get(prepared.suggestion.workoutId) ?? inputsUsed;
       const result = await applySuggestion(prepared, {
         upcomingWorkouts,
@@ -504,11 +504,11 @@ async function applyAutoCoachChanges({
         unitPreferences,
         tx,
       });
-      modResults.push(result);
       if (result.applied && result.inputsUsed) {
         inputsByWorkoutId.set(prepared.suggestion.workoutId, result.inputsUsed);
       }
-    }
+      return result;
+    });
     const workoutById = new Map(upcomingWorkouts.map((workout) => [workout.id, workout]));
     const noteResults = await Promise.all(
       reviewNotes.map((note) =>

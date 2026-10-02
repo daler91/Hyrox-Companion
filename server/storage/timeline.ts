@@ -570,7 +570,7 @@ export class TimelineStorage {
    * reach arbitrarily far back.
    */
   private async fetchAbsences(userId: string): Promise<AbsenceRange[]> {
-    return db
+    return await db
       .select({
         startDate: timelineAnnotations.startDate,
         endDate: timelineAnnotations.endDate,
@@ -627,7 +627,7 @@ export class TimelineStorage {
       query = query.limit(sqlLimit);
     }
 
-    return query;
+    return await query;
   }
 
   private buildTimelineEntries(

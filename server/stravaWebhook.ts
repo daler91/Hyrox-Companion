@@ -429,9 +429,7 @@ export async function processStravaWebhookEvent(
   const targets = owners.filter((owner) => !owner.requiresReauth);
   if (targets.length === 0) return "unknown_owner";
 
-  for (const target of targets) {
-    await enqueueStravaSync(target.userId, "webhook");
-  }
+  await Promise.all(targets.map((target) => enqueueStravaSync(target.userId, "webhook")));
   // A static context and message only. Nothing derived from the
   // (unauthenticated) body — not even a count of the rows its owner_id
   // looked up — reaches the log line, so a crafted event cannot forge a

@@ -1,3 +1,4 @@
+import { inSequence } from "@shared/inSequence";
 import { useRef,useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
@@ -79,12 +80,14 @@ async function extractPdfText(file: File): Promise<string> {
   const { getDocument } = await ensurePdfjs();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await getDocument({ data: arrayBuffer }).promise;
-  const pages: string[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    pages.push(textContent.items.map((item) => ("str" in item ? item.str : "")).join(" "));
-  }
+  const pageNumbers = Array.from({ length: pdf.numPages }, (_, index) => index + 1);
+  const pages = await Promise.all(
+    pageNumbers.map(async (pageNumber) => {
+      const page = await pdf.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      return textContent.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+    }),
+  );
   return sanitizeText(pages.join("\n\n"));
 }
 
@@ -145,10 +148,12 @@ export function useCoachingUpload() {
     const failed: string[] = [];
     let uploaded = 0;
 
-    for (const file of files) {
+    // One file at a time: the upload route is rate-limited, and each upload
+    // queues its own embedding job.
+    await inSequence(files, async (file) => {
       if (file.size > MAX_FILE_SIZE) {
         tooLarge.push(file.name);
-        continue;
+        return;
       }
       try {
         const text = await extractFileText(file);
@@ -161,7 +166,7 @@ export function useCoachingUpload() {
       } catch {
         failed.push(file.name);
       }
-    }
+    });
 
     if (uploaded > 0) {
       toast({ title: `Uploaded ${uploaded} document${uploaded > 1 ? "s" : ""}` });

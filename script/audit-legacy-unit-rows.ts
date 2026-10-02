@@ -32,6 +32,8 @@
  *   --quiet            Summary only; skip the per-athlete lines.
  */
 
+import { inSequence } from "@shared/inSequence";
+
 import { logger } from "../server/logger";
 import {
   type AthleteUnitReport,
@@ -91,12 +93,11 @@ async function main(): Promise<void> {
   const flags = parseFlags(process.argv.slice(2));
 
   const athletes = await loadAthletes(flags.userId);
-  const reports: AthleteUnitReport[] = [];
-  for (const athlete of athletes) {
+  const reports = await inSequence(athletes, async (athlete) => {
     const report = await auditAthlete(athlete);
-    reports.push(report);
     if (!flags.quiet) logAthlete(report);
-  }
+    return report;
+  });
 
   const counts = reports.reduce<Record<string, number>>((acc, r) => {
     acc[r.verdict] = (acc[r.verdict] ?? 0) + 1;

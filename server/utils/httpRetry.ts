@@ -98,12 +98,13 @@ export async function retryWithJitter<T>(
   const maxDelayMs = opts.maxDelayMs ?? 2000;
   const label = opts.label ?? "http";
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  // One try, then — after its backoff — the next, while the failure is
+  // transient. Recursive rather than a loop: each try only starts once the
+  // one before it has failed.
+  const attemptCall = async (attempt: number): Promise<T> => {
     try {
       return await fn();
     } catch (err) {
-      lastError = err;
       const retryable = err instanceof RetryableHttpError || isTransientNetworkError(err);
       if (!retryable || attempt >= retries) {
         throw err;
@@ -111,9 +112,10 @@ export async function retryWithJitter<T>(
       const delay = computeBackoffDelay(attempt, err, minDelayMs, maxDelayMs);
       logRetryAttempt(label, err, attempt, delay);
       await new Promise((resolve) => setTimeout(resolve, delay));
+      return await attemptCall(attempt + 1);
     }
-  }
-  throw lastError;
+  };
+  return await attemptCall(0);
 }
 
 /** Parse an HTTP Retry-After header (seconds or HTTP-date) into milliseconds. */

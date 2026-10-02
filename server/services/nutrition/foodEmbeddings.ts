@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { inChunks, inSequence } from "@shared/inSequence";
 import { foods } from "@shared/schema";
 import { inArray } from "drizzle-orm";
 
@@ -108,12 +109,11 @@ export async function pruneDanglingFoodEmbeddings(): Promise<{ pruned: number }>
   const ids = existing.rows.map((row) => row.food_id);
   if (ids.length === 0) return { pruned: 0 };
 
-  const live = new Set<string>();
-  for (let i = 0; i < ids.length; i += PRUNE_CHECK_BATCH) {
-    const batch = ids.slice(i, i + PRUNE_CHECK_BATCH);
+  const liveBatches = await inSequence(inChunks(ids, PRUNE_CHECK_BATCH), async (batch) => {
     const rows = await db.select({ id: foods.id }).from(foods).where(inArray(foods.id, batch));
-    for (const row of rows) live.add(row.id);
-  }
+    return rows.map((row) => row.id);
+  });
+  const live = new Set(liveBatches.flat());
 
   const dangling = ids.filter((id) => !live.has(id));
   if (dangling.length > 0) {

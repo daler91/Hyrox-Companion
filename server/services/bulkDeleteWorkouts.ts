@@ -45,7 +45,7 @@ export async function bulkDeleteWorkouts({
   workoutLogIds,
   planDayIds,
 }: BulkDeleteWorkoutsInput): Promise<BulkDeleteWorkoutsResult> {
-  return db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const sourceWorkouts = workoutLogIds.length
       ? await tx
           .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })

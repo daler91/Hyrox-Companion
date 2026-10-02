@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { inSequence } from "@shared/inSequence";
 import type { WorkoutSuggestion } from "@shared/schema";
 
 import type { TrainingContext } from "../../server/gemini/types";
@@ -60,18 +61,18 @@ async function runCondition(
   generate: GenerateFn,
 ): Promise<SuggestionBundle[]> {
   const inputs: ConditionInputs = which === "baseline" ? scenario.baseline : scenario.variant;
-  const bundles: SuggestionBundle[] = [];
-  for (let i = 0; i < RUNS_PER_CONDITION; i++) {
+  // One run at a time: each is a live, billed Gemini call.
+  const runs = Array.from({ length: RUNS_PER_CONDITION }, (_, i) => i + 1);
+  return await inSequence(runs, async (run) => {
     const suggestions = await generate(
       inputs.ctx,
       scenario.upcoming,
       inputs.goal,
       inputs.rag,
     );
-    bundles.push(suggestions);
-    log(`  ${scenario.key} [${which} ${i + 1}/${RUNS_PER_CONDITION}] ${suggestions.length} suggestions`);
-  }
-  return bundles;
+    log(`  ${scenario.key} [${which} ${run}/${RUNS_PER_CONDITION}] ${suggestions.length} suggestions`);
+    return suggestions;
+  });
 }
 
 function scoreScenario(
@@ -162,18 +163,17 @@ async function main() {
   const { SCENARIOS } = await import("./scenarios");
 
   const started = Date.now();
-  const scores: ScenarioScore[] = [];
 
-  for (const scenario of SCENARIOS) {
+  const scores = await inSequence(SCENARIOS, async (scenario) => {
     log(`Scenario ${scenario.key}: ${scenario.label}`);
     const baseline = await runCondition(scenario, "baseline", generateWorkoutSuggestions);
     const variant = await runCondition(scenario, "variant", generateWorkoutSuggestions);
     const score = scoreScenario(scenario, baseline, variant);
-    scores.push(score);
     log(
       `  → influence=${score.influence.toFixed(3)} targetΔ=${score.targetOverlap.toFixed(2)} rationaleΔ=${score.rationaleDrift.toFixed(2)}`,
     );
-  }
+    return score;
+  });
 
   const control = scores.find(s => s.input.startsWith("Control"));
   const noiseFloor = control?.influence ?? 0;

@@ -258,32 +258,44 @@ export async function ensureVectorSchema() {
 const DB_CONNECT_MAX_RETRIES = 4;
 const DB_CONNECT_BASE_DELAY_MS = 2_000;
 
+/** One connection check: take a client within 15s, run a trivial query, hand the client back. */
+async function checkDatabaseConnection(): Promise<void> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
+  );
+  let client;
+  try {
+    client = await Promise.race([pool.connect(), timeout]);
+    await client.query("SELECT 1 as ok");
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Connection check `attempt`, then — after an exponential backoff — the next.
+ * Recursive rather than a loop: each attempt only starts once the one before
+ * it has failed.
+ */
+async function connectWithRetry(attempt: number): Promise<void> {
+  try {
+    await checkDatabaseConnection();
+  } catch (error) {
+    if (attempt >= DB_CONNECT_MAX_RETRIES) {
+      logger.fatal({ context: "db", err: error }, "Cannot connect to database after all retries — app cannot start");
+      throw error;
+    }
+    const delay = DB_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1);
+    logger.warn({ context: "db", attempt, maxRetries: DB_CONNECT_MAX_RETRIES, retryInMs: delay, err: error }, "Database connection failed, retrying...");
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    await connectWithRetry(attempt + 1);
+  }
+}
+
 async function testDatabaseConnection() {
   logger.info({ context: "db" }, "Testing database connection...");
-
-  for (let attempt = 1; attempt <= DB_CONNECT_MAX_RETRIES; attempt++) {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
-    );
-    let client;
-    try {
-      client = await Promise.race([pool.connect(), timeout]);
-      await client.query("SELECT 1 as ok");
-      logger.info({ context: "db" }, "Database connection successful");
-      return;
-    } catch (error) {
-      if (attempt < DB_CONNECT_MAX_RETRIES) {
-        const delay = DB_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1);
-        logger.warn({ context: "db", attempt, maxRetries: DB_CONNECT_MAX_RETRIES, retryInMs: delay, err: error }, "Database connection failed, retrying...");
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      } else {
-        logger.fatal({ context: "db", err: error }, "Cannot connect to database after all retries — app cannot start");
-        throw error;
-      }
-    } finally {
-      if (client) client.release();
-    }
-  }
+  await connectWithRetry(1);
+  logger.info({ context: "db" }, "Database connection successful");
 }
 
 export async function runStartupMaintenance(storage: IStorage): Promise<void> {

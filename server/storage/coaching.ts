@@ -1,3 +1,4 @@
+import { inChunks, inSequence } from "@shared/inSequence";
 import {
   type CoachingMaterial,
   coachingMaterials,
@@ -107,15 +108,14 @@ export class CoachingStorage {
     const ids = existing.rows.map((row) => row.material_id);
     if (ids.length === 0) return { pruned: 0 };
 
-    const live = new Set<string>();
-    for (let i = 0; i < ids.length; i += CHECK_BATCH) {
-      const batch = ids.slice(i, i + CHECK_BATCH);
+    const liveBatches = await inSequence(inChunks(ids, CHECK_BATCH), async (batch) => {
       const rows = await db
         .select({ id: coachingMaterials.id })
         .from(coachingMaterials)
         .where(inArray(coachingMaterials.id, batch));
-      for (const row of rows) live.add(row.id);
-    }
+      return rows.map((row) => row.id);
+    });
+    const live = new Set(liveBatches.flat());
 
     const dangling = ids.filter((id) => !live.has(id));
     if (dangling.length > 0) {
@@ -145,9 +145,7 @@ export class CoachingStorage {
         return [];
       }
       const BATCH_SIZE = 100;
-      const results: DocumentChunk[] = [];
-      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks.slice(i, i + BATCH_SIZE);
+      const results = await inSequence(inChunks(chunks, BATCH_SIZE), async (batch) => {
         const values: unknown[] = [];
         const rows = batch.map((c, j) => {
           const o = j * 5;
@@ -160,10 +158,10 @@ export class CoachingStorage {
            RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
           values,
         );
-        results.push(...result.rows);
-      }
+        return result.rows;
+      });
       await client.query("COMMIT");
-      return results;
+      return results.flat();
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

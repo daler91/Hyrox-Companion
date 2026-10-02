@@ -1,4 +1,5 @@
 import { addDaysToISODate, planWeekOneMonday } from "@shared/dateUtils";
+import { inSequence } from "@shared/inSequence";
 import {
   type ExerciseSet,
   exerciseSets,
@@ -447,13 +448,13 @@ export class PlanStorage {
     tx?: DbExecutor,
   ): Promise<void> {
     const executor = tx ?? db;
-    for (const { setId, ...fields } of updates) {
-      if (Object.keys(fields).length === 0) continue;
+    await inSequence(updates, async ({ setId, ...fields }) => {
+      if (Object.keys(fields).length === 0) return;
       await executor
         .update(exerciseSets)
         .set({ ...fields, version: sql`${exerciseSets.version} + 1` })
         .where(and(eq(exerciseSets.id, setId), eq(exerciseSets.planDayId, planDayId)));
-    }
+    });
   }
 
   /**
@@ -498,13 +499,13 @@ export class PlanStorage {
           .delete(exerciseSets)
           .where(and(eq(exerciseSets.planDayId, dayId), inArray(exerciseSets.id, [...write.deleteSetIds])));
       }
-      for (const { id, ...fields } of write.setUpdates ?? []) {
-        if (Object.keys(fields).length === 0) continue;
+      await inSequence(write.setUpdates ?? [], async ({ id, ...fields }) => {
+        if (Object.keys(fields).length === 0) return;
         await tx
           .update(exerciseSets)
           .set({ ...fields, version: sql`${exerciseSets.version} + 1` })
           .where(and(eq(exerciseSets.id, id), eq(exerciseSets.planDayId, dayId)));
-      }
+      });
       if (write.insertSets && write.insertSets.length > 0) {
         await tx
           .insert(exerciseSets)
@@ -851,7 +852,7 @@ export class PlanStorage {
     const zones = await db.selectDistinct({ tz: users.userTimezone }).from(users);
 
     let total = 0;
-    for (const { tz } of zones) {
+    await inSequence(zones, async ({ tz }) => {
       const today = getLocalDateStrSafe(new Date(), tz);
       const zonePlanIds = db
         .select({ id: trainingPlans.id })
@@ -886,7 +887,7 @@ export class PlanStorage {
         )
         .returning({ id: planDays.id });
       total += result.length;
-    }
+    });
     return total;
   }
 

@@ -193,11 +193,8 @@ export async function runStravaAutoSyncScan(
     STRAVA_AUTO_SYNC_MAX_USERS_PER_TICK,
   );
 
-  let enqueued = 0;
-  for (const connection of due) {
-    const result = await enqueueStravaSync(connection.userId, "poll");
-    if (result.enqueued) enqueued += 1;
-  }
+  const results = await Promise.all(due.map((connection) => enqueueStravaSync(connection.userId, "poll")));
+  const enqueued = results.filter((result) => result.enqueued).length;
   return { usersChecked: due.length, enqueued, skipped: null };
 }
 

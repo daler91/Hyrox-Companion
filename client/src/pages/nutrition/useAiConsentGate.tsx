@@ -48,15 +48,17 @@ export function useAiConsentGate(): {
     const action = pendingRef.current;
     pendingRef.current = null;
     setOpen(false);
-    api.preferences
-      .update({ aiCoachEnabled: true })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-        action?.();
-      })
-      .catch(() => {
+    const enableAiThenResume = async () => {
+      try {
+        await api.preferences.update({ aiCoachEnabled: true });
+      } catch {
         toast({ title: "Could not enable AI features", description: "Please try again." });
-      });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+      action?.();
+    };
+    void enableAiThenResume();
   }, [toast]);
 
   const handleDecline = useCallback(() => {

@@ -1,3 +1,4 @@
+import { inSequence } from "@shared/inSequence";
 import { z } from "zod";
 
 import { apiRequest } from "./queryClient";
@@ -290,7 +291,9 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
   const syncedRequests: SyncedRequest[] = [];
   const remaining: PendingMutation[] = [];
 
-  for (const mutation of queue) {
+  // One at a time, in the order they were queued: two edits to the same
+  // record must land in the order they were made.
+  await inSequence(queue, async (mutation) => {
     const retryCount = mutation.retryCount ?? 0;
     const ageMs = now - mutation.timestamp;
 
@@ -298,14 +301,14 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
     if (ageMs > MAX_AGE_MS) {
       dropped++;
       notifyDropped({ id: mutation.id, method: mutation.method, url: mutation.url, retryCount, reason: "max_age", ageMs });
-      continue;
+      return;
     }
 
     // Drop mutations that have exceeded MAX_RETRIES
     if (retryCount >= MAX_RETRIES) {
       dropped++;
       notifyDropped({ id: mutation.id, method: mutation.method, url: mutation.url, retryCount, reason: "max_retries", ageMs });
-      continue;
+      return;
     }
 
     try {
@@ -319,7 +322,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
       failed++;
       remaining.push({ ...mutation, retryCount: retryCount + 1 });
     }
-  }
+  });
 
   // Preserve mutations enqueued during this flush: they weren't in our snapshot
   // so they weren't replayed, and writing back only `remaining` would drop

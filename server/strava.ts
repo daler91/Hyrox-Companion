@@ -309,7 +309,7 @@ async function handleStravaStatus(req: Request, res: Response) {
   });
 }
 
-async function handleStravaAuth(req: Request, res: Response) {
+function handleStravaAuth(req: Request, res: Response) {
   if (!STRAVA_CLIENT_ID) {
     return res.status(500).json({ error: "Strava integration not configured", code: "INTERNAL_SERVER_ERROR" });
   }
@@ -974,7 +974,7 @@ async function handleStravaSync(req: Request, res: Response) {
 
 export function registerStravaRoutes(router: Router): void {
   router.get("/api/v1/strava/status", isAuthenticated, stravaStatusLimiter, asyncHandler(handleStravaStatus));
-  router.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
+  router.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, handleStravaAuth);
   router.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
   router.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, stravaDisconnectLimiter, asyncHandler(handleStravaDisconnect));
   router.post("/api/v1/strava/sync", ...protectedMutationGuards, stravaSyncLimiter, asyncHandler(handleStravaSync));

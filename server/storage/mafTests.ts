@@ -28,7 +28,7 @@ export class MafTestStorage {
     testData: InsertMafTestResult,
     analysisData: InsertMafWorkoutAnalysis | null,
   ): Promise<{ testResult: MafTestResult; analysis: MafWorkoutAnalysis | null }> {
-    return db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       const [testResult] = await tx.insert(mafTestResults).values(testData).returning();
       let analysis: MafWorkoutAnalysis | null = null;
       if (analysisData) {
@@ -52,7 +52,7 @@ export class MafTestStorage {
     patch: { metrics: MafTestMetrics; protocolType?: string; notes?: string | null },
     analysisData: InsertMafWorkoutAnalysis | null,
   ): Promise<{ testResult: MafTestResult; analysis: MafWorkoutAnalysis | null }> {
-    return db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       const setValues: Partial<InsertMafTestResult> = { metrics: patch.metrics };
       if (patch.protocolType !== undefined) setValues.protocolType = patch.protocolType;
       if (patch.notes !== undefined) setValues.notes = patch.notes;
@@ -136,7 +136,7 @@ export class MafTestStorage {
    * removed, false when the workout wasn't tagged (so the route can 404).
    */
   async deleteTestForWorkout(userId: string, workoutLogId: string): Promise<boolean> {
-    return db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       await tx
         .delete(mafWorkoutAnalysis)
         .where(
@@ -167,7 +167,7 @@ export class MafTestStorage {
   }
 
   async listTestResults(userId: string, limit = 20): Promise<MafTestResult[]> {
-    return db
+    return await db
       .select()
       .from(mafTestResults)
       .where(eq(mafTestResults.userId, userId))
@@ -176,7 +176,7 @@ export class MafTestStorage {
   }
 
   async listWorkoutAnalysis(userId: string, limit = 20): Promise<MafWorkoutAnalysis[]> {
-    return db
+    return await db
       .select()
       .from(mafWorkoutAnalysis)
       .where(eq(mafWorkoutAnalysis.userId, userId))

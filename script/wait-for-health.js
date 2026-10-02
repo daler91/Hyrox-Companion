@@ -15,19 +15,25 @@ const deadline = Date.now() + timeoutMs;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-while (Date.now() < deadline) {
+// Probe once a second until the server answers 2xx or the deadline passes.
+// Recursive rather than a loop: each probe waits for the one before it.
+async function becomesHealthy() {
+  if (Date.now() >= deadline) return false;
   try {
     const res = await fetch(url);
-    if (res.ok) {
-      console.log("server is up");
-      process.exit(0);
-    }
+    if (res.ok) return true;
   } catch {
     // Connection refused: the process has not bound the port yet. Keep polling
     // until the deadline — this is the expected state for the first second or
     // two after the server starts.
   }
   await sleep(1000);
+  return await becomesHealthy();
+}
+
+if (await becomesHealthy()) {
+  console.log("server is up");
+  process.exit(0);
 }
 
 // Neither message interpolates anything: Bearer reads any value spliced into a

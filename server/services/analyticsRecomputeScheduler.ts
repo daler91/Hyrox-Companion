@@ -15,6 +15,7 @@
  * limited to users who have a stored result (i.e. who actually use the
  * feature).
  */
+import { inChunks, inSequence } from "@shared/inSequence";
 import { ANALYTICS_FEATURES, type AnalyticsFeature, type AnalyticsResult } from "@shared/schema";
 
 import {
@@ -73,12 +74,13 @@ async function enqueueStaleRecomputes(
     return workoutAnchor;
   };
 
-  let enqueued = 0;
-  for (const feature of ANALYTICS_FEATURES) {
+  // One feature at a time, so the features sharing an anchor wait for the
+  // first fetch of it instead of each racing to fetch it again.
+  const sent = await inSequence(ANALYTICS_FEATURES, async (feature) => {
     const row = resultsByFeature.get(feature);
-    if (!row) continue; // only refresh features the user has actually used
-    if (row.recomputedOn === localDate) continue; // already recomputed today (pre-check)
-    if (!computeStale(row, await anchorFor(feature))) continue; // up to date → skip
+    if (!row) return false; // only refresh features the user has actually used
+    if (row.recomputedOn === localDate) return false; // already recomputed today (pre-check)
+    if (!computeStale(row, await anchorFor(feature))) return false; // up to date → skip
 
     const data: RecomputeAnalyticsJobData = { userId, feature, localDate };
     await queue.send(RECOMPUTE_ANALYTICS_QUEUE, data, {
@@ -89,9 +91,9 @@ async function enqueueStaleRecomputes(
       singletonKey: `recompute:${feature}:${userId}`,
       singletonSeconds: 3600,
     });
-    enqueued += 1;
-  }
-  return enqueued;
+    return true;
+  });
+  return sent.filter(Boolean).length;
 }
 
 export async function runAnalyticsRecomputeScan(
@@ -110,12 +112,9 @@ export async function runAnalyticsRecomputeScan(
     NonNullable<Awaited<ReturnType<typeof storage.users.getUser>>>
   >();
   const batchSize = 100;
-  for (let i = 0; i < userIds.length; i += batchSize) {
-    const batch = userIds.slice(i, i + batchSize);
-    const usersBatch = await storage.users.getUsers(batch);
-    for (const u of usersBatch) {
-      usersMap.set(u.id, u);
-    }
+  const userBatches = await inSequence(inChunks(userIds, batchSize), (batch) => storage.users.getUsers(batch));
+  for (const u of userBatches.flat()) {
+    usersMap.set(u.id, u);
   }
 
   // Narrow to users actually at local midnight before touching
@@ -133,35 +132,37 @@ export async function runAnalyticsRecomputeScan(
   // local-midnight hour, so this collapses up to ~4x that many round trips
   // into ceil(eligibleUserIds.length / 100) batched queries.
   const resultsByUser = new Map<string, Map<AnalyticsFeature, AnalyticsResult>>();
-  for (let i = 0; i < eligibleUserIds.length; i += batchSize) {
-    const batch = eligibleUserIds.slice(i, i + batchSize);
-    const rows = await storage.analyticsResults.getMany(batch);
-    for (const row of rows) {
-      let byFeature = resultsByUser.get(row.userId);
-      if (!byFeature) {
-        byFeature = new Map();
-        resultsByUser.set(row.userId, byFeature);
-      }
-      byFeature.set(row.feature as AnalyticsFeature, row);
+  const resultBatches = await inSequence(inChunks(eligibleUserIds, batchSize), (batch) =>
+    storage.analyticsResults.getMany(batch),
+  );
+  for (const row of resultBatches.flat()) {
+    let byFeature = resultsByUser.get(row.userId);
+    if (!byFeature) {
+      byFeature = new Map();
+      resultsByUser.set(row.userId, byFeature);
     }
+    byFeature.set(row.feature as AnalyticsFeature, row);
   }
 
   const emptyResults: ReadonlyMap<AnalyticsFeature, AnalyticsResult> = new Map();
-  for (const userId of eligibleUserIds) {
+  // One user at a time: the users sharing this midnight can number in the
+  // hundreds, and each one costs anchor reads plus a queue write per feature.
+  const enqueuedPerUser = await inSequence(eligibleUserIds, async (userId) => {
     const user = usersMap.get(userId);
-    if (!user) continue;
+    if (!user) return 0;
 
     // No early return for workout-less users: nutrition_insights anchors on
     // food-log dates, so a user who only logs meals must still recompute.
     // Workout-anchored features naturally skip via computeStale(row, null).
     const localDate = getLocalDateStr(now, user.userTimezone);
-    enqueued += await enqueueStaleRecomputes(
+    return await enqueueStaleRecomputes(
       storage,
       userId,
       localDate,
       resultsByUser.get(userId) ?? emptyResults,
     );
-  }
+  });
+  enqueued = enqueuedPerUser.reduce((sum, count) => sum + count, 0);
 
   return { usersChecked, enqueued };
 }

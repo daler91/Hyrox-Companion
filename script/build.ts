@@ -17,14 +17,16 @@ const BUILD_ARTIFACT_FLOORS: { path: string; minBytes: number }[] = [
 ];
 
 async function assertBuildArtifacts(): Promise<void> {
-  for (const { path, minBytes } of BUILD_ARTIFACT_FLOORS) {
-    const { size } = await stat(path);
-    if (size < minBytes) {
-      throw new Error(
-        `build artifact ${path} is suspiciously small (${size} bytes < ${minBytes}); likely a silent build failure`,
-      );
-    }
-  }
+  await Promise.all(
+    BUILD_ARTIFACT_FLOORS.map(async ({ path, minBytes }) => {
+      const { size } = await stat(path);
+      if (size < minBytes) {
+        throw new Error(
+          `build artifact ${path} is suspiciously small (${size} bytes < ${minBytes}); likely a silent build failure`,
+        );
+      }
+    }),
+  );
 }
 
 /**

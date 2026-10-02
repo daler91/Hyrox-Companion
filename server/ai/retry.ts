@@ -75,8 +75,10 @@ export async function retryWithBackoff<T>(
   assertBreakerClosed();
 
   const deadline = Date.now() + budgetMs;
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  // One attempt, then — after its backoff — the next, while the failure is
+  // worth retrying. Recursive rather than a loop: each attempt only starts
+  // once the one before it has failed.
+  const attemptCall = async (attempt: number, lastError?: unknown): Promise<T> => {
     if (Date.now() >= deadline) {
       throw (lastError instanceof Error ? lastError : new Error(`AI request budget exhausted for ${label}`));
     }
@@ -96,20 +98,23 @@ export async function retryWithBackoff<T>(
       recordBreakerSuccess();
       return result;
     } catch (error) {
-      lastError = error;
       // A breaker-open error thrown mid-flight (from nested retryWithBackoff
       // call) should propagate without counting again.
       if (error instanceof CircuitBreakerOpenError) throw error;
       const delay = shouldRetry(error, attempt, maxRetries, baseDelayMs, deadline);
-      if (delay === false) break;
+      if (delay === false) {
+        // Only count a logical failure (after all retries exhausted) against
+        // the breaker — individual retry attempts should not accelerate
+        // tripping. The error goes with it so a request the provider rejected
+        // as malformed doesn't push the breaker toward cutting off every
+        // other caller.
+        recordBreakerFailure(error);
+        throw error;
+      }
       logger.warn("[ai] provider request failed; retry scheduled");
       await new Promise((resolve) => setTimeout(resolve, delay));
+      return await attemptCall(attempt + 1, error);
     }
-  }
-  // Only count a logical failure (after all retries exhausted) against the
-  // breaker — individual retry attempts should not accelerate tripping. The
-  // error goes with it so a request the provider rejected as malformed doesn't
-  // push the breaker toward cutting off every other caller.
-  recordBreakerFailure(lastError);
-  throw lastError;
+  };
+  return await attemptCall(0);
 }

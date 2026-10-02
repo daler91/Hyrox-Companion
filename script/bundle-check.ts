@@ -21,6 +21,22 @@ import path from "node:path";
 
 const DIST = "dist/public";
 
+/**
+ * Whether a built chunk carries drizzle runtime code. Prefers its sourcemap's
+ * sources (exact). When the Sentry plugin deleted the maps (SENTRY_AUTH_TOKEN
+ * set), falls back to drizzle's Symbol.for("drizzle:*") registry keys, which
+ * survive minification.
+ */
+function shipsDrizzle(assets: string, file: string): Promise<boolean> {
+  return readFile(path.join(assets, `${file}.map`), "utf8").then(
+    (m) =>
+      ((JSON.parse(m) as { sources?: string[] }).sources ?? []).some((s) =>
+        /drizzle-orm|drizzle-zod|zod-to-openapi/.test(s),
+      ),
+    async () => (await readFile(path.join(assets, file), "utf8")).includes("drizzle:"),
+  );
+}
+
 /** Run both invariant checks against dist/. Returns [] when the bundle is clean. */
 export async function collectBundleCheckFailures(): Promise<string[]> {
   const failures: string[] = [];
@@ -34,24 +50,14 @@ export async function collectBundleCheckFailures(): Promise<string[]> {
   }
 
   const assets = path.join(DIST, "assets");
-  for (const file of await readdir(assets)) {
-    if (!file.endsWith(".js")) continue;
-    const mapPath = path.join(assets, `${file}.map`);
-    // Prefer sourcemap sources (exact). When the Sentry plugin deleted the maps
-    // (SENTRY_AUTH_TOKEN set), fall back to drizzle's Symbol.for("drizzle:*")
-    // registry keys, which survive minification.
-    const bad = await readFile(mapPath, "utf8").then(
-      (m) =>
-        ((JSON.parse(m) as { sources?: string[] }).sources ?? []).some((s) =>
-          /drizzle-orm|drizzle-zod|zod-to-openapi/.test(s),
-        ),
-      async () => (await readFile(path.join(assets, file), "utf8")).includes("drizzle:"),
+  const scripts = (await readdir(assets)).filter((file) => file.endsWith(".js"));
+  const checked = await Promise.all(
+    scripts.map(async (file) => ({ file, bad: await shipsDrizzle(assets, file) })),
+  );
+  for (const { file } of checked.filter(({ bad }) => bad)) {
+    failures.push(
+      `${file} contains drizzle-orm/drizzle-zod runtime code — a client file value-imports the @shared/schema barrel`,
     );
-    if (bad) {
-      failures.push(
-        `${file} contains drizzle-orm/drizzle-zod runtime code — a client file value-imports the @shared/schema barrel`,
-      );
-    }
   }
 
   return failures;

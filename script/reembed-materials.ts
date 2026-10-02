@@ -26,6 +26,7 @@
  *
  * Exits non-zero if any material failed to embed or is still without chunks.
  */
+import { inSequence } from "@shared/inSequence";
 import { coachingMaterials } from "@shared/schema";
 
 import { db, pool } from "../server/db";
@@ -195,22 +196,22 @@ function reportUserOutcome(outcome: UserOutcome, flags: Flags): void {
  * stops at the first bad material leaves everyone after it unfixed.
  */
 async function runFleet(userIds: string[], flags: Flags): Promise<UserOutcome[]> {
-  const outcomes: UserOutcome[] = [];
-  for (const userId of userIds) {
+  // One athlete at a time, so a fleet-wide rebuild does not stampede the
+  // embedding provider (see processUser).
+  return await inSequence(userIds, async (userId): Promise<UserOutcome> => {
     try {
       const outcome = await processUser(userId, flags);
-      outcomes.push(outcome);
       reportUserOutcome(outcome, flags);
+      return outcome;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      outcomes.push({ userId, materials: 0, embedded: 0, errors: [message], unembedded: [] });
       // an internal athlete id and the operational error that stopped their
       // rebuild, no athlete content.
       // bearer:disable javascript_lang_logger_leak
       console.log(`  ${userId}: FAILED — ${message}`);
+      return { userId, materials: 0, embedded: 0, errors: [message], unembedded: [] };
     }
-  }
-  return outcomes;
+  });
 }
 
 /** Prints the tail summary; false when the run left work for an operator. */

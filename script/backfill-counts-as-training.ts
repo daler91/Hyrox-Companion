@@ -38,6 +38,7 @@
  */
 
 import { countsAsTraining } from "@shared/deviceSportTypes";
+import { inChunks, inSequence } from "@shared/inSequence";
 import { workoutLogs } from "@shared/schema";
 import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 
@@ -90,12 +91,12 @@ async function main(flags: BackfillFlags): Promise<void> {
     // Chunked: a single IN list of tens of thousands of ids is a query no
     // planner enjoys, and the backfill has no reason to be one statement.
     const CHUNK = 500;
-    for (let i = 0; i < demoteIds.length; i += CHUNK) {
+    await inSequence(inChunks(demoteIds, CHUNK), async (ids) => {
       await db
         .update(workoutLogs)
         .set({ countsAsTraining: false })
-        .where(inArray(workoutLogs.id, demoteIds.slice(i, i + CHUNK)));
-    }
+        .where(inArray(workoutLogs.id, ids));
+    });
   }
 
   say(

@@ -35,7 +35,7 @@ export async function combineWorkouts({
   deleteWorkoutIds,
   skipPlanDayIds,
 }: CombineWorkoutsInput): Promise<typeof workoutLogs.$inferSelect> {
-  return db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const sourceWorkouts = await tx
       .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })
       .from(workoutLogs)

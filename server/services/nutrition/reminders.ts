@@ -1,3 +1,4 @@
+import { inSequence } from "@shared/inSequence";
 import type { User } from "@shared/schema";
 import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 
@@ -180,10 +181,10 @@ export async function runNutritionReminderCron(
   const freshUsers = await storage.users.getUsers(usersToCheck.map((stale) => stale.id));
   const freshById = new Map(freshUsers.map((user) => [user.id, user]));
 
-  for (const stale of usersToCheck) {
+  await inSequence(usersToCheck, async (stale) => {
     try {
       const user = freshById.get(stale.id);
-      if (!user) continue;
+      if (!user) return;
       if (await processRefuelReminder(storage, user, now)) remindersSent++;
       if (await processLoggingReminder(storage, user, now)) remindersSent++;
     } catch (err) {
@@ -195,7 +196,7 @@ export async function runNutritionReminderCron(
         "Nutrition reminder processing failed for user",
       );
     }
-  }
+  });
 
   return { usersChecked: usersToCheck.length, remindersSent };
 }

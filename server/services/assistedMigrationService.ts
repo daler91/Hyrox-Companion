@@ -1,3 +1,4 @@
+import { inSequence } from "@shared/inSequence";
 import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
 import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
@@ -78,13 +79,13 @@ export async function runAssistedMigrationBackfill(userId: string) {
 
   const queue = [...candidates, ...upcomingPlanCandidates].filter((c) => c.hasSets === 0 && c.text.length > 0);
 
-  let processed = 0;
-  for (const item of queue) {
+  // One candidate at a time: each one is a call to the AI parser.
+  const migrated = await inSequence(queue, async (item) => {
     try {
       const parsed = await parseExercisesFromText(item.text, MIGRATION_PARSE_UNITS, undefined, item.userId ?? undefined);
       if (!parsed.length) {
         await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_returned_no_rows" });
-        continue;
+        return false;
       }
 
       const lowConfidence = parsed.some((e) => (e.confidence ?? 0) < HIGH_CONFIDENCE_THRESHOLD);
@@ -105,14 +106,15 @@ export async function runAssistedMigrationBackfill(userId: string) {
         status: lowConfidence ? "needs_manual_review" : "resolved",
         reason: lowConfidence ? "low_confidence_conversion" : "auto_resolved",
       });
-      processed += 1;
+      return true;
     } catch (error) {
       logger.warn({ err: error, ownerType: item.ownerType, ownerId: item.ownerId }, "assisted migration parse failed for candidate; continuing batch");
       await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_error" });
+      return false;
     }
-  }
+  });
 
-  return { queued: queue.length, processed };
+  return { queued: queue.length, processed: migrated.filter(Boolean).length };
 }
 
 export async function listBackfillReviews(userId: string, filter?: { ownerType?: OwnerType; ownerId?: string }) {
@@ -124,8 +126,8 @@ export async function listBackfillReviews(userId: string, filter?: { ownerType?:
     .where(and(...baseWhere))
     .orderBy(desc(structuredExerciseBackfillReviews.updatedAt));
 
-  if (filter?.ownerType && filter?.ownerId) return q.limit(1);
-  return q.limit(100);
+  if (filter?.ownerType && filter?.ownerId) return await q.limit(1);
+  return await q.limit(100);
 }
 
 async function canUserResolveOwner(ownerType: OwnerType, ownerId: string, userId: string): Promise<boolean> {

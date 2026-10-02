@@ -20,6 +20,7 @@
  * unlink (which re-creates the activity as a standalone row) is sticky, as is
  * a manual link. Matching only ever considers rows with no device activity.
  */
+import { inSequence } from "@shared/inSequence";
 import {
   type PlanDay,
   planDays,
@@ -340,7 +341,7 @@ export async function reconcileStravaActivities(
   );
 
   const standalone: StandaloneRow[] = [];
-  for (const [index, { decision }] of planned.entries()) {
+  await inSequence(planned, async ({ decision }, index) => {
     try {
       const outcome = await applyDecision(userId, items[index], decision, candidates.planDays);
       if ("standalone" in outcome) standalone.push(outcome.standalone);
@@ -350,7 +351,7 @@ export async function reconcileStravaActivities(
       if (!isUniqueViolation(err)) throw err;
       counts.skipped++;
     }
-  }
+  });
   await insertStandaloneRows(standalone, counts, preferences);
 
   // Counts only; no activity data or token material.

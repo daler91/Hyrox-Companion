@@ -15,6 +15,8 @@
  *
  * See docs/integrations.md#automatic-sync.
  */
+import { inSequence } from "@shared/inSequence";
+
 import { env } from "../server/env";
 import {
   deleteStravaWebhookSubscription,
@@ -113,14 +115,14 @@ async function remove(): Promise<number> {
     console.log("No Strava webhook subscription to delete.");
     return 0;
   }
-  for (const subscription of subscriptions) {
+  await inSequence(subscriptions, async (subscription) => {
     await deleteStravaWebhookSubscription(config, subscription.id);
     // Operator output: Strava's subscription id and its (public) callback URL.
     // bearer:disable javascript_lang_logger_leak
     console.log(
       `Deleted Strava webhook subscription ${printable(subscription.id)} (${printable(subscription.callback_url)}).`,
     );
-  }
+  });
   console.log(
     "The server re-registers its own subscription within six hours (or on its next boot).",
   );
