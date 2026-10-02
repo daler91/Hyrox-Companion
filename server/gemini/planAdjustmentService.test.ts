@@ -154,7 +154,7 @@ describe("buildPlanAdjustmentUserPrompt", () => {
   });
 
   it("gives the plan changes already made ahead of the conversation that asked for them", () => {
-    const recentPlanChanges = "--- RECENT PLAN CHANGES ---\n- 4 minutes ago, applied: Long Run moved from Monday 2026-07-20 to Sunday 2026-07-19.\n--- END RECENT PLAN CHANGES ---";
+    const recentPlanChanges = "--- RECENT PLAN CHANGES ---\n- today, applied: Long Run moved from Monday 2026-07-20 to Sunday 2026-07-19.\n--- END RECENT PLAN CHANGES ---";
 
     const prompt = buildPlanAdjustmentUserPrompt({
       trainingContext,

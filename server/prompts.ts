@@ -784,8 +784,9 @@ export function buildSystemPrompt(
   // Last, after the training data and materials: it is about this message,
   // and everything before it stays a stable, cacheable prefix.
   const safetyGuidance = formatChatSafetyGuidance(options.chatSafety);
-  // After the stable data, like the notes below: its "N minutes ago" changes
-  // every turn.
+  // After the training data, which changes along with it when a proposal is
+  // applied or undone. Its day labels ("today") hold all day, like the data's,
+  // so it doesn't change the prompt between turns.
   const recentPlanChanges = options.recentPlanChanges ? `\n\n${options.recentPlanChanges}` : "";
   const earlierConversation =
     formatEarlierConversation(options.earlierConversation) + formatEarlierInSession(options.earlierInSession);

@@ -89,7 +89,7 @@ describe("current-date anchoring", () => {
   });
 
   it("gives the weekday alone when the current date is unknown, and nothing for a malformed date", () => {
-    expect(relativeDayLabel("2026-06-28", undefined)).toBe(" (Sunday)");
+    expect(relativeDayLabel("2026-06-28")).toBe(" (Sunday)");
     expect(relativeDayLabel("2026-06-28", "not-a-date")).toBe(" (Sunday)");
     expect(relativeDayLabel("not-a-date", "2026-06-28")).toBe("");
   });

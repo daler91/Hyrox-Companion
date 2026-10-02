@@ -161,7 +161,7 @@ An athlete's report, with auto-apply on. Asked "Move my long run to Sunday this 
 
 | Fix | What changed |
 | --- | --- |
-| A record of plan changes | The chat coach and the plan-change step read the proposals applied in the last 14 days, undone ones included, with each session's date before and after (`server/services/recentPlanChanges.ts`, `server/prompts/recentPlanChanges.ts`). Both are told to undo a listed change by putting each session back on its "from" date, to answer "what happened to X" from it, and never to ask the athlete for a date it lists. "Undo", "revert", "put it back", "change it back" and "back to how it was" now open the plan-edit gate, and the classifier counts an undo as a plan change. |
+| A record of plan changes | The chat coach and the plan-change step read the proposals applied in the last 14 days, undone ones included, with each session's date before and after (`server/services/recentPlanChanges.ts`, `server/prompts/recentPlanChanges.ts`). Each is dated by the athlete's day ("today", "2 days ago"), not the minute, so the chat's system prompt stays the same from turn to turn. Both are told to undo a listed change by putting each session back on its "from" date, to answer "what happened to X" from it, and never to ask the athlete for a date it lists. "Undo", "revert", "put it back", "change it back" and "back to how it was" now open the plan-edit gate, and the classifier counts an undo as a plan change. |
 | Weekdays on dates | Every date the coach and the plan-change step read carries its weekday: the workout lists ("2026-10-04 (Sunday, in 2 days)"), today's date, absences, skips, missed sessions and the next planned session. Before, each "Sunday" was arithmetic on an ISO date. |
 | Week and weekday follow a move | Every write that gives a plan day a new date also sets that date's week and weekday (`server/storage/planSlot.ts`): applying or undoing a proposal, a move with a status change, missed-session recovery and its undo. The workout engine's plan phase, plan repair's race-week skip and session-grade rollups read the right week, and rescheduling the plan keeps moved sessions where they are. Migration `0117` repairs the days moved before. |
 | Evals | Four scenarios: undoing the coach's last change, "what happened to Monday's workout?", the weekday of a planned session, and "move my long run to Sunday" with tools. |
@@ -172,7 +172,7 @@ Behaviour changes:
 - **Changes made outside chat stay invisible to the coach.** A move on the timeline or a missed-session reschedule isn't recorded anywhere it reads, and it says so.
 - **Week badges match the calendar** after a move, including for sessions moved before this change once migration `0117` has run.
 
-Not run: a live model, for the new scenarios as for the rest. The migration is tested on a real database: the athlete's case (Strength and Wall Balls moved from week 6's Monday to Sunday, Rest from week 5's Sunday to Monday) comes back as week 5 Sunday and week 6 Monday, and a second run changes nothing.
+Not run: a live model, for the new scenarios as for the rest. The migration is tested on a real database: the athlete's case (Strength and Wall Balls moved from week 6's Monday to Sunday, Rest from week 5's Sunday to Monday) comes back as week 5 Sunday and week 6 Monday, and a second run changes nothing. A day moved ahead of week 1 is filed under the first week, as the app files a new move there.
 
 ---
 

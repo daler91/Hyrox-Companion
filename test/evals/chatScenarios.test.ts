@@ -53,7 +53,7 @@ describe("the chat eval scenarios", () => {
     expect(promptFor("focused-workout")).toContain("--- FOCUSED WORKOUT ---");
     expect(promptFor("focused-workout")).toContain("6 x 800 m at 5k pace");
     expect(promptFor("undo-last-change")).toContain(
-      "- 6 minutes ago, applied: Long run moved from Saturday 2026-10-03 to Sunday 2026-10-04; Rest moved from Sunday 2026-10-04 to Saturday 2026-10-03. The athlete can still take it back with Undo on its card.",
+      "- today, applied: Long run moved from Saturday 2026-10-03 to Sunday 2026-10-04; Rest moved from Sunday 2026-10-04 to Saturday 2026-10-03. The athlete can still take it back with Undo on its card.",
     );
     expect(promptFor("what-happened-to-session")).toContain(
       "- 2 days ago, applied: Long run moved from Saturday 2026-10-03 to Monday 2026-10-05; Strength and Wall Balls moved from Monday 2026-10-05 to Saturday 2026-10-03.",

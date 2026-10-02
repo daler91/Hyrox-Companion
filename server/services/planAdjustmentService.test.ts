@@ -194,7 +194,7 @@ describe("createPlanAdjustmentProposal", () => {
   });
 
   it("gives the generation the plan changes already made, so an undo can restore them", async () => {
-    const recent = "--- RECENT PLAN CHANGES ---\n- 4 minutes ago, applied: Long Run moved from Monday 2026-07-20 to Sunday 2026-07-19.";
+    const recent = "--- RECENT PLAN CHANGES ---\n- today, applied: Long Run moved from Monday 2026-07-20 to Sunday 2026-07-19.";
     vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([upcomingDay()] as never);
     vi.mocked(loadRecentPlanChanges).mockResolvedValueOnce(recent);
     vi.mocked(generatePlanAdjustment).mockResolvedValue({ summaryMessage: "Done.", changes: [] });

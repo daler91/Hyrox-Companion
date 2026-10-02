@@ -248,7 +248,7 @@ describe("chat system prompt — the conversation before this session", () => {
 });
 
 describe("chat system prompt — the plan changes the coach already made", () => {
-  const RECENT = "--- RECENT PLAN CHANGES ---\n- 4 minutes ago, applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.\n--- END RECENT PLAN CHANGES ---";
+  const RECENT = "--- RECENT PLAN CHANGES ---\n- today, applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.\n--- END RECENT PLAN CHANGES ---";
 
   it("carries the record after the training data and materials, ahead of the session notes and safety guidance, in both branches", () => {
     for (const totalWorkouts of [12, 0]) {

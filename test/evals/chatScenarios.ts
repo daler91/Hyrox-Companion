@@ -410,7 +410,7 @@ export const CHAT_SCENARIOS: readonly ChatScenario[] = [
       ]),
     ),
     facts: [
-      "Six minutes ago the athlete applied the coach's proposal that moved the long run from Saturday October 3 to Sunday October 4, and the rest day from Sunday October 4 to Saturday October 3. That change's card still offers Undo.",
+      "Earlier today (six minutes ago) the athlete applied the coach's proposal that moved the long run from Saturday October 3 to Sunday October 4, and the rest day from Sunday October 4 to Saturday October 3. That change's card still offers Undo.",
       "The coach changes the plan only through proposals the athlete applies (with tools, by calling propose_plan_changes); it cannot change the plan by itself.",
     ],
     criteria: [

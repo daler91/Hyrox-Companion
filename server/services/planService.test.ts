@@ -64,7 +64,7 @@ vi.mock("../storage", () => {
 // The week-and-weekday lookup a move makes is covered in planSlot.test.ts;
 // here it answers "nothing to change" unless a test says otherwise.
 const { planSlotForMoveMock } = vi.hoisted(() => ({
-  planSlotForMoveMock: vi.fn().mockResolvedValue(undefined),
+  planSlotForMoveMock: vi.fn(),
 }));
 vi.mock("../storage/planSlot", () => ({ planSlotForMove: planSlotForMoveMock }));
 

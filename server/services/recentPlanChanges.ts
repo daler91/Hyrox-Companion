@@ -14,7 +14,10 @@ export async function loadRecentPlanChanges(userId: string, now: Date = new Date
   try {
     const since = new Date(now.getTime() - RECENT_PLAN_CHANGES_DAYS * DAY_MS);
     const proposals = await storage.planProposals.getRecentlyApplied(userId, since, RECENT_PLAN_CHANGES_LIMIT);
-    return formatRecentPlanChanges(proposals, now);
+    if (proposals.length === 0) return "";
+    // "today" and "yesterday" are the athlete's, so the record needs their zone.
+    const user = await storage.users.getUser(userId);
+    return formatRecentPlanChanges(proposals, now, user?.userTimezone);
   } catch (error) {
     // The read error only; no plan content.
     // bearer:disable javascript_lang_logger_leak

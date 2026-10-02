@@ -63,7 +63,9 @@ describe("plan day week and weekday follow the date (real Postgres)", () => {
       { id: "slot-rest", planId: plan.id, weekNumber: 5, dayName: "Sunday", focus: "Rest", mainWorkout: "Rest", scheduledDate: "2026-10-05" },
       { id: "slot-week1", planId: plan.id, weekNumber: 1, dayName: "Monday", focus: "Easy Run", mainWorkout: "5km", scheduledDate: "2026-08-31" },
       { id: "slot-lower", planId: plan.id, weekNumber: 6, dayName: "tuesday", focus: "Intervals", mainWorkout: "6x800", scheduledDate: "2026-10-06" },
+      // Moved ahead of week 1: the first week, as planSlotFor has it, on the date's weekday.
       { id: "slot-early", planId: plan.id, weekNumber: 1, dayName: "Monday", focus: "Before week 1", mainWorkout: "x", scheduledDate: "2026-08-20" },
+      { id: "slot-earlier", planId: plan.id, weekNumber: 2, dayName: "Tuesday", focus: "Weeks before week 1", mainWorkout: "x", scheduledDate: "2026-08-10" },
       { id: "slot-undated", planId: plan.id, weekNumber: 3, dayName: "Wednesday", focus: "Unscheduled", mainWorkout: "x", scheduledDate: null },
       { id: "slot-no-start", planId: unscheduledPlan.id, weekNumber: 2, dayName: "Friday", focus: "No plan start", mainWorkout: "x", scheduledDate: "2026-09-07" },
     ]);
@@ -76,7 +78,8 @@ describe("plan day week and weekday follow the date (real Postgres)", () => {
       .from(planDays)
       .orderBy(asc(planDays.id));
     expect(slots).toEqual([
-      { id: "slot-early", weekNumber: 1, dayName: "Monday" },
+      { id: "slot-earlier", weekNumber: 1, dayName: "Monday" },
+      { id: "slot-early", weekNumber: 1, dayName: "Thursday" },
       { id: "slot-long", weekNumber: 5, dayName: "Saturday" },
       { id: "slot-lower", weekNumber: 6, dayName: "tuesday" },
       { id: "slot-no-start", weekNumber: 2, dayName: "Friday" },

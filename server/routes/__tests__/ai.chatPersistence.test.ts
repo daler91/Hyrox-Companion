@@ -376,8 +376,9 @@ describe("the server-owned chat conversation", () => {
 
     expect(response.status).toBe(200);
     expect(vi.mocked(storage.planProposals.getRecentlyApplied).mock.calls[0][0]).toBe("test_user_id");
+    // "today", or "yesterday" in the first minutes after midnight: the day label isn't this test's business.
     expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.recentPlanChanges).toContain(
-      "- 4 minutes ago, applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.",
+      ", applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.",
     );
   });
 
