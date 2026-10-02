@@ -704,6 +704,7 @@ Kick off an **asynchronous** AI training-plan generation. The request creates a 
 - **Validation:** `generatePlanInputSchema`
 - **Response:** `202 Accepted` with the pending `TrainingPlan` stub. Poll [`GET /api/v1/plans/:id/generation-status`](#get-apiv1plansidgeneration-status) for progress.
 - **`supersedePlanIds?: string[]`** (max 5): plans the athlete is switching away from. They are retired **only** once this plan generates successfully, atomically with the flip to `ready`, and effective from the later of the new plan's start date and today. A failed or timed-out generation retires nothing, so the athlete is never left without an active plan.
+- **`injuries?: string`** (max 500): the wizard's box. When present it goes on the [athlete card](#athlete-fact-routes) before the job is queued, a fact per sentence or line (category `constraint`, source `plan_generation`); a sentence already on the card is re-confirmed, and the older free-text note (`users.training_constraints`) the box arrives prefilled with is cleared once all of it fits. An empty string adds nothing and still clears the note. Best effort: a failed card write is logged and never fails the request. The plan is written around the card's active facts plus any sentence of the box the 20-fact cap left off; a sentence matching a retired fact stays out. Without `injuries` (an older client), the older note is read instead.
 - **`409 PLAN_GENERATION_IN_PROGRESS`:** Returned when the user already has a generation in flight (`hasInFlightPlanGeneration`), so rapid re-submits (triple-clicks, retries) can't enqueue parallel jobs that each burn AI budget and race to write the same user's plans.
 
 ### GET /api/v1/plans/:id/generation-status
@@ -1070,7 +1071,7 @@ Add a fact. One the athlete already has (same server-derived key) is re-confirme
 
 ### POST /api/v1/athlete-facts/import
 
-Move the older free-text "Injuries & Limitations" note (`users.training_constraints`) into the card, a fact per sentence or line (category `constraint`, source `plan_generation`). The note is cleared only when all of it fits under the cap.
+Move the older free-text "Injuries & Limitations" note (`users.training_constraints`) into the card, a fact per sentence or line (category `constraint`, source `plan_generation`). The note is cleared only when all of it fits under the cap. The plan wizard's injuries box goes through the same path (see `POST /api/v1/plans/generate`).
 
 - **Auth:** Required
 - **Rate limit:** `athleteFacts` category, 20/min
@@ -1416,7 +1417,8 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
 - **Auth:** Required
 - **Rate limit:** `chat` category, 10/min
 - **Body:** Same as `/api/v1/chat`, plus `planEditing?: boolean` (default `true`; `false` skips plan proposals). `focusPlanDayId` is also passed to the proposal generator
-- **Saving (with the message ids):** the athlete's turn is saved before the first event; if that fails, the request ends in a 500 and is not answered. The reply is saved when the stream ends, whether finished, cut off or a proposal, with the text that was sent, its `ragInfo` (without excerpts), its `safetyNotice` and, for a proposal, `kind: "proposal"` and the `proposalId`.
+- **Saving (with the message ids):** the athlete's turn is saved before the first event; if that fails, the request ends in a 500 and is not answered. The reply is saved when the stream ends, whether finished, cut off or a proposal, with the text that was sent, its `ragInfo` (without excerpts), its `safetyNotice`, a `factProposal` it offered and, for a proposal, `kind: "proposal"` and the `proposalId`.
+- **Athlete facts (with the message ids):** a message that may state something lasting (a keyword gate) is read by the fast model alongside the reply. When it states a fact the [athlete card](#athlete-fact-routes) doesn't hold, the reply's last event before `done` offers it, on prose and proposal replies alike. Nothing is written to the card until the athlete answers with [`POST /api/v1/chat/messages/:id/fact`](#post-apiv1chatmessagesidfact). Never after a red-flag symptom, and the stream waits at most 2 seconds for a read still running.
 - **Plan editing:** when `planEditing` is on and the message is classified as a plan-change request, the reply is a [plan proposal](#plan-proposal-routes) instead of streamed prose; if the athlete has `coachAutoApplyPlanChanges` on, the stream tries to apply it immediately. Any failure in this branch falls back to the normal chat stream. A message that trips the red-flag symptom patterns is never treated as a plan change: it gets the normal chat reply, told to put medical care first.
 - **Response headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - **SSE events:**
@@ -1425,6 +1427,7 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
   - `{ planProposalPending: true }` — The message was classified as a plan-change request and a proposal is being generated
   - `{ text: string }` — Streaming text chunks (on the plan-editing path, a single chunk carrying the proposal summary)
   - `{ planProposal: { id, planId, status, summaryMessage, changes, createdAt } }` — The proposal that was created (`status: "applied"` when auto-applied)
+  - `{ factProposal: { fact, category, status: "pending" } }` — A lasting fact the athlete stated, offered for their athlete card (see "Athlete facts" above); sent just before `done`
   - `{ done: true }` — Stream complete
   - `{ error: "auth-expired" | "timeout", reason: string }` — The stream hit its deadline: the Clerk session's expiry (less a 5-second margin) or the 5-minute hard cap
   - `{ error: "Stream error" }` — Unexpected stream error
@@ -1470,6 +1473,7 @@ Retrieve saved chat messages for the current user, cursor-paginated.
 - **Row fields:** `id, role, content, timestamp`, plus:
   - `kind`: `text`, `proposal` or `summary`. A `summary` row is the note the coach carried into a new session after a break, not something it said to the athlete. `rolling` rows (the note on the start of a long session) are left out of the response.
   - `proposalId`, `safetyNotice`, `ragInfo` (source, excerpt count and material titles), `focusPlanDayId` and `focusWorkoutLogId`.
+  - `factProposal`: a fact the reply offered for the athlete card, `{ fact, category, status }`, where `status` is `pending`, `saved` or `dismissed`.
   - `proposal`: on a proposal reply whose proposal still exists, the proposal (same shape as `GET /api/v1/plan-proposals/pending`) with its **current** status.
 
 ### GET /api/v1/chat/welcome
@@ -1498,6 +1502,15 @@ Rate one of the coach's saved replies, or clear the rating. Only the athlete's o
 - **Rate limit:** `chatFeedback` category, 60/min
 - **Body:** `{ feedback: "up" | "down" | null }` (`chatMessageFeedbackSchema`)
 - **Response:** `{ id, feedback }`; `404` when there is no such reply. The client retries a 404 once after a second, since a reply that just finished streaming may still be on its way into the database.
+
+### POST /api/v1/chat/messages/:id/fact
+
+The athlete's answer to a fact the coach offered under one of their replies (`factProposal`, see `POST /api/v1/chat/stream`). `save` puts it on the athlete card with source `chat` (a fact the card already holds is re-confirmed), then marks the offer saved; `dismiss` marks it dismissed. An offer is answered once. No `aiConsent`: this calls no model, as the card's own routes don't. A save drops the athlete's cached training context, which chat routes otherwise leave alone, so the next reply reads the new fact.
+
+- **Auth:** Required
+- **Rate limit:** `athleteFacts` category, 20/min
+- **Body:** `{ decision: "save" | "dismiss" }` (`chatFactDecisionSchema`)
+- **Response:** `{ factProposal, fact? }` (`fact` is the saved `AthleteFact`); `409 ATHLETE_FACT_LIMIT` when the card already holds 20 active facts, leaving the offer pending; `404` when the reply has no pending offer. The client retries a 404 once after a second, as for ratings.
 
 ### DELETE /api/v1/chat/history
 
@@ -1723,7 +1736,7 @@ Update user preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferences` category, 20/min
-- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `userTimezone?` (IANA name), `weeklyGoal?` (1-14), `mealSchedule?: 3 | 4 | 5`, the `email*` toggles, `notifyHour?` (0-23) and the per-email `notifyHour*` overrides (0-23, or `null` to clear), `aiCoachEnabled?`, `coachAutoApplyPlanChanges?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, the profile fields `division` … `weightGoalRateKgPerWeek`, and the `maf*` fields). Also accepts three fields the response does not echo: `pushRefuelReminder?`, `pushLoggingReminder?` and `trainingConstraints?` (max 500 chars).
+- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `userTimezone?` (IANA name), `weeklyGoal?` (1-14), `mealSchedule?: 3 | 4 | 5`, the `email*` toggles, `notifyHour?` (0-23) and the per-email `notifyHour*` overrides (0-23, or `null` to clear), `aiCoachEnabled?`, `coachAutoApplyPlanChanges?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, the profile fields `division` … `weightGoalRateKgPerWeek`, and the `maf*` fields). Also accepts three fields the response does not echo: `pushRefuelReminder?`, `pushLoggingReminder?` and `trainingConstraints?` (max 500 chars; the client only ever sends `null`, the athlete card's "Remove note", and the Settings save leaves it out).
 - **Validation:** `updateUserPreferencesSchema`
 - **Timezone validation:** a `userTimezone` the server runtime does not recognise returns `400 { code: "INVALID_TIMEZONE" }`.
 - **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge` plus either `mafCategory`, or the legacy `mafConsistency`/`mafTrend` pair, to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.

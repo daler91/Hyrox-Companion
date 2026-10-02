@@ -32,6 +32,8 @@ const EXPECTED_TABLES = [
   "maf_profile",
   "maf_test_results",
   "maf_workout_analysis",
+  // 0115 — the athlete card every coach prompt and the plan generator read.
+  "athlete_facts",
 ];
 
 const EXPECTED_INDEXES = [
@@ -58,6 +60,9 @@ const EXPECTED_INDEXES = [
   "uq_training_plans_user_in_flight",
   "uq_nutrition_targets_user_effective",
   "uq_meal_targets_user_meal_effective",
+  // 0115: the conflict target of the athlete card's re-confirming upsert.
+  // Without it every fact the athlete adds fails instead of re-confirming.
+  "uq_athlete_facts_user_dedupe",
 ];
 
 const VECTOR_DB_INDEXES = [

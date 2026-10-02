@@ -58,7 +58,7 @@ User accounts and preferences.
 | `activity_level` | `varchar(24)` | nullable — Mifflin–St Jeor multiplier bucket (`sedentary`/`light`/`moderate`/`active`/`very_active`) |
 | `weight_goal_direction` | `varchar(16)` | nullable — `lose`/`maintain`/`gain`; null ⇒ no calorie adjustment |
 | `weight_goal_rate_kg_per_week` | `real` | nullable — magnitude only; the sign comes from `weight_goal_direction` |
-| `training_constraints` | `text` | nullable — durable injuries, equipment and scheduling limits in the athlete's own words; cleared to null when emptied |
+| `training_constraints` | `text` | nullable — the older free-text note of injuries, equipment and scheduling limits, from before the [athlete card](#athlete_facts). Still read by the coach until the athlete moves it onto the card (Settings, or generating a plan with the wizard's box) or removes it; nothing writes a new one |
 | `maf_age` | `integer` | nullable |
 | `maf_injury_illness_medication` | `boolean` | nullable |
 | `maf_consistency` | `text` | nullable |
@@ -639,6 +639,7 @@ Persisted AI coach conversation history.
 | `focus_workout_log_id` | `varchar(255)` | As above, for a logged session |
 | `feedback` | `varchar(10)` | The athlete's thumbs on a coach reply; CHECK `chat_messages_feedback_check`: NULL, `up` or `down` (migration `0114`) |
 | `feedback_at` | `timestamp` | When the athlete gave it; NULL once cleared |
+| `fact_proposal` | `jsonb` | A lasting fact the coach offered under the reply for the athlete card, `{ fact, category, status }` (`ChatFactProposal`); `status` is `pending` until the athlete saves it (then `saved`, and the fact is in `athlete_facts` with source `chat`) or turns it down (`dismissed`). Only a pending offer moves, so it is answered once (migration `0116`) |
 
 The chat routes save rows under ids the client generates, once each (`saveChatMessageOnce`), so a retried send never saves a turn twice (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)).
 
