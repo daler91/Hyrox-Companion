@@ -261,7 +261,8 @@ const DB_CONNECT_BASE_DELAY_MS = 2_000;
 /** One connection check: take a client within 15s, run a trivial query, hand the client back. */
 async function checkDatabaseConnection(): Promise<void> {
   const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000),
+    // A fixed callback and a constant delay: nothing from a request reaches the timer.
+    setTimeout(() => reject(new Error("Database connection timed out after 15s — check DATABASE_URL and network connectivity")), 15000), // DevSkim: ignore DS172411
   );
   let client;
   try {
