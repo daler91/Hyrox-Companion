@@ -47,7 +47,7 @@ describe("createJsonStringFieldReader", () => {
   });
 
   it("looks past a code fence around the object", () => {
-    const fenced = "```json\n" + PROPOSAL + "\n```";
+    const fenced = ["```json", PROPOSAL, "```"].join("\n");
     expect(readInPieces(fenced, 4).text).toBe('I moved your long run to Saturday — "easy" pace, and a rest day after. ✅');
   });
 

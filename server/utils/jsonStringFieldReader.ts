@@ -46,8 +46,9 @@ interface ReaderState {
 
 function isHighSurrogate(unit: string): boolean {
   if (unit.length !== 1) return false;
-  const code = unit.charCodeAt(0);
-  return code >= 0xD8_00 && code <= 0xDB_FF;
+  // One code unit: a lone surrogate reads as itself.
+  const code = unit.codePointAt(0);
+  return code !== undefined && code >= 0xD8_00 && code <= 0xDB_FF;
 }
 
 /** One decoded character of the open string. */

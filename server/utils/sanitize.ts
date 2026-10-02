@@ -27,6 +27,11 @@ export function sanitizeHtml(str: string): string {
  */
 export function sanitizeUserInput(input: string): string {
   if (typeof input !== "string") return input;
+  // Escapes for a model prompt, not a page: every caller builds prompt text,
+  // and nothing returned here is rendered as HTML (that is sanitizeHtml's
+  // job). An HTML sanitizer library would drop the athlete's "<3" or "5 < 10"
+  // instead of escaping it.
+  // bearer:disable javascript_lang_manual_html_sanitization
   return input.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
