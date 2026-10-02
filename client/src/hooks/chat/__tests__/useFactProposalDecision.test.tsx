@@ -53,8 +53,8 @@ describe("useFactProposalDecision", () => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Saved to your athlete card" }));
     });
     expect(api.chat.decideFactProposal).toHaveBeenCalledWith("reply-1", "save");
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.athleteFacts });
-    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.chatHistory });
+    expect(vi.mocked(queryClient).invalidateQueries.mock.calls).toContainEqual([{ queryKey: QUERY_KEYS.athleteFacts }]);
+    expect(vi.mocked(queryClient).invalidateQueries.mock.calls).toContainEqual([{ queryKey: QUERY_KEYS.chatHistory }]);
   });
 
   it("puts the offer back and says why when the card is full", async () => {

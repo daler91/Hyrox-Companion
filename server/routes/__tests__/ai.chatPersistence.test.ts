@@ -242,7 +242,7 @@ describe("the server-owned chat conversation", () => {
   });
 
   it("sends an auto-applied proposal as it now stands, so its card can offer Undo", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
     vi.mocked(generateJsonText).mockResolvedValue({
       text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
       model: "fast",
@@ -259,7 +259,7 @@ describe("the server-owned chat conversation", () => {
     } as unknown as PlanAdjustmentProposal;
     vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({ kind: "proposal", proposal: pending });
     vi.mocked(applyPlanAdjustmentProposal).mockResolvedValue({ applied: true, changeCount: 1 });
-    vi.mocked(storage.planProposals.getById).mockResolvedValue({
+    vi.mocked(storage.planProposals).getById.mockResolvedValue({
       ...pending,
       status: "applied",
       resolvedAt: new Date(),
@@ -274,7 +274,7 @@ describe("the server-owned chat conversation", () => {
   });
 
   it("still sends the drafted proposal when auto-apply throws, for the athlete to apply", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
     vi.mocked(generateJsonText).mockResolvedValue({
       text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
       model: "fast",
@@ -320,7 +320,7 @@ describe("the server-owned chat conversation", () => {
 
   it("gives the coach a note on the start of a long session it no longer reads in full", async () => {
     // 31 turns a minute apart: past the 30 the coach reads before the note is written.
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue(
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue(
       Array.from({ length: 31 }, (_, i) => savedRow(i % 2 === 0 ? "user" : "assistant", `turn ${i + 1}`, 40 - i)),
     );
     vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked about pacing.", model: "fast" });
@@ -331,7 +331,7 @@ describe("the server-owned chat conversation", () => {
     expect(response.status).toBe(200);
     expect(vi.mocked(streamChatWithCoach).mock.calls[0][1]).toHaveLength(20);
     expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.earlierInSession).toBe("- The athlete asked about pacing.");
-    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "rolling" }));
+    expect(vi.mocked(storage.users).saveChatMessage.mock.calls).toContainEqual([expect.objectContaining({ kind: "rolling" })]);
   });
 
   it("saves both turns of a non-streamed reply once it exists", async () => {
@@ -437,9 +437,12 @@ describe("the coach with tools (AI_CHAT_TOOLS)", () => {
     await request(app).post(STREAM).send({ message: "What are my PRs?", ...IDS });
     const result = await toolOptions().toolset.run({ id: "call-1", name: "get_personal_records", arguments: {} });
 
-    expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledWith("test_user_id", undefined, undefined, {
-      onlyTraining: true,
-    });
+    expect(vi.mocked(storage.analytics).getExerciseSetsForPersonalRecords.mock.calls).toContainEqual([
+      "test_user_id",
+      undefined,
+      undefined,
+      { onlyTraining: true },
+    ]);
     expect(JSON.parse(result)).toEqual({ records: [] });
   });
 
@@ -470,7 +473,7 @@ describe("the coach with tools (AI_CHAT_TOOLS)", () => {
   });
 
   it("still shows a drafted proposal when auto-apply fails", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
     coachSays(handoff("Move Sunday's long run to Saturday"));
     vi.mocked(createPlanAdjustmentProposal).mockResolvedValue({ kind: "proposal", proposal: PROPOSAL });
     vi.mocked(applyPlanAdjustmentProposal).mockRejectedValue(new Error("db down"));
@@ -605,7 +608,7 @@ describe("answering a fact the coach offered (I5b)", () => {
     await resetRouteTestState();
     app = createTestApp(aiRouter);
     vi.mocked(storage.users.getPendingChatFactProposal).mockResolvedValue(PENDING);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, userTimezone: "UTC" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, userTimezone: "UTC" } as never);
   });
 
   it("saves it to the card and marks it saved", async () => {

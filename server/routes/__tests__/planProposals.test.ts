@@ -92,7 +92,7 @@ describe("serializing an applied proposal", () => {
   });
 
   it("names the days it changed and whether it can still be undone", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue({
+    vi.mocked(storage.planProposals).getById.mockResolvedValue({
       ...PROPOSAL,
       status: "applied",
       payload: { changes: [{ planDayId: "day-1" }, { planDayId: "day-2" }] } as never,
@@ -106,7 +106,7 @@ describe("serializing an applied proposal", () => {
   });
 
   it("says an apply from before undo existed can't be undone", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue({
+    vi.mocked(storage.planProposals).getById.mockResolvedValue({
       ...PROPOSAL,
       status: "applied",
       payload: { changes: [{ planDayId: "day-1" }] } as never,
@@ -125,7 +125,7 @@ describe("POST /api/v1/plan-proposals/:id/apply", () => {
     vi.resetAllMocks();
     clearRateLimitBuckets();
     app = createTestApp(planProposalRouter);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true } as never);
   });
 
   it("applies the days the athlete picked", async () => {
@@ -193,7 +193,7 @@ describe("POST /api/v1/plan-proposals/:id/undo", () => {
     expect(response.body).toEqual({ undone: true, restoredCount: 2, keptDays: [] });
     expect(undoPlanAdjustmentProposal).toHaveBeenCalledWith("test_user_id", "proposal-1", expect.anything());
     // No AI call, so no consent check.
-    expect(storage.users.getUser).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.users).getUser.mock.calls).toEqual([]);
   });
 
   it("is a 409 with the reason when there is nothing to undo", async () => {

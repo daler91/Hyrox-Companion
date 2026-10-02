@@ -797,7 +797,7 @@ describe("buildTrainingContext declared absences", () => {
   });
 
   it("rules stations out of the gaps by the note and the card together (spec §5.1)", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue(makeUser({ trainingConstraints: "Bad left knee." }));
+    vi.mocked(storage.users).getUser.mockResolvedValue(makeUser({ trainingConstraints: "Bad left knee." }));
     vi.mocked(storage.athleteFacts.listActive).mockResolvedValue([
       {
         id: "fact-1",

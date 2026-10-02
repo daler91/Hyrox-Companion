@@ -256,7 +256,7 @@ describe("createPlanAdjustmentProposal", () => {
   });
 
   it("keeps one change per day, the first", async () => {
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([upcomingDay()] as never);
+    vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([upcomingDay()] as never);
     vi.mocked(generatePlanAdjustment).mockResolvedValue({
       summaryMessage: "Updated Thursday.",
       changes: [
@@ -264,12 +264,12 @@ describe("createPlanAdjustmentProposal", () => {
         { planDayId: "day-1", updatedFields: { expectedRpe: 4 }, rationale: "Second." },
       ],
     });
-    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([planDayRow()]);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map());
+    vi.mocked(storage.plans).getPlanDaysByIds.mockResolvedValue([planDayRow()]);
+    vi.mocked(storage.workouts).getExerciseSetsByPlanDays.mockResolvedValue(new Map());
 
     await createPlanAdjustmentProposal(input);
 
-    const created = vi.mocked(storage.planProposals.create).mock.calls[0][0];
+    const created = vi.mocked(storage.planProposals).create.mock.calls[0][0];
     expect(created.payload.changes).toHaveLength(1);
     expect(created.payload.changes[0].rationale).toBe("First.");
   });
@@ -392,7 +392,7 @@ function mockUnstructuredApplyScenario() {
 
 /** updatePlanDay returns the day with the update applied, as the real one does. */
 function mockUpdatesStick(days: ReturnType<typeof planDayRow>[]) {
-  vi.mocked(storage.plans.updatePlanDay).mockImplementation((id: string, updates: object) => {
+  vi.mocked(storage.plans).updatePlanDay.mockImplementation((id: string, updates: object) => {
     const day = days.find((d) => d.id === id);
     return Promise.resolve(day ? { ...day, ...updates } : NO_ROW);
   });
@@ -400,7 +400,7 @@ function mockUpdatesStick(days: ReturnType<typeof planDayRow>[]) {
 
 describe("applyPlanAdjustmentProposal", () => {
   it("returns undefined for an unknown proposal", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(NO_ROW);
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(NO_ROW);
 
     expect(await applyPlanAdjustmentProposal("user-1", "nope")).toBeUndefined();
   });
@@ -483,7 +483,7 @@ describe("applyPlanAdjustmentProposal", () => {
       { days: [expect.objectContaining({ planDayId: "day-1" }), expect.objectContaining({ planDayId: "day-2" })] },
       dbMockState.tx,
     );
-    expect(storage.planProposals.resolve).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.planProposals).resolve.mock.calls).toEqual([]);
     expect(parseStructuredPlanDaySuggestionRows).not.toHaveBeenCalled();
     // The coach chat's cached context no longer matches the plan.
     expect(invalidateTrainingContext).toHaveBeenCalledWith("user-1");
@@ -497,7 +497,7 @@ describe("applyPlanAdjustmentProposal", () => {
     await applyPlanAdjustmentProposal("user-1", "prop-1");
 
     const [, , applyUndo] = vi.mocked(storage.planProposals.markApplied).mock.calls[0];
-    const [, written] = vi.mocked(storage.plans.updatePlanDay).mock.calls[0];
+    const [, written] = vi.mocked(storage.plans).updatePlanDay.mock.calls[0];
     expect(applyUndo.days).toEqual([
       {
         planDayId: "day-1",
@@ -524,10 +524,10 @@ describe("applyPlanAdjustmentProposal", () => {
         baseline: { ...enrichedChange(day2).baseline, fingerprint: fingerprintFor(day2) },
       }),
     ];
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow(changes));
-    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day2]);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([["day-2", []]]));
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" } as never);
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(proposalRow(changes));
+    vi.mocked(storage.plans).getPlanDaysByIds.mockResolvedValue([day2]);
+    vi.mocked(storage.workouts).getExerciseSetsByPlanDays.mockResolvedValue(new Map([["day-2", []]]));
+    vi.mocked(storage.users).getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" } as never);
     mockUpdatesStick([day2]);
     vi.mocked(storage.planProposals.markApplied).mockResolvedValue(proposalRow(changes, { status: "applied" }));
 
@@ -535,22 +535,22 @@ describe("applyPlanAdjustmentProposal", () => {
 
     expect(result).toEqual({ applied: true, changeCount: 1 });
     // Only the picked day is revalidated and written.
-    expect(storage.plans.getPlanDaysByIds).toHaveBeenCalledWith(["day-2"], "user-1");
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(storage.plans.updatePlanDay).mock.calls[0][0]).toBe("day-2");
+    expect(vi.mocked(storage.plans).getPlanDaysByIds.mock.calls).toContainEqual([["day-2"], "user-1"]);
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toHaveLength(1);
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls[0][0]).toBe("day-2");
     const [, , applyUndo] = vi.mocked(storage.planProposals.markApplied).mock.calls[0];
     expect(applyUndo.days.map((d) => d.planDayId)).toEqual(["day-2"]);
   });
 
   it("refuses a pick that names a day the proposal doesn't change", async () => {
     const day = planDayRow();
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([enrichedChange(day)]));
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(proposalRow([enrichedChange(day)]));
 
     const result = await applyPlanAdjustmentProposal("user-1", "prop-1", { planDayIds: ["day-1", "day-9"] });
 
     expect(result).toMatchObject({ applied: false, reason: "invalid_selection" });
-    expect(storage.plans.getPlanDaysByIds).not.toHaveBeenCalled();
-    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).getPlanDaysByIds.mock.calls).toEqual([]);
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
   });
 
   it("reports not_pending only when the proposal was resolved elsewhere mid-apply", async () => {
@@ -672,14 +672,14 @@ describe("undoPlanAdjustmentProposal", () => {
   }
 
   function mockLiveDay(day: ReturnType<typeof planDayRow>, sets: unknown[] = []) {
-    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([["day-1", sets as never]]));
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(day);
+    vi.mocked(storage.plans).getPlanDaysByIds.mockResolvedValue([day]);
+    vi.mocked(storage.workouts).getExerciseSetsByPlanDays.mockResolvedValue(new Map([["day-1", sets as never]]));
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue(day);
     vi.mocked(storage.planProposals.markReverted).mockResolvedValue(appliedProposal({}, { status: "reverted" }));
   }
 
   it("is undefined for an unknown proposal", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(NO_ROW);
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(NO_ROW);
 
     expect(await undoPlanAdjustmentProposal("user-1", "nope")).toBeUndefined();
   });
@@ -690,33 +690,33 @@ describe("undoPlanAdjustmentProposal", () => {
     ["one applied before undo existed", { applyUndo: null }, "not_undoable"],
     ["one applied over a week ago", { resolvedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }, "expired"],
   ] as const)("refuses %s", async (_label, overrides, reason) => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(appliedProposal({}, overrides));
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(appliedProposal({}, overrides));
 
     const result = await undoPlanAdjustmentProposal("user-1", "prop-1");
 
     expect(result).toMatchObject({ undone: false, reason });
-    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
   });
 
   it("puts the day and its coach note back and marks the proposal reverted", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(appliedProposal());
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(appliedProposal());
     mockLiveDay(appliedDay());
 
     const result = await undoPlanAdjustmentProposal("user-1", "prop-1");
 
     expect(result).toEqual({ undone: true, restoredCount: 1, keptDays: [] });
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toContainEqual([
       "day-1",
       { mainWorkout: "40min tempo", aiSource: null, aiRationale: null, aiNoteUpdatedAt: null, aiInputsUsed: null },
       "user-1",
       dbMockState.tx,
-    );
+    ]);
     expect(storage.planProposals.markReverted).toHaveBeenCalledWith("prop-1", "user-1", dbMockState.tx);
     expect(invalidateTrainingContext).toHaveBeenCalledWith("user-1");
   });
 
   it("leaves what the athlete changed since, and says so", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(appliedProposal());
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(appliedProposal());
     mockLiveDay(appliedDay({ mainWorkout: "Hyrox class, then 10 min easy" }));
 
     const result = await undoPlanAdjustmentProposal("user-1", "prop-1");
@@ -726,14 +726,14 @@ describe("undoPlanAdjustmentProposal", () => {
       restoredCount: 1,
       keptDays: [{ planDayId: "day-1", dayLabel: "Thu Jul 16 — Tempo Run" }],
     });
-    const [, update] = vi.mocked(storage.plans.updatePlanDay).mock.calls[0];
+    const [, update] = vi.mocked(storage.plans).updatePlanDay.mock.calls[0];
     expect(update).not.toHaveProperty("mainWorkout");
     expect(update).toMatchObject({ aiRationale: null });
   });
 
   it("puts a cleared exercise table back while it is still as the apply left it", async () => {
     const before = [{ id: "set-1", planDayId: "day-1", exerciseName: "rowing", category: "functional", setNumber: 1 }];
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(
       appliedProposal({ sets: { before: before as never, afterFingerprint: setsFingerprint([]) } }),
     );
     mockLiveDay(appliedDay());
@@ -746,7 +746,7 @@ describe("undoPlanAdjustmentProposal", () => {
 
   it("leaves an exercise table the athlete has edited since", async () => {
     const before = [{ id: "set-1", planDayId: "day-1", exerciseName: "rowing", category: "functional", setNumber: 1 }];
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(
       appliedProposal({ sets: { before: before as never, afterFingerprint: setsFingerprint([]) } }),
     );
     mockLiveDay(appliedDay(), [{ id: "set-9", exerciseName: "burpees", category: "functional", setNumber: 1 }]);
@@ -758,18 +758,18 @@ describe("undoPlanAdjustmentProposal", () => {
   });
 
   it("changes nothing when every day has moved on", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(appliedProposal());
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(appliedProposal());
     mockLiveDay(appliedDay({ status: "completed" }));
 
     const result = await undoPlanAdjustmentProposal("user-1", "prop-1");
 
     expect(result).toMatchObject({ undone: false, reason: "changed_since" });
-    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
     expect(storage.planProposals.markReverted).not.toHaveBeenCalled();
   });
 
   it("reports not_applied when a concurrent undo won", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(appliedProposal());
+    vi.mocked(storage.planProposals).getById.mockResolvedValue(appliedProposal());
     mockLiveDay(appliedDay());
     vi.mocked(storage.planProposals.markReverted).mockResolvedValue(NO_ROW);
 

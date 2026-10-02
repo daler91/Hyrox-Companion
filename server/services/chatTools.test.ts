@@ -64,34 +64,34 @@ describe("the tools offered", () => {
 describe("get_workouts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([]);
+    vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([]);
   });
 
   it("lists the logged sessions in the range, newest first, with their sets", async () => {
-    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
-      { id: "log-1", date: "2026-07-14", focus: "Lower", mainWorkout: "Squats", duration: 60, rpe: 8, notes: "Felt <strong>" },
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([
+      { id: "log-1", date: "2026-07-14", focus: "Lower", mainWorkout: "Squats", duration: 60, rpe: 8, notes: 'RPE <8 & felt "fresh"' },
       { id: "log-2", date: "2026-07-21", focus: "Easy run", mainWorkout: "5k easy", duration: 30, rpe: 3, notes: null },
     ] as never);
-    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([set({})] as never);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([set({})] as never);
 
     const result = await run("get_workouts", { from: "2026-07-01", to: "2026-07-31" });
 
-    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("user-1", "2026-07-01", "2026-07-31");
+    expect(vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mock.calls).toContainEqual(["user-1", "2026-07-01", "2026-07-31"]);
     const workouts = result.workouts as Array<{ date: string; exercises: string; note?: string }>;
     expect(workouts).toHaveLength(2);
     expect(workouts.at(0)).toEqual({ date: "2026-07-21", focus: "Easy run", durationMin: 30, rpe: 3, exercises: "5k easy" });
     expect(workouts.at(1)?.date).toBe("2026-07-14");
     expect(workouts.at(1)?.exercises).toContain("5 reps, 100 kg");
     // The athlete's own text is sanitised like any other text that reaches a prompt.
-    expect(workouts.at(1)?.note).toBe("Felt &lt;strong&gt;");
+    expect(workouts.at(1)?.note).toBe("RPE &lt;8 &amp; felt &quot;fresh&quot;");
     // A range in the past has nothing planned in it.
-    expect(storage.timeline.getUpcomingPlannedDays).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.timeline).getUpcomingPlannedDays.mock.calls).toEqual([]);
   });
 
   it("includes planned sessions in a range that reaches ahead", async () => {
-    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([]);
+    vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([
       { date: "2026-10-05", focus: "Long run", mainWorkout: "90 min easy" },
       { date: "2026-12-01", focus: "Out of range", mainWorkout: "x" },
     ] as never);
@@ -104,7 +104,7 @@ describe("get_workouts", () => {
   it("refuses a range longer than 92 days, or backwards, without reading anything", async () => {
     expect((await run("get_workouts", { from: "2026-01-01", to: "2026-06-30" })).error).toMatch(/Invalid arguments/);
     expect((await run("get_workouts", { from: "2026-07-31", to: "2026-07-01" })).error).toMatch(/Invalid arguments/);
-    expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mock.calls).toEqual([]);
   });
 });
 
@@ -114,7 +114,7 @@ describe("get_exercise_history", () => {
   });
 
   it("finds an exercise by its name or custom label, a session per log, newest first", async () => {
-    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([
       set({ workoutLogId: "log-1", date: "2026-07-14", weight: 100 }),
       set({ workoutLogId: "log-1", date: "2026-07-14", setNumber: 2, weight: 100 }),
       set({ workoutLogId: "log-2", date: "2026-08-04", weight: 105 }),
@@ -124,7 +124,7 @@ describe("get_exercise_history", () => {
 
     const result = await run("get_exercise_history", { exercise: "Back Squat" });
 
-    expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("user-1", "2026-04-04", "2026-10-01");
+    expect(vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mock.calls).toContainEqual(["user-1", "2026-04-04", "2026-10-01"]);
     expect((result.sessions as Array<{ date: string }>).map((session) => session.date)).toEqual([
       "2026-08-10",
       "2026-08-04",
@@ -133,7 +133,7 @@ describe("get_exercise_history", () => {
   });
 
   it("says so when the exercise was never logged in the window", async () => {
-    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([]);
 
     const result = await run("get_exercise_history", { exercise: "sled push", months: 2 });
 
@@ -144,14 +144,14 @@ describe("get_exercise_history", () => {
 
 describe("get_personal_records", () => {
   it("lists each exercise's headline best with its date, weighted lifts first", async () => {
-    vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockResolvedValue([
+    vi.mocked(storage.analytics).getExerciseSetsForPersonalRecords.mockResolvedValue([
       set({ exerciseName: "back_squat", reps: 5, weight: 120, date: "2026-08-04" }),
       set({ exerciseName: "rowing", category: "functional", reps: null, weight: null, time: 3.75, distance: 1000, date: "2026-09-01" }),
     ] as never);
 
     const result = await run("get_personal_records");
 
-    expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledWith("user-1", undefined, undefined, { onlyTraining: true });
+    expect(vi.mocked(storage.analytics).getExerciseSetsForPersonalRecords.mock.calls).toContainEqual(["user-1", undefined, undefined, { onlyTraining: true }]);
     const records = result.records as Array<{ exercise: string; best: string; date: string }>;
     expect(records[0]).toMatchObject({ exercise: "back squat", date: "2026-08-04" });
     expect(records[0].best).toMatch(/^e1RM 140kg$/);
@@ -162,14 +162,14 @@ describe("get_personal_records", () => {
 describe("search_coaching_materials", () => {
   it("returns the matching excerpts, sanitised", async () => {
     vi.mocked(retrieveCoachingContext).mockResolvedValue({
-      retrievedChunks: ["[Hyrox pacing notes] Run the first km at <race pace>."],
+      retrievedChunks: ['[Hyrox pacing notes] Run the first km at <90% & "easy".'],
       ragInfo: { source: "rag", chunkCount: 1 },
     });
 
     const result = await run("search_coaching_materials", { query: "pacing the first run" });
 
     expect(retrieveCoachingContext).toHaveBeenCalledWith("user-1", "pacing the first run", CTX.log);
-    expect(result.excerpts).toEqual(["[Hyrox pacing notes] Run the first km at &lt;race pace&gt;."]);
+    expect(result.excerpts).toEqual(["[Hyrox pacing notes] Run the first km at &lt;90% &amp; &quot;easy&quot;."]);
   });
 });
 
@@ -177,13 +177,13 @@ describe("runChatTool", () => {
   it("never throws: an unknown tool or a failed read comes back as an error to work around", async () => {
     expect(await run("delete_everything")).toEqual({ error: "There is no tool called delete_everything." });
 
-    vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockRejectedValue(new Error("db down"));
+    vi.mocked(storage.analytics).getExerciseSetsForPersonalRecords.mockRejectedValue(new Error("db down"));
     expect((await run("get_personal_records")).error).toMatch(/lookup failed/);
     expect(CTX.log.warn).toHaveBeenCalled();
   });
 
   it("keeps a result within its size cap by halving its lists", async () => {
-    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue(
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue(
       Array.from({ length: 40 }, (_, i) => ({
         id: `log-${i}`,
         date: `2026-07-${String((i % 28) + 1).padStart(2, "0")}`,
@@ -194,7 +194,7 @@ describe("runChatTool", () => {
         notes: "y".repeat(290),
       })) as never,
     );
-    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([]);
 
     const raw = await runChatTool(call("get_workouts", { from: "2026-07-01", to: "2026-07-31" }), CTX);
 

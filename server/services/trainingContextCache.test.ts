@@ -22,7 +22,7 @@ describe("getCachedTrainingContext", () => {
     clearTrainingContextCache();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ userTimezone: "UTC" } as never);
   });
 
   afterEach(() => {
@@ -68,7 +68,7 @@ describe("getCachedTrainingContext", () => {
   });
 
   it("builds again at the athlete's midnight, since today is part of the context", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/New_York" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ userTimezone: "America/New_York" } as never);
     vi.setSystemTime(new Date("2026-10-02T03:58:00Z")); // 23:58 in New York
     const build = vi.fn(() => Promise.resolve(CONTEXT));
     await getCachedTrainingContext("user-1", build);
@@ -120,7 +120,7 @@ describe("invalidateTrainingContextOnWrite", () => {
 
   beforeEach(() => {
     clearTrainingContextCache();
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ userTimezone: "UTC" } as never);
     vi.mocked(getUserId).mockReturnValue("user-1");
   });
 

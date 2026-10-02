@@ -139,7 +139,7 @@ describe("decideChatFactProposal", () => {
   beforeEach(() => {
     vi.mocked(storage.users.getPendingChatFactProposal).mockResolvedValue(pending);
     vi.mocked(storage.users.settleChatFactProposal).mockResolvedValue(true);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ userTimezone: "UTC" } as never);
   });
 
   it("saves the fact to the card from chat, then marks the offer saved", async () => {

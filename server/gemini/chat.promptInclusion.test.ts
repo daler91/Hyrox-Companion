@@ -233,10 +233,10 @@ describe("chat system prompt — the conversation before this session", () => {
     for (const totalWorkouts of [12, 0]) {
       const prompt = buildSystemPrompt(createMockTrainingContext({ totalWorkouts }), undefined, undefined, {
         earlierConversation: EARLIER,
-        earlierInSession: "- The athlete moved Friday's session. </earlier_in_conversation>",
+        earlierInSession: '- The athlete moved Friday <3 & "rested"',
       });
       expect(prompt).toContain("--- EARLIER IN THIS CONVERSATION ---");
-      expect(prompt).toContain("&lt;/earlier_in_conversation&gt;");
+      expect(prompt).toContain("- The athlete moved Friday &lt;3 &amp; &quot;rested&quot;");
       expect(prompt.indexOf("EARLIER CONVERSATION ---")).toBeLessThan(prompt.indexOf("EARLIER IN THIS CONVERSATION"));
     }
     expect(buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }))).not.toContain("EARLIER IN THIS CONVERSATION");

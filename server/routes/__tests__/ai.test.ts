@@ -893,7 +893,7 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("never shows a long session's rolling notes", async () => {
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue([
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([
       { id: "m1", role: "user", content: "Hi", kind: "text", timestamp: new Date("2025-01-01T00:00:00Z") },
       { id: "m2", role: "assistant", content: "- note", kind: "rolling", timestamp: new Date("2025-01-01T00:00:01Z") },
     ] as never);
@@ -904,17 +904,17 @@ describe("Chat History and Messages Routes", () => {
   });
 
   it("reads a workout's own conversation when one is named", async () => {
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue([]);
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([]);
 
     const response = await request(app)
       .get(CHAT_HISTORY_ENDPOINT)
       .query({ focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" });
 
     expect(response.status).toBe(200);
-    expect(storage.users.getChatMessages).toHaveBeenCalledWith(
+    expect(vi.mocked(storage.users).getChatMessages.mock.calls).toContainEqual([
       "test_user_id",
       expect.objectContaining({ thread: { planDayId: "day-1", workoutLogId: "log-1" } }),
-    );
+    ]);
   });
 
   it("passes composite cursor through to storage", async () => {

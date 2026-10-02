@@ -186,8 +186,8 @@ describe("getCoachWelcome", () => {
   });
 
   it("builds the welcome from the athlete, their plan's race and the chat's cached context", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ firstName: "Sam" } as never);
-    vi.mocked(storage.plans.getActivePlan).mockResolvedValue({ raceDate: "2026-10-04" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ firstName: "Sam" } as never);
+    vi.mocked(storage.plans).getActivePlan.mockResolvedValue({ raceDate: "2026-10-04" } as never);
     vi.mocked(getCachedTrainingContext).mockResolvedValue(context());
 
     const welcome = await getCoachWelcome("user-1");

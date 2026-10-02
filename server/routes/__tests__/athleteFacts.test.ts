@@ -58,7 +58,7 @@ describe("athlete facts routes", () => {
     vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
     clearRateLimitBuckets();
     app = createTestApp(athleteFactsRouter);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.mocked(storage.users).getUser.mockResolvedValue({ userTimezone: "UTC" } as never);
   });
 
   afterEach(() => {
@@ -146,7 +146,7 @@ describe("athlete facts routes", () => {
 
   describe("importing the older free-text note", () => {
     it("moves it into the card a fact per sentence, then clears it", async () => {
-      vi.mocked(storage.users.getUser).mockResolvedValue({
+      vi.mocked(storage.users).getUser.mockResolvedValue({
         userTimezone: "UTC",
         trainingConstraints: "Bad left knee. No sled at my gym.",
       } as never);
@@ -163,21 +163,21 @@ describe("athlete facts routes", () => {
         ],
         "2026-12-30",
       );
-      expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", { trainingConstraints: null });
+      expect(vi.mocked(storage.users).updateUserPreferences.mock.calls).toContainEqual(["test_user_id", { trainingConstraints: null }]);
     });
 
     it("keeps the note while some of it doesn't fit, so nothing is lost", async () => {
-      vi.mocked(storage.users.getUser).mockResolvedValue({ trainingConstraints: "Bad left knee." } as never);
+      vi.mocked(storage.users).getUser.mockResolvedValue({ trainingConstraints: "Bad left knee." } as never);
       vi.mocked(storage.athleteFacts.seed).mockResolvedValue({ added: 0, skipped: 1 });
 
       const response = await request(app).post(`${FACTS}/import`).send({});
 
       expect(response.body).toEqual({ added: 0, skipped: 1 });
-      expect(storage.users.updateUserPreferences).not.toHaveBeenCalled();
+      expect(vi.mocked(storage.users).updateUserPreferences.mock.calls).toEqual([]);
     });
 
     it("does nothing without a note", async () => {
-      vi.mocked(storage.users.getUser).mockResolvedValue({ trainingConstraints: null } as never);
+      vi.mocked(storage.users).getUser.mockResolvedValue({ trainingConstraints: null } as never);
 
       const response = await request(app).post(`${FACTS}/import`).send({});
 

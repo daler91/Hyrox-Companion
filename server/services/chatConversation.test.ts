@@ -300,10 +300,10 @@ describe("loadConversation", () => {
 
     expect(storage.users.deleteAssistantChatMessage).toHaveBeenCalledWith("user-1", "33333333-3333-4333-8333-333333333333");
     // The Coach panel's message reads the general conversation only (I4).
-    expect(storage.users.getChatMessages).toHaveBeenCalledWith("user-1", {
-      limit: 60,
-      thread: { planDayId: undefined, workoutLogId: undefined },
-    });
+    expect(vi.mocked(storage.users).getChatMessages.mock.calls).toContainEqual([
+      "user-1",
+      { limit: 60, thread: { planDayId: undefined, workoutLogId: undefined } },
+    ]);
     expect(conversation.turns.map((turn) => turn.content)).toEqual(["hi", "hey"]);
     expect(conversation.notes).toEqual(["1 hour later"]);
     await expect(conversation.earlier).resolves.toBeUndefined();
@@ -359,25 +359,25 @@ describe("loadConversation", () => {
   });
 
   it("reads a workout's own thread, and keeps its summary there", async () => {
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue([row("user", "was that too hard?", 30)]);
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([row("user", "was that too hard?", 30)]);
     vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked whether the session was too hard.", model: "fast" });
     const focus = { focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" };
 
     const conversation = await loadConversation("user-1", TURN, focus, NOW);
     await conversation.earlier;
 
-    expect(storage.users.getChatMessages).toHaveBeenCalledWith("user-1", {
-      limit: 60,
-      thread: { planDayId: "day-1", workoutLogId: "log-1" },
-    });
-    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(
+    expect(vi.mocked(storage.users).getChatMessages.mock.calls).toContainEqual([
+      "user-1",
+      { limit: 60, thread: { planDayId: "day-1", workoutLogId: "log-1" } },
+    ]);
+    expect(vi.mocked(storage.users).saveChatMessage.mock.calls).toContainEqual([
       expect.objectContaining({ kind: "summary", focusPlanDayId: "day-1", focusWorkoutLogId: "log-1" }),
-    );
+    ]);
   });
 
   it("folds the start of a long session into a rolling note, saved just after the turns it covers", async () => {
     const turns = sessionTurns(31);
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue(turns);
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue(turns);
     vi.mocked(generateText).mockResolvedValue({ text: "- The athlete asked about pacing.", model: "fast" });
 
     const conversation = await loadConversation("user-1", TURN, { focusPlanDayId: "day-1" }, NOW);
@@ -391,19 +391,19 @@ describe("loadConversation", () => {
     expect(prompt).toContain("Athlete: turn 1");
     expect(prompt).toContain("Athlete: turn 11");
     expect(prompt).not.toContain("turn 12");
-    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(
+    expect(vi.mocked(storage.users).saveChatMessage.mock.calls).toContainEqual([
       expect.objectContaining({
         kind: "rolling",
         content: "- The athlete asked about pacing.",
         timestamp: new Date((turns[10].timestamp?.getTime() ?? 0) + 1),
         focusPlanDayId: "day-1",
       }),
-    );
+    ]);
   });
 
   it("reads the rolling note without writing another while the session has room", async () => {
     const turns = sessionTurns(35);
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue([...turns.slice(0, 11), rollingNote(turns[10]), ...turns.slice(11)]);
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([...turns.slice(0, 11), rollingNote(turns[10]), ...turns.slice(11)]);
 
     const conversation = await loadConversation("user-1", TURN, {}, NOW);
 
@@ -413,18 +413,18 @@ describe("loadConversation", () => {
   });
 
   it("carries the athlete's last words in the rolling note when the model fails", async () => {
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue(sessionTurns(31));
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue(sessionTurns(31));
     vi.mocked(generateText).mockRejectedValue(new Error("provider down"));
 
     const conversation = await loadConversation("user-1", TURN, {}, NOW);
 
     await expect(conversation.earlierInSession).resolves.toContain('- The athlete wrote: "turn 11"');
-    expect(storage.users.saveChatMessage).toHaveBeenCalledWith(expect.objectContaining({ kind: "rolling" }));
+    expect(vi.mocked(storage.users).saveChatMessage.mock.calls).toContainEqual([expect.objectContaining({ kind: "rolling" })]);
   });
 
   it("writes the next session's handover from the rolling note and the turns after it", async () => {
     const previous = sessionTurns(4, 30);
-    vi.mocked(storage.users.getChatMessages).mockResolvedValue([previous[0], previous[1], rollingNote(previous[1], "- folded start"), previous[2], previous[3]]);
+    vi.mocked(storage.users).getChatMessages.mockResolvedValue([previous[0], previous[1], rollingNote(previous[1], "- folded start"), previous[2], previous[3]]);
     vi.mocked(generateText).mockResolvedValue({ text: "- handover", model: "fast" });
 
     const conversation = await loadConversation("user-1", TURN, {}, NOW);
