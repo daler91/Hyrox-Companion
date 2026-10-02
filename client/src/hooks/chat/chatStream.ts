@@ -1,8 +1,11 @@
+import type { ChatStatusStep } from "@shared/chat";
+
 import { api, type ChatFocus, type ChatTurnIds, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { queryClient } from "@/lib/queryClient";
 import { consumeSSEStream } from "@/lib/sseStream";
 
+import { isChatStatusStep } from "./chatProgress";
 import {
   createMessageUpdater,
   ignoreResult,
@@ -29,8 +32,8 @@ export interface StreamChatReplyOptions extends ChatReplyRequest {
   isCurrent: () => boolean;
   /** The server accepted the request: its headers arrived. */
   onAccepted: (response: Response) => void;
-  /** The server is drafting a plan proposal instead of prose. */
-  onReviewingPlan: () => void;
+  /** What the coach is doing now, as the server reports it (I11). */
+  onStatus: (status: ChatStatusStep) => void;
   /**
    * The text so far, on every flush. The caller keeps it so a Stop or a
    * dropped connection — which reject before this resolves — still leave the
@@ -88,13 +91,14 @@ export async function streamChatReply(options: StreamChatReplyOptions): Promise<
   const updateMessage = createMessageUpdater(ids.assistantMessageId, setMessages);
   const result = await consumeSSEStream<RagInfo>(reader, {
     metaKey: "ragInfo",
-    extraKeys: ["planProposal", "planProposalPending", "safetyNotice", "factProposal"],
+    extraKeys: ["planProposal", "status", "safetyNotice", "factProposal"],
     signal,
     onFlush: (snapshot) => {
       // Drop flushes from a superseded stream so a stale rAF flush after a
       // reconnect can't clobber the current stream's state (W14).
       if (!options.isCurrent()) return;
-      if (snapshot.extras.planProposalPending) options.onReviewingPlan();
+      const { status } = snapshot.extras;
+      if (isChatStatusStep(status)) options.onStatus(status);
       options.onText(snapshot.content);
       updateMessage(snapshot);
     },

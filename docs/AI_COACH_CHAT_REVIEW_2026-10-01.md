@@ -31,7 +31,7 @@ staleness. The gaps are in the conversation itself:
 
 ---
 
-## Remediation status (updated 2026-10-01)
+## Remediation status (updated 2026-10-02)
 
 Wave 1 is fixed (daler91/Hyrox-Companion#2085). Wave 2's first batch (D1(a), D5, I14, I15, I16) and
 second batch (I1, I2, I3, I7) are fixed (daler91/Hyrox-Companion#2086), and its last two items, I6
@@ -136,6 +136,24 @@ Behaviour changes:
 - **I1 uses message ids, not a `conversationId`.** Threads (I4) are keyed by the workout ids each row already carries.
 - **I3 is partial.** The `suggestions`, `safety` and `system` kinds, and the model and latency columns, are not added: latency is in the `[chat] turn` log line instead (I23), and feedback has its own columns. Suggestion cards still float at the end of the Coach panel: they are not chat turns.
 - **No GFM elsewhere.** The other markdown surfaces (coach insights, race predictor, chart explanations, nutrition insights) still render without GFM.
+
+**After wave 3 (daler91/Hyrox-Companion#2088 merged): I24, I21 and I11.**
+
+| ID  | Fix |
+| --- | --- |
+| I24 | `sanitizeUserInput` escapes only `&`, `<` and `>`: text still cannot break out of the prompt's `<user_input>`-style delimiters, and quotes and apostrophes reach the model as typed ("can't", not `can&#39;t`). `sanitizeHtml`, which emails and other HTML use, still encodes both. |
+| I21 | While a reply streams, its text is `aria-busy` and `aria-live="off"`, so the conversation's polite live region stops re-reading it on every flush; once complete it mounts as a new node and is read once. The safety notice, which arrives before any text, sits outside that and is announced at once. Both chat surfaces. |
+| I11 | The chat stream sends `{ status }` steps (`shared/chat.ts`) in place of `planProposalPending`: drafting plan changes, and on the tools path each lookup (workouts, exercise history, personal records, coaching notes), then back to thinking once it returns. The chat shows "Reading your training log..." until the server accepts the send, then "Thinking..." and the steps. A plan proposal's summary streams as the model writes it (`server/utils/jsonStringFieldReader.ts` reads `summaryMessage` off the JSON as it arrives), and the card follows once the whole proposal is checked. |
+
+Behaviour changes:
+
+- **A proposal's first words arrive sooner.** Its summary streams instead of arriving with the card, so the text starts as soon as the model writes it rather than after the changes.
+- **A failed proposal stream is handled by how far it got.** One that fails before its summary begins makes the ordinary call, which retries. One that fails partway through the summary ends the reply with "I couldn't draft that change just now..." rather than a prose answer under the half-written summary.
+- **Quotes reach the model as typed** in every prompt built from athlete or coach text. The escape checks in tests now pin `&lt;`, `&gt;` and `&amp;` only.
+- **Screen readers hear a streamed reply once**, when it completes.
+- **A tab open across the deploy shows "Thinking..."** where it used to show "Reviewing your plan...": it doesn't know the new status event.
+
+Not run: a live model, so neither the streamed summary nor the status steps have met a real provider. The stream reading is unit-tested chunk by chunk, including Anthropic's code fence and escapes split across chunks.
 
 ---
 

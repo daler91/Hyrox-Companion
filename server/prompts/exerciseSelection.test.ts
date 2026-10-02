@@ -88,9 +88,10 @@ describe("formatExerciseSelectionBrief", () => {
   });
 
   it("escapes the athlete's own exercise names", () => {
-    // Angle brackets, ampersands and quotes are what a name could use to break
-    // out of the prompt's delimiters; all of them arrive escaped.
-    const escaped = "Hyrox Class &lt;3 &amp; &quot;more&quot;";
+    // Angle brackets and ampersands are what a name could use to break out of
+    // the prompt's delimiters, and both arrive escaped; quotes delimit nothing
+    // in a prompt and stay as typed.
+    const escaped = 'Hyrox Class &lt;3 &amp; "more"';
     const coach = formatExerciseSelectionBrief(makeBrief(), "coach");
     expect(coach).toContain(escaped);
     expect(coach).not.toContain("<3");

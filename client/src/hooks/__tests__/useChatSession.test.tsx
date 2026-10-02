@@ -379,7 +379,7 @@ describe('useChatSession', () => {
       createdAt: '2026-10-01T10:00:00.000Z',
     };
     mockStreamEndpoint(() =>
-      Promise.resolve(new Response(sseStream({ planProposalPending: true }, { text: 'Moved your long run to Saturday.' }, { planProposal: proposal }, { done: true }))),
+      Promise.resolve(new Response(sseStream({ status: 'drafting_plan' }, { text: 'Moved your long run to Saturday.' }, { planProposal: proposal }, { done: true }))),
     );
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
@@ -390,6 +390,59 @@ describe('useChatSession', () => {
     expect(result.current.messages[2]).toMatchObject({ kind: 'proposal', proposal: { id: 'proposal-1' } });
     expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['/api/v1/plan-proposals'] });
   });
+  it('names what the coach is doing until the reply is in, and which reply is streaming (I11, I21)', async () => {
+    let accept: ((response: Response) => void) | undefined;
+    let push: ((event: object) => void) | undefined;
+    let close: (() => void) | undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        push = (event) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        };
+        close = () => {
+          controller.close();
+        };
+      },
+    });
+    mockStreamEndpoint(() => new Promise((resolve) => {
+      accept = resolve;
+    }));
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    let sent: Promise<void> | undefined;
+    act(() => {
+      sent = result.current.sendMessage('Move my long run to Saturday');
+    });
+    // The server reads the athlete's training before it accepts the send.
+    await waitFor(() => {
+      expect(result.current.progress).toBe('reading');
+    });
+    expect(result.current.streamingMessageId).toBe(result.current.messages[2].id);
+
+    act(() => {
+      accept?.(new Response(body));
+    });
+    await waitFor(() => {
+      expect(result.current.progress).toBe('thinking');
+    });
+    act(() => {
+      push?.({ status: 'drafting_plan' });
+    });
+    await waitFor(() => {
+      expect(result.current.progress).toBe('drafting_plan');
+    });
+
+    await act(async () => {
+      push?.({ text: 'Moved it.' });
+      push?.({ done: true });
+      close?.();
+      await sent;
+    });
+    expect(result.current.progress).toBeNull();
+    expect(result.current.streamingMessageId).toBeNull();
+    expect(result.current.messages[2].content).toBe('Moved it.');
+  });
+
   it("puts the server's safety notice on the reply it arrived with", async () => {
     const notice = { level: 'urgent', message: 'Pause hard training and seek prompt medical care.' };
     mockStreamEndpoint(() =>

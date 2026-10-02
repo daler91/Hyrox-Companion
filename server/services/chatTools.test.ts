@@ -5,6 +5,7 @@ import {
   CHAT_READ_TOOLS,
   type ChatToolContext,
   chatToolsFor,
+  chatToolStatus,
   PROPOSE_PLAN_CHANGES,
   runChatTool,
 } from "./chatTools";
@@ -84,7 +85,7 @@ describe("get_workouts", () => {
     expect(workouts.at(1)?.date).toBe("2026-07-14");
     expect(workouts.at(1)?.exercises).toContain("5 reps, 100 kg");
     // The athlete's own text is sanitised like any other text that reaches a prompt.
-    expect(workouts.at(1)?.note).toBe("RPE &lt;8 &amp; felt &quot;fresh&quot;");
+    expect(workouts.at(1)?.note).toBe('RPE &lt;8 &amp; felt "fresh"');
     // A range in the past has nothing planned in it.
     expect(vi.mocked(storage.timeline).getUpcomingPlannedDays.mock.calls).toEqual([]);
   });
@@ -169,7 +170,17 @@ describe("search_coaching_materials", () => {
     const result = await run("search_coaching_materials", { query: "pacing the first run" });
 
     expect(retrieveCoachingContext).toHaveBeenCalledWith("user-1", "pacing the first run", CTX.log);
-    expect(result.excerpts).toEqual(["[Hyrox pacing notes] Run the first km at &lt;90% &amp; &quot;easy&quot;."]);
+    expect(result.excerpts).toEqual(['[Hyrox pacing notes] Run the first km at &lt;90% &amp; "easy".']);
+  });
+});
+
+describe("chatToolStatus (I11)", () => {
+  it("names the lookup each read tool makes, and falls back to thinking", () => {
+    expect(chatToolStatus("get_workouts")).toBe("looking_up_workouts");
+    expect(chatToolStatus("get_exercise_history")).toBe("looking_up_exercises");
+    expect(chatToolStatus("get_personal_records")).toBe("looking_up_records");
+    expect(chatToolStatus("search_coaching_materials")).toBe("searching_notes");
+    expect(chatToolStatus("delete_everything")).toBe("thinking");
   });
 });
 

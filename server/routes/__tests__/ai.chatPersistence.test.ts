@@ -241,6 +241,57 @@ describe("the server-owned chat conversation", () => {
     );
   });
 
+  it("streams a proposal's summary as the coach writes it, and sends no part of it twice (I11)", async () => {
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    vi.mocked(createPlanAdjustmentProposal).mockImplementation(async (input) => {
+      await input.onSummaryText?.("Moved your long run ");
+      await input.onSummaryText?.("to Saturday.");
+      return {
+        kind: "proposal",
+        proposal: { id: "proposal-1", status: "pending", summaryMessage: "Moved your long run to Saturday.", payload: { changes: [] }, createdAt: new Date() } as unknown as PlanAdjustmentProposal,
+      };
+    });
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    const status = response.text.indexOf('"status":"drafting_plan"');
+    expect(status).toBeGreaterThan(-1);
+    expect(response.text.indexOf('"text":"Moved your long run "')).toBeGreaterThan(status);
+    expect(response.text).toContain('"text":"to Saturday."');
+    expect(response.text).not.toContain('"text":"Moved your long run to Saturday."');
+    expect(response.text).toContain('"planProposal"');
+    expect(savesOnce().at(-1)).toEqual(
+      expect.objectContaining({ content: "Moved your long run to Saturday.", kind: "proposal", proposalId: "proposal-1" }),
+    );
+  });
+
+  it("closes a summary that broke off with an apology, not a second answer under it", async () => {
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    vi.mocked(createPlanAdjustmentProposal).mockImplementation(async (input) => {
+      await input.onSummaryText?.("Moved your long run ");
+      return { kind: "generation_failed" };
+    });
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", ...IDS });
+
+    expect(streamChatWithCoach).not.toHaveBeenCalled();
+    expect(response.text).toContain("I couldn't draft that change just now.");
+    expect(response.text).not.toContain('"planProposal":');
+    expect(savesOnce().at(-1)).toEqual(
+      expect.objectContaining({
+        content: "Moved your long run \n\nI couldn't draft that change just now. Ask me again in a moment, or tell me exactly which session to change.",
+        kind: "text",
+        proposalId: null,
+      }),
+    );
+  });
+
   it("sends an auto-applied proposal as it now stands, so its card can offer Undo", async () => {
     vi.mocked(storage.users).getUser.mockResolvedValue({ aiCoachEnabled: true, coachAutoApplyPlanChanges: true } as never);
     vi.mocked(generateJsonText).mockResolvedValue({
@@ -459,7 +510,7 @@ describe("the coach with tools (AI_CHAT_TOOLS)", () => {
       }),
       expect.anything(),
     );
-    expect(response.text).toContain('"planProposalPending":true');
+    expect(response.text).toContain('"status":"drafting_plan"');
     expect(response.text).toContain('"text":"\\n\\nMoved your long run to Saturday."');
     expect(response.text).toContain('"planProposal"');
     expect(savesOnce().at(-1)).toEqual(
@@ -469,6 +520,38 @@ describe("the coach with tools (AI_CHAT_TOOLS)", () => {
         kind: "proposal",
         proposalId: "proposal-1",
       }),
+    );
+  });
+
+  it("names each lookup while it runs, then goes back to thinking (I11)", async () => {
+    vi.mocked(streamChatWithCoachTools).mockImplementation(async function* (...args) {
+      yield { type: "text", text: "Let me look. " };
+      await args[6].toolset.run({ id: "call-1", name: "get_workouts", arguments: { from: "2026-09-01", to: "2026-09-30" } });
+      yield { type: "text", text: "You trained 12 times." };
+    });
+
+    const response = await request(app).post(STREAM).send({ message: "How much did I train in September?", ...IDS });
+
+    const lookup = response.text.indexOf('"status":"looking_up_workouts"');
+    expect(lookup).toBeGreaterThan(response.text.indexOf('"text":"Let me look. "'));
+    expect(response.text.indexOf('"status":"thinking"')).toBeGreaterThan(lookup);
+    expect(response.text.indexOf('"text":"You trained 12 times."')).toBeGreaterThan(response.text.indexOf('"status":"thinking"'));
+  });
+
+  it("streams the proposal's summary after what the coach already said", async () => {
+    coachSays({ type: "text", text: "Good call." }, handoff("Move Sunday's long run to Saturday"));
+    vi.mocked(createPlanAdjustmentProposal).mockImplementation(async (input) => {
+      await input.onSummaryText?.("Moved your long run ");
+      await input.onSummaryText?.("to Saturday.");
+      return { kind: "proposal", proposal: PROPOSAL };
+    });
+
+    const response = await request(app).post(STREAM).send({ message: "Yes, do that", ...IDS });
+
+    expect(response.text).toContain('"text":"\\n\\nMoved your long run "');
+    expect(response.text).toContain('"text":"to Saturday."');
+    expect(savesOnce().at(-1)).toEqual(
+      expect.objectContaining({ content: "Good call.\n\nMoved your long run to Saturday.", kind: "proposal" }),
     );
   });
 

@@ -48,6 +48,28 @@ function renderChat(
 }
 
 describe("CoachPanelChatArea", () => {
+  it("keeps only the streaming reply out of the live region, and names what the coach is doing (I11, I21)", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CoachPanelChatArea
+          messages={[message("Earlier reply"), message("Half a repl")]}
+          pendingSuggestions={[]}
+          applyingId={null}
+          isProcessing
+          processingLabel="Checking your plan..."
+          streamingMessageId="Half a repl"
+          onApplySuggestion={vi.fn()}
+          onDismissSuggestion={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Half a repl").closest("[aria-busy]")).toHaveAttribute("aria-live", "off");
+    expect(screen.getByText("Earlier reply").closest("[aria-busy]")).toBeNull();
+    expect(screen.getByText("Checking your plan...")).toBeInTheDocument();
+  });
+
   it("shows a proposal's card at the turn that carried it, not again at the end", () => {
     renderChat(
       [

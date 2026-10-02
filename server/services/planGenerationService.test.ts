@@ -230,7 +230,7 @@ describe("buildGenerationPrompt — the athlete card", () => {
       const prompt = buildGenerationPrompt(input, range, units, null, [], card);
       expect(prompt).toContain("ATHLETE CARD");
       expect(prompt).toContain("- Equipment: No sled at my gym");
-      expect(prompt).toContain("Knee sore for &lt;3 weeks &amp; &quot;no lunges&quot;");
+      expect(prompt).toContain('Knee sore for &lt;3 weeks &amp; "no lunges"');
       expect(prompt).toContain("substitute the exercises they rule out");
       expect(prompt).not.toContain("Injuries/Limitations");
     }

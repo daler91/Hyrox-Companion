@@ -7,10 +7,11 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
-import { generateJsonText } from "../ai/providers";
+import { generateJsonText, streamText, stripJsonCodeFence, type TextAiRequest } from "../ai/providers";
 import { logger } from "../logger";
 import { PLAN_ADJUSTMENT_PROMPT } from "../prompts";
-import { formatZodIssues, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { createJsonStringFieldReader } from "../utils/jsonStringFieldReader";
+import { createStreamingOutputValidator, formatZodIssues, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { buildPromptDataSections, type UpcomingWorkout } from "./suggestionService";
 import type { TrainingContext } from "./types";
 
@@ -168,19 +169,56 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
   };
 }
 
+/** The proposal's summary as the model writes it, already in the form the athlete reads. */
+export type PlanAdjustmentSummarySink = (text: string) => Promise<void>;
+
+/**
+ * Generate the proposal with its summary handed to `onSummary` as the model
+ * writes it (AI coach chat review, I11). The summary is the text the athlete
+ * reads either way — over the card, or as the whole reply when no change
+ * survives — so it can go out before the changes are parsed. A stream that
+ * fails before the summary began falls back to the ordinary call, which
+ * retries; once it has begun, the error is the caller's to handle, since some
+ * of it may already be on screen.
+ */
+async function streamPlanAdjustment(
+  request: Omit<TextAiRequest, "json">,
+  onSummary: PlanAdjustmentSummarySink,
+): Promise<PlanAdjustmentLlmOutput | null> {
+  const readSummary = createJsonStringFieldReader("summaryMessage");
+  const validateSummary = createStreamingOutputValidator();
+  let text = "";
+  let summaryBegan = false;
+  try {
+    for await (const chunk of streamText({ ...request, json: true })) {
+      text += chunk;
+      const summary = stripAmpersands(readSummary(chunk));
+      if (!summary) continue;
+      summaryBegan = true;
+      validateSummary(summary);
+      await onSummary(summary);
+    }
+  } catch (error) {
+    if (summaryBegan) throw error;
+    const response = await generateJsonText(request);
+    return parseAndValidatePlanAdjustment(response.text || "");
+  }
+  return parseAndValidatePlanAdjustment(stripJsonCodeFence(text));
+}
+
 export async function generatePlanAdjustment(
   input: PlanAdjustmentGenerationInput,
+  onSummary?: PlanAdjustmentSummarySink,
 ): Promise<PlanAdjustmentLlmOutput | null> {
-  const prompt = buildPlanAdjustmentUserPrompt(input);
-
-  const response = await generateJsonText({
+  const request: Omit<TextAiRequest, "json"> = {
     systemInstruction: PLAN_ADJUSTMENT_PROMPT,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: buildPlanAdjustmentUserPrompt(input) }],
     modelRole: "reasoning",
     label: "plan-adjustment",
     feature: "plan_adjustment",
     userId: input.userId,
-  });
-
+  };
+  if (onSummary) return await streamPlanAdjustment(request, onSummary);
+  const response = await generateJsonText(request);
   return parseAndValidatePlanAdjustment(response.text || "");
 }

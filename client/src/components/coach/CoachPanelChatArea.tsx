@@ -19,8 +19,10 @@ interface CoachPanelChatAreaProps {
   readonly applyingId: string | null;
   readonly suggestionsRagInfo?: RagInfo;
   readonly isProcessing: boolean;
-  /** Swap the generic "Thinking..." status for a plan-review message. */
+  /** What the coach is doing, beside the typing dots (see chatProgressLabel); "Thinking..." when unset. */
   readonly processingLabel?: string;
+  /** The reply streaming in now: its text is announced once it is complete (I21). */
+  readonly streamingMessageId?: string | null;
   readonly streamError?: string | null;
   readonly className?: string;
   readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
@@ -55,6 +57,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       suggestionsRagInfo,
       isProcessing,
       processingLabel,
+      streamingMessageId = null,
       streamError,
       className,
       onViewportScroll,
@@ -114,6 +117,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                       : undefined
                   }
                   messageId={message.id}
+                  streaming={message.id === streamingMessageId}
                   feedback={message.feedback}
                   onFeedback={message.rateable ? onRateMessage : undefined}
                 />

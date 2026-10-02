@@ -14,6 +14,10 @@ describe("sanitizeUserInput", () => {
     const input = "Just a normal user message";
     expect(sanitizeUserInput(input)).toBe(input);
   });
+
+  it("escapes ampersands but leaves quotes and apostrophes as typed", () => {
+    expect(sanitizeUserInput(`I can't do "deep" lunges & squats`)).toBe(`I can't do "deep" lunges &amp; squats`);
+  });
 });
 
 describe("validateAiOutput", () => {
