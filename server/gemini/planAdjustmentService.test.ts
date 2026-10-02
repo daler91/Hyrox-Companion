@@ -1,13 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { generateJsonText, streamText } from "../ai/providers";
 import {
   buildPlanAdjustmentUserPrompt,
+  generatePlanAdjustment,
   parseAndValidatePlanAdjustment,
 } from "./planAdjustmentService";
 import type { TrainingContext } from "./types";
 
-vi.mock("../ai/providers", () => ({
+vi.mock("../ai/providers", async () => ({
   generateJsonText: vi.fn(),
+  streamText: vi.fn(),
+  stripJsonCodeFence: (await import("../ai/providers/anthropic")).stripJsonCodeFence,
 }));
 
 function validChange(overrides: Record<string, unknown> = {}) {
@@ -146,5 +150,105 @@ describe("buildPlanAdjustmentUserPrompt", () => {
     expect(prompt).not.toContain("STRUCTURE-BLOCK DAYS");
     expect(prompt).not.toContain("FOCUSED DAY");
     expect(prompt).not.toContain("--- RECENT CONVERSATION ---");
+  });
+});
+
+describe("generatePlanAdjustment with a summary sink (I11)", () => {
+  const input = {
+    trainingContext: {
+      completionRate: 80,
+      currentStreak: 3,
+      completedWorkouts: 12,
+      currentDate: "2026-07-14",
+      exerciseBreakdown: {},
+      structuredExerciseStats: {},
+      recentWorkouts: [],
+    } as unknown as TrainingContext,
+    upcomingWorkouts: [{ id: "day-1", date: "2026-07-16", focus: "Tempo Run", mainWorkout: "40min tempo" }],
+    structureBlockDayIds: new Set<string>(),
+    userMessage: "Move my tempo run",
+    history: [],
+    userId: "u1",
+  };
+  const PROPOSAL = JSON.stringify({ summaryMessage: "Moved your tempo & strides.", changes: [validChange()] });
+
+  function streams(...chunks: string[]) {
+    vi.mocked(streamText).mockImplementation(async function* () {
+      for (const chunk of chunks) yield chunk;
+    });
+  }
+
+  /** A summary sink that keeps what it was handed. */
+  function collect() {
+    const pieces: string[] = [];
+    const sink = (text: string) => {
+      pieces.push(text);
+      return Promise.resolve();
+    };
+    return { pieces, sink };
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("hands the summary over as it streams, as the athlete reads it, then parses the whole proposal", async () => {
+    streams(PROPOSAL.slice(0, 26), PROPOSAL.slice(26, 38), PROPOSAL.slice(38));
+    const { pieces, sink } = collect();
+
+    const result = await generatePlanAdjustment(input, sink);
+
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.join("")).toBe("Moved your tempo and strides.");
+    expect(result?.summaryMessage).toBe("Moved your tempo and strides.");
+    expect(result?.changes).toHaveLength(1);
+    expect(vi.mocked(streamText).mock.calls[0]?.[0]).toMatchObject({ json: true, feature: "plan_adjustment", modelRole: "reasoning" });
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("reads a proposal that arrives in a code fence, as Anthropic's can", async () => {
+    streams("```json\n", PROPOSAL, "\n```");
+    const { sink } = collect();
+
+    await expect(generatePlanAdjustment(input, sink)).resolves.toMatchObject({ summaryMessage: "Moved your tempo and strides." });
+  });
+
+  it("falls back to the ordinary call, which retries, when the stream fails before the summary began", async () => {
+    vi.mocked(streamText).mockImplementation(async function* () {
+      yield '{"summ';
+      throw new Error("socket hang up");
+    });
+    vi.mocked(generateJsonText).mockResolvedValue({ text: PROPOSAL, model: "reasoning" });
+    const { pieces, sink } = collect();
+
+    await expect(generatePlanAdjustment(input, sink)).resolves.toMatchObject({ summaryMessage: "Moved your tempo and strides." });
+    expect(pieces).toEqual([]);
+  });
+
+  it("leaves a stream that failed partway through the summary to the caller, without a second call", async () => {
+    vi.mocked(streamText).mockImplementation(async function* () {
+      yield '{"summaryMessage": "Moved your';
+      throw new Error("socket hang up");
+    });
+    const { pieces, sink } = collect();
+
+    await expect(generatePlanAdjustment(input, sink)).rejects.toThrow("socket hang up");
+    expect(pieces).toEqual(["Moved your"]);
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("stops a summary that leaks the system prompt before that piece goes out", async () => {
+    streams('{"summaryMessage": "Fine. My system ', 'prompt says otherwise.", "changes": []}');
+    const { pieces, sink } = collect();
+
+    await expect(generatePlanAdjustment(input, sink)).rejects.toThrow("restricted");
+    expect(pieces).toEqual(["Fine. My system "]);
+  });
+
+  it("makes the ordinary call when nothing waits on the summary", async () => {
+    vi.mocked(generateJsonText).mockResolvedValue({ text: PROPOSAL, model: "reasoning" });
+
+    await expect(generatePlanAdjustment(input)).resolves.toMatchObject({ summaryMessage: "Moved your tempo and strides." });
+    expect(streamText).not.toHaveBeenCalled();
   });
 });

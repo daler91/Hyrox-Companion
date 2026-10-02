@@ -1,3 +1,4 @@
+import type { ChatStatusStep } from "@shared/chat";
 import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import type { PersonalRecord, PersonalRecordValue } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
@@ -288,6 +289,22 @@ export async function runChatTool(call: TextAiToolCall, ctx: ChatToolContext): P
     // bearer:disable javascript_lang_logger_leak
     ctx.log.warn({ err: error, tool: call.name }, "[chat] A chat tool failed");
     return JSON.stringify({ error: "That lookup failed. Answer from the training data you have." });
+  }
+}
+
+/** What the chat says the coach is doing while a lookup runs (I11). */
+export function chatToolStatus(name: string): ChatStatusStep {
+  switch (name) {
+    case "get_workouts":
+      return "looking_up_workouts";
+    case "get_exercise_history":
+      return "looking_up_exercises";
+    case "get_personal_records":
+      return "looking_up_records";
+    case "search_coaching_materials":
+      return "searching_notes";
+    default:
+      return "thinking";
   }
 }
 

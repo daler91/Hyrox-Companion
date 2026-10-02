@@ -16,14 +16,23 @@ export function sanitizeHtml(str: string): string {
 }
 
 /**
- * Sanitizes user input specifically for AI prompt injection prevention.
- * Replaces XML-like tags to ensure users cannot break out of <user_input> delimiters
- * or inject fake system tags.
+ * Sanitizes text on its way into an AI prompt. Escapes the characters that can
+ * open or close a tag (`&`, `<`, `>`), so the text cannot break out of the
+ * prompt's <user_input>-style delimiters or inject fake system tags.
+ *
+ * Quotes and apostrophes stay as typed (AI coach chat review, I24): they
+ * delimit nothing in a prompt, and encoding them cost tokens on every turn and
+ * showed the model its own earlier replies encoded ("can&#39;t"). Text bound
+ * for HTML goes through sanitizeHtml, which still encodes both.
  */
 export function sanitizeUserInput(input: string): string {
   if (typeof input !== "string") return input;
-  // Use existing sanitizeHtml logic which handles < and >
-  return sanitizeHtml(input);
+  // Escapes for a model prompt, not a page: every caller builds prompt text,
+  // and nothing returned here is rendered as HTML (that is sanitizeHtml's
+  // job). An HTML sanitizer library would drop the athlete's "<3" or "5 < 10"
+  // instead of escaping it.
+  // bearer:disable javascript_lang_manual_html_sanitization
+  return input.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 

@@ -138,6 +138,14 @@ async function* streamChunks(request: TextAiRequest): AsyncGenerator<TextAiStrea
   }
 }
 
+/**
+ * Anthropic has no machine-enforced JSON mode, so a `json: true` response can
+ * arrive inside a Markdown fence. generateJsonText unwraps it; a caller that
+ * streams a JSON response unwraps the joined text with this once it ends. A
+ * no-op on unfenced output.
+ */
+export { stripJsonCodeFence } from "./anthropic";
+
 export async function* streamText(request: TextAiRequest): AsyncGenerator<string> {
   for await (const chunk of streamChunks(request)) {
     if (chunk.text) yield chunk.text;

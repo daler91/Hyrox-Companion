@@ -6,6 +6,7 @@ import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { chatProgressLabel } from "@/hooks/chat/chatProgress";
 import { useChatSession } from "@/hooks/useChatSession";
 import { usePlanProposal } from "@/hooks/usePlanProposal";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
@@ -57,7 +58,8 @@ export function EmbeddedWorkoutCoachChat({
     messages,
     isLoading,
     isStreaming,
-    isReviewingPlan,
+    streamingMessageId,
+    progress,
     streamError,
     scrollRef,
     updateAutoScrollMode,
@@ -135,7 +137,8 @@ export function EmbeddedWorkoutCoachChat({
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
-        processingLabel={isReviewingPlan ? "Reviewing your plan..." : undefined}
+        processingLabel={chatProgressLabel(progress)}
+        streamingMessageId={streamingMessageId}
         streamError={streamError}
         className={cn("min-h-0 max-h-none flex-1", chatAreaClassName)}
         onViewportScroll={updateAutoScrollMode}

@@ -8,6 +8,7 @@ import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
 import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { useSuggestions } from "@/components/coach/SuggestionsTab";
 import type { QuickAction } from "@/components/QuickActions";
+import { chatProgressLabel } from "@/hooks/chat/chatProgress";
 import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
@@ -93,7 +94,8 @@ export function CoachPanel({
     messages: hookMessages,
     isLoading,
     isStreaming,
-    isReviewingPlan,
+    streamingMessageId,
+    progress,
     streamError,
     scrollRef,
     updateAutoScrollMode,
@@ -220,7 +222,8 @@ export function CoachPanel({
         applyingId={applyingId}
         suggestionsRagInfo={suggestionsRagInfo}
         isProcessing={isProcessing}
-        processingLabel={isReviewingPlan ? "Reviewing your plan..." : undefined}
+        processingLabel={chatProgressLabel(progress)}
+        streamingMessageId={streamingMessageId}
         streamError={streamError}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={handleApplySuggestion}

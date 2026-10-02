@@ -25,6 +25,8 @@ interface ChatMessageProps {
   readonly onRetry?: () => void;
   /** The reply's id, for its rating. */
   readonly messageId?: string;
+  /** True while this reply streams in (I21). */
+  readonly streaming?: boolean;
   /** The athlete's thumbs on the reply. */
   readonly feedback?: ChatFeedback | null;
   /** Offered only on a reply the server saved. Stable across renders, so memo holds. */
@@ -160,6 +162,7 @@ export const ChatMessage = memo(function ChatMessage({
   failure,
   onRetry,
   messageId,
+  streaming = false,
   feedback,
   onFeedback,
 }: Readonly<ChatMessageProps>) {
@@ -189,7 +192,16 @@ export const ChatMessage = memo(function ChatMessage({
             <>
               {safetyNotice && <SafetyNoticeBanner notice={safetyNotice} />}
               {showText && (
-                <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2">
+                // The conversation is a polite live region, and a streaming
+                // reply changes on every frame (I21). While it streams its text
+                // is busy and out of the region; once complete it mounts as a
+                // new node, so a screen reader reads the whole reply once.
+                <div
+                  key={streaming ? "streaming" : "complete"}
+                  aria-busy={streaming || undefined}
+                  aria-live={streaming ? "off" : undefined}
+                  className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2"
+                >
                   {/* AI output is rendered as markdown; rehype-sanitize strips
                       script tags, event handlers, and javascript:/data: URLs so a
                       compromised provider or prompt-injection attempt can't run

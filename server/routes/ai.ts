@@ -1,5 +1,6 @@
 import { getAuth } from "@clerk/express";
 import { ATHLETE_FACT_LIMIT_MESSAGE } from "@shared/athleteFacts";
+import type { ChatStatusStep } from "@shared/chat";
 import { type ChatFactDecisionBody, chatFactDecisionSchema, type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
@@ -22,7 +23,7 @@ import { type CoachReply, type Conversation, type ConversationTurn, loadConversa
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
-import { type ChatToolContext, chatToolsFor, PROPOSE_PLAN_CHANGES, runChatTool } from "../services/chatTools";
+import { type ChatToolContext, chatToolsFor, chatToolStatus, PROPOSE_PLAN_CHANGES, runChatTool } from "../services/chatTools";
 import { chatTurnLogFields, type ChatTurnTelemetry, markFirstText, recordClassifierVerdict, startChatTurn } from "../services/chatTurnTelemetry";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { getCoachWelcome } from "../services/coachWelcome";
@@ -253,6 +254,11 @@ type SseWriter = (payload: string) => Promise<void>;
 
 const sseEvent = (payload: unknown) => `data: ${JSON.stringify(payload)}\n\n`;
 
+/** Tell the chat what the coach is doing, in place of its typing dots (I11). */
+function writeStatus(safeWrite: SseWriter, status: ChatStatusStep): Promise<void> {
+  return safeWrite(sseEvent({ status }));
+}
+
 /**
  * A res.write() that honours slow-client backpressure. A slow client drains
  * the Node write buffer slowly — without waiting on `drain` we keep
@@ -282,6 +288,9 @@ function createSseWriter(res: Response, controller: AbortController): SseWriter 
     });
 
   return async (payload: string) => {
+    // A late write (a lookup that finishes after the reply closed, or after the
+    // client left) has nowhere to go.
+    if (res.writableEnded || res.destroyed) return;
     const ok = res.write(payload);
     if (!ok && !controller.signal.aborted) {
       await awaitDrain();
@@ -402,17 +411,18 @@ async function maybeAutoApplyProposal(
   return (await storage.planProposals.getById(proposal.id, userId)) ?? { ...proposal, status: "applied" };
 }
 
-/** Write the proposal reply as the whole response, then close the stream. */
+const PROPOSAL_FAILED_TEXT =
+  "I couldn't draft that change just now. Ask me again in a moment, or tell me exactly which session to change.";
+
+/** Close a proposal reply, its text already sent: the card, any fact offer, then the stream. */
 async function sendPlanProposalReply(
   res: Response,
   controller: AbortController,
   safeWrite: SseWriter,
-  summaryText: string,
   proposal: PlanAdjustmentProposal | null,
   offerFact: () => Promise<void>,
 ): Promise<void> {
   if (!controller.signal.aborted) {
-    await safeWrite(sseEvent({ text: summaryText }));
     if (proposal) {
       await safeWrite(sseEvent({ planProposal: serializePlanProposal(proposal) }));
     }
@@ -422,43 +432,119 @@ async function sendPlanProposalReply(
   res.end();
 }
 
+/** A proposal's summary on its way to the chat (I11). */
+interface SummaryOut {
+  /** Send the next piece as the model writes it. */
+  readonly write: (text: string) => Promise<void>;
+  /** Whether any of it has gone out. */
+  readonly began: () => boolean;
+  /** Send what of the final text is still unsent; null says the proposal failed, after whatever went out. */
+  readonly end: (finalText: string | null) => Promise<void>;
+}
+
+/**
+ * The summary goes out piece by piece as the model writes it, the first piece
+ * after `lead` (a paragraph break after prose the coach already sent). It is
+ * the text the reply ends with whenever the model answers, so `end` normally
+ * has nothing left to send.
+ */
+function summaryOut({ controller, safeWrite, reply, telemetry }: CoachStream, lead: string): SummaryOut {
+  let sent = "";
+  const write = async (text: string): Promise<void> => {
+    if (!text || controller.signal.aborted) return;
+    const piece = sent === "" ? lead + text : text;
+    sent += text;
+    reply.content += piece;
+    markFirstText(telemetry);
+    await safeWrite(sseEvent({ text: piece }));
+  };
+  return {
+    write,
+    began: () => sent !== "",
+    end: async (finalText) => {
+      if (finalText === null) {
+        await write(sent === "" ? PROPOSAL_FAILED_TEXT : `\n\n${PROPOSAL_FAILED_TEXT}`);
+        return;
+      }
+      await write(finalText.startsWith(sent) ? finalText.slice(sent.length) : "");
+    },
+  };
+}
+
+/** Everything a proposal reply needs from the turn; the classifier and tool branches both have it. */
+type ProposalReplyContext = Omit<PlanEditBranchOptions, "planEditIntent">;
+
+/** How a drafted proposal reply ends: its card (null when no change survived) and its text, null when drafting failed. */
+interface DraftedProposal {
+  readonly proposal: PlanAdjustmentProposal | null;
+  readonly finalText: string | null;
+}
+
+const DRAFT_FAILED: DraftedProposal = { proposal: null, finalText: null };
+
+/**
+ * Draft the proposal for `message`, its summary going out as the model writes
+ * it, and apply it at once when the athlete opted into auto-apply. Each branch
+ * decides what a failed draft means for its reply.
+ */
+async function draftProposal(
+  { req, userId, input, aiContext, telemetry }: ProposalReplyContext,
+  message: string,
+  summary: SummaryOut,
+): Promise<DraftedProposal> {
+  const result = await createPlanAdjustmentProposal(
+    {
+      userId,
+      message,
+      history: input.history,
+      aiContext,
+      focusPlanDayId: req.body.focusPlanDayId,
+      onSummaryText: summary.write,
+    },
+    reqLogger(req),
+  );
+  telemetry.proposal = result.kind;
+  if (result.kind === "proposal") {
+    return {
+      proposal: await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req)),
+      finalText: result.proposal.summaryMessage,
+    };
+  }
+  return result.kind === "chat_fallback" ? { proposal: null, finalText: result.text } : DRAFT_FAILED;
+}
+
+/** End a proposal reply: the rest of its text, then its card and the stream's close. */
+async function finishProposalReply(
+  { res, controller, safeWrite, reply, offerFact }: ProposalReplyContext,
+  summary: SummaryOut,
+  { proposal, finalText }: DraftedProposal,
+): Promise<void> {
+  await summary.end(finalText);
+  reply.proposalId = proposal?.id;
+  await sendPlanProposalReply(res, controller, safeWrite, proposal, offerFact);
+}
+
 /**
  * Generate a structured multi-day proposal instead of a prose reply. Returns
  * true when it answered the request and closed the stream; false falls through
  * to the normal chat stream (including on `generation_failed`).
  */
 async function handlePlanEditRequest(
-  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact }: PlanEditBranchOptions,
+  options: PlanEditBranchOptions,
   planEditIntent: Promise<ChatIntentResult>,
+  summary: SummaryOut,
 ): Promise<boolean> {
+  const { input, controller, safeWrite, telemetry } = options;
   const intent = await planEditIntent;
   recordClassifierVerdict(telemetry, intent);
   if (!isPlanEditIntent(intent) || controller.signal.aborted) return false;
 
-  // Lets the client swap "Thinking..." for a plan-review status.
-  await safeWrite(sseEvent({ planProposalPending: true }));
-  const result = await createPlanAdjustmentProposal(
-    {
-      userId,
-      message: input.message,
-      history: input.history,
-      aiContext,
-      focusPlanDayId: req.body.focusPlanDayId,
-    },
-    reqLogger(req),
-  );
-  telemetry.proposal = result.kind;
-  if (result.kind !== "proposal" && result.kind !== "chat_fallback") return false;
-
-  const proposal =
-    result.kind === "proposal"
-      ? await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req))
-      : null;
-  const summaryText = result.kind === "proposal" ? result.proposal.summaryMessage : result.text;
-  reply.content = summaryText;
-  reply.proposalId = proposal?.id;
-  markFirstText(telemetry);
-  await sendPlanProposalReply(res, controller, safeWrite, summaryText, proposal, offerFact);
+  await writeStatus(safeWrite, "drafting_plan");
+  const drafted = await draftProposal(options, input.message, summary);
+  // A failed draft with nothing on screen yet answers in prose instead. Under
+  // a summary that broke off, a second answer would read as nonsense.
+  if (drafted.finalText === null && !summary.began()) return false;
+  await finishProposalReply(options, summary, drafted);
   return true;
 }
 
@@ -472,19 +558,19 @@ async function handlePlanEditRequest(
 async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
   const { req, res, planEditIntent, controller, telemetry } = options;
   if (!planEditIntent) return false;
+  const summary = summaryOut(options, "");
   try {
-    return await handlePlanEditRequest(options, planEditIntent);
+    return await handlePlanEditRequest(options, planEditIntent, summary);
   } catch (planEditError) {
     telemetry.proposal = "error";
     if (controller.signal.aborted) {
       res.end();
       return true;
     }
-    reqLogger(req).warn(
-      { err: planEditError },
-      "[plan-adjustment] Chat branch failed; falling back to normal chat",
-    );
-    return false;
+    reqLogger(req).warn({ err: planEditError }, "[plan-adjustment] Chat branch failed");
+    if (!summary.began()) return false;
+    await finishProposalReply(options, summary, DRAFT_FAILED);
+    return true;
   }
 }
 
@@ -542,9 +628,13 @@ async function streamCoachReplyWithTools(
   const toolContext = await toolContextFor(req, userId, aiContext);
   const toolset: CoachToolset = {
     tools: chatToolsFor({ planChanges }),
-    run: (call) => {
+    run: async (call) => {
       telemetry.toolCalls.push(call.name);
-      return runChatTool(call, toolContext);
+      await writeStatus(safeWrite, chatToolStatus(call.name));
+      const result = await runChatTool(call, toolContext);
+      // Back to the reply once the lookup is in.
+      await writeStatus(safeWrite, "thinking");
+      return result;
     },
     ...(planChanges ? { handoff: PROPOSE_PLAN_CHANGES } : {}),
   };
@@ -570,51 +660,29 @@ async function streamCoachReplyWithTools(
   return undefined;
 }
 
-const TOOL_PROPOSAL_FAILED_TEXT =
-  "I couldn't draft that change just now. Ask me again in a moment, or tell me exactly which session to change.";
-
 /**
  * The coach called propose_plan_changes: draft the proposal from the
  * athlete's message and the coach's own summary of the change, and answer
  * with it (and its card) after whatever the coach already said.
  */
-async function replyWithToolProposal(
-  { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact }: Omit<PlanEditBranchOptions, "planEditIntent">,
-  call: TextAiToolCall,
-): Promise<void> {
-  await safeWrite(sseEvent({ planProposalPending: true }));
-  const summary = typeof call.arguments.request === "string" ? call.arguments.request.trim().slice(0, 1_000) : "";
-  let proposal: PlanAdjustmentProposal | null = null;
-  let text = TOOL_PROPOSAL_FAILED_TEXT;
+async function replyWithToolProposal(branch: ProposalReplyContext, call: TextAiToolCall): Promise<void> {
+  const { req, input, safeWrite, reply, telemetry } = branch;
+  await writeStatus(safeWrite, "drafting_plan");
+  const request = typeof call.arguments.request === "string" ? call.arguments.request.trim().slice(0, 1_000) : "";
+  const message = request ? `${input.message}\n\nThe coach's summary of the change: ${request}` : input.message;
+  // After what the coach already said, the summary starts a new paragraph.
+  const summary = summaryOut(branch, reply.content ? "\n\n" : "");
+  let drafted = DRAFT_FAILED;
   try {
-    const result = await createPlanAdjustmentProposal(
-      {
-        userId,
-        message: summary ? `${input.message}\n\nThe coach's summary of the change: ${summary}` : input.message,
-        history: input.history,
-        aiContext,
-        focusPlanDayId: req.body.focusPlanDayId,
-      },
-      reqLogger(req),
-    );
-    telemetry.proposal = result.kind;
-    if (result.kind === "proposal") {
-      proposal = await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req));
-      text = result.proposal.summaryMessage;
-    } else if (result.kind === "chat_fallback") {
-      text = result.text;
-    }
+    drafted = await draftProposal(branch, message, summary);
   } catch (error) {
     telemetry.proposal = "error";
     // The plan-adjustment error; no message content.
     // bearer:disable javascript_lang_logger_leak
     reqLogger(req).warn({ err: error }, "[plan-adjustment] Tool-called proposal failed");
   }
-  const sent = reply.content ? `\n\n${text}` : text;
-  reply.content += sent;
-  reply.proposalId = proposal?.id;
-  markFirstText(telemetry);
-  await sendPlanProposalReply(res, controller, safeWrite, sent, proposal, offerFact);
+  // The tool path always answers: a failed draft ends with the failure text.
+  await finishProposalReply(branch, summary, drafted);
 }
 
 async function streamCoachReply(

@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
 
 import { db, type Tx } from "../db";
-import { generatePlanAdjustment } from "../gemini/planAdjustmentService";
+import { generatePlanAdjustment, type PlanAdjustmentSummarySink } from "../gemini/planAdjustmentService";
 import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
@@ -206,6 +206,13 @@ export interface CreatePlanAdjustmentProposalInput {
   aiContext: AIContext;
   /** Day the athlete is viewing when chatting from the workout-detail dialog. */
   focusPlanDayId?: string;
+  /**
+   * Receives the proposal's summary as the model writes it (I11). It is the
+   * text the reply ends up with whenever the model answers — the proposal's
+   * summary, or the conversational reply when no change survives — so the
+   * chat can show it before the changes are checked.
+   */
+  onSummaryText?: PlanAdjustmentSummarySink;
 }
 
 /**
@@ -367,7 +374,7 @@ export async function createPlanAdjustmentProposal(
       coachingMaterials: extractCoachingMaterialsText(aiContext),
       focusPlanDayId: input.focusPlanDayId,
       userId,
-    });
+    }, input.onSummaryText);
   } catch (error) {
     // err is an AI provider error and userId is an internal identifier; no
     // message content.

@@ -189,6 +189,29 @@ describe('ChatMessage', () => {
     });
   });
 
+  describe('a reply that is still streaming (I21)', () => {
+    // Spread, so the component's `role` prop isn't read as an ARIA role.
+    const reply = { role: 'assistant', messageId: 'reply-1' } as const;
+
+    it('keeps its text out of the live region until complete, then mounts it fresh to be read once', () => {
+      const { rerender } = render(<ChatMessage {...reply} content="Ease off" streaming />);
+      const streaming = screen.getByText('Ease off').closest('[aria-busy]');
+      expect(streaming).toHaveAttribute('aria-busy', 'true');
+      expect(streaming).toHaveAttribute('aria-live', 'off');
+
+      rerender(<ChatMessage {...reply} content="Ease off the pace today." />);
+      const complete = screen.getByText('Ease off the pace today.').parentElement;
+      expect(complete).not.toHaveAttribute('aria-busy');
+      expect(complete).not.toHaveAttribute('aria-live');
+      expect(complete).not.toBe(streaming);
+    });
+
+    it("keeps the safety notice announced while the text streams", () => {
+      render(<ChatMessage {...reply} content="" streaming safetyNotice={{ level: 'urgent', message: 'Seek medical care now.' }} />);
+      expect(screen.getByRole('alert').closest('[aria-busy]')).toBeNull();
+    });
+  });
+
   describe('rating a reply', () => {
     // Spread, so the component's `role` prop isn't read as an ARIA role.
     const reply = { role: 'assistant', content: 'Run easy.', messageId: 'reply-1' } as const;

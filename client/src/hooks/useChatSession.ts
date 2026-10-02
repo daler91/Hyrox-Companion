@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 
+import type { ChatProgress } from "./chat/chatProgress";
 import { handleSendFailure, ignoreResult, markReplyRateable } from "./chat/chatSessionModel";
 import {
   fetchChatReply,
@@ -75,9 +76,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  // True while the server is generating a plan-adjustment proposal for the
-  // in-flight message ("Reviewing your plan…" instead of "Thinking…").
-  const [isReviewingPlan, setIsReviewingPlan] = useState(false);
+  // What the coach is doing for the in-flight message, named beside the
+  // typing dots (I11): reading the athlete's training, thinking, a lookup, a
+  // plan proposal.
+  const [progress, setProgress] = useState<ChatProgress | null>(null);
+  // The reply streaming in now. Its text stays out of the conversation's live
+  // region until it is complete, then is announced once (I21).
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   // Short, screen-reader-facing announcement for a stream interruption.
   // Surfaced via an assertive live region so abort/network failures are read
   // immediately rather than being buried in the polite conversation log (W8).
@@ -145,6 +150,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
       if (useStreaming && supportsResponseStreaming()) {
         setMessages((prev) => [...prev, createLocalMessage("assistant", "", assistantMessageId)]);
+        setStreamingMessageId(assistantMessageId);
+        // The server reads the athlete's training before it accepts the send.
+        setProgress("reading");
 
         const controller = new AbortController();
         streamControllerRef.current = controller;
@@ -155,14 +163,18 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           signal: controller.signal,
           setMessages,
           isCurrent: () => streamGenerationRef.current === generationId,
-          onAccepted: warnIfNearBudget,
-          onReviewingPlan: () => setIsReviewingPlan(true),
+          onAccepted: (response) => {
+            warnIfNearBudget(response);
+            setProgress("thinking");
+          },
+          onStatus: setProgress,
           onText: (text) => {
             fullResponse = text;
           },
         });
         markReplyRateable(setMessages, assistantMessageId);
       } else {
+        setProgress("thinking");
         const assistantMessage = await fetchChatReply(request);
         // The non-streamed route saves both turns before it answers.
         setMessages((prev) => [...prev, { ...assistantMessage, rateable: true }]);
@@ -180,8 +192,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       refreshSavedConversation();
       streamControllerRef.current = null;
       setIsStreaming(false);
+      setStreamingMessageId(null);
       setIsLoading(false);
-      setIsReviewingPlan(false);
+      setProgress(null);
       isSubmittingRef.current = false;
     }
   }, [useStreaming, warnIfNearBudget, focusPlanDayId, focusWorkoutLogId, pinAutoScroll]);
@@ -217,7 +230,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     messages,
     isLoading,
     isStreaming,
-    isReviewingPlan,
+    streamingMessageId,
+    progress,
     streamError,
     historyLoading,
     scrollRef,

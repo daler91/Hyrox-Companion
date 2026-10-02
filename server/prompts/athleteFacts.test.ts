@@ -33,7 +33,7 @@ describe("formatAthleteFactLines", () => {
 
   it("escapes markup in a fact, and renders nothing for an empty card", () => {
     expect(formatAthleteFactLines([{ fact: 'Knee sore for <3 weeks & "no lunges"', category: "other", reviewOn: "2026-12-30" }], TODAY)).toContain(
-      "- Note: Knee sore for &lt;3 weeks &amp; &quot;no lunges&quot;",
+      '- Note: Knee sore for &lt;3 weeks &amp; "no lunges"',
     );
     expect(formatAthleteFactLines([], TODAY)).toEqual([]);
     expect(formatAthleteFactLines(undefined, TODAY)).toEqual([]);
