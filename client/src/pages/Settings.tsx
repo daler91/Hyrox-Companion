@@ -3,6 +3,7 @@ import { Bell, Database, Dumbbell, Link2, RotateCw, Trash2, User } from "lucide-
 import { useCallback } from "react";
 
 import { AccountDangerZone } from "@/components/settings/AccountDangerZone";
+import { AthleteCardSection } from "@/components/settings/athlete-card/AthleteCardSection";
 import { CoachingSection } from "@/components/settings/CoachingSection";
 import { RecycleBinCard } from "@/components/settings/data-tools/RecycleBinCard";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
@@ -13,7 +14,6 @@ import { BodyCompositionCard } from "@/components/settings/preferences/BodyCompo
 import { EmailNotificationsCard } from "@/components/settings/preferences/EmailNotificationsCard";
 import { HealthMetricsCard } from "@/components/settings/preferences/HealthMetricsCard";
 import { NutritionPreferencesCard } from "@/components/settings/preferences/NutritionPreferencesCard";
-import { TrainingConstraintsCard } from "@/components/settings/preferences/TrainingConstraintsCard";
 import { TrainingGoalsCard } from "@/components/settings/preferences/TrainingGoalsCard";
 import { UnitsPreferencesCard } from "@/components/settings/preferences/UnitsPreferencesCard";
 import { WorkoutReviewCard } from "@/components/settings/preferences/WorkoutReviewCard";
@@ -228,12 +228,7 @@ export default function Settings() {
             }}
           />
 
-          <TrainingConstraintsCard
-            trainingConstraints={draft.trainingConstraints}
-            onTrainingConstraintsChange={(v) => {
-              updateField("trainingConstraints", v);
-            }}
-          />
+          <AthleteCardSection legacyNote={user?.trainingConstraints} />
           <TrainingStyleSection
             trainingStyleId={draft.trainingStyleId}
             onTrainingStyleIdChange={(v) => updateField("trainingStyleId", v)}

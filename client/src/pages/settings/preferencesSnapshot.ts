@@ -27,6 +27,10 @@ export type WeightGoalDirectionValue = "lose" | "maintain" | "gain";
 // them, and an absent key leaves an older account's stored answers untouched
 // server-side, where they remain the fallback for athletes who have not yet
 // answered the category question (audit M6).
+// The older free-text injuries note is not a preference at all here: GET
+// /preferences never returned it, so a form that carried it saved it back as
+// null and wiped it. The athlete card moves it onto the card or removes it
+// with requests of its own.
 export type SavePayload = Omit<
   UserPreferences,
   | "weeklyGoal"
@@ -62,11 +66,8 @@ export interface PreferencesSnapshot extends Omit<
   | "activityLevel"
   | "weightGoalDirection"
   | "weightGoalRateKgPerWeek"
-  | "trainingConstraints"
 > {
   weeklyGoal: string;
-  /** Empty string rather than null, so the textarea stays controlled. */
-  trainingConstraints: string;
   mealSchedule: 3 | 4 | 5;
   division: string;
   gender: string;
@@ -105,8 +106,6 @@ export interface PreferencesDraft {
   weightGoalDirection: string;
   weightGoalRateKgPerWeek: number | null;
   weeklyGoal: string;
-  /** Empty string rather than null, so the textarea stays controlled. */
-  trainingConstraints: string;
   mealSchedule: 3 | 4 | 5;
   emailNotifications: boolean;
   emailWeeklySummary: boolean;
@@ -169,7 +168,6 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   weightGoalDirection: "",
   weightGoalRateKgPerWeek: null,
   weeklyGoal: "5",
-  trainingConstraints: "",
   mealSchedule: 4,
   emailNotifications: false,
   emailWeeklySummary: false,
@@ -194,7 +192,6 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
 
 export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
   return {
-    trainingConstraints: draft.trainingConstraints,
     weightUnit: draft.weightUnit,
     distanceUnit: draft.distanceUnit,
     division: draft.division,
@@ -267,7 +264,6 @@ function passThroughFields(snapshot: PreferencesSnapshot) {
 
 export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft {
   return {
-    trainingConstraints: snapshot.trainingConstraints,
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,
@@ -296,7 +292,6 @@ export function preferencesToSnapshot(
   preferences: UserPreferences | SavePayload,
 ): PreferencesSnapshot {
   return {
-    trainingConstraints: preferences.trainingConstraints ?? "",
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
     division: preferences.division || "open",
@@ -343,8 +338,6 @@ export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot
 
 export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
   return {
-    // Empty box clears the remembered constraints rather than storing "".
-    trainingConstraints: snapshot.trainingConstraints.trim() || null,
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,

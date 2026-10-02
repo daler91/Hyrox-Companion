@@ -99,4 +99,21 @@ describe("Settings race profile persistence", () => {
       );
     });
   }, 10_000);
+
+  // Regression: GET /preferences never returned the older injuries note, so
+  // the Settings box always started empty and every save sent it back as
+  // null, wiping what the plan wizard had remembered. The athlete card owns
+  // it now, and a preferences save leaves it alone.
+  it("never sends the older injuries note with a save", async () => {
+    const qc = new QueryClient();
+    seedSettings(qc, defaultSettings());
+    renderSettings(qc);
+
+    await makeSettingsDirty();
+    expect(screen.getByTestId("athlete-card-section")).toBeInTheDocument();
+    fireEvent.click(await screen.findByTestId("button-save-settings"));
+
+    await waitFor(() => expect(settingsHarness.updatePreferences).toHaveBeenCalled());
+    expect(settingsHarness.updatePreferences.mock.calls[0]?.[0]).not.toHaveProperty("trainingConstraints");
+  }, 10_000);
 });
