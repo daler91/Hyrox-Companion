@@ -30,7 +30,7 @@ describe("getCachedTrainingContext", () => {
   });
 
   it("builds once for a conversation's turns, sharing a build already under way", async () => {
-    const build = vi.fn(async () => CONTEXT);
+    const build = vi.fn(() => Promise.resolve(CONTEXT));
 
     const [first, second] = await Promise.all([
       getCachedTrainingContext("user-1", build),
@@ -45,7 +45,7 @@ describe("getCachedTrainingContext", () => {
   });
 
   it("keeps each athlete's context apart", async () => {
-    const build = vi.fn(async (userId: string) => ({ userId }) as unknown as TrainingContext);
+    const build = vi.fn((userId: string) => Promise.resolve({ userId } as unknown as TrainingContext));
 
     await getCachedTrainingContext("user-1", build);
     const other = await getCachedTrainingContext("user-2", build);
@@ -55,7 +55,7 @@ describe("getCachedTrainingContext", () => {
   });
 
   it("builds again after five minutes", async () => {
-    const build = vi.fn(async () => CONTEXT);
+    const build = vi.fn(() => Promise.resolve(CONTEXT));
     await getCachedTrainingContext("user-1", build);
 
     vi.advanceTimersByTime(4 * 60 * 1000);
@@ -70,7 +70,7 @@ describe("getCachedTrainingContext", () => {
   it("builds again at the athlete's midnight, since today is part of the context", async () => {
     vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/New_York" } as never);
     vi.setSystemTime(new Date("2026-10-02T03:58:00Z")); // 23:58 in New York
-    const build = vi.fn(async () => CONTEXT);
+    const build = vi.fn(() => Promise.resolve(CONTEXT));
     await getCachedTrainingContext("user-1", build);
 
     vi.setSystemTime(new Date("2026-10-02T04:01:00Z")); // 00:01 the next day
@@ -80,7 +80,7 @@ describe("getCachedTrainingContext", () => {
   });
 
   it("builds again once the athlete's data changes", async () => {
-    const build = vi.fn(async () => CONTEXT);
+    const build = vi.fn(() => Promise.resolve(CONTEXT));
     await getCachedTrainingContext("user-1", build);
 
     invalidateTrainingContext("user-1");
@@ -98,7 +98,7 @@ describe("getCachedTrainingContext", () => {
 });
 
 describe("invalidateTrainingContextOnWrite", () => {
-  const build = vi.fn(async () => CONTEXT);
+  const build = vi.fn(() => Promise.resolve(CONTEXT));
 
   function app(status = 200) {
     const server = express();

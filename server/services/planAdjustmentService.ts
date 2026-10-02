@@ -895,6 +895,8 @@ function undoFailureMessage(reason: UndoPlanProposalFailureReason): string {
       return "Those changes were applied more than a week ago, so they can no longer be undone from here.";
     case "changed_since":
       return "You've changed those days since, so there was nothing left to undo.";
+    default:
+      return "Those changes can't be undone from here.";
   }
 }
 

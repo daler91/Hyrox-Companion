@@ -20,11 +20,14 @@ import { setsFingerprint } from "./planProposalUndo";
 import { applyStructuredPlanDaySuggestionRows, parseStructuredPlanDaySuggestionRows } from "./structuredPlanDaySuggestion";
 import { invalidateTrainingContext } from "./trainingContextCache";
 
+/** What a storage call resolves to when no row matched: an unknown id, or a race another request won. */
+const NO_ROW = undefined;
+
 const dbMockState = vi.hoisted(() => {
-  const deleteWhere = vi.fn().mockResolvedValue(undefined);
+  const deleteWhere = vi.fn(() => Promise.resolve());
   // The exercise table read back after an apply rewrites it.
   const selectWhere = vi.fn().mockResolvedValue([]);
-  const insertValues = vi.fn().mockResolvedValue(undefined);
+  const insertValues = vi.fn(() => Promise.resolve());
   const tx = {
     delete: vi.fn(() => ({ where: deleteWhere })),
     select: vi.fn(() => ({ from: () => ({ where: selectWhere }) })),
@@ -389,15 +392,15 @@ function mockUnstructuredApplyScenario() {
 
 /** updatePlanDay returns the day with the update applied, as the real one does. */
 function mockUpdatesStick(days: ReturnType<typeof planDayRow>[]) {
-  vi.mocked(storage.plans.updatePlanDay).mockImplementation(async (id: string, updates: object) => {
+  vi.mocked(storage.plans.updatePlanDay).mockImplementation((id: string, updates: object) => {
     const day = days.find((d) => d.id === id);
-    return day ? ({ ...day, ...updates }) : undefined;
+    return Promise.resolve(day ? { ...day, ...updates } : NO_ROW);
   });
 }
 
 describe("applyPlanAdjustmentProposal", () => {
   it("returns undefined for an unknown proposal", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(undefined);
+    vi.mocked(storage.planProposals.getById).mockResolvedValue(NO_ROW);
 
     expect(await applyPlanAdjustmentProposal("user-1", "nope")).toBeUndefined();
   });
@@ -554,7 +557,7 @@ describe("applyPlanAdjustmentProposal", () => {
     const day = mockUnstructuredApplyScenario();
     vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(day);
     // A concurrent dismiss won the race: markApplied() finds nothing pending.
-    vi.mocked(storage.planProposals.markApplied).mockResolvedValue(undefined);
+    vi.mocked(storage.planProposals.markApplied).mockResolvedValue(NO_ROW);
 
     const result = await applyPlanAdjustmentProposal("user-1", "prop-1");
 
@@ -676,7 +679,7 @@ describe("undoPlanAdjustmentProposal", () => {
   }
 
   it("is undefined for an unknown proposal", async () => {
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(undefined);
+    vi.mocked(storage.planProposals.getById).mockResolvedValue(NO_ROW);
 
     expect(await undoPlanAdjustmentProposal("user-1", "nope")).toBeUndefined();
   });
@@ -768,7 +771,7 @@ describe("undoPlanAdjustmentProposal", () => {
   it("reports not_applied when a concurrent undo won", async () => {
     vi.mocked(storage.planProposals.getById).mockResolvedValue(appliedProposal());
     mockLiveDay(appliedDay());
-    vi.mocked(storage.planProposals.markReverted).mockResolvedValue(undefined);
+    vi.mocked(storage.planProposals.markReverted).mockResolvedValue(NO_ROW);
 
     const result = await undoPlanAdjustmentProposal("user-1", "prop-1");
 

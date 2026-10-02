@@ -44,8 +44,8 @@ describe("PlanProposalCard", () => {
 
     expect(screen.getByText("Proposed plan changes (1 day)")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("button-apply-plan-proposal"));
-    expect(onApply).toHaveBeenCalledWith(proposal("pending"), undefined);
-    // One change: nothing to pick.
+    // One change: nothing to pick, so the apply names no days.
+    expect(onApply.mock.lastCall).toEqual([proposal("pending"), undefined]);
     expect(screen.queryByTestId("switch-include-change-day-1")).not.toBeInTheDocument();
   });
 

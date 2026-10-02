@@ -179,14 +179,17 @@ function rollingNote(turn: ChatMessage, content = "- The athlete said their knee
 }
 
 describe("sessionWindow", () => {
+  /** A session nothing has been folded out of yet. */
+  const NO_ROLLING_NOTE = undefined;
+
   it("shows a session of up to 30 turns in full", () => {
     const turns = sessionTurns(30);
-    expect(sessionWindow(turns, undefined)).toEqual({ shown: turns, note: undefined });
+    expect(sessionWindow(turns, NO_ROLLING_NOTE)).toEqual({ shown: turns, note: undefined });
   });
 
   it("folds all but the last 20 turns once a session passes 30", () => {
     const turns = sessionTurns(31);
-    const window = sessionWindow(turns, undefined);
+    const window = sessionWindow(turns, NO_ROLLING_NOTE);
     expect(window.shown).toEqual(turns.slice(11));
     expect(window.toFold).toEqual({ turns: turns.slice(0, 11), earlier: undefined });
   });

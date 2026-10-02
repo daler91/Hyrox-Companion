@@ -60,7 +60,7 @@ async function main(): Promise<void> {
   // A report for a human at a terminal: aggregate counts and fixed labels, no
   // per-athlete data.
   // bearer:disable javascript_lang_logger_leak
-  console.log(formatChatQualityReport(stats));
+  process.stdout.write(`${formatChatQualityReport(stats)}\n`);
   process.exit(0);
 }
 

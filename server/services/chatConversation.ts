@@ -518,7 +518,7 @@ async function earlierConversation(
     return await earlierConversationOrThrow(userId, split, focus, now);
   } catch {
     // The summary already falls back on its own; this is only a backstop.
-    return;
+    return undefined;
   }
 }
 

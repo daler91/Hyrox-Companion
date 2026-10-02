@@ -285,12 +285,8 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
   };
 }
 
-// Accepts a SavePayload too: it shares every field read here (it only strips
-// server-owned fields like userTimezone and re-types weeklyGoal), so the
-// same normalization covers both server state and outgoing saves.
-export function preferencesToSnapshot(
-  preferences: UserPreferences | SavePayload,
-): PreferencesSnapshot {
+// The profile and body numbers, as an account that never set them reads.
+function profileSnapshot(preferences: UserPreferences | SavePayload) {
   return {
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
@@ -305,8 +301,12 @@ export function preferencesToSnapshot(
     activityLevel: preferences.activityLevel ?? null,
     weightGoalDirection: preferences.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
-    weeklyGoal: String(preferences.weeklyGoal || 5),
-    mealSchedule: preferences.mealSchedule ?? 4,
+  } satisfies Partial<PreferencesSnapshot>;
+}
+
+// The emails and reminder hours: off, at the default hour, until changed.
+function notificationSnapshot(preferences: UserPreferences | SavePayload) {
+  return {
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
     emailMissedReminder: preferences.emailMissedReminder ?? false,
@@ -319,6 +319,21 @@ export function preferencesToSnapshot(
     notifyHourWeeklyReviewReminder: preferences.notifyHourWeeklyReviewReminder ?? null,
     notifyHourTodaySession: preferences.notifyHourTodaySession ?? null,
     notifyHourAnalysisDigest: preferences.notifyHourAnalysisDigest ?? null,
+  } satisfies Partial<PreferencesSnapshot>;
+}
+
+// Accepts a SavePayload too: it shares every field read here (it only strips
+// server-owned fields like userTimezone and re-types weeklyGoal), so the
+// same normalization covers both server state and outgoing saves.
+// The parts are spread in field order: the form compares snapshots as JSON.
+export function preferencesToSnapshot(
+  preferences: UserPreferences | SavePayload,
+): PreferencesSnapshot {
+  return {
+    ...profileSnapshot(preferences),
+    weeklyGoal: String(preferences.weeklyGoal || 5),
+    mealSchedule: preferences.mealSchedule ?? 4,
+    ...notificationSnapshot(preferences),
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
     coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,

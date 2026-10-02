@@ -178,9 +178,7 @@ describe("runBatch", () => {
     ] as Job[];
 
     await expect(
-      runBatch("test-queue", jobs, async (job) => {
-        if (job.id === "2") throw new Error("boom");
-      }),
+      runBatch("test-queue", jobs, (job) => (job.id === "2" ? Promise.reject(new Error("boom")) : Promise.resolve())),
     ).rejects.toThrow();
 
     expect(vi.mocked(invalidateTrainingContext).mock.calls.map(([userId]) => userId).sort((a, b) => a.localeCompare(b))).toEqual([

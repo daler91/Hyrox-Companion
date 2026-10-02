@@ -14,6 +14,8 @@ export function athleteFactCategoryLabel(category: AthleteFactCategory): string 
     case "preference":
       return "Preference";
     case "other":
+    default:
+      // A category from a server newer than this build reads as Other.
       return "Other";
   }
 }

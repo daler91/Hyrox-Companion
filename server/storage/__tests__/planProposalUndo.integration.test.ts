@@ -33,7 +33,7 @@ describe("plan proposal apply and undo (real Postgres)", () => {
   }
 
   async function readSets(planDayId: string) {
-    return db.select().from(exerciseSets).where(eq(exerciseSets.planDayId, planDayId)).orderBy(asc(exerciseSets.sortOrder));
+    return await db.select().from(exerciseSets).where(eq(exerciseSets.planDayId, planDayId)).orderBy(asc(exerciseSets.sortOrder));
   }
 
   /**

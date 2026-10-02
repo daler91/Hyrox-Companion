@@ -28,6 +28,7 @@ describe("athleteCardLines", () => {
 
     expect(athleteCardLines(card)).toContain("- Equipment: No sled at my gym (unconfirmed since 2026-01-01)");
     expect(athleteCardLines(buildGenerationCard([], null, "2026-01-05"))).toEqual([]);
-    expect(athleteCardLines(undefined)).toEqual([]);
+    const noCard = undefined;
+    expect(athleteCardLines(noCard)).toEqual([]);
   });
 });

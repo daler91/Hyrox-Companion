@@ -67,6 +67,7 @@ describe("standingConstraintsText", () => {
 
   it("is null for an athlete who has said nothing", () => {
     expect(standingConstraintsText(null, [])).toBeNull();
-    expect(standingConstraintsText("   ", undefined)).toBeNull();
+    const factsNotLoaded = undefined;
+    expect(standingConstraintsText("   ", factsNotLoaded)).toBeNull();
   });
 });

@@ -25,8 +25,8 @@ vi.mock("../../storage", () => ({
       updateUserPreferences: vi.fn(),
     },
     idempotency: {
-      get: vi.fn().mockResolvedValue(undefined),
-      set: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn(() => Promise.resolve()),
+      set: vi.fn(() => Promise.resolve()),
     },
   },
 }));

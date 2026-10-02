@@ -63,7 +63,10 @@ protectedPost(
     const userId = getUserId(req);
     const { fact, category, source = "athlete" } = req.body;
     const result = await storage.athleteFacts.add(userId, { fact, category, source }, await reviewOnForToday(userId));
-    if (!result.ok) return sendRefusal(res, result.reason);
+    if (!result.ok) {
+      sendRefusal(res, result.reason);
+      return;
+    }
     res.status(result.created ? 201 : 200).json(result.fact);
   },
 );
@@ -102,7 +105,10 @@ protectedPatch(
     const { fact, category, active, confirm } = req.body;
     const reviewOn = confirm || active === true ? await reviewOnForToday(userId) : undefined;
     const result = await storage.athleteFacts.update(userId, req.params.id, { fact, category, active, reviewOn });
-    if (!result.ok) return sendRefusal(res, result.reason);
+    if (!result.ok) {
+      sendRefusal(res, result.reason);
+      return;
+    }
     res.json(result.fact);
   },
 );
@@ -114,7 +120,8 @@ protectedDelete(
   { limiter: rateLimiter("athleteFacts", 20) },
   async (req: Request<{ id: string }>, res: Response) => {
     if (!(await storage.athleteFacts.delete(getUserId(req), req.params.id))) {
-      return sendNotFound(res, "Fact not found");
+      sendNotFound(res, "Fact not found");
+      return;
     }
     res.json({ success: true });
   },

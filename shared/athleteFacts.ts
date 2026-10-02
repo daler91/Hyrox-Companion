@@ -76,7 +76,7 @@ function fitToFact(piece: string): string {
 }
 
 /** A leading list marker the athlete typed: "-", "*", "•", "1." or "1)". */
-const LIST_MARKER = /^(?:[-*•–—]+|\d+[.)])\s*/;
+const LIST_MARKER = /^(?:[-*•–—]+|\d+[.)])\s*/u;
 
 /**
  * Free text the athlete wrote elsewhere (the plan wizard's injuries box, the

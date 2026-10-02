@@ -38,7 +38,7 @@ function factLine(fact: CoachAthleteFact, today: string | undefined): string {
 export function formatAthleteFactLines(facts: readonly CoachAthleteFact[] | undefined, today: string | undefined): string[] {
   if (!facts || facts.length === 0) return [];
   const lines = [
-    `ATHLETE CARD (what the athlete told us is true every week, in their own words; these always apply):`,
+    "ATHLETE CARD (what the athlete told us is true every week, in their own words; these always apply):",
     ...facts.map((fact) => factLine(fact, today)),
   ];
   if (today !== undefined && facts.some((fact) => isAthleteFactDue(fact.reviewOn, today))) {

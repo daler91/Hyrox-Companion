@@ -1,7 +1,15 @@
+import { athleteFactCategoryEnum } from "@shared/schema/enums";
 import { describe, expect, it } from "vitest";
 
 import { createMockAthleteFact } from "../../../../../test/factories";
-import { groupAthleteFacts } from "./athleteCardModel";
+import { ATHLETE_FACT_CATEGORY_OPTIONS, groupAthleteFacts } from "./athleteCardModel";
+
+describe("ATHLETE_FACT_CATEGORY_OPTIONS", () => {
+  it("gives every category a label of its own", () => {
+    const labels = new Set(ATHLETE_FACT_CATEGORY_OPTIONS.map((option) => option.label));
+    expect(labels.size).toBe(athleteFactCategoryEnum.length);
+  });
+});
 
 describe("groupAthleteFacts", () => {
   it("puts facts due for a check first, the longest overdue first, then the rest as stated", () => {
