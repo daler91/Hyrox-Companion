@@ -45,6 +45,16 @@ describe("runScenario", () => {
     });
   });
 
+  it("gives the coach the scenario's record of recent plan changes, as the route does", async () => {
+    vi.mocked(chatWithCoach).mockResolvedValue("Undo puts it back on Saturday.");
+    const undo = scenario("undo-last-change");
+
+    await runScenario(undo, "classic");
+
+    expect(vi.mocked(chatWithCoach).mock.calls[0][6]?.recentPlanChanges).toBe(undo.recentPlanChanges);
+    expect(undo.recentPlanChanges).toContain("Long run moved from Saturday 2026-10-03 to Sunday 2026-10-04");
+  });
+
   it("scans the athlete's words for red flags, as the route does", async () => {
     vi.mocked(chatWithCoach).mockResolvedValue("Please get checked first.");
 

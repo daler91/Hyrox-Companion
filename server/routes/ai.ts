@@ -30,6 +30,7 @@ import { getCoachWelcome } from "../services/coachWelcome";
 import { loadFocusedWorkout } from "../services/focusedWorkoutService";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../services/planAdjustmentService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
+import { loadRecentPlanChanges } from "../services/recentPlanChanges";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
@@ -107,8 +108,11 @@ protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: r
     res.json(parsed);
   });
 
-/** The per-message parts of the coach's prompt: the open workout, the earlier sessions, the notes on the new message. */
-type ChatPromptOptions = Pick<ChatCallOptions, "focusedWorkout" | "earlierConversation" | "earlierInSession" | "messageNotes">;
+/** The per-message parts of the coach's prompt: the open workout, the earlier sessions, recent plan changes, the notes on the new message. */
+type ChatPromptOptions = Pick<
+  ChatCallOptions,
+  "focusedWorkout" | "earlierConversation" | "earlierInSession" | "recentPlanChanges" | "messageNotes"
+>;
 
 // validateBody(chatRequestSchema) guarantees req.body conforms, so the
 // handler can read it directly without a second safeParse pass.
@@ -121,11 +125,12 @@ async function prepareChatContext(
   const history = conversation.turns;
   // The first message after a break writes the earlier sessions' summary;
   // it runs alongside the context build rather than in front of it.
-  const [aiContext, focused, earlierConversation, earlierInSession] = await Promise.all([
+  const [aiContext, focused, earlierConversation, earlierInSession, recentPlanChanges] = await Promise.all([
     buildAIContext(userId, chatRetrievalQuery(message, history), reqLogger(req), { cachedTrainingContext: true }),
     loadFocusedWorkout(userId, { planDayId: focusPlanDayId, workoutLogId: focusWorkoutLogId }),
     conversation.earlier,
     conversation.earlierInSession,
+    loadRecentPlanChanges(userId),
   ]);
   const { trainingContext } = aiContext;
   const focusedWorkout = focused
@@ -142,6 +147,7 @@ async function prepareChatContext(
       focusedWorkout,
       earlierConversation,
       earlierInSession,
+      ...(recentPlanChanges ? { recentPlanChanges } : {}),
       ...(conversation.notes.length > 0 ? { messageNotes: conversation.notes } : {}),
     },
   };

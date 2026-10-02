@@ -1,8 +1,9 @@
-import type { TrainingLoadOverview } from "@shared/schema";
+import type { EnrichedPlanAdjustmentChange, PlanAdjustmentProposal, TrainingLoadOverview } from "@shared/schema";
 
 import type { CoachHistoryTurn } from "../../server/gemini/chatService";
 import type { TrainingContext } from "../../server/gemini/types";
 import { formatFocusedWorkout } from "../../server/prompts/focusedWorkoutContext";
+import { formatRecentPlanChanges } from "../../server/prompts/recentPlanChanges";
 import { createMockPlanDay, createMockTrainingContext, createMockUpcomingWorkout } from "../factories";
 
 /**
@@ -32,6 +33,8 @@ export interface ChatScenario {
   readonly focusedWorkout?: string;
   /** App notes ahead of the new message, as chatConversation.ts writes them. */
   readonly messageNotes?: readonly string[];
+  /** The RECENT PLAN CHANGES block, as the chat route renders it (see recentChanges below). */
+  readonly recentPlanChanges?: string;
   /** What the coach knew that the judge needs, in plain words. */
   readonly facts: readonly string[];
   /** Statements the reply must satisfy, each graded by the judge. */
@@ -44,8 +47,53 @@ export interface ChatScenario {
   readonly mustNotCall?: readonly string[];
 }
 
-/** The date every scenario pretends it is. */
+/** The date every scenario pretends it is: a Thursday. */
 export const EVAL_TODAY = "2026-10-01";
+const EVAL_NOW = new Date(`${EVAL_TODAY}T10:00:00.000Z`);
+
+/** A proposal the athlete applied `minutesAgo` minutes before EVAL_NOW, moving each [session, from, to]. */
+function appliedMoves(minutesAgo: number, moves: ReadonlyArray<readonly [string, string, string]>): PlanAdjustmentProposal {
+  const resolvedAt = new Date(EVAL_NOW.getTime() - minutesAgo * 60_000);
+  const changes: EnrichedPlanAdjustmentChange[] = moves.map(([focus, from, to], index) => ({
+    planDayId: `moved-${index}`,
+    updatedFields: { scheduledDate: to },
+    rationale: "As asked.",
+    kind: "reschedule",
+    dayLabel: focus,
+    baseline: {
+      focus,
+      mainWorkout: focus,
+      accessory: null,
+      notes: null,
+      scheduledDate: from,
+      expectedDurationMin: null,
+      expectedRpe: null,
+      status: "planned",
+      fingerprint: "eval",
+    },
+    structured: false,
+    hasStructureBlocks: false,
+  }));
+  return {
+    id: `applied-${minutesAgo}`,
+    userId: "eval-athlete",
+    planId: "eval-plan",
+    status: "applied",
+    summaryMessage: "Done.",
+    userRequest: "Move it.",
+    payload: { changes },
+    aiSource: null,
+    createdAt: resolvedAt,
+    resolvedAt,
+    applyUndo: { days: changes.map((change) => ({ planDayId: change.planDayId })) } as never,
+    revertedAt: null,
+  };
+}
+
+/** The RECENT PLAN CHANGES block the chat route would render for these proposals, newest first. */
+function recentChanges(...proposals: PlanAdjustmentProposal[]): string {
+  return formatRecentPlanChanges(proposals, EVAL_NOW);
+}
 
 const NOT_CLAIMED =
   "The reply never says or implies that the plan has already been changed (no 'I've moved', 'done', 'updated your plan', or similar).";
@@ -335,5 +383,93 @@ export const CHAT_SCENARIOS: readonly ChatScenario[] = [
       "The reply does not invent sessions, dates or numbers that were not in the lookup.",
     ],
     mustCallOneOf: ["get_exercise_history", "get_workouts"],
+  },
+  {
+    id: "undo-last-change",
+    title: "Asked to undo its last change, the coach knows what it changed",
+    modes: ["classic", "tools"],
+    history: [
+      { role: "user", content: "Move my long run to Sunday." },
+      { role: "assistant", content: "I've moved your long run to Sunday, October 4, and your rest day to Saturday, October 3." },
+    ],
+    // The applied note, as chatConversation.ts writes it.
+    messageNotes: ["The athlete applied the plan changes the coach proposed."],
+    message: "Actually, undo that.",
+    context: context({
+      upcomingWorkouts: [
+        createMockUpcomingWorkout({ id: "day-thu", date: "2026-10-01", focus: "Intervals", mainWorkout: "6 x 800 m at 5k pace, 90 s jog" }),
+        createMockUpcomingWorkout({ id: "day-fri", date: "2026-10-02", focus: "Strength", mainWorkout: "Back squat 5x5" }),
+        createMockUpcomingWorkout({ id: "day-sat", date: "2026-10-03", focus: "Rest", mainWorkout: "Rest day" }),
+        createMockUpcomingWorkout({ id: "day-sun", date: "2026-10-04", focus: "Long run", mainWorkout: "16 km easy" }),
+      ],
+    }),
+    recentPlanChanges: recentChanges(
+      appliedMoves(6, [
+        ["Long run", "2026-10-03", "2026-10-04"],
+        ["Rest", "2026-10-04", "2026-10-03"],
+      ]),
+    ),
+    facts: [
+      "Earlier today (six minutes ago) the athlete applied the coach's proposal that moved the long run from Saturday October 3 to Sunday October 4, and the rest day from Sunday October 4 to Saturday October 3. That change's card still offers Undo.",
+      "The coach changes the plan only through proposals the athlete applies (with tools, by calling propose_plan_changes); it cannot change the plan by itself.",
+    ],
+    criteria: [
+      "The reply does not ask the athlete what the original days or dates were.",
+      "The reply makes clear that undoing the change puts the long run back on Saturday (October 3) and the rest day back on Sunday (October 4), whether by proposing exactly that change or by pointing the athlete to Undo on that change's card.",
+      NOT_CLAIMED,
+    ],
+  },
+  {
+    id: "what-happened-to-session",
+    title: "Asked what happened to a session, the coach answers from what it changed",
+    modes: ["classic", "tools"],
+    message: "What happened to Monday's workout? I thought Strength and Wall Balls was on Monday.",
+    context: context({
+      upcomingWorkouts: [
+        createMockUpcomingWorkout({ id: "day-thu", date: "2026-10-01", focus: "Intervals", mainWorkout: "6 x 800 m at 5k pace, 90 s jog" }),
+        createMockUpcomingWorkout({ id: "day-fri", date: "2026-10-02", focus: "Rest", mainWorkout: "Rest day" }),
+        createMockUpcomingWorkout({ id: "day-sat", date: "2026-10-03", focus: "Strength and Wall Balls", mainWorkout: "Bench press 3x5, wall balls 3x12" }),
+        createMockUpcomingWorkout({ id: "day-mon", date: "2026-10-05", focus: "Long run", mainWorkout: "16 km easy" }),
+      ],
+    }),
+    recentPlanChanges: recentChanges(
+      appliedMoves(2 * 24 * 60, [
+        ["Long run", "2026-10-03", "2026-10-05"],
+        ["Strength and Wall Balls", "2026-10-05", "2026-10-03"],
+      ]),
+    ),
+    facts: [
+      "Two days ago the athlete applied the coach's proposal that moved Strength and Wall Balls from Monday October 5 to Saturday October 3, and the long run from Saturday October 3 to Monday October 5.",
+    ],
+    criteria: [
+      "The reply says Strength and Wall Balls was moved from Monday (October 5) to Saturday (October 3) by a change the athlete applied, and that the long run took its place on Monday.",
+      "The reply does not invent any other change to the plan.",
+      NOT_CLAIMED,
+    ],
+  },
+  {
+    id: "weekday-question",
+    title: "The coach names the right weekday for a planned session",
+    modes: ["classic", "tools"],
+    message: "Which day is my long run this week?",
+    context: context(),
+    facts: ["Today is Thursday, October 1. The long run is planned for Saturday, October 3, in two days."],
+    criteria: [
+      "The reply says the long run is on Saturday (October 3).",
+      "The reply does not give the long run a different weekday or date.",
+    ],
+  },
+  {
+    id: "weekday-move-tools",
+    title: "With tools, \"Sunday\" in a move request is the right date",
+    modes: ["tools"],
+    message: "Move my long run to Sunday this week.",
+    context: context(),
+    facts: ["Today is Thursday, October 1. The long run is on Saturday, October 3, so Sunday this week is October 4."],
+    criteria: [
+      "The coach asked propose_plan_changes to move the long run to Sunday, October 4 (or to Sunday without naming a different date).",
+      NOT_CLAIMED,
+    ],
+    mustCallOneOf: ["propose_plan_changes"],
   },
 ];

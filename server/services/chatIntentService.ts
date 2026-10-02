@@ -33,6 +33,11 @@ const PLAN_EDIT_KEYWORD_PATTERNS: readonly RegExp[] = [
   /\b(?:class|session|club|parkrun|race|event|competition|holiday|vacation|travel(?:ing|ling)?|away|sick|ill|injured|injury|sore)\b/i,
   /\b(?:add|insert|fit in|squeeze in|instead|rather than)\b/i,
   /\b(?:going to|want to go|planning to|signed up)\b/i,
+  // Taking back a change the coach made: the plan-change step can now read
+  // what it changed (services/recentPlanChanges), so an undo has to reach it.
+  /\b(?:undo|revert|reverse|original(?:ly)?)\b/iu,
+  /\b(?:put|change|set) (?:it|them|that|those|everything) back\b/iu,
+  /\b(?:back to (?:how|where|the way)|the way it was)\b/iu,
 ];
 
 export function hasPlanEditKeywords(message: string): boolean {

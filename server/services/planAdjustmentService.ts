@@ -35,6 +35,7 @@ import {
 import { analyzeSafetySignals, buildSafetyReviewNote } from "./aiSafety";
 import { getStructuredApplyBlocker } from "./aiSuggestionService";
 import { captureDayUndo, type DayRestore, isUndoable, planDayRestore, type SetsWrite } from "./planProposalUndo";
+import { loadRecentPlanChanges } from "./recentPlanChanges";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,
@@ -340,7 +341,10 @@ export async function createPlanAdjustmentProposal(
 ): Promise<PlanAdjustmentProposalResult> {
   const { userId, message, history, aiContext } = input;
 
-  const plannedDays = await storage.timeline.getUpcomingPlannedDays(userId, UPCOMING_DAY_WINDOW);
+  const [plannedDays, recentPlanChanges] = await Promise.all([
+    storage.timeline.getUpcomingPlannedDays(userId, UPCOMING_DAY_WINDOW),
+    loadRecentPlanChanges(userId),
+  ]);
   if (plannedDays.length === 0) {
     return { kind: "chat_fallback", text: NO_PLAN_FALLBACK_TEXT };
   }
@@ -373,6 +377,7 @@ export async function createPlanAdjustmentProposal(
       planGoal: aiContext.trainingContext.activePlan?.goal ?? undefined,
       coachingMaterials: extractCoachingMaterialsText(aiContext),
       focusPlanDayId: input.focusPlanDayId,
+      recentPlanChanges,
       userId,
     }, input.onSummaryText);
   } catch (error) {

@@ -41,7 +41,7 @@ vi.mock("../../storage", () => ({
       getStoredEmbeddingDimension: vi.fn(() => Promise.resolve(3072)),
     },
     aiUsage: { getDailyTotalCents: vi.fn(() => Promise.resolve(0)) },
-    planProposals: { getByIds: vi.fn(() => Promise.resolve([])), getById: vi.fn() },
+    planProposals: { getByIds: vi.fn(() => Promise.resolve([])), getById: vi.fn(), getRecentlyApplied: vi.fn() },
     plans: { getPlanDay: vi.fn() },
     workouts: { getWorkoutLog: vi.fn() },
     analytics: { getExerciseSetsForPersonalRecords: vi.fn(() => Promise.resolve([])) },
@@ -348,6 +348,38 @@ describe("the server-owned chat conversation", () => {
     expect(response.text).toContain('"status":"pending"');
     expect(streamChatWithCoach).not.toHaveBeenCalled();
     expect(savesOnce().at(-1)).toEqual(expect.objectContaining({ kind: "proposal", proposalId: "proposal-1" }));
+  });
+
+  it("gives the coach the plan changes its proposals made, with the dates before and after", async () => {
+    vi.mocked(storage.planProposals.getRecentlyApplied).mockResolvedValue([
+      {
+        id: "proposal-1",
+        status: "applied",
+        resolvedAt: new Date(Date.now() - 4 * MINUTE),
+        revertedAt: null,
+        applyUndo: null,
+        payload: {
+          changes: [
+            {
+              planDayId: "day-long",
+              updatedFields: { scheduledDate: "2026-10-04" },
+              kind: "reschedule",
+              baseline: { focus: "Long Run", scheduledDate: "2026-10-05" },
+            },
+          ],
+        },
+      } as unknown as PlanAdjustmentProposal,
+    ]);
+    streamReply("It was on Monday.");
+
+    const response = await request(app).post(STREAM).send({ message: "Where was my long run before?", ...IDS });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(storage.planProposals.getRecentlyApplied).mock.calls[0][0]).toBe("test_user_id");
+    // "today", or "yesterday" in the first minutes after midnight: the day label isn't this test's business.
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.recentPlanChanges).toContain(
+      ", applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.",
+    );
   });
 
   it("gives the coach a summary of the earlier conversation after a break", async () => {

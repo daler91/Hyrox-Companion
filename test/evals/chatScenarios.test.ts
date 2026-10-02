@@ -19,10 +19,11 @@ function scenario(id: string): ChatScenario {
 
 /** The system prompt the chat would build for the scenario. */
 function promptFor(id: string): string {
-  const { context, message, history, focusedWorkout } = scenario(id);
+  const { context, message, history, focusedWorkout, recentPlanChanges } = scenario(id);
   return buildSystemPrompt(context, undefined, undefined, {
     chatSafety: analyzeChatSafety(message, history ?? []),
     focusedWorkout,
+    recentPlanChanges,
   });
 }
 
@@ -51,5 +52,13 @@ describe("the chat eval scenarios", () => {
     expect(promptFor("imperial-units")).toContain("Units: the athlete uses lbs and miles");
     expect(promptFor("focused-workout")).toContain("--- FOCUSED WORKOUT ---");
     expect(promptFor("focused-workout")).toContain("6 x 800 m at 5k pace");
+    expect(promptFor("undo-last-change")).toContain(
+      "- today, applied: Long run moved from Saturday 2026-10-03 to Sunday 2026-10-04; Rest moved from Sunday 2026-10-04 to Saturday 2026-10-03. The athlete can still take it back with Undo on its card.",
+    );
+    expect(promptFor("what-happened-to-session")).toContain(
+      "- 2 days ago, applied: Long run moved from Saturday 2026-10-03 to Monday 2026-10-05; Strength and Wall Balls moved from Monday 2026-10-05 to Saturday 2026-10-03.",
+    );
+    expect(promptFor("weekday-question")).toContain("Today's date: 2026-10-01 (Thursday).");
+    expect(promptFor("weekday-question")).toContain("- 2026-10-03 (Saturday, in 2 days)");
   });
 });

@@ -1,4 +1,4 @@
-import { dayDiff } from "@shared/dateUtils";
+import { dayDiff, weekdayName } from "@shared/dateUtils";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
@@ -9,21 +9,32 @@ import { priorAiContextParts } from "./priorAiContext";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+function dayOffsetLabel(diff: number): string {
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff === -1) return "yesterday";
+  return diff > 1 ? `in ${diff} days` : `${-diff} days ago`;
+}
+
 /**
- * Human "today/tomorrow/yesterday/in N days" suffix for a workout date relative
- * to the athlete's current local date, e.g. " (today)" or " (in 2 days)". The
- * coach reads dates straight from the data, so spelling out the offset stops it
- * from re-deriving the date and calling today's session "tomorrow". Returns an
- * empty string when either date is missing or not a plain YYYY-MM-DD value.
+ * The weekday, and how far the date is from the athlete's current local date,
+ * as a suffix for a workout date: " (Sunday, in 2 days)", " (Friday, today)".
+ * The coach reads dates straight from the data. Spelling out the offset stops
+ * it calling today's session "tomorrow", and the weekday stops it working out
+ * which date "Sunday" is from an ISO date, which models get wrong. Without a
+ * current date the suffix is the weekday alone; it is empty for anything that
+ * isn't a plain YYYY-MM-DD date.
  */
 export function relativeDayLabel(date: string, currentDate?: string): string {
-  if (!currentDate || !ISO_DATE.test(date) || !ISO_DATE.test(currentDate)) return "";
-  const diff = dayDiff(currentDate, date);
-  if (diff === 0) return " (today)";
-  if (diff === 1) return " (tomorrow)";
-  if (diff === -1) return " (yesterday)";
-  if (diff > 1) return ` (in ${diff} days)`;
-  return ` (${-diff} days ago)`;
+  if (!ISO_DATE.test(date)) return "";
+  const weekday = weekdayName(date);
+  if (!currentDate || !ISO_DATE.test(currentDate)) return ` (${weekday})`;
+  return ` (${weekday}, ${dayOffsetLabel(dayDiff(currentDate, date))})`;
+}
+
+/** "Saturday 2026-10-03": a date with its weekday spelled out (see relativeDayLabel), or the value as given when it isn't a plain YYYY-MM-DD date. */
+export function weekdayDate(date: string): string {
+  return ISO_DATE.test(date) ? `${weekdayName(date)} ${date}` : date;
 }
 
 /**
@@ -31,8 +42,9 @@ export function relativeDayLabel(date: string, currentDate?: string): string {
  * anchored to the calendar rather than inferred from the most recent workout.
  */
 export function buildCurrentDateContext(trainingContext: TrainingContext): string {
-  if (!trainingContext.currentDate) return "";
-  return `\nToday's date: ${trainingContext.currentDate}. Treat this as "today" when discussing workout timing — the dated workouts below are annotated relative to it.`;
+  const today = trainingContext.currentDate;
+  if (!today) return "";
+  return `\nToday's date: ${today}${relativeDayLabel(today)}. Treat this as "today" when discussing workout timing — the dated workouts below carry their weekday and how far they are from it.`;
 }
 
 /**

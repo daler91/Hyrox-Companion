@@ -229,8 +229,8 @@ Individual workout days within a training plan.
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
 | `plan_id` | `varchar(255)` | NOT NULL, FK -> `training_plans.id` ON DELETE CASCADE |
-| `week_number` | `integer` | NOT NULL |
-| `day_name` | `text` | NOT NULL |
+| `week_number` | `integer` | NOT NULL — the plan week the session sits in: `schedulePlan` lays week W's sessions out from week 1's Monday (`training_plans.start_date`), and every write that gives a day a new date also sets the week and weekday of that date (`planSlotForMove`, `server/storage/planSlot.ts`). Moves used to change the date alone; migration `0117` repaired the days moved before that |
+| `day_name` | `text` | NOT NULL — the weekday of that slot, kept with the date as above |
 | `focus` | `text` | NOT NULL |
 | `main_workout` | `text` | NOT NULL |
 | `accessory` | `text` | nullable |

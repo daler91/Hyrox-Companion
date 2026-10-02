@@ -1,5 +1,6 @@
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
+import { weekdayDate } from "./coachingContext";
 
 /**
  * Format the athlete's recent fuelling vs training load for the coach prompt.
@@ -78,5 +79,5 @@ function buildNextSessionLine(s: NutritionCtx["nextSessionFuelling"]): string | 
   const effortSuffix = effort ? `, ${effort}` : "";
   // s.focus is user-editable (planDays.focus) and flows into the AI system prompt — sanitize to
   // prevent breaking out of the <user_input> delimiter scheme (mirrors coachingContext.ts / suggestionService.ts).
-  return `- Next planned session (${s.date}, ${sanitizeUserInput(s.focus)}${effortSuffix}): ${pre}, then ~${s.postCarbG}g carbs + ${s.postProteinG}g protein to recover${basis}.`;
+  return `- Next planned session (${weekdayDate(s.date)}, ${sanitizeUserInput(s.focus)}${effortSuffix}): ${pre}, then ~${s.postCarbG}g carbs + ${s.postProteinG}g protein to recover${basis}.`;
 }

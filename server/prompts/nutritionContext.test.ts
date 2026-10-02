@@ -89,7 +89,7 @@ describe("buildNutritionSection", () => {
   it("renders the next planned session's fuelling target", () => {
     const out = buildNutritionSection(ctx({ ...FULL, nextSessionFuelling: NEXT_SESSION }));
     expect(out).toContain(
-      "- Next planned session (2026-06-10, Strength, ~60 min at RPE 7): aim ~35g carbs beforehand, " +
+      "- Next planned session (Wednesday 2026-06-10, Strength, ~60 min at RPE 7): aim ~35g carbs beforehand, " +
         "then ~50g carbs + 25g protein to recover; estimated from the planned exercises.",
     );
     expect(out).not.toContain("&");
@@ -113,7 +113,7 @@ describe("buildNutritionSection", () => {
         nextSessionFuelling: { ...NEXT_SESSION, durationMin: null, rpe: null },
       }),
     );
-    expect(out).toContain("- Next planned session (2026-06-10, Strength): aim ~35g carbs");
+    expect(out).toContain("- Next planned session (Wednesday 2026-06-10, Strength): aim ~35g carbs");
   });
 
   it("sanitizes a malicious next-session focus to prevent prompt injection", () => {

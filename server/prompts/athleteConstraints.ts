@@ -1,6 +1,7 @@
 import type { CoachAbsence, TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
 import { formatAthleteFactLines } from "./athleteFacts";
+import { weekdayDate } from "./coachingContext";
 
 /**
  * Shared renderer for the ATHLETE CONSTRAINTS block: the athlete card's facts
@@ -28,8 +29,8 @@ function formatRange(absence: CoachAbsence): string {
   const label = TYPE_LABELS[absence.type];
   const range =
     absence.startDate === absence.endDate
-      ? absence.startDate
-      : `${absence.startDate} to ${absence.endDate}`;
+      ? weekdayDate(absence.startDate)
+      : `${weekdayDate(absence.startDate)} to ${weekdayDate(absence.endDate)}`;
   const note = absence.note?.trim();
   return note ? `${label}, ${range} — "${sanitizeUserInput(note)}"` : `${label}, ${range}`;
 }

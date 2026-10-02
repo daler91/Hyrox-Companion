@@ -7,6 +7,7 @@ import {
   buildRecentWorkouts,
   buildUpcomingWorkouts,
   relativeDayLabel,
+  weekdayDate,
 } from "./coachingContext";
 
 // W1: user-controlled free text (athlete notes, plan name/goal, focus, etc.)
@@ -80,21 +81,27 @@ describe("buildOverallStats — let-go sessions", () => {
 // date anchoring that keeps it aligned with the athlete's local calendar.
 describe("current-date anchoring", () => {
   it("labels workout dates relative to the athlete's current date", () => {
-    expect(relativeDayLabel("2026-06-28", "2026-06-28")).toBe(" (today)");
-    expect(relativeDayLabel("2026-06-29", "2026-06-28")).toBe(" (tomorrow)");
-    expect(relativeDayLabel("2026-06-27", "2026-06-28")).toBe(" (yesterday)");
-    expect(relativeDayLabel("2026-06-30", "2026-06-28")).toBe(" (in 2 days)");
-    expect(relativeDayLabel("2026-06-25", "2026-06-28")).toBe(" (3 days ago)");
+    expect(relativeDayLabel("2026-06-28", "2026-06-28")).toBe(" (Sunday, today)");
+    expect(relativeDayLabel("2026-06-29", "2026-06-28")).toBe(" (Monday, tomorrow)");
+    expect(relativeDayLabel("2026-06-27", "2026-06-28")).toBe(" (Saturday, yesterday)");
+    expect(relativeDayLabel("2026-06-30", "2026-06-28")).toBe(" (Tuesday, in 2 days)");
+    expect(relativeDayLabel("2026-06-25", "2026-06-28")).toBe(" (Thursday, 3 days ago)");
   });
 
-  it("returns no label when the current date is unknown or malformed", () => {
-    expect(relativeDayLabel("2026-06-28", undefined)).toBe("");
+  it("gives the weekday alone when the current date is unknown, and nothing for a malformed date", () => {
+    expect(relativeDayLabel("2026-06-28")).toBe(" (Sunday)");
+    expect(relativeDayLabel("2026-06-28", "not-a-date")).toBe(" (Sunday)");
     expect(relativeDayLabel("not-a-date", "2026-06-28")).toBe("");
+  });
+
+  it("spells out a date's weekday", () => {
+    expect(weekdayDate("2026-10-03")).toBe("Saturday 2026-10-03");
+    expect(weekdayDate("not-a-date")).toBe("not-a-date");
   });
 
   it("emits a today line only when currentDate is present", () => {
     expect(buildCurrentDateContext({ currentDate: "2026-06-28" } as TrainingContext)).toContain(
-      "Today's date: 2026-06-28",
+      "Today's date: 2026-06-28 (Sunday).",
     );
     expect(buildCurrentDateContext({} as TrainingContext)).toBe("");
   });
@@ -114,6 +121,6 @@ describe("current-date anchoring", () => {
       distanceUnit: "km",
     } as unknown as TrainingContext);
 
-    expect(out).toContain("2026-06-28 (today): Rest");
+    expect(out).toContain("2026-06-28 (Sunday, today): Rest");
   });
 });

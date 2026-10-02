@@ -150,6 +150,25 @@ describe("buildPlanAdjustmentUserPrompt", () => {
     expect(prompt).not.toContain("STRUCTURE-BLOCK DAYS");
     expect(prompt).not.toContain("FOCUSED DAY");
     expect(prompt).not.toContain("--- RECENT CONVERSATION ---");
+    expect(prompt).not.toContain("--- RECENT PLAN CHANGES ---");
+  });
+
+  it("gives the plan changes already made ahead of the conversation that asked for them", () => {
+    const recentPlanChanges = "--- RECENT PLAN CHANGES ---\n- today, applied: Long Run moved from Monday 2026-07-20 to Sunday 2026-07-19.\n--- END RECENT PLAN CHANGES ---";
+
+    const prompt = buildPlanAdjustmentUserPrompt({
+      trainingContext,
+      upcomingWorkouts,
+      structureBlockDayIds: new Set(),
+      userMessage: "undo that",
+      history: [{ role: "user", content: "move my long run to sunday" }],
+      recentPlanChanges,
+    });
+
+    expect(prompt).toContain(recentPlanChanges);
+    expect(prompt.indexOf("--- RECENT PLAN CHANGES ---")).toBeLessThan(prompt.indexOf("--- RECENT CONVERSATION ---"));
+    // Weekdays on the upcoming days too, so "Sunday" needs no arithmetic.
+    expect(prompt).toContain("Date: 2026-07-16 (Thursday, in 2 days)");
   });
 });
 

@@ -17,6 +17,7 @@ import {
   undoPlanAdjustmentProposal,
 } from "./planAdjustmentService";
 import { setsFingerprint } from "./planProposalUndo";
+import { loadRecentPlanChanges } from "./recentPlanChanges";
 import { applyStructuredPlanDaySuggestionRows, parseStructuredPlanDaySuggestionRows } from "./structuredPlanDaySuggestion";
 import { invalidateTrainingContext } from "./trainingContextCache";
 
@@ -77,6 +78,9 @@ vi.mock("./aiSuggestionService", () => ({
 }));
 
 vi.mock("./trainingContextCache", () => ({ invalidateTrainingContext: vi.fn() }));
+
+// The record itself is covered in recentPlanChanges.test.ts.
+vi.mock("./recentPlanChanges", () => ({ loadRecentPlanChanges: vi.fn().mockResolvedValue("") }));
 
 vi.mock("./structuredPlanDaySuggestion", () => ({
   parseStructuredPlanDaySuggestionRows: vi.fn(),
@@ -187,6 +191,18 @@ describe("createPlanAdjustmentProposal", () => {
 
     expect(result.kind).toBe("chat_fallback");
     expect(generatePlanAdjustment).not.toHaveBeenCalled();
+  });
+
+  it("gives the generation the plan changes already made, so an undo can restore them", async () => {
+    const recent = "--- RECENT PLAN CHANGES ---\n- today, applied: Long Run moved from Monday 2026-07-20 to Sunday 2026-07-19.";
+    vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([upcomingDay()] as never);
+    vi.mocked(loadRecentPlanChanges).mockResolvedValueOnce(recent);
+    vi.mocked(generatePlanAdjustment).mockResolvedValue({ summaryMessage: "Done.", changes: [] });
+
+    await createPlanAdjustmentProposal({ ...input, message: "undo that" });
+
+    expect(loadRecentPlanChanges).toHaveBeenCalledWith("user-1");
+    expect(vi.mocked(generatePlanAdjustment).mock.calls.at(-1)?.[0]).toMatchObject({ recentPlanChanges: recent, userMessage: "undo that" });
   });
 
   it("falls back with the safety note on a red flag, without generating", async () => {

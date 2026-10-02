@@ -253,7 +253,7 @@ export function buildPromptDataSections(
   const header = [
     `--- ATHLETE'S TRAINING DATA ---`,
     ...(trainingContext.currentDate
-      ? [`Today's date: ${trainingContext.currentDate} (use this as "today"; workout dates below are annotated relative to it)`]
+      ? [`Today's date: ${trainingContext.currentDate}${relativeDayLabel(trainingContext.currentDate)}. Use this as "today"; the workout dates below carry their weekday and how far they are from it.`]
       : []),
     ...(planGoal ? [`Athlete's goal: ${sanitizeUserInput(planGoal)}`] : []),
     `Completion rate: ${formatCompletionRate(trainingContext)}`,
