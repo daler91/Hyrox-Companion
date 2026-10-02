@@ -97,21 +97,28 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
       const fallbackUsed = result?.fallbackUsed ?? false;
       const qualityState = resolveHydrationQualityState(acceptedRowCount, rejectedRowCount);
 
+      // Telemetry: the lock key (owner ids), counts and the error; no workout text.
       if (qualityState === "ok") {
+        // bearer:disable javascript_lang_logger_leak
         logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");
       } else {
+        // bearer:disable javascript_lang_logger_leak
         logger.warn({ context: "health-metrics", event: "exercise_set_auto_hydration_success_degraded", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration completed with degraded parse quality");
       }
 
       void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
         .catch((err: unknown) => {
+          // bearer:disable javascript_lang_logger_leak
           logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
         });
       return result;
     } catch (err: unknown) {
+      // Telemetry: the lock key (owner ids) and the error; no workout text.
+      // bearer:disable javascript_lang_logger_leak
       logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
       void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed")
         .catch((counterErr: unknown) => {
+          // bearer:disable javascript_lang_logger_leak
           logger.warn({ context: "health-metrics", event: "auto_hydration_failure_counter_failed", lockKey, err: counterErr }, "Auto hydration failure telemetry increment failed");
         });
       throw err;

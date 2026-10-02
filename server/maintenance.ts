@@ -283,10 +283,14 @@ async function connectWithRetry(attempt: number): Promise<void> {
     await checkDatabaseConnection();
   } catch (error) {
     if (attempt >= DB_CONNECT_MAX_RETRIES) {
+      // A static context and the connection error; no request or athlete data.
+      // bearer:disable javascript_lang_logger_leak
       logger.fatal({ context: "db", err: error }, "Cannot connect to database after all retries — app cannot start");
       throw error;
     }
     const delay = DB_CONNECT_BASE_DELAY_MS * 2 ** (attempt - 1);
+    // Retry counters and the connection error; no request or athlete data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "db", attempt, maxRetries: DB_CONNECT_MAX_RETRIES, retryInMs: delay, err: error }, "Database connection failed, retrying...");
     await new Promise((resolve) => setTimeout(resolve, delay));
     await connectWithRetry(attempt + 1);
@@ -294,8 +298,11 @@ async function connectWithRetry(attempt: number): Promise<void> {
 }
 
 async function testDatabaseConnection() {
+  // Static context and messages only.
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "db" }, "Testing database connection...");
   await connectWithRetry(1);
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "db" }, "Database connection successful");
 }
 
