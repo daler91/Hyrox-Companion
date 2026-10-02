@@ -61,6 +61,13 @@ vi.mock("../storage", () => {
 
 // The reopen path hands a linked recording to the device-link service; its
 // row-building is covered in deviceActivityLink.test.ts, so here it is a spy.
+// The week-and-weekday lookup a move makes is covered in planSlot.test.ts;
+// here it answers "nothing to change" unless a test says otherwise.
+const { planSlotForMoveMock } = vi.hoisted(() => ({
+  planSlotForMoveMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../storage/planSlot", () => ({ planSlotForMove: planSlotForMoveMock }));
+
 vi.mock("./deviceActivityLink", () => ({
   releaseStravaActivityInTx: vi.fn(),
   stripStravaActivityLabel: vi.fn(),
@@ -658,6 +665,19 @@ describe("planService", () => {
       await expect(
         updatePlanDayStatus(dayId, { status: "completed" }, userId),
       ).rejects.toThrow(/Plan day not found/);
+    });
+
+    it("files a day moved with its status under the new date's week and weekday", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "planned" });
+      const tx = setupTx([{ status: "missed", planId: "plan-1" } as never], [], [returned]);
+      planSlotForMoveMock.mockResolvedValueOnce({ weekNumber: 6, dayName: "Monday" });
+
+      await updatePlanDayStatus(dayId, { status: "planned", scheduledDate: "2026-10-05" }, userId);
+
+      expect(planSlotForMoveMock).toHaveBeenCalledWith(tx, "plan-1", "2026-10-05");
+      expect(tx.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "planned", scheduledDate: "2026-10-05", weekNumber: 6, dayName: "Monday" }),
+      );
     });
 
     it("stores the skip reason alongside the skipped status", async () => {

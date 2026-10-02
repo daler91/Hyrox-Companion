@@ -27,6 +27,13 @@ describe("hasPlanEditKeywords — high-recall gate", () => {
     "skip today's session",
     "turn Thursday into a rest day",
     "I signed up for a parkrun",
+    // Taking back a change the coach made.
+    "undo that",
+    "please revert it",
+    "put it back",
+    "can you change them back",
+    "back to how it was please",
+    "that's not what it was originally",
   ])("fires on plan-edit-shaped message: %s", (message) => {
     expect(hasPlanEditKeywords(message)).toBe(true);
   });

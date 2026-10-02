@@ -13,6 +13,7 @@ import type {
 
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
+import { weekdayDate } from "./coachingContext";
 
 type CoachingInsights = NonNullable<TrainingContext["coachingInsights"]>;
 
@@ -369,7 +370,7 @@ function formatRecentSkips(recentSkips: CoachingInsights["recentSkips"]): string
     // it reaches the LLM prompt, same as every other user-authored field here.
     .map(
       (s) =>
-        `${s.date} ${sanitizeUserInput(s.focus)} (${SKIP_REASON_PROMPT_LABELS[s.reason] ?? s.reason})`,
+        `${weekdayDate(s.date)} ${sanitizeUserInput(s.focus)} (${SKIP_REASON_PROMPT_LABELS[s.reason] ?? s.reason})`,
     )
     .join("; ");
   return `RECENT SKIPS (athlete-stated reasons): ${items}. Treat ill/injured skips as recovery signals to program around — not as compliance failures to nudge about.`;
@@ -385,7 +386,7 @@ function formatRecentMisses(recentMisses: CoachingInsights["recentMisses"]): str
   const items = recentMisses
     .map(
       (miss) =>
-        `${miss.date} ${sanitizeUserInput(miss.focus)} (${miss.priority}, ${miss.decision === "let_go" ? "let go" : "no decision yet"})`,
+        `${weekdayDate(miss.date)} ${sanitizeUserInput(miss.focus)} (${miss.priority}, ${miss.decision === "let_go" ? "let go" : "no decision yet"})`,
     )
     .join("; ");
   return `RECENT MISSED SESSIONS: ${items}. A session the athlete let go is their decision — don't add it back. Protect the key sessions still ahead rather than making up the missed volume.`;

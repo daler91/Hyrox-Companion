@@ -102,7 +102,7 @@ describe("formatCoachingAnalysis", () => {
       recentSkips: [{ date: "2026-06-10", focus: "Leg day", reason: "injured" }],
     });
 
-    expect(out).toContain("RECENT SKIPS (athlete-stated reasons): 2026-06-10 Leg day (injured).");
+    expect(out).toContain("RECENT SKIPS (athlete-stated reasons): Wednesday 2026-06-10 Leg day (injured).");
   });
 
   it("names recent misses with their tier and the athlete's decision", () => {
@@ -115,7 +115,7 @@ describe("formatCoachingAnalysis", () => {
     });
 
     expect(out).toContain(
-      "RECENT MISSED SESSIONS: 2026-06-11 Threshold run (key, let go); 2026-06-09 Strength B (supporting, no decision yet).",
+      "RECENT MISSED SESSIONS: Thursday 2026-06-11 Threshold run (key, let go); Tuesday 2026-06-09 Strength B (supporting, no decision yet).",
     );
     expect(out).toContain("don't add it back");
   });

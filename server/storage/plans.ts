@@ -22,6 +22,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
+import { planSlotForMove } from "./planSlot";
 import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
 
 /** `recovery` with a let-go dropped and a fold or shorten kept, for the missed-day sweep. */
@@ -379,9 +380,11 @@ export class PlanStorage {
     const day = await this.getPlanDay(dayId, userId, executor);
     if (!day) return undefined;
 
+    // A new date carries its week and weekday with it (planSlotForMove).
+    const slot = await planSlotForMove(executor, day.planId, updates.scheduledDate);
     const [updatedDay] = await executor
       .update(planDays)
-      .set(updates)
+      .set({ ...updates, ...slot })
       .where(eq(planDays.id, dayId))
       .returning();
     return updatedDay;
@@ -472,6 +475,7 @@ export class PlanStorage {
     return await db.transaction(async (tx): Promise<PlanDayRecoveryOutcome> => {
       const [current] = await tx
         .select({
+          planId: planDays.planId,
           status: planDays.status,
           scheduledDate: planDays.scheduledDate,
           recovery: planDays.recovery,
@@ -509,7 +513,12 @@ export class PlanStorage {
           .onConflictDoNothing({ target: exerciseSets.id });
       }
 
-      const [day] = await tx.update(planDays).set(write.update).where(eq(planDays.id, dayId)).returning();
+      const slot = await planSlotForMove(tx, current.planId, write.update.scheduledDate);
+      const [day] = await tx
+        .update(planDays)
+        .set({ ...write.update, ...slot })
+        .where(eq(planDays.id, dayId))
+        .returning();
       return day ? { outcome: "applied", day } : { outcome: "not_found" };
     });
   }

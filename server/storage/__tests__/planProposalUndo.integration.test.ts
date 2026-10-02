@@ -1,4 +1,4 @@
-import { type EnrichedPlanAdjustmentChange, exerciseSets, planDays, trainingPlans } from "@shared/schema";
+import { type EnrichedPlanAdjustmentChange, exerciseSets, planAdjustmentProposals, planDays, trainingPlans } from "@shared/schema";
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -38,9 +38,10 @@ describe("plan proposal apply and undo (real Postgres)", () => {
 
   /**
    * A strength day with a two-row exercise table, and a free-text run, with a
-   * pending proposal that turns the strength day into rest and moves the run.
+   * pending proposal that turns the strength day into rest and moves the run
+   * (to Saturday unless `runTo` says otherwise). Week 1 starts Monday Aug 3.
    */
-  async function seedProposal() {
+  async function seedProposal(runTo = "2026-08-08") {
     const [plan] = await db
       .insert(trainingPlans)
       .values({ userId: ALICE, name: "Block", totalWeeks: 8, startDate: "2026-08-03", endDate: "2026-09-27" })
@@ -87,7 +88,7 @@ describe("plan proposal apply and undo (real Postgres)", () => {
       },
       {
         planDayId: run.id,
-        updatedFields: { scheduledDate: "2026-08-08", expectedRpe: 5 },
+        updatedFields: { scheduledDate: runTo, expectedRpe: 5 },
         rationale: "Saturday gives you a rest day first.",
         kind: "reschedule",
         dayLabel: "Thu Aug 6 — Tempo Run",
@@ -112,7 +113,7 @@ describe("plan proposal apply and undo (real Postgres)", () => {
     expect(await applyPlanAdjustmentProposal(ALICE, proposal.id)).toEqual({ applied: true, changeCount: 2 });
     expect(await readDay(strength.id)).toMatchObject({ focus: "Rest", mainWorkout: "Complete rest" });
     expect(await readSets(strength.id)).toEqual([]);
-    expect(await readDay(run.id)).toMatchObject({ scheduledDate: "2026-08-08", expectedRpe: 5 });
+    expect(await readDay(run.id)).toMatchObject({ scheduledDate: "2026-08-08", expectedRpe: 5, weekNumber: 1, dayName: "Saturday" });
     const applied = await storage.planProposals.getById(proposal.id, ALICE);
     expect(applied?.status).toBe("applied");
     expect(applied?.applyUndo?.days.map((day) => day.planDayId)).toEqual([strength.id, run.id]);
@@ -134,12 +135,54 @@ describe("plan proposal apply and undo (real Postgres)", () => {
       aiNoteUpdatedAt: null,
     });
     expect(await readSets(strength.id)).toEqual(strengthSets);
-    expect(await readDay(run.id)).toMatchObject({ scheduledDate: "2026-08-06", expectedRpe: 6 });
+    expect(await readDay(run.id)).toMatchObject({ scheduledDate: "2026-08-06", expectedRpe: 6, weekNumber: 1, dayName: "Thursday" });
     const reverted = await storage.planProposals.getById(proposal.id, ALICE);
     expect(reverted?.status).toBe("reverted");
     expect(reverted?.revertedAt).toBeInstanceOf(Date);
 
     expect(await undoPlanAdjustmentProposal(ALICE, proposal.id)).toMatchObject({ undone: false, reason: "not_applied" });
+  });
+
+  it("files a session moved into the next week under that week, and undo puts it back", async () => {
+    const { proposal, run } = await seedProposal("2026-08-10");
+
+    expect(await applyPlanAdjustmentProposal(ALICE, proposal.id, { planDayIds: [run.id] })).toEqual({
+      applied: true,
+      changeCount: 1,
+    });
+    expect(await readDay(run.id)).toMatchObject({ scheduledDate: "2026-08-10", weekNumber: 2, dayName: "Monday" });
+
+    expect(await undoPlanAdjustmentProposal(ALICE, proposal.id)).toMatchObject({ undone: true, restoredCount: 1 });
+    expect(await readDay(run.id)).toMatchObject({ scheduledDate: "2026-08-06", weekNumber: 1, dayName: "Thursday" });
+  });
+
+  it("reads back the athlete's proposals applied or undone since a date, newest first", async () => {
+    const BOB = "undo-bob";
+    await seedUser(BOB);
+    const plans = await db
+      .insert(trainingPlans)
+      .values([
+        { userId: ALICE, name: "Block", totalWeeks: 8, startDate: "2026-08-03", endDate: "2026-09-27" },
+        { userId: BOB, name: "Other", totalWeeks: 8, startDate: "2026-08-03", endDate: "2026-09-27" },
+      ])
+      .returning();
+    async function proposalResolved(userId: string, status: string, resolvedAt: Date) {
+      const planId = plans.find((plan) => plan.userId === userId)?.id ?? "";
+      const row = await storage.planProposals.create({ userId, planId, summaryMessage: status, userRequest: "x", payload: { changes: [] } });
+      await db.update(planAdjustmentProposals).set({ status, resolvedAt }).where(eq(planAdjustmentProposals.id, row.id));
+      return row.id;
+    }
+    const applied = await proposalResolved(ALICE, "applied", new Date("2026-09-25T10:00:00Z"));
+    const undone = await proposalResolved(ALICE, "reverted", new Date("2026-09-26T10:00:00Z"));
+    await proposalResolved(ALICE, "dismissed", new Date("2026-09-27T10:00:00Z"));
+    await proposalResolved(ALICE, "applied", new Date("2026-09-10T10:00:00Z"));
+    await proposalResolved(BOB, "applied", new Date("2026-09-26T12:00:00Z"));
+    const since = new Date("2026-09-20T00:00:00Z");
+
+    const recent = await storage.planProposals.getRecentlyApplied(ALICE, since, 8);
+
+    expect(recent.map((proposal) => proposal.id)).toEqual([undone, applied]);
+    expect((await storage.planProposals.getRecentlyApplied(ALICE, since, 1)).map((proposal) => proposal.id)).toEqual([undone]);
   });
 
   it("applies only the change the athlete picked", async () => {

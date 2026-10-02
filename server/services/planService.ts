@@ -9,6 +9,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
+import { planSlotForMove } from "../storage/planSlot";
 import { getLocalDateStrSafe } from "../timezone";
 import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
 import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
@@ -518,6 +519,7 @@ export async function updatePlanDayStatus(
   const { updatedDay, dateChanged } = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
+        planId: planDays.planId,
         status: planDays.status,
         scheduledDate: planDays.scheduledDate,
         recovery: planDays.recovery,
@@ -570,7 +572,12 @@ export async function updatePlanDayStatus(
       Object.assign(updates, await foldLinkedLogsBackOntoPlanDay(tx, dayId, userId));
     }
 
-    const [row] = await tx.update(planDays).set(updates).where(eq(planDays.id, dayId)).returning();
+    const slot = await planSlotForMove(tx, current.planId, updates.scheduledDate);
+    const [row] = await tx
+      .update(planDays)
+      .set({ ...updates, ...slot })
+      .where(eq(planDays.id, dayId))
+      .returning();
 
     const dateChanged =
       scheduledDate !== undefined && (scheduledDate ?? null) !== (current.scheduledDate ?? null);

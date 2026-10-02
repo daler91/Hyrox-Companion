@@ -5,9 +5,33 @@ import {
   type PlanProposalApplyUndo,
   type PlanProposalStatus,
 } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
+
+/**
+ * The athlete's proposals applied since `since`, the ones undone since
+ * included, newest first: the coach's record of what it changed
+ * (services/recentPlanChanges).
+ */
+async function getRecentlyAppliedProposals(
+  userId: string,
+  since: Date,
+  limit: number,
+): Promise<PlanAdjustmentProposal[]> {
+  return await db
+    .select()
+    .from(planAdjustmentProposals)
+    .where(
+      and(
+        eq(planAdjustmentProposals.userId, userId),
+        inArray(planAdjustmentProposals.status, ["applied", "reverted"]),
+        gte(planAdjustmentProposals.resolvedAt, since),
+      ),
+    )
+    .orderBy(desc(planAdjustmentProposals.resolvedAt))
+    .limit(limit);
+}
 
 /** The athlete's proposals among `ids`: the chat history and the coach's conversation read their outcomes. */
 async function getProposalsByIds(ids: readonly string[], userId: string): Promise<PlanAdjustmentProposal[]> {
@@ -128,6 +152,8 @@ export class PlanProposalStorage {
   // NutritionStorage binds its own: storage.planProposals.getByIds() and its
   // mocks still work.
   readonly getByIds = getProposalsByIds;
+
+  readonly getRecentlyApplied = getRecentlyAppliedProposals;
 
   /**
    * Move a pending proposal to a terminal status. Returns the updated row, or

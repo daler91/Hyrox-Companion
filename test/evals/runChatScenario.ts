@@ -11,6 +11,7 @@ function callOptions(scenario: ChatScenario): ChatCallOptions {
     chatSafety: analyzeChatSafety(scenario.message, scenario.history ?? []),
     focusedWorkout: scenario.focusedWorkout,
     messageNotes: scenario.messageNotes,
+    recentPlanChanges: scenario.recentPlanChanges,
   };
 }
 

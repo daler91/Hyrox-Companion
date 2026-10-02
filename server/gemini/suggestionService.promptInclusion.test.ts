@@ -174,7 +174,7 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       "CURRENTLY AFFECTED",
       // Specifically the constraints block's own line — "UPCOMING" alone would
       // be satisfied by the unrelated "UPCOMING WORKOUTS" header.
-      "UPCOMING: Travel, 2026-05-02 to 2026-05-06",
+      "UPCOMING: Travel, Saturday 2026-05-02 to Wednesday 2026-05-06",
 
       // MAF method — the ceiling and test cadence. These two fields sat on
       // TrainingContext rendered by NEITHER assembler until formatMafContext.

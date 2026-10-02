@@ -246,3 +246,39 @@ describe("chat system prompt — the conversation before this session", () => {
     expect(BASE_SYSTEM_PROMPT).toContain("only an applied proposal changed anything");
   });
 });
+
+describe("chat system prompt — the plan changes the coach already made", () => {
+  const RECENT = "--- RECENT PLAN CHANGES ---\n- 4 minutes ago, applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.\n--- END RECENT PLAN CHANGES ---";
+
+  it("carries the record after the training data and materials, ahead of the session notes and safety guidance, in both branches", () => {
+    for (const totalWorkouts of [12, 0]) {
+      const prompt = buildSystemPrompt(createMockTrainingContext({ totalWorkouts }), undefined, undefined, {
+        recentPlanChanges: RECENT,
+        earlierConversation: { text: "- The athlete reported knee pain.", endedAgo: "2 days" },
+        chatSafety: { redFlagDetected: true, hrMedicationDetected: false },
+      });
+      expect(prompt).toContain(RECENT);
+      if (totalWorkouts > 0) expect(prompt.indexOf("--- END TRAINING DATA ---")).toBeLessThan(prompt.indexOf(RECENT));
+      expect(prompt.indexOf(RECENT)).toBeLessThan(prompt.indexOf("--- EARLIER CONVERSATION ---"));
+      expect(prompt.indexOf(RECENT)).toBeLessThan(prompt.indexOf(CHAT_RED_FLAG_GUIDANCE));
+    }
+    expect(buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }))).not.toContain("RECENT PLAN CHANGES ---");
+  });
+
+  it("tells the coach how to undo a listed change, with the tool or without it", () => {
+    const withTool = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }), undefined, undefined, {
+      chatTools: { planChanges: true },
+    });
+    expect(withTool).toContain('call propose_plan_changes asking for each session back on its "from" date');
+    expect(withTool).toContain("point the athlete to it instead");
+
+    const readOnly = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }), undefined, undefined, {
+      chatTools: { planChanges: false },
+    });
+    expect(readOnly).toContain("say exactly what undoing it puts back, and that Undo on that change's card does it");
+
+    const classic = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }));
+    expect(classic).toContain("say exactly what undoing it puts back, and that Undo on that change's card does it");
+    expect(classic).toContain('"Put my long run back on Monday"');
+  });
+});

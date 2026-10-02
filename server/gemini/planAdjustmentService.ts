@@ -26,6 +26,8 @@ export interface PlanAdjustmentGenerationInput {
   coachingMaterials?: string;
   /** Day the athlete is currently viewing (embedded workout chat). */
   focusPlanDayId?: string;
+  /** The RECENT PLAN CHANGES block (services/recentPlanChanges); empty when nothing was applied lately. */
+  recentPlanChanges?: string;
   userId?: string;
 }
 
@@ -57,6 +59,10 @@ export function buildPlanAdjustmentUserPrompt(input: PlanAdjustmentGenerationInp
       `STRUCTURE-BLOCK DAYS [structure-blocks] — for these IDs you may ONLY change scheduledDate, notes, expectedDurationMin, expectedRpe: ${[...input.structureBlockDayIds].join(", ")}`,
     );
   }
+
+  // What earlier proposals already changed, ahead of the conversation that
+  // asked for them: an undo restores these dates.
+  if (input.recentPlanChanges) sections.push(input.recentPlanChanges);
 
   const historySection = buildRecentHistorySection(input.history);
   if (historySection) sections.push(historySection);

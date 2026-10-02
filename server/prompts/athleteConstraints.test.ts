@@ -75,7 +75,7 @@ describe("formatAthleteConstraints", () => {
     );
 
     expect(out).toContain("CURRENTLY AFFECTED");
-    expect(out).toContain("Injury, 2026-08-13 to 2026-08-19");
+    expect(out).toContain("Injury, Thursday 2026-08-13 to Wednesday 2026-08-19");
     expect(out).toContain("left hamstring, physio says no sprints");
     // Program around it...
     expect(out).toContain("Do not prescribe work that would aggravate it");
@@ -116,9 +116,9 @@ describe("formatAthleteConstraints", () => {
       }),
     );
 
-    expect(out).toContain("CURRENTLY AFFECTED: Injury, 2026-08-13 to 2026-08-19");
-    expect(out).toContain("RECENTLY AFFECTED: Illness, 2026-07-01 to 2026-07-05");
-    expect(out).toContain("UPCOMING: Travel, 2026-08-25 to 2026-08-30");
+    expect(out).toContain("CURRENTLY AFFECTED: Injury, Thursday 2026-08-13 to Wednesday 2026-08-19");
+    expect(out).toContain("RECENTLY AFFECTED: Illness, Wednesday 2026-07-01 to Sunday 2026-07-05");
+    expect(out).toContain("UPCOMING: Travel, Tuesday 2026-08-25 to Sunday 2026-08-30");
     // The recent one is framed as explanation, not as a failure to train.
     expect(out).toContain("it is context, not a compliance problem");
   });
@@ -128,7 +128,7 @@ describe("formatAthleteConstraints", () => {
       context({ absences: [absence({ startDate: "2026-08-16", endDate: "2026-08-16" })] }),
     );
 
-    expect(out).toContain("Injury, 2026-08-16");
+    expect(out).toContain("Injury, Sunday 2026-08-16");
     expect(out).not.toContain("2026-08-16 to 2026-08-16");
   });
 
