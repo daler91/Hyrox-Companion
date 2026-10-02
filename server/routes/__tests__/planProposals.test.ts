@@ -102,7 +102,7 @@ describe("serializing an applied proposal", () => {
 
     const response = await request(app).get("/api/v1/plan-proposals/proposal-1");
 
-    expect(response.body.proposal).toMatchObject({ appliedPlanDayIds: ["day-2"], undoable: true });
+    expect(response.body).toMatchObject({ proposal: { appliedPlanDayIds: ["day-2"], undoable: true } });
   });
 
   it("says an apply from before undo existed can't be undone", async () => {
@@ -114,7 +114,7 @@ describe("serializing an applied proposal", () => {
 
     const response = await request(app).get("/api/v1/plan-proposals/proposal-1");
 
-    expect(response.body.proposal).toMatchObject({ appliedPlanDayIds: ["day-1"], undoable: false });
+    expect(response.body).toMatchObject({ proposal: { appliedPlanDayIds: ["day-1"], undoable: false } });
   });
 });
 
@@ -171,7 +171,7 @@ describe("POST /api/v1/plan-proposals/:id/apply", () => {
     const response = await request(app).post("/api/v1/plan-proposals/proposal-1/apply").send({ planDayIds: ["day-9"] });
 
     expect(response.status).toBe(400);
-    expect(response.body.reason).toBe("invalid_selection");
+    expect(response.body).toMatchObject({ reason: "invalid_selection" });
   });
 });
 
@@ -206,7 +206,7 @@ describe("POST /api/v1/plan-proposals/:id/undo", () => {
     const response = await request(app).post("/api/v1/plan-proposals/proposal-1/undo");
 
     expect(response.status).toBe(409);
-    expect(response.body.reason).toBe("expired");
+    expect(response.body).toMatchObject({ reason: "expired" });
   });
 
   it("is a 404 for a proposal that isn't the athlete's", async () => {

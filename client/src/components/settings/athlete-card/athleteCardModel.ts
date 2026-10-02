@@ -2,17 +2,25 @@ import { isAthleteFactDue } from "@shared/athleteFacts";
 import type { AthleteFact } from "@shared/schema";
 import { type AthleteFactCategory, athleteFactCategoryEnum } from "@shared/schema/enums";
 
-export const ATHLETE_FACT_CATEGORY_LABELS: Record<AthleteFactCategory, string> = {
-  constraint: "Injury or limit",
-  equipment: "Equipment",
-  schedule: "Schedule",
-  preference: "Preference",
-  other: "Other",
-};
+/** What a category is called in the app. */
+export function athleteFactCategoryLabel(category: AthleteFactCategory): string {
+  switch (category) {
+    case "constraint":
+      return "Injury or limit";
+    case "equipment":
+      return "Equipment";
+    case "schedule":
+      return "Schedule";
+    case "preference":
+      return "Preference";
+    case "other":
+      return "Other";
+  }
+}
 
 export const ATHLETE_FACT_CATEGORY_OPTIONS = athleteFactCategoryEnum.map((value) => ({
   value,
-  label: ATHLETE_FACT_CATEGORY_LABELS[value],
+  label: athleteFactCategoryLabel(value),
 }));
 
 export interface AthleteCardFacts {

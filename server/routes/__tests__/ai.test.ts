@@ -900,7 +900,7 @@ describe("Chat History and Messages Routes", () => {
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
-    expect(response.body.map((message: { id: string }) => message.id)).toEqual(["m1"]);
+    expect((response.body as Array<{ id: string }>).map((message) => message.id)).toEqual(["m1"]);
   });
 
   it("reads a workout's own conversation when one is named", async () => {

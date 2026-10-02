@@ -43,7 +43,9 @@ describe("useMessageFeedback", () => {
     rate("reply-1", "up");
 
     expect(feedback()).toBe("up");
-    await waitFor(() => expect(api.chat.setFeedback).toHaveBeenCalledWith("reply-1", "up"));
+    await waitFor(() => {
+      expect(api.chat.setFeedback).toHaveBeenCalledWith("reply-1", "up");
+    });
     expect(toast).not.toHaveBeenCalled();
   });
 
@@ -68,7 +70,9 @@ describe("useMessageFeedback", () => {
 
     rate("reply-1", "down");
 
-    await waitFor(() => expect(feedback()).toBe("up"));
+    await waitFor(() => {
+      expect(feedback()).toBe("up");
+    });
     expect(api.chat.setFeedback).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Couldn't save your rating", variant: "destructive" }));
   });

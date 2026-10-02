@@ -25,7 +25,14 @@ export function AddAthleteFactForm({ atCap }: AddAthleteFactFormProps) {
   const submit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!trimmed || atCap) return;
-    add.mutate({ fact: trimmed, category }, { onSuccess: () => setText("") });
+    add.mutate(
+      { fact: trimmed, category },
+      {
+        onSuccess: () => {
+          setText("");
+        },
+      },
+    );
   };
 
   return (
@@ -36,7 +43,9 @@ export function AddAthleteFactForm({ atCap }: AddAthleteFactFormProps) {
         data-testid="input-new-athlete-fact"
         placeholder="e.g. Bad left knee: no deep lunges"
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+        }}
         maxLength={ATHLETE_FACT_MAX_LENGTH}
         disabled={atCap}
         aria-describedby="new-athlete-fact-hint new-athlete-fact-count"

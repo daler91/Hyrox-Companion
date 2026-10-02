@@ -190,9 +190,12 @@ describe('ChatMessage', () => {
   });
 
   describe('rating a reply', () => {
+    // Spread, so the component's `role` prop isn't read as an ARIA role.
+    const reply = { role: 'assistant', content: 'Run easy.', messageId: 'reply-1' } as const;
+
     it('offers thumbs on a saved coach reply, and reports which was pressed', async () => {
       const onFeedback = vi.fn();
-      render(<ChatMessage role="assistant" content="Run easy." messageId="reply-1" onFeedback={onFeedback} />);
+      render(<ChatMessage {...reply} onFeedback={onFeedback} />);
 
       await userEvent.click(screen.getByRole('button', { name: 'Helpful' }));
 
@@ -202,7 +205,7 @@ describe('ChatMessage', () => {
 
     it('clears the rating when the chosen thumb is pressed again', async () => {
       const onFeedback = vi.fn();
-      render(<ChatMessage role="assistant" content="Run easy." messageId="reply-1" feedback="down" onFeedback={onFeedback} />);
+      render(<ChatMessage {...reply} feedback="down" onFeedback={onFeedback} />);
 
       const notHelpful = screen.getByRole('button', { name: 'Not helpful' });
       expect(notHelpful).toHaveAttribute('aria-pressed', 'true');
@@ -213,15 +216,14 @@ describe('ChatMessage', () => {
 
     it('offers no thumbs on the athlete\'s own message, a failed reply, or one with no handler', () => {
       const onFeedback = vi.fn();
-      const { rerender } = render(<ChatMessage role="user" content="Hi" messageId="m-1" onFeedback={onFeedback} />);
+      const own = { ...reply, role: 'user', content: 'Hi', messageId: 'm-1' } as const;
+      const { rerender } = render(<ChatMessage {...own} onFeedback={onFeedback} />);
       expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
 
-      rerender(
-        <ChatMessage role="assistant" content="" messageId="m-2" onFeedback={onFeedback} failure={{ message: 'The reply stopped.' }} />,
-      );
+      rerender(<ChatMessage {...reply} content="" messageId="m-2" onFeedback={onFeedback} failure={{ message: 'The reply stopped.' }} />);
       expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
 
-      rerender(<ChatMessage role="assistant" content="Welcome!" messageId="welcome" />);
+      rerender(<ChatMessage {...reply} content="Welcome!" messageId="welcome" />);
       expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
     });
   });

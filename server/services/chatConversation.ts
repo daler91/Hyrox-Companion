@@ -206,8 +206,10 @@ export function splitSessions(rows: ChatMessage[], now: number): SessionSplit {
   if (!startsSession || carried || !before) return split;
 
   const previousStart = sessionStart(texts, currentStart);
-  const earlier = summaries.findLast((row) => timeOf(row) <= timeOf(texts[previousStart]));
-  const rolling = rollingNoteWithin(rollings, texts[previousStart], before);
+  const previousFirst = texts.at(previousStart);
+  if (!previousFirst) return split;
+  const earlier = summaries.findLast((row) => timeOf(row) <= timeOf(previousFirst));
+  const rolling = rollingNoteWithin(rollings, previousFirst, before);
   return { ...split, toSummarise: { turns: texts.slice(previousStart, currentStart), earlier, rolling } };
 }
 

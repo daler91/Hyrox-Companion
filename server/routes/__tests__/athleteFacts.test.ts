@@ -72,7 +72,7 @@ describe("athlete facts routes", () => {
 
     expect(response.status).toBe(200);
     expect(storage.athleteFacts.list).toHaveBeenCalledWith("test_user_id");
-    expect(response.body[0]).toMatchObject({ fact: "No sled at my gym", reviewOn: "2026-12-30" });
+    expect(response.body).toMatchObject([{ fact: "No sled at my gym", reviewOn: "2026-12-30" }]);
   });
 
   it("adds a fact the athlete typed, due for review in 90 days on their calendar", async () => {
@@ -105,7 +105,7 @@ describe("athlete facts routes", () => {
     const seeded = await request(app).post(FACTS).send({ fact: "Bad left knee", category: "constraint", source: "plan_generation" });
 
     expect(full.status).toBe(409);
-    expect(full.body.code).toBe("ATHLETE_FACT_LIMIT");
+    expect(full.body).toMatchObject({ code: "ATHLETE_FACT_LIMIT" });
     expect(long.status).toBe(400);
     expect(seeded.status).toBe(400);
     expect(storage.athleteFacts.add).toHaveBeenCalledTimes(1);
@@ -132,7 +132,7 @@ describe("athlete facts routes", () => {
     const empty = await request(app).patch(`${FACTS}/fact-1`).send({});
 
     expect(clash.status).toBe(409);
-    expect(clash.body.code).toBe("ATHLETE_FACT_DUPLICATE");
+    expect(clash.body).toMatchObject({ code: "ATHLETE_FACT_DUPLICATE" });
     expect(empty.status).toBe(400);
   });
 

@@ -35,13 +35,19 @@ export function setsFingerprint(rows: ReadonlyArray<ExerciseSet | InsertExercise
 
 type UndoFields = PlanProposalDayUndo["fields"];
 
+const UNDO_FIELDS: ReadonlySet<string> = new Set<string>(PLAN_PROPOSAL_UNDO_FIELDS);
+
 /** `{ before, after }` for each field the apply changed. */
 function changedFields(before: PlanDay, after: PlanDay, written: UpdatePlanDay): UndoFields {
-  const fields: Record<string, PlanProposalFieldUndo<unknown>> = {};
-  for (const field of PLAN_PROPOSAL_UNDO_FIELDS) {
-    if (written[field] === undefined || after[field] === before[field]) continue;
-    fields[field] = { before: before[field], after: after[field] };
-  }
+  const was = new Map<string, unknown>(Object.entries(before));
+  const is = new Map<string, unknown>(Object.entries(after));
+  // A key the payload carries as undefined was not written.
+  const wrote = new Map<string, unknown>(Object.entries(written));
+  const fields: Record<string, PlanProposalFieldUndo<unknown>> = Object.fromEntries(
+    [...wrote]
+      .filter(([field, value]) => value !== undefined && UNDO_FIELDS.has(field) && is.get(field) !== was.get(field))
+      .map(([field]) => [field, { before: was.get(field), after: is.get(field) }]),
+  );
   return fields;
 }
 
@@ -90,13 +96,13 @@ export interface DayRestore {
 }
 
 function restoredFields(undo: PlanProposalDayUndo, day: PlanDay): { update: UpdatePlanDay; kept: boolean } {
+  const current = new Map<string, unknown>(Object.entries(day));
+  const changes = Object.entries(undo.fields) as [PlanProposalUndoField, PlanProposalFieldUndo<unknown>][];
+  // A field reads what the apply wrote unless something changed it since.
+  const restorable = changes.filter(([field, change]) => current.get(field) === change.after);
   const update: UpdatePlanDay = {};
-  let kept = false;
-  for (const [field, change] of Object.entries(undo.fields) as [PlanProposalUndoField, PlanProposalFieldUndo<unknown>][]) {
-    if (day[field] === change.after) Object.assign(update, { [field]: change.before });
-    else kept = true;
-  }
-  return { update, kept };
+  for (const [field, change] of restorable) Object.assign(update, { [field]: change.before });
+  return { update, kept: restorable.length < changes.length };
 }
 
 /** The coach note back as it was, while the note on the day is still the one the apply wrote. */

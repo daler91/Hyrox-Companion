@@ -42,25 +42,32 @@ export function useFactProposalDecision(setMessages: SetMessages, messagesRef: R
     (id: string, decision: FactProposalDecision) => {
       const previous = messagesRef.current.find((message) => message.id === id)?.factProposal;
       if (previous?.status !== "pending") return;
-      const show = (factProposal: ChatFactProposal) =>
+      const show = (factProposal: ChatFactProposal) => {
         setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, factProposal } : message)));
+      };
       show({ ...previous, status: decision === "save" ? "saved" : "dismissed" });
-      sendDecision(id, decision)
-        .then(() => {
-          // A chat surface opened from now on reads the answer, not the offer.
-          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.chatHistory }).catch(ignoreResult);
-          if (decision !== "save") return;
-          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.athleteFacts }).catch(ignoreResult);
-          toast({ title: "Saved to your athlete card", description: "Your coach will plan around it." });
-        })
-        .catch((error: unknown) => {
+      const deliver = async () => {
+        try {
+          await sendDecision(id, decision);
+        } catch (error) {
           show(previous);
           toast({
             title: decision === "save" ? "Couldn't save that fact" : "Couldn't update that fact",
             description: humanizeApiError(error),
             variant: "destructive",
           });
-        });
+          return;
+        }
+        if (decision === "save") {
+          toast({ title: "Saved to your athlete card", description: "Your coach will plan around it." });
+        }
+        // A chat surface opened from now on reads the answer, not the offer.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.chatHistory }),
+          ...(decision === "save" ? [queryClient.invalidateQueries({ queryKey: QUERY_KEYS.athleteFacts })] : []),
+        ]);
+      };
+      deliver().catch(ignoreResult);
     },
     [messagesRef, setMessages, toast],
   );

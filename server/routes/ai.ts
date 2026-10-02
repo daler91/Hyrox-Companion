@@ -507,7 +507,7 @@ function chatToolsEnabled(): boolean {
  * classifier path applies).
  */
 function canProposePlanChanges(req: ChatStreamRequest, chatSafety: ChatSafetySignals): boolean {
-  return req.body.planEditing !== false && !chatSafety.redFlagDetected;
+  return req.body.planEditing && !chatSafety.redFlagDetected;
 }
 
 async function toolContextFor(req: ChatStreamRequest, userId: string, aiContext: AIContext): Promise<ChatToolContext> {

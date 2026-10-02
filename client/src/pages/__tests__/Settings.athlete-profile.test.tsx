@@ -113,7 +113,9 @@ describe("Settings race profile persistence", () => {
     expect(screen.getByTestId("athlete-card-section")).toBeInTheDocument();
     fireEvent.click(await screen.findByTestId("button-save-settings"));
 
-    await waitFor(() => expect(settingsHarness.updatePreferences).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(settingsHarness.updatePreferences).toHaveBeenCalled();
+    });
     expect(settingsHarness.updatePreferences.mock.calls[0]?.[0]).not.toHaveProperty("trainingConstraints");
   }, 10_000);
 });

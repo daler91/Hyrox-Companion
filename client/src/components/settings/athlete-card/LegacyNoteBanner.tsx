@@ -44,10 +44,23 @@ export function LegacyNoteBanner({ note }: LegacyNoteBannerProps) {
         own, or remove it if it no longer applies.
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => importNote.mutate()} disabled={busy}>
+        <Button
+          size="sm"
+          onClick={() => {
+            importNote.mutate();
+          }}
+          disabled={busy}
+        >
           Add to card
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setConfirmingRemove(true)} disabled={busy}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setConfirmingRemove(true);
+          }}
+          disabled={busy}
+        >
           Remove note
         </Button>
       </div>
@@ -61,7 +74,13 @@ export function LegacyNoteBanner({ note }: LegacyNoteBannerProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction onClick={() => discard.mutate()}>Remove note</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                discard.mutate();
+              }}
+            >
+              Remove note
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

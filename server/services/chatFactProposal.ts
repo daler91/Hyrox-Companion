@@ -143,7 +143,10 @@ export async function settleFactProposal(
 ): Promise<ChatFactProposal | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), waitMs);
+    // A fixed callback and a number: nothing from a request reaches the timer.
+    timer = setTimeout(() => { // DevSkim: ignore DS172411
+      resolve(null);
+    }, waitMs);
   });
   try {
     const found = await Promise.race([candidate, timeout]);

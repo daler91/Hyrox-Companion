@@ -124,17 +124,24 @@ function clean(text: string | null | undefined): string | undefined {
   return sanitizeUserInput(trimmed.length > MAX_TEXT ? `${trimmed.slice(0, MAX_TEXT)}…` : trimmed);
 }
 
+const canHalve = (item: unknown): item is unknown[] => Array.isArray(item) && item.length > 1;
+
+/** `value` with every list of more than one item cut to its first half; null when none can be. */
+function halveLists(value: Record<string, unknown>): Record<string, unknown> | null {
+  if (!Object.values(value).some(canHalve)) return null;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, canHalve(item) ? item.slice(0, Math.ceil(item.length / 2)) : item]),
+  );
+}
+
 /** A result as the model reads it: JSON, with its lists halved until it fits. */
 function result(value: Record<string, unknown>): string {
-  const out: Record<string, unknown> = { ...value };
+  let out: Record<string, unknown> = { ...value };
   let json = JSON.stringify(out);
   while (json.length > MAX_RESULT_CHARS) {
-    const lists = Object.entries(out).filter(
-      (entry): entry is [string, unknown[]] => Array.isArray(entry[1]) && entry[1].length > 1,
-    );
-    if (lists.length === 0) break;
-    for (const [key, list] of lists) out[key] = list.slice(0, Math.ceil(list.length / 2));
-    out.truncated = true;
+    const halved = halveLists(out);
+    if (!halved) break;
+    out = { ...halved, truncated: true };
     json = JSON.stringify(out);
   }
   return json;

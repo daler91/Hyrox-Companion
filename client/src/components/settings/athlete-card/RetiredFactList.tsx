@@ -44,7 +44,9 @@ export function RetiredFactList({ facts, atCap }: RetiredFactListProps) {
                   size="sm"
                   variant="ghost"
                   aria-label={`Restore "${fact.fact}"`}
-                  onClick={() => update.mutate({ id: fact.id, changes: { active: true } })}
+                  onClick={() => {
+                    update.mutate({ id: fact.id, changes: { active: true } });
+                  }}
                   disabled={atCap || update.isPending}
                 >
                   Restore
@@ -53,7 +55,9 @@ export function RetiredFactList({ facts, atCap }: RetiredFactListProps) {
                   size="icon"
                   variant="ghost"
                   aria-label={`Delete "${fact.fact}"`}
-                  onClick={() => remove.mutate(fact.id)}
+                  onClick={() => {
+                    remove.mutate(fact.id);
+                  }}
                   disabled={remove.isPending}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />

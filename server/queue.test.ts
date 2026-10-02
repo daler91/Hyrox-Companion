@@ -183,7 +183,7 @@ describe("runBatch", () => {
       }),
     ).rejects.toThrow();
 
-    expect(vi.mocked(invalidateTrainingContext).mock.calls.map(([userId]) => userId).sort()).toEqual([
+    expect(vi.mocked(invalidateTrainingContext).mock.calls.map(([userId]) => userId).sort((a, b) => a.localeCompare(b))).toEqual([
       "user-1",
       "user-2",
     ]);

@@ -9,7 +9,7 @@ import type { SetMessages } from "../chatSessionModel";
 import { useFactProposalDecision } from "../useFactProposalDecision";
 import { FEEDBACK_RETRY_MS } from "../useMessageFeedback";
 
-const toast = vi.fn();
+const toast = vi.fn<(content: { title?: string; description?: string; variant?: string }) => void>();
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
 vi.mock("@/lib/queryClient", async (importOriginal) => ({
@@ -49,7 +49,9 @@ describe("useFactProposalDecision", () => {
     decide("reply-1", "save");
 
     expect(status()).toBe("saved");
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Saved to your athlete card" })));
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Saved to your athlete card" }));
+    });
     expect(api.chat.decideFactProposal).toHaveBeenCalledWith("reply-1", "save");
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.athleteFacts });
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.chatHistory });
@@ -63,10 +65,12 @@ describe("useFactProposalDecision", () => {
 
     decide("reply-1", "save");
 
-    await waitFor(() => expect(status()).toBe("pending"));
-    expect(toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Couldn't save that fact", description: expect.stringContaining("holds up to 20"), variant: "destructive" }),
-    );
+    await waitFor(() => {
+      expect(status()).toBe("pending");
+    });
+    const shown = toast.mock.calls.at(-1)?.[0];
+    expect(shown).toMatchObject({ title: "Couldn't save that fact", variant: "destructive" });
+    expect(shown?.description).toContain("holds up to 20");
   });
 
   it("turns an offer down, trying once more while the reply is still being saved", async () => {

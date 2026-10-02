@@ -61,9 +61,13 @@ describe("usePlanProposal", () => {
     vi.mocked(api.planProposals.apply).mockResolvedValue({ applied: true, changeCount: 1 });
     const { result, addLocalMessage, saveMessage } = renderProposalHook();
 
-    act(() => result.current.applyProposal(PROPOSAL, ["day-2"]));
+    act(() => {
+      result.current.applyProposal(PROPOSAL, ["day-2"]);
+    });
 
-    await waitFor(() => expect(addLocalMessage).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(addLocalMessage).toHaveBeenCalled();
+    });
     expect(api.planProposals.apply).toHaveBeenCalledWith("proposal-1", ["day-2"]);
     expect(lastMessage(addLocalMessage)).toBe("Done — I've applied 1 of the 2 changes to your plan.");
     expect(saveMessage).toHaveBeenCalledWith({ role: "assistant", content: lastMessage(addLocalMessage) });
@@ -79,9 +83,13 @@ describe("usePlanProposal", () => {
     });
     const { result, addLocalMessage, saveMessage } = renderProposalHook();
 
-    act(() => result.current.undoProposal({ ...PROPOSAL, status: "applied", appliedPlanDayIds: ["day-1", "day-2"] }));
+    act(() => {
+      result.current.undoProposal({ ...PROPOSAL, status: "applied", appliedPlanDayIds: ["day-1", "day-2"] });
+    });
 
-    await waitFor(() => expect(addLocalMessage).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(addLocalMessage).toHaveBeenCalled();
+    });
     expect(api.planProposals.undo).toHaveBeenCalledWith("proposal-1");
     expect(lastMessage(addLocalMessage)).toBe(
       "Undone — I've put 2 days back the way they were. I left what's changed since on Thu Oct 1 — Long Run as it is.",
@@ -95,9 +103,13 @@ describe("usePlanProposal", () => {
     );
     const { result, addLocalMessage, saveMessage } = renderProposalHook();
 
-    act(() => result.current.undoProposal({ ...PROPOSAL, status: "applied" }));
+    act(() => {
+      result.current.undoProposal({ ...PROPOSAL, status: "applied" });
+    });
 
-    await waitFor(() => expect(addLocalMessage).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(addLocalMessage).toHaveBeenCalled();
+    });
     expect(lastMessage(addLocalMessage)).toBe("Those changes were applied more than a week ago.");
     expect(saveMessage).not.toHaveBeenCalled();
   });

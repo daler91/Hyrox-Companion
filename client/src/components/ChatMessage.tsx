@@ -130,7 +130,9 @@ function ReplyFeedback({ messageId, feedback, onFeedback }: ReplyFeedbackProps) 
             className={cn("h-11 w-11 text-muted-foreground md:h-7 md:w-7", selected && "text-foreground")}
             aria-label={label}
             aria-pressed={selected}
-            onClick={() => onFeedback(messageId, selected ? null : value)}
+            onClick={() => {
+              onFeedback(messageId, selected ? null : value);
+            }}
             data-testid={`button-feedback-${value}`}
           >
             <Icon className={cn("h-3.5 w-3.5", selected && "fill-current")} aria-hidden="true" />

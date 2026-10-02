@@ -219,6 +219,49 @@ async function* streamToolRound(
   return turn;
 }
 
+/** What every round of one reply with tools shares. */
+interface ToolRoundsContext {
+  readonly request: ReturnType<typeof buildCoachRequest>;
+  readonly toolset: CoachToolset;
+  readonly userId: string | undefined;
+  readonly signal: AbortSignal | undefined;
+  /** One validator for the whole reply: the athlete reads the rounds as one text. */
+  readonly validateChunk: (text: string) => void;
+}
+
+/**
+ * Round `round` of a reply with tools, then the next while the model keeps
+ * calling read tools. Recursive rather than a loop: each round needs the one
+ * before it answered, so they can only run one after another.
+ */
+async function* streamToolRounds(
+  context: ToolRoundsContext,
+  messages: TextAiConversationMessage[],
+  round: number,
+): AsyncGenerator<CoachStreamEvent> {
+  const { request, toolset, userId, signal, validateChunk } = context;
+  const turn = yield* streamToolRound(
+    {
+      ...request,
+      messages,
+      tools: toolset.tools,
+      toolChoice: round < MAX_TOOL_ROUNDS ? "auto" : "none",
+      label: "chat-stream",
+      feature: "chat_stream",
+      userId,
+      signal,
+    },
+    validateChunk,
+  );
+  if (!turn || turn.calls.length === 0 || round === MAX_TOOL_ROUNDS) return;
+  const handoff = turn.calls.find((call) => call.name === toolset.handoff);
+  if (handoff) {
+    yield { type: "handoff", call: handoff };
+    return;
+  }
+  yield* streamToolRounds(context, [...messages, ...(await toolRoundMessages(turn, toolset))], round + 1);
+}
+
 /**
  * Stream a reply with tools (AI coach chat review, I8). Each round streams
  * the model's text; when it calls read tools, their results go back and the
@@ -236,31 +279,8 @@ export async function* streamChatWithCoachTools(
 ): AsyncGenerator<CoachStreamEvent> {
   try {
     const request = buildCoachRequest({ userMessage, conversationHistory, trainingContext, coachingMaterials, retrievedChunks, options });
-    let messages: TextAiConversationMessage[] = request.messages;
-    // One validator for the whole reply: the athlete reads the rounds as one text.
-    const validateChunk = createStreamingOutputValidator();
-    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const turn = yield* streamToolRound(
-        {
-          ...request,
-          messages,
-          tools: toolset.tools,
-          toolChoice: round < MAX_TOOL_ROUNDS ? "auto" : "none",
-          label: "chat-stream",
-          feature: "chat_stream",
-          userId,
-          signal,
-        },
-        validateChunk,
-      );
-      if (!turn || turn.calls.length === 0 || round === MAX_TOOL_ROUNDS) return;
-      const handoff = turn.calls.find((call) => call.name === toolset.handoff);
-      if (handoff) {
-        yield { type: "handoff", call: handoff };
-        return;
-      }
-      messages = [...messages, ...(await toolRoundMessages(turn, toolset))];
-    }
+    const context = { request, toolset, userId, signal, validateChunk: createStreamingOutputValidator() };
+    yield* streamToolRounds(context, request.messages, 0);
   } catch (error) {
     const classified = classifyAiError(error);
     logger.error("AI provider streaming request with tools failed");

@@ -1,7 +1,7 @@
 import { ATHLETE_FACT_MAX_LENGTH } from "@shared/athleteFacts";
 import type { AthleteFact, UpdateAthleteFact } from "@shared/schema";
 import { Archive, Pencil } from "lucide-react";
-import { type SyntheticEvent, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUpdateAthleteFact } from "@/hooks/useAthleteFacts";
 
-import { ATHLETE_FACT_CATEGORY_LABELS } from "./athleteCardModel";
+import { athleteFactCategoryLabel } from "./athleteCardModel";
 import { CategorySelect } from "./CategorySelect";
 
 interface AthleteFactEditorProps {
@@ -23,6 +23,12 @@ function AthleteFactEditor({ fact, onDone }: AthleteFactEditorProps) {
   const update = useUpdateAthleteFact();
   const trimmed = text.trim();
   const inputId = `edit-athlete-fact-${fact.id}`;
+  // Focus the wording when the form opens, as an inline edit should; done
+  // here rather than with autoFocus, which also fires on every remount.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const save = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -46,9 +52,11 @@ function AthleteFactEditor({ fact, onDone }: AthleteFactEditorProps) {
         <Input
           id={inputId}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          ref={inputRef}
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
           maxLength={ATHLETE_FACT_MAX_LENGTH}
-          autoFocus
         />
         <div className="flex flex-wrap items-center gap-2">
           <CategorySelect id={`${inputId}-category`} value={category} onValueChange={setCategory} />
@@ -74,19 +82,37 @@ interface AthleteFactRowProps {
 export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
   const [editing, setEditing] = useState(false);
   const update = useUpdateAthleteFact();
-  const retire = () => update.mutate({ id: fact.id, changes: { active: false } });
+  const retire = () => {
+    update.mutate({ id: fact.id, changes: { active: false } });
+  };
 
-  if (editing) return <AthleteFactEditor fact={fact} onDone={() => setEditing(false)} />;
+  if (editing) {
+    return (
+      <AthleteFactEditor
+        fact={fact}
+        onDone={() => {
+          setEditing(false);
+        }}
+      />
+    );
+  }
 
   return (
     <li className="space-y-2 rounded-md border p-3" data-testid={`athlete-fact-${fact.id}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <p className="break-words text-sm">{fact.fact}</p>
-          <Badge variant="secondary">{ATHLETE_FACT_CATEGORY_LABELS[fact.category]}</Badge>
+          <Badge variant="secondary">{athleteFactCategoryLabel(fact.category)}</Badge>
         </div>
         <div className="flex shrink-0 gap-1">
-          <Button variant="ghost" size="icon" aria-label={`Edit "${fact.fact}"`} onClick={() => setEditing(true)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Edit "${fact.fact}"`}
+            onClick={() => {
+              setEditing(true);
+            }}
+          >
             <Pencil className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button
@@ -108,7 +134,9 @@ export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => update.mutate({ id: fact.id, changes: { confirm: true } })}
+              onClick={() => {
+                update.mutate({ id: fact.id, changes: { confirm: true } });
+              }}
               disabled={update.isPending}
             >
               Yes, still true

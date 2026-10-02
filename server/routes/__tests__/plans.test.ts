@@ -500,8 +500,8 @@ describe("POST /api/v1/plans/generate", () => {
     // field must change nothing.
     vi.mocked(moveStatementsToCard).mockResolvedValue({ added: 0, skipped: 0 });
     await request(app).post("/api/v1/plans/generate").send({ ...generatePlanPayload, injuries: "   " });
-    const { injuries: _omitted, ...withoutInjuries } = { ...generatePlanPayload, injuries: "x" };
-    await request(app).post("/api/v1/plans/generate").send(withoutInjuries);
+    // generatePlanPayload carries no injuries field at all.
+    await request(app).post("/api/v1/plans/generate").send(generatePlanPayload);
 
     expect(vi.mocked(moveStatementsToCard).mock.calls).toEqual([["test_user_id", "   ", "plan_generation"]]);
   });

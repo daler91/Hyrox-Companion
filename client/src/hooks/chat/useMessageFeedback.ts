@@ -42,8 +42,9 @@ export function useMessageFeedback(setMessages: SetMessages, messagesRef: RefObj
   return useCallback(
     (id: string, feedback: ChatFeedback | null) => {
       const previous = messagesRef.current.find((message) => message.id === id)?.feedback ?? null;
-      const show = (value: ChatFeedback | null) =>
+      const show = (value: ChatFeedback | null) => {
         setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, feedback: value } : message)));
+      };
       show(feedback);
       saveFeedback(id, feedback).catch((error: unknown) => {
         show(previous);

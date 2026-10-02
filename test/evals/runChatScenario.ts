@@ -16,7 +16,8 @@ function callOptions(scenario: ChatScenario): ChatCallOptions {
 
 /** A read tool's result in this scenario: its canned answer, or nothing found. */
 function cannedResult(scenario: ChatScenario, name: string): string {
-  return JSON.stringify(scenario.toolResults?.[name] ?? { note: "Nothing found for that lookup." });
+  const canned = new Map(Object.entries(scenario.toolResults ?? {}));
+  return JSON.stringify(canned.get(name) ?? { note: "Nothing found for that lookup." });
 }
 
 function proposalRequestOf(args: Record<string, unknown>): string {

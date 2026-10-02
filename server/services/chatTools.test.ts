@@ -78,12 +78,13 @@ describe("get_workouts", () => {
     const result = await run("get_workouts", { from: "2026-07-01", to: "2026-07-31" });
 
     expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("user-1", "2026-07-01", "2026-07-31");
-    expect(result.workouts).toEqual([
-      { date: "2026-07-21", focus: "Easy run", durationMin: 30, rpe: 3, exercises: "5k easy" },
-      expect.objectContaining({ date: "2026-07-14", exercises: expect.stringContaining("5 reps, 100 kg") }),
-    ]);
+    const workouts = result.workouts as Array<{ date: string; exercises: string; note?: string }>;
+    expect(workouts).toHaveLength(2);
+    expect(workouts.at(0)).toEqual({ date: "2026-07-21", focus: "Easy run", durationMin: 30, rpe: 3, exercises: "5k easy" });
+    expect(workouts.at(1)?.date).toBe("2026-07-14");
+    expect(workouts.at(1)?.exercises).toContain("5 reps, 100 kg");
     // The athlete's own text is sanitised like any other text that reaches a prompt.
-    expect((result.workouts as Array<{ note?: string }>)[1].note).toBe("Felt &lt;strong&gt;");
+    expect(workouts.at(1)?.note).toBe("Felt &lt;strong&gt;");
     // A range in the past has nothing planned in it.
     expect(storage.timeline.getUpcomingPlannedDays).not.toHaveBeenCalled();
   });

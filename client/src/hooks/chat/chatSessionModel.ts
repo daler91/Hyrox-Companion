@@ -29,6 +29,9 @@ export function isChatSafetyNotice(value: unknown): value is ChatSafetyNotice {
   return (level === "urgent" || level === "caution") && typeof message === "string" && message !== "";
 }
 
+const FACT_CATEGORIES: ReadonlySet<string> = new Set<string>(athleteFactCategoryEnum);
+const FACT_PROPOSAL_STATUSES: ReadonlySet<string> = new Set<string>(chatFactProposalStatusEnum);
+
 /** A fact the coach offered for the athlete card, well-formed enough to show. */
 export function isChatFactProposal(value: unknown): value is ChatFactProposal {
   if (typeof value !== "object" || value === null) return false;
@@ -36,8 +39,10 @@ export function isChatFactProposal(value: unknown): value is ChatFactProposal {
   return (
     typeof fact === "string" &&
     fact !== "" &&
-    athleteFactCategoryEnum.some((value) => value === category) &&
-    chatFactProposalStatusEnum.some((value) => value === status)
+    typeof category === "string" &&
+    FACT_CATEGORIES.has(category) &&
+    typeof status === "string" &&
+    FACT_PROPOSAL_STATUSES.has(status)
   );
 }
 

@@ -42,7 +42,14 @@ function AthleteCardBody() {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         Couldn&apos;t load your athlete card.
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            // A refetch reports through the query's own state, never by rejecting.
+            refetch().catch(() => null);
+          }}
+        >
           Try again
         </Button>
       </div>

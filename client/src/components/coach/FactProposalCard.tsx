@@ -2,7 +2,7 @@ import type { ChatFactProposal } from "@shared/schema";
 import { Check, ClipboardList } from "lucide-react";
 import { memo } from "react";
 
-import { ATHLETE_FACT_CATEGORY_LABELS } from "@/components/settings/athlete-card/athleteCardModel";
+import { athleteFactCategoryLabel } from "@/components/settings/athlete-card/athleteCardModel";
 import { Button } from "@/components/ui/button";
 import type { FactProposalDecision } from "@/hooks/chat/useFactProposalDecision";
 
@@ -42,17 +42,28 @@ export const FactProposalCard = memo(function FactProposalCard({ messageId, prop
       <p className="text-sm">
         &ldquo;{proposal.fact}&rdquo;
         <span className="ml-1.5 text-xs text-muted-foreground">
-          ({ATHLETE_FACT_CATEGORY_LABELS[proposal.category]})
+          ({athleteFactCategoryLabel(proposal.category)})
         </span>
       </p>
       <p className="text-xs text-muted-foreground">
         Your coach plans around what&apos;s on your card in every week. Change it any time in Settings.
       </p>
       <div className="flex gap-2">
-        <Button size="sm" onClick={() => onDecide(messageId, "save")}>
+        <Button
+          size="sm"
+          onClick={() => {
+            onDecide(messageId, "save");
+          }}
+        >
           Save to card
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => onDecide(messageId, "dismiss")}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            onDecide(messageId, "dismiss");
+          }}
+        >
           Not now
         </Button>
       </div>

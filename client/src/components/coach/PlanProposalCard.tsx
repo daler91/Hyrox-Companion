@@ -148,7 +148,9 @@ function ChangeRow({ change, selection, notApplied = false }: ChangeRowProps) {
             <Switch
               id={switchId}
               checked={selection.included}
-              onCheckedChange={() => selection.onToggle(change.planDayId)}
+              onCheckedChange={() => {
+              selection.onToggle(change.planDayId);
+            }}
               disabled={selection.disabled}
               aria-label={`Include ${change.dayLabel}`}
               data-testid={`switch-include-change-${change.planDayId}`}
@@ -313,7 +315,9 @@ function ProposalActions({ proposal, isApplying, selectedIds, onApply, onDismiss
       <Button
         size="sm"
         className="min-h-11 md:min-h-8"
-        onClick={() => onApply(proposal, selectedIds)}
+        onClick={() => {
+              onApply(proposal, selectedIds);
+            }}
         disabled={isApplying || selected === 0}
         aria-busy={isApplying}
         data-testid="button-apply-plan-proposal"
@@ -356,7 +360,9 @@ function UndoAction({ proposal, isUndoing, onUndo }: UndoActionProps) {
         size="sm"
         variant="outline"
         className="min-h-11 md:min-h-8"
-        onClick={() => onUndo(proposal)}
+        onClick={() => {
+              onUndo(proposal);
+            }}
         disabled={isUndoing}
         aria-busy={isUndoing}
         data-testid="button-undo-plan-proposal"

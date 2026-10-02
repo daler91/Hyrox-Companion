@@ -23,6 +23,7 @@ import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import type { UpcomingPlannedDay } from "../storage/timeline";
+import { inSequence } from "../utils/inSequence";
 import type { AIContext } from "./aiContextService";
 import { extractCoachingMaterialsText } from "./aiContextService";
 import {
@@ -745,8 +746,7 @@ async function writeProposalChanges(
     userId,
   }: WriteProposalChangesOptions,
 ): Promise<PlanProposalDayUndo[]> {
-  const undoDays: PlanProposalDayUndo[] = [];
-  for (const change of changes) {
+  return await inSequence(changes, async (change) => {
     const live = liveDays.get(change.planDayId);
     if (!live) throw new Error(`missing live day for ${change.planDayId}`);
 
@@ -755,9 +755,8 @@ async function writeProposalChanges(
     if (!updated) throw new Error(`plan day ${change.planDayId} disappeared during apply`);
 
     const sets = await writeChangeSets(tx, change, live, structuredRowsByDayId.get(change.planDayId));
-    undoDays.push(captureDayUndo(live.day, updated, updates, sets));
-  }
-  return undoDays;
+    return captureDayUndo(live.day, updated, updates, sets);
+  });
 }
 
 /**
@@ -886,15 +885,33 @@ class ProposalNoLongerAppliedError extends Error {
   }
 }
 
-const UNDO_FAILURE_MESSAGES: Record<UndoPlanProposalFailureReason, string> = {
-  not_applied: "Those changes aren't applied, so there is nothing to undo.",
-  not_undoable: "Those changes were applied before undo was available, so I can't take them back automatically.",
-  expired: "Those changes were applied more than a week ago, so they can no longer be undone from here.",
-  changed_since: "You've changed those days since, so there was nothing left to undo.",
-};
+function undoFailureMessage(reason: UndoPlanProposalFailureReason): string {
+  switch (reason) {
+    case "not_applied":
+      return "Those changes aren't applied, so there is nothing to undo.";
+    case "not_undoable":
+      return "Those changes were applied before undo was available, so I can't take them back automatically.";
+    case "expired":
+      return "Those changes were applied more than a week ago, so they can no longer be undone from here.";
+    case "changed_since":
+      return "You've changed those days since, so there was nothing left to undo.";
+  }
+}
 
 function undoFailure(reason: UndoPlanProposalFailureReason): UndoPlanProposalResult {
-  return { undone: false, reason, message: UNDO_FAILURE_MESSAGES[reason] };
+  return { undone: false, reason, message: undoFailureMessage(reason) };
+}
+
+/** One day of an undo: its fields back, then its exercise table. */
+async function restoreDay(tx: Tx, restore: DayRestore, userId: string): Promise<void> {
+  if (restore.update) {
+    const updated = await storage.plans.updatePlanDay(restore.planDayId, restore.update, userId, tx);
+    if (!updated) throw new Error(`plan day ${restore.planDayId} disappeared during undo`);
+  }
+  if (restore.sets) {
+    await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, restore.planDayId));
+    if (restore.sets.length > 0) await tx.insert(exerciseSets).values(restore.sets);
+  }
 }
 
 /** Put the restorable days back, then mark the proposal reverted, in one transaction. */
@@ -904,16 +921,7 @@ async function writeDayRestores(
   userId: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const restore of restores) {
-      if (restore.update) {
-        const updated = await storage.plans.updatePlanDay(restore.planDayId, restore.update, userId, tx);
-        if (!updated) throw new Error(`plan day ${restore.planDayId} disappeared during undo`);
-      }
-      if (restore.sets) {
-        await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, restore.planDayId));
-        if (restore.sets.length > 0) await tx.insert(exerciseSets).values(restore.sets);
-      }
-    }
+    await inSequence(restores, (restore) => restoreDay(tx, restore, userId));
     const reverted = await storage.planProposals.markReverted(proposalId, userId, tx);
     if (!reverted) throw new ProposalNoLongerAppliedError();
   });

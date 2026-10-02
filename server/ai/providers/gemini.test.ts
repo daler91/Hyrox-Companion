@@ -37,14 +37,14 @@ describe("gemini text provider tools", () => {
 
     expect(chunks).toEqual([]);
 
-    expect(stream).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({
-          tools: [{ functionDeclarations: [{ name: "get_workouts", description: "Logged sessions", parametersJsonSchema: { type: "object", properties: {} } }] }],
-          toolConfig: { functionCallingConfig: { mode: "NONE" } },
-        }),
-      }),
-    );
+    // The stub takes no parameters, but the provider passes it the request.
+    const calls = stream.mock.calls as unknown[][];
+    expect(calls.at(0)?.at(0)).toMatchObject({
+      config: {
+        tools: [{ functionDeclarations: [{ name: "get_workouts", description: "Logged sessions", parametersJsonSchema: { type: "object", properties: {} } }] }],
+        toolConfig: { functionCallingConfig: { mode: "NONE" } },
+      },
+    });
   });
 
   it("streams the text, then the calls with the turn's parts to send back", async () => {

@@ -46,9 +46,9 @@ function renderCard(legacyNote?: string | null) {
 }
 
 function expectRequest(method: string, url: string, body?: unknown) {
-  return waitFor(() =>
-    expect(apiRequest).toHaveBeenCalledWith(method, url, body, expect.anything()),
-  );
+  return waitFor(() => {
+    expect(apiRequest).toHaveBeenCalledWith(method, url, body, expect.anything());
+  });
 }
 
 describe("AthleteCardSection", () => {

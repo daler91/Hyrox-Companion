@@ -625,7 +625,7 @@ describe("answering a fact the coach offered (I5b)", () => {
     const response = await request(app).post(DECIDE).send({ decision: "save" });
 
     expect(response.status).toBe(409);
-    expect(response.body.code).toBe("ATHLETE_FACT_LIMIT");
+    expect(response.body).toMatchObject({ code: "ATHLETE_FACT_LIMIT" });
     expect(storage.users.settleChatFactProposal).not.toHaveBeenCalled();
   });
 
