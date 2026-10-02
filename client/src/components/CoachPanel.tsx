@@ -8,6 +8,7 @@ import { CoachPanelHeader } from "@/components/coach/CoachPanelHeader";
 import { CoachPanelStats } from "@/components/coach/CoachPanelStats";
 import { useSuggestions } from "@/components/coach/SuggestionsTab";
 import type { QuickAction } from "@/components/QuickActions";
+import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message, useChatSession } from "@/hooks/useChatSession";
@@ -187,7 +188,8 @@ export function CoachPanel({
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();
     } else {
-      sendMessage(action.message ?? action.label).catch(() => {});
+      // sendMessage reports its own failures on the reply it adds.
+      sendMessage(action.message ?? action.label).catch(ignoreResult);
     }
   };
 

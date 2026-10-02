@@ -13,6 +13,32 @@ import {
 import { Button } from "@/components/ui/button";
 import { useDiscardAthleteNote, useImportAthleteNote } from "@/hooks/useAthleteFacts";
 
+interface RemoveNoteDialogProps {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onConfirm: () => void;
+}
+
+/** The confirm step before the older note is deleted for good. */
+function RemoveNoteDialog({ open, onOpenChange, onConfirm }: RemoveNoteDialogProps) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove your older note?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your coach stops reading it, and nothing from it is added to your card.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep it</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Remove note</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 interface LegacyNoteBannerProps {
   /** The older free-text injuries note, trimmed and non-empty. */
   readonly note: string;
@@ -64,26 +90,13 @@ export function LegacyNoteBanner({ note }: LegacyNoteBannerProps) {
           Remove note
         </Button>
       </div>
-      <AlertDialog open={confirmingRemove} onOpenChange={setConfirmingRemove}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove your older note?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Your coach stops reading it, and nothing from it is added to your card.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                discard.mutate();
-              }}
-            >
-              Remove note
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <RemoveNoteDialog
+        open={confirmingRemove}
+        onOpenChange={setConfirmingRemove}
+        onConfirm={() => {
+          discard.mutate();
+        }}
+      />
     </section>
   );
 }

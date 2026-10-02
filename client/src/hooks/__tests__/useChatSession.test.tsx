@@ -233,7 +233,7 @@ describe('useChatSession', () => {
   });
 
   it('lets the athlete rate a reply once it has arrived in full, but not one that failed', async () => {
-    mockStreamEndpoint(async () => new Response(sseStream({ text: 'Run easy.' }, { done: true })));
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Run easy.' }, { done: true }))));
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 
     await act(async () => {

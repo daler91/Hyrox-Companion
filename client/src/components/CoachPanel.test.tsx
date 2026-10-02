@@ -76,17 +76,18 @@ function renderPanel(isNewUser = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      <CoachPanel isOpen={true} onClose={vi.fn()} timeline={[]} isNewUser={isNewUser} />
+      <CoachPanel isOpen onClose={vi.fn()} timeline={[]} isNewUser={isNewUser} />
     </QueryClientProvider>,
   );
 }
 
 describe("CoachPanel", () => {
   beforeEach(() => {
-    chatSession.sendMessage.mockReset().mockResolvedValue(undefined);
+    chatSession.sendMessage.mockReset().mockImplementation(() => Promise.resolve());
     chatSession.welcomes.length = 0;
     // Pending unless a test resolves it: the panel shows its own chips meanwhile.
-    vi.mocked(api.chat.getWelcome).mockReturnValue(new Promise(() => {}));
+    // vi.fn() as the executor: a promise that never settles.
+    vi.mocked(api.chat.getWelcome).mockReturnValue(new Promise(vi.fn()));
   });
 
   it("opens with the welcome built from the athlete's training, and its chips send their message", async () => {

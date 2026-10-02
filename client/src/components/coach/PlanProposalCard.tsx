@@ -418,8 +418,10 @@ export function PlanProposalCard({
     excluded.size > 0
       ? proposal.changes.map((change) => change.planDayId).filter((id) => !excluded.has(id))
       : undefined;
-  const appliedIds =
-    proposal.status === "applied" && proposal.appliedPlanDayIds ? new Set(proposal.appliedPlanDayIds) : undefined;
+  // An undone proposal still names what its apply changed, so its folded
+  // changes mark the ones the athlete left out, as an applied one's do.
+  const decided = proposal.status === "applied" || proposal.status === "reverted";
+  const appliedIds = decided && proposal.appliedPlanDayIds ? new Set(proposal.appliedPlanDayIds) : undefined;
 
   return (
     <Card

@@ -129,7 +129,7 @@ export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
       {due ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted p-2 text-sm">
           <span className="font-medium">Still true?</span>
-          <span className="text-muted-foreground">You haven't confirmed this in a while.</span>
+          <span className="text-muted-foreground">You haven&apos;t confirmed this in a while.</span>
           <div className="flex gap-2">
             <Button
               size="sm"

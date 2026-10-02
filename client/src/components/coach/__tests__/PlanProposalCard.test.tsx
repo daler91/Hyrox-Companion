@@ -122,6 +122,17 @@ describe("PlanProposalCard", () => {
       expect(screen.getByTestId("proposal-change-day-1")).toHaveTextContent("Not applied");
       expect(screen.getByTestId("proposal-change-day-2")).not.toHaveTextContent("Not applied");
     });
+
+    it("still says which changes were left out once an apply is undone", () => {
+      render(
+        <PlanProposalCard proposal={twoChanges("reverted", { appliedPlanDayIds: ["day-2"] })} isApplying={false} />,
+      );
+
+      expect(screen.getByText("Undone — plan restored")).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId("button-toggle-proposal-changes"));
+      expect(screen.getByTestId("proposal-change-day-1")).toHaveTextContent("Not applied");
+      expect(screen.getByTestId("proposal-change-day-2")).not.toHaveTextContent("Not applied");
+    });
   });
 
   it("offers Undo on an applied proposal that can still be undone", () => {
