@@ -54,8 +54,8 @@ importers:
         specifier: ^3.2.2
         version: 3.2.2(react@19.3.0)
       '@flow-js/garmin-connect':
-        specifier: ^1.6.18
-        version: 1.6.18
+        specifier: ^1.6.22
+        version: 1.6.22
       '@fontsource/geist-mono':
         specifier: ^5.3.0
         version: 5.3.0
@@ -1301,8 +1301,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@flow-js/garmin-connect@1.6.18':
-    resolution: {integrity: sha512-V9N0eA4C5BnVFEqOM+/LB5bLV7N78yInGj4g4skVD/Qsg+viKSPO5ENe7kNUTy1mtpnt765dkgqFW8BEInFb3g==}
+  '@flow-js/garmin-connect@1.6.22':
+    resolution: {integrity: sha512-ah881ZZu8GQ5r7XfjcuwbQJubHBmgEpF3lEF1Rzk08SucO0m3FOzU48YuaRXJRmDmQne5S6BPbU+sTjchlQRNw==}
 
   '@fontsource/geist-mono@5.3.0':
     resolution: {integrity: sha512-UtJ1BBBCVpMYdIcW7nEB45UAoAw5M53ZXs2t0ciPW+IokuAAIc56M8+kW5tXbRJCTpDw4XTtU7proT6NdQAHTg==}
@@ -4164,8 +4164,8 @@ packages:
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
 
-  follow-redirects@1.16.0:
-    resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
+  follow-redirects@1.16.1:
+    resolution: {integrity: sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -7772,7 +7772,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@flow-js/garmin-connect@1.6.18':
+  '@flow-js/garmin-connect@1.6.22':
     dependencies:
       app-root-path: 3.1.0
       axios: 1.20.0
@@ -9633,7 +9633,7 @@ snapshots:
 
   axios@1.20.0:
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.1
       form-data: 4.0.6
       https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
@@ -10597,7 +10597,7 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.1: {}
 
   for-each@0.3.5:
     dependencies:
