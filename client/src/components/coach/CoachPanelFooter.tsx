@@ -1,10 +1,11 @@
-import { ChatInput } from "@/components/ChatInput";
+import { ChatInput, type ChatInputExtras } from "@/components/ChatInput";
 import { type QuickAction,QuickActions } from "@/components/QuickActions";
 
 interface CoachPanelFooterProps {
   readonly quickActions: QuickAction[];
   readonly onQuickAction: (action: QuickAction) => void;
-  readonly onSendMessage: (message: string) => void;
+  /** The message, and the photo it carries when the athlete attached one (I20). */
+  readonly onSendMessage: (message: string, extras?: ChatInputExtras) => void;
   readonly onStopMessage?: () => void;
   readonly isProcessing: boolean;
 }

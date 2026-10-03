@@ -82,6 +82,16 @@ export interface ChatFactProposal {
   status: ChatFactProposalStatus;
 }
 
+/**
+ * What came with an athlete's chat message (AI coach chat review, I20): a
+ * photo, kept as the app's reading of it for the coach — never the image.
+ */
+export interface ChatAttachment {
+  kind: "photo";
+  /** What the photo showed, as the image reader wrote it down. */
+  reading: string;
+}
+
 export interface WorkoutSuggestion {
   workoutId: string;
   workoutDate: string;

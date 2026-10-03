@@ -14,6 +14,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
 import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
 import { captureMove } from "./missedRecovery/undo";
+import { recordPlanDayMove } from "./planDayMoves";
 
 // Moving a plan day changes the shape of the athlete's upcoming schedule, so
 // re-run the auto-coach and let its suggestions/review notes reflect the new
@@ -301,16 +302,48 @@ async function writeReschedule(
   existing: PlanDay | null | undefined,
   moveFields: MissedSessionMoveFields,
 ) {
-  if (!existing || moveFields.status === undefined) return storage.plans.updatePlanDay(dayId, updates, userId);
-  return db.transaction(async (tx) => {
-    const [current] = await tx
-      .select({ status: planDays.status, scheduledDate: planDays.scheduledDate })
-      .from(planDays)
-      .where(eq(planDays.id, dayId))
-      .for("update");
-    const unchanged = current?.status === existing.status && current?.scheduledDate === existing.scheduledDate;
-    return storage.plans.updatePlanDay(dayId, unchanged ? { ...updates, ...moveFields } : updates, userId, tx);
-  });
+  const updated =
+    !existing || moveFields.status === undefined
+      ? await storage.plans.updatePlanDay(dayId, updates, userId)
+      : await db.transaction(async (tx) => {
+          const [current] = await tx
+            .select({ status: planDays.status, scheduledDate: planDays.scheduledDate })
+            .from(planDays)
+            .where(eq(planDays.id, dayId))
+            .for("update");
+          const unchanged = current?.status === existing.status && current?.scheduledDate === existing.scheduledDate;
+          return storage.plans.updatePlanDay(dayId, unchanged ? { ...updates, ...moveFields } : updates, userId, tx);
+        });
+  // The athlete's own move, for the coach's record of plan changes; a missed
+  // session the move folded is listed as rescheduled after the miss.
+  if (existing && updated) {
+    const folded = moveFields.recovery === "folded" && updated.recovery === "folded";
+    await recordPlanDayMove(userId, {
+      planDayId: dayId,
+      fromDate: existing.scheduledDate,
+      toDate: updated.scheduledDate,
+      kind: folded ? "folded" : "moved",
+    });
+  }
+  return updated;
+}
+
+/**
+ * The plan-scoped day update (`PATCH /api/v1/plans/:planId/days/:dayId`): the
+ * stored write as it is, with a new date recorded as the athlete's move.
+ */
+export async function updatePlanDayRecordingMove(dayId: string, updates: UpdatePlanDay, userId: string) {
+  const existing = updates.scheduledDate === undefined ? undefined : await storage.plans.getPlanDay(dayId, userId);
+  const updated = await storage.plans.updatePlanDay(dayId, updates, userId);
+  if (existing && updated) {
+    await recordPlanDayMove(userId, {
+      planDayId: dayId,
+      fromDate: existing.scheduledDate,
+      toDate: updated.scheduledDate,
+      kind: "moved",
+    });
+  }
+  return updated;
 }
 
 export async function updatePlanDayWithCleanup(
@@ -516,7 +549,7 @@ export async function updatePlanDayStatus(
   // Transition path: do the read, transition check, optional log cleanup,
   // and write inside a single transaction so a concurrent cron or workout
   // mutation can't race the check and sneak through a forbidden from-state.
-  const { updatedDay, dateChanged } = await db.transaction(async (tx) => {
+  const { updatedDay, dateChanged, previousDate } = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         planId: planDays.planId,
@@ -582,8 +615,17 @@ export async function updatePlanDayStatus(
     const dateChanged =
       scheduledDate !== undefined && (scheduledDate ?? null) !== (current.scheduledDate ?? null);
 
-    return { updatedDay: row, dateChanged };
+    return { updatedDay: row, dateChanged, previousDate: current.scheduledDate };
   });
+
+  if (updatedDay && dateChanged) {
+    await recordPlanDayMove(userId, {
+      planDayId: dayId,
+      fromDate: previousDate,
+      toDate: updatedDay.scheduledDate,
+      kind: "moved",
+    });
+  }
 
   if (updatedDay && (status === "completed" || dateChanged)) {
     enqueueAutoCoachInBackground(

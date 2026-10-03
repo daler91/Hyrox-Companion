@@ -34,6 +34,7 @@ function savedRow(overrides: Partial<ChatHistoryMessage>): ChatHistoryMessage {
     feedback: null,
     feedbackAt: null,
     factProposal: null,
+    attachment: null,
     ...overrides,
   };
 }
@@ -100,6 +101,16 @@ describe("messageFromHistory — a fact offered for the athlete card (I5b)", () 
 
     expect(messageFromHistory(savedRow({ factProposal })).factProposal).toEqual(factProposal);
     expect(messageFromHistory(savedRow({}))).not.toHaveProperty("factProposal");
+  });
+});
+
+describe("messageFromHistory — an athlete's photo (I20)", () => {
+  it("keeps what the coach read in an athlete's photo, and nothing malformed", () => {
+    const attachment = { kind: "photo" as const, reading: "Watch summary: 10 km in 45:12." };
+
+    expect(messageFromHistory(savedRow({ role: "user", attachment })).attachment).toEqual(attachment);
+    expect(messageFromHistory(savedRow({ role: "user", attachment: { kind: "photo" } as never }))).not.toHaveProperty("attachment");
+    expect(messageFromHistory(savedRow({ role: "assistant", attachment }))).not.toHaveProperty("attachment");
   });
 });
 
@@ -181,5 +192,27 @@ describe("handleSendFailure", () => {
     expect(messages[1].content).toBe("Cut volume");
     expect(messages[1].failure?.retry).toEqual({ content: "Taper advice?", userMessageId: "u1" });
     expect(setStreamError).toHaveBeenCalledWith(messages[1].failure?.message);
+  });
+
+  it("keeps the photo for the retry, so it goes again with the message (I20)", () => {
+    const user = message({ id: "u1", content: "How was my pacing?", attachment: { kind: "photo" } });
+    const buffer = messageBuffer([user]);
+    const photo = { mimeType: "image/jpeg" as const, imageBase64: "/9j/4AAQ" };
+
+    handleSendFailure({
+      err: new Error('502: {"error":"Couldn\'t read that photo.","code":"CHAT_PHOTO_UNREADABLE"}'),
+      fullResponse: "",
+      assistantMessageId: "a1",
+      userMessage: user,
+      photo,
+      setMessages: buffer.setMessages,
+      setStreamError: vi.fn(),
+    });
+
+    const failed = buffer.current()[1];
+    expect(failed.failure).toEqual({
+      message: "Couldn't read that photo. Try again, or say what it shows.",
+      retry: { content: "How was my pacing?", userMessageId: "u1", photo },
+    });
   });
 });

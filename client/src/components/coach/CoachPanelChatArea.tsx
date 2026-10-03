@@ -120,6 +120,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                   streaming={message.id === streamingMessageId}
                   feedback={message.feedback}
                   onFeedback={message.rateable ? onRateMessage : undefined}
+                  attachment={message.attachment}
                 />
                 {message.factProposal && !message.failure && onDecideFactProposal && (
                   <FactProposalCard

@@ -1,4 +1,5 @@
 import type { ChatStatusStep } from "@shared/chat";
+import type { ChatPhoto } from "@shared/schema";
 
 import { api, type ChatFocus, type ChatTurnIds, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
@@ -23,6 +24,8 @@ export interface ChatReplyRequest {
   /** The workout in view in the workout-detail chat. */
   focus?: ChatFocus;
   ids: ChatTurnIds;
+  /** One photo with the message (I20). */
+  photo?: ChatPhoto;
 }
 
 export interface StreamChatReplyOptions extends ChatReplyRequest {
@@ -79,8 +82,8 @@ function handleStreamPlanProposal(extras: Record<string, unknown>): void {
  * a dropped connection, a server error event, or a Stop.
  */
 export async function streamChatReply(options: StreamChatReplyOptions): Promise<string> {
-  const { content, focus, ids, signal, setMessages } = options;
-  const response = await api.chat.sendStream({ message: content, ...focus, ...ids }, { signal });
+  const { content, focus, ids, photo, signal, setMessages } = options;
+  const response = await api.chat.sendStream({ message: content, ...focus, ...ids, ...(photo ? { photo } : {}) }, { signal });
   options.onAccepted(response);
 
   const reader = response.body?.getReader();
@@ -108,8 +111,8 @@ export async function streamChatReply(options: StreamChatReplyOptions): Promise<
 }
 
 /** The non-streaming fallback (S9): one request, the whole reply as a message. */
-export async function fetchChatReply({ content, focus, ids }: ChatReplyRequest): Promise<Message> {
-  const data = await api.chat.send({ message: content, ...focus, ...ids });
+export async function fetchChatReply({ content, focus, ids, photo }: ChatReplyRequest): Promise<Message> {
+  const data = await api.chat.send({ message: content, ...focus, ...ids, ...(photo ? { photo } : {}) });
   return {
     ...createLocalMessage("assistant", data.response, ids.assistantMessageId),
     ragInfo: data.ragInfo,

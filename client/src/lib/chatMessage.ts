@@ -1,4 +1,4 @@
-import type { ChatFactProposal, ChatFeedback, ChatMessageKind, ChatSafetyNotice, RagInfo } from "@shared/schema";
+import type { ChatFactProposal, ChatFeedback, ChatMessageKind, ChatPhoto, ChatSafetyNotice, RagInfo } from "@shared/schema";
 
 import type { PlanProposalView } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
@@ -19,7 +19,19 @@ export interface MessageFailure {
      * many attempts it takes, and the old bubble is replaced rather than duplicated.
      */
     userMessageId: string;
+    /** The photo it carried, sent again with it (I20). Held here only until the retry. */
+    photo?: ChatPhoto;
   };
+}
+
+/**
+ * What came with an athlete's message (I20): a photo. A message sent from this
+ * tab knows only that; one loaded from the history also has what the coach
+ * read in it, since the photo itself is never kept.
+ */
+export interface MessageAttachment {
+  kind: "photo";
+  reading?: string;
 }
 
 /** One bubble in a coach chat surface. */
@@ -36,6 +48,8 @@ export interface Message {
   proposal?: PlanProposalView;
   /** A lasting fact the coach offered to put on the athlete card, and the athlete's answer (I5b). */
   factProposal?: ChatFactProposal;
+  /** The photo an athlete's message carried (I20). */
+  attachment?: MessageAttachment;
   /**
    * What the saved row is. `summary` is the note the coach carried into a new
    * session after a break: shown as a divider, not as something the coach said.

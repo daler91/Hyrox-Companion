@@ -98,6 +98,17 @@ describe("describeChatFailure", () => {
     expect(busy.retryable).toBe(false);
   });
 
+  it("says a photo couldn't be read, and offers a retry", () => {
+    const unreadable = describeChatFailure(
+      new Error('502: {"error":"Couldn\'t read that photo.","code":"CHAT_PHOTO_UNREADABLE"}'),
+    );
+    expect(unreadable).toEqual({
+      aborted: false,
+      message: "Couldn't read that photo. Try again, or say what it shows.",
+      retryable: true,
+    });
+  });
+
   it("uses the generic copy for anything unrecognised", () => {
     expect(describeChatFailure(new Error("No response body")).message).toBe(CHAT_GENERIC_FAILURE);
     expect(describeChatFailure("a thrown string").message).toBe(CHAT_GENERIC_FAILURE);

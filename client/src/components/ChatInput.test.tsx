@@ -1,3 +1,4 @@
+import { CHAT_MESSAGE_MAX_LENGTH, CHAT_PHOTO_DEFAULT_MESSAGE, CHAT_PHOTO_MAX_BASE64_CHARS } from "@shared/chat";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,9 +10,14 @@ const voiceInputMocks = vi.hoisted(() => ({
   stopListening: vi.fn(),
 }));
 
+const { toastMock, compressImageMock } = vi.hoisted(() => ({ toastMock: vi.fn(), compressImageMock: vi.fn() }));
+
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
+
+// The resize itself needs a real canvas; here it hands back a shrunk photo.
+vi.mock("@/lib/image", () => ({ compressImage: compressImageMock }));
 
 vi.mock("@/hooks/useVoiceInput", () => ({
   useVoiceInput: () => ({
@@ -185,7 +191,94 @@ describe("ChatInput", () => {
     render(<ChatInput onSend={vi.fn()} />);
 
     await user.click(screen.getByTestId("input-chat-message"));
-    await user.paste("x".repeat(801));
-    expect(lengthCounter()).toHaveTextContent("801/1000");
+    const nearLimit = CHAT_MESSAGE_MAX_LENGTH * 0.8 + 1;
+    await user.paste("x".repeat(nearLimit));
+    expect(lengthCounter()).toHaveTextContent(`${nearLimit}/${CHAT_MESSAGE_MAX_LENGTH}`);
+    expect(CHAT_MESSAGE_MAX_LENGTH).toBe(4000);
+  });
+});
+
+describe("ChatInput photos (I20)", () => {
+  const PHOTO = {
+    blob: new Blob(["x"]),
+    mimeType: "image/jpeg" as const,
+    base64: "/9j/4AAQ",
+    previewUrl: "blob:photo-1",
+    width: 10,
+    height: 10,
+  };
+  const revokeObjectURL = vi.fn();
+
+  beforeEach(() => {
+    compressImageMock.mockReset().mockResolvedValue(PHOTO);
+    toastMock.mockReset();
+    revokeObjectURL.mockReset();
+    Object.defineProperty(URL, "revokeObjectURL", { value: revokeObjectURL, configurable: true, writable: true });
+  });
+
+  async function attachPhoto(user: ReturnType<typeof userEvent.setup>) {
+    await user.upload(screen.getByTestId("button-chat-photo-input"), new File(["x"], "watch.jpg", { type: "image/jpeg" }));
+  }
+
+  it("shows an attached photo and sends it with the message, then lets it go", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} />);
+
+    await attachPhoto(user);
+    expect(await screen.findByAltText("Attachment to send")).toHaveAttribute("src", "blob:photo-1");
+    await user.type(screen.getByTestId("input-chat-message"), "How was my pacing?{Enter}");
+
+    expect(onSend).toHaveBeenCalledWith("How was my pacing?", {
+      photo: { mimeType: "image/jpeg", imageBase64: "/9j/4AAQ" },
+    });
+    expect(screen.queryByTestId("chat-photo-preview")).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:photo-1");
+  });
+
+  it("sends a photo on its own with a question, so the coach is asked something", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} />);
+
+    await attachPhoto(user);
+    await screen.findByTestId("chat-photo-preview");
+    expect(screen.getByTestId("button-send-message")).toHaveAttribute("aria-disabled", "false");
+    await user.click(screen.getByTestId("button-send-message"));
+
+    expect(onSend).toHaveBeenCalledWith(CHAT_PHOTO_DEFAULT_MESSAGE, {
+      photo: { mimeType: "image/jpeg", imageBase64: "/9j/4AAQ" },
+    });
+  });
+
+  it("drops the photo when the athlete removes it", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} />);
+
+    await attachPhoto(user);
+    await user.click(await screen.findByRole("button", { name: "Remove photo" }));
+    await user.type(screen.getByTestId("input-chat-message"), "Just words{Enter}");
+
+    expect(screen.queryByTestId("chat-photo-preview")).toBeNull();
+    expect(onSend).toHaveBeenCalledWith("Just words");
+  });
+
+  it("refuses a photo too large to send", async () => {
+    compressImageMock.mockResolvedValueOnce({ ...PHOTO, base64: "x".repeat(CHAT_PHOTO_MAX_BASE64_CHARS + 1) });
+    const user = userEvent.setup();
+    render(<ChatInput onSend={vi.fn()} />);
+
+    await attachPhoto(user);
+
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Photo too large" }));
+    expect(screen.queryByTestId("chat-photo-preview")).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:photo-1");
+  });
+
+  it("offers no photo button where photos aren't wanted", () => {
+    render(<ChatInput onSend={vi.fn()} allowPhoto={false} />);
+
+    expect(screen.queryByTestId("button-chat-photo")).toBeNull();
   });
 });

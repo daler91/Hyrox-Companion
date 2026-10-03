@@ -3,6 +3,7 @@ import type {
   ChatFactProposal,
   ChatFeedback,
   ChatMessage,
+  ChatPhoto,
   ChatSafetyNotice,
   CoachingMaterial,
   CoachWelcome,
@@ -85,6 +86,8 @@ export const chat = {
       message: string;
       /** Opt-out for surfaces without proposal-card UI (server defaults true). */
       planEditing?: boolean;
+      /** One photo with the message, read for the coach and never stored (I20). */
+      photo?: ChatPhoto;
     } & ChatFocus & ChatTurnIds,
     options?: { signal?: AbortSignal },
   ) =>
@@ -96,7 +99,7 @@ export const chat = {
       signal: options?.signal,
     }),
 
-  send: (data: { message: string } & ChatFocus & ChatTurnIds) =>
+  send: (data: { message: string; photo?: ChatPhoto } & ChatFocus & ChatTurnIds) =>
     typedRequest<ChatResponse>("POST", "/api/v1/chat", data),
 
   // Turns the chat routes don't save themselves: the Coach panel's own

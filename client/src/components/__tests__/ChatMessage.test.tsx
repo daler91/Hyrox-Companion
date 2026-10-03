@@ -250,4 +250,27 @@ describe('ChatMessage', () => {
       expect(screen.queryByTestId('message-feedback')).not.toBeInTheDocument();
     });
   });
+
+  describe('a photo on an athlete message (I20)', () => {
+    it('notes the photo on a message sent from this tab', () => {
+      render(<ChatMessage role="user" content="How was my pacing?" attachment={{ kind: 'photo' }} />);
+
+      expect(screen.getByTestId('message-photo')).toHaveTextContent('Photo attached');
+    });
+
+    it('carries what the coach read in it once the message comes back from the history', () => {
+      render(
+        <ChatMessage
+          role="user"
+          content="How was my pacing?"
+          attachment={{ kind: 'photo', reading: 'Watch summary: 10 km in 45:12.' }}
+        />,
+      );
+
+      const note = screen.getByTestId('message-photo');
+      expect(note.tagName).toBe('DETAILS');
+      expect(note).toHaveTextContent('Photo attached: what the coach read');
+      expect(note).toHaveTextContent('Watch summary: 10 km in 45:12.');
+    });
+  });
 });

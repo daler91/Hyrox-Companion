@@ -47,6 +47,7 @@ vi.mock("../../services/planService", () => ({
   createSamplePlan: vi.fn(),
   updatePlanDayWithCleanup: vi.fn(),
   updatePlanDayStatus: vi.fn(),
+  updatePlanDayRecordingMove: vi.fn(),
 }));
 
 vi.mock("../../services/workoutService", () => ({

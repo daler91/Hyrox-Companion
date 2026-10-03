@@ -23,6 +23,7 @@ import type { PlanDayRecoveryWrite } from "../../storage/plans";
 import { deriveRaceDayOverride } from "../../storage/raceDayView";
 import { getLocalDateStrSafe } from "../../timezone";
 import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import { recordPlanDayMove } from "../planDayMoves";
 import {
   planMissedSessionRecovery,
   type PlannerInput,
@@ -392,6 +393,12 @@ async function moveMissedSession(
       : shortenWrite(context, update);
 
   const updated = await writeRecovery(userId, day.id, write);
+  await recordPlanDayMove(userId, {
+    planDayId: day.id,
+    fromDate: day.scheduledDate,
+    toDate: updated.scheduledDate,
+    kind: action === "fold" ? "folded" : "shortened",
+  });
   // The upcoming schedule changed shape: let the coach look at it again.
   enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
   return updated;
@@ -444,6 +451,12 @@ async function undoMove(userId: string, day: PlanDay): Promise<PlanDay> {
   const sets = await storage.workouts.getExerciseSetsByPlanDay(day.id, userId);
   const write = planUndo(day, day.recoveryUndo, sets ?? []);
   const restored = await writeRecovery(userId, day.id, { guard: guardFor(day), ...write });
+  await recordPlanDayMove(userId, {
+    planDayId: day.id,
+    fromDate: day.scheduledDate,
+    toDate: restored.scheduledDate,
+    kind: "recovery_undone",
+  });
   // The upcoming schedule changed shape again.
   enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
   return restored;

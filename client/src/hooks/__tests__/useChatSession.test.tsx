@@ -106,6 +106,7 @@ interface StreamBody {
   userMessageId: string;
   assistantMessageId: string;
   replaceAssistantId?: string;
+  photo?: { mimeType: string; imageBase64: string };
 }
 
 /** The body POSTed to /api/v1/chat/stream on the nth send (0-based). */
@@ -367,6 +368,34 @@ describe('useChatSession', () => {
     expect(retry.replaceAssistantId).toBe(failedId);
     expect(retry.assistantMessageId).not.toBe(failedId);
     expect(result.current.messages[1].id).toBe(firstAttempt.userMessageId);
+  });
+
+  it('sends a photo with the message, shows it on the bubble, and sends it again on a retry (I20)', async () => {
+    const photo = { mimeType: 'image/jpeg' as const, imageBase64: '/9j/4AAQ' };
+    mockStreamEndpoint(() =>
+      Promise.reject(new Error('502: {"error":"Couldn\'t read that photo.","code":"CHAT_PHOTO_UNREADABLE"}')),
+    );
+    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('How was my pacing?', { photo });
+    });
+
+    expect(streamRequest(0).photo).toEqual(photo);
+    expect(result.current.messages[1].attachment).toEqual({ kind: 'photo' });
+    const failed = result.current.messages[2];
+    expect(failed.failure?.message).toBe("Couldn't read that photo. Try again, or say what it shows.");
+
+    mockStreamEndpoint(() => Promise.resolve(new Response(sseStream({ text: 'Even splits.' }, { done: true }))));
+    act(() => {
+      result.current.retryMessage(failed.id);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(streamRequest(1)).toMatchObject({ photo, userMessageId: streamRequest(0).userMessageId });
+    expect(result.current.messages[1].attachment).toEqual({ kind: 'photo' });
   });
 
   it('puts a drafted proposal on the reply it arrived with', async () => {

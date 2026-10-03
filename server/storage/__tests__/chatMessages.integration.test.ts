@@ -46,6 +46,15 @@ describe("chat messages and their proposals (real Postgres)", () => {
     expect(rows[0].timestamp?.toISOString()).toBe("2026-10-01T10:00:00.000Z");
   });
 
+  it("keeps a photo as what the coach read in it, and reads it back with the turn (I20)", async () => {
+    const attachment = { kind: "photo" as const, reading: "Watch summary: 10 km in 45:12, average 4:31/km." };
+    await storage.users.saveChatMessageOnce({ id: MESSAGE_ID, userId: ALICE, role: "user", content: "How was my pacing?", attachment });
+
+    const [saved] = await storage.users.getChatMessages(ALICE, { limit: 10 });
+
+    expect(saved).toMatchObject({ id: MESSAGE_ID, content: "How was my pacing?", attachment });
+  });
+
   it("never writes over another athlete's message that has the same id", async () => {
     await storage.users.saveChatMessageOnce({ id: MESSAGE_ID, userId: ALICE, role: "user", content: "mine" });
 
