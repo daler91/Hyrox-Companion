@@ -34,6 +34,8 @@ export enum ErrorCode {
   ATHLETE_FACT_LIMIT = "ATHLETE_FACT_LIMIT",
   /** Another fact on the athlete card already says the same thing. */
   ATHLETE_FACT_DUPLICATE = "ATHLETE_FACT_DUPLICATE",
+  /** The photo on a chat message couldn't be read; nothing was saved, and sending it again may work. */
+  CHAT_PHOTO_UNREADABLE = "CHAT_PHOTO_UNREADABLE",
   AI_TIMEOUT = "AI_TIMEOUT",
   AI_ERROR = "AI_ERROR",
   AI_QUOTA_EXCEEDED = "AI_QUOTA_EXCEEDED",

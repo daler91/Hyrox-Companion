@@ -2,7 +2,7 @@ import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
-import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
+import { ChatInput, type ChatInputExtras, type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -83,8 +83,8 @@ export function EmbeddedWorkoutCoachChat({
     usePlanProposal();
 
   const handleSend = useCallback(
-    (message: string) => {
-      sendMessage(message).catch(ignoreAsyncError);
+    (message: string, extras?: ChatInputExtras) => {
+      sendMessage(message, extras).catch(ignoreAsyncError);
     },
     [sendMessage],
   );

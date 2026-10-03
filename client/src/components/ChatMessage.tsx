@@ -1,5 +1,5 @@
 import type { ChatFeedback, ChatSafetyNotice } from "@shared/schema";
-import { AlertCircle, Bot, HeartPulse, RotateCcw, ShieldAlert, ThumbsDown, ThumbsUp, User } from "lucide-react";
+import { AlertCircle, Bot, HeartPulse, ImageIcon, RotateCcw, ShieldAlert, ThumbsDown, ThumbsUp, User } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
@@ -9,7 +9,7 @@ import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import type { RagInfo } from "@/hooks/useChatSession";
-import type { MessageFailure } from "@/lib/chatMessage";
+import type { MessageAttachment, MessageFailure } from "@/lib/chatMessage";
 import { cn } from "@/lib/utils";
 
 interface ChatMessageProps {
@@ -31,6 +31,8 @@ interface ChatMessageProps {
   readonly feedback?: ChatFeedback | null;
   /** Offered only on a reply the server saved. Stable across renders, so memo holds. */
   readonly onFeedback?: (messageId: string, feedback: ChatFeedback | null) => void;
+  /** The photo an athlete's message carried (I20). */
+  readonly attachment?: MessageAttachment;
 }
 
 /**
@@ -68,6 +70,31 @@ function SafetyNoticeBanner({ notice }: { readonly notice: ChatSafetyNotice }) {
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <p>{notice.message}</p>
     </div>
+  );
+}
+
+/**
+ * The photo an athlete's message carried (I20). The photo itself is never
+ * kept; once the message comes back from the history it shows what the coach
+ * read in it, so the athlete can check the coach saw it right.
+ */
+function PhotoAttachmentNote({ attachment }: { readonly attachment: MessageAttachment }) {
+  if (!attachment.reading) {
+    return (
+      <p className="mt-2 flex items-center gap-1 text-xs opacity-90" data-testid="message-photo">
+        <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        Photo attached
+      </p>
+    );
+  }
+  return (
+    <details className="mt-2 text-xs opacity-90" data-testid="message-photo">
+      <summary className="cursor-pointer">
+        <ImageIcon className="mr-1 inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />
+        Photo attached: what the coach read
+      </summary>
+      <p className="mt-1 whitespace-pre-wrap">{attachment.reading}</p>
+    </details>
   );
 }
 
@@ -165,6 +192,7 @@ export const ChatMessage = memo(function ChatMessage({
   streaming = false,
   feedback,
   onFeedback,
+  attachment,
 }: Readonly<ChatMessageProps>) {
   const isUser = role === "user";
   // A reply that failed before any text arrived is just its failure note.
@@ -187,7 +215,10 @@ export const ChatMessage = memo(function ChatMessage({
           }`}
         >
           {isUser ? (
-            <p className="text-sm whitespace-pre-wrap">{content}</p>
+            <>
+              <p className="text-sm whitespace-pre-wrap">{content}</p>
+              {attachment && <PhotoAttachmentNote attachment={attachment} />}
+            </>
           ) : (
             <>
               {safetyNotice && <SafetyNoticeBanner notice={safetyNotice} />}

@@ -58,6 +58,9 @@ describe("the chat eval scenarios", () => {
     expect(promptFor("what-happened-to-session")).toContain(
       "- 2 days ago, applied: Long run moved from Saturday 2026-10-03 to Monday 2026-10-05; Strength and Wall Balls moved from Monday 2026-10-05 to Saturday 2026-10-03.",
     );
+    expect(promptFor("undo-athlete-move")).toContain(
+      "- today, moved by the athlete: Long run moved from Saturday 2026-10-03 to Sunday 2026-10-04.",
+    );
     expect(promptFor("weekday-question")).toContain("Today's date: 2026-10-01 (Thursday).");
     expect(promptFor("weekday-question")).toContain("- 2026-10-03 (Saturday, in 2 days)");
   });

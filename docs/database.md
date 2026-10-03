@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~2,140 lines, 41 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of twelve modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `planProposals.ts`, `plans.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~2,300 lines, 43 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of twelve modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `planProposals.ts`, `plans.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -640,6 +640,7 @@ Persisted AI coach conversation history.
 | `feedback` | `varchar(10)` | The athlete's thumbs on a coach reply; CHECK `chat_messages_feedback_check`: NULL, `up` or `down` (migration `0114`) |
 | `feedback_at` | `timestamp` | When the athlete gave it; NULL once cleared |
 | `fact_proposal` | `jsonb` | A lasting fact the coach offered under the reply for the athlete card, `{ fact, category, status }` (`ChatFactProposal`); `status` is `pending` until the athlete saves it (then `saved`, and the fact is in `athlete_facts` with source `chat`) or turns it down (`dismissed`). Only a pending offer moves, so it is answered once (migration `0116`) |
+| `attachment` | `jsonb` | What came with an athlete's message: a photo, as `{ kind: "photo", reading }` (`ChatAttachment`), the app's reading of it for the coach. The image itself is never stored (migration `0119`) |
 
 The chat routes save rows under ids the client generates, once each (`saveChatMessageOnce`), so a retried send never saves a turn twice (see [AI and RAG → Chat History](ai-and-rag.md#chat-history)).
 
@@ -902,6 +903,26 @@ A proposed rewrite of the athlete's upcoming plan, raised by the AI coach rather
 - `idx_plan_proposals_user_status` on (`user_id`, `status`) -- serves the pending-proposal lookup
 
 Served by [`GET /api/v1/plan-proposals/pending`](api-reference.md#plan-proposal-routes) and the apply/dismiss routes.
+
+### plan_day_moves
+
+The moves the athlete makes to their plan days themselves, so the coach's record of plan changes can list them beside its own proposals (`server/services/recentPlanChanges.ts`). Written after the write that made the move (`recordPlanDayMove`, `server/services/planDayMoves.ts`): a new date on the timeline or in the session's edit sheet, a move together with a status change, a missed session's fold or shorten, and taking one of those back. The coach's applied proposals are never recorded here. Best effort: a failed write is logged, and the move itself stands. Migration `0118`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `plan_day_id` | varchar(255) | Not null, FK → `plan_days.id` ON DELETE CASCADE; the record reads the session's current `focus` through it |
+| `from_date` | date | Not null -- where the session was |
+| `to_date` | date | Not null -- where it went; CHECK `plan_day_moves_dates_check`: differs from `from_date` |
+| `kind` | varchar(20) | Not null, CHECK `plan_day_moves_kind_check`: `moved` (the athlete gave it a new date), `folded` / `shortened` (a missed session rescheduled, whole or cut down), `recovery_undone` (one of those taken back) |
+| `moved_at` | timestamp with time zone | Not null, default `now()` |
+
+A `moved` correction within 15 minutes (`PLAN_DAY_MOVE_MERGE_MS`) of the same session's last move, starting where that one ended, updates it instead of adding a row, and one that puts the session straight back deletes it: a drag corrected on the timeline is one move. The coach's record reads the last 14 days (at most 12 moves); the nightly `planDayMovePrune` job drops rows older than 30 days (see [integrations.md](integrations.md#maintenance-and-telemetry)).
+
+**Indexes:**
+- Primary key on `id`
+- `idx_plan_day_moves_user_moved` on (`user_id`, `moved_at`) -- serves the record's read
 
 ### user_consents
 
@@ -1284,6 +1305,7 @@ export interface IStorage {
   workouts: WorkoutStorage;
   plans: PlanStorage;
   planProposals: PlanProposalStorage;
+  planDayMoves: PlanDayMovesStorage;
   timeline: TimelineStorage;
   timelineAnnotations: TimelineAnnotationsStorage;
   analytics: AnalyticsStorage;
@@ -1322,6 +1344,7 @@ Each domain class owns a cohesive slice of functionality:
 | `ConsentStorage` | `server/storage/consent.ts` | Auditable consent decisions (record, read back for a DSAR) |
 | `NutritionStorage` | `server/storage/nutrition.ts` | The nutrition module, delegating to `nutritionFoods.ts`, `nutritionLogs.ts`, `nutritionTargets.ts`, `nutritionFavorites.ts`, `nutritionRecipes.ts` and `nutritionShared.ts` |
 | `PlanProposalStorage` | `server/storage/planProposals.ts` | AI plan-adjustment proposals (pending lookup, apply/dismiss transitions) |
+| `PlanDayMovesStorage` | `server/storage/planDayMoves.ts` | The athlete's own plan-day moves for the coach's record: record (merging a corrected drag), list recent, prune |
 | `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
 | `RecycleBinStorage` | `server/storage/recycleBin.ts` | Recycle bin: list, restore (single or bulk-delete batch), purge; the delete-time snapshots themselves are written by `recycleBinCapture.ts` |
 | `SessionStreamStorage` | `server/storage/sessionStreams.ts` | Session-grading streams: pending-fetch lists, the upsert, the read-budget ledger, and the unlink/disconnect purges |
@@ -1340,6 +1363,7 @@ export const storage: IStorage = {
   workouts,
   plans: new PlanStorage(),
   planProposals: new PlanProposalStorage(),
+  planDayMoves: new PlanDayMovesStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
   athleteFacts: new AthleteFactsStorage(),

@@ -4,6 +4,7 @@ import type { CoachHistoryTurn } from "../../server/gemini/chatService";
 import type { TrainingContext } from "../../server/gemini/types";
 import { formatFocusedWorkout } from "../../server/prompts/focusedWorkoutContext";
 import { formatRecentPlanChanges } from "../../server/prompts/recentPlanChanges";
+import type { RecentPlanDayMove } from "../../server/storage/planDayMoves";
 import { createMockPlanDay, createMockTrainingContext, createMockUpcomingWorkout } from "../factories";
 
 /**
@@ -92,7 +93,19 @@ function appliedMoves(minutesAgo: number, moves: ReadonlyArray<readonly [string,
 
 /** The RECENT PLAN CHANGES block the chat route would render for these proposals, newest first. */
 function recentChanges(...proposals: PlanAdjustmentProposal[]): string {
-  return formatRecentPlanChanges(proposals, EVAL_NOW);
+  return formatRecentPlanChanges({ proposals }, EVAL_NOW);
+}
+
+/** A move the athlete made themselves on the timeline, `minutesAgo` minutes before EVAL_NOW. */
+function timelineMove(minutesAgo: number, focus: string, fromDate: string, toDate: string): RecentPlanDayMove {
+  return {
+    planDayId: `timeline-${focus}`,
+    focus,
+    fromDate,
+    toDate,
+    kind: "moved",
+    movedAt: new Date(EVAL_NOW.getTime() - minutesAgo * 60_000),
+  };
 }
 
 const NOT_CLAIMED =
@@ -416,6 +429,30 @@ export const CHAT_SCENARIOS: readonly ChatScenario[] = [
     criteria: [
       "The reply does not ask the athlete what the original days or dates were.",
       "The reply makes clear that undoing the change puts the long run back on Saturday (October 3) and the rest day back on Sunday (October 4), whether by proposing exactly that change or by pointing the athlete to Undo on that change's card.",
+      NOT_CLAIMED,
+    ],
+  },
+  {
+    id: "undo-athlete-move",
+    title: "Asked to put back a move the athlete made on the timeline, the coach knows where it was",
+    modes: ["classic", "tools"],
+    message: "I dragged my long run to the wrong day on the timeline. Can you put it back?",
+    context: context({
+      upcomingWorkouts: [
+        createMockUpcomingWorkout({ id: "day-thu", date: "2026-10-01", focus: "Intervals", mainWorkout: "6 x 800 m at 5k pace, 90 s jog" }),
+        createMockUpcomingWorkout({ id: "day-fri", date: "2026-10-02", focus: "Strength", mainWorkout: "Back squat 5x5" }),
+        createMockUpcomingWorkout({ id: "day-sun", date: "2026-10-04", focus: "Long run", mainWorkout: "16 km easy" }),
+      ],
+    }),
+    recentPlanChanges: formatRecentPlanChanges({ moves: [timelineMove(20, "Long run", "2026-10-03", "2026-10-04")] }, EVAL_NOW),
+    facts: [
+      "Twenty minutes ago the athlete moved the long run on the timeline themselves, from Saturday October 3 to Sunday October 4. It was not a change the coach proposed, so there is no card to undo.",
+      "The coach changes the plan only through proposals the athlete applies (with tools, by calling propose_plan_changes); it cannot change the plan by itself.",
+    ],
+    criteria: [
+      "The reply does not ask the athlete which day the long run was on before.",
+      "The reply makes clear that putting it back means moving the long run back to Saturday (October 3), by proposing exactly that change or by offering to.",
+      "The reply does not tell the athlete to use an Undo button or card for this move.",
       NOT_CLAIMED,
     ],
   },

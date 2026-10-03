@@ -276,6 +276,8 @@ describe("chat system prompt — the plan changes the coach already made", () =>
       chatTools: { planChanges: false },
     });
     expect(readOnly).toContain("say exactly what undoing it puts back, and that Undo on that change's card does it");
+    // A move the athlete made has no card, and this coach can't propose one.
+    expect(readOnly).toContain("A move the athlete made themselves has no card: they can drag it back on the timeline");
 
     const classic = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 12 }));
     expect(classic).toContain("say exactly what undoing it puts back, and that Undo on that change's card does it");

@@ -1,4 +1,4 @@
-﻿import { CHAT_MESSAGE_MAX_LENGTH } from "../../chat";
+﻿import { CHAT_MESSAGE_MAX_LENGTH, CHAT_PHOTO_MAX_BASE64_CHARS } from "../../chat";
 import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
 import { chatFeedbackEnum } from "../enums";
 import { chatMessages } from "../tables";
@@ -93,6 +93,9 @@ export const chatRequestSchema = z.object({
   userMessageId: z.uuid().optional(),
   assistantMessageId: z.uuid().optional(),
   replaceAssistantId: z.uuid().optional(),
+  // One photo with the message (I20): read for the coach, never stored. Lazy
+  // because the image checks are declared further down this module.
+  photo: z.lazy(() => chatPhotoSchema).optional(),
 })
   .refine((body) => (body.userMessageId === undefined) === (body.assistantMessageId === undefined), {
     message: "Send userMessageId and assistantMessageId together",
@@ -173,24 +176,30 @@ function imageBytesMatchDeclaredType(
   );
 }
 
-export const parseExercisesFromImageRequestSchema = z
-  .object({
-    mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
-    imageBase64: z
-      .string()
-      .min(1, "Image is required")
-      .max(10 * 1024 * 1024, "Image must be 10MB or less"),
-  })
-  .superRefine((value, ctx) => {
-    if (!imageBytesMatchDeclaredType(value.mimeType, value.imageBase64)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["imageBase64"],
-        message: `Image data is not a valid ${value.mimeType} file`,
-      });
-    }
-  });
+/** An image in a JSON body: an accepted type, base64 within `maxChars`, whose bytes really are that type. */
+function base64ImageSchema(maxChars: number, tooLarge: string) {
+  return z
+    .object({
+      mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
+      imageBase64: z.string().min(1, "Image is required").max(maxChars, tooLarge),
+    })
+    .superRefine((value, ctx) => {
+      if (!imageBytesMatchDeclaredType(value.mimeType, value.imageBase64)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["imageBase64"],
+          message: `Image data is not a valid ${value.mimeType} file`,
+        });
+      }
+    });
+}
+
+export const parseExercisesFromImageRequestSchema = base64ImageSchema(10 * 1024 * 1024, "Image must be 10MB or less");
 export type ParseExercisesFromImageRequest = z.infer<typeof parseExercisesFromImageRequestSchema>;
+
+/** A photo attached to a chat message (AI coach chat review, I20). */
+export const chatPhotoSchema = base64ImageSchema(CHAT_PHOTO_MAX_BASE64_CHARS, "Photo must be 3MB or less");
+export type ChatPhoto = z.infer<typeof chatPhotoSchema>;
 
 export const importPlanRequestSchema = z.object({
   csvContent: z

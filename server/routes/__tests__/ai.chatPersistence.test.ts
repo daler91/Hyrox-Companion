@@ -5,9 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generateJsonText, generateText } from "../../ai/providers";
 import { env } from "../../env";
+import { AppError, ErrorCode } from "../../errors";
 import { chatWithCoach, type CoachStreamEvent, streamChatWithCoach, streamChatWithCoachTools } from "../../gemini";
 import { logger } from "../../logger";
+import { withPhotoReading } from "../../prompts/chatPhoto";
 import { buildTrainingContext } from "../../services/ai";
+import { readChatPhoto } from "../../services/chatPhoto";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../../services/planAdjustmentService";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
@@ -42,6 +45,7 @@ vi.mock("../../storage", () => ({
     },
     aiUsage: { getDailyTotalCents: vi.fn(() => Promise.resolve(0)) },
     planProposals: { getByIds: vi.fn(() => Promise.resolve([])), getById: vi.fn(), getRecentlyApplied: vi.fn() },
+    planDayMoves: { listRecent: vi.fn(() => Promise.resolve([])) },
     plans: { getPlanDay: vi.fn() },
     workouts: { getWorkoutLog: vi.fn() },
     analytics: { getExerciseSetsForPersonalRecords: vi.fn(() => Promise.resolve([])) },
@@ -74,6 +78,8 @@ vi.mock("../../services/trainingContextCache", () => ({
   invalidateTrainingContext: vi.fn(),
 }));
 vi.mock("../../services/ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
+// The vision call itself is covered in chatPhoto.test.ts; here it is a stand-in.
+vi.mock("../../services/chatPhoto", () => ({ readChatPhoto: vi.fn() }));
 vi.mock("../../services/planAdjustmentService", () => ({
   createPlanAdjustmentProposal: vi.fn(),
   applyPlanAdjustmentProposal: vi.fn(),
@@ -85,6 +91,8 @@ const REPLY_ID = "22222222-2222-4222-8222-222222222222";
 const FAILED_REPLY_ID = "33333333-3333-4333-8333-333333333333";
 const IDS = { userMessageId: USER_ID, assistantMessageId: REPLY_ID };
 const MINUTE = 60 * 1000;
+// The first bytes of a JPEG: enough for the request schema's type check.
+const PHOTO = { mimeType: "image/jpeg", imageBase64: "/9j/4AAQ" };
 
 function savedRow(role: "user" | "assistant", content: string, minutesAgo: number, extra: Partial<ChatMessage> = {}): ChatMessage {
   return {
@@ -102,6 +110,7 @@ function savedRow(role: "user" | "assistant", content: string, minutesAgo: numbe
     feedback: null,
     feedbackAt: null,
     factProposal: null,
+    attachment: null,
     ...extra,
   };
 }
@@ -380,6 +389,98 @@ describe("the server-owned chat conversation", () => {
     expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.recentPlanChanges).toContain(
       ", applied: Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04.",
     );
+  });
+
+  it("gives the coach the moves the athlete made on the timeline too", async () => {
+    vi.mocked(storage.planProposals.getRecentlyApplied).mockResolvedValue([]);
+    vi.mocked(storage.planDayMoves).listRecent.mockResolvedValueOnce([
+      {
+        planDayId: "day-long",
+        focus: "Long Run",
+        fromDate: "2026-10-03",
+        toDate: "2026-10-04",
+        kind: "moved",
+        movedAt: new Date(Date.now() - 20 * MINUTE),
+      },
+    ]);
+    streamReply("You moved it from Saturday.");
+
+    const response = await request(app).post(STREAM).send({ message: "Put my long run back", ...IDS });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(storage.planDayMoves).listRecent.mock.calls[0][0]).toBe("test_user_id");
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.recentPlanChanges).toContain(
+      ", moved by the athlete: Long Run moved from Saturday 2026-10-03 to Sunday 2026-10-04.",
+    );
+  });
+
+  it("reads an attached photo for the coach and keeps what it showed, never the photo", async () => {
+    vi.mocked(readChatPhoto).mockResolvedValueOnce("Watch summary: 10 km in 45:12.");
+    streamReply("Nice even pacing.");
+
+    const response = await request(app).post(STREAM).send({ message: "How was my pacing?", photo: PHOTO, ...IDS });
+
+    expect(response.status).toBe(200);
+    expect(readChatPhoto).toHaveBeenCalledWith(PHOTO, "test_user_id");
+    // The athlete's words, then what the photo showed, as withPhotoReading writes it.
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][0]).toBe(
+      withPhotoReading("How was my pacing?", "Watch summary: 10 km in 45:12."),
+    );
+    expect(savesOnce()[0]).toEqual(
+      expect.objectContaining({
+        role: "user",
+        content: "How was my pacing?",
+        attachment: { kind: "photo", reading: "Watch summary: 10 km in 45:12." },
+      }),
+    );
+    expect(JSON.stringify(savesOnce())).not.toContain(PHOTO.imageBase64);
+  });
+
+  it("refuses the send, saving nothing, when the photo can't be read", async () => {
+    vi.mocked(readChatPhoto).mockRejectedValueOnce(
+      new AppError(ErrorCode.CHAT_PHOTO_UNREADABLE, "Couldn't read that photo. Try again, or say what it shows.", 502),
+    );
+
+    const response = await request(app).post(STREAM).send({ message: "How was my pacing?", photo: PHOTO, ...IDS });
+
+    expect(response.status).toBe(502);
+    expect(response.body).toMatchObject({ code: "CHAT_PHOTO_UNREADABLE" });
+    expect(storage.users.saveChatMessageOnce).not.toHaveBeenCalled();
+    expect(streamChatWithCoach).not.toHaveBeenCalled();
+  });
+
+  it("refuses a photo whose bytes aren't the image type it claims, before reading it", async () => {
+    const response = await request(app)
+      .post(STREAM)
+      .send({ message: "Look", photo: { mimeType: "image/png", imageBase64: PHOTO.imageBase64 }, ...IDS });
+
+    expect(response.status).toBe(400);
+    expect(readChatPhoto).not.toHaveBeenCalled();
+  });
+
+  it("counts a red flag in what the photo showed as one the athlete typed: the notice, the guidance, no plan change", async () => {
+    vi.mocked(readChatPhoto).mockResolvedValueOnce("A training diary page: chest pain on Tuesday's run.");
+    vi.mocked(generateJsonText).mockResolvedValue({
+      text: JSON.stringify({ intent: "plan_modification", confidence: 0.95 }),
+      model: "fast",
+    });
+    streamReply("Please get that checked first.");
+
+    const response = await request(app).post(STREAM).send({ message: "Move my long run to Saturday", photo: PHOTO, ...IDS });
+
+    expect(response.text).toContain('"safetyNotice":{"level":"urgent"');
+    expect(vi.mocked(streamChatWithCoach).mock.calls[0][6]?.chatSafety).toEqual({ redFlagDetected: true, hrMedicationDetected: false });
+    expect(createPlanAdjustmentProposal).not.toHaveBeenCalled();
+  });
+
+  it("scans what the photo showed for a non-streamed reply too", async () => {
+    vi.mocked(readChatPhoto).mockResolvedValueOnce("A pill box: bisoprolol 5 mg.");
+    vi.mocked(chatWithCoach).mockResolvedValue("Go by effort for now.");
+
+    const response = await request(app).post("/api/v1/chat").send({ message: "Can I train on these?", photo: PHOTO, ...IDS });
+
+    expect(response.body.safetyNotice).toEqual(expect.objectContaining({ level: "caution" }));
+    expect(vi.mocked(chatWithCoach).mock.calls[0][6]?.chatSafety).toEqual({ redFlagDetected: false, hrMedicationDetected: true });
   });
 
   it("gives the coach a summary of the earlier conversation after a break", async () => {

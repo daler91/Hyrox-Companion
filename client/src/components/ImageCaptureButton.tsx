@@ -1,4 +1,4 @@
-import { Camera, Loader2, Sparkles } from "lucide-react";
+import { Camera, ImagePlus, Loader2, Sparkles } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,13 @@ export interface ImageCaptureButtonProps {
    * affordance.
    */
   readonly tooltip?: string;
+  /**
+   * `scan` (the default): the camera opens straight away and the glyph reads
+   * as an AI scan. `attach`: a photo to send along, such as a watch
+   * screenshot for the coach (I20), so the gallery is offered too and the
+   * glyph is a plain photo.
+   */
+  readonly purpose?: "scan" | "attach";
 }
 
 /**
@@ -48,7 +55,9 @@ export function ImageCaptureButton({
   className,
   "data-testid": dataTestId,
   tooltip,
+  purpose = "scan",
 }: ImageCaptureButtonProps) {
+  const attach = purpose === "attach";
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [processing, setProcessing] = useState(false);
   const { toast } = useToast();
@@ -86,7 +95,7 @@ export function ImageCaptureButton({
   const iconSize = size === "sm" ? "size-3.5!" : "size-4!";
   const sparkleSize = size === "sm" ? "size-2!" : "size-2.5!";
   const tooltipCopy =
-    tooltip ?? "Scan a printed or whiteboard workout — we'll auto-fill the exercises.";
+    tooltip ?? (attach ? "Attach a photo" : "Scan a printed or whiteboard workout — we'll auto-fill the exercises.");
 
   return (
     <>
@@ -94,10 +103,11 @@ export function ImageCaptureButton({
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        // Attaching offers the gallery (a screenshot) as well as the camera.
+        capture={attach ? undefined : "environment"}
         className="sr-only"
         onChange={handleChange}
-        aria-label="Capture workout image"
+        aria-label={attach ? "Choose a photo" : "Capture workout image"}
         data-testid={`${dataTestId ?? "button-image-capture"}-input`}
       />
       <TooltipProvider>
@@ -111,11 +121,11 @@ export function ImageCaptureButton({
               disabled={busy}
               className={cn(processing && "animate-pulse", className)}
               data-testid={dataTestId ?? "button-image-capture"}
-              aria-label={label ?? "Scan a printed or whiteboard workout"}
+              aria-label={label ?? (attach ? "Attach a photo" : "Scan a printed or whiteboard workout")}
             >
-              {processing ? (
-                <Loader2 className={cn(iconSize, "animate-spin")} aria-hidden />
-              ) : (
+              {processing && <Loader2 className={cn(iconSize, "animate-spin")} aria-hidden />}
+              {!processing && attach && <ImagePlus className={iconSize} aria-hidden />}
+              {!processing && !attach && (
                 <span className="relative inline-flex">
                   <Camera className={iconSize} aria-hidden />
                   <Sparkles

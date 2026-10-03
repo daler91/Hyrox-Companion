@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isImageParsePath } from "./imageParsePaths";
+import { isChatSendPath, isImageParsePath } from "./imageParsePaths";
 
 describe("isImageParsePath", () => {
   it("allows stateless image parse routes to use the large JSON body parser", () => {
@@ -23,5 +23,20 @@ describe("isImageParsePath", () => {
     expect(isImageParsePath("/api/v1/workouts/workout-1")).toBe(false);
     // The text meal-parse route uses the default (small) JSON body parser.
     expect(isImageParsePath("/api/v1/nutrition/parse/text")).toBe(false);
+  });
+});
+
+describe("isChatSendPath", () => {
+  it("gives the two chat send routes the photo-sized parser", () => {
+    expect(isChatSendPath("/api/v1/chat")).toBe(true);
+    expect(isChatSendPath("/api/v1/chat/stream")).toBe(true);
+    expect(isChatSendPath("/api/v1/chat/stream/")).toBe(true);
+  });
+
+  it("leaves the other chat routes on the default parser", () => {
+    expect(isChatSendPath("/api/v1/chat/message")).toBe(false);
+    expect(isChatSendPath("/api/v1/chat/history")).toBe(false);
+    expect(isChatSendPath("/api/v1/chat/messages/m-1/fact")).toBe(false);
+    expect(isChatSendPath("/api/v1/chatter")).toBe(false);
   });
 });

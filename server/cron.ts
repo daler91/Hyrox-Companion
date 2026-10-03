@@ -33,6 +33,7 @@ let stravaAutoSyncTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
 let recycleBinPurgeTask: ReturnType<typeof cron.schedule> | null = null;
 let sessionStreamBackfillTask: ReturnType<typeof cron.schedule> | null = null;
+let planDayMovePruneTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -41,6 +42,8 @@ let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 // run and well below user-perceived "stuck" thresholds (W5).
 const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
 const STARTUP_CATCH_UP_DELAY_MS = 30_000;
+/** How long the athlete's own plan-day moves are kept: past the coach's two-week record, then pruned. */
+const PLAN_DAY_MOVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
@@ -69,6 +72,7 @@ export const CRON_LOCK_KEYS = {
   stravaWebhookEnsure: 42_010_017n,
   recycleBinPurge: 42_010_018n,
   sessionStreamBackfill: 42_010_019n,
+  planDayMovePrune: 42_010_020n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -515,6 +519,20 @@ export function startCron(storage: IStorage): void {
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Recycle bin purge scheduled: daily at 03:45 UTC");
 
+  // Plan-day move prune: the coach's record of plan changes reads the last two
+  // weeks of the athlete's own moves (services/recentPlanChanges.ts); a month
+  // is kept, then dropped.
+  planDayMovePruneTask = scheduleLockedCronJob("planDayMovePrune", "55 3 * * *", async () => {
+    const pruned = await storage.planDayMoves.deleteBefore(new Date(Date.now() - PLAN_DAY_MOVE_RETENTION_MS));
+    if (pruned === 0) return;
+    // A count and a static context only, no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ context: "cron", pruned }, `Plan-day move prune: removed ${pruned} old move(s)`);
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Plan-day move prune scheduled: daily at 03:55 UTC");
+
   // Run one catch-up scan shortly after boot (e.g. a Railway restart that
   // straddled the top of an hour). Always safe: the scan gates every email on
   // the athlete's local hour and the claim ledgers stop a second send.
@@ -590,4 +608,5 @@ export async function stopCron(): Promise<void> {
   }
   recycleBinPurgeTask = await stopTask(recycleBinPurgeTask);
   sessionStreamBackfillTask = await stopTask(sessionStreamBackfillTask);
+  planDayMovePruneTask = await stopTask(planDayMovePruneTask);
 }

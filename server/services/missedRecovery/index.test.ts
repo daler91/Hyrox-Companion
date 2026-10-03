@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockPlanDay, createMockTrainingPlan } from "../../../test/factories";
 import type { storage } from "../../storage";
 import { enqueueAutoCoachInBackground } from "../autoCoachQueue";
+import { recordPlanDayMove } from "../planDayMoves";
 import { applyMissedSessionRecovery, getMissedSessionRecoveryPreview } from "./index";
 
 // Standalone mocks, typed as the storage methods they stand in for, so the
@@ -36,6 +37,7 @@ vi.mock("../../storage", () => ({
   },
 }));
 vi.mock("../autoCoachQueue", () => ({ enqueueAutoCoachInBackground: vi.fn() }));
+vi.mock("../planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
 
 /** The write the service last handed to storage. */
 function lastWrite() {
@@ -242,6 +244,13 @@ describe("applyMissedSessionRecovery", () => {
     });
     expect(day).toMatchObject({ scheduledDate: "2026-09-24", recovery: "folded" });
     expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+    // The coach's record of plan changes lists it as the athlete's reschedule.
+    expect(recordPlanDayMove).toHaveBeenCalledWith(USER, {
+      planDayId: "pd-missed",
+      fromDate: "2026-09-22",
+      toDate: "2026-09-24",
+      kind: "folded",
+    });
   });
 
   it("shortens it by dropping the last intervals, leaving the notes alone when the table shows the cut", async () => {
@@ -254,6 +263,12 @@ describe("applyMissedSessionRecovery", () => {
     expect(write.deleteSetIds).toEqual(["set-4", "set-5"]);
     // The dropped intervals are kept, whole, for the undo.
     expect(write.update.recoveryUndo?.deletedSets.map((set) => set.id)).toEqual(["set-4", "set-5"]);
+    expect(recordPlanDayMove).toHaveBeenCalledWith(USER, {
+      planDayId: "pd-missed",
+      fromDate: "2026-09-22",
+      toDate: "2026-09-26",
+      kind: "shortened",
+    });
   });
 
   it("pins the length and adds an instruction when there is no table to cut", async () => {
@@ -294,6 +309,12 @@ describe("applyMissedSessionRecovery", () => {
     });
     expect(undo.insertSets?.map((set) => set.id)).toEqual(["set-4", "set-5"]);
     expect(enqueueAutoCoachInBackground).toHaveBeenCalledWith(USER, "plan-day-rescheduled");
+    expect(recordPlanDayMove).toHaveBeenLastCalledWith(USER, {
+      planDayId: "pd-missed",
+      fromDate: "2026-09-26",
+      toDate: "2026-09-22",
+      kind: "recovery_undone",
+    });
   });
 
   it("won't take a move back once the session has been done", async () => {
@@ -324,6 +345,7 @@ describe("applyMissedSessionRecovery", () => {
       update: { status: "missed", recovery: "let_go" },
     });
     expect(enqueueAutoCoachInBackground).not.toHaveBeenCalled();
+    expect(recordPlanDayMove).not.toHaveBeenCalled();
   });
 
   it("reopens only a decision the timeline shows", async () => {

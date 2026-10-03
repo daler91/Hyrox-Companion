@@ -174,6 +174,24 @@ Behaviour changes:
 
 Not run: a live model, for the new scenarios as for the rest. The migration is tested on a real database: the athlete's case (Strength and Wall Balls moved from week 6's Monday to Sunday, Rest from week 5's Sunday to Monday) comes back as week 5 Sunday and week 6 Monday, and a second run changes nothing. A day moved ahead of week 1 is filed under the first week, as the app files a new move there.
 
+**After daler91/Hyrox-Companion#2093 merged: the athlete's own moves, and longer messages with photos (I20).**
+
+| Fix | What changed |
+| --- | --- |
+| The athlete's own moves | A new table, `plan_day_moves` (migration `0118`), records each move the athlete makes outside the coach's proposals: a new date on the timeline or in the edit sheet, a move with a status change, a missed session rescheduled whole or shortened, and taking one back (`server/services/planDayMoves.ts`). A drag corrected within 15 minutes is one move, and one put straight back is none. The coach's record of plan changes lists them beside its proposals, newest first. A move has no Undo card: putting it back means moving the session to its "from" date, and the read-only coach says they can drag it back on the timeline. A nightly job drops moves older than 30 days. |
+| Longer messages (I20) | `CHAT_MESSAGE_MAX_LENGTH` is 4,000, up from 1,000; the input's counter still shows near the limit. |
+| Photos in chat (I20) | One photo per message, from the gallery or the camera. Gemini vision reads it into words for the coach (`server/services/chatPhoto.ts`), alongside the context build; the coach reads the reading after the message, marked as data, and the safety scan reads it with the athlete's words. The turn keeps the reading as `attachment` (migration `0119`), never the image, and the chat shows "Photo attached" with what the coach read. A photo that can't be read refuses the send with `CHAT_PHOTO_UNREADABLE` before anything is saved, and Retry sends it again. |
+
+Behaviour changes:
+
+- **The coach sees moves made on the timeline and on a missed session's card**, with the dates before and after. Rescheduling the whole plan to a new start date still isn't listed.
+- **Every move by the athlete writes one small row**, and the chat's record read makes one more query (and reads the athlete's time zone only when something changed).
+- **Chat messages can be four times longer**, so long ones cost more tokens per turn and fill the history window sooner.
+- **A photo costs one more Gemini vision call**, billed as `parse`, and works only where Gemini is configured, like the other photo parsers. The chat send routes accept a 5 MB body instead of 100 KB.
+- **What a photo shows counts for the safety scan.** A red flag or a heart-rate medication in it brings the same notice and guidance as typed words, and a red flag stops a plan change or a fact offer on that turn.
+
+Not run: a live model, so neither the photo reading nor the new eval scenario has met a real one. The moves table is tested against Postgres: merging a corrected drag, keeping separate moves after the window, pruning, and a deleted session's moves going with it.
+
 ---
 
 ## How a chat turn works today

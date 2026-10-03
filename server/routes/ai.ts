@@ -1,7 +1,7 @@
 import { getAuth } from "@clerk/express";
 import { ATHLETE_FACT_LIMIT_MESSAGE } from "@shared/athleteFacts";
 import type { ChatStatusStep } from "@shared/chat";
-import { type ChatFactDecisionBody, chatFactDecisionSchema, type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type ChatAttachment, type ChatFactDecisionBody, chatFactDecisionSchema, type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -13,6 +13,7 @@ import { type ChatCallOptions, chatWithCoach, type CoachToolset, parseExercisesF
 import { reqLogger } from "../logger";
 import { aiBudgetCheck } from "../middleware/aibudget";
 import { aiConsentCheck } from "../middleware/aiConsent";
+import { withPhotoReading } from "../prompts/chatPhoto";
 import { formatFocusedWorkout } from "../prompts/focusedWorkoutContext";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
@@ -22,6 +23,7 @@ import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regene
 import { type CoachReply, type Conversation, type ConversationTurn, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
+import { readChatPhoto } from "../services/chatPhoto";
 import { chatRetrievalQuery } from "../services/chatRetrievalQuery";
 import { type ChatToolContext, chatToolsFor, chatToolStatus, PROPOSE_PLAN_CHANGES, runChatTool } from "../services/chatTools";
 import { chatTurnLogFields, type ChatTurnTelemetry, markFirstText, recordClassifierVerdict, startChatTurn } from "../services/chatTurnTelemetry";
@@ -119,18 +121,21 @@ type ChatPromptOptions = Pick<
 async function prepareChatContext(
   req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>,
   conversation: Conversation,
-): Promise<{ input: ChatInput; aiContext: AIContext; promptOptions: ChatPromptOptions }> {
-  const { message, focusPlanDayId, focusWorkoutLogId } = req.body;
+): Promise<{ input: ChatInput; aiContext: AIContext; promptOptions: ChatPromptOptions; chatSafety: ChatSafetySignals; attachment?: ChatAttachment }> {
+  const { message, focusPlanDayId, focusWorkoutLogId, photo } = req.body;
   const userId = getUserId(req);
   const history = conversation.turns;
-  // The first message after a break writes the earlier sessions' summary;
-  // it runs alongside the context build rather than in front of it.
-  const [aiContext, focused, earlierConversation, earlierInSession, recentPlanChanges] = await Promise.all([
+  // The first message after a break writes the earlier sessions' summary, and
+  // a photo is read into words (I20); both run alongside the context build
+  // rather than in front of it. A photo that can't be read refuses the send
+  // here, before the athlete's turn is saved.
+  const [aiContext, focused, earlierConversation, earlierInSession, recentPlanChanges, photoReading] = await Promise.all([
     buildAIContext(userId, chatRetrievalQuery(message, history), reqLogger(req), { cachedTrainingContext: true }),
     loadFocusedWorkout(userId, { planDayId: focusPlanDayId, workoutLogId: focusWorkoutLogId }),
     conversation.earlier,
     conversation.earlierInSession,
     loadRecentPlanChanges(userId),
+    photo ? readChatPhoto(photo, userId) : undefined,
   ]);
   const { trainingContext } = aiContext;
   const focusedWorkout = focused
@@ -140,8 +145,13 @@ async function prepareChatContext(
         currentDate: trainingContext?.currentDate,
       })
     : undefined;
+  const coachMessage = withPhotoReading(message, photoReading);
   return {
-    input: { message, history },
+    input: { message: coachMessage, history },
+    // Scanned as the coach reads it: a red flag or a heart-rate medication in
+    // what a photo showed counts as one the athlete typed (I20).
+    chatSafety: analyzeChatSafety(coachMessage, history),
+    ...(photoReading ? { attachment: { kind: "photo", reading: photoReading } } : {}),
     aiContext,
     promptOptions: {
       focusedWorkout,
@@ -174,15 +184,14 @@ protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middle
     const userId = getUserId(req);
     const turn = serverOwnedTurn(req.body);
     const conversation = await conversationFor(userId, turn, req.body);
-    const chatSafety = analyzeChatSafety(req.body.message, conversation.turns);
-    const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
+    const { input, aiContext, promptOptions, chatSafety, attachment } = await prepareChatContext(req, conversation);
     const acceptedAt = new Date();
     const response = await chatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, userId, { chatSafety, ...promptOptions });
     const safetyNotice = buildChatSafetyNotice(chatSafety);
     if (turn) {
       // Both turns once the reply exists: a failed request leaves nothing behind.
       const focus = turnFocus(req.body);
-      await saveUserTurn(userId, turn, input.message, focus, acceptedAt);
+      await saveUserTurn(userId, turn, req.body.message, focus, { at: acceptedAt, attachment });
       await saveCoachReply(userId, turn, { content: response, ragInfo: aiContext.ragInfo, safetyNotice: safetyNotice ?? undefined }, focus);
     }
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(safetyNotice ? { safetyNotice } : {}) });
@@ -783,6 +792,15 @@ async function answerWithTools(
   return "proposal";
 }
 
+/**
+ * A step that started on the athlete's words alone, unless the scan of the
+ * whole message, a photo's reading included (I20), found a red flag. Neither
+ * step it drops can reject.
+ */
+function unlessRedFlag<T>(step: T | null, chatSafety: ChatSafetySignals): T | null {
+  return chatSafety.redFlagDetected ? null : step;
+}
+
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     const useTools = chatToolsEnabled();
     const telemetry = startChatTurn(useTools ? "tools" : "classic", req.body.replaceAssistantId !== undefined);
@@ -790,7 +808,9 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     const turn = serverOwnedTurn(req.body);
     const conversation = await conversationFor(userId, turn, req.body);
     // The athlete's own words, scanned for red-flag symptoms and heart-rate
-    // medication (analyzeSafetySignals only ever reads workout text).
+    // medication (analyzeSafetySignals only ever reads workout text), for the
+    // steps that start now. The reply goes by the scan prepareChatContext
+    // makes, which a photo's reading joins (I20).
     const chatSafety = analyzeChatSafety(req.body.message, conversation.turns);
     // With tools the reply model decides itself, so the classifier never runs.
     const planEditIntent = useTools ? null : startPlanEditIntent(req, userId, chatSafety, conversation.turns);
@@ -803,12 +823,13 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       chatSafety,
       serverOwned: turn !== null,
     });
-    const { input, aiContext, promptOptions } = await prepareChatContext(req, conversation);
+    const { input, aiContext, promptOptions, chatSafety: replySafety, attachment } = await prepareChatContext(req, conversation);
     telemetry.contextReadyAt = Date.now();
     const focus = turnFocus(req.body);
     // Accepted from here: the athlete's turn is saved before the first byte, so
     // any reply the client sees has its question in the history.
-    if (turn) await saveUserTurn(userId, turn, input.message, focus);
+    // The athlete's own words; a photo is kept as what it showed (I20).
+    if (turn) await saveUserTurn(userId, turn, req.body.message, focus, { attachment });
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -828,7 +849,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     const abortState: SseAbortState = { reason: "generic" };
     const clearDeadline = startSseDeadline(req, res, controller, abortState);
     const safeWrite = createSseWriter(res, controller);
-    const safetyNotice = buildChatSafetyNotice(chatSafety) ?? undefined;
+    const safetyNotice = buildChatSafetyNotice(replySafety) ?? undefined;
     const reply: CoachReply = { content: "", ragInfo: aiContext.ragInfo, safetyNotice };
 
     try {
@@ -837,11 +858,12 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       // independent of what the model goes on to write.
       if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
-      const offerFact = () => offerFactProposal({ controller, safeWrite, reply }, factCandidate, aiContext);
+      const offerFact = () => offerFactProposal({ controller, safeWrite, reply }, unlessRedFlag(factCandidate, replySafety), aiContext);
       const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact };
+      const chatOptions = { chatSafety: replySafety, ...promptOptions };
       const answered = useTools
-        ? await answerWithTools(branch, { chatSafety, ...promptOptions }, canProposePlanChanges(req, chatSafety))
-        : await answerWithoutTools({ ...branch, planEditIntent }, { chatSafety, ...promptOptions });
+        ? await answerWithTools(branch, chatOptions, canProposePlanChanges(req, replySafety))
+        : await answerWithoutTools({ ...branch, planEditIntent: unlessRedFlag(planEditIntent, replySafety) }, chatOptions);
       telemetry.outcome = controller.signal.aborted ? "aborted" : answered;
       if (answered === "proposal") return;
 
