@@ -65,11 +65,12 @@ sequenceDiagram
     User->>Client: Click "Connect Strava"
     Client->>Server: GET /api/v1/strava/auth
     Server->>Server: createSignedState(userId) with HMAC-SHA256
+    Server->>Client: Set-Cookie: binding cookie (SHA-256 of the state)
     Server->>Client: { url: "strava.com/oauth/authorize?state=..." }
     Client->>Strava: Redirect to authorization URL
     User->>Strava: Approve access
     Strava->>Server: GET /api/v1/strava/callback?code=...&state=...
-    Server->>Server: verifySignedState(state) — CSRF check + max age
+    Server->>Server: verifySignedState(state) — CSRF check + max age + binding cookie
     Server->>Strava: POST /oauth/token (exchange code for tokens)
     Strava->>Server: { access_token, refresh_token, expires_at }
     Server->>Server: encryptToken(access_token), encryptToken(refresh_token)
@@ -93,9 +94,9 @@ sequenceDiagram
 
 ### OAuth 2.0 Flow
 
-1. **Authorization URL generation** (`GET /api/v1/strava/auth`): The authenticated user requests an authorization URL. The server creates a signed state token containing the user ID, a timestamp (base-36 encoded), and a random nonce. The state is HMAC-SHA256 signed with `STRAVA_STATE_SECRET`. The Strava authorization URL is returned with scope `activity:read_all`.
+1. **Authorization URL generation** (`GET /api/v1/strava/auth`): The authenticated user requests an authorization URL. The server creates a signed state token containing the user ID, a timestamp (base-36 encoded), and a random nonce. The state is HMAC-SHA256 signed with `STRAVA_STATE_SECRET`. The Strava authorization URL is returned with scope `activity:read_all` and `approval_prompt=force`, so an athlete who already authorized the app still sees Strava's consent screen instead of being connected silently. The response also sets the short-lived browser-binding cookie described under [CSRF State Verification](#csrf-state-verification).
 
-2. **Callback handling** (`GET /api/v1/strava/callback`): Strava redirects the user back with a `code` and `state` parameter. The server verifies the signed state using timing-safe comparison (via double-hashing with `crypto.timingSafeEqual`) and checks that the state is not older than 10 minutes (`STRAVA_STATE_MAX_AGE_MS`). The state is then **atomically claimed** in the shared runtime cache (`claimRuntimeCacheKey`, cross-instance) so a captured callback URL cannot be replayed within the validity window — a second callback with the same state redirects to `/settings?strava=error`.
+2. **Callback handling** (`GET /api/v1/strava/callback`): Strava redirects the user back with a `code` and `state` parameter. The server verifies the signed state using timing-safe comparison (via double-hashing with `crypto.timingSafeEqual`) and checks that the state is not older than 10 minutes (`STRAVA_STATE_MAX_AGE_MS`). It then requires the browser-binding cookie set by `/auth` to match the state, and only then is the state **atomically claimed** in the shared runtime cache (`claimRuntimeCacheKey`, cross-instance) so a captured callback URL cannot be replayed within the validity window — a second callback with the same state redirects to `/settings?strava=error`.
 
 3. **Token exchange**: The authorization code is exchanged for an access token, refresh token, and athlete information via a POST to `https://www.strava.com/oauth/token` with `grant_type: authorization_code`.
 
@@ -112,6 +113,8 @@ The OAuth state parameter serves as a CSRF token. It is structured as `userId:ti
 Verification uses timing-safe comparison by hashing both the received and expected signatures with SHA-256, then comparing with `crypto.timingSafeEqual`. This prevents timing attacks and safely handles inputs of different lengths.
 
 States are additionally **single-use**: on a successful callback the state is claimed in the `server_runtime_cache` table (TTL = the state max age, swept by the shared-runtime cleanup cron), so replaying a valid state fails even inside the 10-minute window.
+
+States are also **bound to the browser that started the flow** (S3 in `CODEBASE_ANALYSIS_2026-10-03.md`, RFC 6749 §10.12). Without this, any signed-in user could mint a state for their own account and send the authorize URL to someone else, whose browser would then link *their* Strava account to the sender's. `/auth` sets an `HttpOnly`, `SameSite=Lax` cookie (`__Host-fitai.strava-oauth` with `Secure` in production, `fitai.strava-oauth` elsewhere; `Path=/`, `Max-Age` = the state max age) holding the SHA-256 of the state. The callback compares it with the state (timing-safe) before claiming the state or exchanging the code, redirects to `/settings?strava=error` when it is missing or does not match, and clears it on every outcome. A cookie is used rather than comparing the callback's Clerk session with the state's user: the Clerk session token lives 60 seconds, so it has usually lapsed by the time the athlete returns from Strava's consent screen, and the dev auth bypass has no Clerk session at all.
 
 ### Encrypted Token Storage
 

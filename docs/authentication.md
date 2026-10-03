@@ -218,7 +218,7 @@ Every `/api/v1/*` route is protected by the `isAuthenticated` middleware except 
 
 - `GET /api/v1/health` and `GET /api/v1/health/live` -- platform health probes (`server/bootstrap/health.ts`)
 - `GET /api/v1/csrf-token` -- CSRF token issuance
-- `GET /api/v1/strava/callback` -- the Strava OAuth redirect, authorised by the signed, single-use OAuth `state`
+- `GET /api/v1/strava/callback` -- the Strava OAuth redirect, authorised by the signed, single-use OAuth `state` plus the browser-binding cookie `/strava/auth` set, so only the browser that started the flow can complete it
 - `GET`/`POST /api/v1/strava/webhook` -- Strava webhook deliveries, which the handler treats as hints only (`server/stravaWebhook.ts`)
 - `GET`/`POST /api/v1/emails/unsubscribe` -- email unsubscribe, authorised by the signed unsubscribe token
 - `GET /api/v1/cron/emails` -- the external email-cron trigger, authorised by an `x-cron-secret` header matching `CRON_SECRET`

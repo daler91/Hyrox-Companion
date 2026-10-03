@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { type StravaConnection } from "@shared/schema";
 import { type DistanceUnit } from "@shared/unitConversion";
-import type { Request, Response, Router } from "express";
+import type { CookieOptions, Request, Response, Router } from "express";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
@@ -69,6 +69,38 @@ const stravaStatusLimiter = rateLimiter("stravaStatus", 60, RATE_LIMIT_WINDOW_15
 const stravaDisconnectLimiter = rateLimiter("stravaDisconnect", 10, RATE_LIMIT_WINDOW_15M_MS);
 const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 
+// S3 (CODEBASE_ANALYSIS_2026-10-03): the signed state says WHICH user to link
+// but not WHICH browser started the flow, so any signed-in user could mint one
+// and hand the authorize URL to a victim, whose browser would then link the
+// victim's Strava to the minter's account (RFC 6749 §10.12). /auth therefore
+// also sets this short-lived cookie holding a hash of the state, and the
+// callback refuses a state the completing browser does not hold the cookie
+// for. A cookie rather than a Clerk-session comparison: the __session JWT
+// lives 60 s, so it has usually lapsed by the time the athlete returns from
+// Strava's consent screen, and the dev auth bypass has no session at all.
+// Naming and Secure follow the CSRF cookie: the __Host- prefix (which
+// requires Path=/) stops a sibling subdomain from planting one. SameSite=Lax,
+// not Strict, so it rides Strava's cross-site top-level redirect back.
+const STRAVA_OAUTH_COOKIE = env.NODE_ENV === "production" ? "__Host-fitai.strava-oauth" : "fitai.strava-oauth";
+const STRAVA_OAUTH_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: env.NODE_ENV === "production",
+  path: "/",
+};
+
+function stateBindingValue(state: string): string {
+  return crypto.createHash("sha256").update(state).digest("base64url");
+}
+
+function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
+  if (typeof cookieValue !== "string" || cookieValue === "") return false;
+  // Hash both sides to equal-length buffers so timingSafeEqual never throws
+  // on a malformed cookie (same approach as verifySignedState).
+  const presented = crypto.createHash("sha256").update(cookieValue).digest();
+  const expected = crypto.createHash("sha256").update(stateBindingValue(state)).digest();
+  return crypto.timingSafeEqual(presented, expected);
+}
 
 export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
@@ -324,12 +356,24 @@ function handleStravaAuth(req: Request, res: Response) {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("scope", STRAVA_SCOPE);
   authUrl.searchParams.set("state", state);
+  // Strava's default ("auto") skips the consent screen for an athlete who
+  // already authorized the app, so a link would connect them silently (S3).
+  authUrl.searchParams.set("approval_prompt", "force");
 
+  res.cookie(STRAVA_OAUTH_COOKIE, stateBindingValue(state), {
+    ...STRAVA_OAUTH_COOKIE_OPTIONS,
+    maxAge: STATE_MAX_AGE_MS,
+  });
   res.json({ authUrl: authUrl.toString() });
 }
 
 async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
+  // The binding cookie is single-use like the state: read it, then clear it
+  // up front so every outcome below leaves none behind.
+  const cookies: Record<string, unknown> | undefined = req.cookies;
+  const bindingCookie = cookies?.[STRAVA_OAUTH_COOKIE];
+  res.clearCookie(STRAVA_OAUTH_COOKIE, STRAVA_OAUTH_COOKIE_OPTIONS);
 
   if (stravaError) {
     reqLogger(req).error("Strava auth error received from provider");
@@ -344,6 +388,17 @@ async function handleStravaCallback(req: Request, res: Response) {
   const verified = verifySignedState(state);
   if (!verified) {
     reqLogger(req).error("Strava OAuth state invalid or expired - possible CSRF attack");
+    return res.redirect("/settings?strava=error");
+  }
+
+  // S3 (CODEBASE_ANALYSIS_2026-10-03): only the browser that called /auth may
+  // complete the flow. Checked before the claim below so a captured callback
+  // URL replayed from another browser cannot burn the owner's in-flight state.
+  if (!isStateBoundToBrowser(bindingCookie, state)) {
+    reqLogger(req).error(
+      { hasBindingCookie: typeof bindingCookie === "string" },
+      "Strava OAuth state not bound to this browser - possible CSRF attack",
+    );
     return res.redirect("/settings?strava=error");
   }
 
