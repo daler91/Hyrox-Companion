@@ -1,5 +1,6 @@
 import webpush from "web-push";
 
+import { PUSH_SEND_TIMEOUT_MS } from "./constants";
 import { env } from "./env";
 import { logger } from "./logger";
 import { assertResolvedHostIsPublic } from "./ssrfGuard";
@@ -21,6 +22,50 @@ export function isPushEnabled(): boolean {
   return Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_EMAIL);
 }
 
+/**
+ * Browser push services a PushManager subscription can point at: FCM (Chrome
+ * and most Chromium browsers), Mozilla autopush (Firefox), Apple (Safari) and
+ * WNS (Edge).
+ * Any other endpoint is a server the user chose, which could stall a send or
+ * stream an unbounded body that web-push buffers into one string and crashes
+ * the process with. S2 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const PUSH_SERVICE_HOSTS = new Set(["fcm.googleapis.com"]);
+const PUSH_SERVICE_HOST_SUFFIXES = ["push.services.mozilla.com", "push.apple.com", "notify.windows.com"];
+
+/**
+ * The raw endpoint's authority must be a plain hostname (letters, digits, dots,
+ * hyphens) followed by the path, query, fragment or end. web-push connects to
+ * legacy url.parse()'s hostname, which stops at a '%' or ';' that new URL()
+ * decodes or keeps: "https://127.0.0.1%2eweb.push.apple.com/p" is
+ * 127.0.0.1.web.push.apple.com to new URL() but 127.0.0.1 to web-push.
+ * Rejecting anything else in the raw authority means both parsers see the same
+ * host. S2 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const PLAIN_HTTPS_AUTHORITY = /^https:\/\/([a-z0-9.-]+)(?:[/?#]|$)/i;
+
+/**
+ * True when `endpoint` is an HTTPS URL on a known browser push service. Hosts
+ * match exactly or on a dot boundary, never by substring.
+ */
+export function isAllowedPushEndpoint(endpoint: string): boolean {
+  const rawHost = PLAIN_HTTPS_AUTHORITY.exec(endpoint)?.[1];
+  if (!rawHost) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+  const host = parsed.hostname;
+  if (host !== rawHost.toLowerCase()) return false;
+  return (
+    PUSH_SERVICE_HOSTS.has(host) ||
+    PUSH_SERVICE_HOST_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))
+  );
+}
+
 export interface PushPayload {
   title: string;
   body: string;
@@ -37,6 +82,16 @@ async function sendToSubscription(
 ): Promise<boolean> {
   if (!ensureInitialized()) return false;
 
+  // Rows saved before subscribe enforced the allowlist may point anywhere;
+  // prune them like a 410 rather than send. S2 (CODEBASE_ANALYSIS_2026-10-03)
+  if (!isAllowedPushEndpoint(sub.endpoint)) {
+    // subId is a uuid, no secrets.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ subId: sub.id }, "[push] Endpoint is not a known push service. Removing subscription.");
+    await storage.push.removeById(sub.id);
+    return false;
+  }
+
   const pushSubscription = {
     endpoint: sub.endpoint,
     keys: { p256dh: sub.p256dh, auth: sub.auth },
@@ -52,7 +107,9 @@ async function sendToSubscription(
     // schedule long after subscribe. Re-resolving immediately before the
     // request closes that TOCTOU/DNS-rebinding gap.
     await assertResolvedHostIsPublic(sub.endpoint);
-    await webpush.sendNotification(pushSubscription, JSON.stringify(payload));
+    await webpush.sendNotification(pushSubscription, JSON.stringify(payload), {
+      timeout: PUSH_SEND_TIMEOUT_MS,
+    });
     return true;
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes("resolves to a private/loopback address")) {

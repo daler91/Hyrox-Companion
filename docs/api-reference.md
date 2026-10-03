@@ -1821,7 +1821,7 @@ Persist a `PushSubscription` for the authenticated user. Multiple endpoints per 
 
 - **Auth:** Required
 - **Rate limit:** `push` category, 10/min
-- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }` — `endpoint` must be HTTPS and must pass the [SSRF guard](../server/ssrfGuard.ts), since the server later POSTs to it
+- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }` — `endpoint` must be HTTPS, must pass the [SSRF guard](../server/ssrfGuard.ts) and must be on a known browser push service (FCM, Mozilla autopush, Apple or WNS; see `isAllowedPushEndpoint` in `server/pushNotifications.ts`), since the server later POSTs to it. Any other host gets `400`
 - **Response:** `{ success: true }`
 
 The cap matters because each row is an arbitrary URL the server will send requests

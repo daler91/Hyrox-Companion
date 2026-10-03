@@ -24,6 +24,14 @@ export const STRAVA_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 export const EXTERNAL_API_TIMEOUT_MS = 15_000;
 
 /**
+ * Socket timeout for one web-push delivery. web-push sets none unless it is
+ * passed, so an endpoint that accepts the connection and never answers would
+ * hang the send, and the nutrition-reminder cron awaiting it under its
+ * advisory lock, forever. S2 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const PUSH_SEND_TIMEOUT_MS = 10_000;
+
+/**
  * Hard timeout budget for a single AI request (including all retries).
  * Reasoning-model calls on complex prompts routinely take
  * 30-60 seconds. The coach runs in a background pg-boss job so there is
