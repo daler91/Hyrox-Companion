@@ -91,6 +91,9 @@ vi.mock("../queue", () => {
   };
 });
 
+/** What a storage call resolves to when no row matched: the day is gone. */
+const NO_ROW = undefined;
+
 describe("planService", () => {
   describe("importPlanFromCSV", () => {
     let loggerErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -900,7 +903,7 @@ describe("planService — moving a missed session", () => {
     getPlanDayMock.mockResolvedValueOnce(
       createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-26" }),
     );
-    updatePlanDayMock.mockResolvedValueOnce(undefined);
+    updatePlanDayMock.mockResolvedValueOnce(NO_ROW);
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-28" }, userId);
 
     expect(recordPlanDayMoveMock).not.toHaveBeenCalled();

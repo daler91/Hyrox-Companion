@@ -65,6 +65,6 @@ describe("withPhotoReading", () => {
   });
 
   it("is the message alone without a photo", () => {
-    expect(withPhotoReading("Hi coach", undefined)).toBe("Hi coach");
+    expect(withPhotoReading("Hi coach")).toBe("Hi coach");
   });
 });

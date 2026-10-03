@@ -60,52 +60,6 @@ export const weeklyReviewIntentSchema = z.object({
     .optional(),
 });
 
-export const chatMessageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z
-    .string()
-    .min(1, "Message content cannot be empty")
-    .max(50000, "Message must be 50000 characters or less"),
-});
-
-export const chatRequestSchema = z.object({
-  message: z
-    .string()
-    .min(1, "Message is required")
-    .max(CHAT_MESSAGE_MAX_LENGTH, `Message must be ${CHAT_MESSAGE_MAX_LENGTH} characters or less`),
-  history: z
-    .array(chatMessageSchema)
-    .optional()
-    .default([])
-    .transform((h) => h.slice(-20)),
-  // Conversational plan editing: opt-out flag for chat surfaces that don't
-  // render proposal cards.
-  planEditing: z.boolean().optional().default(true),
-  // The workout the athlete is viewing when chatting from the workout-detail
-  // dialog: its plan day ("make this day easier") and/or its log. The server
-  // loads them, ownership-checked, into the chat prompt's FOCUSED WORKOUT.
-  focusPlanDayId: z.string().max(255).optional(),
-  focusWorkoutLogId: z.string().max(255).optional(),
-  // The server-owned conversation (server/services/chatConversation.ts): a
-  // client that sends its message ids has the server save both turns and read
-  // the history from the database, ignoring `history`. A retry sends the same
-  // userMessageId (saved once) and the failed reply's id to replace.
-  userMessageId: z.uuid().optional(),
-  assistantMessageId: z.uuid().optional(),
-  replaceAssistantId: z.uuid().optional(),
-  // One photo with the message (I20): read for the coach, never stored. Lazy
-  // because the image checks are declared further down this module.
-  photo: z.lazy(() => chatPhotoSchema).optional(),
-})
-  .refine((body) => (body.userMessageId === undefined) === (body.assistantMessageId === undefined), {
-    message: "Send userMessageId and assistantMessageId together",
-    path: ["assistantMessageId"],
-  })
-  .refine((body) => body.userMessageId === undefined || body.userMessageId !== body.assistantMessageId, {
-    message: "userMessageId and assistantMessageId must differ",
-    path: ["assistantMessageId"],
-  });
-
 export const parseExercisesRequestSchema = z.object({
   text: z
     .string()
@@ -200,6 +154,51 @@ export type ParseExercisesFromImageRequest = z.infer<typeof parseExercisesFromIm
 /** A photo attached to a chat message (AI coach chat review, I20). */
 export const chatPhotoSchema = base64ImageSchema(CHAT_PHOTO_MAX_BASE64_CHARS, "Photo must be 3MB or less");
 export type ChatPhoto = z.infer<typeof chatPhotoSchema>;
+
+export const chatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z
+    .string()
+    .min(1, "Message content cannot be empty")
+    .max(50000, "Message must be 50000 characters or less"),
+});
+
+export const chatRequestSchema = z.object({
+  message: z
+    .string()
+    .min(1, "Message is required")
+    .max(CHAT_MESSAGE_MAX_LENGTH, `Message must be ${CHAT_MESSAGE_MAX_LENGTH} characters or less`),
+  history: z
+    .array(chatMessageSchema)
+    .optional()
+    .default([])
+    .transform((h) => h.slice(-20)),
+  // Conversational plan editing: opt-out flag for chat surfaces that don't
+  // render proposal cards.
+  planEditing: z.boolean().optional().default(true),
+  // The workout the athlete is viewing when chatting from the workout-detail
+  // dialog: its plan day ("make this day easier") and/or its log. The server
+  // loads them, ownership-checked, into the chat prompt's FOCUSED WORKOUT.
+  focusPlanDayId: z.string().max(255).optional(),
+  focusWorkoutLogId: z.string().max(255).optional(),
+  // The server-owned conversation (server/services/chatConversation.ts): a
+  // client that sends its message ids has the server save both turns and read
+  // the history from the database, ignoring `history`. A retry sends the same
+  // userMessageId (saved once) and the failed reply's id to replace.
+  userMessageId: z.uuid().optional(),
+  assistantMessageId: z.uuid().optional(),
+  replaceAssistantId: z.uuid().optional(),
+  // One photo with the message (I20): read for the coach, never stored.
+  photo: chatPhotoSchema.optional(),
+})
+  .refine((body) => (body.userMessageId === undefined) === (body.assistantMessageId === undefined), {
+    message: "Send userMessageId and assistantMessageId together",
+    path: ["assistantMessageId"],
+  })
+  .refine((body) => body.userMessageId === undefined || body.userMessageId !== body.assistantMessageId, {
+    message: "userMessageId and assistantMessageId must differ",
+    path: ["assistantMessageId"],
+  });
 
 export const importPlanRequestSchema = z.object({
   csvContent: z
