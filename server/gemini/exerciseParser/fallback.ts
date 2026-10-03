@@ -1,3 +1,4 @@
+import { SET_NUMBER_MAX } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
 
 import { sanitizeLabel } from "./mapping";
@@ -129,7 +130,12 @@ function readPositiveInteger(value: string, index: number): { value: number; nex
 
 function parseSetExpression(value: string, startIndex: number): HeuristicSetExpression | null {
   const sets = readPositiveInteger(value, startIndex);
-  if (!sets) return null;
+  // S1 (CODEBASE_ANALYSIS_2026-10-03): one set object is built per set, so an
+  // unbounded count ("Back squat 10000000 x 5") stalled or crashed the
+  // instance. A count past the set-number ceiling is not a set count (a typo, a
+  // distance, a load), so reject the reading rather than clamp it: clamping
+  // would invent 100 sets the athlete never did.
+  if (!sets || sets.value > SET_NUMBER_MAX) return null;
 
   let cursor = skipWhitespace(value, sets.nextIndex);
   if (value[cursor]?.toLowerCase() !== "x") return null;
@@ -325,12 +331,25 @@ function buildHeuristicFallbackRow(candidate: HeuristicFallbackCandidate): unkno
   };
 }
 
+// S1 (CODEBASE_ANALYSIS_2026-10-03): each line is capped at SET_NUMBER_MAX
+// sets, but a reparse parses up to ~100k characters of stored workout text, and
+// every 8 of them ("a 100x1;") made 100 more sets — over a million set objects,
+// built and zod-validated synchronously. Stop once the paste passes the write
+// path's set-row cap (MAX_SET_ROWS_PER_WORKOUT, workoutService/setRows.ts):
+// nothing past it can be saved. The row that crosses the cap is kept, so an
+// over-cap paste still fails that cap's 400 instead of saving a truncated workout.
+export const HEURISTIC_FALLBACK_MAX_SETS = 1000;
+
 export function heuristicFallbackRowsFromText(text: string): unknown[] {
-  return text
-    .split(HEURISTIC_CHUNK_SPLIT_PATTERN)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map(parseHeuristicFallbackChunk)
-    .filter((candidate): candidate is HeuristicFallbackCandidate => candidate != null)
-    .map(buildHeuristicFallbackRow);
+  const rows: unknown[] = [];
+  let totalSets = 0;
+  for (const chunk of text.split(HEURISTIC_CHUNK_SPLIT_PATTERN)) {
+    if (totalSets > HEURISTIC_FALLBACK_MAX_SETS) break;
+    const trimmed = chunk.trim();
+    const candidate = trimmed ? parseHeuristicFallbackChunk(trimmed) : null;
+    if (!candidate) continue;
+    rows.push(buildHeuristicFallbackRow(candidate));
+    totalSets += candidate.sets;
+  }
+  return rows;
 }

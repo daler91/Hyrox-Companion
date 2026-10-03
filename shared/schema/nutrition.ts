@@ -1,3 +1,4 @@
+import { dayDiff } from "../dateUtils";
 import type { EnergyBalanceSummary } from "../energyBalance";
 import type { MealFuelTargets } from "../mealFuelling";
 import type { Per100gMacros } from "../nutritionScaling";
@@ -300,12 +301,52 @@ export interface RecipeListItem {
 // Phase 3 (Integration) — relate fuelling to training.
 // ---------------------------------------------------------------------------
 
-// Block view range. `to` defaults to the user's local "today" server-side.
-export const blockViewQuerySchema = z.object({
-  from: isoDate,
-  to: isoDate.optional(),
-});
+/**
+ * Most days a /block or /summary-range window may cover, inclusive. Both build
+ * one point per day synchronously, and an unbounded span let one request stall
+ * or crash the instance (PF1, CODEBASE_ANALYSIS_2026-10-03). Two years: double
+ * the longest fixed window a client asks for (the Analytics Fuelling tab's
+ * 366-day "All time"). The Timeline's visible window has no fixed length, so
+ * the Timeline narrows its request to this many days around today
+ * (client/src/pages/timeline/fuellingWindow.ts).
+ */
+export const NUTRITION_RANGE_MAX_DAYS = 731;
+
+// Calendar bounds for those windows. The span cap alone is not enough: the
+// training-load day loop compares dates as strings, so from a `to` of
+// 9999-12-31 it steps to "10000-01-01", which sorts first, and never stops.
+const NUTRITION_RANGE_EARLIEST = "1900-01-01";
+const NUTRITION_RANGE_LATEST = "2100-12-31";
+
+const rangeDate = isoDate.refine(
+  (s) => s >= NUTRITION_RANGE_EARLIEST && s <= NUTRITION_RANGE_LATEST,
+  { message: `Expected a date from ${NUTRITION_RANGE_EARLIEST} to ${NUTRITION_RANGE_LATEST}` },
+);
+
+function checkRangeSpan({ from, to }: { from: string; to?: string }, ctx: z.RefinementCtx): void {
+  if (to === undefined) return;
+  if (from > to) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "from must be on or before to", path: ["from"] });
+  } else if (dayDiff(from, to) >= NUTRITION_RANGE_MAX_DAYS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `The range can cover at most ${NUTRITION_RANGE_MAX_DAYS} days`,
+      path: ["to"],
+    });
+  }
+}
+
+// Block view range. `to` defaults to the user's local "today" server-side, so
+// a from-only span is checked by the route, against nutritionRangeSchema.
+export const blockViewQuerySchema = z
+  .object({ from: rangeDate, to: rangeDate.optional() })
+  .superRefine(checkRangeSpan);
 export type BlockViewQuery = z.infer<typeof blockViewQuerySchema>;
+
+/** The block / summary-range window once `to` is resolved: same rules, `to` required. */
+export const nutritionRangeSchema = z
+  .object({ from: rangeDate, to: rangeDate })
+  .superRefine(checkRangeSpan);
 
 /** Phase 3 — how far the logged fuelling is from the session target (target −
  *  logged). Positive = still to go; negative = already over. */

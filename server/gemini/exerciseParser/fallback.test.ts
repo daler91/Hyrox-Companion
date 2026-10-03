@@ -1,6 +1,7 @@
+import { SET_NUMBER_MAX } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { heuristicFallbackRowsFromText } from "./fallback";
+import { HEURISTIC_FALLBACK_MAX_SETS, heuristicFallbackRowsFromText } from "./fallback";
 
 type FallbackRow = {
   exerciseName: string;
@@ -77,5 +78,60 @@ describe("heuristicFallbackRowsFromText (single-measurement / circuit lines)", (
     expect(row.exerciseName).toBe("back_squat");
     expect(row.sets).toHaveLength(3);
     expect(row.sets[0]).toMatchObject({ setNumber: 1, reps: 5 });
+  });
+});
+
+// S1 (CODEBASE_ANALYSIS_2026-10-03): the set count read from athlete text used
+// to be unbounded, and one set object was built per set — so a few characters
+// ("Back squat 10000000 x 5") blocked the event loop or ran the heap out.
+describe("heuristicFallbackRowsFromText (set-count bound)", () => {
+  it("accepts a set count at the set-number ceiling", () => {
+    const [row] = rows(`Back Squat ${SET_NUMBER_MAX}x5`);
+    expect(row.sets).toHaveLength(SET_NUMBER_MAX);
+    expect(row.sets[SET_NUMBER_MAX - 1]).toMatchObject({ setNumber: SET_NUMBER_MAX, reps: 5 });
+  });
+
+  it("does not read a number above the set-number ceiling as a set count", () => {
+    expect(rows(`Back Squat ${SET_NUMBER_MAX + 1}x5`)).toHaveLength(0);
+    expect(rows(`Squat: ${SET_NUMBER_MAX + 1} x 5`)).toHaveLength(0);
+  });
+
+  it.each([
+    "Back squat 10000000 x 5",
+    "Back squat: 30000000 x 5",
+    "Back squat 99999999999999999999 x 5",
+  ])("returns fast, bounded output for %j", (text) => {
+    const started = performance.now();
+    const parsed = rows(text);
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(parsed).toHaveLength(0);
+  });
+
+  it("keeps the other lines of a paste when one has an absurd set count", () => {
+    const parsed = rows("Back squat 10000000 x 5\nDeadlift 3 x 5");
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].exerciseName).toBe("deadlift");
+    expect(parsed[0].sets).toHaveLength(3);
+  });
+
+  // A reparse hands the fallback the stored mainWorkout + accessory (~100k
+  // characters), and every 8 characters here is another SET_NUMBER_MAX sets.
+  it("bounds the total sets of a long paste", () => {
+    const text = `a ${SET_NUMBER_MAX}x1;`.repeat(12_375); // 99,000 characters
+    const started = performance.now();
+    const parsed = rows(text);
+    expect(performance.now() - started).toBeLessThan(250);
+    const totalSets = parsed.reduce((sum, row) => sum + row.sets.length, 0);
+    // Past the cap, so the write path still rejects it rather than saving a
+    // truncated workout — but by at most one row.
+    expect(totalSets).toBeGreaterThan(HEURISTIC_FALLBACK_MAX_SETS);
+    expect(totalSets).toBeLessThanOrEqual(HEURISTIC_FALLBACK_MAX_SETS + SET_NUMBER_MAX);
+  });
+
+  it("keeps every row of a paste up to the set cap", () => {
+    const lines = HEURISTIC_FALLBACK_MAX_SETS / 10;
+    const parsed = rows(Array.from({ length: lines }, () => "Deadlift 10 x 5").join("\n"));
+    expect(parsed).toHaveLength(lines);
+    expect(parsed.reduce((sum, row) => sum + row.sets.length, 0)).toBe(HEURISTIC_FALLBACK_MAX_SETS);
   });
 });

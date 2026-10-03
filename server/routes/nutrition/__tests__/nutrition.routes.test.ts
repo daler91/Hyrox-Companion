@@ -1,4 +1,6 @@
+import { addDaysToISODate, toIsoDateUtc } from "@shared/dateUtils";
 import { OAT_BAR_LABEL_SCAN } from "@shared/nutritionTestFixtures";
+import { NUTRITION_RANGE_MAX_DAYS } from "@shared/schema";
 import express, { Router } from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -716,9 +718,11 @@ describe("nutrition routes", () => {
     });
 
     it("defaults `to` to the user's local today when omitted", async () => {
-      const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01");
+      // Relative to now: a from-only range is span-capped once `to` resolves (PF1).
+      const from = addDaysToISODate(toIsoDateUtc(new Date()), -30);
+      const res = await request(app).get(`/api/v1/nutrition/block?from=${from}`);
       expect(res.status).toBe(200);
-      expect(res.body.from).toBe("2026-06-01");
+      expect(res.body.from).toBe(from);
       expect(res.body.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
@@ -940,6 +944,67 @@ describe("nutrition routes", () => {
     });
   });
 });
+
+// PF1 (CODEBASE_ANALYSIS_2026-10-03): both range endpoints zero-fill one point
+// per day synchronously, so the span (explicit, or with `to` defaulted to the
+// athlete's local today) is capped and the calendar bounded. A separate
+// top-level suite for the max-lines-per-function reason given below.
+describe.each(["/api/v1/nutrition/block", "/api/v1/nutrition/summary-range"])(
+  "nutrition range bounds (PF1): %s",
+  (path) => {
+    let app: express.Express;
+    // 12:00Z is 07:00 in Chicago, so the athlete's local today is the same date.
+    const today = "2026-06-10";
+
+    beforeEach(() => {
+      vi.resetAllMocks();
+      clearRateLimitBuckets();
+      app = buildApp();
+      // Fake only Date so supertest's real timers keep running.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(`${today}T12:00:00Z`));
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago" } as never);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([]);
+      vi.mocked(storage.nutrition.listTargets).mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("serves an explicit range of exactly the cap", async () => {
+      const to = addDaysToISODate("2025-01-01", NUTRITION_RANGE_MAX_DAYS - 1);
+      const res = await request(app).get(`${path}?from=2025-01-01&to=${to}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ from: "2025-01-01", to });
+    });
+
+    it("serves a from-only range of exactly the cap, `to` defaulting to the athlete's today", async () => {
+      const from = addDaysToISODate(today, -(NUTRITION_RANGE_MAX_DAYS - 1));
+      const res = await request(app).get(`${path}?from=${from}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ from, to: today });
+    });
+
+    it.each([
+      ["an explicit span one day over the cap", `from=2025-01-01&to=${addDaysToISODate("2025-01-01", NUTRITION_RANGE_MAX_DAYS)}`],
+      ["a from-only span one day over the cap", `from=${addDaysToISODate(today, -NUTRITION_RANGE_MAX_DAYS)}`],
+      ["from after to", "from=2026-06-02&to=2026-06-01"],
+      ["a from after the athlete's today with no to", "from=2026-06-11"],
+      ["a far-future one-day range", "from=9999-12-31&to=9999-12-31"],
+      ["an ancient from with no to", "from=0001-01-01"],
+    ])("400s on %s before reading anything", async (_label, query) => {
+      const res = await request(app).get(`${path}?${query}`);
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", details: { issues: expect.any(Array) } });
+      expect(storage.nutrition.listEntriesWithFoodForDateRange).not.toHaveBeenCalled();
+      expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    });
+  },
+);
 
 // Kept as a separate top-level suite (not nested in "nutrition routes") so the
 // outer describe callback stays under the max-lines-per-function limit.

@@ -1,4 +1,4 @@
-import { exerciseSetSchema, type ParsedExercise, type StructureBlockInput } from "@shared/schema";
+import { exerciseSetSchema, type ParsedExercise, SET_NUMBER_MAX, type StructureBlockInput } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { z } from "zod";
 
@@ -36,7 +36,9 @@ export const parsedExerciseSchema = z.preprocess((raw) => {
   customLabel: z.string().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
   missingFields: z.array(z.string()).optional().nullable(),
-  sets: z.array(parserExerciseSetSchema).min(1),
+  // No row may carry more sets than a set can be numbered (S1,
+  // CODEBASE_ANALYSIS_2026-10-03).
+  sets: z.array(parserExerciseSetSchema).min(1).max(SET_NUMBER_MAX),
 }));
 
 export const parserResponseSchema = z.object({

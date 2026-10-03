@@ -1,4 +1,4 @@
-import { exerciseSetSchema } from "@shared/schema";
+import { exerciseSetSchema, SET_NUMBER_MAX } from "@shared/schema";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { __resetCircuitBreakerForTests } from "./ai/circuitBreaker";
@@ -215,6 +215,12 @@ describe("parsedExerciseSchema", () => {
     expect(() =>
       parsedExerciseSchema.parse({ ...validExercise, confidence: -5 }),
     ).toThrow();
+  });
+
+  it("caps a row's sets at the set-number ceiling (S1)", () => {
+    const sets = (count: number) => Array.from({ length: count }, () => ({ reps: 5 }));
+    expect(parsedExerciseSchema.safeParse({ ...validExercise, sets: sets(SET_NUMBER_MAX) }).success).toBe(true);
+    expect(parsedExerciseSchema.safeParse({ ...validExercise, sets: sets(SET_NUMBER_MAX + 1) }).success).toBe(false);
   });
 });
 

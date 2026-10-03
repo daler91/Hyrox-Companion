@@ -19,6 +19,15 @@ import type { CoachNoteInputs } from "./plans";
  * into a minutes field, which is exactly the error that shipped (audit C7, H1).
  */
 export const SET_TIME_MAX_MINUTES = 1_440;
+
+/**
+ * Highest `setNumber` a set can carry, so also the most sets one exercise can
+ * hold. The AI parser bounds its `sets` array with it, and its heuristic
+ * fallback refuses to read a larger number as a set count: that count used to
+ * be unbounded, and one set object was built per set (S1,
+ * CODEBASE_ANALYSIS_2026-10-03).
+ */
+export const SET_NUMBER_MAX = 100;
 // Workout log types and schemas
 // Reject workout dates more than 24h in the future. A 24h grace window lets
 // Strava/Garmin activities that straddle midnight in the user's timezone
@@ -411,7 +420,7 @@ const plannedSetMetricFields = {
 export const exerciseSetSchema = withBlockStepPairing(
   z
     .object({
-      setNumber: z.number().min(1).max(100).optional().nullable(),
+      setNumber: z.number().min(1).max(SET_NUMBER_MAX).optional().nullable(),
       ...setMetricFields,
       // Planned (prescribed) values, captured at log creation. Optional so
       // ad-hoc logs without a prescription can simply omit them. plannedReps
@@ -742,7 +751,7 @@ export const patchExerciseSetBodySchema = disallowLegacyEmomRowName(
         exerciseName: z.string().min(1).max(255).optional(),
         customLabel: z.string().max(255).nullable().optional(),
         category: z.string().max(50).optional(),
-        setNumber: z.number().int().min(1).max(100).optional(),
+        setNumber: z.number().int().min(1).max(SET_NUMBER_MAX).optional(),
         ...measurableSetFields,
         sortOrder: z.number().int().nullable().optional(),
         // Optional optimistic-lock version (W18). When omitted, the update
@@ -762,7 +771,7 @@ export const addExerciseSetBodySchema = disallowLegacyEmomRowName(
       exerciseName: z.string().min(1).max(255),
       customLabel: z.string().max(255).nullable().optional(),
       category: z.string().max(50),
-      setNumber: z.number().int().min(1).max(100).default(1),
+      setNumber: z.number().int().min(1).max(SET_NUMBER_MAX).default(1),
       ...measurableSetFields,
       confidence: z.number().int().min(0).max(100).nullable().optional(),
     }),
