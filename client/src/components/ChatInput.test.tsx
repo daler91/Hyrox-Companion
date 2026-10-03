@@ -226,7 +226,7 @@ describe("ChatInput photos (I20)", () => {
     render(<ChatInput onSend={onSend} />);
 
     await attachPhoto(user);
-    expect(await screen.findByAltText("Photo to send")).toHaveAttribute("src", "blob:photo-1");
+    expect(await screen.findByAltText("Attachment to send")).toHaveAttribute("src", "blob:photo-1");
     await user.type(screen.getByTestId("input-chat-message"), "How was my pacing?{Enter}");
 
     expect(onSend).toHaveBeenCalledWith("How was my pacing?", {

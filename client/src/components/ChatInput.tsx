@@ -170,7 +170,7 @@ export function ChatInput({
       <div className="relative min-w-0 flex-1">
         {photo && (
           <div className="mb-1 flex items-center gap-2" data-testid="chat-photo-preview">
-            <img src={photo.previewUrl} alt="Photo to send" className="h-14 w-14 rounded-md border object-cover" />
+            <img src={photo.previewUrl} alt="Attachment to send" className="h-14 w-14 rounded-md border object-cover" />
             <Button
               type="button"
               size="icon"
