@@ -1,3 +1,4 @@
+import type { ChatPhoto } from "@shared/schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { createLocalMessage, type Message } from "@/lib/chatMessage";
@@ -35,6 +36,8 @@ interface SendMessageOptions {
   userMessageId?: string;
   /** A retry: the failed reply the server drops, if it saved any of it. */
   replaceAssistantId?: string;
+  /** One photo with the message, read for the coach (I20). */
+  photo?: ChatPhoto;
 }
 
 const DEFAULT_WELCOME = "hey. i'm your ai training coach. ask me about pacing, sessions, or anything you're training for — running, functional fitness, hyrox, the lot.";
@@ -121,7 +124,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     // Claim this send's stream generation; later flushes check it (W14).
     const generationId = ++streamGenerationRef.current;
 
-    const userMessage = createLocalMessage("user", content, sendOptions.userMessageId);
+    const { photo } = sendOptions;
+    const userMessage: Message = {
+      ...createLocalMessage("user", content, sendOptions.userMessageId),
+      ...(photo ? { attachment: { kind: "photo" } } : {}),
+    };
     setMessages((prev) => [...prev, userMessage]);
     pinAutoScroll();
     setIsLoading(true);
@@ -146,6 +153,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           assistantMessageId,
           replaceAssistantId: sendOptions.replaceAssistantId,
         },
+        ...(photo ? { photo } : {}),
       };
 
       if (useStreaming && supportsResponseStreaming()) {
@@ -185,6 +193,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         fullResponse,
         assistantMessageId,
         userMessage,
+        photo,
         setMessages,
         setStreamError,
       });
@@ -216,6 +225,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     sendMessage(retry.content, {
       userMessageId: retry.userMessageId,
       replaceAssistantId: failedMessageId,
+      ...(retry.photo ? { photo: retry.photo } : {}),
     }).catch(ignoreResult);
   }, [sendMessage]);
 

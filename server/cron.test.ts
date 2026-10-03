@@ -358,6 +358,64 @@ describe("recycle bin purge cron job", () => {
   });
 });
 
+describe("plan-day move prune cron job", () => {
+  let pruneCallback: () => Promise<void>;
+  const storage = { planDayMoves: { deleteBefore: vi.fn() } };
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+
+    const scheduled = startCronWith(storage);
+    pruneCallback = scheduled("55 3 * * *");
+  });
+
+  beforeEach(() => {
+    storage.planDayMoves.deleteBefore.mockReset();
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("holds its own advisory lock key", () => {
+    expect(CRON_LOCK_KEYS.planDayMovePrune).toBe(42_010_020n);
+  });
+
+  it("drops moves older than 30 days under its lock and logs the count", async () => {
+    storage.planDayMoves.deleteBefore.mockResolvedValueOnce(4);
+    const before = Date.now();
+
+    await pruneCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.planDayMovePrune, name: "planDayMovePrune" },
+      expect.any(Function),
+    );
+    const cutoff = storage.planDayMoves.deleteBefore.mock.calls[0][0] as Date;
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(thirtyDays - 1000);
+    expect(before - cutoff.getTime()).toBeLessThanOrEqual(thirtyDays + 1000);
+    expect(logger.info).toHaveBeenCalledWith({ context: "cron", pruned: 4 }, "Plan-day move prune: removed 4 old move(s)");
+  });
+
+  it("stays quiet when nothing was old enough", async () => {
+    storage.planDayMoves.deleteBefore.mockResolvedValueOnce(0);
+
+    await pruneCallback();
+
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it("logs and swallows a prune failure instead of throwing into the scheduler", async () => {
+    const error = new Error("db unavailable");
+    storage.planDayMoves.deleteBefore.mockRejectedValueOnce(error);
+
+    await expect(pruneCallback()).resolves.toBeUndefined();
+
+    expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error, job: "planDayMovePrune" }, "Cron job failed");
+  });
+});
+
 describe("strava auto-sync cron jobs", () => {
   let scanCallback: () => Promise<void>;
   let ensureCallback: () => Promise<void>;

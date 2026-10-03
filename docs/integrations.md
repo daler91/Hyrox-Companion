@@ -724,6 +724,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | Strava webhook subscription check | `20 */6 * * *` UTC (six-hourly, plus 30 s after boot) | `stravaWebhookEnsure` |
 | Session-stream backfill | `11,26,41,56 * * * *` UTC (every 15 minutes, offset from the auto-sync scan) | `sessionStreamBackfill` |
 | Recycle bin purge | `45 3 * * *` UTC (drops `recycle_bin_items` past their 90-day expiry; see [database.md](database.md#recycle_bin_items)) | `recycleBinPurge` |
+| Plan-day move prune | `55 3 * * *` UTC (drops `plan_day_moves` older than 30 days, past the coach's two-week record; see [database.md](database.md#plan_day_moves)) | `planDayMovePrune` |
 
 #### Analytics Recompute Scan
 

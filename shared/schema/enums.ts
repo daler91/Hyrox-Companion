@@ -160,3 +160,16 @@ export type AthleteFactCategory = (typeof athleteFactCategoryEnum)[number];
  */
 export const athleteFactSourceEnum = ["athlete", "plan_generation", "onboarding", "chat"] as const;
 export type AthleteFactSource = (typeof athleteFactSourceEnum)[number];
+
+/**
+ * How a plan day came to move outside the coach's proposals, as the coach's
+ * record of plan changes lists it (server/services/planDayMoves.ts):
+ * - `moved`: the athlete gave it a new date, on the timeline, in its edit
+ *   sheet or with a status change;
+ * - `folded` / `shortened`: the athlete picked a missed session's new day on
+ *   its recovery card, keeping it whole or cut down;
+ * - `recovery_undone`: the athlete took one of those back, so it returned to
+ *   the day it was missed on.
+ */
+export const planDayMoveKindEnum = ["moved", "folded", "shortened", "recovery_undone"] as const;
+export type PlanDayMoveKind = (typeof planDayMoveKindEnum)[number];

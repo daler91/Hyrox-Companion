@@ -1,5 +1,5 @@
 ﻿import { planDayPriorityEnum, planDayRecoveryEnum } from "../enums";
-import { planDays, trainingPlans } from "../tables";
+import { type planDayMoves, planDays, trainingPlans } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { PlanDayRecoveryUndo } from "./recovery";
 import { dateStringSchema } from "./requests";
@@ -116,6 +116,8 @@ export type InsertPlanDay = z.infer<typeof insertPlanDaySchema>;
 export type UpdatePlanDay = z.infer<typeof updatePlanDaySchema>;
 export type UpdatePlanDayRouteBody = z.infer<typeof updatePlanDayRouteSchema>;
 export type PlanDay = typeof planDays.$inferSelect;
+/** A move the athlete made to a plan day themselves (plan_day_moves), not one of the coach's proposals. */
+export type PlanDayMove = typeof planDayMoves.$inferSelect;
 
 export const coachModificationKindSchema = z.enum([
   "fatigue_volume_reduction",

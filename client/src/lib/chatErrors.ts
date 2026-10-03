@@ -24,10 +24,18 @@ const CHAT_SLOW_FAILURE = "The coach took too long to start replying. Please try
  * operator conditions with a known code, so they get fixed copy instead of
  * "something went wrong" — and no Retry, which cannot clear either.
  */
-const KNOWN_UNAVAILABLE_CODES: Readonly<Record<string, string>> = {
-  AI_FEATURES_DISABLED: "AI coaching is switched off for now. Please try again later.",
-  AI_GLOBAL_BUDGET_EXCEEDED: "The AI coach is very busy right now. Please try again later.",
-};
+const KNOWN_UNAVAILABLE_CODES: ReadonlyMap<string, string> = new Map([
+  ["AI_FEATURES_DISABLED", "AI coaching is switched off for now. Please try again later."],
+  ["AI_GLOBAL_BUDGET_EXCEEDED", "The AI coach is very busy right now. Please try again later."],
+]);
+
+/**
+ * A 5xx with a known code whose fix is the athlete's to try: fixed copy that
+ * says what to do, with Retry, since sending again may work.
+ */
+const KNOWN_RETRYABLE_CODES: ReadonlyMap<string, string> = new Map([
+  ["CHAT_PHOTO_UNREADABLE", "Couldn't read that photo. Try again, or say what it shows."],
+]);
 
 const failure = (message: string, retryable: boolean): ChatFailureDescription => ({
   aborted: false,
@@ -46,10 +54,10 @@ function parseHttpError(error: Error): { status: number; body: string } | null {
   return isStatus ? { status: Number(head), body: error.message.slice(4).trimStart() } : null;
 }
 
-function knownUnavailableMessage(body: string): string | null {
+function errorCodeOf(body: string): string | null {
   try {
     const code = (JSON.parse(body) as { code?: unknown } | null)?.code;
-    return typeof code === "string" ? (KNOWN_UNAVAILABLE_CODES[code] ?? null) : null;
+    return typeof code === "string" ? code : null;
   } catch {
     return null;
   }
@@ -63,8 +71,10 @@ function describeHttpFailure(error: Error): ChatFailureDescription {
     // limit): its own message says why, and resending won't change it.
     return failure(humanizeApiError(error), false);
   }
-  const unavailable = knownUnavailableMessage(http.body);
-  return unavailable ? failure(unavailable, false) : failure(CHAT_GENERIC_FAILURE, true);
+  const code = errorCodeOf(http.body) ?? "";
+  const unavailable = KNOWN_UNAVAILABLE_CODES.get(code);
+  if (unavailable) return failure(unavailable, false);
+  return failure(KNOWN_RETRYABLE_CODES.get(code) ?? CHAT_GENERIC_FAILURE, true);
 }
 
 /** Turn a rejected chat send into what the athlete should read. */

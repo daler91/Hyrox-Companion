@@ -1,4 +1,4 @@
-import type { ChatFactProposal, ChatSafetyNotice } from "@shared/schema";
+import type { ChatAttachment, ChatFactProposal, ChatPhoto, ChatSafetyNotice } from "@shared/schema";
 import { athleteFactCategoryEnum, chatFactProposalStatusEnum } from "@shared/schema/enums";
 import type { Dispatch, SetStateAction } from "react";
 
@@ -46,6 +46,13 @@ export function isChatFactProposal(value: unknown): value is ChatFactProposal {
   );
 }
 
+/** A saved message's photo, as what the coach read in it (I20). */
+export function isChatAttachment(value: unknown): value is ChatAttachment {
+  if (typeof value !== "object" || value === null) return false;
+  const { kind, reading } = value as Record<string, unknown>;
+  return kind === "photo" && typeof reading === "string";
+}
+
 /** Enough of a proposal to render its card; the rest is the server's own serializer. */
 export function isPlanProposalView(value: unknown): value is PlanProposalView {
   if (typeof value !== "object" || value === null) return false;
@@ -74,6 +81,7 @@ export function messageFromHistory(row: ChatHistoryMessage): Message {
     ...(isChatSafetyNotice(row.safetyNotice) ? { safetyNotice: row.safetyNotice } : {}),
     ...(isPlanProposalView(row.proposal) ? { proposal: row.proposal } : {}),
     ...(isChatFactProposal(row.factProposal) ? { factProposal: row.factProposal } : {}),
+    ...(row.role === "user" && isChatAttachment(row.attachment) ? { attachment: row.attachment } : {}),
     ...(row.role === "assistant" && (row.kind === "text" || row.kind === "proposal") ? { rateable: true } : {}),
     ...(row.feedback === "up" || row.feedback === "down" ? { feedback: row.feedback } : {}),
   };
@@ -123,6 +131,8 @@ interface HandleSendFailureArgs {
   fullResponse: string;
   assistantMessageId: string;
   userMessage: Message;
+  /** The photo the message carried, kept for a Retry (I20). */
+  photo?: ChatPhoto;
   setMessages: SetMessages;
   setStreamError: (message: string | null) => void;
 }
@@ -138,6 +148,7 @@ export function handleSendFailure({
   fullResponse,
   assistantMessageId,
   userMessage,
+  photo,
   setMessages,
   setStreamError,
 }: HandleSendFailureArgs): void {
@@ -150,7 +161,7 @@ export function handleSendFailure({
   const failure: MessageFailure = {
     message: description.message,
     ...(description.retryable
-      ? { retry: { content: userMessage.content, userMessageId: userMessage.id } }
+      ? { retry: { content: userMessage.content, userMessageId: userMessage.id, ...(photo ? { photo } : {}) } }
       : {}),
   };
   setMessages((prev) => {

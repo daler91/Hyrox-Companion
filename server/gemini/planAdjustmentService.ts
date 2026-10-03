@@ -26,7 +26,7 @@ export interface PlanAdjustmentGenerationInput {
   coachingMaterials?: string;
   /** Day the athlete is currently viewing (embedded workout chat). */
   focusPlanDayId?: string;
-  /** The RECENT PLAN CHANGES block (services/recentPlanChanges); empty when nothing was applied lately. */
+  /** The RECENT PLAN CHANGES block (services/recentPlanChanges): applied proposals and the athlete's own moves; empty when nothing changed lately. */
   recentPlanChanges?: string;
   userId?: string;
 }

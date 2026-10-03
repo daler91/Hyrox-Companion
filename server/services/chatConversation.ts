@@ -1,4 +1,5 @@
 import type {
+  ChatAttachment,
   ChatFactProposal,
   ChatMessage,
   ChatSafetyNotice,
@@ -10,6 +11,7 @@ import type {
 import { generateText } from "../ai/providers";
 import { logger } from "../logger";
 import { CHAT_ROLLING_SUMMARY_PROMPT, CHAT_SESSION_SUMMARY_PROMPT, type EarlierConversation } from "../prompts";
+import { withPhotoReading } from "../prompts/chatPhoto";
 import { storage } from "../storage";
 import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { appliedPlanDayIds } from "./planProposalUndo";
@@ -320,6 +322,11 @@ function placeProposalNotes(
   });
 }
 
+/** A saved turn's words as the coach reads them: an athlete's photo goes along as what it showed (I20). */
+function turnText(row: ChatMessage): string {
+  return row.role === "user" ? withPhotoReading(row.content, row.attachment?.reading) : row.content;
+}
+
 export function annotateSession(
   rows: ChatMessage[],
   proposals: ReadonlyMap<string, PlanAdjustmentProposal>,
@@ -330,7 +337,7 @@ export function annotateSession(
   placeProposalNotes(placements, rows, proposals);
   const turns = rows.map((row, index): ConversationTurn => {
     const notes = placements.get(index);
-    return { role: row.role === "user" ? "user" : "assistant", content: row.content, ...(notes ? { notes } : {}) };
+    return { role: row.role === "user" ? "user" : "assistant", content: turnText(row), ...(notes ? { notes } : {}) };
   });
   return { turns, notes: placements.get(rows.length) ?? [] };
 }
@@ -358,7 +365,7 @@ const FALLBACK_TURN_CHARS = 300;
 function transcriptOf(turns: ChatMessage[]): string {
   return turns
     .slice(-SUMMARY_TURNS)
-    .map((row) => `${row.role === "user" ? "Athlete" : "Coach"}: ${sanitizeUserInput(row.content.slice(0, SUMMARY_TURN_CHARS))}`)
+    .map((row) => `${row.role === "user" ? "Athlete" : "Coach"}: ${sanitizeUserInput(turnText(row).slice(0, SUMMARY_TURN_CHARS))}`)
     .join("\n\n");
 }
 
@@ -567,7 +574,7 @@ export async function saveUserTurn(
   turn: ServerOwnedTurn,
   content: string,
   focus: TurnFocus,
-  at: Date = new Date(),
+  options: { at?: Date; attachment?: ChatAttachment } = {},
 ): Promise<void> {
   await storage.users.saveChatMessageOnce({
     id: turn.userMessageId,
@@ -575,7 +582,9 @@ export async function saveUserTurn(
     role: "user",
     content,
     kind: "text",
-    timestamp: at,
+    timestamp: options.at ?? new Date(),
+    // What a photo showed, never the photo (I20).
+    ...(options.attachment ? { attachment: options.attachment } : {}),
     ...focusColumns(focus),
   });
 }

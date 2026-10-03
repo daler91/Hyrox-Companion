@@ -1,7 +1,8 @@
 import { dayDiff } from "@shared/dateUtils";
-import type { EnrichedPlanAdjustmentChange, PlanAdjustmentProposal } from "@shared/schema";
+import type { EnrichedPlanAdjustmentChange, PlanAdjustmentProposal, PlanDayMoveKind } from "@shared/schema";
 
 import { appliedPlanDayIds, isUndoable } from "../services/planProposalUndo";
+import type { RecentPlanDayMove } from "../storage/planDayMoves";
 import { getLocalDateStrSafe } from "../timezone";
 import { sanitizeUserInput } from "../utils/sanitize";
 import { weekdayDate } from "./coachingContext";
@@ -62,6 +63,34 @@ function describeChange(change: EnrichedPlanAdjustmentChange): string {
   return `${session}${on}: ${done.length > 0 ? done.join(", ") : "adjusted"}`;
 }
 
+/** What the record holds: the coach's applied proposals and the athlete's own moves, each newest first. */
+export interface RecentPlanChanges {
+  readonly proposals?: readonly PlanAdjustmentProposal[];
+  readonly moves?: readonly RecentPlanDayMove[];
+}
+
+/** One line of the record, with the instant it sorts by. */
+interface RecordLine {
+  readonly at: number;
+  readonly text: string;
+}
+
+/** How each kind of move the athlete made reads in the record. */
+const MOVE_OUTCOMES: Readonly<Record<PlanDayMoveKind, string>> = {
+  moved: "moved by the athlete",
+  folded: "rescheduled by the athlete after it was missed",
+  shortened: "rescheduled and shortened by the athlete after it was missed",
+  recovery_undone: "a missed session's reschedule taken back by the athlete",
+};
+
+/** A move the athlete made themselves: "Long Run moved from Monday 2026-10-05 to Sunday 2026-10-04". */
+function describeMove(move: RecentPlanDayMove, clock: RecordClock): string {
+  // The plan's own text, so sanitised like any athlete text.
+  const session = sanitizeUserInput(move.focus || "Session");
+  const back = move.kind === "recovery_undone" ? " back" : "";
+  return `- ${daysAgo(move.movedAt, clock)}, ${MOVE_OUTCOMES[move.kind]}: ${session} moved from ${weekdayDate(move.fromDate)}${back} to ${weekdayDate(move.toDate)}.`;
+}
+
 /** One proposal's line: when it was applied, what became of it, and the changes it made. */
 function describeProposal(proposal: PlanAdjustmentProposal, clock: RecordClock): string | undefined {
   if (!proposal.resolvedAt) return undefined;
@@ -80,26 +109,32 @@ function describeProposal(proposal: PlanAdjustmentProposal, clock: RecordClock):
 }
 
 /**
- * The coach's record of the plan changes made from its proposals, newest
- * first, for the chat coach and the plan-change step, dated by the athlete's
- * day in `timeZone` (UTC when absent). Without it neither knew what an applied
- * card had changed: asked to undo one, the coach asked the athlete for the
- * original dates, and it couldn't say what had happened to a session it had
- * moved. Empty when nothing was applied in the window.
+ * The coach's record of what changed in the athlete's plan, newest first, for
+ * the chat coach and the plan-change step: the proposals the athlete applied,
+ * and the moves they made themselves on the timeline or a missed session's
+ * card. Dated by the athlete's day in `timeZone` (UTC when absent). Without it
+ * neither knew what had changed: asked to undo a card, the coach asked the
+ * athlete for the original dates, and it couldn't say what had happened to a
+ * session that had moved. Empty when nothing changed in the window.
  */
 export function formatRecentPlanChanges(
-  proposals: readonly PlanAdjustmentProposal[],
+  changes: RecentPlanChanges,
   now: Date,
   timeZone?: string | null,
 ): string {
   const clock: RecordClock = { now: now.getTime(), today: getLocalDateStrSafe(now, timeZone), timeZone };
-  const lines = proposals.flatMap((proposal) => describeProposal(proposal, clock) ?? []);
+  const proposalLines = (changes.proposals ?? []).flatMap((proposal): RecordLine[] => {
+    const text = describeProposal(proposal, clock);
+    return text && proposal.resolvedAt ? [{ at: proposal.resolvedAt.getTime(), text }] : [];
+  });
+  const moveLines = (changes.moves ?? []).map((move): RecordLine => ({ at: move.movedAt.getTime(), text: describeMove(move, clock) }));
+  const lines = [...proposalLines, ...moveLines].sort((a, b) => b.at - a.at).map((line) => line.text);
   if (lines.length === 0) return "";
   return [
     "--- RECENT PLAN CHANGES ---",
-    `What changed in the athlete's plan from your proposals in the last ${RECENT_PLAN_CHANGES_DAYS} days, newest first, with each session's date before and after:`,
+    `What changed in the athlete's plan in the last ${RECENT_PLAN_CHANGES_DAYS} days, newest first, from your proposals and from the athlete's own moves, with each session's date before and after:`,
     ...lines,
-    'When the athlete asks to undo, revert or put something back, or asks what happened to a session, answer from this list: each "from" date is where that session was. Never ask the athlete for a date or detail listed here. Changes made outside your proposals (a move on the timeline, a missed-session reschedule) are not listed.',
+    'When the athlete asks to undo, revert or put something back, or asks what happened to a session, answer from this list: each "from" date is where that session was. Never ask the athlete for a date or detail listed here. A move the athlete made has no Undo card: putting it back means moving the session to its "from" date again. Rescheduling the whole plan to a new start date is not listed.',
     "--- END RECENT PLAN CHANGES ---",
   ].join("\n");
 }

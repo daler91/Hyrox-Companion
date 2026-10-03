@@ -1,7 +1,9 @@
-import { CHAT_MESSAGE_MAX_LENGTH } from "@shared/chat";
-import { Loader2, Send, Square } from "lucide-react";
+import { CHAT_MESSAGE_MAX_LENGTH, CHAT_PHOTO_DEFAULT_MESSAGE, CHAT_PHOTO_MAX_BASE64_CHARS } from "@shared/chat";
+import type { ChatPhoto } from "@shared/schema";
+import { Loader2, Send, Square, X } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 
+import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
 import { CharacterCount } from "@/components/ui/character-count";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { VoiceButton } from "@/components/VoiceButton";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import type { CompressedImage } from "@/lib/image";
 
 /**
  * Carrier for an externally-seeded prefill. The `nonce` field lets callers
@@ -21,28 +24,42 @@ export interface ChatInputSeed {
   nonce: number;
 }
 
+/** What a message carries besides its words. */
+export interface ChatInputExtras {
+  /** One photo, read for the coach and never stored (I20). */
+  readonly photo?: ChatPhoto;
+}
+
 interface ChatInputProps {
-  readonly onSend: (message: string) => void;
+  readonly onSend: (message: string, extras?: ChatInputExtras) => void;
   readonly onStop?: () => void;
   readonly isLoading?: boolean;
   readonly placeholder?: string;
   readonly seed?: ChatInputSeed | null;
   /** Longest message the server accepts; defaults to the coach chat's limit. */
   readonly maxLength?: number;
+  /** Offer attaching a photo (I20). On by default. */
+  readonly allowPhoto?: boolean;
 }
 
 /** Show the character count once a message is this close to the limit. */
 const COUNTER_THRESHOLD = 0.8;
 
+function placeholderFor(isListening: boolean, hasPhoto: boolean, placeholder: string): string {
+  if (isListening) return "Listening...";
+  if (hasPhoto) return "Ask about the photo, or just send it";
+  return placeholder;
+}
+
 function getSendTooltip(args: {
   isLoading: boolean;
   canStop: boolean;
-  hasText: boolean;
+  hasContent: boolean;
   tooLong: boolean;
 }): string {
   if (args.isLoading && args.canStop) return "Stop response";
   if (args.tooLong) return "Message is too long to send";
-  if (args.hasText) return "Send message";
+  if (args.hasContent) return "Send message";
   return "Type a message to send";
 }
 
@@ -53,8 +70,11 @@ export function ChatInput({
   placeholder = "Ask about your training...",
   seed,
   maxLength = CHAT_MESSAGE_MAX_LENGTH,
+  allowPhoto = true,
 }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
+  // A photo waiting to go with the next message, shrunk already (I20).
+  const [photo, setPhoto] = useState<CompressedImage | null>(null);
   const { toast } = useToast();
   const counterId = useId();
   // Counted, not truncated: a native maxLength would silently cut a pasted
@@ -62,7 +82,32 @@ export function ChatInput({
   // server refuses the request, so sending is blocked here instead.
   const tooLong = message.length > maxLength;
   const showCounter = message.length > maxLength * COUNTER_THRESHOLD;
-  const cannotSend = message.trim() === "" || Boolean(isLoading) || tooLong;
+  const hasContent = message.trim() !== "" || photo !== null;
+  const cannotSend = !hasContent || Boolean(isLoading) || tooLong;
+
+  // The preview's object URL goes when the photo is replaced, sent, removed or unmounted.
+  useEffect(() => {
+    const previewUrl = photo?.previewUrl;
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [photo]);
+
+  const removePhoto = useCallback(() => {
+    setPhoto(null);
+  }, []);
+
+  const handlePhoto = useCallback(
+    (image: CompressedImage) => {
+      if (image.base64.length > CHAT_PHOTO_MAX_BASE64_CHARS) {
+        URL.revokeObjectURL(image.previewUrl);
+        toast({ title: "Photo too large", description: "Try a smaller photo or a screenshot.", variant: "destructive" });
+        return;
+      }
+      setPhoto(image);
+    },
+    [toast],
+  );
 
   // Re-seed the textarea whenever the caller bumps the nonce, so clicking
   // "Ask coach" repeatedly pre-fills each time even when the text matches
@@ -94,11 +139,14 @@ export function ChatInput({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim() && !isLoading && !tooLong) {
-      if (isListening) stopListening();
-      onSend(message.trim());
-      setMessage("");
-    }
+    if (cannotSend) return;
+    if (isListening) stopListening();
+    // A photo alone still asks the coach something.
+    const text = message.trim() || CHAT_PHOTO_DEFAULT_MESSAGE;
+    if (photo) onSend(text, { photo: { mimeType: photo.mimeType, imageBase64: photo.base64 } });
+    else onSend(text);
+    setMessage("");
+    setPhoto(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -110,12 +158,37 @@ export function ChatInput({
 
   return (
     <form onSubmit={handleSubmit} className="flex min-w-0 items-end gap-2" data-testid="form-chat">
+      {allowPhoto && (
+        <ImageCaptureButton
+          purpose="attach"
+          onImage={handlePhoto}
+          disabled={isLoading}
+          tooltip="Attach a photo, like a watch screenshot or a workout board"
+          data-testid="button-chat-photo"
+        />
+      )}
       <div className="relative min-w-0 flex-1">
+        {photo && (
+          <div className="mb-1 flex items-center gap-2" data-testid="chat-photo-preview">
+            <img src={photo.previewUrl} alt="Attachment to send" className="h-14 w-14 rounded-md border object-cover" />
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={removePhoto}
+              aria-label="Remove photo"
+              data-testid="button-remove-chat-photo"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        )}
         <Textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? "Listening..." : placeholder}
+          placeholder={placeholderFor(isListening, photo !== null, placeholder)}
           className="min-h-[44px] max-h-32 resize-none"
           disabled={isLoading}
           enterKeyHint="send"
@@ -193,7 +266,7 @@ export function ChatInput({
               {getSendTooltip({
                 isLoading: Boolean(isLoading),
                 canStop: Boolean(onStop),
-                hasText: message.trim().length > 0,
+                hasContent,
                 tooLong,
               })}
             </TooltipContent>

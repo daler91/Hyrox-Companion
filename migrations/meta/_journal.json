@@ -827,6 +827,20 @@
       "when": 1790955736643,
       "tag": "0117_plan_day_slot_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1790993360798,
+      "tag": "0118_plan_day_moves",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1790993951469,
+      "tag": "0119_chat_message_attachment",
+      "breakpoints": true
     }
   ]
 }

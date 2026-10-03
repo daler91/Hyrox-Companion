@@ -27,6 +27,8 @@ import {
   chatMessageKindEnum,
   deviceLinkSourceEnum,
   MEAL_TYPES,
+  type PlanDayMoveKind,
+  planDayMoveKindEnum,
   planDayPriorityEnum,
   planDayRecoveryEnum,
   planDaySkipReasonEnum,
@@ -36,6 +38,7 @@ import {
 } from "./enums";
 import type { SessionStreamSamples } from "./sessionStream";
 import type {
+  ChatAttachment,
   ChatFactProposal,
   ChatSafetyNotice,
   CoachNoteInputs,
@@ -1413,6 +1416,38 @@ export const planAdjustmentProposals = pgTable(
   ],
 );
 
+/**
+ * Moves the athlete made to their plan days themselves — not the coach's
+ * proposals, which plan_adjustment_proposals records — so the coach's record
+ * of plan changes can list them (server/services/planDayMoves.ts). A drag
+ * corrected within minutes is kept as one move; rows past the record's window
+ * are pruned nightly.
+ */
+export const planDayMoves = pgTable(
+  "plan_day_moves",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    planDayId: varchar("plan_day_id", { length: 255 })
+      .notNull()
+      .references(() => planDays.id, { onDelete: "cascade" }),
+    fromDate: date("from_date").notNull(),
+    toDate: date("to_date").notNull(),
+    /** See planDayMoveKindEnum. */
+    kind: varchar("kind", { length: 20 }).$type<PlanDayMoveKind>().notNull(),
+    movedAt: timestamp("moved_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_plan_day_moves_user_moved").on(table.userId, table.movedAt),
+    check("plan_day_moves_kind_check", sql`kind IN (${inValues(planDayMoveKindEnum)})`),
+    check("plan_day_moves_dates_check", sql`from_date <> to_date`),
+  ],
+);
+
 // Chat messages for AI Coach persistence
 export const chatMessages = pgTable(
   "chat_messages",
@@ -1444,6 +1479,8 @@ export const chatMessages = pgTable(
     feedbackAt: timestamp("feedback_at"),
     /** A lasting fact the coach offered to put on the athlete card, and the athlete's answer (I5b). */
     factProposal: jsonb("fact_proposal").$type<ChatFactProposal>(),
+    /** What came with an athlete's message: a photo, as the app read it for the coach (I20). Never the image. */
+    attachment: jsonb("attachment").$type<ChatAttachment>(),
   },
   (table) => [
     // idx_chat_messages_user_id (single-column, on user_id) was dropped:

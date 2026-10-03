@@ -2,6 +2,7 @@ import type { ChatMessage, PlanAdjustmentProposal } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generateText } from "../ai/providers";
+import { withPhotoReading } from "../prompts/chatPhoto";
 import { storage } from "../storage";
 import {
   annotateSession,
@@ -59,6 +60,7 @@ function row(
     feedback: null,
     feedbackAt: null,
     factProposal: null,
+    attachment: null,
     ...extra,
   };
 }
@@ -214,6 +216,16 @@ describe("annotateSession", () => {
     expect(turns[0].notes).toBeUndefined();
     expect(turns[2].notes).toEqual(["5 hours later"]);
     expect(notes).toEqual(["3 hours later"]);
+  });
+
+  it("gives the coach what an athlete's photo showed, after their words", () => {
+    const rows = [
+      row("user", "How was my pacing?", 1, { attachment: { kind: "photo", reading: "Watch summary: 10 km in 45:12." } }),
+      row("assistant", "Even splits.", 1),
+    ];
+    const { turns } = annotateSession(rows, new Map(), NOW.getTime());
+    expect(turns[0].content).toBe(withPhotoReading("How was my pacing?", "Watch summary: 10 km in 45:12."));
+    expect(turns[1].content).toBe("Even splits.");
   });
 
   it("puts a proposal's outcome ahead of the first athlete turn after it was decided", () => {
@@ -460,7 +472,7 @@ describe("saving turns", () => {
 
   it("saves the athlete's turn once, under its client id, with the open workout", async () => {
     const at = new Date("2026-10-01T10:00:00Z");
-    await saveUserTurn("user-1", TURN, "How was Tuesday?", { focusPlanDayId: "day-1" }, at);
+    await saveUserTurn("user-1", TURN, "How was Tuesday?", { focusPlanDayId: "day-1" }, { at });
     expect(storage.users.saveChatMessageOnce).toHaveBeenCalledWith({
       id: TURN.userMessageId,
       userId: "user-1",
@@ -471,6 +483,20 @@ describe("saving turns", () => {
       focusPlanDayId: "day-1",
       focusWorkoutLogId: null,
     });
+  });
+
+  it("keeps a photo as what it showed, never the photo", async () => {
+    const at = new Date("2026-10-01T10:00:00Z");
+    await saveUserTurn("user-1", TURN, "How was my pacing?", {}, {
+      at,
+      attachment: { kind: "photo", reading: "Watch summary: 10 km in 45:12." },
+    });
+    expect(storage.users.saveChatMessageOnce).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "How was my pacing?",
+        attachment: { kind: "photo", reading: "Watch summary: 10 km in 45:12." },
+      }),
+    );
   });
 
   it("throws when the athlete's turn can't be saved", async () => {

@@ -8,7 +8,7 @@ import { logger } from "../logger";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
 import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
-import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus, updatePlanDayWithCleanup,validateAndMapCSVRows } from "./planService";
+import { createSamplePlan, importPlanFromCSV, updatePlanDayRecordingMove, updatePlanDayStatus, updatePlanDayWithCleanup,validateAndMapCSVRows } from "./planService";
 
 vi.mock("csv-parse/sync", () => {
   return {
@@ -68,6 +68,11 @@ const { planSlotForMoveMock } = vi.hoisted(() => ({
 }));
 vi.mock("../storage/planSlot", () => ({ planSlotForMove: planSlotForMoveMock }));
 
+// What a move records for the coach's record is covered in planDayMoves.test.ts
+// and the storage integration test; here it is a spy.
+const { recordPlanDayMoveMock } = vi.hoisted(() => ({ recordPlanDayMoveMock: vi.fn() }));
+vi.mock("./planDayMoves", () => ({ recordPlanDayMove: recordPlanDayMoveMock }));
+
 vi.mock("./deviceActivityLink", () => ({
   releaseStravaActivityInTx: vi.fn(),
   stripStravaActivityLabel: vi.fn(),
@@ -85,6 +90,9 @@ vi.mock("../queue", () => {
     },
   };
 });
+
+/** What a storage call resolves to when no row matched: the day is gone. */
+const NO_ROW = undefined;
 
 describe("planService", () => {
   describe("importPlanFromCSV", () => {
@@ -667,9 +675,9 @@ describe("planService", () => {
       ).rejects.toThrow(/Plan day not found/);
     });
 
-    it("files a day moved with its status under the new date's week and weekday", async () => {
-      const returned = createMockPlanDay({ id: dayId, status: "planned" });
-      const tx = setupTx([{ status: "missed", planId: "plan-1" } as never], [], [returned]);
+    it("files a day moved with its status under the new date's week and weekday, and records the move", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-10-05" });
+      const tx = setupTx([{ status: "missed", planId: "plan-1", scheduledDate: "2026-10-01" } as never], [], [returned]);
       planSlotForMoveMock.mockResolvedValueOnce({ weekNumber: 6, dayName: "Monday" });
 
       await updatePlanDayStatus(dayId, { status: "planned", scheduledDate: "2026-10-05" }, userId);
@@ -678,9 +686,10 @@ describe("planService", () => {
       expect(tx.updateSet).toHaveBeenCalledWith(
         expect.objectContaining({ status: "planned", scheduledDate: "2026-10-05", weekNumber: 6, dayName: "Monday" }),
       );
+      expect(recordPlanDayMoveMock).toHaveBeenCalledWith(userId, { planDayId: dayId, fromDate: "2026-10-01", toDate: "2026-10-05", kind: "moved" });
     });
 
-    it("stores the skip reason alongside the skipped status", async () => {
+    it("stores the skip reason alongside the skipped status, recording no move", async () => {
       const returned = createMockPlanDay({ id: dayId, status: "skipped" });
       const tx = setupTx([{ status: "planned" }], [], [returned]);
 
@@ -689,6 +698,7 @@ describe("planService", () => {
       expect(tx.updateSet).toHaveBeenCalledWith(
         expect.objectContaining({ status: "skipped", skipReason: "injured" }),
       );
+      expect(recordPlanDayMoveMock).not.toHaveBeenCalled();
     });
 
     it("leaves an existing reason alone when a skip arrives without one", async () => {
@@ -852,5 +862,83 @@ describe("planService — moving a missed session", () => {
     );
     await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-28" }, userId);
     expect(updatePlanDayMock).toHaveBeenLastCalledWith(dayId, { scheduledDate: "2026-09-28" }, userId);
+  });
+
+  it("records the move for the coach: a fold as rescheduled after the miss, any other move as the athlete's", async () => {
+    getPlanDayMock.mockResolvedValueOnce(
+      createMockPlanDay({ id: dayId, status: "missed", scheduledDate: "2026-09-22" }),
+    );
+    lockedRow({ status: "missed", scheduledDate: "2026-09-22" });
+    updatePlanDayMock.mockResolvedValueOnce(
+      createMockPlanDay({ id: dayId, scheduledDate: "2026-09-25", recovery: "folded" }),
+    );
+
+    await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-25" }, userId);
+
+    expect(recordPlanDayMoveMock).toHaveBeenLastCalledWith(userId, {
+      planDayId: dayId,
+      fromDate: "2026-09-22",
+      toDate: "2026-09-25",
+      kind: "folded",
+    });
+
+    getPlanDayMock.mockResolvedValueOnce(
+      createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-26" }),
+    );
+    updatePlanDayMock.mockResolvedValueOnce(createMockPlanDay({ id: dayId, scheduledDate: "2026-09-28" }));
+
+    await updatePlanDayStatus(dayId, { scheduledDate: "2026-09-28" }, userId);
+
+    expect(recordPlanDayMoveMock).toHaveBeenLastCalledWith(userId, {
+      planDayId: dayId,
+      fromDate: "2026-09-26",
+      toDate: "2026-09-28",
+      kind: "moved",
+    });
+  });
+
+  it("records nothing when the update names no date, or the day is gone", async () => {
+    await updatePlanDayWithCleanup(dayId, { focus: "Hill Repeats" }, userId);
+
+    getPlanDayMock.mockResolvedValueOnce(
+      createMockPlanDay({ id: dayId, status: "planned", scheduledDate: "2026-09-26" }),
+    );
+    updatePlanDayMock.mockResolvedValueOnce(NO_ROW);
+    await updatePlanDayWithCleanup(dayId, { scheduledDate: "2026-09-28" }, userId);
+
+    expect(recordPlanDayMoveMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("updatePlanDayRecordingMove", () => {
+  const dayId = "test-day-id";
+  const userId = "test-user-id";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("writes the update as it is and records a new date as the athlete's move", async () => {
+    getPlanDayMock.mockResolvedValueOnce(createMockPlanDay({ id: dayId, scheduledDate: "2026-10-05" }));
+    updatePlanDayMock.mockResolvedValueOnce(createMockPlanDay({ id: dayId, scheduledDate: "2026-10-04" }));
+
+    await updatePlanDayRecordingMove(dayId, { scheduledDate: "2026-10-04" }, userId);
+
+    expect(updatePlanDayMock).toHaveBeenCalledWith(dayId, { scheduledDate: "2026-10-04" }, userId);
+    expect(recordPlanDayMoveMock).toHaveBeenCalledWith(userId, {
+      planDayId: dayId,
+      fromDate: "2026-10-05",
+      toDate: "2026-10-04",
+      kind: "moved",
+    });
+  });
+
+  it("reads nothing first and records nothing when the update names no date", async () => {
+    updatePlanDayMock.mockResolvedValueOnce(createMockPlanDay({ id: dayId, focus: "Easy Run" }));
+
+    await updatePlanDayRecordingMove(dayId, { focus: "Easy Run" }, userId);
+
+    expect(getPlanDayMock).not.toHaveBeenCalled();
+    expect(recordPlanDayMoveMock).not.toHaveBeenCalled();
   });
 });

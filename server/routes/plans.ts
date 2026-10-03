@@ -12,7 +12,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeU
 import { moveStatementsToCard } from "../services/athleteFactsService";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { createPendingPlan } from "../services/planGenerationService";
-import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
+import { createSamplePlan, importPlanFromCSV, updatePlanDayRecordingMove, updatePlanDayStatus, updatePlanDayWithCleanup } from "../services/planService";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 import { deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
@@ -110,7 +110,7 @@ function sendPlanDayReparseError(
 
 
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
-  updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),
+  updatePlanDay: updatePlanDayRecordingMove,
 });
 
 const planDaySetUseCase = createMutateExerciseSetUseCase({

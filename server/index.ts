@@ -20,7 +20,7 @@ import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
 import { AppError, shouldReportToSentry } from "./errors";
-import { isImageParsePath } from "./imageParsePaths";
+import { isChatSendPath, isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
 import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
 import { buildCspDirectives } from "./middleware/csp";
@@ -231,11 +231,19 @@ app.use("/api/v1/coaching-materials", express.json({ limit: "2mb" }));
 // parsers + the stateful reparse siblings on workouts and plan days
 // (`.../:id/reparse-from-image`).
 const imageParseJsonParser = express.json({ limit: "10mb" });
+// A coach chat message can carry one photo (CHAT_PHOTO_MAX_BASE64_CHARS,
+// capped again by the request schema), so the two send routes get room for it.
+const chatSendJsonParser = express.json({ limit: "5mb" });
 app.use((req, res, next) => {
   if (isImageParsePath(req.path)) {
-    return imageParseJsonParser(req, res, next);
+    imageParseJsonParser(req, res, next);
+    return;
   }
-  return next();
+  if (isChatSendPath(req.path)) {
+    chatSendJsonParser(req, res, next);
+    return;
+  }
+  next();
 });
 
 app.use(
