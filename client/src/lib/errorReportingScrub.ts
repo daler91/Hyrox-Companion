@@ -4,8 +4,9 @@ import type * as Sentry from "@sentry/react";
  * Client-side Sentry scrubber, the browser counterpart to
  * `scrubSentryEvent` in server/bootstrap/observability.ts.
  *
- * `sendDefaultPii: false` alone was not enough. Three channels were carrying
- * athlete data off-device even for consented users:
+ * The SDK's own opt-outs (`dataCollection`, formerly `sendDefaultPii: false`)
+ * were not enough. Three channels were carrying athlete data off-device even
+ * for consented users:
  *
  *  1. `apiRequest` throws `new Error(\`${status}: ${body}\`)` (queryClient.ts),
  *     so the raw 4xx response body — Zod validation errors echo the submitted

@@ -12,7 +12,6 @@ overrides:
   '@hono/node-server': ^2.0.10
   protobufjs: ^7.6.3
   ip-address: ^10.7.1
-  '@clerk/shared': ^4.8.1
   follow-redirects: ^1.16.0
   '@xmldom/xmldom': ^0.8.15
   uuid: ^14.0.0
@@ -42,8 +41,8 @@ importers:
         specifier: ^2.1.73
         version: 2.1.73(express@5.2.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@clerk/react':
-        specifier: 6.12.10
-        version: 6.12.10(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 6.17.3
+        version: 6.17.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -123,8 +122,8 @@ importers:
         specifier: ^10.75.2
         version: 10.75.2(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))
       '@sentry/react':
-        specifier: ^10.75.2
-        version: 10.75.2(react@19.3.0)
+        specifier: ^11.1.0
+        version: 11.1.0(react@19.3.0)
       '@tanstack/react-query':
         specifier: ^5.104.0
         version: 5.104.0(react@19.3.0)
@@ -981,15 +980,15 @@ packages:
     peerDependencies:
       express: ^4.17.0 || ^5.0.0
 
-  '@clerk/react@6.12.10':
-    resolution: {integrity: sha512-VDYyCyzRdMsNW6qQsMp1+L2VOXxFwpLfWBxOWPvUNOYCruecnAZjUYEJWS+E+i5MAPhSew9HjuweS4bO0FclTQ==}
+  '@clerk/react@6.17.3':
+    resolution: {integrity: sha512-g5UsCSBeZqNYV/2GG12EsWxZIKfwBgMC92Tc5gxHhCkXW/xMqipSzHnGuN9ykNBallE676A/BgEr5hIBREwm8g==}
     engines: {node: '>=20.9.0'}
     peerDependencies:
       react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
       react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
 
-  '@clerk/shared@4.31.1':
-    resolution: {integrity: sha512-j3cDEZ/j7r5tAv4mmo2JhpFRtL1z0JghjCgvBJjZSR6Q4ZVIlwd2Bv0loM+opKReeN17H30u1/WHEBl7pZuxrw==}
+  '@clerk/shared@4.38.0':
+    resolution: {integrity: sha512-jVHz03682SJ3xsjsSjNX8YyWHllnr91qQEQZpZjCHGUIwGz3rYVavh69cofSuvPrqwOtXReukVEMtodzG2vVCQ==}
     engines: {node: '>=20.9.0'}
     peerDependencies:
       react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
@@ -2351,13 +2350,13 @@ packages:
   '@selderee/plugin-htmlparser2@0.11.0':
     resolution: {integrity: sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ==}
 
-  '@sentry/browser-utils@10.75.2':
-    resolution: {integrity: sha512-U9RIJE0vZHWEnfEpJAa/SQ60MsNSUaxww4MVymNLwJ26BrLFz9jLhVIW9bXcx0i1iwK+KQbIv6ebPDOnCfYUPQ==}
-    engines: {node: '>=18'}
+  '@sentry/browser-utils@11.1.0':
+    resolution: {integrity: sha512-1Bcv2FOKQUXKCSfGmCUMTthQZbmyxoWkiePFQzF7hrchdLlwsgYKJic1t1QwxBMZCBCA+352C4/5tZ9/DWgOVw==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
-  '@sentry/browser@10.75.2':
-    resolution: {integrity: sha512-2Q8Bd6aTIHmqWL/rGDZdr1JTGW2fYPXf+lMyhHp4CX6OE7gMaaI5ZUwQWgVelqUOvKkOZHHk0wo6K8+ExdwawQ==}
-    engines: {node: '>=18'}
+  '@sentry/browser@11.1.0':
+    resolution: {integrity: sha512-9uXvMg5U8q6hcyzRUYywDJKdaQu1PqjVoqKJ7owwlLFSXjzYihYnfAUmUUalJUQ7Hibe8PydyOV/8r9aL6m72A==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
   '@sentry/bundler-plugins@10.65.0':
     resolution: {integrity: sha512-AYgv31l4wY/CwYAD/2Og59RT+TNjvhatcLOrEe5tFOpi9VcPAQ4xfPZIM6fXYGawofT52p6LhUECNSfNkNnc7Q==}
@@ -2443,6 +2442,10 @@ packages:
     resolution: {integrity: sha512-fO9PLmHdVURcSPUpWCItWAtgKiMwGdJHbovoSEyLplX5sxs2ugvI4CBPTrkkgqhObnZOD0CnWBKDzSVQYBKEyQ==}
     engines: {node: '>=14'}
 
+  '@sentry/conventions@0.24.0':
+    resolution: {integrity: sha512-pmmF2mLy7A23z8gnLRG87lYu4SSPIBColtfqu9cfkh1omn/0CI3w0/AqZ/uf/VGAtM/wJMN61J58Ks/IWBCHpQ==}
+    engines: {node: '>=14'}
+
   '@sentry/core@10.65.0':
     resolution: {integrity: sha512-3aqtmM5NgNGo45BNaaBzi0LPQZAw//NEL4HKS5fXm12pJMa4KEkze8DEKnkTEIrGnWaOJKamecHKlnNg/Mqf/Q==}
     engines: {node: '>=18'}
@@ -2455,13 +2458,17 @@ packages:
     resolution: {integrity: sha512-KXzNf2c430cJIOMv84+MKpkXgave1DBNMNNwn073olVD773NME5IhDv/9VQyiFM2wIU+6bm4FEBVEVSuzqgjJw==}
     engines: {node: '>=18'}
 
+  '@sentry/core@11.1.0':
+    resolution: {integrity: sha512-ObM47oMWxRQiVxUdkV6bs2BeHxPVWim571hw1iT3suyAc8iRfJ27f+QdIdmDKZtvHFGJ0Vh/LpeTZP5Z8FXyEA==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
   '@sentry/esbuild-plugin@5.4.0':
     resolution: {integrity: sha512-ACn/W1j1GUqVjfZvqtGfMRAhtgXAKKzJGBEgt4LrazQYoTh+rtrZy1JwfRKzGTsA3XgE+p5gXtFdU32Jc8fY7Q==}
     engines: {node: '>= 18'}
 
-  '@sentry/feedback@10.75.2':
-    resolution: {integrity: sha512-/nrtMVSxOqBAigMWxIQS+Y8OqQ27ty+isMh6+X96kfAp/SaGrNZ425SZxKwq0mwHS0WnVkF+rE5dJnbbi56XSA==}
-    engines: {node: '>=18'}
+  '@sentry/feedback@11.1.0':
+    resolution: {integrity: sha512-ZHZwmJEWcvxJP/rvaJlrO6NFpGHkewsxVmvHLJHkbd1XSChtwgdUI8W/+Gu4jcGXRz0JJPFrpRFNuVTp1QWCjg==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
   '@sentry/node-core@10.75.2':
     resolution: {integrity: sha512-6sFhrvWVLAPRTOYkwrOOLwgsWINe6Y75oX9xKj11zZcKd2e1K2Y3bcx3uzDU06+cxfVbUQUBulsCr/TD7yx/vw==}
@@ -2496,19 +2503,23 @@ packages:
       '@opentelemetry/core': ^1.30.1 || ^2.1.0
       '@opentelemetry/sdk-trace-base': ^1.30.1 || ^2.1.0
 
-  '@sentry/react@10.75.2':
-    resolution: {integrity: sha512-4MtB1tSmMHzwTwY7m30UzRbbUx9cP84UK7WIDL9g7RvoGd/aZwxbp6IkUJ46VBNItVoSF+1GM9wtqzkLma252g==}
-    engines: {node: '>=18'}
+  '@sentry/react@11.1.0':
+    resolution: {integrity: sha512-Xa+URJBG2r5jE9z5sYEvWA5KmYhtNNTKQXYMYysogGW4WRM8z5xipVo1WLDwDCtA4EqC/ybEVfM7N0Ta3331DQ==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
     peerDependencies:
-      react: ^16.14.0 || 17.x || 18.x || 19.x
+      react: 17.x || 18.x || 19.x
+      react-router: 6.x || 7.x || 8.x
+    peerDependenciesMeta:
+      react-router:
+        optional: true
 
-  '@sentry/replay-canvas@10.75.2':
-    resolution: {integrity: sha512-4GVhCkn+/0QEpXdY8UfXahg8qjF2QTH1+qej/CLketHGfRqxLhdanzHU9ILesplWX5GeuTkPn5ZTmd5CJf+KXg==}
-    engines: {node: '>=18'}
+  '@sentry/replay-canvas@11.1.0':
+    resolution: {integrity: sha512-nHWrcN5B6tkxSNvFkI1xT9llNi3NJfUV5JUGhUTtt9urcL55dIMtT7GSflub2fBtrsE//FzeoL1T3Wt4r8+CMQ==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
-  '@sentry/replay@10.75.2':
-    resolution: {integrity: sha512-cCfdPt892S+rrAFOuUvbwR318/ZPFfBFvVkMlL3goktAnbECAGy6comAxLQEalyp22Ee67bEqYQN7RdNuRHIJw==}
-    engines: {node: '>=18'}
+  '@sentry/replay@11.1.0':
+    resolution: {integrity: sha512-11J/iTBOHqYXQxu9b/KRPxUeHakFdLPnHmDz4hrJ198R4QQQeY245tnYxL8o/1yaQdSo0AMEWJ38lo9GtIWfhg==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
   '@sentry/server-utils@10.75.2':
     resolution: {integrity: sha512-ep8Ntj/vsLHbql1jUMFiRYrleuQ3dENb8oD4Nkjv7hou2j0UKLct1eLbx+TckeVOhYdWmFeO7WJWjRio/a4TOg==}
@@ -2624,9 +2635,6 @@ packages:
     resolution: {integrity: sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
-
-  '@tanstack/query-core@5.103.2':
-    resolution: {integrity: sha512-I8DkFXls5jXLqtm8+QpOhEmG07hIblhSZFzafg9wHsMSEvMzULy9hK17wU1T/ahfhMbtITJhbxutwwCoihkR7A==}
 
   '@tanstack/query-core@5.104.0':
     resolution: {integrity: sha512-JrC2r/JQlXt7khBSdUpsgxNvybzOg+aITa+ARRMlP2AFo93Y8vIqz077rp+e61mJetSZ0T6AJbwW1JHer1vrPQ==}
@@ -6558,6 +6566,9 @@ packages:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
 
+  web-vitals@6.2.2:
+    resolution: {integrity: sha512-oto5x6dLEgrRqfcWed+pZEUb2q6ikbFmqF54CRDhI/QGbn+qxC49b4C4OkbH+kb9C3a8shpFD3SgR9kRcs80ZQ==}
+
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
 
@@ -7513,7 +7524,7 @@ snapshots:
 
   '@clerk/backend@3.21.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@clerk/shared': 4.31.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@clerk/shared': 4.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       standardwebhooks: 1.1.1
       tslib: 2.8.1
     transitivePeerDependencies:
@@ -7523,23 +7534,23 @@ snapshots:
   '@clerk/express@2.1.73(express@5.2.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@clerk/backend': 3.21.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@clerk/shared': 4.31.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@clerk/shared': 4.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       express: 5.2.1
       tslib: 2.8.1
     transitivePeerDependencies:
       - react
       - react-dom
 
-  '@clerk/react@6.12.10(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@clerk/react@6.17.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@clerk/shared': 4.31.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@clerk/shared': 4.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       tslib: 2.8.1
 
-  '@clerk/shared@4.31.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@clerk/shared@4.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@tanstack/query-core': 5.103.2
+      '@tanstack/query-core': 5.104.0
       dequal: 2.0.3
       glob-to-regexp: 0.4.1
       js-cookie: 3.0.8
@@ -8735,19 +8746,20 @@ snapshots:
       selderee: 0.11.0
     optional: true
 
-  '@sentry/browser-utils@10.75.2':
+  '@sentry/browser-utils@11.1.0':
     dependencies:
-      '@sentry/conventions': 0.16.0
-      '@sentry/core': 10.75.2
+      '@sentry/conventions': 0.24.0
+      '@sentry/core': 11.1.0
+      web-vitals: 6.2.2
 
-  '@sentry/browser@10.75.2':
+  '@sentry/browser@11.1.0':
     dependencies:
-      '@sentry/browser-utils': 10.75.2
-      '@sentry/conventions': 0.16.0
-      '@sentry/core': 10.75.2
-      '@sentry/feedback': 10.75.2
-      '@sentry/replay': 10.75.2
-      '@sentry/replay-canvas': 10.75.2
+      '@sentry/browser-utils': 11.1.0
+      '@sentry/conventions': 0.24.0
+      '@sentry/core': 11.1.0
+      '@sentry/feedback': 11.1.0
+      '@sentry/replay': 11.1.0
+      '@sentry/replay-canvas': 11.1.0
 
   '@sentry/bundler-plugins@10.65.0(rollup@4.64.0)':
     dependencies:
@@ -8827,6 +8839,8 @@ snapshots:
 
   '@sentry/conventions@0.16.0': {}
 
+  '@sentry/conventions@0.24.0': {}
+
   '@sentry/core@10.65.0':
     dependencies:
       '@sentry/conventions': 0.15.1
@@ -8839,6 +8853,10 @@ snapshots:
     dependencies:
       '@sentry/conventions': 0.16.0
 
+  '@sentry/core@11.1.0':
+    dependencies:
+      '@sentry/conventions': 0.24.0
+
   '@sentry/esbuild-plugin@5.4.0(rollup@4.64.0)':
     dependencies:
       '@sentry/bundler-plugins': 10.65.0(rollup@4.64.0)
@@ -8848,9 +8866,9 @@ snapshots:
       - supports-color
       - webpack
 
-  '@sentry/feedback@10.75.2':
+  '@sentry/feedback@11.1.0':
     dependencies:
-      '@sentry/core': 10.75.2
+      '@sentry/core': 11.1.0
 
   '@sentry/node-core@10.75.2(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))':
     dependencies:
@@ -8888,22 +8906,22 @@ snapshots:
       '@sentry/conventions': 0.16.0
       '@sentry/core': 10.75.2
 
-  '@sentry/react@10.75.2(react@19.3.0)':
+  '@sentry/react@11.1.0(react@19.3.0)':
     dependencies:
-      '@sentry/browser': 10.75.2
-      '@sentry/conventions': 0.16.0
-      '@sentry/core': 10.75.2
+      '@sentry/browser': 11.1.0
+      '@sentry/conventions': 0.24.0
+      '@sentry/core': 11.1.0
       react: 19.3.0
 
-  '@sentry/replay-canvas@10.75.2':
+  '@sentry/replay-canvas@11.1.0':
     dependencies:
-      '@sentry/core': 10.75.2
-      '@sentry/replay': 10.75.2
+      '@sentry/core': 11.1.0
+      '@sentry/replay': 11.1.0
 
-  '@sentry/replay@10.75.2':
+  '@sentry/replay@11.1.0':
     dependencies:
-      '@sentry/browser-utils': 10.75.2
-      '@sentry/core': 10.75.2
+      '@sentry/browser-utils': 11.1.0
+      '@sentry/core': 11.1.0
 
   '@sentry/server-utils@10.75.2':
     dependencies:
@@ -8999,8 +9017,6 @@ snapshots:
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
       vite: 8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
-
-  '@tanstack/query-core@5.103.2': {}
 
   '@tanstack/query-core@5.104.0': {}
 
@@ -13340,6 +13356,8 @@ snapshots:
       - supports-color
 
   web-streams-polyfill@3.3.3: {}
+
+  web-vitals@6.2.2: {}
 
   webidl-conversions@3.0.1: {}
 
