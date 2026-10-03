@@ -97,6 +97,7 @@ above and the source.
 
 | Document                                                              | Date                                                                                      |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Codebase Analysis](CODEBASE_ANALYSIS_2026-10-03.md)                  | 2026-10-03 — 28 discovery agents (18 subsystem mappers, 10 cross-cutting lenses); 315 findings that survived adversarial verification (8 high), ranked priority items, and every open item from earlier audits re-checked against the code |
 | [AI Coach Chat Review](AI_COACH_CHAT_REVIEW_2026-10-01.md)           | 2026-10-01 — the conversational coach end to end: six defects to fix first, then improvements ranked into three waves; read from the code, not run against a live model; carries a remediation section for wave 1 |
 | [Onboarding Audit](ONBOARDING_AUDIT_2026-09-23.md)                   | 2026-09-23 — first-run flow, reproduced end to end in the running app; carries a remediation section: every finding's fix, the behaviour changes, and what was left, with reasons |
 | [Refactoring Review](REFACTORING_REVIEW_2026-09-23.md)               | 2026-09-23 — what its branch changed, behaviour changes left for the owner, and deferred refactors ranked by risk |
