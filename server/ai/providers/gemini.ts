@@ -151,6 +151,7 @@ export const geminiTextProvider: TextAiProvider = {
       undefined,
       request.timeoutMs,
       request.timeoutMs,
+      request.signal,
     );
 
     return {

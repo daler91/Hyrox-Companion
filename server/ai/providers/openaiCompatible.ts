@@ -225,6 +225,7 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
         undefined,
         request.timeoutMs,
         request.timeoutMs,
+        request.signal,
       );
       const payload = await readJsonPayload(response);
       return {

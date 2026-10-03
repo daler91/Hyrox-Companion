@@ -29,6 +29,8 @@ export interface PlanAdjustmentGenerationInput {
   /** The RECENT PLAN CHANGES block (services/recentPlanChanges): applied proposals and the athlete's own moves; empty when nothing changed lately. */
   recentPlanChanges?: string;
   userId?: string;
+  /** The chat stream's cancel signal: a Stop, disconnect or deadline ends the drafting call too. */
+  signal?: AbortSignal;
 }
 
 const HISTORY_TURNS = 6;
@@ -205,10 +207,13 @@ async function streamPlanAdjustment(
       await onSummary(summary);
     }
   } catch (error) {
-    if (summaryBegan) throw error;
+    // A cancelled draft starts no second, billed call (AI7 (CODEBASE_ANALYSIS_2026-10-03)).
+    if (summaryBegan || request.signal?.aborted) throw error;
     const response = await generateJsonText(request);
     return parseAndValidatePlanAdjustment(response.text || "");
   }
+  // A stream cancelled between chunks ends early, on half a proposal.
+  if (request.signal?.aborted) return null;
   return parseAndValidatePlanAdjustment(stripJsonCodeFence(text));
 }
 
@@ -223,6 +228,7 @@ export async function generatePlanAdjustment(
     label: "plan-adjustment",
     feature: "plan_adjustment",
     userId: input.userId,
+    ...(input.signal ? { signal: input.signal } : {}),
   };
   if (onSummary) return await streamPlanAdjustment(request, onSummary);
   const response = await generateJsonText(request);

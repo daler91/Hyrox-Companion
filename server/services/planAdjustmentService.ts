@@ -52,7 +52,9 @@ export type PlanAdjustmentProposalResult =
   /** The coach replies conversationally without proposing changes. */
   | { kind: "chat_fallback"; text: string }
   /** Generation itself failed — the caller should fall back to normal chat. */
-  | { kind: "generation_failed" };
+  | { kind: "generation_failed" }
+  /** The chat stream was cut off while drafting: nothing was created, so nothing can be applied. */
+  | { kind: "aborted" };
 
 export type ApplyPlanProposalFailureReason =
   | "not_pending"
@@ -214,6 +216,8 @@ export interface CreatePlanAdjustmentProposalInput {
    * chat can show it before the changes are checked.
    */
   onSummaryText?: PlanAdjustmentSummarySink;
+  /** The chat stream's cancel signal: the athlete's Stop, a disconnect or the stream's deadline. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -379,14 +383,19 @@ export async function createPlanAdjustmentProposal(
       focusPlanDayId: input.focusPlanDayId,
       recentPlanChanges,
       userId,
+      signal: input.signal,
     }, input.onSummaryText);
   } catch (error) {
+    if (input.signal?.aborted) return { kind: "aborted" };
     // err is an AI provider error and userId is an internal identifier; no
     // message content.
     // bearer:disable javascript_lang_logger_leak
     log.error({ err: error, userId }, "[plan-adjustment] Generation failed");
     return { kind: "generation_failed" };
   }
+  // Stopped mid-draft: no proposal the athlete never saw, and so none for
+  // auto-apply to change their plan with — AI7 (CODEBASE_ANALYSIS_2026-10-03).
+  if (input.signal?.aborted) return { kind: "aborted" };
   if (!llmOutput) {
     return { kind: "generation_failed" };
   }
@@ -416,6 +425,8 @@ export async function createPlanAdjustmentProposal(
   if (enriched.length === 0 || planId === null) {
     return { kind: "chat_fallback", text: llmOutput.summaryMessage };
   }
+  // The enrich reads above can outlast a Stop that lands after generation.
+  if (input.signal?.aborted) return { kind: "aborted" };
 
   const proposal = await storage.planProposals.create({
     userId,

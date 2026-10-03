@@ -1430,8 +1430,9 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
   - `{ planProposal: { id, planId, status, summaryMessage, changes, createdAt } }` — The proposal that was created (`status: "applied"` when auto-applied)
   - `{ factProposal: { fact, category, status: "pending" } }` — A lasting fact the athlete stated, offered for their athlete card (see "Athlete facts" above); sent just before `done`
   - `{ done: true }` — Stream complete
-  - `{ error: "auth-expired" | "timeout", reason: string }` — The stream hit its deadline: the Clerk session's expiry (less a 5-second margin) or the 5-minute hard cap
-  - `{ error: "Stream error" }` — Unexpected stream error
+  - `{ error: "timeout", reason: string }` — The stream hit its 5-minute hard cap. The deadline is not tied to the Clerk session token, which lives 60 seconds and is refreshed in the background; the session is checked when the request arrives
+  - `{ error: "Stream error" }` — Unexpected stream error, or the server shutting down mid-reply
+- **Cancellation:** a client that disconnects (Stop, closing the panel or tab) aborts the reply's provider calls, plan-change drafting included. A proposal drafted for a stream that was cut off is never auto-applied
 
 **Request example:**
 

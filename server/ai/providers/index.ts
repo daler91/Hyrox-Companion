@@ -4,6 +4,7 @@ import {
   assertBreakerClosed,
   recordBreakerFailure,
   recordBreakerSuccess,
+  releaseBreakerProbe,
 } from "../circuitBreaker";
 import { createAnthropicTextProvider } from "./anthropic";
 import {
@@ -123,17 +124,32 @@ async function* streamChunks(request: TextAiRequest): AsyncGenerator<TextAiStrea
   assertBreakerClosed();
   let latestUsage: TextAiUsage | undefined;
   let model = resolved.model;
+  // A stream its caller cancelled (the athlete's Stop or disconnect, the SSE
+  // deadline, a shutdown drain) ends in an AbortError, or early, that says
+  // nothing about the provider; counting it let a run of cancelled chats open
+  // the breaker for everyone. Told by the caller's own signal, so the
+  // provider's own timeouts still count — AI5 (CODEBASE_ANALYSIS_2026-10-03).
+  let recorded = false;
   try {
     for await (const chunk of getTextAiProvider().streamText(resolved)) {
       model = chunk.model;
       if (chunk.usage) latestUsage = chunk.usage;
       yield chunk;
     }
-    recordBreakerSuccess();
+    if (!resolved.signal?.aborted) {
+      recordBreakerSuccess();
+      recorded = true;
+    }
   } catch (error) {
-    recordBreakerFailure(error);
+    if (!resolved.signal?.aborted) {
+      recordBreakerFailure(error);
+      recorded = true;
+    }
     throw error;
   } finally {
+    // Cancelled, or left unread by its consumer: neutral, but a half-open
+    // probe gives its slot back.
+    if (!recorded) releaseBreakerProbe();
     trackTextUsage(resolved.userId, resolved.feature, model, latestUsage);
   }
 }

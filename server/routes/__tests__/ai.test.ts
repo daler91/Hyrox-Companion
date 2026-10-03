@@ -14,6 +14,7 @@ import {
 } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
+import { drainSseStreams } from "../../sseRegistry";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -29,6 +30,15 @@ function parseStreamResponse(responseText: string) {
 
 
 vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
+
+// The session token the chat stream once took its deadline from (AI1); a
+// test sets its claims, otherwise there are none.
+const { getAuthSpy } = vi.hoisted(() => ({ getAuthSpy: vi.fn() }));
+vi.mock("@clerk/express", () => ({
+  getAuth: (req: unknown) => getAuthSpy(req),
+  clerkMiddleware: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  clerkClient: { users: { getUser: vi.fn(), deleteUser: vi.fn() } },
+}));
 
 // Mock the getUserId function to return our test user
 vi.mock("../../types", () => ({
@@ -859,6 +869,86 @@ describe("POST /api/chat/stream", () => {
     const chunks = parseStreamResponse(response.text);
     expect(chunks[0]).toContain('"ragInfo"');
     expect(chunks[1]).toContain('{"error":"Stream error"}');
+  });
+
+  // AI1 (CODEBASE_ANALYSIS_2026-10-03): the stream's only deadline is its
+  // 5-minute cap, and a stream cut off by it, or by a shutdown, still ends.
+  describe("when the stream is cut off", () => {
+    const FIVE_MINUTES = 5 * 60 * 1000;
+
+    /** A reply that sends "Hello", then thinks until `resume` — or, cancelled, rejects its read as a provider does. */
+    function replyThatThinks() {
+      let midReply!: () => void;
+      const reachedMidReply = new Promise<void>((resolve) => {
+        midReply = resolve;
+      });
+      let resume!: () => void;
+      const resumed = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      vi.mocked(streamChatWithCoach).mockImplementation(async function* (_message, _history, _context, _materials, _chunks, _userId, options) {
+        yield "Hello";
+        midReply();
+        const signal = options?.signal;
+        const cancelled = new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+        await Promise.race([resumed, cancelled]);
+        if (signal?.aborted) throw new DOMException("This operation was aborted", "AbortError");
+        yield " World";
+      });
+      return { reachedMidReply, resume };
+    }
+
+    beforeEach(() => {
+      vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("streams on past the session token's expiry, which Clerk refreshes in the background", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      // Clerk's session JWT lives 60 s; a request carries what is left of it.
+      getAuthSpy.mockReturnValue({ userId: "test_user_id", sessionClaims: { exp: Math.floor((Date.now() + 20_000) / 1000) } });
+      const reply = replyThatThinks();
+
+      const response = postChatStream(app, "Hello stream").then((res) => res);
+      await reply.reachedMidReply;
+      vi.advanceTimersByTime(30_000);
+      reply.resume();
+
+      const { text } = await response;
+      expect(text).toContain('{"text":" World"}');
+      expect(text).toContain('{"done":true}');
+      expect(text).not.toContain('"error"');
+    });
+
+    it("ends a reply the 5-minute cap cuts off with the timeout event, and closes the stream", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const reply = replyThatThinks();
+
+      const response = postChatStream(app, "Hello stream").then((res) => res);
+      await reply.reachedMidReply;
+      vi.advanceTimersByTime(FIVE_MINUTES);
+
+      const chunks = parseStreamResponse((await response).text);
+      expect(chunks[1]).toContain('{"text":"Hello"}');
+      expect(chunks[2]).toBe('data: {"error":"timeout","reason":"The response took too long and was stopped."}');
+      expect(chunks).toHaveLength(3);
+    });
+
+    it("ends a reply a shutdown drains with an error event, and closes the stream", async () => {
+      const reply = replyThatThinks();
+
+      const response = postChatStream(app, "Hello stream").then((res) => res);
+      await reply.reachedMidReply;
+      await drainSseStreams();
+
+      const chunks = parseStreamResponse((await response).text);
+      expect(chunks[1]).toContain('{"text":"Hello"}');
+      expect(chunks[2]).toBe('data: {"error":"Stream error"}');
+      expect(chunks).toHaveLength(3);
+    });
   });
 });
 

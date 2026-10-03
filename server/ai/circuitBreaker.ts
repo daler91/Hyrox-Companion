@@ -214,19 +214,28 @@ export function recordBreakerSuccess(): void {
 }
 
 /**
+ * Called when a request ended without saying anything about the provider: it
+ * failed for a caller-side reason, or its caller cancelled it — the athlete's
+ * Stop, a stream deadline, a shutdown drain (AI5 (CODEBASE_ANALYSIS_2026-10-03)).
+ * Neither a success nor a failure: a half-open probe learned nothing, so it
+ * must neither close the breaker nor re-open it. It releases the slot so the
+ * next call can still prove recovery instead of leaving the probe wedged until
+ * its deadline.
+ */
+export function releaseBreakerProbe(): void {
+  if (state !== "half-open") return;
+  probeInFlight = false;
+  clearProbeDeadline();
+}
+
+/**
  * Called after a failed request. `error` lets the breaker ignore failures that
  * say nothing about the provider (see isProviderHealthSignal); omit it and the
  * failure always counts.
  */
 export function recordBreakerFailure(error?: unknown): void {
   if (!isProviderHealthSignal(error)) {
-    if (state === "half-open") {
-      // The probe learned nothing about the provider, so it must neither close
-      // the breaker nor re-open it. Release the slot so the next call can still
-      // prove recovery instead of leaving the probe wedged until its deadline.
-      probeInFlight = false;
-      clearProbeDeadline();
-    }
+    releaseBreakerProbe();
     return;
   }
   if (state === "half-open") {

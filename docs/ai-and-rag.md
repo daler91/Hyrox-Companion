@@ -186,7 +186,7 @@ data: {"text": " training data, I recommend..."}
 data: {"done": true}                                      // Stream complete
 ```
 
-The server propagates an `AbortSignal` to the provider adapter when the SSE client disconnects. This cancels in-flight token generation promptly where the upstream API supports aborts. The signal is constructed from the request's `close` event and passed through the streaming pipeline.
+The server propagates an `AbortSignal` to the provider adapter when the SSE client disconnects. This cancels in-flight token generation promptly where the upstream API supports aborts. The signal is aborted from the response's `close` event when the response had not finished (the request's own `close` fires as soon as its body is read) and is passed through the streaming pipeline, plan-change drafting included.
 
 ### Complete Streaming Example
 
