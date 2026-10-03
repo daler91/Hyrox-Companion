@@ -51,11 +51,11 @@ function SelectedPlanMenuItems({
     <>
       <DropdownMenuLabel className="text-xs">{plan.name}</DropdownMenuLabel>
       <DropdownMenuItem onClick={onRenameClick} data-testid="menuitem-rename-plan">
-        <Pencil className="h-4 w-4 mr-2" />
+        <Pencil className="h-4 w-4 mr-2" aria-hidden="true" />
         Rename plan
       </DropdownMenuItem>
       <DropdownMenuItem onClick={onGoalClick} data-testid="menuitem-set-goal">
-        <Target className="h-4 w-4 mr-2" />
+        <Target className="h-4 w-4 mr-2" aria-hidden="true" />
         {plan.goal ? "Edit goal" : "Set goal"}
       </DropdownMenuItem>
       {onScheduleClick ? (
@@ -63,7 +63,7 @@ function SelectedPlanMenuItems({
           onClick={() => onScheduleClick(plan.id)}
           data-testid="menuitem-reschedule-plan"
         >
-          <CalendarDays className="h-4 w-4 mr-2" />
+          <CalendarDays className="h-4 w-4 mr-2" aria-hidden="true" />
           Reschedule
         </DropdownMenuItem>
       ) : null}
@@ -75,7 +75,7 @@ function SelectedPlanMenuItems({
           }}
           data-testid="menuitem-archive-plan"
         >
-          <Archive className="h-4 w-4 mr-2" />
+          <Archive className="h-4 w-4 mr-2" aria-hidden="true" />
           {isArchived ? "Restore plan" : "Archive plan"}
         </DropdownMenuItem>
       ) : null}
@@ -88,7 +88,7 @@ function SelectedPlanMenuItems({
           className="text-destructive focus:text-destructive focus:bg-destructive/10"
           data-testid="menuitem-delete-plan"
         >
-          <Trash2 className="h-4 w-4 mr-2" />
+          <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
           Delete plan
         </DropdownMenuItem>
       ) : null}
@@ -154,11 +154,11 @@ export function PlanToolsMenu({
         ) : null}
         <DropdownMenuLabel className="text-xs">Plan setup</DropdownMenuLabel>
         <DropdownMenuItem onClick={onGenerateClick} data-testid="button-generate-ai-plan">
-          <Sparkles className="h-4 w-4 mr-2" />
+          <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
           AI plan
         </DropdownMenuItem>
         <DropdownMenuItem onClick={downloadTemplate} data-testid="button-download-template">
-          <Download className="h-4 w-4 mr-2" />
+          <Download className="h-4 w-4 mr-2" aria-hidden="true" />
           Download template
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -172,7 +172,7 @@ export function PlanToolsMenu({
           {isImporting ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
-            <Upload className="h-4 w-4 mr-2" />
+            <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
           )}
           Import plan
         </DropdownMenuItem>
@@ -189,9 +189,9 @@ export function PlanToolsMenu({
               data-testid="menuitem-bulk-delete-mode"
             >
               {bulkDeleteMode ? (
-                <X className="h-4 w-4 mr-2" />
+                <X className="h-4 w-4 mr-2" aria-hidden="true" />
               ) : (
-                <Trash2 className="h-4 w-4 mr-2" />
+                <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
               )}
               {bulkDeleteMode ? "Exit bulk delete" : "Bulk delete"}
             </DropdownMenuItem>

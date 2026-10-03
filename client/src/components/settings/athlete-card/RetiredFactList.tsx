@@ -1,6 +1,8 @@
 import type { AthleteFact } from "@shared/schema";
 import { ChevronDown, Trash2 } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,6 +21,7 @@ interface RetiredFactListProps {
 export function RetiredFactList({ facts, atCap }: RetiredFactListProps) {
   const update = useUpdateAthleteFact();
   const remove = useDeleteAthleteFact();
+  const [pendingDeleteFact, setPendingDeleteFact] = useState<AthleteFact | null>(null);
   if (facts.length === 0) return null;
 
   return (
@@ -59,9 +62,7 @@ export function RetiredFactList({ facts, atCap }: RetiredFactListProps) {
                         size="icon"
                         variant="ghost"
                         aria-label={`Delete "${fact.fact}"`}
-                        onClick={() => {
-                          remove.mutate(fact.id);
-                        }}
+                        onClick={() => setPendingDeleteFact(fact)}
                         disabled={remove.isPending}
                       >
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -77,6 +78,22 @@ export function RetiredFactList({ facts, atCap }: RetiredFactListProps) {
           ))}
         </ul>
       </CollapsibleContent>
+      <ConfirmDialog
+        open={pendingDeleteFact !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteFact(null);
+        }}
+        title="Delete fact forever?"
+        description={`"${pendingDeleteFact?.fact}" will be permanently removed and cannot be restored.`}
+        confirmText="Delete"
+        isDestructive
+        isPending={remove.isPending}
+        onConfirm={() => {
+          if (!pendingDeleteFact) return;
+          remove.mutate(pendingDeleteFact.id);
+          setPendingDeleteFact(null);
+        }}
+      />
     </Collapsible>
   );
 }
