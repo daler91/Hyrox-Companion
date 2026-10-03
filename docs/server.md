@@ -36,7 +36,7 @@ After listening, startup advances from the initial `initializing` phase through 
 
 8. **`ssrf_guard` phase** (only when `AI_TEXT_BASE_URL` is set) -- `assertResolvedHostIsPublic(env.AI_TEXT_BASE_URL)` resolves the host and aborts startup if it resolves to a private/loopback address (see [SSRF Guard](#ssrf-guard)).
 9. **`db_maintenance` phase** -- `runStartupMaintenance(storage)` executes DB connectivity checks, migrations, schema/extension guards, and cleanup/backfill tasks.
-10. **`queue` phase** -- `startQueue()` starts pg-boss and registers the workers defined in `server/queue.ts`; `registerStravaAutoSyncWorker()` (`server/services/stravaAutoSync.ts`) then registers the `strava-sync` worker.
+10. **`queue` phase** -- `startQueue()` starts pg-boss and registers the workers defined in `server/queue.ts`; `registerStravaAutoSyncWorker()` (`server/services/stravaAutoSync.ts`) then registers the `strava-sync` worker, and `registerSessionStreamWorker()` (`server/services/sessionStreamSync.ts`) the `session-streams` worker.
 11. **`cron` phase** -- `startCron(storage)` schedules recurring jobs, and a warning is logged if `RESEND_API_KEY` is unset.
 12. **`routes` phase** -- `registerRoutes(httpServer, app)` mounts auth + API routes.
 13. **Post-route runtime wiring** -- Dev-only Swagger UI (`/api/docs`), global Express error handler, Sentry Express error handler, and static/Vite serving are attached.
@@ -108,8 +108,10 @@ Listed in mount order:
 | Email | `server/routes/email.ts` |
 | AI | `server/routes/ai.ts` |
 | Analytics | `server/routes/analytics.ts` |
+| Session grades | `server/routes/sessionGrades.ts` |
 | Workouts | `server/routes/workouts/` (composite router in `index.ts` over the CRUD, AI, device-link, timeline, export, MAF, and migration sub-route modules) |
 | Plans | `server/routes/plans.ts` |
+| Plan recovery | `server/routes/planRecovery.ts` |
 | Plan proposals | `server/routes/planProposals.ts` |
 | Coaching | `server/routes/coaching.ts` |
 | Consent | `server/routes/consent.ts` |
@@ -424,7 +426,7 @@ Both pools log unexpected errors on idle clients.
 
 ### Job Queue
 
-pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Workers are registered for every queue at boot — ten in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts`.
+pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Workers are registered for every queue at boot — ten in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts` and `session-streams` in `server/services/sessionStreamSync.ts`.
 
 **The queue catalogue lives in [Integrations → Job Types](integrations.md#job-types)** — name, worker and payload for each. It is not repeated here: this section previously carried a second copy of that table and drifted from it.
 

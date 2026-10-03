@@ -650,7 +650,7 @@ Errors on the queue emit to a global error handler that logs via the application
 #### `recompute-analytics`
 
 - **Purpose**: Refreshes a user's **stored** Coach Insights / Race Prediction (the durable `analytics_results` row) when a workout was logged after it was generated, so the next open paints a fresh result. Enqueued by the `analyticsRecompute` cron at each user's local midnight (see [Cron Scheduling](#cron-scheduling-node-cron)).
-- **Payload**: `{ userId: string, feature: "coach_insights" | "race_prediction", localDate: string }`
+- **Payload**: `{ userId: string, feature: "coach_insights" | "race_prediction" | "nutrition_insights" | "overview_analysis", localDate: string }`
 - **Worker**: Performs an atomic once-per-day claim via `storage.analyticsResults.markRecomputedOn(userId, feature, localDate)` (skips silently if already claimed today or the row was deleted), then regenerates: `regenerateAndStoreRacePrediction()` for `race_prediction` (always refreshes — deterministic fallback when AI is unavailable) or `generateCoachInsightsIfAllowed()` for `coach_insights` (self-gates on AI consent/budget, leaving the previous insight intact when skipped).
 - **Enqueued via**: `queue.send()` with `DEFAULT_JOB_OPTIONS` plus `singletonKey: recompute:<feature>:<userId>` and `singletonSeconds: 3600`, which coalesces duplicate enqueues for the same user+feature within the hour. Combined with the per-day claim, this makes the job safely idempotent. See [API Reference — Coach Insights / Race Prediction](api-reference.md) for the stored-first read endpoints this keeps warm.
 
