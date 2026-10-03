@@ -140,7 +140,7 @@ function base64ImageSchema(maxChars: number, tooLarge: string) {
     .superRefine((value, ctx) => {
       if (!imageBytesMatchDeclaredType(value.mimeType, value.imageBase64)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           path: ["imageBase64"],
           message: `Image data is not a valid ${value.mimeType} file`,
         });
