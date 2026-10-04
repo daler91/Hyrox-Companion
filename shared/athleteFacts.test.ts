@@ -48,6 +48,41 @@ describe("splitIntoFacts", () => {
     expect(splitIntoFacts("No sled at my gym. no sled at my gym\n\n-- \n...")).toEqual(["No sled at my gym."]);
   });
 
+  // D23 (CODEBASE_ANALYSIS_2026-10-03): the "2." of a decimal read as a list
+  // marker, and every full stop ended a sentence, so these facts were stored
+  // cut: "5 kg max on overhead press …", "See Dr." and "Patel before squatting".
+  it("keeps a leading decimal, even straight after a sentence end", () => {
+    expect(splitIntoFacts("2.5 kg max on overhead press after shoulder surgery")).toEqual([
+      "2.5 kg max on overhead press after shoulder surgery",
+    ]);
+    expect(splitIntoFacts("Bad left knee. 2.5 kg max on overhead press\n- 10.5 km longest run")).toEqual([
+      "Bad left knee.",
+      "2.5 kg max on overhead press",
+      "10.5 km longest run",
+    ]);
+  });
+
+  it("doesn't end a sentence at an abbreviation", () => {
+    expect(splitIntoFacts("See Dr. Patel before squatting. Avoid impact, e.g. box jumps")).toEqual([
+      "See Dr. Patel before squatting.",
+      "Avoid impact, e.g. box jumps",
+    ]);
+    expect(splitIntoFacts("Run approx. 5 km max. No sled")).toEqual(["Run approx. 5 km max.", "No sled"]);
+    // "2024." on its own has no letters, so splitting at "Mar." lost the year.
+    expect(splitIntoFacts("Shoulder surgery Mar. 2024. Light pressing only")).toEqual([
+      "Shoulder surgery Mar. 2024.",
+      "Light pressing only",
+    ]);
+  });
+
+  it("still strips a numbered marker with or without a space after it", () => {
+    expect(splitIntoFacts("1. Bad left knee\n2.No sled at my gym\n3) Night shifts")).toEqual([
+      "Bad left knee",
+      "No sled at my gym",
+      "Night shifts",
+    ]);
+  });
+
   it("cuts a sentence too long for a fact at the last word that fits", () => {
     const long = `Recovering from a ${"very ".repeat(40)}long injury`;
     const [fact] = splitIntoFacts(long);
