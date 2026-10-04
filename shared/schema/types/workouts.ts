@@ -300,6 +300,12 @@ export type TimelineEntry = {
   /** The provider's own activity name ("Morning Run"), from the link snapshot. */
   deviceActivityName?: string | null;
   /**
+   * The recording's sport type ("Run", "Ride"), from the link snapshot or a
+   * standalone import's focus. Decides the unit `avgCadence` is shown in
+   * (`cadenceUnitFor`): pedal rpm for a ride, steps per minute otherwise.
+   */
+  deviceSportType?: string | null;
+  /**
    * Seconds the recording's clock ran while the athlete was still, derived
    * from the link snapshot (`stoppedSecondsFor`).
    *

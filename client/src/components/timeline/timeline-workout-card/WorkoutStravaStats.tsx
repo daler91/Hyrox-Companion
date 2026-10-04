@@ -1,3 +1,4 @@
+import { cadenceUnitFor } from "@shared/deviceSportTypes";
 import { formatSpeed } from "@shared/unitConversion";
 import { Activity, Flame, TrendingUp,Zap } from "lucide-react";
 
@@ -34,7 +35,9 @@ export function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStra
       {entry.avgCadence && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-cadence-${entry.id}`}>
           <Activity className="h-3 w-3 text-blue-500" />
-          <span>{Math.round(entry.avgCadence)} spm</span>
+          <span>
+            {Math.round(entry.avgCadence)} {cadenceUnitFor(entry.deviceSportType)}
+          </span>
         </div>
       )}
       {entry.avgSpeed && entry.avgSpeed > 0 && (

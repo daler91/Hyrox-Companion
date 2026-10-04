@@ -369,6 +369,10 @@ function mapUpcomingWorkout(
             time: es.time ?? es.plannedTime,
             notes: es.notes,
             sortOrder: es.sortOrder,
+            // One stamp covers actual and planned values alike; the formatter
+            // converts through it so a kg prescription is not read as lbs (AI9).
+            weightUnit: es.weightUnit,
+            distanceUnit: es.distanceUnit,
           })),
         }
       : {}),
@@ -524,8 +528,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates, userTimezone);
+  const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const recentWorkouts = collectRecentWorkouts(timeline);
-  const structuredExerciseStats = getStructuredExerciseStats(timeline);
+  const structuredExerciseStats = getStructuredExerciseStats(timeline, { weightUnit, distanceUnit });
 
   let activePlan: TrainingContext["activePlan"];
   if (activePlanRecord) {
@@ -546,7 +551,6 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     : undefined;
   const weeklyVolume =
     weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
-  const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const progressionFlags = computeProgressionFlags(timeline, weightUnit, distanceUnit);
   const athlete: AthleteLoadContext = {
     age: user?.age ?? null,

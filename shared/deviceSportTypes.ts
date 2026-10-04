@@ -131,3 +131,44 @@ export function isIndoorRunSportType(sportType: string | null | undefined): bool
   if (!sportType) return false;
   return INDOOR_RUNNING_SPORTS.has(normalizeSportType(sportType));
 }
+
+/**
+ * Cycling sports, in both providers' spellings. Their cadence is pedal
+ * revolutions per minute, where every other sport's is steps (or strokes) per
+ * minute.
+ */
+const CYCLING_SPORTS: ReadonlySet<string> = new Set([
+  "ride",
+  "virtualride",
+  "mountainbikeride",
+  "gravelride",
+  "ebikeride",
+  "emountainbikeride",
+  "handcycle",
+  "velomobile",
+  "cycling",
+  "roadbiking",
+  "mountainbiking",
+  "gravelcycling",
+  "indoorcycling",
+  "virtualcycling",
+  "cyclocross",
+  "trackcycling",
+  "bmx",
+  "ebikefitness",
+  "ebikemountain",
+  "handcycling",
+  "recumbentcycling",
+]);
+
+/**
+ * The unit `workout_logs.avg_cadence` holds for a session of this sport: pedal
+ * "rpm" for a ride, "spm" for everything else (a run's cadence is stored as
+ * full steps per minute from both providers; see `stravaCadenceToStored`).
+ * Labelling every value "spm" showed a 90 rpm ride as "90 spm" — C9
+ * (CODEBASE_ANALYSIS_2026-10-03). An unknown sport reads "spm".
+ */
+export function cadenceUnitFor(sportType: string | null | undefined): "spm" | "rpm" {
+  if (!sportType) return "spm";
+  return CYCLING_SPORTS.has(normalizeSportType(sportType)) ? "rpm" : "spm";
+}

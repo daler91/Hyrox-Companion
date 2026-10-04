@@ -11,6 +11,7 @@ import {
   metersToUserDistance,
   paceSecondsPerUnit,
   storedDistanceToMetersStamped,
+  storedWeightToDisplay,
 } from "@shared/unitConversion";
 import { formatMinutes, minutes, minutesToSeconds, unitless } from "@shared/units";
 
@@ -198,15 +199,27 @@ function setDistanceInMetres(es: ExerciseSet, distanceUnit: string): number {
   return storedDistanceToMetersStamped(es.distance, { distanceUnit: es.distanceUnit }, { distanceUnit });
 }
 
+/**
+ * A set's weight in the athlete's current unit, which the flag labels it with.
+ * Raw, a kg-stamped 100 read as "100lbs" after a switch and the flag reported
+ * a 2.2x jump across it — AI9 (CODEBASE_ANALYSIS_2026-10-03).
+ */
+function setWeightInDisplayUnit(es: ExerciseSet, weightUnit: string): number {
+  if (es.weight == null || es.weight <= 0) return 0;
+  return storedWeightToDisplay(es.weight, { weightUnit: es.weightUnit }, { weightUnit });
+}
+
 function aggregateExercisePeaks(
   exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
+  weightUnit: string,
   distanceUnit: string,
 ): Record<string, Omit<SessionEffort, "date">> {
   const perExercise: Record<string, Omit<SessionEffort, "date">> = {};
   for (const es of exerciseSets) {
     if (!perExercise[es.exerciseName]) perExercise[es.exerciseName] = {};
     const pe = perExercise[es.exerciseName];
-    if (es.weight && (!pe.maxWeight || es.weight > pe.maxWeight)) pe.maxWeight = es.weight;
+    const weight = setWeightInDisplayUnit(es, weightUnit);
+    if (weight > 0 && (!pe.maxWeight || weight > pe.maxWeight)) pe.maxWeight = weight;
     if (!es.time || es.time <= 0) continue;
 
     const metres = setDistanceInMetres(es, distanceUnit);
@@ -226,6 +239,7 @@ function aggregateExercisePeaks(
 
 function collectExerciseHistory(
   timeline: TimelineEntry[],
+  weightUnit: string,
   distanceUnit: string,
 ): Record<string, SessionEffort[]> {
   const history: Record<string, SessionEffort[]> = {};
@@ -235,7 +249,7 @@ function collectExerciseHistory(
     .sort(compareEntryDates);
 
   for (const entry of completed) {
-    const peaks = aggregateExercisePeaks(entry.exerciseSets ?? [], distanceUnit);
+    const peaks = aggregateExercisePeaks(entry.exerciseSets ?? [], weightUnit, distanceUnit);
     for (const [name, stats] of Object.entries(peaks)) {
       if (!history[name]) history[name] = [];
       history[name].push({ date: entry.date ?? "", ...stats });
@@ -364,7 +378,7 @@ export function computeProgressionFlags(
   weightUnit: string,
   distanceUnit: string,
 ): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
-  const exerciseHistory = collectExerciseHistory(timeline, distanceUnit);
+  const exerciseHistory = collectExerciseHistory(timeline, weightUnit, distanceUnit);
   const flags: ProgressionFlag[] = [];
 
   for (const [exercise, history] of Object.entries(exerciseHistory)) {

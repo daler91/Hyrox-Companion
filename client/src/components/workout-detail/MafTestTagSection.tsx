@@ -1,5 +1,6 @@
 import { type MafTestMetrics } from "@shared/maf";
 import type { WorkoutLog } from "@shared/schema";
+import { minutes, minutesToSeconds, unitless } from "@shared/units";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, CheckCircle2, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -102,7 +103,12 @@ export function MafTestTagSection({
     : {
         avgHeartRate: workout?.avgHeartrate ?? null,
         maxHeartRate: workout?.maxHeartrate ?? null,
-        durationSeconds: workout?.duration ?? null,
+        // workout_logs.duration is MINUTES; the form (and the manual override the
+        // server prefers) is seconds, so convert as mafTestService does. Seeding
+        // the raw minutes brought back audit H1's 60x-fast pace on every
+        // accepted prefill -- CL2 (CODEBASE_ANALYSIS_2026-10-03).
+        durationSeconds:
+          workout?.duration == null ? null : unitless(minutesToSeconds(minutes(workout.duration))),
         distanceMeters: workout?.distanceMeters ?? null,
       };
 

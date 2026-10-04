@@ -1,3 +1,9 @@
+import {
+  storedDistanceToDisplay,
+  storedWeightToDisplay,
+  type UnitPreferences,
+} from "@shared/unitConversion";
+
 import type { TrainingContext } from "../../gemini/index";
 import { FUNCTIONAL_EXERCISES } from "../../prompts";
 import type { TimelineEntry } from "./types";
@@ -151,6 +157,10 @@ export function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContex
           time: es.time,
           notes: es.notes,
           sortOrder: es.sortOrder,
+          // The L4 stamp, so the prompt formatter converts the raw values into
+          // the athlete's current units before labelling them (AI9).
+          weightUnit: es.weightUnit,
+          distanceUnit: es.distanceUnit,
         })),
       });
     }
@@ -185,7 +195,13 @@ function updateExerciseStat(
   }
 }
 
-export function getStructuredExerciseStats(timeline: TimelineEntry[]) {
+/**
+ * Per-exercise bests for the coach, in the athlete's CURRENT units (the prompt
+ * labels them so). Each row is converted through its L4 stamp before the max:
+ * comparing raw values across a kg/lbs switch both picked the wrong row and
+ * labelled a kg max as lbs — AI9 (CODEBASE_ANALYSIS_2026-10-03).
+ */
+export function getStructuredExerciseStats(timeline: TimelineEntry[], preferences: UnitPreferences) {
   const stats: Record<string, { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }> = {};
   let hasStats = false;
 
@@ -194,7 +210,11 @@ export function getStructuredExerciseStats(timeline: TimelineEntry[]) {
       for (const es of entry.exerciseSets) {
         hasStats = true;
         if (!stats[es.exerciseName]) stats[es.exerciseName] = { count: 0 };
-        updateExerciseStat(stats[es.exerciseName], es);
+        updateExerciseStat(stats[es.exerciseName], {
+          ...es,
+          weight: es.weight == null ? null : storedWeightToDisplay(es.weight, es, preferences),
+          distance: es.distance == null ? null : storedDistanceToDisplay(es.distance, es, preferences),
+        });
       }
     }
   }

@@ -90,6 +90,24 @@ describe("get_workouts", () => {
     expect(vi.mocked(storage.timeline).getUpcomingPlannedDays.mock.calls).toEqual([]);
   });
 
+  it("shows a set logged in kg in lbs for an athlete who has since switched (AI9)", async () => {
+    vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([
+      { id: "log-1", date: "2026-07-14", focus: "Lower", mainWorkout: "Squats", duration: 60, rpe: 8, notes: null },
+    ] as never);
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([
+      set({ weight: 140, weightUnit: "kg" }),
+    ] as never);
+
+    const raw = await runChatTool(call("get_workouts", { from: "2026-07-01", to: "2026-07-31" }), {
+      ...CTX,
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+    });
+    const workouts = (JSON.parse(raw) as { workouts: Array<{ exercises: string }> }).workouts;
+
+    expect(workouts.at(0)?.exercises).toBe("Back Squat: 5 reps, 309 lbs");
+  });
+
   it("includes planned sessions in a range that reaches ahead", async () => {
     vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([]);
     vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([
@@ -140,6 +158,27 @@ describe("get_exercise_history", () => {
 
     expect(result.sessions).toEqual([]);
     expect(result.note).toBe("No logged sets of that exercise since 2026-08-02.");
+  });
+
+  // AI9 (CODEBASE_ANALYSIS_2026-10-03): a set is shown in the athlete's
+  // current unit through its L4 stamp, not as the raw number under that label.
+  it("shows sets logged in kg in lbs for an athlete who has since switched", async () => {
+    vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([
+      set({ workoutLogId: "log-1", date: "2026-07-14", weight: 140, weightUnit: "kg" }),
+      set({ workoutLogId: "log-2", date: "2026-09-14", weight: 315, weightUnit: "lbs" }),
+    ] as never);
+
+    const raw = await runChatTool(call("get_exercise_history", { exercise: "back squat" }), {
+      ...CTX,
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+    });
+    const sessions = (JSON.parse(raw) as { sessions: Array<{ date: string; sets: string }> }).sessions;
+
+    expect(sessions).toEqual([
+      { date: "2026-09-14", sets: "Back Squat: 5 reps, 315 lbs" },
+      { date: "2026-07-14", sets: "Back Squat: 5 reps, 309 lbs" },
+    ]);
   });
 });
 

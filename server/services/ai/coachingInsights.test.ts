@@ -521,6 +521,24 @@ describe("computeProgressionFlags — weight unit labelling (audit M8)", () => {
     );
     expect(flag.detail).toBe("Weight stuck at 225lbs for last 3 sessions");
   });
+
+  // AI9 (CODEBASE_ANALYSIS_2026-10-03): each set's L4 stamp converts it into
+  // the athlete's current unit before sessions are compared and labelled.
+  it("compares sessions across a kg-to-lbs switch in lbs", () => {
+    const stamped = (date: string, weight: number, weightUnit: string): TimelineEntry =>
+      makeEntry({ date, exerciseSets: [makeSet({ exerciseName: BACK_SQUAT, weight, weightUnit })] });
+    const [flag] = computeProgressionFlags(
+      [
+        stamped("2026-06-01", 100, "kg"),
+        stamped("2026-06-05", 100, "kg"),
+        stamped("2026-06-10", 225, "lbs"),
+      ],
+      "lbs",
+      "miles",
+    );
+    // Raw it read "Weight increased from 100lbs to 225lbs"; 100 kg is 220 lbs.
+    expect(flag.detail).toBe("Weight increased from 220lbs to 225lbs over last 3 sessions");
+  });
 });
 
 describe("computeProgressionFlags", () => {

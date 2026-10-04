@@ -93,8 +93,11 @@ describe("mapExerciseSetToPromptDetail", () => {
         time: 0,
         notes: "Top set of the day",
         sortOrder: 2,
+        weightUnit: "kg",
+        distanceUnit: "m",
       }),
     );
+    // The L4 stamp rides along so the prompt formatter can convert (AI9).
     expect(result).toEqual({
       exerciseName: "deadlift",
       customLabel: "Trap-bar",
@@ -106,6 +109,8 @@ describe("mapExerciseSetToPromptDetail", () => {
       time: 0,
       notes: "Top set of the day",
       sortOrder: 2,
+      weightUnit: "kg",
+      distanceUnit: "m",
     });
   });
 
@@ -127,6 +132,8 @@ describe("mapExerciseSetToPromptDetail", () => {
       time: null,
       notes: null,
       sortOrder: null,
+      weightUnit: null,
+      distanceUnit: null,
     });
   });
 });
@@ -210,6 +217,16 @@ describe("buildWorkoutPrescriptionFingerprint", () => {
   it("returns the same fingerprint for identical workouts (determinism)", () => {
     const a = buildWorkoutPrescriptionFingerprint(workout());
     const b = buildWorkoutPrescriptionFingerprint(workout());
+    expect(a).toBe(b);
+  });
+
+  it("is unchanged by the unit stamp the prompt details now carry (AI9)", () => {
+    // Fingerprints stored before the stamp was carried must still match.
+    const bare = { exerciseName: "back_squat", category: "strength", setNumber: 1, weight: 100 };
+    const a = buildWorkoutPrescriptionFingerprint(workout({ exerciseDetails: [bare] }));
+    const b = buildWorkoutPrescriptionFingerprint(
+      workout({ exerciseDetails: [{ ...bare, weightUnit: "kg", distanceUnit: "m" }] }),
+    );
     expect(a).toBe(b);
   });
 

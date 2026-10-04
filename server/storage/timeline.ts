@@ -45,6 +45,11 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
     // without a second fetch.
     countsAsTraining: log.countsAsTraining,
     deviceActivityName: log.deviceActivity?.raw?.name ?? null,
+    // Names the unit avg_cadence is in (rpm for a ride, spm otherwise). A
+    // standalone import from before the snapshot column carries its sport in
+    // `focus` (see legacyRawFromLog) -- C9 (CODEBASE_ANALYSIS_2026-10-03).
+    deviceSportType:
+      log.deviceActivity?.raw?.sport_type ?? (log.source === "strava" ? log.focus : null),
     // `duration` is moving time, so the stop it drops is worth showing next to
     // it — see the workout_logs.duration column note.
     stoppedSeconds: stoppedSecondsFor(log.deviceActivity),

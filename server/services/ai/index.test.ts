@@ -546,17 +546,30 @@ describe("buildTrainingContext", () => {
         exerciseSets: [
           // Plan-day sets carry the prescription in planned*; actuals are null
           // until the workout is logged.
-          { exerciseName: "back_squat", setNumber: 1, reps: null, plannedReps: 5, weight: null, plannedWeight: 100, sortOrder: 0 },
+          { exerciseName: "back_squat", setNumber: 1, reps: null, plannedReps: 5, weight: null, plannedWeight: 100, weightUnit: "kg", sortOrder: 0 },
         ],
       },
     ] as never);
 
     const ctx = await buildTrainingContext(USER_ID);
 
+    // The stamp rides along, so the prompt shows the prescription in the
+    // athlete's current unit rather than this raw number (AI9).
     expect(ctx.upcomingWorkouts?.[0].exerciseDetails?.[0]).toMatchObject({
       reps: 5,
       weight: 100,
+      weightUnit: "kg",
     });
+  });
+
+  it("builds the structured exercise stats in the athlete's units (AI9)", async () => {
+    vi.mocked(storage.users).getUser.mockResolvedValue(
+      makeUser({ weightUnit: "lbs", distanceUnit: "miles" }),
+    );
+
+    await buildTrainingContext(USER_ID);
+
+    expect(structuredMock).toHaveBeenCalledWith(expect.any(Array), { weightUnit: "lbs", distanceUnit: "miles" });
   });
 
   it("omits exercise details for upcoming days without exercise sets", async () => {

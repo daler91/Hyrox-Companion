@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { countsAsTraining, heartRateReflectsEffort, isIndoorRunSportType, isRunSportType } from "./deviceSportTypes";
+import {
+  cadenceUnitFor,
+  countsAsTraining,
+  heartRateReflectsEffort,
+  isIndoorRunSportType,
+  isRunSportType,
+} from "./deviceSportTypes";
 
 describe("countsAsTraining", () => {
   it("excludes the sports that arrive without being training", () => {
@@ -104,5 +110,22 @@ describe("isIndoorRunSportType", () => {
     expect(isIndoorRunSportType("treadmill_running")).toBe(true);
     expect(isIndoorRunSportType("Run")).toBe(false);
     expect(isIndoorRunSportType(undefined)).toBe(false);
+  });
+});
+
+describe("cadenceUnitFor", () => {
+  it("reads a ride's cadence as pedal rpm, in both providers' spellings", () => {
+    for (const sport of ["Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "cycling", "indoor_cycling", "road_biking"]) {
+      expect(cadenceUnitFor(sport), sport).toBe("rpm");
+    }
+  });
+
+  it("reads every other sport, and an unknown one, as steps per minute", () => {
+    for (const sport of ["Run", "TrailRun", "running", "Rowing", "Walk", "Workout"]) {
+      expect(cadenceUnitFor(sport), sport).toBe("spm");
+    }
+    expect(cadenceUnitFor(null)).toBe("spm");
+    expect(cadenceUnitFor(undefined)).toBe("spm");
+    expect(cadenceUnitFor("")).toBe("spm");
   });
 });

@@ -122,6 +122,11 @@ export function mapExerciseSetToPromptDetail(row: ExerciseSet | InsertExerciseSe
     time: row.time ?? null,
     notes: row.notes ?? null,
     sortOrder: row.sortOrder ?? null,
+    // The L4 stamp, so the prompt formatter can show the values in the
+    // athlete's current units (AI9). normalizeExerciseDetails picks its own
+    // fields, so prescription fingerprints are unchanged by it.
+    weightUnit: row.weightUnit ?? null,
+    distanceUnit: row.distanceUnit ?? null,
   };
 }
 
