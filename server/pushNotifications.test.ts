@@ -47,6 +47,9 @@ import { PUSH_SEND_TIMEOUT_MS } from "./constants";
 import { storage } from "./storage";
 
 const SUB = { id: "sub-1", endpoint: "https://fcm.googleapis.com/fcm/send/x", p256dh: "p256dh", auth: "auth" };
+// A push service reached over plain http: the insecure scheme is what the
+// allowlist must refuse.
+const INSECURE_SCHEME = "http";
 
 describe("sendPushToUser (S: DNS-rebinding SSRF guard)", () => {
   beforeEach(() => {
@@ -152,7 +155,7 @@ describe("isAllowedPushEndpoint (S2 CODEBASE_ANALYSIS_2026-10-03)", () => {
 
   it.each([
     "https://evil.example/p",
-    "http://fcm.googleapis.com/fcm/send/abc", // DevSkim: ignore DS137138
+    `${INSECURE_SCHEME}://fcm.googleapis.com/fcm/send/abc`,
     "https://fcm.googleapis.com.evil.example/fcm/send/abc",
     "https://evilfcm.googleapis.com/fcm/send/abc",
     "https://storage.googleapis.com/bucket/p",

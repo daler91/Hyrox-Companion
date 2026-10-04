@@ -412,7 +412,9 @@ describe("the server-owned chat conversation", () => {
       // Thinking until the stream is cancelled; one nobody cancels runs on.
       const cancelled = await new Promise<boolean>((resolve) => {
         options?.signal?.addEventListener("abort", () => resolve(true), { once: true });
-        setTimeout(() => resolve(false), 500); // DevSkim: ignore DS172411
+        setTimeout(() => { // DevSkim: ignore DS172411
+          resolve(false);
+        }, 500);
       });
       providerCancelled(cancelled);
       if (cancelled) throw new DOMException("This operation was aborted", "AbortError");

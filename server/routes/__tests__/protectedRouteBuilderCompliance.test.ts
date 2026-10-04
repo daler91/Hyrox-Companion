@@ -176,14 +176,15 @@ describe("protected route builder compliance", () => {
     const parserReaching = [...PARSER_FUNCTIONS, ...Object.values(PARSER_CALLERS).filter((v) => Array.isArray(v)).flat()];
     const withoutComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     // String scans rather than a RegExp built from each name.
-    const isIdentChar = (c: string | undefined) => c !== undefined && /[\w$]/.test(c);
+    // charAt is "" past either end, which is not an identifier character.
+    const isIdentChar = (c: string) => /[\w$]/.test(c);
     /** Whether `src` calls `name(`, as opposed to declaring `function name(`. */
     const callsName = (src: string, name: string) => {
       for (let i = src.indexOf(name); i !== -1; i = src.indexOf(name, i + 1)) {
-        if (isIdentChar(src[i - 1])) continue;
+        if (isIdentChar(src.charAt(i - 1))) continue;
         let j = i + name.length;
-        while (j < src.length && /\s/.test(src[j])) j++;
-        if (src[j] !== "(") continue;
+        while (j < src.length && /\s/.test(src.charAt(j))) j++;
+        if (src.charAt(j) !== "(") continue;
         if (/function\s+$/.test(src.slice(Math.max(0, i - 40), i))) continue;
         return true;
       }
@@ -193,7 +194,7 @@ describe("protected route builder compliance", () => {
     const exportsName = (contents: string, name: string) =>
       [`export function ${name}`, `export async function ${name}`, `export const ${name}`].some((decl) => {
         for (let i = contents.indexOf(decl); i !== -1; i = contents.indexOf(decl, i + 1)) {
-          if (!isIdentChar(contents[i + decl.length])) return true;
+          if (!isIdentChar(contents.charAt(i + decl.length))) return true;
         }
         return false;
       });

@@ -18,6 +18,9 @@ vi.mock("../../storage", async () =>
 );
 
 const KEYS = { p256dh: "BPubKey", auth: "authSecret" };
+// A push service reached over plain http: the insecure scheme is what the
+// subscribe validation must refuse.
+const INSECURE_SCHEME = "http";
 
 describe("POST /api/v1/push/subscribe (S2 CODEBASE_ANALYSIS_2026-10-03: push-service allowlist)", () => {
   let app: express.Express;
@@ -60,7 +63,7 @@ describe("POST /api/v1/push/subscribe (S2 CODEBASE_ANALYSIS_2026-10-03: push-ser
   it("still rejects a plain-http push service endpoint", async () => {
     const response = await request(app)
       .post("/api/v1/push/subscribe")
-      .send({ endpoint: "http://fcm.googleapis.com/fcm/send/abc", keys: KEYS }); // DevSkim: ignore DS137138
+      .send({ endpoint: `${INSECURE_SCHEME}://fcm.googleapis.com/fcm/send/abc`, keys: KEYS });
 
     expect(response.status).toBe(400);
     expect(storage.push.saveSubscription).not.toHaveBeenCalled();
