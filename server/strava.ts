@@ -13,6 +13,10 @@ import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
+import {
+  dropCrossProviderDuplicates,
+  recordingTimingFromStrava,
+} from "./services/crossProviderDuplicates";
 import { parseStravaStreamResponse, type StravaStreamSet } from "./services/sessionGrades/downsample";
 import { enqueueSessionStreams } from "./services/sessionStreamQueue";
 import {
@@ -843,6 +847,9 @@ function sendStravaSyncFailure(res: Response, failure: StravaSyncFailure): Respo
  * Drop activities already imported for this athlete; map the rest for the
  * reconciler. Dedup by (user, strava_activity_id) is what makes a manual
  * link or unlink sticky: either way the activity's id is already on a row.
+ * An activity the athlete's Garmin sync already brought in (the watch
+ * auto-uploads to Strava) is dropped too, before any detail fetch is spent
+ * on it (D16, CODEBASE_ANALYSIS_2026-10-03).
  */
 async function selectStravaActivitiesToImport(
   activities: StravaActivity[],
@@ -855,7 +862,12 @@ async function selectStravaActivitiesToImport(
       activities.map((a) => String(a.id)),
     ),
   );
-  const fresh = activities.filter((a) => !existingStravaIds.has(String(a.id)));
+  const { kept: fresh } = await dropCrossProviderDuplicates(
+    userId,
+    activities.filter((a) => !existingStravaIds.has(String(a.id))),
+    "garmin",
+    (a) => ({ date: a.start_date_local.split("T")[0], timing: recordingTimingFromStrava(a) }),
+  );
   return {
     items: fresh.map((activity) => ({
       activity,
@@ -893,7 +905,7 @@ export interface StravaSyncCounts {
   suggested: number;
   /** Standalone imports with nothing to match. */
   standalone: number;
-  /** Already imported before this sync, or claimed by a concurrent one. */
+  /** Already imported before this sync, claimed by a concurrent one, or already imported from Garmin (D16). */
   skipped: number;
   total: number;
   /** True when the page cap left older activities unfetched. */

@@ -20,14 +20,16 @@
 import {
   type DeviceActivitySnapshot,
   type DeviceLinkSource,
+  type ExerciseSet,
   exerciseSets,
   type PlanDay,
   type StravaActivitySummary,
   type WorkoutLog,
   workoutLogs,
+  workoutStructureBlocks,
 } from "@shared/schema";
 import type { DistanceUnit } from "@shared/unitConversion";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -357,6 +359,106 @@ export async function linkStandaloneDeviceLog(input: {
   });
 }
 
+/** What a plan-day log the link created holds beyond its own columns. */
+export interface LinkCreatedLogContents {
+  planDay: Pick<PlanDay, "focus" | "scheduledDate"> | undefined;
+  sets: ReadonlyArray<
+    Pick<
+      ExerciseSet,
+      | "version"
+      | "reps"
+      | "plannedReps"
+      | "weight"
+      | "plannedWeight"
+      | "distance"
+      | "plannedDistance"
+      | "time"
+      | "plannedTime"
+    >
+  >;
+  /** Structure blocks carrying a score, which only the athlete enters. */
+  scoredBlocks: number;
+}
+
+/**
+ * Whether the athlete has put anything of their own on a plan-day log the
+ * link created (source "strava" + plan day).
+ *
+ * Such a log starts as a pure derivative: the day's prescription (text,
+ * copied sets and structure) with the recording's metrics on top. While it
+ * still is one, deleting it loses nothing, because the prescription is still
+ * on the plan day and the recording comes back as its own row. But it is the
+ * day's working log and as editable as any other, so once the athlete has
+ * entered actual sets, an RPE, notes or a block score on it, deleting it
+ * destroyed their session with no undo (D11, CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * Errs towards "edited": a log kept by mistake costs the athlete one delete,
+ * which the recycle bin can undo; a log deleted by mistake costs the session.
+ */
+export function hasAthleteEdits(log: WorkoutLog, contents: LinkCreatedLogContents): boolean {
+  const filled = new Set<string>(log.deviceActivity?.filledColumns ?? []);
+  const { planDay, sets, scoredBlocks } = contents;
+  return (
+    // createWorkoutInTx snapshots the text it created the log with into prescribed*.
+    log.mainWorkout !== log.prescribedMainWorkout ||
+    (log.accessory ?? null) !== (log.prescribedAccessory ?? null) ||
+    (log.notes ?? null) !== (log.prescribedNotes ?? null) ||
+    // Every metric the recording did not fill started NULL; a value there
+    // (an RPE above all) was typed here.
+    DEVICE_METRIC_COLUMNS.some((col) => !filled.has(col) && log[col] != null) ||
+    log.timeOfDayMin != null ||
+    !log.countsAsTraining ||
+    !planDay ||
+    log.focus !== planDay.focus ||
+    log.date !== (planDay.scheduledDate ?? log.date) ||
+    // The copy wrote each prescribed set once, at version 1, with actuals equal
+    // to the prescription, and the adherence snapshot counted them.
+    sets.length !== (log.plannedSetCount ?? 0) ||
+    sets.some(
+      (set) =>
+        set.version > 1 ||
+        set.reps !== set.plannedReps ||
+        set.weight !== set.plannedWeight ||
+        set.distance !== set.plannedDistance ||
+        set.time !== set.plannedTime,
+    ) ||
+    scoredBlocks > 0
+  );
+}
+
+async function loadLinkCreatedLogContents(
+  tx: WorkoutTx,
+  log: WorkoutLog,
+  planDayId: string,
+  userId: string,
+): Promise<LinkCreatedLogContents> {
+  const planDay = await storage.plans.getPlanDay(planDayId, userId, tx);
+  const sets = await tx
+    .select({
+      version: exerciseSets.version,
+      reps: exerciseSets.reps,
+      plannedReps: exerciseSets.plannedReps,
+      weight: exerciseSets.weight,
+      plannedWeight: exerciseSets.plannedWeight,
+      distance: exerciseSets.distance,
+      plannedDistance: exerciseSets.plannedDistance,
+      time: exerciseSets.time,
+      plannedTime: exerciseSets.plannedTime,
+    })
+    .from(exerciseSets)
+    .where(eq(exerciseSets.workoutLogId, log.id));
+  const scored = await tx
+    .select({ id: workoutStructureBlocks.id })
+    .from(workoutStructureBlocks)
+    .where(
+      and(
+        eq(workoutStructureBlocks.workoutLogId, log.id),
+        isNotNull(workoutStructureBlocks.score),
+      ),
+    );
+  return { planDay, sets, scoredBlocks: scored.length };
+}
+
 export interface UnlinkResult {
   /** The row the activity was removed from; null when the row itself only existed because of the link. */
   log: WorkoutLog | null;
@@ -370,10 +472,13 @@ export interface UnlinkResult {
  * Two shapes of linked row exist and they unwind differently:
  *  - the athlete's own log (source "manual") that a link enriched: the
  *    filled metric columns go back to NULL and everything they typed stays;
- *  - a plan-day log the link CREATED (source "strava" + plan day): the row
- *    has no athlete-authored content, so it is deleted and the plan day's
- *    status is re-derived (back to planned, unless the day was skipped/missed
- *    by hand).
+ *  - a plan-day log the link CREATED (source "strava" + plan day): while it
+ *    is still exactly what the link built (see hasAthleteEdits) it holds
+ *    nothing of the athlete's, so it is deleted and the plan day's status is
+ *    re-derived (back to planned, unless the day was skipped/missed by hand).
+ *    Once the athlete has edited it, it is their session: it unwinds like
+ *    their own log and stays on the day as a manual log, minus the
+ *    "Strava: <name>" line.
  */
 export async function unlinkDeviceActivity(input: {
   userId: string;
@@ -396,19 +501,34 @@ export async function unlinkDeviceActivity(input: {
       );
     }
     const snapshot = log.deviceActivity;
+    const createdForPlanDayId = log.source === "strava" ? log.planDayId : null;
 
     let remaining: WorkoutLog | null;
-    if (log.source === "strava" && log.planDayId) {
+    if (
+      createdForPlanDayId &&
+      !hasAthleteEdits(log, await loadLinkCreatedLogContents(tx, log, createdForPlanDayId, userId))
+    ) {
       await tx.delete(workoutLogs).where(eq(workoutLogs.id, log.id));
-      await syncPlanDayStatusFromWorkouts(log.planDayId, userId, tx);
+      await syncPlanDayStatusFromWorkouts(createdForPlanDayId, userId, tx);
       remaining = null;
     } else {
       const reset: Record<string, null> = {};
       for (const col of snapshot?.filledColumns ?? []) reset[col] = null;
+      // An edited log the link created is the athlete's from here on: a manual
+      // log on the day, so the timeline stops presenting it as a Strava import
+      // and offers it as a target for the right recording.
+      const adopt = createdForPlanDayId
+        ? {
+            source: "manual",
+            notes: stripStravaActivityLabel(log.notes, log),
+            prescribedNotes: stripStravaActivityLabel(log.prescribedNotes, log),
+          }
+        : {};
       [remaining] = await tx
         .update(workoutLogs)
         .set({
           ...reset,
+          ...adopt,
           stravaActivityId: null,
           deviceLinkSource: null,
           deviceLinkConfidence: null,

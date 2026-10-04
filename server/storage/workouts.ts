@@ -449,6 +449,38 @@ export class WorkoutStorage {
   }
 
   /**
+   * The athlete's logs on `dates` that carry a `provider` recording, with just
+   * the columns that time it. The OTHER provider's sync checks a fresh activity
+   * against these before importing it: a Garmin watch that auto-uploads to
+   * Strava hands us every session twice under unrelated ids (D16,
+   * CODEBASE_ANALYSIS_2026-10-03; see crossProviderDuplicates.ts).
+   */
+  async listDeviceRecordingsForDates(
+    userId: string,
+    dates: readonly string[],
+    provider: "strava" | "garmin",
+  ): Promise<Pick<WorkoutLog, "startedAt" | "duration" | "focus" | "deviceActivity">[]> {
+    if (dates.length === 0) return [];
+    return await db
+      .select({
+        startedAt: workoutLogs.startedAt,
+        duration: workoutLogs.duration,
+        focus: workoutLogs.focus,
+        deviceActivity: workoutLogs.deviceActivity,
+      })
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          inArray(workoutLogs.date, [...dates]),
+          isNotNull(
+            provider === "strava" ? workoutLogs.stravaActivityId : workoutLogs.garminActivityId,
+          ),
+        ),
+      );
+  }
+
+  /**
    * Activity ids among `stravaActivityIds` the athlete already has — on a live
    * workout log OR on a workout sitting in the recycle bin. The bin half is
    * what keeps a deleted device workout deleted: Strava re-scans a 7-day

@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { db } from "../db";
+import { storage } from "../storage";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
 import {
   attachStravaActivityToLogInTx,
   createLogFromPlanDayWithStravaInTx,
   dismissDeviceLinkSuggestion,
+  hasAthleteEdits,
   legacyRawFromLog,
+  type LinkCreatedLogContents,
   linkStandaloneDeviceLog,
   pickDeviceMetrics,
   releaseStravaActivityInTx,
@@ -45,6 +48,61 @@ const RAW: StravaActivitySummary = {
   average_heartrate: 152,
   max_heartrate: 171,
 };
+
+/** The plan day the link-created fixtures below were built from. */
+const LINK_PLAN_DAY = createMockPlanDay({
+  id: "pd-1",
+  focus: "Strength",
+  scheduledDate: "2026-09-08",
+});
+
+/** A set as copyPrescribedSetsIntoLog writes it: actuals equal to the prescription. */
+const UNTOUCHED_SET = {
+  version: 1,
+  reps: 5,
+  plannedReps: 5,
+  weight: 100,
+  plannedWeight: 100,
+  distance: null,
+  plannedDistance: null,
+  time: null,
+  plannedTime: null,
+} as const;
+
+/**
+ * A plan-day log exactly as createLogFromPlanDayWithStravaInTx leaves it: the
+ * prescription's text (snapshotted into prescribed*), the recording's
+ * metrics, one copied set counted by the adherence snapshot.
+ */
+function linkCreatedLog(overrides: Partial<WorkoutLog> = {}): WorkoutLog {
+  return makeWorkoutLog({
+    id: "log-2",
+    source: "strava",
+    date: "2026-09-08",
+    focus: "Strength",
+    mainWorkout: "Back squat 5x5 @ 100kg",
+    prescribedMainWorkout: "Back squat 5x5 @ 100kg",
+    notes: "Back squat 5x5\nStrava: Morning Run",
+    prescribedNotes: "Back squat 5x5\nStrava: Morning Run",
+    plannedSetCount: 1,
+    actualSetCount: 1,
+    planDayId: "pd-1",
+    planId: "plan-1",
+    duration: 45,
+    distanceMeters: 8100,
+    startedAt: new Date("2026-09-08T11:30:00Z"),
+    stravaActivityId: "9001",
+    deviceLinkSource: "auto",
+    deviceLinkConfidence: 0.8,
+    deviceActivity: {
+      provider: "strava",
+      raw: RAW,
+      filledColumns: ["duration", "distanceMeters", "startedAt"],
+      linkedAt: "2026-09-08T12:00:00Z",
+    },
+    ...overrides,
+  });
+}
 
 function makeTx() {
   return {
@@ -247,22 +305,23 @@ describe("unlinkDeviceActivity", () => {
     expect(streamMocks.deleteForLog).toHaveBeenCalledWith("log-1", USER, tx);
   });
 
+  /**
+   * Queue the reads unlink makes of a plan-day log the link created, in order:
+   * the log itself (FOR UPDATE), its sets, its scored structure blocks.
+   */
+  function givenLinkCreatedLog(log: WorkoutLog, contents: Partial<LinkCreatedLogContents> = {}) {
+    const { planDay = LINK_PLAN_DAY, sets = [UNTOUCHED_SET], scoredBlocks = 0 } = contents;
+    tx.for.mockResolvedValue([log]);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(planDay as never);
+    tx.where
+      .mockReturnValueOnce(tx) // the log select, finished by .for()
+      .mockResolvedValueOnce(sets)
+      .mockResolvedValueOnce(Array.from({ length: scoredBlocks }, (_, i) => ({ id: `b-${i}` })));
+  }
+
   it("deletes a plan-day log the sync created and re-derives the day's status", async () => {
-    const created = makeWorkoutLog({
-      id: "log-2",
-      source: "strava",
-      planDayId: "pd-1",
-      stravaActivityId: "9001",
-      deviceLinkSource: "auto",
-      deviceActivity: {
-        provider: "strava",
-        raw: RAW,
-        filledColumns: ["duration", "distanceMeters"],
-        linkedAt: "2026-09-08T12:00:00Z",
-      },
-    });
-    tx.for.mockResolvedValue([created]);
-    tx.where.mockReturnValueOnce(tx).mockResolvedValueOnce({ rowCount: 1 });
+    givenLinkCreatedLog(linkCreatedLog());
+    tx.where.mockResolvedValueOnce({ rowCount: 1 }); // the delete
     tx.returning.mockResolvedValueOnce([
       makeWorkoutLog({ id: "standalone", stravaActivityId: "9001", source: "strava" }),
     ]);
@@ -276,11 +335,104 @@ describe("unlinkDeviceActivity", () => {
     expect(result.standalone.id).toBe("standalone");
   });
 
+  it("keeps a plan-day log the sync created once the athlete has logged on it, as their own log", async () => {
+    // D11 (CODEBASE_ANALYSIS_2026-10-03): the athlete entered the weights they
+    // lifted, an RPE and a note on the day's log, then unlinked a wrong match.
+    // Deleting the log took all of it with it, with nothing in the bin.
+    const edited = linkCreatedLog({
+      rpe: 8,
+      notes: "Back squat 5x5\nStrava: Morning Run\nFelt heavy today",
+    });
+    givenLinkCreatedLog(edited, {
+      sets: [{ ...UNTOUCHED_SET, weight: 102.5, version: 2 }],
+    });
+    tx.returning
+      .mockResolvedValueOnce([{ ...edited, source: "manual", stravaActivityId: null }])
+      .mockResolvedValueOnce([
+        makeWorkoutLog({ id: "standalone", stravaActivityId: "9001", source: "strava" }),
+      ]);
+
+    const result = await unlinkDeviceActivity({ userId: USER, logId: "log-2", distanceUnit: "km" });
+
+    expect(tx.delete).not.toHaveBeenCalled();
+    expect(syncPlanDayStatusFromWorkouts).not.toHaveBeenCalled();
+    const [patch] = tx.set.mock.calls[0];
+    expect(patch).toEqual({
+      duration: null,
+      distanceMeters: null,
+      startedAt: null,
+      source: "manual",
+      notes: "Back squat 5x5\nFelt heavy today",
+      prescribedNotes: "Back squat 5x5",
+      stravaActivityId: null,
+      deviceLinkSource: null,
+      deviceLinkConfidence: null,
+      deviceActivity: null,
+    });
+    // Their RPE was never the recording's, so it neither leaves the log nor
+    // travels with the recording.
+    expect(patch.rpe).toBeUndefined();
+    expect(tx.values.mock.calls[0][0].rpe).toBeNull();
+    expect(streamMocks.deleteForLog).toHaveBeenCalledWith("log-2", USER, tx);
+    expect(result.log?.source).toBe("manual");
+    expect(result.standalone.id).toBe("standalone");
+  });
+
   it("refuses a log with nothing linked", async () => {
     tx.for.mockResolvedValue([makeWorkoutLog({ id: "log-3" })]);
     await expect(
       unlinkDeviceActivity({ userId: USER, logId: "log-3", distanceUnit: "km" }),
     ).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("hasAthleteEdits", () => {
+  const untouched: LinkCreatedLogContents = {
+    planDay: LINK_PLAN_DAY,
+    sets: [UNTOUCHED_SET],
+    scoredBlocks: 0,
+  };
+
+  it("finds nothing on a log that is still exactly what the link built", () => {
+    expect(hasAthleteEdits(linkCreatedLog(), untouched)).toBe(false);
+  });
+
+  it("counts a Strava rating the link filled as the recording's, not the athlete's", () => {
+    const rated = linkCreatedLog({
+      rpe: 6,
+      deviceActivity: {
+        provider: "strava",
+        raw: RAW,
+        filledColumns: ["duration", "distanceMeters", "startedAt", "rpe"],
+        linkedAt: "2026-09-08T12:00:00Z",
+      },
+    });
+    expect(hasAthleteEdits(rated, untouched)).toBe(false);
+  });
+
+  it.each<[string, Partial<WorkoutLog>]>([
+    ["an RPE", { rpe: 8 }],
+    ["notes", { notes: "Back squat 5x5\nStrava: Morning Run\nLeft knee niggle" }],
+    ["a rewritten description", { mainWorkout: "Back squat 5x5 @ 105kg" }],
+    ["an accessory", { accessory: "Core finisher" }],
+    ["a heart rate the recording lacked", { avgHeartrate: 140 }],
+    ["a start time", { timeOfDayMin: 420 }],
+    ["a not-training flag", { countsAsTraining: false }],
+    ["a new title", { focus: "Heavy squats" }],
+    ["a moved date", { date: "2026-09-09" }],
+  ])("sees %s typed on the log", (_label, edit) => {
+    expect(hasAthleteEdits(linkCreatedLog(edit), untouched)).toBe(true);
+  });
+
+  it.each<[string, Partial<LinkCreatedLogContents>]>([
+    ["an edited set", { sets: [{ ...UNTOUCHED_SET, version: 2 }] }],
+    ["an actual that differs from the prescription", { sets: [{ ...UNTOUCHED_SET, reps: 4 }] }],
+    ["a removed set", { sets: [] }],
+    ["an added set", { sets: [UNTOUCHED_SET, { ...UNTOUCHED_SET, plannedReps: null }] }],
+    ["a block score", { scoredBlocks: 1 }],
+    ["a plan day it can no longer be checked against", { planDay: undefined }],
+  ])("sees %s", (_label, contents) => {
+    expect(hasAthleteEdits(linkCreatedLog(), { ...untouched, ...contents })).toBe(true);
   });
 });
 

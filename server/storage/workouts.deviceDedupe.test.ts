@@ -62,3 +62,37 @@ describe("WorkoutStorage device-activity dedupe is recycle-bin aware", () => {
     expect(await storage.getExistingStravaActivityIds("u1", ["x"])).toEqual([]);
   });
 });
+
+/**
+ * The cross-provider half of the dedupe (D16, CODEBASE_ANALYSIS_2026-10-03):
+ * each sync reads the other provider's recordings for the batch's dates.
+ */
+describe("WorkoutStorage.listDeviceRecordingsForDates", () => {
+  const storage = new WorkoutStorage();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns nothing without querying for an empty date list", async () => {
+    expect(await storage.listDeviceRecordingsForDates("u1", [], "garmin")).toEqual([]);
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("reads only the columns that time a recording, in one query", async () => {
+    const rows = [{ startedAt: new Date(), duration: 45, focus: "running", deviceActivity: null }];
+    const whereMock = vi.fn().mockResolvedValueOnce(rows);
+    vi.mocked(db.select).mockReturnValue({
+      from: vi.fn().mockReturnValue({ where: whereMock }),
+    } as never); // NOSONAR partial Drizzle query-builder mock
+
+    expect(await storage.listDeviceRecordingsForDates("u1", ["2026-09-08"], "strava")).toBe(rows);
+    expect(Object.keys(vi.mocked(db.select).mock.calls[0][0] ?? {})).toEqual([
+      "startedAt",
+      "duration",
+      "focus",
+      "deviceActivity",
+    ]);
+    expect(whereMock).toHaveBeenCalledTimes(1);
+  });
+});
