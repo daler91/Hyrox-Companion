@@ -221,7 +221,7 @@ Unauthenticated, like the few other routes listed in the [Overview](#overview). 
 
 ### GET /api/v1/health/live
 
-**Liveness** probe: is the process up? Wire this one to a restart policy.
+**Liveness** probe: is the process up? It answers `200` before boot has finished, so it is not a deploy gate. Wire this one to a runtime restart policy, where the platform has one.
 
 - **Auth:** None
 - **Response:** `200` `{ status: "alive", uptimeMs, timestamp }`
@@ -229,7 +229,7 @@ Unauthenticated, like the few other routes listed in the [Overview](#overview). 
 
 ### GET /api/v1/health
 
-**Readiness** probe: gates on startup state plus a cached DB / vector-DB probe. A `503` here means "don't route traffic to me right now" and should **not** be wired to a restart policy.
+**Readiness** probe: gates on startup state plus a cached DB / vector-DB probe. A `503` here means "don't route traffic to me right now" and should **not** be wired to a restart policy. `railway.toml` points Railway's deploy healthcheck here: Railway polls it only while a deploy rolls out, so a release whose boot fails never replaces the deployment that is serving (D2, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
 
 - **Auth:** None
 - **Response:** `200` `{ status: "ok", vectorSchema, uptimeMs, timestamp }`
@@ -270,7 +270,7 @@ Permanently delete the authenticated user's account and all associated data (GDP
   4. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
   5. **DB user row and private custom foods are deleted in one transaction.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`. Public custom foods survive by explicit opt-in.
   6. **Best-effort purge** of the user's rate-limit buckets, then their queued pg-boss jobs.
-  7. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
+  7. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache. A Clerk session minted before step 3 still authenticates until it expires, so before step 5 the erasure writes a 10-minute `auth-erased` tombstone (`rememberUserErased`) and `ensureUserExists` answers such a session with 401 instead of re-provisioning the account.
 - **Stranded runs:** if a run dies after step 3, `runStrandedErasureSweep` (hourly cron) finds the still-stamped row and finishes it — the athlete can no longer authenticate to retry themselves.
 
 ---
@@ -573,6 +573,7 @@ Run an assisted-migration backfill pass for the current user.
 
 - **Auth:** Required
 - **Rate limit:** `migrationBackfill` category, 2/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** Backfill result summary
 
 ### POST /api/v1/workouts/migration/reviews/resolve
@@ -649,7 +650,7 @@ MAF test history and compliance trend, for the trend charts and the coach.
 
 - **Auth:** Required
 - **Rate limit:** `mafTest` category, 60/min
-- **Response:** `{ tests, analysis }` — up to 200 rows each
+- **Response:** `{ tests, analysis, workoutDates }` — up to 200 rows each; `workoutDates` maps each tagged workout's id to its date (YYYY-MM-DD), which the charts date a test by instead of when it was tagged
 
 ---
 
@@ -1430,8 +1431,9 @@ Send a message to the AI coach and receive a streaming response via Server-Sent 
   - `{ planProposal: { id, planId, status, summaryMessage, changes, createdAt } }` — The proposal that was created (`status: "applied"` when auto-applied)
   - `{ factProposal: { fact, category, status: "pending" } }` — A lasting fact the athlete stated, offered for their athlete card (see "Athlete facts" above); sent just before `done`
   - `{ done: true }` — Stream complete
-  - `{ error: "auth-expired" | "timeout", reason: string }` — The stream hit its deadline: the Clerk session's expiry (less a 5-second margin) or the 5-minute hard cap
-  - `{ error: "Stream error" }` — Unexpected stream error
+  - `{ error: "timeout", reason: string }` — The stream hit its 5-minute hard cap. The deadline is not tied to the Clerk session token, which lives 60 seconds and is refreshed in the background; the session is checked when the request arrives
+  - `{ error: "Stream error" }` — Unexpected stream error, or the server shutting down mid-reply
+- **Cancellation:** a client that disconnects (Stop, closing the panel or tab) aborts the reply's provider calls, plan-change drafting included. A proposal drafted for a stream that was cut off is never auto-applied
 
 **Request example:**
 
@@ -1820,7 +1822,7 @@ Persist a `PushSubscription` for the authenticated user. Multiple endpoints per 
 
 - **Auth:** Required
 - **Rate limit:** `push` category, 10/min
-- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }` — `endpoint` must be HTTPS and must pass the [SSRF guard](../server/ssrfGuard.ts), since the server later POSTs to it
+- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }` — `endpoint` must be HTTPS, must pass the [SSRF guard](../server/ssrfGuard.ts) and must be on a known browser push service (FCM, Mozilla autopush, Apple or WNS; see `isAllowedPushEndpoint` in `server/pushNotifications.ts`), since the server later POSTs to it. Any other host gets `400`
 - **Response:** `{ success: true }`
 
 The cap matters because each row is an arbitrary URL the server will send requests
@@ -1866,7 +1868,8 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 - **Auth:** Required
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes, per user (the limiter runs after `isAuthenticated`; the bucket is shared with `/callback`)
 - **Response:** `{ url: string }` — Redirect URL for Strava OAuth
-- **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback)
+- **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
+- **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
 
 ### GET /api/v1/strava/callback
 
@@ -1875,6 +1878,7 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 - **Auth:** Not required (redirect from Strava)
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes (shared with `/auth`) — keyed by userId when the request carries a Clerk session, otherwise by IP
 - **Query:** `code`, `state` (CSRF-verified, single-use — replays redirect to `/settings?strava=error`), `scope`
+- **Cookie:** the browser-binding cookie `/auth` set must match the state, so only the browser that started the flow can complete it; a missing or mismatched cookie redirects to `/settings?strava=error` before the code is exchanged. The cookie is cleared on every outcome
 - **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
 - **Response:** Redirect to `/settings`
 
@@ -2068,7 +2072,7 @@ Export all training data as CSV or JSON.
 - **Auth:** Required
 - **Rate limit:** `export` category, 5/min
 - **Query:** `format` — `"csv"` (default) or `"json"`
-- **Response:** File download with appropriate Content-Type and Content-Disposition headers. Records sitting in the [recycle bin](#recycle-bin-routes) are not included.
+- **Response:** File download with appropriate Content-Type and Content-Disposition headers. The CSV holds workout and exercise-set rows only, and leaves out records sitting in the [recycle bin](#recycle-bin-routes). The JSON is the full data-subject export (P7, CODEBASE_ANALYSIS_2026-10-03): plans with every day and its prescription, nutrition, reviews, consents, MAF data, analytics results and the recycle bin's contents among them. Secrets (OAuth tokens, Garmin credentials, push keys) and server-internal caches are left out.
 
 ---
 
@@ -2086,7 +2090,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST   | `/foods/barcode`                       | Barcode → food (Open Food Facts)                                                                                 | `nutritionBarcode` (30)              |
 | POST   | `/foods`                               | Create a custom food (+ servings)                                                                                | `nutritionWrite` (30)                |
 | GET    | `/foods/:id`                           | Food + named servings                                                                                            | `nutritionRead` (60)                 |
-| PATCH  | `/foods/:id`                           | Edit a custom food                                                                                               | `nutritionWrite` (30)                |
+| PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete has logged it and the name or macros change)                      | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id`                           | Delete a custom food (`409` if referenced by a log)                                                              | `nutritionWrite` (30)                |
 | POST   | `/foods/:id/servings`                  | Add a named serving                                                                                              | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id/servings/:servingId`       | Delete a serving                                                                                                 | `nutritionWrite` (30)                |
@@ -2116,7 +2120,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | GET    | `/recipes`                             | List recipes                                                                                                     | `nutritionRead` (60)                 |
 | POST   | `/recipes`                             | Create a recipe                                                                                                  | `nutritionWrite` (30)                |
 | GET    | `/recipes/:id`                         | Recipe + ingredients + per-serving macros                                                                        | `nutritionRead` (60)                 |
-| PATCH  | `/recipes/:id`                         | Edit a recipe                                                                                                    | `nutritionWrite` (30)                |
+| PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete has logged it)                                                         | `nutritionWrite` (30)                |
 | DELETE | `/recipes/:id`                         | Delete a recipe                                                                                                  | `nutritionWrite` (30)                |
 
 `/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its

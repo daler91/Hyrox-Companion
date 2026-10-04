@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { type StravaConnection } from "@shared/schema";
 import { type DistanceUnit } from "@shared/unitConversion";
-import type { Request, Response, Router } from "express";
+import type { CookieOptions, Request, Response, Router } from "express";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
@@ -13,6 +13,10 @@ import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
+import {
+  dropCrossProviderDuplicates,
+  recordingTimingFromStrava,
+} from "./services/crossProviderDuplicates";
 import { parseStravaStreamResponse, type StravaStreamSet } from "./services/sessionGrades/downsample";
 import { enqueueSessionStreams } from "./services/sessionStreamQueue";
 import {
@@ -69,6 +73,55 @@ const stravaStatusLimiter = rateLimiter("stravaStatus", 60, RATE_LIMIT_WINDOW_15
 const stravaDisconnectLimiter = rateLimiter("stravaDisconnect", 10, RATE_LIMIT_WINDOW_15M_MS);
 const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 
+// S3 (CODEBASE_ANALYSIS_2026-10-03): the signed state says WHICH user to link
+// but not WHICH browser started the flow, so any signed-in user could mint one
+// and hand the authorize URL to a victim, whose browser would then link the
+// victim's Strava to the minter's account (RFC 6749 §10.12). /auth therefore
+// also sets this short-lived cookie holding a hash of the state, and the
+// callback refuses a state the completing browser does not hold the cookie
+// for. A cookie rather than a Clerk-session comparison: the __session JWT
+// lives 60 s, so it has usually lapsed by the time the athlete returns from
+// Strava's consent screen, and the dev auth bypass has no session at all.
+// Naming follows the CSRF cookie: the __Host- prefix (which requires Path=/)
+// stops a sibling subdomain from planting one. SameSite=Lax, not Strict, so it
+// rides Strava's cross-site top-level redirect back. Secure in every
+// environment, not only production: CodeQL's clear-text-cookie check can only
+// verify a literal `true`, and Chromium and Firefox accept a Secure cookie
+// over plain http on the local machine. Safari does not, so connect Strava
+// from one of those in local dev.
+const STRAVA_OAUTH_COOKIE = env.NODE_ENV === "production" ? "__Host-fitai.strava-oauth" : "fitai.strava-oauth";
+const STRAVA_OAUTH_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: true,
+  path: "/",
+};
+
+function stateBindingValue(state: string): string {
+  return crypto.createHash("sha256").update(state).digest("base64url");
+}
+
+/**
+ * The binding cookie off the request, or undefined when it is absent.
+ * `req.cookies` is typed as always present, but only cookie-parser puts it
+ * there. The name is matched rather than passed to a lookup: CodeQL reads a
+ * call given the cookie's "oauth" name as returning a password, and then the
+ * timing-safe compare below as hashing one.
+ */
+function readBindingCookie(req: Request): unknown {
+  const cookies: unknown = req.cookies;
+  if (typeof cookies !== "object" || cookies === null) return undefined;
+  return Object.entries(cookies).find(([name]) => name === STRAVA_OAUTH_COOKIE)?.[1];
+}
+
+function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
+  if (typeof cookieValue !== "string" || cookieValue === "") return false;
+  // Hash both sides to equal-length buffers so timingSafeEqual never throws
+  // on a malformed cookie (same approach as verifySignedState).
+  const presented = crypto.createHash("sha256").update(cookieValue).digest();
+  const expected = crypto.createHash("sha256").update(stateBindingValue(state)).digest();
+  return crypto.timingSafeEqual(presented, expected);
+}
 
 export function createSignedState(userId: string): string {
   const timestamp = Date.now().toString(36);
@@ -324,12 +377,28 @@ function handleStravaAuth(req: Request, res: Response) {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("scope", STRAVA_SCOPE);
   authUrl.searchParams.set("state", state);
+  // Strava's default ("auto") skips the consent screen for an athlete who
+  // already authorized the app, so a link would connect them silently (S3).
+  authUrl.searchParams.set("approval_prompt", "force");
 
+  // Spelled out rather than spread from STRAVA_OAUTH_COOKIE_OPTIONS: CodeQL
+  // reads a cookie's flags only from an object literal at the call.
+  res.cookie(STRAVA_OAUTH_COOKIE, stateBindingValue(state), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: STATE_MAX_AGE_MS,
+  });
   res.json({ authUrl: authUrl.toString() });
 }
 
 async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
+  // The binding cookie is single-use like the state: read it, then clear it
+  // up front so every outcome below leaves none behind.
+  const bindingCookie = readBindingCookie(req);
+  res.clearCookie(STRAVA_OAUTH_COOKIE, STRAVA_OAUTH_COOKIE_OPTIONS);
 
   if (stravaError) {
     reqLogger(req).error("Strava auth error received from provider");
@@ -345,6 +414,18 @@ async function handleStravaCallback(req: Request, res: Response) {
   if (!verified) {
     reqLogger(req).error("Strava OAuth state invalid or expired - possible CSRF attack");
     return res.redirect("/settings?strava=error");
+  }
+
+  // S3 (CODEBASE_ANALYSIS_2026-10-03): only the browser that called /auth may
+  // complete the flow. Checked before the claim below so a captured callback
+  // URL replayed from another browser cannot burn the owner's in-flight state.
+  if (!isStateBoundToBrowser(bindingCookie, state)) {
+    reqLogger(req).error(
+      { hasBindingCookie: typeof bindingCookie === "string" },
+      "Strava OAuth state not bound to this browser - possible CSRF attack",
+    );
+    res.redirect("/settings?strava=error");
+    return;
   }
 
   // Single-use state: the HMAC makes the state unforgeable but not
@@ -788,6 +869,9 @@ function sendStravaSyncFailure(res: Response, failure: StravaSyncFailure): Respo
  * Drop activities already imported for this athlete; map the rest for the
  * reconciler. Dedup by (user, strava_activity_id) is what makes a manual
  * link or unlink sticky: either way the activity's id is already on a row.
+ * An activity the athlete's Garmin sync already brought in (the watch
+ * auto-uploads to Strava) is dropped too, before any detail fetch is spent
+ * on it (D16, CODEBASE_ANALYSIS_2026-10-03).
  */
 async function selectStravaActivitiesToImport(
   activities: StravaActivity[],
@@ -800,7 +884,12 @@ async function selectStravaActivitiesToImport(
       activities.map((a) => String(a.id)),
     ),
   );
-  const fresh = activities.filter((a) => !existingStravaIds.has(String(a.id)));
+  const { kept: fresh } = await dropCrossProviderDuplicates(
+    userId,
+    activities.filter((a) => !existingStravaIds.has(String(a.id))),
+    "garmin",
+    (a) => ({ date: a.start_date_local.split("T")[0], timing: recordingTimingFromStrava(a) }),
+  );
   return {
     items: fresh.map((activity) => ({
       activity,
@@ -838,7 +927,7 @@ export interface StravaSyncCounts {
   suggested: number;
   /** Standalone imports with nothing to match. */
   standalone: number;
-  /** Already imported before this sync, or claimed by a concurrent one. */
+  /** Already imported before this sync, claimed by a concurrent one, or already imported from Garmin (D16). */
   skipped: number;
   total: number;
   /** True when the page cap left older activities unfetched. */

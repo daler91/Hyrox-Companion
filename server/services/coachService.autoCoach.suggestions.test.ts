@@ -3,6 +3,7 @@ import "./coachService.testSetup";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  generateReviewNotes,
   generateWorkoutSuggestions,
   parseExercisesFromText,
   type TrainingContext,
@@ -388,6 +389,101 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     expect(updatePayload.mainWorkout).toEqual(expect.stringContaining("aerobic run"));
     expect(updatePayload.accessory).toBeNull();
     expect(updatePayload.notes).toBeNull();
+  });
+
+  // AI14 (CODEBASE_ANALYSIS_2026-10-03): every pass re-ran the yellow-zone cut
+  // on the rows the previous pass had already cut (9 → 6 → 4 → 2 sets).
+  describe("repeat passes under an ACWR yellow restriction", () => {
+    const squatSet = (setNumber: number, notes: string | null) => ({
+      exerciseName: "back_squat",
+      category: "strength",
+      setNumber,
+      reps: 5,
+      weight: 100,
+      notes,
+      sortOrder: setNumber - 1,
+    });
+
+    function yellowContext(exerciseDetails: ReturnType<typeof squatSet>[]): TrainingContext {
+      const base = loadGovernorTrainingContext();
+      const insights = base.coachingInsights;
+      const loadGovernor = insights?.loadGovernor;
+      if (!insights || !loadGovernor) {
+        throw new Error("loadGovernorTrainingContext() returned no load-governor insights");
+      }
+      return {
+        ...base,
+        upcomingWorkouts: [
+          {
+            planDayId: "day-1",
+            date: "2026-01-16",
+            focus: "Lower Strength",
+            mainWorkout: "Back squat 6x5 @ 100kg",
+            notes: "Gym closed Friday",
+            exerciseDetails,
+          },
+        ],
+        coachingInsights: {
+          ...insights,
+          loadGovernor: {
+            ...loadGovernor,
+            acwr: 1.4,
+            zone: "yellow",
+            flaggedVectors: [],
+            activeRestrictions: [
+              {
+                id: "acwr_yellow_guard",
+                label: "ACWR yellow guard",
+                severity: "caution",
+                expiresOn: "2026-01-17",
+                rationale: "Acute load is running ahead of the chronic baseline.",
+              },
+            ],
+          },
+        },
+      };
+    }
+
+    it("cuts the day once and keeps what it replaced as the original", async () => {
+      mockBaseAutoCoachDeps(storage, buildTrainingContext, [makeTimelineEntry()]);
+      vi.mocked(buildTrainingContext).mockResolvedValue(
+        yellowContext([1, 2, 3, 4, 5, 6].map((n) => squatSet(n, null))),
+      );
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+      vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(dbMockState.insertValues).toHaveBeenCalledWith(
+        [1, 2, 3, 4].map((): unknown => expect.objectContaining({ exerciseName: "back_squat" })),
+      );
+      expectPlanDayUpdate("day-1", {
+        aiSource: "load_governor",
+        aiInputsUsed: expect.objectContaining({
+          replacedPrescription: expect.objectContaining({
+            focus: "Lower Strength",
+            mainWorkout: "Back squat 6x5 @ 100kg",
+            notes: "Gym closed Friday",
+          }) as unknown,
+        }),
+      });
+    });
+
+    it("holds a day it already cut: no second cut, no model rewrite, no review note", async () => {
+      mockBaseAutoCoachDeps(storage, buildTrainingContext, [makeTimelineEntry()]);
+      vi.mocked(buildTrainingContext).mockResolvedValue(
+        yellowContext([1, 2, 3, 4].map((n) => squatSet(n, "Load governor: reduced volume."))),
+      );
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ recommendation: "Back squat 6x5 @ 105kg", rationale: "Add volume back" }),
+      ]);
+      vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+      expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+      expect(dbMockState.insertValues).not.toHaveBeenCalled();
+      expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
+      expect(generateReviewNotes).not.toHaveBeenCalled();
+    });
   });
 
   it("does not fall back to text when a load-governor structured write fails", async () => {

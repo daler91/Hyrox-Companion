@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { dateStringSchema, type RacePredictionResponse, weeklyReviewIntentSchema, type WorkoutLog } from "@shared/schema";
+import { dateStringSchema, type RacePredictionResponse, type User, weeklyReviewIntentSchema, type WorkoutLog } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { type NextFunction, type Request as ExpressRequest, type Request, type Response,Router } from "express";
 import { z } from "zod";
@@ -13,12 +13,13 @@ import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
-import { assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
+import { assembleTrainingOverview } from "../services/trainingOverviewLoader";
 import { assembleTrainingSummary } from "../services/trainingSummaryService";
 import { getWeekRangeForDate } from "../services/weeklyProgress";
 import { buildWeeklyReview, isWeekParamValid } from "../services/weeklyReviewService";
 import { storage } from "../storage";
 import type { SlimLoggedExerciseSet } from "../storage/shared";
+import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
@@ -63,7 +64,10 @@ type DateReq = ExpressRequest<Record<string, never>, unknown, unknown, DateQuery
 // from this module.
 export { addCalendarDays, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
 
-function parseDateParams(req: DateReq, res: Response): { from?: string; to?: string } | null {
+async function parseDateParams(
+  req: DateReq,
+  res: Response,
+): Promise<{ from?: string; to?: string; user: User | undefined } | null> {
   const from = validDate(req.query.from);
   const rawTo = validDate(req.query.to);
 
@@ -78,9 +82,16 @@ function parseDateParams(req: DateReq, res: Response): { from?: string; to?: str
   // Clamp a future `to` to today so `?to=2099-01-01` can't silently
   // return an empty window. The cost of a silent empty-result reply is
   // worse than a visible off-by-one on the upper bound.
-  const today = todayUtcYyyyMmDd();
+  //
+  // The ATHLETE's today: the client sends its local date, and workout dates
+  // are athlete-local. Against the UTC date, an athlete east of UTC lost
+  // today's sessions from PRs, progression and the overview every local
+  // morning (until 10:00 in Sydney) — C4 (CODEBASE_ANALYSIS_2026-10-03). The
+  // user row is returned so handlers that need it don't fetch it twice.
+  const user = await storage.users.getUser(getUserId(req));
+  const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const to = rawTo && rawTo > today ? today : rawTo;
-  return { from, to };
+  return { from, to, user };
 }
 
 function secretsMatch(provided: string | undefined, expected: string | undefined): boolean {
@@ -144,16 +155,14 @@ protectedPost(
 
 router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
-    const dates = parseDateParams(req, res);
+    const dates = await parseDateParams(req, res);
     if (!dates) return;
 
     // Preferences are read per request, not cached with the sets: the caches
     // hold raw stamped rows and conversion happens here, so a unit switch is
     // reflected on the next request instead of after the cache TTL.
-    const [prSets, user] = await Promise.all([
-      getPersonalRecordSetsCoalesced(userId, dates.from, dates.to),
-      storage.users.getUser(userId),
-    ]);
+    const { user } = dates;
+    const prSets = await getPersonalRecordSetsCoalesced(userId, dates.from, dates.to);
     res.json(calculatePersonalRecords(prSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }));
   }));
 
@@ -168,13 +177,11 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
 // shared slim one.
 router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
-    const dates = parseDateParams(req, res);
+    const dates = await parseDateParams(req, res);
     if (!dates) return;
 
-    const [allSets, user] = await Promise.all([
-      getPersonalRecordSetsCoalesced(userId, dates.from, dates.to),
-      storage.users.getUser(userId),
-    ]);
+    const { user } = dates;
+    const allSets = await getPersonalRecordSetsCoalesced(userId, dates.from, dates.to);
     res.json(calculateExerciseAnalytics(allSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }));
   }));
 
@@ -234,7 +241,7 @@ router.get("/api/v1/training-overview/summary", isAuthenticated, rateLimiter("an
 
 router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
-    const dates = parseDateParams(req, res);
+    const dates = await parseDateParams(req, res);
     if (!dates) return;
 
     // Delegate to the shared assembly, injecting the route's request-coalescing

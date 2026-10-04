@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  __circuitBreakerInternalsForTests,
   __resetCircuitBreakerForTests,
   CircuitBreakerOpenError,
 } from "../circuitBreaker";
@@ -113,5 +114,93 @@ describe("streamText participates in the AI circuit breaker", () => {
 
     respondWith(["healthy"]);
     await expect(drain()).resolves.toEqual({ text: "healthy" });
+  });
+});
+
+// AI5 (CODEBASE_ANALYSIS_2026-10-03): a stream its caller cancels — the
+// athlete's Stop or disconnect, the SSE deadline, a shutdown drain — ends in
+// the AbortError fetch rejects the pending read with, which says nothing
+// about the provider.
+describe("a stream its caller cancelled, and the circuit breaker", () => {
+  const abortError = () => new DOMException("This operation was aborted", "AbortError");
+
+  /** The provider sends a first piece, then rejects its pending read with an AbortError once `signal` aborts. */
+  function rejectsOnAbort() {
+    streamChunks.mockImplementation(async function* (request: { signal?: AbortSignal }) {
+      yield { text: "partial", model: "test-model" };
+      const signal = request.signal;
+      if (signal && !signal.aborted) {
+        await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+      }
+      throw abortError();
+    });
+  }
+
+  /** Read the first piece, then cancel, as the chat route does on Stop. */
+  async function drainAndCancel(): Promise<unknown> {
+    const controller = new AbortController();
+    try {
+      for await (const _chunk of streamText({ label: "unit", messages: [], signal: controller.signal } as never)) {
+        controller.abort();
+      }
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetCircuitBreakerForTests();
+    __resetTextAiProviderForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("never opens the breaker, however many times it happens", async () => {
+    rejectsOnAbort();
+    for (let i = 0; i < 8; i++) {
+      await expect(drainAndCancel()).resolves.toMatchObject({ name: "AbortError" });
+    }
+
+    respondWith(["healthy"]);
+    await expect(drain()).resolves.toEqual({ text: "healthy" });
+  });
+
+  it("neither counts as a failure nor resets the run a provider 503 started", async () => {
+    failWith(new Error("503 upstream unavailable"));
+    for (let i = 0; i < 4; i++) await drain();
+
+    rejectsOnAbort();
+    for (let i = 0; i < 3; i++) await drainAndCancel();
+
+    // The fifth real failure still opens it: the cancels were neutral both ways.
+    failWith(new Error("503 upstream unavailable"));
+    await drain();
+    await expect(drain()).resolves.toMatchObject({ error: expect.any(CircuitBreakerOpenError) });
+  });
+
+  it("still counts an AbortError the caller didn't ask for, such as the provider's own timeout", async () => {
+    // Told apart by the caller's signal, not by the error's name or message.
+    failWith(abortError());
+    for (let i = 0; i < 5; i++) await drain();
+
+    await expect(drain()).resolves.toMatchObject({ error: expect.any(CircuitBreakerOpenError) });
+  });
+
+  it("gives back a half-open probe it cancelled, without re-opening the breaker", async () => {
+    vi.useFakeTimers();
+    failWith(new Error("503 upstream unavailable"));
+    for (let i = 0; i < 5; i++) await drain();
+    vi.advanceTimersByTime(30_000); // COOLDOWN_MS: the next call is the probe.
+
+    rejectsOnAbort();
+    await drainAndCancel();
+
+    expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+    respondWith(["back up"]);
+    await expect(drain()).resolves.toEqual({ text: "back up" });
   });
 });

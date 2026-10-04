@@ -186,7 +186,13 @@ export async function createWorkoutInTx(
     clientSuppliedSetCount = savedSets.length;
   } else if (enrichedData.planDayId) {
     const blockIdMap = await copyPrescribedStructureIntoLog(tx, enrichedData.planDayId, log.id);
-    savedSets = await copyPrescribedSetsIntoLog(tx, enrichedData.planDayId, log.id, blockIdMap);
+    savedSets = await copyPrescribedSetsIntoLog(
+      tx,
+      enrichedData.planDayId,
+      log.id,
+      blockIdMap,
+      await loadUnitPreferences(userId),
+    );
   }
 
   if (enrichedData.planDayId) {
@@ -270,22 +276,34 @@ export async function createWorkoutAndScheduleCoaching(
     // Post-commit enqueue, and the one auto-coach producer that can't be
     // fire-and-forget: this path pre-set isAutoCoaching inside the transaction,
     // so a failed enqueue has to clear it or the client polls forever for a
-    // coaching result that will never arrive. The singleton key and window that
-    // coalesce rapid-fire creation (e.g. bulk CSV import) live in
+    // coaching result that will never arrive. The singleton key and debounce
+    // window that coalesce rapid-fire creation (e.g. bulk CSV import) live in
     // services/autoCoachQueue (TECHNICAL_DEBT #23).
-    enqueueAutoCoach(userId, "workout-created").catch(async (err) => {
-      // Only the pg-boss rejection is logged — no payload, athlete data, or
-      // secrets. Marker must stay bare and on the line directly above the call.
-      // bearer:disable javascript_lang_logger_leak
-      logger.error({ err }, "Failed to queue auto-coach job after workout creation");
+    const clearCoachingFlag = async () => {
       try {
         await storage.users.updateIsAutoCoaching(userId, false);
       } catch (resetErr) {
-        // As above: the reset failure is a DB error, not athlete data.
+        // The reset failure is a DB error, not athlete data.
         // bearer:disable javascript_lang_logger_leak
         logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
       }
-    });
+    };
+    enqueueAutoCoach(userId, "workout-created").then(
+      async (jobId) => {
+        // A null id queued nothing for this call, and only a rejection used to
+        // clear the flag, so the banner stayed up until the stale-flag sweep. With
+        // the debounce, null means the next window already holds a pass, which
+        // raises the flag again when it starts. AI12 (CODEBASE_ANALYSIS_2026-10-03)
+        if (jobId === null) await clearCoachingFlag();
+      },
+      async (err) => {
+        // Only the pg-boss rejection is logged — no payload, athlete data, or
+        // secrets. Marker must stay bare and on the line directly above the call.
+        // bearer:disable javascript_lang_logger_leak
+        logger.error({ err }, "Failed to queue auto-coach job after workout creation");
+        await clearCoachingFlag();
+      },
+    );
   }
 
   return workout;

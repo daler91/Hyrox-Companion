@@ -229,7 +229,7 @@ Individual workout days within a training plan.
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
 | `plan_id` | `varchar(255)` | NOT NULL, FK -> `training_plans.id` ON DELETE CASCADE |
-| `week_number` | `integer` | NOT NULL — the plan week the session sits in: `schedulePlan` lays week W's sessions out from week 1's Monday (`training_plans.start_date`), and every write that gives a day a new date also sets the week and weekday of that date (`planSlotForMove`, `server/storage/planSlot.ts`). Moves used to change the date alone; migration `0117` repaired the days moved before that |
+| `week_number` | `integer` | NOT NULL — the plan week the session sits in: `schedulePlan` lays week W's sessions out from week 1's Monday (`training_plans.start_date`), and every write that gives a day a new date also sets the week and weekday of that date (`planSlotForMove`, `server/storage/planSlot.ts`). Moves used to change the date alone; migration `0117` repairs the days moved before that. That `UPDATE` runs only where the migration chain runs (a fresh database, CI); push-managed production needs it run by hand, tracked in [pending-manual-steps.md](operations/pending-manual-steps.md) |
 | `day_name` | `text` | NOT NULL — the weekday of that slot, kept with the date as above |
 | `focus` | `text` | NOT NULL |
 | `main_workout` | `text` | NOT NULL |
@@ -1379,6 +1379,7 @@ export const storage: IStorage = {
   weeklyReviews: new WeeklyReviewsStorage(),
   recycleBin: new RecycleBinStorage(),
   sessionStreams: new SessionStreamStorage(),
+  dataExport: new DataExportStorage(),
 };
 ```
 
@@ -1520,11 +1521,11 @@ In addition to Drizzle Kit migrations, `runStartupMaintenance()` in `server/main
 
 1. Test the database connection (`testDatabaseConnection`)
 2. Execute Drizzle migrations (`runDrizzleMigrations`)
-3. Assert the critical tables exist (`assertCriticalTablesExist` in `server/migrationGuards.ts`: `users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`) — throws rather than serve an empty or partial schema
+3. Assert the critical tables exist (`assertCriticalTablesExist` in `server/migrationGuards.ts`: `users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`) — throws rather than serve an empty or partial schema — and that every table and column the Drizzle schema declares is present (`assertSchemaColumnsExist`, same file; `document_chunks` excepted), so a release deployed before its `drizzle-kit push` fails its deploy instead of failing every query on the new columns
 4. Ensure the pgvector extension (`ensurePgvectorExtension`)
 5. Bootstrap the vector schema (`ensureVectorSchema`)
 6. Mark past planned days as missed and reset stale `isAutoCoaching` flags
-7. Fail plan generations left `pending`/`generating` for over an hour by a crashed worker (`failStalePlanGenerations`)
+7. Fail plan generations left `pending`/`generating` for over an hour by a crashed worker (`failStalePlanGenerations`); the `stalePlanGenerations` cron repeats this every 10 minutes
 8. Restore the persisted AI circuit-breaker state from `server_runtime_cache` (`loadPersistedBreakerState`)
 9. Run the opt-in encryption-key rotation sweep (`maybeReencryptOnBoot`), a no-op unless `ENCRYPTION_KEY_V2` is set and `ENCRYPTION_REENCRYPT_ON_BOOT=true`
 

@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -136,6 +136,38 @@ describe("FuellingPlanPanel", () => {
 
     await waitFor(() =>
       expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledWith("day-1", { expectedRpe: 8 }),
+    );
+  });
+
+  // CL12 (CODEBASE_ANALYSIS_2026-10-03): the debounce kept only the last
+  // field changed, and closing the sheet inside the window dropped the save.
+  it("saves every field changed within the debounce window in one patch", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<FuellingPlanPanel entry={makeEntry({ expectedDurationMin: 60 })} />);
+
+    await user.click(screen.getByTestId("fuelling-plan-adjust"));
+    await user.click(screen.getByTestId("fuelling-plan-duration-increment"));
+    await user.click(screen.getByTestId("button-rpe-7"));
+
+    await waitFor(() =>
+      expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledWith("day-1", {
+        expectedDurationMin: 65,
+        expectedRpe: 7,
+      }),
+    );
+    expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a pending change when the panel closes before the debounce fires", async () => {
+    const { unmount } = renderWithClient(<FuellingPlanPanel entry={makeEntry()} />);
+
+    fireEvent.change(screen.getByTestId("fuelling-plan-time"), { target: { value: "07:30" } });
+    unmount();
+
+    await waitFor(() =>
+      expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledWith("day-1", {
+        plannedTimeOfDayMin: 450,
+      }),
     );
   });
 });

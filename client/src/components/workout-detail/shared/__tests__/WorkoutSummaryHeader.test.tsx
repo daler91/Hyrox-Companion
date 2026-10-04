@@ -237,6 +237,19 @@ describe("buildDeviceDetails", () => {
     ]);
   });
 
+  // C9 (CODEBASE_ANALYSIS_2026-10-03): a ride's cadence is pedal rpm, not steps.
+  it("labels a ride's cadence rpm and a run's spm", () => {
+    const cadence = (deviceSportType: string | null) =>
+      buildDeviceDetails(makeEntry({ ...recording, deviceSportType }), "km").find(
+        (d) => d.key === "cadence",
+      )?.value;
+
+    expect(cadence("Ride")).toBe("76 rpm");
+    expect(cadence("VirtualRide")).toBe("76 rpm");
+    expect(cadence("Run")).toBe("76 spm");
+    expect(cadence(null)).toBe("76 spm");
+  });
+
   it("reads a run as pace rather than speed", () => {
     const details = buildDeviceDetails(
       makeEntry({

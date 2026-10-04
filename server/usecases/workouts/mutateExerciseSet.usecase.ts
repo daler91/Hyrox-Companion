@@ -1,5 +1,10 @@
 import { type AddExerciseSetBody, type PatchExerciseSetBody } from "@shared/schema";
-import { stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
+import {
+  stampForPreferences,
+  type StoredDistanceUnit,
+  type UnitPreferences,
+  type WeightUnit,
+} from "@shared/unitConversion";
 
 import { invalidateAnalyticsCachesForUser } from "../../services/analyticsRouteCache";
 import { refreshDerivedStateAfterLoggedSetChange } from "../../services/workoutService/loggedSetChange";
@@ -11,14 +16,29 @@ export type ExerciseSetOwnerRef = {
   ownerId: string;
 };
 
-/** A patch plus the units its numbers are in, so storage can keep the row's stamp true. */
-export type StampedPatchExerciseSetBody = PatchExerciseSetBody & { unitPreferences: UnitPreferences };
+/** The units a request body says its numbers were composed in (D22). */
+type ComposedUnits = Pick<PatchExerciseSetBody, "weightUnit" | "distanceUnit">;
+
+/**
+ * A patch plus the units its numbers are in, so storage can keep the row's
+ * stamp true. The body's own unit fields are consumed into `unitPreferences`:
+ * passed through, they would land on the row as a stamp no value was converted to.
+ */
+export type StampedPatchExerciseSetBody = Omit<PatchExerciseSetBody, keyof ComposedUnits> & {
+  unitPreferences: UnitPreferences;
+};
+
+/** A new row and the stamp it is written with. */
+export type StampedAddExerciseSetBody = Omit<AddExerciseSetBody, keyof ComposedUnits> & {
+  weightUnit: WeightUnit;
+  distanceUnit: StoredDistanceUnit;
+};
 
 export interface ExerciseSetMutationStorage {
   updateSet: (owner: ExerciseSetOwnerRef, setId: string, body: StampedPatchExerciseSetBody, userId: string) => Promise<unknown>;
-  addSet: (owner: ExerciseSetOwnerRef, body: AddExerciseSetBody, userId: string) => Promise<unknown>;
+  addSet: (owner: ExerciseSetOwnerRef, body: StampedAddExerciseSetBody, userId: string) => Promise<unknown>;
   deleteSet: (owner: ExerciseSetOwnerRef, setId: string, userId: string) => Promise<boolean>;
-  /** The athlete's current units — what every number in a request body is in. */
+  /** The athlete's current units — what a request body's numbers are in when it names none. */
   getUnitPreferences: (userId: string) => Promise<UnitPreferences>;
 }
 
@@ -48,10 +68,34 @@ async function refreshDerivedState(owner: ExerciseSetOwnerRef, userId: string): 
 }
 
 /**
- * Every number a set-mutation request carries is in the athlete's CURRENT unit
- * preference (that is what the client shows and edits), so this layer is where
- * the row's unit stamp (audit L4) gets written: a new row is stamped outright,
- * and a patch carries the preferences so storage can re-stamp the axes it
+ * The units a request's numbers are in: the ones the client says it composed
+ * them in, per axis, else the athlete's current preference.
+ *
+ * The client converts for display with the preferences it has cached, which a
+ * unit switch on another device leaves stale. Reading the server's preference
+ * here stamped a number typed under a "kg" header as lbs (D22,
+ * CODEBASE_ANALYSIS_2026-10-03). A body without units — an older client — keeps
+ * the old reading.
+ */
+async function unitsForRequest(
+  storage: ExerciseSetMutationStorage,
+  userId: string,
+  composed: ComposedUnits,
+): Promise<UnitPreferences> {
+  if (composed.weightUnit && composed.distanceUnit) {
+    return { weightUnit: composed.weightUnit, distanceUnit: composed.distanceUnit };
+  }
+  const current = await storage.getUnitPreferences(userId);
+  return {
+    weightUnit: composed.weightUnit ?? current.weightUnit,
+    distanceUnit: composed.distanceUnit ?? current.distanceUnit,
+  };
+}
+
+/**
+ * This layer is where the row's unit stamp (audit L4) gets written, in the
+ * units the request's numbers are in (unitsForRequest): a new row is stamped
+ * outright, and a patch carries the units so storage can re-stamp the axes it
  * touches — converting any untouched value on those axes from the old stamp
  * first, so one stamp stays true for the whole row. Before this, "+Add row"
  * created permanently unstamped rows and a weight edit after a kg↔lbs switch
@@ -59,14 +103,16 @@ async function refreshDerivedState(owner: ExerciseSetOwnerRef, userId: string): 
  */
 export const createMutateExerciseSetUseCase = (storage: ExerciseSetMutationStorage) => ({
   updateSet: async (owner: ExerciseSetOwnerRef, setId: string, body: PatchExerciseSetBody, userId: string) => {
-    const unitPreferences = await storage.getUnitPreferences(userId);
-    const updated = await storage.updateSet(owner, setId, { ...body, unitPreferences }, userId);
+    const { weightUnit, distanceUnit, ...patch } = body;
+    const unitPreferences = await unitsForRequest(storage, userId, { weightUnit, distanceUnit });
+    const updated = await storage.updateSet(owner, setId, { ...patch, unitPreferences }, userId);
     if (updated) await refreshDerivedState(owner, userId);
     return updated;
   },
   addSet: async (owner: ExerciseSetOwnerRef, body: AddExerciseSetBody, userId: string) => {
-    const stamp = stampForPreferences(await storage.getUnitPreferences(userId));
-    const created = await storage.addSet(owner, { ...body, ...stamp }, userId);
+    const { weightUnit, distanceUnit, ...fields } = body;
+    const stamp = stampForPreferences(await unitsForRequest(storage, userId, { weightUnit, distanceUnit }));
+    const created = await storage.addSet(owner, { ...fields, ...stamp }, userId);
     if (created) await refreshDerivedState(owner, userId);
     return created;
   },

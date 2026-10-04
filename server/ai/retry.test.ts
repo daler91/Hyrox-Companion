@@ -65,3 +65,38 @@ describe("retryWithBackoff — circuit breaker interplay", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 });
+
+// AI5 (CODEBASE_ANALYSIS_2026-10-03): a call its caller cancelled (the
+// athlete's Stop, a stream deadline, a shutdown) says nothing about the
+// provider's health. Told by the caller's own signal.
+describe("retryWithBackoff — a call its caller cancelled", () => {
+  beforeEach(() => {
+    __resetCircuitBreakerForTests();
+  });
+
+  it("is neither retried nor counted toward opening the breaker", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fn = vi.fn().mockRejectedValue(new DOMException("This operation was aborted", "AbortError"));
+
+    for (let i = 0; i < 6; i++) {
+      await expect(retryWithBackoff(fn, "cancelled-test", 3, 1, 1_000, 1_000, controller.signal)).rejects.toMatchObject({
+        name: "AbortError",
+      });
+    }
+
+    expect(fn).toHaveBeenCalledTimes(6);
+    await expect(retryWithBackoff(() => Promise.resolve("ok"), "after-cancels-test", 0, 1)).resolves.toBe("ok");
+  });
+
+  it("still counts a provider failure while the caller is still waiting", async () => {
+    const controller = new AbortController();
+    const fn = vi.fn().mockRejectedValue(new Error("503 Service Unavailable"));
+
+    for (let i = 0; i < 5; i++) {
+      await expect(retryWithBackoff(fn, "outage-test", 0, 1, 1_000, 1_000, controller.signal)).rejects.toThrow("503");
+    }
+
+    await expect(retryWithBackoff(fn, "outage-test", 0, 1)).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+  });
+});

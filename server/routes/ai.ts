@@ -1,4 +1,3 @@
-import { getAuth } from "@clerk/express";
 import { ATHLETE_FACT_LIMIT_MESSAGE } from "@shared/athleteFacts";
 import type { ChatStatusStep } from "@shared/chat";
 import { type ChatAttachment, type ChatFactDecisionBody, chatFactDecisionSchema, type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
@@ -20,7 +19,7 @@ import { type AIContext, buildAIContext, type ChatInput } from "../services/aiCo
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
-import { type CoachReply, type Conversation, type ConversationTurn, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
+import { type CoachReply, type Conversation, type ConversationTurn, fitHistoryWindow, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { readChatPhoto } from "../services/chatPhoto";
@@ -170,6 +169,11 @@ function turnFocus(body: z.infer<typeof chatRequestSchema>): TurnFocus {
 /**
  * What the coach reads: the saved conversation when the server owns the turn,
  * else the history the client sent (an old client, open across a deploy).
+ *
+ * The sent history gets the saved conversation's character window too: any
+ * caller can pick this branch by leaving out the message ids, and the 5 MB
+ * chat body limit otherwise let one request carry ~1M characters of history to
+ * the reasoning model — S5 (CODEBASE_ANALYSIS_2026-10-03).
  */
 function conversationFor(
   userId: string,
@@ -177,7 +181,7 @@ function conversationFor(
   body: z.infer<typeof chatRequestSchema>,
 ): Promise<Conversation> | Conversation {
   if (turn) return loadConversation(userId, turn, turnFocus(body));
-  return { turns: body.history, notes: [] };
+  return { turns: fitHistoryWindow(body.history), notes: [] };
 }
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
@@ -197,14 +201,12 @@ protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middle
     res.json({ response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), ...(safetyNotice ? { safetyNotice } : {}) });
   });
 
-// Belt-and-suspenders ceiling for SSE stream duration. Both caps fire
-// via controller.abort() so the existing drain/finally path runs cleanly:
-//   - SSE_MAX_DURATION_MS: hard wall-clock cap, applies even when the JWT
-//     has hours of headroom (prevents runaway AI generation on a
-//     pathologically slow prompt).
-//   - JWT `exp` minus a small margin: aborts before the Clerk session
-//     actually expires so responses can't persist against a
-//     now-invalid session (Warning-12).
+// Hard wall-clock ceiling for one SSE stream (prevents runaway AI generation
+// on a pathologically slow prompt). It fires via controller.abort() so the
+// existing drain/finally path runs cleanly. It is deliberately not tied to the
+// Clerk session JWT: that token lives 60 s and is refreshed in the background,
+// so its `exp` cut replies off 5-55 s in — AI1 (CODEBASE_ANALYSIS_2026-10-03).
+// The session is checked once, when the request arrives.
 const SSE_MAX_DURATION_MS = 5 * 60 * 1000;
 
 /**
@@ -218,34 +220,10 @@ const SSE_MAX_DURATION_MS = 5 * 60 * 1000;
  * that gets destroyed.
  */
 const SSE_FORCE_CLOSE_GRACE_MS = 2_000;
-const SSE_EXPIRY_MARGIN_MS = 5_000;
-
-export type SseDeadlineReason = "auth-expired" | "timeout";
 
 // Exported for unit tests — no external consumer should rely on this.
-export function computeSseDeadline(req: ExpressRequest): { deadlineMs: number; reason: SseDeadlineReason } {
-  const hardCap = Date.now() + SSE_MAX_DURATION_MS;
-  try {
-    const auth = getAuth(req);
-    const expSec = auth?.sessionClaims?.exp;
-    if (typeof expSec === "number" && expSec > 0) {
-      // The JWT floor overrides the hard cap even when it's already in
-      // the past. A token that expires inside the 5s margin (or was
-      // mid-stream when the user logged out) should abort the stream
-      // immediately, not fall back to a 5-minute cap — otherwise the
-      // stated "no persistence under an invalid session" invariant
-      // silently breaks (Codex review of #877). Clamp to `now` so
-      // setTimeout fires on the next tick.
-      const expMs = expSec * 1000 - SSE_EXPIRY_MARGIN_MS;
-      if (expMs < hardCap) {
-        return { deadlineMs: Math.max(expMs, Date.now()), reason: "auth-expired" };
-      }
-    }
-  } catch {
-    // Dev bypass / test harness won't expose sessionClaims — fall back
-    // to the hard cap, which is always safe.
-  }
-  return { deadlineMs: hardCap, reason: "timeout" };
+export function computeSseDeadline(now: number = Date.now()): number {
+  return now + SSE_MAX_DURATION_MS;
 }
 
 type ChatStreamRequest = ExpressRequest<
@@ -256,13 +234,12 @@ type ChatStreamRequest = ExpressRequest<
 
 /**
  * The abort reason, tracked separately so we can tell the client whether their
- * stream was killed because the Clerk session expired (which they can recover
- * from by re-authing) vs a hard-cap timeout vs a generic client/shutdown abort.
+ * stream was killed by the hard-cap timeout vs a generic client/shutdown abort.
  * Wrapped in an object so TypeScript control-flow doesn't narrow it to its
  * initial literal value (the setTimeout reassignment is async).
  */
 interface SseAbortState {
-  reason: "auth-expired" | "timeout" | "generic";
+  reason: "timeout" | "generic";
 }
 
 type SseWriter = (payload: string) => Promise<void>;
@@ -314,11 +291,10 @@ function createSseWriter(res: Response, controller: AbortController): SseWriter 
 }
 
 /**
- * Auto-abort when the stream exceeds its deadline (hard cap OR Clerk session
- * expiry, whichever comes first). The deadline reason distinguishes which one
- * fired so we report the correct cause to the client — only auth-expired is
- * recoverable by re-authing. unref() so the timers don't block process exit on
- * an otherwise-idle server. Returns a teardown that clears both.
+ * Auto-abort when the stream exceeds its hard-cap deadline, marking the abort
+ * as a timeout so the client is told why. unref() so the timers don't block
+ * process exit on an otherwise-idle server. Returns a teardown that clears
+ * both.
  */
 function startSseDeadline(
   req: ExpressRequest,
@@ -326,10 +302,10 @@ function startSseDeadline(
   controller: AbortController,
   abortState: SseAbortState,
 ): () => void {
-  const { deadlineMs, reason: deadlineReason } = computeSseDeadline(req);
+  const deadlineMs = computeSseDeadline();
   let forceCloseTimer: ReturnType<typeof setTimeout> | null = null;
   const deadlineTimer = setTimeout(() => {
-    abortState.reason = deadlineReason;
+    abortState.reason = "timeout";
     controller.abort();
     // After a short grace period, forcibly destroy the underlying socket
     // if the response is still pending — a client that's hung past the
@@ -365,6 +341,8 @@ interface PlanEditBranchOptions {
   /** The classifier, already running (startPlanEditIntent); null when the message can't be a plan edit. */
   readonly planEditIntent: Promise<ChatIntentResult> | null;
   readonly controller: AbortController;
+  /** Why the controller aborted, for the stream's closing event. */
+  readonly abortState: SseAbortState;
   readonly safeWrite: SseWriter;
   /** Filled with what was sent, for saving when the server owns the turn. */
   readonly reply: CoachReply;
@@ -431,20 +409,16 @@ const PROPOSAL_FAILED_TEXT =
 
 /** Close a proposal reply, its text already sent: the card, any fact offer, then the stream. */
 async function sendPlanProposalReply(
-  res: Response,
-  controller: AbortController,
-  safeWrite: SseWriter,
+  { res, controller, abortState, safeWrite, offerFact }: ProposalReplyContext,
   proposal: PlanAdjustmentProposal | null,
-  offerFact: () => Promise<void>,
 ): Promise<void> {
   if (!controller.signal.aborted) {
     if (proposal) {
       await safeWrite(sseEvent({ planProposal: serializePlanProposal(proposal) }));
     }
     await offerFact();
-    res.write(sseEvent({ done: true }));
   }
-  res.end();
+  endSseStream(res, controller, abortState);
 }
 
 /** A proposal's summary on its way to the chat (I11). */
@@ -503,7 +477,7 @@ const DRAFT_FAILED: DraftedProposal = { proposal: null, finalText: null };
  * decides what a failed draft means for its reply.
  */
 async function draftProposal(
-  { req, userId, input, aiContext, telemetry }: ProposalReplyContext,
+  { req, userId, input, aiContext, telemetry, controller }: ProposalReplyContext,
   message: string,
   summary: SummaryOut,
 ): Promise<DraftedProposal> {
@@ -515,13 +489,18 @@ async function draftProposal(
       aiContext,
       focusPlanDayId: req.body.focusPlanDayId,
       onSummaryText: summary.write,
+      signal: controller.signal,
     },
     reqLogger(req),
   );
   telemetry.proposal = result.kind;
   if (result.kind === "proposal") {
     return {
-      proposal: await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req)),
+      // Cut off just as it was created: it stays pending, never applied to a
+      // plan behind the athlete's back — AI7 (CODEBASE_ANALYSIS_2026-10-03).
+      proposal: controller.signal.aborted
+        ? result.proposal
+        : await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req)),
       finalText: result.proposal.summaryMessage,
     };
   }
@@ -530,13 +509,13 @@ async function draftProposal(
 
 /** End a proposal reply: the rest of its text, then its card and the stream's close. */
 async function finishProposalReply(
-  { res, controller, safeWrite, reply, offerFact }: ProposalReplyContext,
+  branch: ProposalReplyContext,
   summary: SummaryOut,
   { proposal, finalText }: DraftedProposal,
 ): Promise<void> {
   await summary.end(finalText);
-  reply.proposalId = proposal?.id;
-  await sendPlanProposalReply(res, controller, safeWrite, proposal, offerFact);
+  branch.reply.proposalId = proposal?.id;
+  await sendPlanProposalReply(branch, proposal);
 }
 
 /**
@@ -557,8 +536,11 @@ async function handlePlanEditRequest(
   await writeStatus(safeWrite, "drafting_plan");
   const drafted = await draftProposal(options, input.message, summary);
   // A failed draft with nothing on screen yet answers in prose instead. Under
-  // a summary that broke off, a second answer would read as nonsense.
-  if (drafted.finalText === null && !summary.began()) return false;
+  // a summary that broke off, a second answer would read as nonsense; under a
+  // stream that was cut off, nobody is waiting for one.
+  // Read through `options`: the check above narrowed `controller`'s flag to
+  // false for the type checker, but the draft can outlast the stream.
+  if (drafted.finalText === null && !summary.began() && !options.controller.signal.aborted) return false;
   await finishProposalReply(options, summary, drafted);
   return true;
 }
@@ -571,7 +553,7 @@ async function handlePlanEditRequest(
  * plain conversation.
  */
 async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
-  const { req, res, planEditIntent, controller, telemetry } = options;
+  const { req, res, planEditIntent, controller, abortState, telemetry } = options;
   if (!planEditIntent) return false;
   const summary = summaryOut(options, "");
   try {
@@ -579,7 +561,7 @@ async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boole
   } catch (planEditError) {
     telemetry.proposal = "error";
     if (controller.signal.aborted) {
-      res.end();
+      endSseStream(res, controller, abortState);
       return true;
     }
     reqLogger(req).warn({ err: planEditError }, "[plan-adjustment] Chat branch failed");
@@ -727,26 +709,34 @@ async function streamCoachReply(
  * Best-effort — the underlying socket may already be half-closed by the time
  * we try. The client SSE reader treats a visible error payload differently
  * from a silent close, so we prefer a named event over letting the connection
- * die in silence.
+ * die in silence. Nothing goes to a client that has already left.
  */
 function sendSseTerminalEvent(
   res: Response,
   controller: AbortController,
   abortState: SseAbortState,
 ): void {
+  if (res.writableEnded || res.destroyed) return;
   if (!controller.signal.aborted) {
     res.write(sseEvent({ done: true }));
     return;
   }
-  if (abortState.reason === "auth-expired") {
-    res.write(
-      sseEvent({ error: "auth-expired", reason: "Your session expired — please sign in again." }),
-    );
-    return;
-  }
   if (abortState.reason === "timeout") {
     res.write(sseEvent({ error: "timeout", reason: "The response took too long and was stopped." }));
+    return;
   }
+  // Aborted with the client still there: a shutdown drained the stream.
+  res.write(sseEvent({ error: "Stream error" }));
+}
+
+/**
+ * Close the stream with its last event, however the reply ended: an aborted
+ * stream must still end, or the athlete watches a reply that never finishes
+ * (AI1 (CODEBASE_ANALYSIS_2026-10-03)).
+ */
+function endSseStream(res: Response, controller: AbortController, abortState: SseAbortState): void {
+  sendSseTerminalEvent(res, controller, abortState);
+  res.end();
 }
 
 /**
@@ -801,7 +791,29 @@ function unlessRedFlag<T>(step: T | null, chatSafety: ChatSafetySignals): T | nu
   return chatSafety.redFlagDetected ? null : step;
 }
 
+/**
+ * Bridge a client disconnect -> AbortController so upstream provider
+ * generation is torn down promptly on Stop, panel close or tab close
+ * (CODEBASE_AUDIT.md §3). On the response, before the first await: the
+ * request emits its own `close` as soon as express.json() has read the
+ * body, so a listener on it added later never fired — AI10
+ * (CODEBASE_ANALYSIS_2026-10-03). A response that finished also closes;
+ * only one cut off mid-way aborts.
+ */
+function abortOnDisconnect(res: Response): AbortController {
+  const controller = new AbortController();
+  res.on("close", () => {
+    if (!res.writableFinished) controller.abort();
+  });
+  // Gone already, during the consent and budget checks.
+  if (res.destroyed) controller.abort();
+  return controller;
+}
+
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
+    // Before the first await (AI10).
+    const controller = abortOnDisconnect(res);
+
     const useTools = chatToolsEnabled();
     const telemetry = startChatTurn(useTools ? "tools" : "classic", req.body.replaceAssistantId !== undefined);
     const userId = getUserId(req);
@@ -836,15 +848,10 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    // Bridge Express req-close -> AbortController so upstream provider
-    // generation is torn down promptly on client disconnect
-    // (CODEBASE_AUDIT.md §3). The same controller is registered with
-    // the SSE registry so graceful shutdown can abort every in-flight
-    // stream and let `httpServer.close()` complete without waiting on
-    // long-lived connections.
-    const controller = new AbortController();
+    // The same controller is registered with the SSE registry so graceful
+    // shutdown can abort every in-flight stream and let `httpServer.close()`
+    // complete without waiting on long-lived connections.
     const unregister = registerSseStream(controller);
-    req.on("close", () => controller.abort());
 
     const abortState: SseAbortState = { reason: "generic" };
     const clearDeadline = startSseDeadline(req, res, controller, abortState);
@@ -859,7 +866,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       if (safetyNotice) await safeWrite(sseEvent({ safetyNotice }));
 
       const offerFact = () => offerFactProposal({ controller, safeWrite, reply }, unlessRedFlag(factCandidate, replySafety), aiContext);
-      const branch = { req, res, userId, input, aiContext, controller, safeWrite, reply, telemetry, offerFact };
+      const branch = { req, res, userId, input, aiContext, controller, abortState, safeWrite, reply, telemetry, offerFact };
       const chatOptions = { chatSafety: replySafety, ...promptOptions };
       const answered = useTools
         ? await answerWithTools(branch, chatOptions, canProposePlanChanges(req, replySafety))
@@ -868,11 +875,15 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       if (answered === "proposal") return;
 
       await offerFact();
-      sendSseTerminalEvent(res, controller, abortState);
-      res.end();
+      endSseStream(res, controller, abortState);
     } catch (streamError) {
-      telemetry.outcome = controller.signal.aborted ? "aborted" : "error";
-      if (controller.signal.aborted) return;
+      // The abort cut a provider read short, its usual landing place.
+      if (controller.signal.aborted) {
+        telemetry.outcome = "aborted";
+        endSseStream(res, controller, abortState);
+        return;
+      }
+      telemetry.outcome = "error";
       reqLogger(req).error({ err: streamError }, "Stream error:");
       res.write(sseEvent({ error: "Stream error" }));
       res.end();

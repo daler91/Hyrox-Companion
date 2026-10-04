@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { flushQueue, getPendingCount, reconcileQueueOwner } from "@/lib/offlineQueue";
+import { flushQueue, getPendingCount, reconcileQueueOwner, releaseQueueOwner } from "@/lib/offlineQueue";
 
 /**
  * Drain the offline queue once on mount when the app boots already-online
@@ -15,11 +15,14 @@ import { flushQueue, getPendingCount, reconcileQueueOwner } from "@/lib/offlineQ
 export function useOfflineQueueFlush(userId: string | null | undefined) {
   useEffect(() => {
     reconcileQueueOwner(userId);
-    if (globalThis.navigator?.onLine === false) return;
-    if (getPendingCount() === 0) return;
-    void flushQueue().catch(() => {
-      // Per-mutation failures are handled inside flushQueue; this only
-      // guards unexpected errors (e.g. localStorage unavailable).
-    });
+    if (globalThis.navigator.onLine !== false && getPendingCount() > 0) {
+      void flushQueue().catch(() => {
+        // Per-mutation failures are handled inside flushQueue; this only
+        // guards unexpected errors (e.g. localStorage unavailable).
+      });
+    }
+    // Signed out or switching athlete: the queue's automatic retries wait for
+    // the next reconcile instead (CL27, CODEBASE_ANALYSIS_2026-10-03).
+    return releaseQueueOwner;
   }, [userId]);
 }

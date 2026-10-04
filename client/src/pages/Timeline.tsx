@@ -39,6 +39,7 @@ import { useFuellingRange } from "@/hooks/useNutrition";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
+import { fuellingRangeWindow } from "@/pages/timeline/fuellingWindow";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
@@ -202,9 +203,20 @@ export default function Timeline() {
   // Phase 2: per-day fuelling chips on the home screen. Fetch the whole visible
   // window once (groups are ascending by date) and look up per-date below — no
   // per-day fan-out. Gated by the nutrition feature flag; no-ops without data.
+  // A window wider than the server's span cap is narrowed to it around today
+  // (PF1, CODEBASE_ANALYSIS_2026-10-03).
+  const fuellingWindow = useMemo(
+    () =>
+      fuellingRangeWindow(
+        allVisibleGroups[0]?.[0] ?? "",
+        allVisibleGroups[allVisibleGroups.length - 1]?.[0] ?? "",
+        getTodayString(),
+      ),
+    [allVisibleGroups],
+  );
   const { data: fuellingRange } = useFuellingRange(
-    allVisibleGroups[0]?.[0] ?? "",
-    allVisibleGroups[allVisibleGroups.length - 1]?.[0] ?? "",
+    fuellingWindow.from,
+    fuellingWindow.to,
     featureFlags.nutritionEnabled,
   );
   const fuellingByDate = useMemo(() => {

@@ -24,6 +24,14 @@ export const STRAVA_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 export const EXTERNAL_API_TIMEOUT_MS = 15_000;
 
 /**
+ * Socket timeout for one web-push delivery. web-push sets none unless it is
+ * passed, so an endpoint that accepts the connection and never answers would
+ * hang the send, and the nutrition-reminder cron awaiting it under its
+ * advisory lock, forever. S2 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const PUSH_SEND_TIMEOUT_MS = 10_000;
+
+/**
  * Hard timeout budget for a single AI request (including all retries).
  * Reasoning-model calls on complex prompts routinely take
  * 30-60 seconds. The coach runs in a background pg-boss job so there is
@@ -47,6 +55,19 @@ export const AI_CALL_TIMEOUT_MS = 90_000;
  * 60-120+ s per dense 2-week chunk; 90s was killing every call.
  */
 export const PLAN_GENERATION_AI_TIMEOUT_MS = 300_000; // 5 minutes
+
+/**
+ * Age past which a plan still `pending`/`generating` is treated as stranded
+ * and failed (`failStalePlanGenerations`), at boot and by the
+ * stalePlanGenerations cron. It must exceed a real generation, which the
+ * pg-boss job bounds at 50 min (JOB_TIMEOUT_MS) inside a 60-min expiry. The
+ * age runs from the stub's INSERT (`generationStartedAt`), not from when a
+ * worker picks the job up, so it is not a hard guarantee: a job that sat in
+ * the queue behind slow generations (one at a time per instance) can be
+ * failed before or while it runs, and executePlanGeneration then writes
+ * `generating`/`ready` over the `failed`. Rare, and nothing is lost.
+ */
+export const STALE_PLAN_GENERATION_THRESHOLD_MS = 60 * 60 * 1000;
 
 /** Hard maximum for one timeline response (also the legacy offset default). */
 export const DEFAULT_TIMELINE_LIMIT = 500;
@@ -97,9 +118,9 @@ export const DB_STATEMENT_TIMEOUT_MS = 30_000;
  * several minutes) and `JOB_TIMEOUT_MS = 50min` in server/queue.ts —
  * 45min gives PG time to kill a hung query so the connection returns to
  * pg-boss's pool before the JS-side timeout fires, instead of staying
- * pinned to a wedged session until pg-boss's `expireInMinutes=60`
- * reaper notices. Applied via the PG `options` URL parameter when
- * constructing the queue.
+ * pinned to a wedged session until pg-boss's 60-minute job expiry
+ * (`expireInSeconds` in server/queue.ts) notices. Applied via the PG
+ * `options` URL parameter when constructing the queue.
  */
 export const PGBOSS_STATEMENT_TIMEOUT_MS = 45 * 60 * 1000;
 

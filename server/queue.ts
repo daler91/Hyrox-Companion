@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { ANALYTICS_FEATURES, type AnalyticsFeature, type GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
-import { type Job,PgBoss } from "pg-boss";
+import { type Job,PgBoss, type SendOptions } from "pg-boss";
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { pool } from "./db";
@@ -36,7 +36,7 @@ if (!env.DATABASE_URL) {
  * (separate from server/db.ts's request pool), so the
  * `DB_STATEMENT_TIMEOUT_MS = 30s` configured there does NOT apply to job
  * handlers — a hung DB query inside a job would otherwise wedge the
- * connection until pg-boss's 60-min `expireInMinutes` reaper noticed.
+ * connection until pg-boss's 60-min job expiry (`expireInSeconds`) noticed.
  *
  * Done via the libpq `options` URL parameter (`-c statement_timeout=...`)
  * because pg-boss's DatabaseOptions interface doesn't expose
@@ -55,6 +55,15 @@ export function buildQueueConnectionString(baseUrl: string): string {
 export const queue = new PgBoss(buildQueueConnectionString(env.DATABASE_URL));
 
 /**
+ * How long a job may stay active before pg-boss fails it (and, with retries
+ * left, re-dispatches it). pg-boss 12 reads `expireInSeconds` only: these
+ * options once said `expireInMinutes: 60`, which it silently ignored, so every
+ * job got the 15-minute queue default (D9, CODEBASE_ANALYSIS_2026-10-03). The
+ * `satisfies SendOptions` below makes a misspelt option a compile error.
+ */
+const JOB_EXPIRE_SECONDS = 60 * 60;
+
+/**
  * Default job options for idempotent handlers: retry up to 3 times with
  * exponential backoff, expire after 60 min. Handlers must tolerate being
  * invoked multiple times for the same job (e.g. pure DB reads/writes by
@@ -63,8 +72,8 @@ export const queue = new PgBoss(buildQueueConnectionString(env.DATABASE_URL));
 export const DEFAULT_JOB_OPTIONS = {
   retryLimit: 3,
   retryBackoff: true,
-  expireInMinutes: 60,
-} as const;
+  expireInSeconds: JOB_EXPIRE_SECONDS,
+} as const satisfies SendOptions;
 
 /**
  * Options for non-idempotent jobs: no retries. Use this for handlers
@@ -74,8 +83,8 @@ export const DEFAULT_JOB_OPTIONS = {
  */
 export const NO_RETRY_JOB_OPTIONS = {
   retryLimit: 0,
-  expireInMinutes: 60,
-} as const;
+  expireInSeconds: JOB_EXPIRE_SECONDS,
+} as const satisfies SendOptions;
 
 // Midnight analytics recompute contract — the queue name and payload shape
 // shared between the producer (analyticsRecomputeScheduler) and the worker
@@ -148,10 +157,10 @@ queue.on("error", (error: Error) => {
 // (CODEBASE_AUDIT.md §3).
 const IN_BATCH_CONCURRENCY = 2;
 
-// Per-job wall-clock timeout. expireInMinutes (60) only expunges the queue
-// row - it does not kill the worker, so a hung AI / HTTP call would leak
-// a worker slot forever (W5). We reject the job promise well before the
-// 60min expire so pg-boss sees it as failed and can retry.
+// Per-job wall-clock timeout. pg-boss's expiry (JOB_EXPIRE_SECONDS, 60 min)
+// fails the job but does not stop the handler, so a hung AI / HTTP call would
+// keep running after its slot was freed (W5). We reject the job promise well
+// before the 60min expire so pg-boss sees it as failed and can retry.
 //
 // Kept deliberately 10 minutes BELOW expire (not 5) so that when the JS
 // rejection fires, any orphaned upstream fetch/provider call still in Node's

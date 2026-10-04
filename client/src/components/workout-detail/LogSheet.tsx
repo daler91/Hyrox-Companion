@@ -496,6 +496,18 @@ function getAskCoachHandler(
 }
 
 /**
+ * A set cell commits its typed draft on blur. Escape, a swipe and a desktop
+ * overlay click close the sheet while the cell still has focus, so the draft
+ * never reached the save queue. Blurring first commits it; the queue then
+ * flushes to this plan day when the sheet's owner goes null (CL18,
+ * CODEBASE_ANALYSIS_2026-10-03).
+ */
+function commitFocusedField(): void {
+  const focused = document.activeElement;
+  if (focused instanceof HTMLElement) focused.blur();
+}
+
+/**
  * Sheet-native surface for planned cards. Single-tier:
  * the prescription editor is inline (no disclosure tap) so per-set
  * tweaks are one tap away. In log mode, edits autosave before the log
@@ -598,7 +610,11 @@ export function LogSheet({
       {...coachChat}
       entry={entry}
       open={!!entry}
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(open) => {
+        if (open) return;
+        commitFocusedField();
+        onClose();
+      }}
       title={title}
       narrowContentClassName="sm:max-w-2xl"
       currentCoachSeedText={currentCoachSeedText}

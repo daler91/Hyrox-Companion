@@ -1,4 +1,5 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { storedDistanceToDisplay, storedWeightToDisplay } from "@shared/unitConversion";
 
 import { sanitizeUserInput } from "../utils/sanitize";
 
@@ -13,8 +14,16 @@ export interface PromptExerciseSet {
   readonly time?: number | null;
   readonly notes?: string | null;
   readonly sortOrder?: number | null;
+  /**
+   * The row's L4 unit stamp (exercise_sets.weight_unit / distance_unit): the
+   * unit `weight` / `distance` were written in. Absent on a legacy row, which
+   * is read as the athlete's current unit.
+   */
+  readonly weightUnit?: string | null;
+  readonly distanceUnit?: string | null;
 }
 
+/** The athlete's CURRENT units: every value is converted into, and labelled with, these. */
 interface FormatOptions {
   readonly weightUnit?: string | null;
   readonly distanceUnit?: string | null;
@@ -149,12 +158,30 @@ function formatGroup(group: ExerciseGroup, options: FormatOptions): string {
   return `${name}: ${setParts.join("; ")}`;
 }
 
+/**
+ * A set's weight and distance in the athlete's current units.
+ *
+ * The stored numbers are in whatever unit the row was written in, and the
+ * label below is the athlete's current preference. Printing the raw number
+ * under that label told the coach a 140 kg squat logged before a switch to lbs
+ * was "140 lbs" (truly ~309), and it prescribed from there — AI9
+ * (CODEBASE_ANALYSIS_2026-10-03). Converted before grouping, so two sets that
+ * only look equal across a switch are not collapsed into one.
+ */
+function toDisplayUnits(set: PromptExerciseSet, options: FormatOptions): PromptExerciseSet {
+  return {
+    ...set,
+    weight: set.weight == null ? set.weight : storedWeightToDisplay(set.weight, set, options),
+    distance: set.distance == null ? set.distance : storedDistanceToDisplay(set.distance, set, options),
+  };
+}
+
 export function formatExerciseSetsForPrompt(
   sets: readonly PromptExerciseSet[] | null | undefined,
   options: FormatOptions = {},
 ): string {
   if (!sets || sets.length === 0) return "";
-  return groupExerciseSets(sets)
+  return groupExerciseSets(sets.map((set) => toDisplayUnits(set, options)))
     .map((group) => formatGroup(group, options))
     .join(" | ");
 }

@@ -16,7 +16,7 @@ vi.mock("../../storage", () => ({
 }));
 vi.mock("./adherence", () => ({ persistAdherenceSnapshot: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../../queue", () => ({
-  queue: { send: vi.fn().mockResolvedValue(undefined) },
+  queue: { send: vi.fn().mockResolvedValue(undefined), sendDebounced: vi.fn().mockResolvedValue(null) },
   DEFAULT_JOB_OPTIONS: {},
 }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));

@@ -16,7 +16,11 @@ type Params<TSnapshot> = {
   ownerId: string | null;
   mutationKeyFamily: (ownerId: string) => QueryKey;
   setsQueryKey: (ownerId: string) => QueryKey;
-  patchCachedSets: (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => void;
+  /**
+   * Takes the owner explicitly, like getSnapshot/restoreSnapshot: a debounced
+   * edit can land after the hook has moved to another owner (CL18).
+   */
+  patchCachedSets: (ownerId: string, updater: (sets: ExerciseSet[]) => ExerciseSet[]) => void;
   getSnapshot: (ownerId: string) => TSnapshot | undefined;
   restoreSnapshot: (ownerId: string, snapshot: TSnapshot) => void;
   updateSetRequest: (ownerId: string, setId: string, data: PatchExerciseSetPayload) => Promise<ExerciseSet>;
@@ -40,8 +44,19 @@ type Params<TSnapshot> = {
   cellSaveDebounceMs?: number;
 };
 
-type UpdateSetVariables = { readonly setId: string; readonly data: PatchExerciseSetPayload };
+type UpdateSetVariables = {
+  readonly setId: string;
+  readonly data: PatchExerciseSetPayload;
+  /**
+   * The owner the edit was made under; the current one when omitted. The
+   * debounce coordinator always sets it, so an edit flushed after the owner
+   * changed (a closed sheet, a switched workout) still PATCHes its own owner
+   * (CL18, CODEBASE_ANALYSIS_2026-10-03).
+   */
+  readonly ownerId?: string;
+};
 type UpdateSetContext<TSnapshot> = {
+  readonly ownerId: string;
   readonly prev: TSnapshot | undefined;
   readonly seq: number;
   readonly setId: string;
@@ -55,6 +70,37 @@ const CONFLICT_TOAST = {
   title: "This set was updated elsewhere",
   description: "Showing the latest values.",
 };
+
+/**
+ * The units a patch's weight/distance numbers were composed in — the
+ * preferences the table displayed them under — for each axis the patch touches.
+ *
+ * The server used to stamp every write with the preference IT held, so after a
+ * unit switch on another device this tab's kg entry was stored as lbs (D22,
+ * CODEBASE_ANALYSIS_2026-10-03). An axis the patch leaves alone names no unit,
+ * so the server does not re-stamp it.
+ */
+function composedUnitsFor(
+  data: PatchExerciseSetPayload,
+  units: Pick<ReturnType<typeof useUnitPreferences>, "weightUnit" | "distanceUnit">,
+): Pick<PatchExerciseSetPayload, "weightUnit" | "distanceUnit"> {
+  const touchesWeight = data.weight !== undefined || data.plannedWeight !== undefined;
+  const touchesDistance = data.distance !== undefined || data.plannedDistance !== undefined;
+  return {
+    ...(touchesWeight ? { weightUnit: units.weightUnit } : {}),
+    ...(touchesDistance ? { distanceUnit: units.distanceUnit } : {}),
+  };
+}
+
+/**
+ * The owner a set write is sent to. The editors only offer set writes once
+ * their sheet has an owner; one that fires without it fails here, rather than
+ * being sent to an `undefined` owner's URL.
+ */
+function requireOwnerId(ownerId: string | null | undefined): string {
+  if (!ownerId) throw new Error("There's no workout to save this set to.");
+  return ownerId;
+}
 
 export function useExerciseSetsForOwner<TSnapshot>({
   ownerId,
@@ -74,11 +120,15 @@ export function useExerciseSetsForOwner<TSnapshot>({
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [lastSaveErrorAt, setLastSaveErrorAt] = useState<number | null>(null);
   const [activeOwnerId, setActiveOwnerId] = useState(ownerId);
-  const markSaved = () => setLastSavedAt(Date.now());
+  const markSaved = () => {
+    setLastSavedAt(Date.now());
+  };
   // Records the most recent failed set write so the save pill can show an
   // honest "Couldn't save" state. A later markSaved() supersedes it — the pill
   // compares timestamps — so no explicit clear is needed on a subsequent save.
-  const markError = () => setLastSaveErrorAt(Date.now());
+  const markError = () => {
+    setLastSaveErrorAt(Date.now());
+  };
 
   // Per-set sequence guard (W13): each set PATCH bumps its set's counter on
   // mutate; onSuccess only writes the server row back if its PATCH is still the
@@ -91,11 +141,16 @@ export function useExerciseSetsForOwner<TSnapshot>({
   // in flight at a time, each carrying the version the last response reported.
   const [versionTracker] = useState(createSetVersionTracker);
 
-  const sendLockedPatch = async (setId: string, data: PatchExerciseSetPayload): Promise<ExerciseSet> => {
+  const sendLockedPatch = async (
+    targetOwnerId: string,
+    setId: string,
+    data: PatchExerciseSetPayload,
+  ): Promise<ExerciseSet> => {
     const expectedVersion = versionTracker.expectedVersion(setId);
-    const body = expectedVersion === undefined ? data : { ...data, expectedVersion };
+    const composed = { ...data, ...composedUnitsFor(data, unitPreferences) };
+    const body = expectedVersion === undefined ? composed : { ...composed, expectedVersion };
     try {
-      const row = await updateSetRequest(ownerId!, setId, body);
+      const row = await updateSetRequest(targetOwnerId, setId, body);
       // Noted here, not in onSuccess: a response the W13 guard drops for the UI
       // still carries the version the next PATCH on this set must send.
       versionTracker.noteServerVersion(setId, row.version);
@@ -108,8 +163,8 @@ export function useExerciseSetsForOwner<TSnapshot>({
     }
   };
 
-  const applyOptimisticPatch = (setId: string, data: PatchExerciseSetPayload) => {
-    patchCachedSets((sets) => {
+  const applyOptimisticPatch = (targetOwnerId: string, setId: string, data: PatchExerciseSetPayload) => {
+    patchCachedSets(targetOwnerId, (sets) => {
       const row = sets.find((s) => s.id === setId);
       if (!row) return sets;
       versionTracker.seed(setId, row.version);
@@ -128,15 +183,16 @@ export function useExerciseSetsForOwner<TSnapshot>({
     UpdateSetContext<TSnapshot> | undefined
   >({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: ({ setId, data }) => versionTracker.enqueue(setId, () => sendLockedPatch(setId, data)),
-    onMutate: async ({ setId, data }) => {
-      if (!ownerId) return undefined;
+    mutationFn: ({ setId, data, ownerId: target }) =>
+      versionTracker.enqueue(setId, () => sendLockedPatch(target ?? requireOwnerId(ownerId), setId, data)),
+    onMutate: async ({ setId, data, ownerId: target = ownerId ?? undefined }) => {
+      if (!target) return undefined;
       const seq = (setPatchSeqRef.current.get(setId) ?? 0) + 1;
       setPatchSeqRef.current.set(setId, seq);
-      await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });
-      const prev = getSnapshot(ownerId);
-      applyOptimisticPatch(setId, data);
-      return { prev, seq, setId };
+      await queryClient.cancelQueries({ queryKey: setsQueryKey(target) });
+      const prev = getSnapshot(target);
+      applyOptimisticPatch(target, setId, data);
+      return { ownerId: target, prev, seq, setId };
     },
     onSuccess: (serverSet, _vars, ctx) => {
       // Ignore a stale response: if a newer PATCH for this set has since been
@@ -144,20 +200,21 @@ export function useExerciseSetsForOwner<TSnapshot>({
       // it with this older server row (W13).
       const isLatestPatch = ctx !== undefined && ctx.seq === setPatchSeqRef.current.get(ctx.setId);
       if (isLatestPatch) {
-        patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
+        patchCachedSets(ctx.ownerId, (sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
       }
       markSaved();
       // The write landed even if a newer PATCH superseded its response, so the
       // derived views are out of date either way.
       onWriteSuccess?.();
     },
-    onError: (error, _vars, ctx) => {
+    onError: (error, vars, ctx) => {
       markError();
-      if (!ownerId) return;
-      if (ctx?.prev) restoreSnapshot(ownerId, ctx.prev);
+      const target = ctx?.ownerId ?? vars.ownerId ?? ownerId;
+      if (!target) return;
+      if (ctx?.prev) restoreSnapshot(target, ctx.prev);
       // D5: never retry over the other device's write. Refetch so its row shows.
       if (isSetConflictError(error)) {
-        void queryClient.invalidateQueries({ queryKey: setsQueryKey(ownerId) });
+        void queryClient.invalidateQueries({ queryKey: setsQueryKey(target) });
       }
     },
     errorToast: (error) =>
@@ -166,38 +223,49 @@ export function useExerciseSetsForOwner<TSnapshot>({
         : { title: SAVE_FAILED_TITLE, description: humanizeApiError(error) },
   });
 
-  const { patchSetDebounced, flushPendingSetPatches, cancelPending, getPendingPatches } =
-    useDebouncedSetPatches<PatchExerciseSetPayload>(updateSet.mutateAsync, cellSaveDebounceMs);
+  // Each queued edit carries the owner it was made under, and the coordinator
+  // flushes the queue when the owner changes rather than this hook cancelling
+  // it (CL18). The version tracker is kept across owners for the same reason:
+  // set ids are unique across owners, and the flushed PATCH still needs its
+  // set's version and must still wait behind that set's in-flight PATCH.
+  const { patchSetDebounced, flushPendingSetPatches, getPendingPatches } =
+    useDebouncedSetPatches<PatchExerciseSetPayload>(updateSet.mutateAsync, cellSaveDebounceMs, ownerId);
 
   if (ownerId !== activeOwnerId) {
     setActiveOwnerId(ownerId);
     setLastSavedAt(null);
     setLastSaveErrorAt(null);
-    cancelPending();
-    versionTracker.reset();
   }
 
   const addSet = useApiMutation({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: (data: AddExerciseSetPayload) => addSetRequest(ownerId!, data),
+    // A new row is stamped on both axes, so it names both units (D22).
+    mutationFn: (data: AddExerciseSetPayload) =>
+      addSetRequest(requireOwnerId(ownerId), {
+        ...data,
+        weightUnit: unitPreferences.weightUnit,
+        distanceUnit: unitPreferences.distanceUnit,
+      }),
     onSuccess: (serverSet) => {
-      patchCachedSets((sets) => [...sets, serverSet]);
+      if (ownerId) patchCachedSets(ownerId, (sets) => [...sets, serverSet]);
       markSaved();
       onWriteSuccess?.();
     },
-    onError: () => markError(),
+    onError: () => {
+      markError();
+    },
     errorToast: "Couldn't add that exercise",
     invalidateQueries: ownerId ? addInvalidateQueries?.(ownerId) : undefined,
   });
 
   const deleteSet = useApiMutation({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: (setId: string) => deleteSetRequest(ownerId!, setId).then(() => setId),
+    mutationFn: (setId: string) => deleteSetRequest(requireOwnerId(ownerId), setId).then(() => setId),
     onMutate: async (setId: string) => {
       if (!ownerId) return undefined;
       await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });
       const prev = getSnapshot(ownerId);
-      patchCachedSets((sets) => sets.filter((s) => s.id !== setId));
+      patchCachedSets(ownerId, (sets) => sets.filter((s) => s.id !== setId));
       return { prev };
     },
     onSuccess: () => {

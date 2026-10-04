@@ -24,16 +24,17 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, type SQL } from "drizzle-orm";
 
 import { db } from "../db";
 import { getLocalDateStrSafe } from "../timezone";
-import { planDaysWithinLifetimes } from "./planRetirement";
+import { planDaysPastRetirement, planDaysWithinLifetimes } from "./planRetirement";
 import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
 import { sortAndWindowTimelineEntries, type TimelinePageWindow, windowTimelinePage } from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
+  const raw = log.deviceActivity?.raw;
   return {
     source: (log.source as "manual" | "strava") || "manual",
     // A Strava recording sits on a standalone import (source "strava") or on a
@@ -44,7 +45,11 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
     // So the card and the review sheet can show (and flip) the training flag
     // without a second fetch.
     countsAsTraining: log.countsAsTraining,
-    deviceActivityName: log.deviceActivity?.raw?.name ?? null,
+    deviceActivityName: raw?.name ?? null,
+    // Names the unit avg_cadence is in (rpm for a ride, spm otherwise). A
+    // standalone import from before the snapshot column carries its sport in
+    // `focus` (see legacyRawFromLog) -- C9 (CODEBASE_ANALYSIS_2026-10-03).
+    deviceSportType: raw?.sport_type ?? (log.source === "strava" ? log.focus : null),
     // `duration` is moving time, so the stop it drops is worth showing next to
     // it — see the workout_logs.duration column note.
     stoppedSeconds: stoppedSecondsFor(log.deviceActivity),
@@ -345,6 +350,9 @@ function toUpcomingPlannedDay(
 // planId (e.g. logged inside a plan's window but on a date with no scheduled
 // day), in which case we surface the plan name so the timeline tags it and the
 // plan filter can scope it. planId is the source of truth — the day link is absent.
+// A linked log that has no plan-day entry of its own (a second log on the same
+// day, or its day past a retirement cutoff) is shown the same way — C16/C17
+// (CODEBASE_ANALYSIS_2026-10-03).
 function createStandaloneWorkoutEntry(
   log: WorkoutLog,
   planNameById: Map<string, string>,
@@ -367,13 +375,13 @@ function createStandaloneWorkoutEntry(
   };
 }
 
-function addSetToGroup(groups: Map<string, ExerciseSet[]>, key: string, set: ExerciseSet): void {
+function addToGroup<T>(groups: Map<string, T[]>, key: string, item: T): void {
   const existing = groups.get(key);
   if (existing) {
-    existing.push(set);
+    existing.push(item);
     return;
   }
-  groups.set(key, [set]);
+  groups.set(key, [item]);
 }
 
 function collectExerciseSetOwnerIds(
@@ -407,10 +415,20 @@ function groupExerciseSetsByWorkoutLogId(sets: ExerciseSet[]): Map<string, Exerc
   const setsByWorkoutId = new Map<string, ExerciseSet[]>();
   for (const set of sets) {
     if (set.workoutLogId) {
-      addSetToGroup(setsByWorkoutId, set.workoutLogId, set);
+      addToGroup(setsByWorkoutId, set.workoutLogId, set);
     }
   }
   return setsByWorkoutId;
+}
+
+function groupWorkoutLogsByPlanDayId(logs: WorkoutLog[]): Map<string, WorkoutLog[]> {
+  const logsByPlanDayId = new Map<string, WorkoutLog[]>();
+  for (const log of logs) {
+    if (log.planDayId) {
+      addToGroup(logsByPlanDayId, log.planDayId, log);
+    }
+  }
+  return logsByPlanDayId;
 }
 
 async function fetchPlanDayExerciseSets(planDayIds: string[]): Promise<Map<string, ExerciseSet[]>> {
@@ -425,7 +443,7 @@ async function fetchPlanDayExerciseSets(planDayIds: string[]): Promise<Map<strin
   const setsByPlanDayId = new Map<string, ExerciseSet[]>();
   for (const set of prescribedSets) {
     if (set.planDayId) {
-      addSetToGroup(setsByPlanDayId, set.planDayId, set);
+      addToGroup(setsByPlanDayId, set.planDayId, set);
     }
   }
   return setsByPlanDayId;
@@ -507,10 +525,10 @@ export class TimelineStorage {
     // for standalone-workout plan names instead of issuing a second identical
     // trainingPlans query (the old fetchUserPlanNameMap).
     const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
-    if (userPlans.length === 0) return { scheduledDays: [], planNameById };
+    if (userPlans.length === 0) return { scheduledDays: [], planNameById, retiredDayScope: undefined };
 
     const planIds = userPlans.map((p) => p.id);
-    if (planIds.length === 0) return { scheduledDays: [], planNameById };
+    if (planIds.length === 0) return { scheduledDays: [], planNameById, retiredDayScope: undefined };
     const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
     const retiredOnById = new Map(userPlans.map((p) => [p.id, p.retiredOn]));
 
@@ -524,7 +542,11 @@ export class TimelineStorage {
     const planScope = isSinglePlanView
       ? inArray(planDays.planId, [planId])
       : planDaysWithinLifetimes(userPlans);
-    if (!planScope) return { scheduledDays: [], planNameById };
+    if (!planScope) return { scheduledDays: [], planNameById, retiredDayScope: undefined };
+    // The days that scope just dropped. A log linked to one has no plan-day
+    // entry here, so the standalone read shows it instead — C17
+    // (CODEBASE_ANALYSIS_2026-10-03). A single plan keeps every day in scope.
+    const retiredDayScope = isSinglePlanView ? undefined : planDaysPastRetirement(userPlans);
 
     const days = await db.query.planDays.findMany({
       where: and(
@@ -543,7 +565,7 @@ export class TimelineStorage {
       raceDate: raceDateById.get(day.planId) ?? null,
       retiredOn: retiredOnById.get(day.planId) ?? null,
     }));
-    return { scheduledDays, planNameById };
+    return { scheduledDays, planNameById, retiredDayScope };
   }
 
   /**
@@ -602,8 +624,22 @@ export class TimelineStorage {
     planId?: string,
     sqlLimit?: number,
     before?: string,
+    retiredDayScope?: SQL,
   ): Promise<WorkoutLog[]> {
-    const conditions = [eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)];
+    // A log linked to a day past its plan's retirement cutoff gets no plan-day
+    // entry in the "All plans" view. Retirement must never hide a session the
+    // athlete actually did, so it is read here with the unlinked logs — C17
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    const unrenderedLink = retiredDayScope
+      ? (or(
+          isNull(workoutLogs.planDayId),
+          inArray(
+            workoutLogs.planDayId,
+            db.select({ id: planDays.id }).from(planDays).where(retiredDayScope),
+          ),
+        ) as SQL)
+      : isNull(workoutLogs.planDayId);
+    const conditions = [eq(workoutLogs.userId, userId), unrenderedLink];
     if (before !== undefined) conditions.push(lt(workoutLogs.date, before));
 
     // When scoping to a specific plan, hide standalone workouts that belong to a
@@ -641,22 +677,25 @@ export class TimelineStorage {
     const entries: TimelineEntry[] = [];
     const suppressedPlanDayIds = new Set<string>();
 
-    const workoutsByPlanDayId = new Map<string, WorkoutLog>();
-    for (const log of linkedWorkouts) {
-      if (log.planDayId) {
-        workoutsByPlanDayId.set(log.planDayId, log);
-      }
-    }
+    // Nothing stops several logs pointing at one plan day (the plan-day picker
+    // offers days already logged), so they are grouped rather than written into
+    // a last-write-wins Map that hid all but one — C16
+    // (CODEBASE_ANALYSIS_2026-10-03). The first, the newest in the linked
+    // read's order, stands in for the plan day; the rest show as logs of their own.
+    const workoutsByPlanDayId = groupWorkoutLogsByPlanDayId(linkedWorkouts);
 
     for (const row of scheduledDays) {
       const day = row.planDay;
       if (!day.scheduledDate) continue;
-      const linkedLog = workoutsByPlanDayId.get(day.id);
+      const [linkedLog, ...otherLogs] = workoutsByPlanDayId.get(day.id) ?? [];
       if (linkedLog) {
         // A logged workout shows what the athlete actually did — never overridden.
         entries.push(
           createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }),
         );
+        for (const log of otherLogs) {
+          entries.push(createStandaloneWorkoutEntry(log, planNameById));
+        }
       } else {
         const override = deriveRaceDayOverride(day.scheduledDate, row.raceDate);
         if (override) suppressedPlanDayIds.add(day.id);
@@ -709,7 +748,7 @@ export class TimelineStorage {
     //
     // fetchAbsences joins the same wave for the same reason: it reads a third
     // unrelated table and is not consumed until buildTimelineEntries either.
-    const [today, { scheduledDays, planNameById }, absences] = await Promise.all([
+    const [today, { scheduledDays, planNameById, retiredDayScope }, absences] = await Promise.all([
       this.resolveUserToday(userId),
       this.fetchScheduledDays(userId, planId, sqlOverFetch, before),
       this.fetchAbsences(userId),
@@ -724,8 +763,12 @@ export class TimelineStorage {
             .select()
             .from(workoutLogs)
             .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds)))
+            // Newest first, the order un-completing a day folds its logs back in
+            // (planService), so the same log stands in for the plan day on every
+            // read — C16 (CODEBASE_ANALYSIS_2026-10-03).
+            .orderBy(desc(workoutLogs.date), desc(workoutLogs.startedAt), desc(workoutLogs.id))
         : Promise.resolve([]),
-      this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch, before),
+      this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch, before, retiredDayScope),
     ]);
 
     const { entries, suppressedPlanDayIds } = this.buildTimelineEntries(

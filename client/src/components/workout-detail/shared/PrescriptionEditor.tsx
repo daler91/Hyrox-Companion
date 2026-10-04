@@ -25,6 +25,8 @@ export interface PrescriptionEditorProps {
   readonly notes: string | null | undefined;
   /** Single-field debounced save from the textarea. */
   readonly onSaveField: (field: PrescriptionField, value: string) => void;
+  /** Every keystroke, ahead of the debounced onSaveField. */
+  readonly onDraftFieldChange?: (field: PrescriptionField, value: string) => void;
   /** Fire the text-parse mutation with the current visible text. */
   readonly onParseText: (payload: PrescriptionTextPayload) => void;
   /** Fire the image-parse mutation. */
@@ -81,6 +83,7 @@ export function PrescriptionEditor({
   accessory,
   notes,
   onSaveField,
+  onDraftFieldChange,
   onParseText,
   onParseImage,
   isParsingText,
@@ -197,6 +200,7 @@ export function PrescriptionEditor({
           if (field === "mainWorkout" || field === "accessory") {
             setDraftText((prev) => ({ ...prev, [field]: value }));
           }
+          onDraftFieldChange?.(field, value);
         }}
         onParse={handleParseTextClicked}
         isParsing={isParsingText}

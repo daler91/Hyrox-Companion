@@ -1,3 +1,6 @@
+import * as schema from "@shared/schema";
+import { is } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Pool } from "pg";
 
 /**
@@ -64,6 +67,66 @@ export async function assertCriticalTablesExist(pool: Pick<Pool, "query">): Prom
   if (rows.length > 0) {
     throw new Error(
       `Critical tables missing after migration: ${rows.map((r) => r.missing).join(", ")} — refusing to serve an incomplete schema`,
+    );
+  }
+}
+
+/**
+ * Declared in the Drizzle schema but not held by the primary database:
+ * document_chunks lives on the vector DB, where ensureVectorSchema
+ * (server/maintenance.ts) creates it; migrations 0008-0014 are no-ops for it.
+ */
+const SCHEMA_CHECK_EXEMPT_TABLES: ReadonlySet<string> = new Set(["document_chunks"]);
+
+/** Every primary-DB table the deployed code's Drizzle schema declares, with its column names. */
+export function declaredSchemaColumns(): Map<string, string[]> {
+  const declared = new Map<string, string[]>();
+  for (const value of Object.values(schema)) {
+    if (!is(value, PgTable)) continue;
+    const { name, columns } = getTableConfig(value);
+    if (SCHEMA_CHECK_EXEMPT_TABLES.has(name)) continue;
+    declared.set(name, columns.map((column) => column.name));
+  }
+  return declared;
+}
+
+/**
+ * Throw if the database lacks a table or column the Drizzle schema declares
+ * (D7, CODEBASE_ANALYSIS_2026-10-03). Production's schema changes only when
+ * someone runs `drizzle-kit push` by hand, and boot-time migrate() no-ops
+ * against a pushed schema, so a release that adds a column could go live
+ * before the push. Every `db.select().from(table)` names each declared column,
+ * so every query on that table then failed while readiness (`SELECT 1`) stayed
+ * green. Like assertCriticalTablesExist, the throw reaches the startup catch in
+ * server/index.ts: readiness answers 503, the deploy fails Railway's
+ * healthcheck and the previous deployment keeps serving until the schema is
+ * pushed. Derived from the schema rather than a list, so the next migration is
+ * covered without anyone remembering to add it. Presence only, not types; a
+ * column the database still has but the code no longer declares is fine.
+ */
+export async function assertSchemaColumnsExist(
+  pool: Pick<Pool, "query">,
+  declared: Map<string, string[]> = declaredSchemaColumns(),
+): Promise<void> {
+  const { rows } = await pool.query<{ table_name: string; column_name: string }>(
+    `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = ANY($1::text[])`,
+    [[...declared.keys()]],
+  );
+  const present = new Map<string, Set<string>>();
+  for (const { table_name: table, column_name: column } of rows) {
+    const columns = present.get(table) ?? new Set<string>();
+    columns.add(column);
+    present.set(table, columns);
+  }
+  const missing = [...declared].flatMap(([table, columns]) => {
+    const have = present.get(table);
+    if (!have) return [`${table} (table)`];
+    return columns.filter((column) => !have.has(column)).map((column) => `${table}.${column}`);
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Database schema is behind the deployed code — missing: ${missing.join(", ")}. Run \`drizzle-kit push\` against this database, then redeploy — refusing to serve queries that would fail`,
     );
   }
 }

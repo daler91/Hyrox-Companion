@@ -1,6 +1,11 @@
+import { foods } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import { db } from "../../db";
 import { storage } from "../index";
+import { SHARED_FOOD_EDIT_CONFLICT } from "../nutritionFoods";
+import { SHARED_RECIPE_EDIT_CONFLICT } from "../nutritionRecipes";
 import { resetIntegrationDb, seedCustomFood, seedUser } from "./integrationDb";
 
 /**
@@ -87,6 +92,160 @@ describe("NutritionStorage (real Postgres)", () => {
       expect(await storage.nutrition.updateLogEntry(ALICE, entry.id, { quantityG: 120 })).toMatchObject({ quantityG: 120 });
       expect(await storage.nutrition.deleteLogEntry(ALICE, entry.id)).toBe(true);
       expect(await storage.nutrition.listEntriesWithFoodForDate(ALICE, DAY)).toEqual([]);
+    });
+  });
+
+  describe("editing a shared custom food (D18, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    // Log entries store only foodId + quantityG and join `foods` live, so an
+    // in-place edit of a food someone else logged rewrites THEIR history.
+    // The edit dialog resends every field, so the payloads here do too.
+    const BANANA = {
+      name: "Banana",
+      brand: null,
+      caloriesPer100g: 89,
+      proteinPer100g: 1.1,
+      carbPer100g: 22.8,
+      fatPer100g: 0.3,
+      fiberPer100g: 2.6,
+      servingSizeG: 118,
+    };
+
+    async function seedSharedBananaLoggedByAlice() {
+      const banana = await seedCustomFood(BOB, BANANA.name, { ...BANANA, isPublic: true });
+      await storage.nutrition.createLogEntry(ALICE, {
+        foodId: banana.id,
+        quantityG: 120,
+        mealType: "breakfast",
+        loggedAt: new Date(`${DAY}T07:30:00Z`),
+        logDate: DAY,
+      });
+      return banana;
+    }
+
+    it("refuses to change the macros or name, and Alice's logged nutrition stays as she logged it", async () => {
+      const banana = await seedSharedBananaLoggedByAlice();
+
+      await expect(
+        storage.nutrition.updateCustomFood(BOB, banana.id, { ...BANANA, isPublic: true, caloriesPer100g: 1000, proteinPer100g: 0 }),
+      ).rejects.toMatchObject({ status: 409, message: SHARED_FOOD_EDIT_CONFLICT });
+      await expect(
+        storage.nutrition.updateCustomFood(BOB, banana.id, { ...BANANA, isPublic: true, name: "Anything at all" }),
+      ).rejects.toMatchObject({ status: 409 });
+      // Unsharing first doesn't unlock it: Alice's entry still points at the row.
+      await storage.nutrition.updateCustomFood(BOB, banana.id, { ...BANANA, isPublic: false });
+      await expect(
+        storage.nutrition.updateCustomFood(BOB, banana.id, { ...BANANA, isPublic: false, caloriesPer100g: 1000 }),
+      ).rejects.toMatchObject({ status: 409 });
+
+      const [entry] = await storage.nutrition.listEntriesWithFoodForDate(ALICE, DAY);
+      expect(entry.food).toMatchObject({ name: "Banana", caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8 });
+    });
+
+    it("still lets the owner resave unchanged values, change the serving size and toggle sharing", async () => {
+      const banana = await seedSharedBananaLoggedByAlice();
+
+      const updated = await storage.nutrition.updateCustomFood(BOB, banana.id, {
+        ...BANANA,
+        servingSizeG: 120,
+        isPublic: false,
+      });
+
+      expect(updated).toMatchObject({ servingSizeG: 120, isPublic: false, caloriesPer100g: 89 });
+    });
+
+    it("refuses when another athlete's recipe uses the food", async () => {
+      const banana = await seedCustomFood(BOB, BANANA.name, { ...BANANA, isPublic: true });
+      await storage.nutrition.createRecipe(ALICE, {
+        name: "Smoothie",
+        servings: 1,
+        ingredients: [{ foodId: banana.id, quantityG: 120 }],
+      });
+
+      await expect(
+        storage.nutrition.updateCustomFood(BOB, banana.id, { ...BANANA, carbPer100g: 50 }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+
+    it("lets the owner edit freely while only their own entries reference it", async () => {
+      const banana = await seedCustomFood(BOB, BANANA.name, { ...BANANA, isPublic: true });
+      await storage.nutrition.createLogEntry(BOB, {
+        foodId: banana.id,
+        quantityG: 120,
+        mealType: "breakfast",
+        loggedAt: new Date(`${DAY}T07:30:00Z`),
+        logDate: DAY,
+      });
+
+      expect(
+        await storage.nutrition.updateCustomFood(BOB, banana.id, { ...BANANA, caloriesPer100g: 95, name: "Ripe banana" }),
+      ).toMatchObject({ caloriesPer100g: 95, name: "Ripe banana" });
+    });
+
+    it("is still a 404 (undefined) for someone else's food", async () => {
+      const banana = await seedSharedBananaLoggedByAlice();
+
+      expect(await storage.nutrition.updateCustomFood(ALICE, banana.id, { ...BANANA, caloriesPer100g: 1000 })).toBeUndefined();
+    });
+
+    it("won't share or edit a recipe's backing food directly (it changes only through its recipe)", async () => {
+      const banana = await seedCustomFood(BOB, BANANA.name, BANANA);
+      const recipe = await storage.nutrition.createRecipe(BOB, {
+        name: "Smoothie",
+        servings: 1,
+        ingredients: [{ foodId: banana.id, quantityG: 120 }],
+      });
+
+      expect(await storage.nutrition.updateCustomFood(BOB, recipe.foodId, { isPublic: true })).toBeUndefined();
+      const [backing] = await db.select().from(foods).where(eq(foods.id, recipe.foodId));
+      expect(backing.isPublic).toBe(false);
+    });
+
+    it("refuses a recipe edit that would rewrite another athlete's log of its backing food", async () => {
+      const banana = await seedCustomFood(BOB, BANANA.name, BANANA);
+      const oats = await seedCustomFood(BOB, "Oats", { ...BANANA, name: "Oats", caloriesPer100g: 389 });
+      const recipe = await storage.nutrition.createRecipe(BOB, {
+        name: "Smoothie",
+        servings: 1,
+        ingredients: [{ foodId: banana.id, quantityG: 120 }],
+      });
+      // Shared before the direct PATCH stopped matching recipe foods.
+      await db.update(foods).set({ isPublic: true }).where(eq(foods.id, recipe.foodId));
+      await storage.nutrition.createLogEntry(ALICE, {
+        foodId: recipe.foodId,
+        quantityG: 120,
+        mealType: "breakfast",
+        loggedAt: new Date(`${DAY}T07:30:00Z`),
+        logDate: DAY,
+      });
+      const [before] = await storage.nutrition.listEntriesWithFoodForDate(ALICE, DAY);
+
+      await expect(
+        storage.nutrition.updateRecipe(BOB, recipe.id, {
+          name: "Oat smoothie",
+          servings: 1,
+          ingredients: [{ foodId: oats.id, quantityG: 120 }],
+        }),
+      ).rejects.toMatchObject({ status: 409, message: SHARED_RECIPE_EDIT_CONFLICT });
+
+      const [after] = await storage.nutrition.listEntriesWithFoodForDate(ALICE, DAY);
+      expect(after.food).toMatchObject({ name: "Smoothie", caloriesPer100g: before.food.caloriesPer100g });
+    });
+
+    it("still lets the owner edit a recipe nobody else has logged", async () => {
+      const banana = await seedCustomFood(BOB, BANANA.name, BANANA);
+      const recipe = await storage.nutrition.createRecipe(BOB, {
+        name: "Smoothie",
+        servings: 1,
+        ingredients: [{ foodId: banana.id, quantityG: 120 }],
+      });
+
+      expect(
+        await storage.nutrition.updateRecipe(BOB, recipe.id, {
+          name: "Big smoothie",
+          servings: 2,
+          ingredients: [{ foodId: banana.id, quantityG: 240 }],
+        }),
+      ).toMatchObject({ name: "Big smoothie", servings: 2 });
     });
   });
 

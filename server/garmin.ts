@@ -32,6 +32,10 @@ import { env } from "./env";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "./routeUtils";
+import {
+  dropCrossProviderDuplicates,
+  recordingTimingFromLog,
+} from "./services/crossProviderDuplicates";
 import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
 import { claimRuntimeCacheKey, deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
 import { storage } from "./storage";
@@ -650,15 +654,26 @@ async function fetchAndImportGarminActivities(
   const existingSet = new Set(existingIds);
 
   let skipped = 0;
-  const workoutsToImport = [];
+  const unseen = [];
 
   for (const activity of rawActivities) {
     if (existingSet.has(String(activity.activityId))) {
       skipped++;
       continue;
     }
-    workoutsToImport.push(mapGarminActivityToWorkout(activity, userId, distanceUnit));
+    unseen.push(mapGarminActivityToWorkout(activity, userId, distanceUnit));
   }
+
+  // A session the athlete's Strava sync already brought in (the watch
+  // auto-uploads there too) is the same recording under another id; importing
+  // it again counted it twice everywhere (D16, CODEBASE_ANALYSIS_2026-10-03).
+  const { kept: workoutsToImport, duplicates } = await dropCrossProviderDuplicates(
+    userId,
+    unseen,
+    "strava",
+    (row) => ({ date: row.date, timing: recordingTimingFromLog(row) }),
+  );
+  skipped += duplicates;
 
   // Compute imported from the rows actually inserted, not the rows we tried
   // to insert. createGarminWorkoutLogs uses onConflictDoNothing against the

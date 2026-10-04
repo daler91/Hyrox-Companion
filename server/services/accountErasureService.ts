@@ -16,7 +16,7 @@ import { clerkClient } from "@clerk/express";
 import { inSequence } from "@shared/inSequence";
 import type { Logger } from "pino";
 
-import { evictUserFromSeenCache } from "../clerkAuth";
+import { evictUserFromSeenCache, rememberUserErased } from "../clerkAuth";
 import { env } from "../env";
 import { logger as defaultLogger } from "../logger";
 import { purgeUserJobs } from "../queue";
@@ -51,6 +51,9 @@ const SWEEP_BATCH_SIZE = 50;
  *    cron re-embeds still-existing foods, so deleting early is safe.)
  * 2. Delete the Clerk identity (hard fail, since ensureUserExists would
  *    re-provision the DB row on the next request).
+ * 2b. Tombstone the id in the auth layer (fail-loud) so a Clerk session token
+ *    minted before step 2, still valid for up to its lifetime, is refused
+ *    instead of re-provisioning the row step 5 deletes.
  * 3. Best-effort Strava deauthorization.
  * 4. Garmin upstream revocation is intentionally NOT attempted — see the
  *    comment block at that step for the rationale.
@@ -61,8 +64,8 @@ const SWEEP_BATCH_SIZE = 50;
  * 6. Best-effort purge of the user's rate-limit buckets.
  * 7. Best-effort purge of the user's pg-boss jobs (logged at error on failure —
  *    it runs after the marker is gone, so nothing retries it).
- * 8. Evict the user from the auth seen-cache so stale sessions can't
- *    re-provision them.
+ * 8. Evict the user from the auth seen-cache, so a stale session misses it
+ *    and meets the step-2b tombstone (401) instead of passing as "seen".
  */
 export async function eraseAccount(
   userId: string,
@@ -103,6 +106,14 @@ export async function eraseAccount(
       log.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
     }
   }
+
+  // Step 2b: from here on any session for this id is stale, but Clerk verifies
+  // its JWT locally until it expires. Once step 5 deletes the row,
+  // ensureUserExists would read such a request as a first sign-in and recreate
+  // the account, with no erasure marker for the sweep to find. The tombstone
+  // makes it answer 401 instead, and must be written before the row goes.
+  // P5 (CODEBASE_ANALYSIS_2026-10-03)
+  await rememberUserErased(userId);
 
   // Step 3: best-effort Strava deauthorization before deleting the DB record
   // (which cascades and removes the stored token). Non-fatal — the user's data
@@ -206,8 +217,10 @@ export async function eraseAccount(
     );
   }
 
-  // Step 8: evict from the auth seen-cache so stale sessions can't trigger
-  // ensureUserExists within the 5-minute TTL window.
+  // Step 8: evict from the auth seen-cache. A stale session then reaches
+  // ensureUserExists, finds no row and meets the step-2b tombstone (401),
+  // instead of passing as "seen" for the rest of the 5-minute TTL. The eviction
+  // alone used to be what let it re-provision the account.
   await evictUserFromSeenCache(userId);
 
   return { deleted: true };

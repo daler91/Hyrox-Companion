@@ -1,3 +1,4 @@
+import { init as initSentry } from "@sentry/react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,8 +11,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { setupErrorReporting, stopErrorReporting } from "@/lib/errorReporting";
 
 import { PRIVACY_BANNER_HEIGHT_VAR, PrivacyConsentBanner } from "./PrivacyConsentBanner";
+
+// Only the SDK entry points are swapped: the banner -> privacyConsent event ->
+// errorReporting listener path under test is all real.
+vi.mock("@sentry/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@sentry/react")>();
+  return { ...actual, init: vi.fn(), close: vi.fn(() => Promise.resolve(true)) };
+});
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
 const ERROR_REPORTING_CONSENT_KEY = "fitai-error-reporting-consent-v1";
@@ -176,5 +185,41 @@ describe("PrivacyConsentBanner", () => {
 
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(storage.removeItem).not.toHaveBeenCalled();
+  });
+});
+
+// P1 (CODEBASE_ANALYSIS_2026-10-03): with the boot listener from main.tsx in
+// place, acknowledging the notice starts Sentry synchronously, so the decision
+// has to be on disk before the acknowledgement fires that listener.
+describe("PrivacyConsentBanner with error reporting wired up", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(initSentry).mockClear();
+    vi.stubEnv("VITE_SENTRY_DSN", "https://public@o0.ingest.sentry.io/0");
+  });
+
+  afterEach(() => {
+    stopErrorReporting();
+    vi.unstubAllEnvs();
+  });
+
+  it("never starts Sentry when analytics are declined on first load", () => {
+    setupErrorReporting();
+    render(<PrivacyConsentBanner />);
+
+    fireEvent.click(screen.getByTestId("btn-consent-decline"));
+
+    expect(localStorage.getItem(ERROR_REPORTING_CONSENT_KEY)).toBe("off");
+    expect(initSentry).not.toHaveBeenCalled();
+  });
+
+  it("starts Sentry once the notice is accepted", () => {
+    setupErrorReporting();
+    render(<PrivacyConsentBanner />);
+    expect(initSentry).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("btn-consent-ack"));
+
+    expect(initSentry).toHaveBeenCalledTimes(1);
   });
 });

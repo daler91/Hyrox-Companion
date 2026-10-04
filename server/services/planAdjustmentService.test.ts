@@ -311,6 +311,68 @@ describe("createPlanAdjustmentProposal", () => {
 
     expect(result).toEqual({ kind: "generation_failed" });
   });
+
+  describe("stopped by the athlete mid-draft (AI7)", () => {
+    beforeEach(() => {
+      vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([upcomingDay()] as never);
+      vi.mocked(storage.plans).getPlanDaysByIds.mockResolvedValue([planDayRow()]);
+      vi.mocked(storage.workouts).getExerciseSetsByPlanDays.mockResolvedValue(new Map());
+    });
+
+    it("hands the chat's cancel signal to the drafting call", async () => {
+      const controller = new AbortController();
+      vi.mocked(generatePlanAdjustment).mockResolvedValue({ summaryMessage: "Done.", changes: [] });
+
+      await createPlanAdjustmentProposal({ ...input, signal: controller.signal });
+
+      expect(vi.mocked(generatePlanAdjustment).mock.calls[0]?.[0]).toMatchObject({ signal: controller.signal });
+    });
+
+    it("creates no proposal, so auto-apply has nothing to change the plan with", async () => {
+      const controller = new AbortController();
+      // The draft came back whole, but the athlete had already pressed Stop.
+      vi.mocked(generatePlanAdjustment).mockImplementation(async () => {
+        controller.abort();
+        return {
+          summaryMessage: "Moved Thursday.",
+          changes: [{ planDayId: "day-1", updatedFields: { notes: "Keep it easy" }, rationale: "Class day." }],
+        };
+      });
+
+      const result = await createPlanAdjustmentProposal({ ...input, signal: controller.signal });
+
+      expect(result).toEqual({ kind: "aborted" });
+      expect(vi.mocked(storage.planProposals).create.mock.calls).toEqual([]);
+    });
+
+    it("creates no proposal when Stop lands during the day reads after the draft", async () => {
+      const controller = new AbortController();
+      vi.mocked(generatePlanAdjustment).mockResolvedValue({
+        summaryMessage: "Moved Thursday.",
+        changes: [{ planDayId: "day-1", updatedFields: { notes: "Keep it easy" }, rationale: "Class day." }],
+      });
+      vi.mocked(storage.plans).getPlanDaysByIds.mockImplementation(async () => {
+        controller.abort();
+        return [planDayRow()];
+      });
+
+      const result = await createPlanAdjustmentProposal({ ...input, signal: controller.signal });
+
+      expect(result).toEqual({ kind: "aborted" });
+      expect(vi.mocked(storage.planProposals).create.mock.calls).toEqual([]);
+    });
+
+    it("reports a draft the cancel cut off as stopped, not as a generation failure", async () => {
+      const controller = new AbortController();
+      vi.mocked(generatePlanAdjustment).mockImplementation(async () => {
+        controller.abort();
+        throw new DOMException("This operation was aborted", "AbortError");
+      });
+
+      await expect(createPlanAdjustmentProposal({ ...input, signal: controller.signal })).resolves.toEqual({ kind: "aborted" });
+      expect(vi.mocked(storage.planProposals).create.mock.calls).toEqual([]);
+    });
+  });
 });
 
 function fingerprintFor(day: ReturnType<typeof planDayRow>, sets: unknown[] = []) {

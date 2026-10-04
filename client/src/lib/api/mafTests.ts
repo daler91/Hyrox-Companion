@@ -16,6 +16,13 @@ export interface MafTagResponse {
 export interface MafTestsListResponse {
   tests: MafTestResult[];
   analysis: MafWorkoutAnalysis[];
+  /**
+   * Tagged workout id → that workout's date (YYYY-MM-DD), so history is dated
+   * by the run rather than by when it was tagged. Optional because a response
+   * cached by the analytics snapshot before this field existed can still be
+   * served; the server always sends it.
+   */
+  workoutDates?: Record<string, string>;
 }
 
 /**

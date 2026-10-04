@@ -62,20 +62,37 @@ describe("buildTrendData", () => {
     expect(result.mileageData).toEqual([{ weekStart: "2026-05-04", runningMeters: 5000 }]);
   });
 
-  it("averages duration per workout, rounded, only when workouts were counted", () => {
+  it("averages duration per workout that recorded one, rounded", () => {
     const result = buildTrendData(
       overview([
-        week({ weekStart: "2026-05-04", totalDuration: 100, workoutCount: 3 }),
-        // totalDuration > 0 but workoutCount is 0: an inconsistent record that
-        // must not divide by zero.
-        week({ weekStart: "2026-05-11", totalDuration: 45, workoutCount: 0 }),
+        week({ weekStart: "2026-05-04", totalDuration: 100, workoutCount: 3, workoutsWithDuration: 3 }),
       ]),
     );
 
-    expect(result.durationData).toEqual([
-      { weekStart: "2026-05-04", avgDuration: 33 },
-      { weekStart: "2026-05-11", avgDuration: 0 },
-    ]);
+    expect(result.durationData).toEqual([{ weekStart: "2026-05-04", avgDuration: 33 }]);
+  });
+
+  it("pools duration over the workouts that recorded one, not every workout (audit H8, CL5)", () => {
+    // 10 workouts, only 5 of them recorded 60 min: the average is 60, matching
+    // the stat card, not 300 / 10 = 30.
+    const result = buildTrendData(
+      overview([
+        week({ weekStart: "2026-05-04", totalDuration: 300, workoutCount: 10, workoutsWithDuration: 5 }),
+      ]),
+    );
+
+    expect(result.durationData).toEqual([{ weekStart: "2026-05-04", avgDuration: 60 }]);
+  });
+
+  it("skips a week where no workout recorded a duration", () => {
+    const result = buildTrendData(
+      overview([
+        week({ weekStart: "2026-05-04", totalDuration: 0, workoutCount: 4, workoutsWithDuration: 0 }),
+        week({ weekStart: "2026-05-11", totalDuration: 45, workoutCount: 2, workoutsWithDuration: 1 }),
+      ]),
+    );
+
+    expect(result.durationData).toEqual([{ weekStart: "2026-05-11", avgDuration: 45 }]);
   });
 
   it("drops the mileage series entirely when every week has zero running", () => {

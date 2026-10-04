@@ -1,4 +1,4 @@
-import { countsAsTraining } from "@shared/deviceSportTypes";
+import { countsAsTraining, isRunSportType } from "@shared/deviceSportTypes";
 import type { StravaActivitySummary } from "@shared/schema";
 import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
 
@@ -75,6 +75,23 @@ export function perceivedExertionToRpe(value: number | null | undefined): number
   return rpe >= 1 && rpe <= 10 ? rpe : null;
 }
 
+/**
+ * Strava's `average_cadence` in the unit `workout_logs.avg_cadence` holds.
+ *
+ * For a run Strava reports the cadence of ONE leg (a 170 spm runner reads 85),
+ * while the Garmin mapper writes full steps per minute into the same column
+ * and every surface labels it "spm". Storing Strava's number as it came showed
+ * every Strava run at half its cadence; doubling it puts both providers on one
+ * scale — C9 (CODEBASE_ANALYSIS_2026-10-03). A ride's value is pedal rpm and
+ * is kept as it is; the UI labels it by sport (`cadenceUnitFor`).
+ */
+export function stravaCadenceToStored(activity: StravaActivity): number | null {
+  if (!activity.average_cadence) return null;
+  return isRunSportType(activity.sport_type || activity.type)
+    ? activity.average_cadence * 2
+    : activity.average_cadence;
+}
+
 function getAccessory(activity: StravaActivity, distanceUnit: DistanceUnit, isDistanceActivity: boolean): string | null {
   const accessoryParts: string[] = [];
   if (activity.total_elevation_gain > 0) {
@@ -140,7 +157,7 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
     maxHeartrate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
     avgSpeed: activity.average_speed || null,
     maxSpeed: activity.max_speed || null,
-    avgCadence: activity.average_cadence || null,
+    avgCadence: stravaCadenceToStored(activity),
     avgWatts: activity.average_watts ? Math.round(activity.average_watts) : null,
     sufferScore: activity.suffer_score || null,
   };

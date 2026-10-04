@@ -101,11 +101,12 @@ export function registerHealthEndpoint(app: Express, deps: {
 }): void {
   // Liveness probe (W7): dependency-free. Returns 200 whenever the process is up
   // and the event loop can serve HTTP — it deliberately does NOT probe the DB,
-  // so a transient runtime DB blip cannot make a healthy instance look dead and
-  // trigger a restart loop. The one exception is a definitive startup failure,
-  // where a restart can legitimately retry boot (e.g. DB unreachable at boot).
-  // Point the platform's restart healthcheck at THIS, and use /api/v1/health
-  // (readiness, below) only for load-balancer traffic gating.
+  // so a transient runtime DB blip cannot make a healthy instance look dead.
+  // The one exception is a definitive startup failure. It answers 200 before
+  // boot has finished, so it must NOT gate a deploy: Railway promotes a
+  // deployment on the first 2xx from its healthcheck path and never polls it
+  // again, which is why railway.toml points that at /api/v1/health (readiness,
+  // below) instead (D2, CODEBASE_ANALYSIS_2026-10-03).
   // Both /health and /health/live are mounted before auth (platform probes
   // hit them with no credentials — see the module-level comment in
   // index.ts), so their responses are readable by anyone on the internet.
@@ -124,8 +125,9 @@ export function registerHealthEndpoint(app: Express, deps: {
   });
 
   // Readiness probe: gates on startup state + DB/vector-DB health. A 503 here
-  // means "don't route traffic to me right now" — it should NOT be wired to a
-  // restart policy (see the liveness probe above).
+  // means "don't route traffic to me right now". It is Railway's deploy gate
+  // (railway.toml healthcheckPath), polled only while a deploy rolls out; it
+  // should NOT be wired to a runtime restart policy (see the liveness probe above).
   app.get("/api/v1/health", (_req, res) => {
     const uptimeMs = Date.now() - deps.state.startupBeganAt;
     if (deps.state.startupError) {

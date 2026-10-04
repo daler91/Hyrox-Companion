@@ -186,7 +186,7 @@ data: {"text": " training data, I recommend..."}
 data: {"done": true}                                      // Stream complete
 ```
 
-The server propagates an `AbortSignal` to the provider adapter when the SSE client disconnects. This cancels in-flight token generation promptly where the upstream API supports aborts. The signal is constructed from the request's `close` event and passed through the streaming pipeline.
+The server propagates an `AbortSignal` to the provider adapter when the SSE client disconnects. This cancels in-flight token generation promptly where the upstream API supports aborts. The signal is aborted from the response's `close` event when the response had not finished (the request's own `close` fires as soon as its body is read) and is passed through the streaming pipeline, plan-change drafting included.
 
 ### Complete Streaming Example
 
@@ -859,6 +859,12 @@ assumes every athlete maxes out their $2, which none will.
   the provider emitted a usage chunk, and a server-side timeout after the
   provider has already billed. Embeddings are billed at a flat 150-token
   estimate.
+- Gemini reports thinking apart from the answer (`thoughtsTokenCount`) and bills
+  it at the output rate, so `usageFromGeminiResponse` folds it into
+  `output_tokens` for every Gemini call, text, stream and vision alike
+  (`ai_usage_logs` has no column of its own for it). OpenAI's
+  `completion_tokens` already include reasoning tokens. Every reparse path
+  passes the athlete's `userId`, without which a call is not recorded at all.
 
 ---
 

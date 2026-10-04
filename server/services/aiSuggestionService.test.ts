@@ -90,6 +90,7 @@ const testLog = { error: vi.fn(), warn: vi.fn() };
 function mockPlanDay(overrides: Record<string, unknown> = {}) {
   return {
     id: "day-1",
+    focus: "Lower Strength",
     mainWorkout: "Old main",
     accessory: "Old accessory",
     notes: null,
@@ -246,14 +247,82 @@ describe("applyTimelineAiSuggestion", () => {
       string,
       unknown
     >;
-    expect(updatePayload).not.toHaveProperty("mainWorkout");
+    // The replace swapped the whole table, so the text is reconciled to it the
+    // way the auto-coach does — it used to keep "Old main", contradicting the
+    // new rows — and what was there is kept as "Originally planned".
+    // AI13 (CODEBASE_ANALYSIS_2026-10-03)
     expect(updatePayload).toEqual(
       expect.objectContaining({
+        mainWorkout: "Back squat 2x5 at 205 lb",
+        accessory: null,
+        notes: null,
         aiSource: "rag",
         aiRationale: "Load is trending well",
         aiNoteUpdatedAt: expect.any(Date),
+        aiInputsUsed: expect.objectContaining({
+          replacedPrescription: {
+            focus: "Lower Strength",
+            mainWorkout: "Old main",
+            accessory: "Old accessory",
+            notes: null,
+          },
+        }) as unknown,
       }),
     );
+  });
+
+  // AI13 (CODEBASE_ANALYSIS_2026-10-03): the table's rows carry no main or
+  // accessory section, so writing an accessory-only replace meant deleting the
+  // whole table, main work included.
+  it("refuses an accessory-only replace on a table-backed day", async () => {
+    const result = await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "accessory",
+        action: "replace",
+        recommendation: "Plank 2x45s",
+        rationale: "Taper: simplify the accessory work.",
+      },
+      testLog,
+    );
+
+    expect(result).toEqual({
+      applied: false,
+      structured: false,
+      reason: "structured_partial_replace",
+      message: expect.stringContaining("left the workout unchanged") as unknown,
+    });
+    // Refused before the AI parse it would have spent.
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+    expect(dbMockState.insertValues).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
+  });
+
+  it("still appends to a table-backed day's accessory work without touching its text", async () => {
+    vi.mocked(parseExercisesFromText).mockResolvedValue([
+      { exerciseName: "plank", category: "core", sets: [{}] },
+    ]);
+
+    const result = await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "accessory",
+        action: "append",
+        recommendation: "Plank 2x45s",
+        rationale: "Core work",
+      },
+      testLog,
+    );
+
+    expect(result).toEqual({ applied: true, structured: true });
+    expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+    const updatePayload = vi.mocked(storage.plans).updatePlanDay.mock.calls[0][1];
+    expect(updatePayload).not.toHaveProperty("mainWorkout");
+    expect(updatePayload).not.toHaveProperty("accessory");
+    expect(updatePayload.aiInputsUsed).not.toHaveProperty("replacedPrescription");
   });
 
   it("falls back to text updates when the day is not table-backed", async () => {

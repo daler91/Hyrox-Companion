@@ -518,11 +518,12 @@ Grouped by theme and roughly prioritised. **P1** = correctness / trust / complia
 
 ### Correctness, trust & compliance
 
-- **[P1] Include nutrition in the GDPR data export.** `server/services/exportService.ts`
-  exports plans, workouts, exercise sets, and annotations — but **not** food logs,
-  custom foods, recipes, or targets. Food intake is health data; it should be in
-  the user's data export and is currently missing. (Deletion *is* handled — FK
-  cascades cover it — but portability is not.)
+- **[DONE] Include nutrition in the GDPR data export.** The JSON export now carries a
+  `nutrition` section (food log with food names, nutrition and meal targets,
+  favourites, recipes with ingredients, the athlete's custom foods and servings),
+  read by `server/storage/dataExport.ts`. A closed-world sweep in
+  `exportService.test.ts` fails when a new user-owned table is neither exported nor
+  excluded with a reason (P7, CODEBASE_ANALYSIS_2026-10-03).
 - **[P1] Register the routes with the OpenAPI registry.** Nutrition is absent from
   `shared/openapi.ts`, so it's missing from `docs/openapi.json` and the Swagger UI
   (`docs/api-reference.md` carries a manual catalog meanwhile — see the

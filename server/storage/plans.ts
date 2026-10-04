@@ -897,8 +897,9 @@ export class PlanStorage {
    * a worker that dies mid-job strands the plan in a perpetual loading state the
    * user can't escape. `executePlanGeneration`'s catch always flips to `failed`,
    * so the only way a row stays in flight is a crash — this sweep cleans those
-   * up on startup. The threshold must comfortably exceed real generation time so
-   * a genuinely in-flight job on another instance is never failed.
+   * up on startup and from the stalePlanGenerations cron (D20,
+   * CODEBASE_ANALYSIS_2026-10-03). The threshold must comfortably exceed real
+   * generation time so a genuinely in-flight job on another instance is never failed.
    */
   async failStalePlanGenerations(olderThanMs: number): Promise<number> {
     const cutoff = new Date(Date.now() - olderThanMs);

@@ -218,7 +218,7 @@ Every `/api/v1/*` route is protected by the `isAuthenticated` middleware except 
 
 - `GET /api/v1/health` and `GET /api/v1/health/live` -- platform health probes (`server/bootstrap/health.ts`)
 - `GET /api/v1/csrf-token` -- CSRF token issuance
-- `GET /api/v1/strava/callback` -- the Strava OAuth redirect, authorised by the signed, single-use OAuth `state`
+- `GET /api/v1/strava/callback` -- the Strava OAuth redirect, authorised by the signed, single-use OAuth `state` plus the browser-binding cookie `/strava/auth` set, so only the browser that started the flow can complete it
 - `GET`/`POST /api/v1/strava/webhook` -- Strava webhook deliveries, which the handler treats as hints only (`server/stravaWebhook.ts`)
 - `GET`/`POST /api/v1/emails/unsubscribe` -- email unsubscribe, authorised by the signed unsubscribe token
 - `GET /api/v1/cron/emails` -- the external email-cron trigger, authorised by an `x-cron-secret` header matching `CRON_SECRET`
@@ -294,7 +294,7 @@ The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point
 
 2. **Purge the vector DB.** The user's RAG chunks and their private foods' embeddings live on a separate `vectorPool` database that the main-DB cascade cannot reach, so they are deleted explicitly, fail-loud, before any irreversible step.
 
-3. **Delete the Clerk identity.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). By deleting Clerk before the DB row, subsequent requests are rejected at the auth middleware.
+3. **Delete the Clerk identity.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). Deleting Clerk before the DB row means no new session can be minted; a session token minted earlier still verifies until it expires, and is refused by the tombstone described in step 8.
 
 4. **Clerk 404 is treated as success.** If `clerkClient.users.deleteUser(userId)` throws with `status === 404`, the handler logs `"Clerk user already deleted, continuing with DB cleanup"` and proceeds. This makes the endpoint idempotent for retries where a previous attempt succeeded at Clerk but failed at a later step. Any other Clerk error aborts the request so the DB row is left intact.
 
@@ -304,7 +304,7 @@ The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point
 
 7. **Best-effort purges.** The user's rate-limit buckets and any queued pg-boss jobs are removed; neither is FK-linked to `users`, so the cascade leaves them behind.
 
-8. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
+8. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache. Eviction on its own would *re-open* provisioning: Clerk verifies session JWTs locally, so a token minted before step 3 keeps authenticating for up to its lifetime (60 s by default), and with no row and no cache entry `ensureUserExists` would recreate the account. So before step 6 the erasure also writes a 10-minute `auth-erased` tombstone (`rememberUserErased`, local and shared runtime cache, fail-loud), and `ensureUserExists` answers 401 instead of provisioning while it stands (P5, CODEBASE_ANALYSIS_2026-10-03).
 
 Rate-limited to 3 per minute under the `accountDelete` category — enough to retry a transient failure, not enough to mass-delete.
 

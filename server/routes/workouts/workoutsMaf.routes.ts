@@ -5,6 +5,7 @@ import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
 import { recordMafTestFromWorkout, updateMafTestForWorkout } from "../../services/mafTestService";
 import { storage } from "../../storage";
+import type { MafTestResult, MafWorkoutAnalysis } from "../../storage/mafTests";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 
@@ -31,6 +32,25 @@ const mafTestBodySchema = z.object({
   notes: z.string().max(2000).optional(),
   metrics: mafTestMetricsSchema.optional(),
 });
+
+/**
+ * Every workout the listed history points at: a test keeps its `workoutLogId`
+ * inside the `conditions` JSONB, an analysis row as a column.
+ */
+function taggedWorkoutLogIds(
+  tests: readonly MafTestResult[],
+  analysis: readonly MafWorkoutAnalysis[],
+): string[] {
+  const ids = new Set<string>();
+  for (const test of tests) {
+    const workoutLogId = (test.conditions as { workoutLogId?: unknown } | null)?.workoutLogId;
+    if (typeof workoutLogId === "string") ids.add(workoutLogId);
+  }
+  for (const row of analysis) {
+    if (row.workoutLogId) ids.add(row.workoutLogId);
+  }
+  return [...ids];
+}
 
 export function registerWorkoutMafRoutes(router: Router): void {
   // Tag an already-logged run as a MAF test: records a maf_test_results row and,
@@ -88,7 +108,13 @@ export function registerWorkoutMafRoutes(router: Router): void {
         storage.mafTests.listTestResults(userId, MAF_HISTORY_LIMIT),
         storage.mafTests.listWorkoutAnalysis(userId, MAF_HISTORY_LIMIT),
       ]);
-      res.json({ tests, analysis });
+      // The charts date each test by its workout, not by when it was tagged
+      // (CL4 (CODEBASE_ANALYSIS_2026-10-03)).
+      const workoutDates = await storage.mafTests.getWorkoutDates(
+        userId,
+        taggedWorkoutLogIds(tests, analysis),
+      );
+      res.json({ tests, analysis, workoutDates });
     }),
   );
 }

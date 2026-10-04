@@ -101,6 +101,31 @@ export function planDaysWithinLifetimes(
 }
 
 /**
+ * The scheduled days `planDaysWithinLifetimes` leaves out: each retired plan's
+ * days from its cutoff onward. Kept beside it so the two stay exact complements.
+ *
+ * The timeline's "All plans" view drops these as plan days, but a workout the
+ * athlete LOGGED against one is history, not training they walked away from,
+ * so the timeline uses this to keep showing those logs — C17
+ * (CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * `undefined` when no plan is retired: there is nothing left out to add back.
+ */
+export function planDaysPastRetirement(
+  plans: readonly { id: string; retiredOn: string | null }[],
+): SQL | undefined {
+  const clauses = plans
+    .filter((p): p is { id: string; retiredOn: string } => p.retiredOn != null)
+    .map(
+      (plan) =>
+        and(eq(planDays.planId, plan.id), gte(planDays.scheduledDate, plan.retiredOn)) as SQL,
+    );
+
+  if (clauses.length === 0) return undefined;
+  return clauses.length === 1 ? clauses[0] : or(...clauses);
+}
+
+/**
  * The missed-day sweep's retirement guard: skip any day at or after its own
  * plan's cutoff.
  *

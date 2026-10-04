@@ -1,7 +1,13 @@
+import { SET_NUMBER_MAX } from "@shared/schema";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { retryWithBackoff } from "../ai/retry";
-import { parseExercisesFromText, parseWorkoutStructureFromText } from "./exerciseParser";
+import {
+  parseExercisesFromText,
+  parseWorkoutStructureFromText,
+  parseWorkoutStructureFromTextWithDiagnostics,
+} from "./exerciseParser";
+import { HEURISTIC_FALLBACK_MAX_SETS } from "./exerciseParser/fallback";
 
 vi.mock("../ai/retry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ai/retry")>();
@@ -351,6 +357,39 @@ describe("parseExercisesFromText", () => {
 
     expect(result).toHaveLength(3);
     expect(result.map((r) => r.exerciseName)).toEqual(["run_1k", "sled_push", "wall_balls"]);
+  });
+
+  it("fails fast on an absurd set count instead of building one set per number", async () => {
+    // S1 (CODEBASE_ANALYSIS_2026-10-03): a truncated AI reply hands the text to
+    // the heuristic fallback, which used to build (and zod-validate) ten million
+    // set objects here. Every text parse path — parse-exercises, workout create,
+    // set-row reparse, migration, parse-workout-structure and the reparse
+    // diagnostics variant — runs that same fallback.
+    vi.mocked(retryWithBackoff)
+      .mockResolvedValueOnce({ text: "{ not valid json" })
+      .mockResolvedValueOnce({ text: "{ not valid json" })
+      .mockResolvedValueOnce({ text: "{ not valid json" });
+    const text = "Back squat 10000000 x 5";
+
+    const started = performance.now();
+    await expect(parseExercisesFromText(text)).rejects.toThrow(/invalid JSON/);
+    await expect(parseWorkoutStructureFromText(text)).rejects.toThrow(/invalid JSON/);
+    await expect(parseWorkoutStructureFromTextWithDiagnostics(text)).rejects.toThrow(/invalid JSON/);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  it("bounds the fallback's total sets for a reparse-sized text", async () => {
+    // S1 (CODEBASE_ANALYSIS_2026-10-03): a workout reparse parses mainWorkout +
+    // accessory, ~100k characters, and each 8-character "a 100x1;" used to add
+    // 100 more set objects — 1.2M, built and validated synchronously.
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce({ text: "{ not valid json" });
+    const text = "a 100x1;".repeat(12_375); // 99,000 characters
+
+    const started = performance.now();
+    const result = await parseWorkoutStructureFromTextWithDiagnostics(text);
+    expect(performance.now() - started).toBeLessThan(1_000);
+    const totalSets = result.acceptedRows.reduce((sum, row) => sum + row.sets.length, 0);
+    expect(totalSets).toBeLessThanOrEqual(HEURISTIC_FALLBACK_MAX_SETS + SET_NUMBER_MAX);
   });
 
   it("should fall back to source text when customLabel and exerciseName are both 'custom'", async () => {

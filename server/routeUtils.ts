@@ -158,7 +158,7 @@ export function formatValidationErrors(error: z.ZodError): ValidationErrorRespon
   };
 }
 
-function sendValidationError(res: Response, error: z.ZodError): void {
+export function sendValidationError(res: Response, error: z.ZodError): void {
   const message = error.issues[0]?.message || "Invalid request data";
   const payload: ValidationErrorResponse = {
     code: "VALIDATION_ERROR",

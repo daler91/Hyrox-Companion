@@ -32,19 +32,40 @@ function toDateStr(d: Date): string {
   return toISODateString(d);
 }
 
-function getHeatmapCellColor(cell: { isFuture: boolean; hasWorkout: boolean }): string {
+interface HeatmapCell {
+  date: string;
+  hasWorkout: boolean;
+  isFuture: boolean;
+  isOutOfRange: boolean;
+}
+
+const OUT_OF_RANGE_CELL_CLASS = "border border-dashed border-muted-foreground/30";
+
+function getHeatmapCellColor(cell: HeatmapCell): string {
   if (cell.isFuture) return "bg-muted/30";
+  if (cell.isOutOfRange) return OUT_OF_RANGE_CELL_CLASS;
   if (cell.hasWorkout) return "bg-primary";
   return "bg-muted/60";
 }
 
+function getHeatmapCellTitle(cell: HeatmapCell): string {
+  if (cell.isOutOfRange) return `${cell.date} - Outside selected range`;
+  return `${cell.date}${cell.hasWorkout ? " - Workout logged" : ""}`;
+}
+
 interface WorkoutHeatmapProps {
   readonly workoutDates: string[];
+  /**
+   * First day (YYYY-MM-DD) of the selected Analytics range. `workoutDates`
+   * only covers that range, so an earlier day in the fixed 16-week grid has no
+   * data rather than no workout; omitted for "All time".
+   */
+  readonly rangeStart?: string;
   readonly explanation?: string;
 }
 
-export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProps) {
-  const { grid, monthLabels } = useMemo(() => {
+export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: WorkoutHeatmapProps) {
+  const { grid, monthLabels, hasOutOfRange } = useMemo(() => {
     const dateSet = new Set(workoutDates);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -52,21 +73,27 @@ export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProp
     const startMonday = getMonday(today);
     startMonday.setDate(startMonday.getDate() - (WEEKS_TO_SHOW - 1) * 7);
 
-    const weeks: Array<Array<{ date: string; hasWorkout: boolean; isFuture: boolean }>> = [];
+    const weeks: HeatmapCell[][] = [];
     const months: Array<{ label: string; colStart: number }> = [];
     let lastMonth = -1;
+    let anyOutOfRange = false;
 
     for (let w = 0; w < WEEKS_TO_SHOW; w++) {
-      const week: Array<{ date: string; hasWorkout: boolean; isFuture: boolean }> = [];
+      const week: HeatmapCell[] = [];
       for (let d = 0; d < 7; d++) {
         const cellDate = new Date(startMonday);
         cellDate.setDate(startMonday.getDate() + w * 7 + d);
         const dateStr = toDateStr(cellDate);
         const isFuture = cellDate > today;
+        // A day before the selected range was never fetched, so drawing it as
+        // a rest day invents a layoff (CL6 (CODEBASE_ANALYSIS_2026-10-03)).
+        const isOutOfRange = rangeStart !== undefined && dateStr < rangeStart;
+        if (isOutOfRange) anyOutOfRange = true;
         week.push({
           date: dateStr,
-          hasWorkout: !isFuture && dateSet.has(dateStr),
+          hasWorkout: !isFuture && !isOutOfRange && dateSet.has(dateStr),
           isFuture,
+          isOutOfRange,
         });
 
         if (d === 0 && cellDate.getMonth() !== lastMonth) {
@@ -80,8 +107,8 @@ export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProp
       weeks.push(week);
     }
 
-    return { grid: weeks, monthLabels: months };
-  }, [workoutDates]);
+    return { grid: weeks, monthLabels: months, hasOutOfRange: anyOutOfRange };
+  }, [workoutDates, rangeStart]);
 
   return (
     <div className={CHART_CARD_CLASS}>
@@ -142,7 +169,7 @@ export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProp
                     <div
                       key={cell.date}
                       className={`aspect-square w-full max-w-7 rounded-sm ${getHeatmapCellColor(cell)}`}
-                      title={`${cell.date}${cell.hasWorkout ? " - Workout logged" : ""}`}
+                      title={getHeatmapCellTitle(cell)}
                       data-testid="workout-heatmap-cell"
                     />
                   ))}
@@ -160,6 +187,12 @@ export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProp
               <span className="h-[10px] w-[10px] rounded-sm bg-primary" aria-hidden="true" />
               <span>Workout logged</span>
             </span>
+            {hasOutOfRange && (
+              <span className="inline-flex items-center gap-1" data-testid="workout-heatmap-out-of-range-legend">
+                <span className={`h-[10px] w-[10px] rounded-sm ${OUT_OF_RANGE_CELL_CLASS}`} aria-hidden="true" />
+                <span>Outside selected range</span>
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -20,6 +20,8 @@ const BACK_SQUAT = "back_squat";
 const RUNNING = "running";
 const ROWING = "rowing";
 const DATE_A = "2026-01-01";
+const KG_KM = { weightUnit: "kg", distanceUnit: "km" } as const;
+const LBS_MILES = { weightUnit: "lbs", distanceUnit: "miles" } as const;
 
 describe("calculateTrainingStats", () => {
   it("returns all-zero stats for an empty timeline", () => {
@@ -268,10 +270,13 @@ describe("collectRecentWorkouts", () => {
             time: 20,
             notes: "deep",
             sortOrder: 3,
+            weightUnit: "kg",
+            distanceUnit: "m",
           }),
         ],
       }),
     ]);
+    // The stamp rides along so the prompt formatter can convert (AI9).
     expect(recent[0].exerciseDetails).toEqual([
       {
         exerciseName: BACK_SQUAT,
@@ -284,34 +289,38 @@ describe("collectRecentWorkouts", () => {
         time: 20,
         notes: "deep",
         sortOrder: 3,
+        weightUnit: "kg",
+        distanceUnit: "m",
       },
     ]);
   });
 });
 
 describe("getStructuredExerciseStats", () => {
+  const structuredStats = (timeline: TimelineEntry[]) => getStructuredExerciseStats(timeline, KG_KM);
+
   it("returns undefined when no entries have exercise sets", () => {
-    expect(getStructuredExerciseStats([makeEntry()])).toBeUndefined();
+    expect(structuredStats([makeEntry()])).toBeUndefined();
   });
 
   it("returns undefined for an empty timeline", () => {
-    expect(getStructuredExerciseStats([])).toBeUndefined();
+    expect(structuredStats([])).toBeUndefined();
   });
 
   it("returns undefined when a completed entry has an empty exercise-set array", () => {
-    expect(getStructuredExerciseStats([makeEntry({ exerciseSets: [] })])).toBeUndefined();
+    expect(structuredStats([makeEntry({ exerciseSets: [] })])).toBeUndefined();
   });
 
   it("ignores exercise sets on non-completed entries", () => {
     expect(
-      getStructuredExerciseStats([
+      structuredStats([
         makeEntry({ status: PLANNED, exerciseSets: [makeSet({ reps: 5 })] }),
       ]),
     ).toBeUndefined();
   });
 
   it("aggregates count, max weight, max distance, best (min) time and average reps", () => {
-    const stats = getStructuredExerciseStats([
+    const stats = structuredStats([
       makeEntry({
         exerciseSets: [
           makeSet({ reps: 10, weight: 100, distance: 50, time: 40 }),
@@ -329,7 +338,7 @@ describe("getStructuredExerciseStats", () => {
   });
 
   it("treats zero-valued weight/distance/time as absent (falsy guards)", () => {
-    const stats = getStructuredExerciseStats([
+    const stats = structuredStats([
       makeEntry({
         exerciseSets: [
           makeSet({ weight: 0, distance: 0, time: 0, reps: 10 }),
@@ -347,7 +356,7 @@ describe("getStructuredExerciseStats", () => {
   });
 
   it("keeps the existing max/min when later sets do not beat them", () => {
-    const stats = getStructuredExerciseStats([
+    const stats = structuredStats([
       makeEntry({
         exerciseSets: [
           makeSet({ reps: 10, weight: 120, distance: 200, time: 30 }),
@@ -365,7 +374,7 @@ describe("getStructuredExerciseStats", () => {
   });
 
   it("tracks distinct exercises independently", () => {
-    const stats = getStructuredExerciseStats([
+    const stats = structuredStats([
       makeEntry({
         exerciseSets: [
           makeSet({ exerciseName: BACK_SQUAT, reps: 5 }),
@@ -380,13 +389,47 @@ describe("getStructuredExerciseStats", () => {
   it("inflates count for measurement-less sets, which skews the running avgReps", () => {
     // count++ runs before the reps guard, so the null-rep set still bumps the
     // denominator: avg = round((10*2 + 20) / 3) = 13, not the true mean of 15.
-    const stats = getStructuredExerciseStats([
+    const stats = structuredStats([
       makeEntry({
         exerciseSets: [makeSet({ reps: 10 }), makeSet({ reps: null }), makeSet({ reps: 20 })],
       }),
     ]);
     expect(stats?.[BACK_SQUAT]?.count).toBe(3);
     expect(stats?.[BACK_SQUAT]?.avgReps).toBe(13);
+  });
+  // AI9 (CODEBASE_ANALYSIS_2026-10-03): each row is converted through its L4
+  // stamp into the athlete's current units BEFORE the max, so the best is
+  // picked and labelled in one unit.
+  it("reports a kg-stamped max in lbs for an athlete who has switched", () => {
+    const stats = getStructuredExerciseStats(
+      [makeEntry({ exerciseSets: [makeSet({ reps: 5, weight: 140, weightUnit: "kg" })] })],
+      LBS_MILES,
+    );
+    expect(stats?.[BACK_SQUAT]?.maxWeight).toBe(309);
+  });
+
+  it("compares rows across a unit switch in one unit", () => {
+    // Raw, 300 (lbs) beats 140 (kg); in lbs, 309 beats 300.
+    const stats = getStructuredExerciseStats(
+      [
+        makeEntry({
+          exerciseSets: [
+            makeSet({ reps: 5, weight: 140, weightUnit: "kg", distance: 1000, distanceUnit: "m" }),
+            makeSet({ reps: 5, weight: 300, weightUnit: "lbs", distance: 3000, distanceUnit: "ft" }),
+          ],
+        }),
+      ],
+      LBS_MILES,
+    );
+    expect(stats?.[BACK_SQUAT]).toMatchObject({ maxWeight: 309, maxDistance: 3281 });
+  });
+
+  it("reads a legacy (unstamped) row as the current unit, as before L4", () => {
+    const stats = getStructuredExerciseStats(
+      [makeEntry({ exerciseSets: [makeSet({ reps: 5, weight: 140 })] })],
+      LBS_MILES,
+    );
+    expect(stats?.[BACK_SQUAT]?.maxWeight).toBe(140);
   });
 });
 

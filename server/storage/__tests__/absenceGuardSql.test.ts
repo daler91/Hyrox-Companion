@@ -9,7 +9,13 @@ import {
   noAbsenceDeclaredForPlanDay,
   noAbsenceDeclaredForUserDate,
 } from "../absenceGuard";
-import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "../planRetirement";
+import {
+  missedSweepRetirementGuard,
+  planDaysPastRetirement,
+  planDaysWithinLifetimes,
+  planDayWithinPlanLifetime,
+  planLiveForDate,
+} from "../planRetirement";
 
 /**
  * The declared-absence guards render as *correlated* NOT EXISTS.
@@ -190,6 +196,27 @@ describe("plan-retirement guards", () => {
       `"plan_days"."scheduled_date" < "training_plans"."retired_on"`,
     );
     expect(rendered).toContain(`"training_plans"."retired_on" IS NULL`);
+  });
+
+  it("hands the timeline back exactly the retired days its lifetime scope drops (C17)", () => {
+    const plans = [
+      { id: "plan-live", retiredOn: null },
+      { id: "plan-old", retiredOn: "2026-07-20" },
+    ];
+    const renderDays = (where: ReturnType<typeof planDaysPastRetirement>) =>
+      render(db.select({ id: planDays.id }).from(planDays).where(where) as never);
+
+    const kept = renderDays(planDaysWithinLifetimes(plans));
+    const dropped = renderDays(planDaysPastRetirement(plans));
+
+    // Complements on the cutoff day itself: `<` keeps the stretch the plan ran,
+    // `>=` returns the rest, so a log on the cutoff day is shown exactly once.
+    expect(kept).toContain(`"plan_days"."scheduled_date" < $`);
+    expect(dropped).toContain(`"plan_days"."scheduled_date" >= $`);
+    // Only retired plans drop anything; a live plan's days never come back twice.
+    expect(kept).toContain(`"plan_days"."plan_id" in`);
+    expect(dropped).not.toContain(`"plan_days"."plan_id" in`);
+    expect(planDaysPastRetirement([{ id: "plan-live", retiredOn: null }])).toBeUndefined();
   });
 
   it("keeps the sweep's retirement guard aliased and correlated, without disturbing the absence guard", () => {

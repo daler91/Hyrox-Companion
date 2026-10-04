@@ -23,7 +23,10 @@ const resolveSchema = z.object({
 });
 
 export function registerWorkoutMigrationRoutes(router: Router): void {
-  protectedPost(router, "/api/v1/workouts/migration/backfill", { limiter: rateLimiter("migrationBackfill", 2) }, async (req: Request, res: Response) => {
+  // Each call sends up to 50 workout and plan-day texts to the AI parser, so it
+  // takes the same consent and budget gates as batch-reparse — P6
+  // (CODEBASE_ANALYSIS_2026-10-03).
+  protectedPost(router, "/api/v1/workouts/migration/backfill", { limiter: rateLimiter("migrationBackfill", 2), aiConsent: true, aiBudget: true }, async (req: Request, res: Response) => {
     const result = await runAssistedMigrationBackfill(getUserId(req));
     res.json(result);
   });

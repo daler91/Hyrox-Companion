@@ -10,6 +10,7 @@ import {
   type EffectiveTargetSummary,
   type FuellingRangeResponse,
   type MealType,
+  nutritionRangeSchema,
   type SessionFuellingGap,
   type SessionFuellingResponse,
 } from "@shared/schema";
@@ -18,7 +19,7 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { aiConsentCheck } from "../../middleware/aiConsent";
-import { asyncHandler, rateLimiter, sendNotFound, validateQuery } from "../../routeUtils";
+import { asyncHandler, rateLimiter, sendNotFound, sendValidationError, validateQuery } from "../../routeUtils";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
 import { fetchDailyTraining, fetchDailyUtss, fetchTrainingLoadWindow } from "../../services/nutrition/dailyLoad";
 import { resolveDayEnergy } from "../../services/nutrition/energy";
@@ -239,6 +240,28 @@ async function handleDailySummary(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * The /block and /summary-range window. `to` defaults to the athlete's local
+ * today, and that effective range must pass the same span rules as an explicit
+ * one: `?from=0001-01-01` alone used to zero-fill ~740k days (PF1,
+ * CODEBASE_ANALYSIS_2026-10-03). Sends the 400 and returns null when it fails.
+ */
+async function resolveRangeQuery(
+  req: Request,
+  res: Response,
+): Promise<{ from: string; to: string } | null> {
+  const { from, to } = req.query as unknown as BlockViewQuery;
+  const range = nutritionRangeSchema.safeParse({
+    from,
+    to: to ?? getLocalDateStr(new Date(), await getUserTimezone(getUserId(req))),
+  });
+  if (!range.success) {
+    sendValidationError(res, range.error);
+    return null;
+  }
+  return range.data;
+}
+
+/**
  * FR-3.3 + Roadmap G — the block view's per-day points: intake macros + UTSS,
  * decorated with the day's carb target / RPE / compliance so the Fuelling tab
  * can correlate fuelling with performance without another endpoint.
@@ -380,9 +403,10 @@ export function registerNutritionSummaryRoutes(router: Router): void {
     rateLimiter("nutritionRead", 60),
     validateQuery(blockViewQuerySchema),
     asyncHandler(async (req: Request, res: Response) => {
+      const range = await resolveRangeQuery(req, res);
+      if (!range) return;
       const userId = getUserId(req);
-      const { from, to: toParam } = req.query as unknown as BlockViewQuery;
-      const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const { from, to } = range;
 
       const response: BlockViewResponse = {
         from,
@@ -404,9 +428,10 @@ export function registerNutritionSummaryRoutes(router: Router): void {
     rateLimiter("nutritionRead", 60),
     validateQuery(blockViewQuerySchema),
     asyncHandler(async (req: Request, res: Response) => {
+      const range = await resolveRangeQuery(req, res);
+      if (!range) return;
       const userId = getUserId(req);
-      const { from, to: toParam } = req.query as unknown as BlockViewQuery;
-      const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const { from, to } = range;
 
       const targets = await storage.nutrition.listTargets(userId);
       const needLoad = targets.some((t) => t.periodizationEnabled);

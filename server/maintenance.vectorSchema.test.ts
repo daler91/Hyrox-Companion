@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // maintenance.ts pulls in the whole boot graph; stub every direct import so the
-// module loads without a real DB, then exercise ensureVectorSchema alone.
+// module loads without a real DB, then exercise ensureVectorSchema, and the
+// boot order runStartupMaintenance wraps around it.
 vi.mock("@sentry/node", () => ({ captureException: vi.fn() }));
 vi.mock("drizzle-orm/node-postgres", () => ({ drizzle: vi.fn() }));
 vi.mock("drizzle-orm/node-postgres/migrator", () => ({ migrate: vi.fn() }));
@@ -14,6 +15,7 @@ vi.mock("./logger", () => ({
 }));
 vi.mock("./migrationGuards", () => ({
   assertCriticalTablesExist: vi.fn(),
+  assertSchemaColumnsExist: vi.fn(),
   isBenignIdempotencyError: vi.fn(() => false),
 }));
 vi.mock("./services/keyRotation", () => ({ maybeReencryptOnBoot: vi.fn() }));
@@ -23,7 +25,16 @@ vi.mock("./vectorDb", () => ({ vectorPool: { connect } }));
 
 import * as Sentry from "@sentry/node";
 
-import { __resetVectorSchemaStatusForTests, ensureVectorSchema, getVectorSchemaStatus } from "./maintenance";
+import { withPgAdvisoryLock } from "./advisoryLock";
+import { pool } from "./db";
+import {
+  __resetVectorSchemaStatusForTests,
+  ensureVectorSchema,
+  getVectorSchemaStatus,
+  runStartupMaintenance,
+} from "./maintenance";
+import { assertCriticalTablesExist, assertSchemaColumnsExist } from "./migrationGuards";
+import type { IStorage } from "./storage";
 
 /**
  * A vector DB that remembers what has been created, so the same fake proves
@@ -135,5 +146,39 @@ describe("ensureVectorSchema", () => {
 
     expect(getVectorSchemaStatus()).toBe("failed");
     expect(Sentry.captureException).toHaveBeenCalledWith(err);
+  });
+});
+
+describe("runStartupMaintenance", () => {
+  const storage = {
+    plans: { markMissedPlanDays: vi.fn(async () => 0), failStalePlanGenerations: vi.fn(async () => 0) },
+    users: { resetStaleAutoCoaching: vi.fn(async () => 0) },
+  };
+  const firstCall = (fn: unknown) => vi.mocked(fn as () => unknown).mock.invocationCallOrder[0];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetVectorSchemaStatusForTests();
+    vi.mocked(pool.connect).mockResolvedValue({ query: vi.fn(async () => ({ rows: [{ ok: 1 }] })), release: vi.fn() } as never);
+    vi.mocked(withPgAdvisoryLock).mockResolvedValue({ acquired: true } as never);
+    connect.mockResolvedValue(fakeVectorDb().client);
+  });
+
+  it("checks the schema's columns right after the critical tables, before any boot write (D7)", async () => {
+    await runStartupMaintenance(storage as unknown as IStorage);
+
+    // Mocked out of every other test in this file, so this is the one place
+    // that fails if the boot call is dropped.
+    expect(assertSchemaColumnsExist).toHaveBeenCalledWith(pool);
+    expect(firstCall(assertCriticalTablesExist)).toBeLessThan(firstCall(assertSchemaColumnsExist));
+    expect(firstCall(assertSchemaColumnsExist)).toBeLessThan(firstCall(storage.plans.markMissedPlanDays));
+  });
+
+  it("fails boot on a missing column, so readiness never goes green (D7)", async () => {
+    vi.mocked(assertSchemaColumnsExist).mockRejectedValueOnce(new Error("Missing columns: chat_messages.attachment"));
+
+    await expect(runStartupMaintenance(storage as unknown as IStorage)).rejects.toThrow("chat_messages.attachment");
+    expect(storage.plans.markMissedPlanDays).not.toHaveBeenCalled();
+    expect(storage.plans.failStalePlanGenerations).not.toHaveBeenCalled();
   });
 });

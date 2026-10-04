@@ -11,6 +11,14 @@ import { storage } from "./storage";
 
 export const DEV_USER_ID = "dev-user";
 
+/** Thrown by ensureUserExists for a session whose account has been erased. */
+class ErasedAccountError extends Error {
+  constructor() {
+    super("Account has been erased");
+    this.name = "ErasedAccountError";
+  }
+}
+
 // Clerk SDK does not accept an AbortSignal, so bound its network calls
 // with Promise.race to keep auth middleware from stalling worker threads
 // when Clerk's API hangs. Clear the timer once `promise` settles so we
@@ -83,6 +91,9 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       try {
         await ensureUserExists(auth.userId);
       } catch (error) {
+        if (error instanceof ErasedAccountError) {
+          return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+        }
         logger.error({ err: error }, "Error syncing user:");
         return res.status(500).json({ error: "Failed to initialize user session", code: "INTERNAL_SERVER_ERROR" });
       }
@@ -116,13 +127,59 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 const userSeenCache = new Map<string, number>();
 const USER_SEEN_TTL_MS = 5 * 60_000; // 5 minutes
 
+/**
+ * How long an erased account's id is refused re-provisioning. Clerk verifies
+ * session JWTs locally, so a token minted before the identity was deleted keeps
+ * passing clerkMiddleware until it expires (60 s by default); ten minutes
+ * comfortably outlives that plus clock skew.
+ */
+const ERASED_USER_TTL_MS = 10 * 60_000;
+/** userId -> when its erasure tombstone lapses (epoch ms). */
+const erasedUserCache = new Map<string, number>();
+
 function userSeenCacheKey(userId: string): string {
   return runtimeCacheKey("auth-seen", userId);
 }
 
-// Exported for testing only — clears the user-seen cache so each test starts fresh.
+function erasedUserCacheKey(userId: string): string {
+  return runtimeCacheKey("auth-erased", userId);
+}
+
+// Exported for testing only — clears the user-seen cache (and the erasure
+// tombstones) so each test starts fresh.
 export function clearUserSeenCache() {
   userSeenCache.clear();
+  erasedUserCache.clear();
+}
+
+/**
+ * Tombstone an account that is being erased, so a still-valid Clerk session for
+ * it is refused (401) instead of re-provisioned. ensureUserExists treats a
+ * missing users row as a first sign-in and recreates it; without this a request
+ * from another tab or device inside the token's lifetime brought back an
+ * erased account, with no erasure marker for the sweep to find. eraseAccount
+ * calls this before the row is deleted. Throws if the shared tombstone cannot
+ * be written, so the erasure stops while it is still retriable.
+ * P5 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function rememberUserErased(userId: string): Promise<void> {
+  erasedUserCache.set(userId, Date.now() + ERASED_USER_TTL_MS);
+  if (env.NODE_ENV !== "test") {
+    await setRuntimeCache(erasedUserCacheKey(userId), { erased: true }, ERASED_USER_TTL_MS);
+  }
+}
+
+async function wasUserErased(userId: string, now: number): Promise<boolean> {
+  const erasedUntil = erasedUserCache.get(userId);
+  if (erasedUntil !== undefined) {
+    if (now < erasedUntil) return true;
+    erasedUserCache.delete(userId);
+  }
+  if (env.NODE_ENV === "test") return false;
+  // Not caught: on a read failure the caller answers 500 rather than risk
+  // re-creating an erased account.
+  const shared = await getRuntimeCache<{ erased: true }>(erasedUserCacheKey(userId));
+  return shared !== undefined;
 }
 
 /** Evict a single user from the seen-cache (e.g. after account deletion). */
@@ -169,6 +226,7 @@ async function ensureUserExists(clerkUserId: string): Promise<void> {
 
   const existing = await storage.users.getUser(clerkUserId);
   if (!existing) {
+    if (await wasUserErased(clerkUserId, now)) throw new ErasedAccountError();
     await storage.users.upsertUser({ id: clerkUserId });
     await hydrateClerkProfile(clerkUserId);
   }

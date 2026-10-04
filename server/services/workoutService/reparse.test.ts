@@ -47,6 +47,7 @@ vi.mock("../../gemini", () => ({
 }));
 
 const UNITS: UnitPreferences = { weightUnit: "kg", distanceUnit: "km" };
+const USER_ID = "user1";
 const MANUAL_FIX = "manual_fix_completed";
 const ATTEMPTED = "auto_hydration_attempted";
 const SUCCEEDED = "auto_hydration_succeeded";
@@ -141,7 +142,7 @@ beforeEach(() => {
   textMock.mockResolvedValue(parseResult());
   imageMock.mockResolvedValue(parseResult());
   prepareMock.mockResolvedValue(null);
-  saveBatchMock.mockResolvedValue({ saved: 0, failed: 0 });
+  saveBatchMock.mockResolvedValue({ saved: 0, failed: 0, skipped: 0 });
   vi.mocked(storage.workouts.getWorkoutsWithoutExerciseSets).mockResolvedValue([]);
   vi.mocked(storage.users.getUser).mockResolvedValue({
     weightUnit: "kg",
@@ -155,14 +156,14 @@ afterEach(() => {
 
 describe("reparseWorkout / reparsePlanDay (text)", () => {
   it("returns null when the combined free text is empty", async () => {
-    const result = await reparseWorkout({ id: "w1", mainWorkout: null, accessory: null }, UNITS);
+    const result = await reparseWorkout({ id: "w1", mainWorkout: null, accessory: null }, UNITS, USER_ID);
     expect(result).toBeNull();
     expect(textMock).not.toHaveBeenCalled();
   });
 
   it("returns null when the provider yields no rows and no structure blocks", async () => {
     textMock.mockResolvedValue(parseResult());
-    const result = await reparseWorkout({ id: "w1", mainWorkout: "5 squats" }, UNITS);
+    const result = await reparseWorkout({ id: "w1", mainWorkout: "5 squats" }, UNITS, USER_ID);
     expect(result).toBeNull();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -176,6 +177,7 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
     const result = (await reparseWorkout(
       { id: "w1", mainWorkout: "squats" },
       UNITS,
+      USER_ID,
     )) as WriteResult;
 
     expect(result).toEqual({
@@ -188,6 +190,9 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
     });
     expect(expandMock).toHaveBeenCalledWith(rows, { workoutLogId: "w1" }, "workout", UNITS);
     expect(replaceMock).toHaveBeenCalledWith({ workoutLogId: "w1" }, [{}, {}], undefined);
+    // The provider records usage only for a call that names its user — PF2
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    expect(textMock).toHaveBeenCalledWith("squats", UNITS, undefined, USER_ID);
     expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", MANUAL_FIX);
   });
 
@@ -198,6 +203,7 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
     const result = (await reparseWorkout(
       { id: "w1", mainWorkout: "squats" },
       UNITS,
+      USER_ID,
     )) as WriteResult;
     expect(result.rejectedCount).toBe(2);
     expect(result.rejectionReasons).toEqual(["schema_validation_failed"]);
@@ -209,6 +215,7 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
     const result = (await reparseWorkout(
       { id: "w1", mainWorkout: "EMOM 10" },
       UNITS,
+      USER_ID,
     )) as WriteResult;
     expect(result.exercises).toEqual([]);
     expect(expandMock).not.toHaveBeenCalled();
@@ -220,13 +227,15 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
     const result = (await reparseWorkout(
       { id: "w1", mainWorkout: "squats" },
       UNITS,
+      USER_ID,
     )) as WriteResult;
     expect(result.fallbackUsed).toBe(true);
   });
 
   it("targets the plan-day owner and plan context", async () => {
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-    await reparsePlanDay({ id: "p1", mainWorkout: "squats" }, UNITS);
+    await reparsePlanDay({ id: "p1", mainWorkout: "squats" }, UNITS, USER_ID);
+    expect(textMock).toHaveBeenCalledWith("squats", UNITS, undefined, USER_ID);
     expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan", UNITS);
     expect(counterMock).toHaveBeenCalledWith("plan_day", "manual", MANUAL_FIX);
   });
@@ -286,7 +295,7 @@ describe("reparseWorkoutFromImage / reparsePlanDayFromImage", () => {
 
 describe("processBatchChunk", () => {
   it("returns zero counts for an empty chunk", async () => {
-    const result = await processBatchChunk([], UNITS);
+    const result = await processBatchChunk([], UNITS, USER_ID);
     expect(result).toEqual({ parsed: 0, failed: 0 });
     expect(prepareMock).not.toHaveBeenCalled();
     expect(saveBatchMock).not.toHaveBeenCalled();
@@ -294,11 +303,12 @@ describe("processBatchChunk", () => {
 
   it("counts successful parses saved by the batch writer", async () => {
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 2, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 2, failed: 0, skipped: 0 });
 
-    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS);
+    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
     expect(result).toEqual({ parsed: 2, failed: 0 });
+    expect(prepareMock).toHaveBeenCalledWith({ id: "w1" }, UNITS, USER_ID);
     expect(saveBatchMock).toHaveBeenCalledWith([
       { workoutId: "w1", setRows: [{}] },
       { workoutId: "w2", setRows: [{}] },
@@ -309,9 +319,9 @@ describe("processBatchChunk", () => {
     prepareMock
       .mockRejectedValueOnce(new Error("provider down"))
       .mockResolvedValueOnce({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 0 });
 
-    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS);
+    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
     expect(result).toEqual({ parsed: 1, failed: 1 });
     expect(logger.error).toHaveBeenCalled();
@@ -321,20 +331,32 @@ describe("processBatchChunk", () => {
     prepareMock
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 0 });
 
-    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS);
+    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
     expect(result).toEqual({ parsed: 1, failed: 1 });
   });
 
   it("adds batch write failures to the failed count", async () => {
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 1 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 1, skipped: 0 });
 
-    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS);
+    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
     expect(result).toEqual({ parsed: 1, failed: 1 });
+  });
+
+  it("counts a workout skipped by the batch writer as neither parsed nor failed", async () => {
+    // Skipped means the athlete logged sets into it after the snapshot, so it
+    // is no longer unstructured and its parse was discarded (D17,
+    // CODEBASE_ANALYSIS_2026-10-03).
+    prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 1 });
+
+    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
+
+    expect(result).toEqual({ parsed: 1, failed: 0 });
   });
 });
 
@@ -351,7 +373,7 @@ describe("batchReparseWorkouts", () => {
     ] as never);
     vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 0 });
 
     const result = await batchReparseWorkouts("user1");
 
@@ -359,6 +381,7 @@ describe("batchReparseWorkouts", () => {
     expect(prepareMock).toHaveBeenCalledWith(
       { id: "w1" },
       { weightUnit: "kg", distanceUnit: "km" },
+      "user1",
     );
   });
 
@@ -370,7 +393,7 @@ describe("batchReparseWorkouts", () => {
       distanceUnit: "miles",
     } as never);
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockImplementation((arr) => Promise.resolve({ saved: arr.length, failed: 0 }));
+    saveBatchMock.mockImplementation((arr) => Promise.resolve({ saved: arr.length, failed: 0, skipped: 0 }));
 
     const result = await batchReparseWorkouts("user1");
 
@@ -380,6 +403,7 @@ describe("batchReparseWorkouts", () => {
     expect(prepareMock).toHaveBeenCalledWith(
       { id: "w1" },
       { weightUnit: "lbs", distanceUnit: "miles" },
+      "user1",
     );
   });
 });
@@ -395,6 +419,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       workoutOwner,
       UNITS,
       "workout",
+      USER_ID,
     );
     expect(result).toBeNull();
     expect(textMock).not.toHaveBeenCalled();
@@ -406,6 +431,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       workoutOwner,
       UNITS,
       "workout",
+      USER_ID,
     );
     expect(result).toBeNull();
     expect(textMock).not.toHaveBeenCalled();
@@ -420,9 +446,11 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       workoutOwner,
       UNITS,
       "workout",
+      USER_ID,
     );
 
     expect(result).toMatchObject({ setCount: 1, saved: true, rejectedCount: 0 });
+    expect(textMock).toHaveBeenCalledWith("10 squats", UNITS, undefined, USER_ID);
     expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", ATTEMPTED);
     expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", SUCCEEDED);
     expect(logger.info).toHaveBeenCalledWith(
@@ -442,7 +470,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     dbState.source = raw;
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
 
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     expect(counterMock).toHaveBeenCalledWith("workout_log", expected, ATTEMPTED);
   });
@@ -454,6 +482,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       { planDayId: "p1" },
       UNITS,
       "plan",
+      USER_ID,
     );
     expect(counterMock).toHaveBeenCalledWith("plan_day", "manual", ATTEMPTED);
   });
@@ -464,7 +493,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     );
     replaceMock.mockResolvedValue(1);
 
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -479,7 +508,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     textMock.mockResolvedValue(parseResult({ acceptedRows: [], structureBlocks: [block()] }));
     replaceMock.mockResolvedValue(0);
 
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ qualityState: "failed" }),
@@ -491,9 +520,9 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     const gate = deferred<DiagnosticsResult>();
     textMock.mockReturnValue(gate.promise);
 
-    const first = autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    const first = autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
     await tick(); // let the first call install the lock before the second checks
-    const second = autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    const second = autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     gate.resolve(parseResult({ acceptedRows: [ex("squat")] }));
     const [a, b] = await Promise.all([first, second]);
@@ -506,7 +535,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     textMock.mockRejectedValue(new Error("provider exploded"));
 
     await expect(
-      autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout"),
+      autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID),
     ).rejects.toThrow("provider exploded");
     expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", FAILED);
     expect(logger.error).toHaveBeenCalledWith(
@@ -518,8 +547,8 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
   it("clears the lock so a subsequent call re-parses", async () => {
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
 
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     expect(textMock).toHaveBeenCalledTimes(2);
   });
@@ -528,7 +557,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     dbState.sourceThrows = true;
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
 
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ event: "auto_hydration_source_resolution_failed" }),
@@ -546,6 +575,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       workoutOwner,
       UNITS,
       "workout",
+      USER_ID,
     );
     await tick();
     await tick();
@@ -571,7 +601,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     counterMock.mockRejectedValue(new Error("telemetry down"));
 
     await expect(
-      autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout"),
+      autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID),
     ).rejects.toThrow("provider exploded");
     await tick();
     await tick();
@@ -590,6 +620,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       workoutOwner,
       UNITS,
       "workout",
+      USER_ID,
     );
 
     expect(result).toBeNull();
@@ -609,6 +640,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
       workoutOwner,
       UNITS,
       "workout",
+      USER_ID,
     );
 
     expect(result).toMatchObject({ saved: true });
@@ -618,7 +650,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
     dbState.sourceMissing = true;
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
 
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout");
+    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
 
     expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", ATTEMPTED);
   });
@@ -632,6 +664,7 @@ describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
         { planDayId: "p1" },
         UNITS,
         "plan",
+        USER_ID,
       ),
     ).rejects.toThrow("boom");
 

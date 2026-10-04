@@ -19,6 +19,7 @@ const parseMock = vi.mocked(parseExercisesFromText);
 const BACK_SQUAT = "back_squat";
 const STRENGTH = "strength";
 const WORKOUT_ID = "w1";
+const USER_ID = "user1";
 const UNITS: UnitPreferences = { weightUnit: "kg", distanceUnit: "km" };
 
 function pe(overrides: Partial<ParsedExercise> = {}): ParsedExercise {
@@ -276,6 +277,7 @@ describe("prepareParsedWorkout", () => {
     const result = await prepareParsedWorkout(
       { id: WORKOUT_ID, mainWorkout: null, accessory: null },
       UNITS,
+      USER_ID,
     );
     expect(result).toBeNull();
     expect(parseMock).not.toHaveBeenCalled();
@@ -283,7 +285,7 @@ describe("prepareParsedWorkout", () => {
 
   it("returns null when the parser yields no exercises", async () => {
     parseMock.mockResolvedValue([]);
-    const result = await prepareParsedWorkout({ id: WORKOUT_ID, mainWorkout: "5 squats" }, UNITS);
+    const result = await prepareParsedWorkout({ id: WORKOUT_ID, mainWorkout: "5 squats" }, UNITS, USER_ID);
     expect(result).toBeNull();
   });
 
@@ -293,9 +295,12 @@ describe("prepareParsedWorkout", () => {
     const result = await prepareParsedWorkout(
       { id: WORKOUT_ID, mainWorkout: "Squats", accessory: "Lunges" },
       UNITS,
+      USER_ID,
     );
 
-    expect(parseMock).toHaveBeenCalledWith("Squats\nLunges", UNITS);
+    // userId, so the provider records the call's usage — PF2
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    expect(parseMock).toHaveBeenCalledWith("Squats\nLunges", UNITS, undefined, USER_ID);
     expect(result?.exercises).toHaveLength(1);
     expect(result?.setRows[0]).toMatchObject({ workoutLogId: WORKOUT_ID, setNumber: 1, reps: 5 });
   });
@@ -305,8 +310,9 @@ describe("prepareParsedWorkout", () => {
     await prepareParsedWorkout(
       { id: WORKOUT_ID, mainWorkout: null, accessory: "  Pushups  " },
       UNITS,
+      USER_ID,
     );
-    expect(parseMock).toHaveBeenCalledWith("Pushups", UNITS);
+    expect(parseMock).toHaveBeenCalledWith("Pushups", UNITS, undefined, USER_ID);
   });
 });
 

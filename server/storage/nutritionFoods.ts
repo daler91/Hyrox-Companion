@@ -27,6 +27,7 @@ import {
   getTableColumns,
   inArray,
   isNull,
+  ne,
   sql,
 } from "drizzle-orm";
 
@@ -266,32 +267,141 @@ export async function createCustomFood(userId: string, data: CreateCustomFoodInp
 }
 
 
+/**
+ * The per-100g columns a logged entry's nutrition is computed from, each as
+ * (patched, stored). Log entries store only `foodId` + `quantityG` and every
+ * read joins `foods` live.
+ */
+function loggedMacroPairs(
+  current: Food,
+  patch: UpdateCustomFoodInput,
+): [patched: number | null | undefined, stored: number | null][] {
+  return [
+    [patch.caloriesPer100g, current.caloriesPer100g],
+    [patch.proteinPer100g, current.proteinPer100g],
+    [patch.carbPer100g, current.carbPer100g],
+    [patch.fatPer100g, current.fatPer100g],
+    [patch.fiberPer100g, current.fiberPer100g],
+  ];
+}
+
+/** Equal as stored: the macro columns are float4, so compare at that precision. */
+function sameStoredReal(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Math.fround(a) === Math.fround(b);
+}
+
+/**
+ * Whether the patch changes anything another athlete's logged history shows:
+ * the name, the brand or a per-100g macro. `servingSizeG` (a default portion)
+ * and `isPublic` don't touch logged totals. The edit dialog always resends
+ * every field, so this compares values instead of checking which keys are set.
+ */
+function rewritesLoggedHistory(current: Food, patch: UpdateCustomFoodInput): boolean {
+  if (patch.name !== undefined && patch.name !== current.name) return true;
+  if (patch.brand !== undefined && (patch.brand || null) !== (current.brand || null)) return true;
+  return loggedMacroPairs(current, patch).some(
+    ([patched, stored]) => patched !== undefined && !sameStoredReal(patched, stored),
+  );
+}
+
+/** Whether anyone other than the owner has logged this food or uses it in a recipe. */
+async function isReferencedByOtherUsers(
+  executor: DbExecutor,
+  foodId: string,
+  ownerId: string,
+): Promise<boolean> {
+  const logged = await executor
+    .select({ id: foodLogEntries.id })
+    .from(foodLogEntries)
+    .where(and(eq(foodLogEntries.foodId, foodId), ne(foodLogEntries.userId, ownerId)))
+    .limit(1);
+  if (logged.length > 0) return true;
+  const inRecipe = await executor
+    .select({ id: recipeIngredients.id })
+    .from(recipeIngredients)
+    .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
+    .where(and(eq(recipeIngredients.foodId, foodId), ne(recipes.userId, ownerId)))
+    .limit(1);
+  return inRecipe.length > 0;
+}
+
+export const SHARED_FOOD_EDIT_CONFLICT =
+  "Other people have logged this shared food, so its name and nutrition can't be changed. " +
+  "Create a new custom food with the corrected values instead.";
+
+/**
+ * Refuse a write to `current` that would rewrite another athlete's logged
+ * history (D18, below). Call inside the write transaction with the row locked
+ * FOR UPDATE. Shared by the custom-food edit and the recipe edit, which
+ * rewrites its backing food's name and macros.
+ */
+export function assertLoggedHistoryKept(
+  executor: DbExecutor,
+  current: Food,
+  next: UpdateCustomFoodInput,
+  ownerId: string,
+  message = SHARED_FOOD_EDIT_CONFLICT,
+): Promise<void> {
+  if (!rewritesLoggedHistory(current, next)) return Promise.resolve();
+  return isReferencedByOtherUsers(executor, current.id, ownerId).then((referenced) => {
+    if (referenced) throw new AppError(ErrorCode.CONFLICT, message, 409);
+  });
+}
+
+/**
+ * Edit the user's own custom food. Returns undefined if it isn't theirs (→ 404).
+ *
+ * D18 (CODEBASE_ANALYSIS_2026-10-03): a shared food is read live by every
+ * other athlete who logged it, so editing its name or macros in place would
+ * silently rewrite their past days, targets and insights. Once anyone else
+ * references it (a log entry or a recipe ingredient), those fields are frozen
+ * and the edit is refused with a 409; the owner can still change the serving
+ * size and toggle sharing. This holds even after `isPublic` is switched back
+ * off, since the other athletes' entries still point at the row. The row is
+ * locked FOR UPDATE first: a new log entry takes FOR KEY SHARE on it through
+ * the foreign key, so nobody can start referencing it between the check and
+ * the write.
+ */
 export async function updateCustomFood(
   userId: string,
   id: string,
   patch: UpdateCustomFoodInput,
 ): Promise<Food | undefined> {
-  const [row] = await db
-    .update(foods)
-    .set({
-      ...(patch.name !== undefined && { name: patch.name }),
-      ...(patch.brand !== undefined && { brand: patch.brand ?? null }),
-      ...(patch.caloriesPer100g !== undefined && {
-        caloriesPer100g: patch.caloriesPer100g ?? null,
-      }),
-      ...(patch.proteinPer100g !== undefined && { proteinPer100g: patch.proteinPer100g ?? null }),
-      ...(patch.carbPer100g !== undefined && { carbPer100g: patch.carbPer100g ?? null }),
-      ...(patch.fatPer100g !== undefined && { fatPer100g: patch.fatPer100g ?? null }),
-      ...(patch.fiberPer100g !== undefined && { fiberPer100g: patch.fiberPer100g ?? null }),
-      ...(patch.servingSizeG !== undefined && { servingSizeG: patch.servingSizeG ?? null }),
-      // Public sharing opt-in/out. The WHERE below already pins ownership and
-      // source='custom', so only the owner can toggle and only custom foods.
-      ...(patch.isPublic !== undefined && { isPublic: patch.isPublic }),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(foods.id, id), eq(foods.createdByUserId, userId), eq(foods.source, "custom")))
-    .returning();
-  return row;
+  return await db.transaction(async (tx) => {
+    const ownCustomFood = and(eq(foods.id, id), eq(foods.createdByUserId, userId), eq(foods.source, "custom"));
+    // A recipe's backing food is also source='custom', but it is edited only
+    // through its recipe, which recomputes it (listCustomFoods hides it too).
+    // Matching it here let this PATCH share it, and the recipe edit then
+    // rewrote it in place around the freeze below (D18).
+    const notARecipe = sql`NOT EXISTS (SELECT 1 FROM ${recipes} WHERE ${recipes.foodId} = ${foods.id})`;
+    const current = (await tx.select().from(foods).where(and(ownCustomFood, notARecipe)).for("update")).at(0);
+    if (!current) return undefined;
+
+    await assertLoggedHistoryKept(tx, current, patch, userId);
+
+    const [row] = await tx
+      .update(foods)
+      .set({
+        ...(patch.name !== undefined && { name: patch.name }),
+        ...(patch.brand !== undefined && { brand: patch.brand ?? null }),
+        ...(patch.caloriesPer100g !== undefined && {
+          caloriesPer100g: patch.caloriesPer100g ?? null,
+        }),
+        ...(patch.proteinPer100g !== undefined && { proteinPer100g: patch.proteinPer100g ?? null }),
+        ...(patch.carbPer100g !== undefined && { carbPer100g: patch.carbPer100g ?? null }),
+        ...(patch.fatPer100g !== undefined && { fatPer100g: patch.fatPer100g ?? null }),
+        ...(patch.fiberPer100g !== undefined && { fiberPer100g: patch.fiberPer100g ?? null }),
+        ...(patch.servingSizeG !== undefined && { servingSizeG: patch.servingSizeG ?? null }),
+        // Public sharing opt-in/out. The WHERE below already pins ownership and
+        // source='custom', so only the owner can toggle and only custom foods.
+        ...(patch.isPublic !== undefined && { isPublic: patch.isPublic }),
+        updatedAt: new Date(),
+      })
+      .where(ownCustomFood)
+      .returning();
+    return row;
+  });
 }
 
 

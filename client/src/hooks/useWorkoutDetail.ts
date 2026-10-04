@@ -137,9 +137,8 @@ export function useWorkoutDetail(workoutId: string | null) {
     restoreWorkoutFields((ctx as { prev?: Partial<WorkoutWithSets> } | undefined)?.prev);
   };
 
-  const patchCachedSets = (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
-    if (!workoutId) return;
-    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) => {
+  const patchCachedSets = (id: string, updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
+    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(id), (prev) => {
       if (!prev) return prev;
       return { ...prev, exerciseSets: updater(prev.exerciseSets ?? []) };
     });

@@ -1,4 +1,6 @@
 import { clearOfflineQueue } from "@/lib/offlineQueue";
+import { apiRequest } from "@/lib/queryClient";
+import { timeoutSignal } from "@/lib/timeoutSignal";
 
 const LOCAL_STORAGE_EXACT_KEYS = [
   "fitai-offline-queue",
@@ -48,6 +50,43 @@ async function clearApiResponseCache(): Promise<void> {
   }
 }
 
+/**
+ * Detach this browser's push subscription from the athlete. A PushManager
+ * subscription belongs to the browser, not to whoever is signed in, and
+ * survives sign-out: the server kept sending the previous athlete's session
+ * briefs and reminders to a shared device, and the next person's Settings
+ * showed push as already on. The server row goes first, while the session is
+ * still valid (sign-out awaits this before Clerk's signOut), then the browser
+ * subscription itself, which kills the endpoint even when that request fails
+ * (after account deletion it always does, and the cascade already removed
+ * the row). Best effort and bounded: sign-out must never hang on it.
+ * P3 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function unsubscribeBrowserPush(): Promise<void> {
+  try {
+    // getRegistration, not `ready`: `ready` never settles when no service
+    // worker is registered.
+    const registration = await globalThis.navigator?.serviceWorker?.getRegistration();
+    const subscription = await registration?.pushManager?.getSubscription();
+    if (!subscription) return;
+    try {
+      await apiRequest(
+        "DELETE",
+        "/api/v1/push/unsubscribe",
+        { endpoint: subscription.endpoint },
+        timeoutSignal(5_000),
+      );
+    } catch {
+      // Unsubscribing below still makes the stored endpoint undeliverable; the
+      // server prunes it on the push service's next 404/410.
+    }
+    await subscription.unsubscribe();
+  } catch {
+    // Push or service workers unavailable (private browsing, insecure origin,
+    // tests). Nothing is subscribed there to clean up.
+  }
+}
+
 const SESSION_STORAGE_EXACT_KEYS = [
   "fitai-log-workout-draft-announced",
   "hyrox-log-workout-draft-announced",
@@ -63,13 +102,14 @@ const SESSION_STORAGE_PREFIXES = [
  *
  * Storage is cleared synchronously so callers that navigate immediately still
  * get the effect; the returned promise settles once the asynchronous Cache
- * Storage purge is done, and callers that can await it should.
+ * Storage purge and the push unsubscribe are done, and callers that can await
+ * it should.
  */
 export function clearUserLocalData(): Promise<void> {
   clearOfflineQueue();
   removeStorageEntries(getStorage("localStorage"), LOCAL_STORAGE_EXACT_KEYS, LOCAL_STORAGE_PREFIXES);
   removeStorageEntries(getStorage("sessionStorage"), SESSION_STORAGE_EXACT_KEYS, SESSION_STORAGE_PREFIXES);
-  return clearApiResponseCache();
+  return Promise.all([clearApiResponseCache(), unsubscribeBrowserPush()]).then(() => undefined);
 }
 
 function getStorage(kind: "localStorage" | "sessionStorage"): Storage | undefined {

@@ -222,3 +222,105 @@ describe("buildLoadGovernorSuggestions — graduated (reduce/cap) downshifts", (
     );
   });
 });
+
+// AI14 (CODEBASE_ANALYSIS_2026-10-03): the auto-coach runs the governor on
+// every pass, against the rows the previous pass wrote. Each test feeds one
+// pass's output back in as the next pass's day.
+describe("buildLoadGovernorSuggestions — repeat passes over the governor's own output", () => {
+  function strengthRows(name: string, n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      exercise({ exerciseName: name, category: "strength", setNumber: i + 1, reps: 5, weight: 100 }),
+    );
+  }
+
+  /** The day as the next pass reads it: the rows and text the last pass wrote. */
+  function afterPass(
+    day: Parameters<typeof workout>[0],
+    pass: ReturnType<typeof runGovernor>[number],
+  ): Parameters<typeof workout>[0] {
+    return {
+      ...day,
+      mainWorkout: pass.suggestion.recommendation,
+      exerciseDetails: pass.structuredSetRows?.map((row) => ({
+        exerciseName: row.exerciseName,
+        category: row.category,
+        setNumber: row.setNumber,
+        reps: row.reps,
+        weight: row.weight,
+        distance: row.distance,
+        time: row.time,
+        notes: row.notes,
+      })),
+    };
+  }
+
+  it("cuts a structured day once, then holds it instead of compounding the cut", () => {
+    const day = {
+      id: "w1",
+      date: "2026-05-23",
+      focus: "Lower Strength",
+      mainWorkout: "Back squat 5x5, deadlift 4x3",
+      exerciseDetails: [...strengthRows("back_squat", 5), ...strengthRows("deadlift", 4)],
+    };
+    const yellow = [restriction("acwr_yellow_guard")];
+
+    const [first] = runGovernor(yellow, [workout(day)]);
+    expect(first.structuredSetRows).toHaveLength(6);
+
+    const [second] = runGovernor(yellow, [workout(afterPass(day, first))]);
+    // Still claimed (so the model and review notes leave the day alone), but
+    // nothing more is cut: 9 → 6 sets, not 9 → 6 → 4 → 2.
+    expect(second.held).toBe(true);
+    expect(second.suggestion.workoutId).toBe("w1");
+    expect(second.structuredSetRows).toBeUndefined();
+  });
+
+  it("holds a day it already converted to a recovery run rather than blanking the run", () => {
+    const day = {
+      id: "w1",
+      date: "2026-05-23",
+      focus: "Lower Strength",
+      mainWorkout: "Heavy squats",
+      exerciseDetails: strengthRows("back_squat", 5),
+    };
+    const danger = [restriction("acwr_danger_lock")];
+
+    const [first] = runGovernor(danger, [workout(day)]);
+    expect(first.structuredSetRows?.[0]).toEqual(expect.objectContaining({ time: 30 }));
+
+    const converted = afterPass({ ...day, focus: "Recovery Run" }, first);
+    const [second] = runGovernor(danger, [workout(converted)]);
+    // The recovery text ("avoid hills, sprints, track work") reads as a hard
+    // run, and rebuilding from the recovery_run row wrote distance and time
+    // both null — the 30-minute run became a blank row.
+    expect(second.held).toBe(true);
+    expect(second.structuredSetRows).toBeUndefined();
+  });
+
+  it("holds a free-text day already converted to the recovery run", () => {
+    const day = { id: "w1", date: "2026-05-23", focus: "Run", mainWorkout: "Hill repeats 8x60s" };
+    const posterior = [restriction("posterior_chain_velocity_lock")];
+
+    const [first] = runGovernor(posterior, [workout(day)]);
+    const [second] = runGovernor(posterior, [workout(afterPass({ ...day, focus: "Recovery Run" }, first))]);
+
+    expect(second.held).toBe(true);
+  });
+
+  it("still escalates a day it reduced to a recovery run when the danger lock arrives", () => {
+    const day = {
+      id: "w1",
+      date: "2026-05-23",
+      focus: "Lower Strength",
+      mainWorkout: "Back squat 5x5",
+      exerciseDetails: strengthRows("back_squat", 5),
+    };
+    const [reduced] = runGovernor([restriction("acwr_yellow_guard")], [workout(day)]);
+
+    const [escalated] = runGovernor([restriction("acwr_danger_lock")], [workout(afterPass(day, reduced))]);
+
+    expect(escalated.held).toBeUndefined();
+    expect(escalated.focusOverride).toBe("Recovery Run");
+    expect(escalated.structuredSetRows?.[0].exerciseName).toBe("recovery_run");
+  });
+});

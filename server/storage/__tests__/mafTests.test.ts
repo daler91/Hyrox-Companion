@@ -130,3 +130,36 @@ describe("MafTestStorage.updateTestWithAnalysis", () => {
     expect(result.analysis).toBeNull();
   });
 });
+
+describe("MafTestStorage.getWorkoutDates (CL4)", () => {
+  let storage: MafTestStorage;
+
+  beforeEach(() => {
+    storage = new MafTestStorage();
+    vi.clearAllMocks();
+  });
+
+  it("maps each found workout id to its date", async () => {
+    const where = vi.fn().mockResolvedValue([
+      { id: "w1", date: "2026-01-10" },
+      { id: "w2", date: "2026-03-14" },
+    ]);
+    const from = vi.fn().mockReturnValue({ where });
+    const select = vi.fn().mockReturnValue({ from });
+    Object.assign(db, { select });
+
+    const result = await storage.getWorkoutDates("u1", ["w1", "w2", "w-deleted"]);
+
+    expect(result).toEqual({ "w1": "2026-01-10", "w2": "2026-03-14" });
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an empty map without querying when there are no ids", async () => {
+    const select = vi.fn();
+    Object.assign(db, { select });
+
+    expect(await storage.getWorkoutDates("u1", [])).toEqual({});
+    expect(select).not.toHaveBeenCalled();
+  });
+});

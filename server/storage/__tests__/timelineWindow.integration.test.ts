@@ -1,4 +1,5 @@
 import { planDays, trainingPlans } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "../../db";
@@ -17,7 +18,9 @@ describe("TimelineStorage.getTimeline (real Postgres)", () => {
   const ALICE = "timeline-alice";
   const BOB = "timeline-bob";
 
+  let planId: string;
   let linkedPlanDayId: string;
+  let wednesdayPlanDayId: string;
   let linkedLogId: string;
   let hydratedLogId: string;
 
@@ -38,7 +41,9 @@ describe("TimelineStorage.getTimeline (real Postgres)", () => {
         { planId: plan.id, weekNumber: 1, dayName: "Friday", focus: "Sled", mainWorkout: "Sled push", scheduledDate: "2026-05-08" },
       ])
       .returning();
+    planId = plan.id;
     linkedPlanDayId = days[0].id;
+    wednesdayPlanDayId = days[1].id;
 
     // The Monday session was logged against its plan day.
     const linked = await seedWorkoutLog(ALICE, "2026-05-04", { planDayId: linkedPlanDayId, planId: plan.id });
@@ -120,6 +125,69 @@ describe("TimelineStorage.getTimeline (real Postgres)", () => {
     const everything = await storage.timeline.getTimelinePage(ALICE, { limit: 50 });
     expect(everything.entries).toHaveLength(6);
     expect(everything.nextCursor).toBeNull();
+  });
+
+  it("shows every log linked to one plan day, the newest in the day's own slot (C16)", async () => {
+    // A morning run logged against Wednesday, then an evening session the
+    // athlete also picked Wednesday for, "(logged)" as it already was.
+    const morning = await seedWorkoutLog(ALICE, "2026-05-06", {
+      planDayId: wednesdayPlanDayId,
+      planId,
+      focus: "Morning run",
+      startedAt: new Date("2026-05-06T06:30:00Z"),
+    });
+    const evening = await seedWorkoutLog(ALICE, "2026-05-06", {
+      planDayId: wednesdayPlanDayId,
+      planId,
+      focus: "Evening intervals",
+      startedAt: new Date("2026-05-06T18:00:00Z"),
+    });
+
+    const entries = await storage.timeline.getTimeline(ALICE);
+    const wednesday = entries.filter((e) => e.date === "2026-05-06");
+
+    expect(wednesday).toHaveLength(2);
+    expect(wednesday.find((e) => e.planDayId === wednesdayPlanDayId)).toMatchObject({
+      type: "logged",
+      workoutLogId: evening.id,
+    });
+    const other = wednesday.find((e) => e.workoutLogId === morning.id);
+    expect(other).toMatchObject({ type: "logged", focus: "Morning run", planId, planName: "Alice's block" });
+    expect(other?.planDayId).toBeUndefined();
+    // The plan day itself is not shown a second time as planned.
+    expect(wednesday.some((e) => e.type === "planned")).toBe(false);
+  });
+
+  it("keeps a log on a retired plan's dropped days in the default timeline (C17)", async () => {
+    // Retired on the very day its Monday session was logged, as superseding it
+    // with a plan that starts today does.
+    await db.update(trainingPlans).set({ retiredOn: "2026-05-04" }).where(eq(trainingPlans.id, planId));
+
+    const entries = await storage.timeline.getTimeline(ALICE);
+
+    // Every day from the cutoff on is dropped as a plan day...
+    expect(entries.some((e) => e.type === "planned")).toBe(false);
+    // ...but the session the athlete actually did is still there, once.
+    const monday = entries.filter((e) => e.date === "2026-05-04");
+    expect(monday).toHaveLength(1);
+    expect(monday[0]).toMatchObject({
+      type: "logged",
+      status: "completed",
+      workoutLogId: linkedLogId,
+      planId,
+      planName: "Alice's block",
+    });
+    expect(monday[0].planDayId).toBeUndefined();
+    expect(entries.some((e) => e.focus === "Bob's run")).toBe(false);
+
+    // The paged read sees it too, and the retired plan's own view still shows
+    // it on its plan day, never twice.
+    const page = await storage.timeline.getTimelinePage(ALICE, { limit: 50 });
+    expect(page.entries.filter((e) => e.workoutLogId === linkedLogId)).toHaveLength(1);
+    const own = await storage.timeline.getTimeline(ALICE, planId);
+    expect(own.filter((e) => e.workoutLogId === linkedLogId)).toEqual([
+      expect.objectContaining({ planDayId: linkedPlanDayId }),
+    ]);
   });
 
   it("returns nothing for an athlete with no history", async () => {

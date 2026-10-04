@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { RpeSelector } from "@/components/RpeSelector";
 import { NumberStepper } from "@/components/ui/number-stepper";
 import { useApiMutation } from "@/hooks/useApiMutation";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
@@ -109,14 +110,6 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
     }
   }, [serverEstimate, entry.expectedDurationMin, entry.expectedRpe]);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    },
-    [],
-  );
-
   const mutation = useApiMutation({
     mutationFn: (updates: ExpectedSessionUpdate) =>
       api.plans.updateDayWithoutPlan(entry.planDayId ?? "", updates as Record<string, unknown>),
@@ -125,10 +118,20 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   });
 
   // Debounce so rapid stepper clicks coalesce into one PATCH (rate-limited 20/min).
+  // Edits to different fields inside the window merge into that one PATCH,
+  // and useDebouncedCallback sends whatever is still pending when the sheet
+  // closes. The old single timer kept only the last field's update and
+  // cleared it on unmount (CL12, CODEBASE_ANALYSIS_2026-10-03).
+  const pendingUpdates = useRef<ExpectedSessionUpdate>({});
+  const flushPendingUpdates = useDebouncedCallback(() => {
+    const updates = pendingUpdates.current;
+    pendingUpdates.current = {};
+    if (Object.keys(updates).length > 0) mutation.mutate(updates);
+  }, 500);
   const persist = (updates: ExpectedSessionUpdate) => {
     if (!entry.planDayId) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => mutation.mutate(updates), 500);
+    pendingUpdates.current = { ...pendingUpdates.current, ...updates };
+    flushPendingUpdates();
   };
 
   const target = useMemo(

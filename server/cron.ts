@@ -1,6 +1,7 @@
 import cron from "node-cron";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
+import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
 import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
@@ -34,6 +35,7 @@ let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
 let recycleBinPurgeTask: ReturnType<typeof cron.schedule> | null = null;
 let sessionStreamBackfillTask: ReturnType<typeof cron.schedule> | null = null;
 let planDayMovePruneTask: ReturnType<typeof cron.schedule> | null = null;
+let stalePlanGenerationTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -48,7 +50,7 @@ const PLAN_DAY_MOVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_020. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_022. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -73,6 +75,7 @@ export const CRON_LOCK_KEYS = {
   recycleBinPurge: 42_010_018n,
   sessionStreamBackfill: 42_010_019n,
   planDayMovePrune: 42_010_020n,
+  stalePlanGenerations: 42_010_021n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -533,6 +536,23 @@ export function startCron(storage: IStorage): void {
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Plan-day move prune scheduled: daily at 03:55 UTC");
 
+  // Stranded plan generations (D20, CODEBASE_ANALYSIS_2026-10-03). The job is
+  // NO_RETRY, so a generation cut off by a deploy or a crash stays
+  // pending/generating, and the in-flight guard answers 409 to every new
+  // attempt. The boot-time sweep alone missed it: the boot that follows a
+  // deploy finds the row minutes old. Every 10 minutes, offset from the
+  // auto-coach recovery tick.
+  stalePlanGenerationTask = scheduleLockedCronJob("stalePlanGenerations", "3,13,23,33,43,53 * * * *", async () => {
+    const failed = await storage.plans.failStalePlanGenerations(STALE_PLAN_GENERATION_THRESHOLD_MS);
+    if (failed === 0) return;
+    // A count and a static context only, no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ context: "cron", failed }, `Stale plan-generation sweep: failed ${failed} stranded generation(s)`);
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Stale plan-generation sweep scheduled: every 10 minutes");
+
   // Run one catch-up scan shortly after boot (e.g. a Railway restart that
   // straddled the top of an hour). Always safe: the scan gates every email on
   // the athlete's local hour and the claim ledgers stop a second send.
@@ -609,4 +629,5 @@ export async function stopCron(): Promise<void> {
   recycleBinPurgeTask = await stopTask(recycleBinPurgeTask);
   sessionStreamBackfillTask = await stopTask(sessionStreamBackfillTask);
   planDayMovePruneTask = await stopTask(planDayMovePruneTask);
+  stalePlanGenerationTask = await stopTask(stalePlanGenerationTask);
 }

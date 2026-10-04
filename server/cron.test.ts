@@ -416,6 +416,66 @@ describe("plan-day move prune cron job", () => {
   });
 });
 
+describe("stale plan-generation sweep cron job (D20)", () => {
+  let sweepCallback: () => Promise<void>;
+  const storage = { plans: { failStalePlanGenerations: vi.fn() } };
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+
+    const scheduled = startCronWith(storage);
+    sweepCallback = scheduled("3,13,23,33,43,53 * * * *");
+  });
+
+  beforeEach(() => {
+    storage.plans.failStalePlanGenerations.mockReset();
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("holds its own advisory lock key", () => {
+    expect(CRON_LOCK_KEYS.stalePlanGenerations).toBe(42_010_021n);
+  });
+
+  it("fails generations stranded for over an hour under its lock, without waiting for a reboot", async () => {
+    // The sweep used to run only at boot, so a generation cut off by a deploy
+    // (the next boot found it minutes old) blocked every new generation with a
+    // 409 until some later restart.
+    storage.plans.failStalePlanGenerations.mockResolvedValueOnce(2);
+
+    await sweepCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.stalePlanGenerations, name: "stalePlanGenerations" },
+      expect.any(Function),
+    );
+    expect(storage.plans.failStalePlanGenerations).toHaveBeenCalledWith(60 * 60 * 1000);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { context: "cron", failed: 2 },
+      "Stale plan-generation sweep: failed 2 stranded generation(s)",
+    );
+  });
+
+  it("stays quiet when nothing was stranded", async () => {
+    storage.plans.failStalePlanGenerations.mockResolvedValueOnce(0);
+
+    await sweepCallback();
+
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("logs and swallows a sweep failure instead of throwing into the scheduler", async () => {
+    const error = new Error("db unavailable");
+    storage.plans.failStalePlanGenerations.mockRejectedValueOnce(error);
+
+    await expect(sweepCallback()).resolves.toBeUndefined();
+
+    expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error, job: "stalePlanGenerations" }, "Cron job failed");
+  });
+});
+
 describe("strava auto-sync cron jobs", () => {
   let scanCallback: () => Promise<void>;
   let ensureCallback: () => Promise<void>;

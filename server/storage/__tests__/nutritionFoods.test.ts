@@ -1,17 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { selectMock, insertMock, deleteMock } = vi.hoisted(() => ({
+const { selectMock, insertMock, deleteMock, transactionMock } = vi.hoisted(() => ({
   selectMock: vi.fn(),
   insertMock: vi.fn(),
   deleteMock: vi.fn(),
+  transactionMock: vi.fn(),
 }));
 
 vi.mock("../../db", () => ({
-  db: { select: selectMock, insert: insertMock, delete: deleteMock },
+  db: { select: selectMock, insert: insertMock, delete: deleteMock, transaction: transactionMock },
 }));
 
+import type { Food, UpdateCustomFoodInput } from "@shared/schema";
+
 import { AppError, ErrorCode } from "../../errors";
-import { createServing, deleteCustomFood, deleteServing } from "../nutritionFoods";
+import {
+  createServing,
+  deleteCustomFood,
+  deleteServing,
+  SHARED_FOOD_EDIT_CONFLICT,
+  updateCustomFood,
+} from "../nutritionFoods";
 
 /**
  * server/storage/nutritionFoods.ts moved out of the monolithic
@@ -77,6 +86,118 @@ describe("deleteCustomFood", () => {
 
     await expect(deleteCustomFood("u1", "food-1")).resolves.toBe(true);
     expect(deleteMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("updateCustomFood", () => {
+  // D18 (CODEBASE_ANALYSIS_2026-10-03): other athletes' log entries join this
+  // row live, so once they reference it its name and macros must not change.
+  const STORED = {
+    id: "food-1",
+    name: "Banana",
+    brand: null,
+    caloriesPer100g: 89,
+    proteinPer100g: 1.1,
+    carbPer100g: 22.8,
+    fatPer100g: 0.3,
+    fiberPer100g: 2.6,
+    servingSizeG: 118,
+    isPublic: true,
+  } as unknown as Food;
+  // What the edit dialog sends: every field, whether or not it changed.
+  const RESAVE = {
+    name: "Banana",
+    brand: null,
+    caloriesPer100g: 89,
+    proteinPer100g: 1.1,
+    carbPer100g: 22.8,
+    fatPer100g: 0.3,
+    fiberPer100g: 2.6,
+    servingSizeG: 118,
+    isPublic: true,
+  } satisfies UpdateCustomFoodInput;
+
+  const tx = { select: vi.fn(), update: vi.fn() };
+  const updateSet = vi.fn();
+
+  /** `current` is the locked row (null = not the user's custom food);
+   *  `otherLogs` / `otherRecipes` are the other-user reference probes. */
+  function mockTx({
+    current = STORED,
+    otherLogs = [],
+    otherRecipes = [],
+  }: { current?: Food | null; otherLogs?: unknown[]; otherRecipes?: unknown[] } = {}) {
+    tx.select
+      // the row lock
+      .mockReturnValueOnce({ from: () => ({ where: () => ({ for: vi.fn().mockResolvedValue(current ? [current] : []) }) }) })
+      // another user's log entry
+      .mockReturnValueOnce({ from: () => ({ where: () => ({ limit: vi.fn().mockResolvedValue(otherLogs) }) }) })
+      // another user's recipe ingredient
+      .mockReturnValueOnce({
+        from: () => ({ innerJoin: () => ({ where: () => ({ limit: vi.fn().mockResolvedValue(otherRecipes) }) }) }),
+      });
+    updateSet.mockReturnValue({ where: () => ({ returning: vi.fn().mockResolvedValue([{ ...STORED, updated: true }]) }) });
+    tx.update.mockReturnValue({ set: updateSet });
+    transactionMock.mockImplementation((cb: (handle: typeof tx) => Promise<unknown>) => cb(tx));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tx.select.mockReset();
+  });
+
+  it("returns undefined (404) without writing when the food isn't the user's own custom food", async () => {
+    mockTx({ current: null });
+
+    await expect(updateCustomFood("u1", "food-1", { ...RESAVE, caloriesPer100g: 1000 })).resolves.toBeUndefined();
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("throws a 409 and does not write when another user has logged the food and the macros change", async () => {
+    mockTx({ otherLogs: [{ id: "entry-of-u2" }] });
+
+    const error = await updateCustomFood("u1", "food-1", { ...RESAVE, caloriesPer100g: 1000 }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({ code: ErrorCode.CONFLICT, status: 409, message: SHARED_FOOD_EDIT_CONFLICT });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("throws a 409 on a rename when another user's recipe uses the food", async () => {
+    mockTx({ otherRecipes: [{ id: "ingredient-of-u2" }] });
+
+    await expect(updateCustomFood("u1", "food-1", { ...RESAVE, name: "Anything" })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("allows a resave of unchanged values plus a serving-size or sharing change without probing references", async () => {
+    mockTx({ otherLogs: [{ id: "entry-of-u2" }] });
+
+    const result = await updateCustomFood("u1", "food-1", { ...RESAVE, servingSizeG: 120, isPublic: false });
+
+    expect(result).toMatchObject({ updated: true });
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ servingSizeG: 120, isPublic: false }));
+    // Only the row lock ran: no change to logged history, so no reference check.
+    expect(tx.select).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a value equal at float4 precision as unchanged", async () => {
+    // The column is `real`: 1.1 is stored as Math.fround(1.1) and may read
+    // back as that float widened to a double.
+    mockTx({ current: { ...STORED, proteinPer100g: Math.fround(1.1) }, otherLogs: [{ id: "entry-of-u2" }] });
+
+    await expect(updateCustomFood("u1", "food-1", RESAVE)).resolves.toMatchObject({ updated: true });
+  });
+
+  it("edits macros freely while no other user references the food", async () => {
+    mockTx();
+
+    await expect(updateCustomFood("u1", "food-1", { ...RESAVE, caloriesPer100g: 95 })).resolves.toMatchObject({
+      updated: true,
+    });
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ caloriesPer100g: 95 }));
   });
 });
 

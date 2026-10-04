@@ -29,7 +29,7 @@ const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
 vi.mock("../../storage", async () => {
   const mocked = (await import("./testUtils")).mockStorageModule({
     workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
-    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
+    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "updateGenerationStatus", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
   });
   return { storage: { ...mocked.storage, plans: { ...mocked.storage.plans, schedulePlan } } };
@@ -39,7 +39,7 @@ vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredE
 
 // Mock the planService functions
 vi.mock("../../queue", () => ({
-  queue: { send: vi.fn().mockResolvedValue(undefined) },
+  queue: { send: vi.fn().mockResolvedValue(undefined), sendDebounced: vi.fn().mockResolvedValue(null) },
   sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../services/planService", () => ({
@@ -515,6 +515,37 @@ describe("POST /api/v1/plans/generate", () => {
     expect(createPendingPlan).toHaveBeenCalled();
   });
 
+  it("fails the stub when the job cannot be enqueued, so it does not block the athlete's retry (D20)", async () => {
+    // With no job behind it, a pending stub held uq_training_plans_user_in_flight
+    // and every retry answered 409 until the stale-generation sweep reached it.
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    vi.mocked(createPendingPlan).mockResolvedValue({ id: "plan-1", generationStatus: "pending", days: [] } as never);
+    vi.mocked(sendJobNoRetry).mockRejectedValueOnce(new Error("pg-boss unavailable"));
+    vi.mocked(storage.plans.updateGenerationStatus).mockResolvedValue(undefined);
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(500);
+    expect(storage.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.any(String));
+  });
+
+  it("still reports the enqueue failure when the stub cannot be marked failed either", async () => {
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    vi.mocked(createPendingPlan).mockResolvedValue({ id: "plan-1", generationStatus: "pending", days: [] } as never);
+    vi.mocked(sendJobNoRetry).mockRejectedValueOnce(new Error("pg-boss unavailable"));
+    vi.mocked(storage.plans.updateGenerationStatus).mockRejectedValueOnce(new Error("db down"));
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(500);
+  });
+
   it("returns 409 and does not enqueue a job when a generation is already in flight (W13)", async () => {
     const { createPendingPlan } = await import("../../services/planGenerationService");
     const { sendJobNoRetry } = await import("../../queue");
@@ -663,6 +694,7 @@ describe("plan-day exercise routes", () => {
     expect(reparsePlanDay).toHaveBeenCalledWith(
       expect.objectContaining({ id: "day-1", mainWorkout: "new text", accessory: null }),
       { weightUnit: "lb", distanceUnit: "miles" },
+      "test_user_id",
     );
     expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
       "day-1",
@@ -698,5 +730,50 @@ describe("plan-day exercise routes", () => {
 
     expect(response.status).toBe(200);
     expect(replacePlanDayStructure).toHaveBeenCalledWith("day-1", "test_user_id", []);
+  });
+
+  describe("set writes carry the units they were composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    const PLAN_DAY = { kind: "planDay", ownerId: "day-1" };
+
+    beforeEach(() => {
+      // The athlete has switched to lbs on another device.
+      vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lbs", distanceUnit: "miles" });
+      vi.mocked(storage.workouts.mutateExerciseSetUpdate).mockResolvedValue({ id: "set-1" } as never);
+    });
+
+    it("stamps a PATCH composed in kg as kg while the stored preference is lbs", async () => {
+      const response = await request(app)
+        .patch("/api/v1/plans/days/day-1/sets/set-1")
+        .send({ weight: 100, weightUnit: "kg" });
+
+      expect(response.status).toBe(200);
+      expect(storage.workouts.mutateExerciseSetUpdate).toHaveBeenCalledWith(
+        PLAN_DAY,
+        "set-1",
+        { weight: 100, unitPreferences: { weightUnit: "kg", distanceUnit: "miles" } },
+        "test_user_id",
+      );
+    });
+
+    it("reads a PATCH without units in the stored preference, as before", async () => {
+      const response = await request(app).patch("/api/v1/plans/days/day-1/sets/set-1").send({ weight: 225 });
+
+      expect(response.status).toBe(200);
+      expect(storage.workouts.mutateExerciseSetUpdate).toHaveBeenCalledWith(
+        PLAN_DAY,
+        "set-1",
+        { weight: 225, unitPreferences: { weightUnit: "lbs", distanceUnit: "miles" } },
+        "test_user_id",
+      );
+    });
+
+    it("rejects a unit outside the preference enum", async () => {
+      const response = await request(app)
+        .patch("/api/v1/plans/days/day-1/sets/set-1")
+        .send({ weight: 100, weightUnit: "stone" });
+
+      expect(response.status).toBe(400);
+      expect(storage.workouts.mutateExerciseSetUpdate).not.toHaveBeenCalled();
+    });
   });
 });

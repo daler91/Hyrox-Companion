@@ -12,6 +12,7 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 import { seconds, secondsToMinutes, unitless } from "@shared/units";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
@@ -419,12 +420,16 @@ export async function replaceWorkoutStructure(
  * its own transaction and can't nest inside `tx`. Returns an empty array
  * when the plan day has no prescribed rows (e.g., rest days, or a plan
  * generated before structured exercises shipped).
+ *
+ * `preferences` stamps only rows the plan day never stamped; every other copy
+ * keeps the unit its prescription was written in (see prescribedSetToLogRow).
  */
 export async function copyPrescribedSetsIntoLog(
   tx: WorkoutTx,
   planDayId: string,
   workoutLogId: string,
   blockIdMap: Map<string, string>,
+  preferences: UnitPreferences,
 ): Promise<ExerciseSet[]> {
   const prescribed = await tx
     .select()
@@ -436,7 +441,7 @@ export async function copyPrescribedSetsIntoLog(
   const copyRows = prescribed.map((p) => {
     const mappedBlockId = p.blockId ? blockIdMap.get(p.blockId) ?? null : null;
     return {
-      ...prescribedSetToLogRow(p, workoutLogId),
+      ...prescribedSetToLogRow(p, workoutLogId, preferences),
       blockId: mappedBlockId,
       stepNumber: mappedBlockId ? p.stepNumber : null,
       intervalMinute: mappedBlockId ? p.intervalMinute : null,

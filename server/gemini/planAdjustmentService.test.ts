@@ -270,4 +270,40 @@ describe("generatePlanAdjustment with a summary sink (I11)", () => {
     await expect(generatePlanAdjustment(input)).resolves.toMatchObject({ summaryMessage: "Moved your tempo and strides." });
     expect(streamText).not.toHaveBeenCalled();
   });
+
+  describe("cancelled by the chat (AI7)", () => {
+    it("hands the chat stream's signal to the drafting call, so a Stop ends it", async () => {
+      streams(PROPOSAL);
+      const controller = new AbortController();
+
+      await generatePlanAdjustment({ ...input, signal: controller.signal }, collect().sink);
+
+      expect(vi.mocked(streamText).mock.calls[0]?.[0]).toMatchObject({ signal: controller.signal });
+    });
+
+    it("starts no second, billed call once the stream failed because it was cancelled", async () => {
+      const controller = new AbortController();
+      vi.mocked(streamText).mockImplementation(async function* () {
+        yield '{"summ';
+        controller.abort();
+        throw new DOMException("This operation was aborted", "AbortError");
+      });
+
+      await expect(generatePlanAdjustment({ ...input, signal: controller.signal }, collect().sink)).rejects.toMatchObject({
+        name: "AbortError",
+      });
+      expect(generateJsonText).not.toHaveBeenCalled();
+    });
+
+    it("comes to nothing when cancelled mid-stream, whatever text arrived", async () => {
+      const controller = new AbortController();
+      vi.mocked(streamText).mockImplementation(async function* () {
+        yield PROPOSAL.slice(0, 26);
+        controller.abort();
+        yield PROPOSAL.slice(26);
+      });
+
+      await expect(generatePlanAdjustment({ ...input, signal: controller.signal }, collect().sink)).resolves.toBeNull();
+    });
+  });
 });

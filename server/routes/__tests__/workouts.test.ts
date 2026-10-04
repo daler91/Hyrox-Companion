@@ -21,7 +21,9 @@ vi.mock("../../storage", async () =>
   }),
 );
 
-vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock("../../queue", () => ({
+  queue: { send: vi.fn().mockResolvedValue(undefined), sendDebounced: vi.fn().mockResolvedValue(null) },
+}));
 vi.mock("../../services/workoutUseCases", () => ({
   createWorkout: vi.fn(),
   updateWorkoutUseCase: vi.fn(),

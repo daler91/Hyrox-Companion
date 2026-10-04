@@ -7,6 +7,7 @@ import {
   CircuitBreakerOpenError,
   recordBreakerFailure,
   recordBreakerSuccess,
+  releaseBreakerProbe,
 } from "./circuitBreaker";
 
 // Provider-neutral retry and timeout core shared by every text AI provider
@@ -68,6 +69,8 @@ export async function retryWithBackoff<T>(
   baseDelayMs: number = 2000,
   budgetMs: number = AI_REQUEST_TIMEOUT_MS,
   callTimeoutMs: number = AI_CALL_TIMEOUT_MS,
+  /** The caller's own cancel signal, which `fn` already honours; see the catch below. */
+  callerSignal?: AbortSignal,
 ): Promise<T> {
   // Fast-fail when the breaker is open so prolonged outages don't amplify
   // latency across every caller (CODEBASE_AUDIT.md §5). Breaker open error
@@ -101,6 +104,13 @@ export async function retryWithBackoff<T>(
       // A breaker-open error thrown mid-flight (from nested retryWithBackoff
       // call) should propagate without counting again.
       if (error instanceof CircuitBreakerOpenError) throw error;
+      // The caller cancelled it: nothing to retry, and no word on the
+      // provider's health, unlike the per-call timeout, which still counts —
+      // AI5 (CODEBASE_ANALYSIS_2026-10-03).
+      if (callerSignal?.aborted) {
+        releaseBreakerProbe();
+        throw error;
+      }
       const delay = shouldRetry(error, attempt, maxRetries, baseDelayMs, deadline);
       if (delay === false) {
         // Only count a logical failure (after all retries exhausted) against

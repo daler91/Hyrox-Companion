@@ -30,6 +30,7 @@ vi.mock("./storage", () => ({
     },
     workouts: {
       getExistingGarminActivityIds: vi.fn(),
+      listDeviceRecordingsForDates: vi.fn(),
       createGarminWorkoutLogs: vi.fn(),
     },
   },
@@ -146,6 +147,7 @@ beforeEach(() => {
   app = createTestApp(router);
   vi.mocked(storage.users.getUser).mockResolvedValue({ distanceUnit: "km" } as never);
   vi.mocked(storage.workouts.getExistingGarminActivityIds).mockResolvedValue([]);
+  vi.mocked(storage.workouts.listDeviceRecordingsForDates).mockResolvedValue([]);
   vi.mocked(storage.workouts.createGarminWorkoutLogs).mockImplementation(
     async (rows: unknown) => rows as never,
   );
@@ -178,6 +180,37 @@ describe("POST /sync import accounting", () => {
     expect(res.body.imported + res.body.skipped).toBe(res.body.total);
     expect(vi.mocked(storage.workouts.createGarminWorkoutLogs).mock.calls[0][0]).toHaveLength(3);
     expect(storage.users.updateGarminLastSync).toHaveBeenCalledWith("user-1");
+  });
+
+  it("skips a session the Strava sync already imported and counts it as skipped", async () => {
+    // D16 (CODEBASE_ANALYSIS_2026-10-03): the watch auto-uploads to Strava, so
+    // with both connected the same run arrives from both syncs.
+    vi.mocked(storage.users.getGarminConnection).mockResolvedValue(conn());
+    FakeGarminConnect.getActivitiesImpl = () =>
+      Promise.resolve([
+        { ...activity(1), startTimeGMT: "2026-07-01 07:00:00" },
+        { ...activity(2), startTimeLocal: "2026-07-01 18:00:00", startTimeGMT: "2026-07-01 17:00:00" },
+      ]);
+    vi.mocked(storage.workouts.listDeviceRecordingsForDates).mockResolvedValue([
+      {
+        startedAt: new Date("2026-07-01T07:00:05Z"),
+        duration: 25,
+        focus: "Run",
+        deviceActivity: null,
+      },
+    ]);
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, imported: 1, skipped: 1, total: 2 });
+    expect(storage.workouts.listDeviceRecordingsForDates).toHaveBeenCalledWith(
+      "user-1",
+      ["2026-07-01"],
+      "strava",
+    );
+    const inserted = vi.mocked(storage.workouts.createGarminWorkoutLogs).mock.calls[0][0];
+    expect(inserted.map((row) => row.garminActivityId)).toEqual(["2"]);
   });
 
   it("translates a non-array activities response into 502 GARMIN_API_ERROR and records the error", async () => {

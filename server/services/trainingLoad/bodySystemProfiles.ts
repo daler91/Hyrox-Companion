@@ -311,6 +311,11 @@ const TEXT_SPORT_EXERCISES: ReadonlyArray<readonly [RegExp, ExerciseName]> = [
   [/\belliptical\b/, "elliptical"],
 ];
 
+/** Every endurance sport the title matcher above can name. */
+export const ENDURANCE_SPORT_EXERCISES: ReadonlySet<ExerciseName> = new Set(
+  TEXT_SPORT_EXERCISES.map(([, exercise]) => exercise),
+);
+
 /**
  * Split provider sport types and snake_case keys into words: "TrailRun" →
  * "trail run", "lap_swimming" → "lap swimming".

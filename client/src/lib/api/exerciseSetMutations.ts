@@ -2,7 +2,20 @@ import type { ExerciseSet } from "@shared/schema";
 
 import { typedRequest } from "./client";
 
-export type PatchExerciseSetPayload = Partial<{
+/**
+ * The units a body's weight/distance numbers were composed in: the
+ * preferences the client displayed them under. The server stamps the row
+ * with these, not the preference it reads at write time, which a unit switch
+ * on another device can have moved (D22, CODEBASE_ANALYSIS_2026-10-03).
+ * useExerciseSetsForOwner fills them in; a body without them is read in the
+ * athlete's current preference.
+ */
+interface ComposedUnits {
+  weightUnit?: "kg" | "lbs";
+  distanceUnit?: "km" | "miles";
+}
+
+export type PatchExerciseSetPayload = ComposedUnits & Partial<{
   exerciseName: string;
   customLabel: string | null;
   category: string;
@@ -31,7 +44,7 @@ export type PatchExerciseSetPayload = Partial<{
   expectedVersion: number;
 }>;
 
-export interface AddExerciseSetPayload {
+export interface AddExerciseSetPayload extends ComposedUnits {
   exerciseName: string;
   customLabel?: string | null;
   category: string;

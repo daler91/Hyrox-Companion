@@ -2,6 +2,7 @@ import type { GenerateContentResponse } from "@google/genai";
 import { inChunks, inSequence } from "@shared/inSequence";
 
 import { getAiClient } from "../ai/geminiSdk";
+import { usageFromGeminiResponse } from "../ai/providers/gemini";
 import { retryWithBackoff } from "../ai/retry";
 import { env } from "../env";
 import { recordAiUsage } from "../services/aiUsageService";
@@ -131,11 +132,11 @@ export function trackUsageFromResponse(
   feature: string,
   response: GenerateContentResponse,
 ): void {
-  const usage = response.usageMetadata;
-  const inputTokens = usage?.promptTokenCount ?? 0;
-  const outputTokens = usage?.candidatesTokenCount ?? 0;
+  // The text provider's counting, so thinking tokens are billed here too — AI4
+  // (CODEBASE_ANALYSIS_2026-10-03).
+  const usage = usageFromGeminiResponse(response);
   // Fire-and-forget — recordAiUsage already catches internally
-  void recordAiUsage(userId, model, feature, inputTokens, outputTokens);
+  void recordAiUsage(userId, model, feature, usage?.inputTokens ?? 0, usage?.outputTokens ?? 0);
 }
 
 /**

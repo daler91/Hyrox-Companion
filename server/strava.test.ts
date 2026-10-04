@@ -696,6 +696,7 @@ describe('syncStravaForUser', () => {
 
   let getStravaConnection: ReturnType<typeof vi.fn>;
   let getExistingStravaActivityIds: ReturnType<typeof vi.fn>;
+  let listDeviceRecordingsForDates: ReturnType<typeof vi.fn>;
   let updateStravaLastSync: ReturnType<typeof vi.fn>;
   let setStravaReauthRequired: ReturnType<typeof vi.fn>;
   let reconcileStravaActivities: ReturnType<typeof vi.fn>;
@@ -710,6 +711,7 @@ describe('syncStravaForUser', () => {
 
     getStravaConnection = vi.fn().mockResolvedValue(connection);
     getExistingStravaActivityIds = vi.fn().mockResolvedValue([]);
+    listDeviceRecordingsForDates = vi.fn().mockResolvedValue([]);
     updateStravaLastSync = vi.fn().mockResolvedValue(undefined);
     setStravaReauthRequired = vi.fn().mockResolvedValue(undefined);
     reconcileStravaActivities = vi.fn().mockResolvedValue({ ...zeroCounts });
@@ -732,7 +734,7 @@ describe('syncStravaForUser', () => {
           updateStravaLastSync,
           setStravaReauthRequired,
         },
-        workouts: { getExistingStravaActivityIds },
+        workouts: { getExistingStravaActivityIds, listDeviceRecordingsForDates },
       },
     }));
     vi.doMock('./advisoryLock', () => ({
@@ -810,6 +812,39 @@ describe('syncStravaForUser', () => {
     expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ imported: 1 }), 'strava.sync.ok');
     // A recording now sits on a log, so its stream is queued for grading.
     expect(enqueueSessionStreams).toHaveBeenCalledWith('user-1', 'sync');
+  });
+
+  it('skips an activity the Garmin sync already imported, before spending a detail fetch on it', async () => {
+    // D16 (CODEBASE_ANALYSIS_2026-10-03): a Garmin watch auto-uploads to
+    // Strava, so with both connected the same run arrives from both syncs.
+    const run = activity(7);
+    const evening = activity(9);
+    fetchMock
+      .mockResolvedValueOnce(stravaResponse([run, evening]))
+      .mockResolvedValueOnce(stravaResponse({ id: 9 }));
+    listDeviceRecordingsForDates.mockResolvedValue([
+      {
+        startedAt: new Date(new Date(run.start_date).getTime() + 30_000),
+        duration: 25,
+        focus: 'running',
+        deviceActivity: null,
+      },
+    ]);
+    reconcileStravaActivities.mockResolvedValue({ ...zeroCounts, standalone: 1 });
+
+    const outcome = await syncStravaForUser('user-1', log);
+
+    expect(outcome).toMatchObject({ ok: true, imported: 1, skipped: 1, total: 2 });
+    expect(listDeviceRecordingsForDates).toHaveBeenCalledWith(
+      'user-1',
+      [...new Set([run, evening].map((a) => a.start_date_local.split('T')[0]))],
+      'garmin',
+    );
+    const items = reconcileStravaActivities.mock.calls[0][1] as { activity: { id: number } }[];
+    expect(items.map((item) => item.activity.id)).toEqual([9]);
+    // One list page and one detail read: none for the duplicate.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/api/v3/activities/9');
   });
 
   it('queues no stream fetch when nothing was linked to a log or plan day', async () => {

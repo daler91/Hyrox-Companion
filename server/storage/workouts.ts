@@ -8,6 +8,7 @@ import {
   type StructureBlockInput,
   trainingPlans,
   type UpdateWorkoutLog,
+  users,
   type WorkoutLog,
   type WorkoutLogDeviceLinkColumns,
   workoutLogs,
@@ -445,6 +446,38 @@ export class WorkoutStorage {
         ),
       )
       .orderBy(asc(workoutLogs.date), asc(workoutLogs.id));
+  }
+
+  /**
+   * The athlete's logs on `dates` that carry a `provider` recording, with just
+   * the columns that time it. The OTHER provider's sync checks a fresh activity
+   * against these before importing it: a Garmin watch that auto-uploads to
+   * Strava hands us every session twice under unrelated ids (D16,
+   * CODEBASE_ANALYSIS_2026-10-03; see crossProviderDuplicates.ts).
+   */
+  async listDeviceRecordingsForDates(
+    userId: string,
+    dates: readonly string[],
+    provider: "strava" | "garmin",
+  ): Promise<Pick<WorkoutLog, "startedAt" | "duration" | "focus" | "deviceActivity">[]> {
+    if (dates.length === 0) return [];
+    return await db
+      .select({
+        startedAt: workoutLogs.startedAt,
+        duration: workoutLogs.duration,
+        focus: workoutLogs.focus,
+        deviceActivity: workoutLogs.deviceActivity,
+      })
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          inArray(workoutLogs.date, [...dates]),
+          isNotNull(
+            provider === "strava" ? workoutLogs.stravaActivityId : workoutLogs.garminActivityId,
+          ),
+        ),
+      );
   }
 
   /**
@@ -1011,7 +1044,15 @@ export class WorkoutStorage {
         .orderBy(asc(exerciseSets.sortOrder));
       if (prescribed.length === 0) return 0;
 
-      const rows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId));
+      // Only consulted for a prescription the plan day never stamped; every
+      // other copy keeps its own unit (D21, CODEBASE_ANALYSIS_2026-10-03). A
+      // missing user falls back to the column defaults, as loadUnitPreferences does.
+      const [unitPreferences] = await tx
+        .select({ weightUnit: users.weightUnit, distanceUnit: users.distanceUnit })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const rows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId, unitPreferences ?? {}));
       await tx.insert(exerciseSets).values(rows);
       return rows.length;
     });

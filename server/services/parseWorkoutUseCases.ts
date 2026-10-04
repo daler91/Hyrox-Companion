@@ -81,7 +81,7 @@ export async function reparseWorkoutUseCase(input: {
   }
 
   void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_attempted").catch(() => undefined);
-  const result = await reparseWorkout(parseTarget, unitPreferences);
+  const result = await reparseWorkout(parseTarget, unitPreferences, userId);
   if (!result || result.setCount === 0) {
     void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_failed").catch(() => undefined);
     return { status: "parse_failed" };

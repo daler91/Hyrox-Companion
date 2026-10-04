@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
-import { isPushEnabled, sendPushToUser } from "../pushNotifications";
+import { isAllowedPushEndpoint, isPushEnabled, sendPushToUser } from "../pushNotifications";
 import { rateLimiter, validateBody } from "../routeUtils";
 import { checkSafeOutboundUrl } from "../ssrfGuard";
 import { storage } from "../storage";
@@ -14,9 +14,16 @@ const router = Router();
 
 const subscribeSchema = z.object({
   // 🛡️ Sentinel: Enforce HTTPS to prevent SSRF against internal/local services
-  endpoint: z.string().url().refine((url) => url.startsWith("https://") && checkSafeOutboundUrl(url).ok, {
-    message: "Push endpoint must be an HTTPS URL and must not point to a local/private address",
-  }),
+  endpoint: z
+    .string()
+    .url()
+    .refine((url) => url.startsWith("https://") && checkSafeOutboundUrl(url).ok, {
+      message: "Push endpoint must be an HTTPS URL and must not point to a local/private address",
+    })
+    // Only browser push services: any other host is a server the user picked,
+    // which web-push would wait on and buffer without limit.
+    // S2 (CODEBASE_ANALYSIS_2026-10-03)
+    .refine(isAllowedPushEndpoint, { message: "Push endpoint must belong to a known browser push service" }),
   keys: z.object({
     p256dh: z.string().min(1),
     auth: z.string().min(1),

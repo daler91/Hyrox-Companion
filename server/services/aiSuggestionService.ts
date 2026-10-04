@@ -30,7 +30,10 @@ import { buildCoachNoteInputs } from "./coachNoteInputs";
 import { sanitizeRagInfo } from "./ragRetrieval";
 import {
   applyStructuredPlanDaySuggestionRows,
+  isUnscopedStructuredReplace,
   parseStructuredPlanDaySuggestionRows,
+  structuredReplaceTextUpdates,
+  withReplacedPrescription,
 } from "./structuredPlanDaySuggestion";
 import { resolveTrainingStyle } from "./training_styles";
 
@@ -74,7 +77,8 @@ export interface ApplyTimelineSuggestionInput {
 export type ApplyTimelineSuggestionFailureReason =
   | "ai_budget_exceeded"
   | "ai_disabled"
-  | "structured_parse_failed";
+  | "structured_parse_failed"
+  | "structured_partial_replace";
 
 export interface AppliedTimelineSuggestionResult {
   applied: true;
@@ -198,9 +202,9 @@ async function persistRecommendationTraceForSuggestions(
   );
 }
 
-function buildUnappliedStructuredResult(
-  reason: ApplyTimelineSuggestionFailureReason,
-): UnappliedTimelineSuggestionResult {
+function buildUnappliedStructuredResult<R extends ApplyTimelineSuggestionFailureReason>(
+  reason: R,
+): UnappliedTimelineSuggestionResult & { reason: R } {
   const messageByReason: Record<ApplyTimelineSuggestionFailureReason, string> = {
     ai_budget_exceeded:
       "Applying that table-backed suggestion needs one more AI parse, but your daily AI limit has been reached. I left the workout unchanged.",
@@ -208,6 +212,8 @@ function buildUnappliedStructuredResult(
       "Applying that table-backed suggestion needs one more AI parse, but AI features are temporarily disabled. I left the workout unchanged.",
     structured_parse_failed:
       "I couldn't convert that suggestion into exercise-table rows, so I left the table-backed workout unchanged.",
+    structured_partial_replace:
+      "That suggestion replaces only the accessory work, but this workout's exercise table doesn't separate main and accessory exercises, so replacing it would remove the main work too. I left the workout unchanged — edit the table directly, or ask for the complete revised session.",
   };
   return {
     applied: false,
@@ -220,7 +226,9 @@ function buildUnappliedStructuredResult(
 export async function getStructuredApplyBlocker(
   userId: string,
   log: TimelineSuggestionLogger,
-): Promise<UnappliedTimelineSuggestionResult | null> {
+): Promise<
+  (UnappliedTimelineSuggestionResult & { reason: "ai_disabled" | "ai_budget_exceeded" }) | null
+> {
   if (env.AI_FEATURES_ENABLED === "false") {
     return buildUnappliedStructuredResult("ai_disabled");
   }
@@ -454,6 +462,15 @@ export async function applyTimelineAiSuggestion(
   const shouldWriteStructuredRows =
     existingExerciseSets.length > 0 && input.targetField !== "notes";
   if (shouldWriteStructuredRows) {
+    // Refused before the AI parse it would spend: the table can't be scoped to
+    // the accessory rows. AI13 (CODEBASE_ANALYSIS_2026-10-03)
+    if (isUnscopedStructuredReplace(input)) {
+      return buildUnappliedStructuredResult("structured_partial_replace");
+    }
+    const unitPreferences = {
+      weightUnit: user?.weightUnit || "kg",
+      distanceUnit: user?.distanceUnit || "km",
+    };
     const structuredApplyBlocker = await getStructuredApplyBlocker(userId, log);
     if (structuredApplyBlocker) {
       return structuredApplyBlocker;
@@ -462,7 +479,7 @@ export async function applyTimelineAiSuggestion(
     try {
       const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
         input,
-        { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+        unitPreferences,
         userId,
       );
 
@@ -474,6 +491,17 @@ export async function applyTimelineAiSuggestion(
             structuredSetRows,
           ),
         );
+        // A replace swaps the whole table: reconcile the text to it and keep
+        // what it swapped out, as the auto-coach does. Keeping the old text
+        // left it contradicting the new rows. AI13 (CODEBASE_ANALYSIS_2026-10-03)
+        const updates: UpdatePlanDay =
+          input.action === "replace"
+            ? {
+                ...aiMetadata,
+                ...structuredReplaceTextUpdates(input.recommendation, unitPreferences),
+                aiInputsUsed: withReplacedPrescription(aiMetadata.aiInputsUsed ?? {}, day),
+              }
+            : aiMetadata;
         await db.transaction(async (tx) => {
           await applyStructuredPlanDaySuggestionRows(
             input.workoutId,
@@ -481,7 +509,7 @@ export async function applyTimelineAiSuggestion(
             structuredSetRows,
             tx,
           );
-          await storage.plans.updatePlanDay(input.workoutId, aiMetadata, userId, tx);
+          await storage.plans.updatePlanDay(input.workoutId, updates, userId, tx);
         });
         return { applied: true, structured: true };
       }

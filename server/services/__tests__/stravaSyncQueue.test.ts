@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../../queue", () => ({
   queue: { sendDebounced: mocks.sendDebounced },
-  DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInMinutes: 60 },
+  DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInSeconds: 3600 },
   // Stand-in for the request-id stamping; the real one is covered by queue tests.
   withTrace: (data: Record<string, unknown>) => ({ ...data, __requestId: "req-1" }),
 }));
@@ -43,7 +43,7 @@ describe("enqueueStravaSync", () => {
     expect(mocks.sendDebounced).toHaveBeenCalledWith(
       STRAVA_SYNC_QUEUE,
       { userId: "user-1", trigger: "webhook", __requestId: "req-1" },
-      { retryLimit: 3, retryBackoff: true, expireInMinutes: 60 },
+      { retryLimit: 3, retryBackoff: true, expireInSeconds: 3600 },
       STRAVA_SYNC_DEBOUNCE_SECONDS,
       "strava-sync:user-1",
     );

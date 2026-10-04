@@ -254,13 +254,16 @@ export function expandExercisesToPlanDaySetRows(
 export async function prepareParsedWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   unitPreferences: UnitPreferences,
+  userId: string,
 ): Promise<{ exercises: ParsedExercise[]; setRows: InsertExerciseSet[] } | null> {
   const { parseExercisesFromText } = await import("../../gemini");
 
   const textToParse = [workout.mainWorkout, workout.accessory].filter(Boolean).join("\n");
   if (!textToParse.trim()) return null;
 
-  const exercises = await parseExercisesFromText(textToParse.trim(), unitPreferences);
+  // userId so batch reparse's AI calls are recorded against the athlete's
+  // budget — PF2 (CODEBASE_ANALYSIS_2026-10-03).
+  const exercises = await parseExercisesFromText(textToParse.trim(), unitPreferences, undefined, userId);
   if (exercises.length === 0) return null;
 
   const setRows = expandExercisesToSetRows(exercises, workout.id, unitPreferences);

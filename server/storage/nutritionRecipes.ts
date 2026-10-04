@@ -28,7 +28,7 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { computeRecipeFood } from "../services/nutrition/recipe";
 import { roundMacros, scaleNutrition } from "../services/nutrition/rollup";
-import { getVisibleFoodsByIds } from "./nutritionFoods";
+import { assertLoggedHistoryKept, getVisibleFoodsByIds } from "./nutritionFoods";
 
 
 // --- recipes (FR-2.3) -----------------------------------------------------
@@ -104,6 +104,10 @@ export async function createRecipe(userId: string, input: CreateRecipeInput): Pr
 }
 
 
+export const SHARED_RECIPE_EDIT_CONFLICT =
+  "Other people have logged this recipe, so its name and ingredients can't be changed. " +
+  "Create a new recipe instead.";
+
 export async function updateRecipe(
   userId: string,
   id: string,
@@ -130,9 +134,17 @@ export async function updateRecipe(
   const computed = computeFromInputs(input, foodsById);
 
   await db.transaction(async (tx) => {
+    const backing = backingFoodValues(userId, input.name, computed);
+    // The backing food can't be shared any more, but one shared before D18
+    // (CODEBASE_ANALYSIS_2026-10-03) may be in other athletes' logs, which read
+    // it live: don't rewrite their history.
+    const [current] = await tx.select().from(foods).where(eq(foods.id, existing.foodId)).for("update");
+    if (current) {
+      await assertLoggedHistoryKept(tx, current, backing, userId, SHARED_RECIPE_EDIT_CONFLICT);
+    }
     await tx
       .update(foods)
-      .set({ ...backingFoodValues(userId, input.name, computed), updatedAt: new Date() })
+      .set({ ...backing, updatedAt: new Date() })
       .where(eq(foods.id, existing.foodId));
     await tx.delete(recipeIngredients).where(eq(recipeIngredients.recipeId, id));
     await tx.insert(recipeIngredients).values(

@@ -2,10 +2,12 @@ import "./coachService.testSetup";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { generateWorkoutSuggestions } from "../gemini/index";
+import { generateReviewNotes, generateWorkoutSuggestions } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
+import { lockAutoCoachWriteTargets } from "./autoCoachWriteGuard";
 import { triggerAutoCoach } from "./coachService";
+import { dbMockState } from "./coachService.dbMockState";
 import {
   makeSuggestion,
   makeTimelineEntry,
@@ -62,6 +64,39 @@ describe("coachService triggerAutoCoach guards", () => {
 
     await expect(triggerAutoCoach("user-1")).rejects.toThrow("budget svc down");
     expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
+  });
+
+  // AI16 (CODEBASE_ANALYSIS_2026-10-03): the pass writes from a snapshot taken
+  // before tens of seconds of model calls. A day the athlete edited meanwhile
+  // must keep the athlete's edit.
+  it("leaves alone a day that changed after the pass took its snapshot", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ planDayId: "day-1" }),
+      makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
+      makeTimelineEntry({ planDayId: "day-3", date: "2026-01-18" }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({ workoutId: "day-1", recommendation: "4x5 Squats @ 80%" }),
+      makeSuggestion({ workoutId: "day-2", recommendation: "5km tempo" }),
+    ]);
+    vi.mocked(generateReviewNotes).mockResolvedValue([
+      { workoutId: "day-3", note: "On track." },
+    ]);
+    vi.mocked(lockAutoCoachWriteTargets).mockResolvedValue({
+      dayIds: new Set(["day-1", "day-3"]),
+      adaptation: false,
+    });
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+    // Every day the pass writes is checked, inside the write transaction.
+    const [tx, userId, targets] = vi.mocked(lockAutoCoachWriteTargets).mock.calls[0];
+    expect(tx).toBe(dbMockState.tx);
+    expect(userId).toBe("user-1");
+    expect(targets.days.map((day) => day.id).sort()).toEqual(["day-1", "day-2", "day-3"]);
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls.map((call) => call[0])).toEqual([
+      "day-2",
+    ]);
   });
 
   it("skips suggestions with missing workoutId or recommendation", async () => {

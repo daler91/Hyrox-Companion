@@ -11,9 +11,20 @@ import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
  * the key would quietly give one athlete two concurrent coach runs (and two
  * AI bills) for the same edit.
  *
- * The 60s singleton window is what makes it safe to call this from a
+ * The 60s debounce window is what makes it safe to call this from a
  * per-keystroke write path: a burst of set edits, a drag of three workouts, or
  * a bulk CSV import all collapse into one coach pass per athlete.
+ *
+ * It has to be pg-boss's DEBOUNCE (sendDebounced, i.e. singletonNextSlot), not
+ * a bare singletonKey + singletonSeconds, which pg-boss treats as a THROTTLE: a
+ * window's job holds its slot while queued, running AND completed, so a trigger
+ * landing after that job had started — a typo'd set corrected 30 s after the
+ * first save — was dropped, and no pass ever saw the correction. The debounce
+ * queues exactly one more pass in the next window instead, like the Strava
+ * sync queue. AI12 (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * Jobs from two windows can still run at once on two instances; the coach's
+ * write serializes them per athlete (autoCoachWriteGuard).
  */
 export const AUTO_COACH_QUEUE = "auto-coach";
 
@@ -28,21 +39,24 @@ export type AutoCoachTrigger =
   | "plan-day-completed"
   | "plan-day-rescheduled";
 
-function autoCoachJobOptions(userId: string) {
-  return {
-    ...DEFAULT_JOB_OPTIONS,
-    singletonKey: `${AUTO_COACH_QUEUE}:${userId}`,
-    singletonSeconds: AUTO_COACH_DEBOUNCE_SECONDS,
-  };
-}
-
 /**
  * Enqueue an auto-coach pass, returning the send promise so callers that hold
  * companion state (createWorkoutAndScheduleCoaching pre-sets isAutoCoaching)
- * can roll it back when the enqueue fails.
+ * can roll it back when the enqueue fails. Resolves to the job id, or null
+ * when this window and the next already hold a pass for the athlete. Async so
+ * even a synchronous throw reaches the callers' .catch as a rejection.
  */
-export function enqueueAutoCoach(userId: string, trigger: AutoCoachTrigger): Promise<unknown> {
-  return queue.send(AUTO_COACH_QUEUE, { userId, trigger }, autoCoachJobOptions(userId));
+export async function enqueueAutoCoach(
+  userId: string,
+  trigger: AutoCoachTrigger,
+): Promise<string | null> {
+  return await queue.sendDebounced(
+    AUTO_COACH_QUEUE,
+    { userId, trigger },
+    DEFAULT_JOB_OPTIONS,
+    AUTO_COACH_DEBOUNCE_SECONDS,
+    `${AUTO_COACH_QUEUE}:${userId}`,
+  );
 }
 
 /**

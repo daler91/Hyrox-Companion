@@ -18,6 +18,7 @@ import type { TrainingContext } from "../gemini/index";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
+import { fingerprintStoredPlanDay } from "./autoCoachWriteGuard";
 import {
   type AdaptablePlanDay,
   type AdaptationResult,
@@ -30,6 +31,15 @@ const HISTORY_DAYS = 70;
 export interface PlanAdaptation {
   readonly planId: string;
   readonly result: AdaptationResult;
+  /**
+   * What the adaptation was computed from: the engine state's stamp and each
+   * changed day's prescription fingerprint, so the coach's write can tell the
+   * plan moved underneath it (autoCoachWriteGuard). AI16 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  readonly baseline: {
+    readonly engineStateUpdatedAt: string | null;
+    readonly dayFingerprints: ReadonlyMap<string, string | undefined>;
+  };
 }
 
 /** Nothing may rise while the load governor or the RPE trend reports fatigue. */
@@ -101,7 +111,17 @@ export async function computePlanAdaptation(
       fatigued: isFatigued(trainingContext),
       excludedDayIds,
     });
-    return { planId: plan.id, result };
+    const changed = new Set(result.days.map((day) => day.planDayId));
+    const dayFingerprints = new Map(
+      days
+        .filter((day) => changed.has(day.id))
+        .map((day) => [day.id, fingerprintStoredPlanDay(day, day.sets)] as const),
+    );
+    return {
+      planId: plan.id,
+      result,
+      baseline: { engineStateUpdatedAt: plan.engineState?.updatedAt ?? null, dayFingerprints },
+    };
   } catch (err) {
     // Reads and a pure computation: a failed query or a bug reports its
     // message and stack, never the rows it read. userId stays out (logger S2).

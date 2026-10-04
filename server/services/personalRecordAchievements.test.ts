@@ -128,31 +128,51 @@ describe("findPersonalRecordAchievements", () => {
   });
 
   it("treats lower time as an improvement", () => {
+    // run_1k's catalogue entry fixes the distance, so its bare clock is a result.
     const priorSets = [
       makeSet({
-        exerciseName: "easy_run",
+        exerciseName: "run_1k",
         category: "running",
-        time: 25,
+        time: 4.5,
         workoutLogId: "prior-1",
       }),
     ];
     const createdSet = makeSet({
       id: "set-new",
       workoutLogId: "created-1",
-      exerciseName: "easy_run",
+      exerciseName: "run_1k",
       category: "running",
-      time: 22,
+      time: 4.2,
       date: "2026-05-20",
     }) as ExerciseSet;
 
     expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([
       expect.objectContaining({
-        exerciseKey: "easy_run",
+        exerciseKey: "run_1k",
         metric: "bestTime",
-        value: 22,
-        previousValue: 25,
+        value: 4.2,
+        previousValue: 4.5,
       }),
     ]);
+  });
+
+  it("does not call a shorter run logged by time alone a PR (C1)", () => {
+    // A bare time on distance-carrying work is how long the athlete went, not
+    // how fast: a 20 min easy run is a shorter run than a 30 min one.
+    const priorSets = [
+      makeSet({ exerciseName: "easy_run", category: "running", time: 30, workoutLogId: "prior-1" }),
+      makeSet({ exerciseName: "easy_run", category: "running", time: 45, workoutLogId: "prior-2" }),
+    ];
+    const createdSet = makeSet({
+      id: "set-new",
+      workoutLogId: "created-1",
+      exerciseName: "easy_run",
+      category: "running",
+      time: 20,
+      date: "2026-05-20",
+    }) as ExerciseSet;
+
+    expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([]);
   });
 
   it("treats a LONGER hold as the improvement for isometric exercises", () => {
@@ -290,6 +310,83 @@ describe("findPersonalRecordAchievements", () => {
         value: 32,
         previousValue: 40,
       }),
+    ]);
+  });
+});
+
+// C1 (CODEBASE_ANALYSIS_2026-10-03): the raw minimum time per exercise made
+// every shorter piece a "New PR". A time now only beats a time for the same
+// distance, or for timed work sized by reps, the same reps.
+describe("findPersonalRecordAchievements — best time compares like-for-like work (C1)", () => {
+  const ski = (overrides: Partial<ExerciseSetWithDate>) =>
+    makeSet({ exerciseName: "skierg", category: "functional", ...overrides });
+  const priorSkiErg = [ski({ distance: 1000, time: 4, workoutLogId: "prior-1" })];
+
+  it("does not celebrate 250 m in 0:54 as faster than 1000 m in 4:00", () => {
+    const created = makeWorkout([
+      ski({ id: "new-1", workoutLogId: "created-1", distance: 250, time: 0.9, date: "2026-05-20" }),
+    ]);
+
+    expect(findPersonalRecordAchievements(priorSkiErg, created)).toEqual([]);
+  });
+
+  it("celebrates a faster 1000 m", () => {
+    const created = makeWorkout([
+      ski({ id: "new-1", workoutLogId: "created-1", distance: 1000, time: 3.8, date: "2026-05-20" }),
+    ]);
+
+    expect(findPersonalRecordAchievements(priorSkiErg, created)).toEqual([
+      expect.objectContaining({ exerciseKey: "skierg", metric: "bestTime", value: 3.8, previousValue: 4 }),
+    ]);
+  });
+
+  it("judges a faster piece against its own distance when the session mixes distances", () => {
+    const prior = [
+      ...priorSkiErg,
+      ski({ distance: 250, time: 0.85, workoutLogId: "prior-2", date: "2026-05-07" }),
+    ];
+    const created = makeWorkout([
+      ski({ id: "new-1", workoutLogId: "created-1", distance: 250, time: 0.9, date: "2026-05-20" }),
+      ski({ id: "new-2", workoutLogId: "created-1", distance: 1000, time: 3.9, date: "2026-05-20" }),
+    ]);
+
+    // The 250 m is slower than the 250 m best; the 1000 m beats the 1000 m best.
+    expect(findPersonalRecordAchievements(prior, created)).toEqual([
+      expect.objectContaining({ metric: "bestTime", value: 3.9, previousValue: 4 }),
+    ]);
+  });
+
+  it("matches distances through their unit stamps", () => {
+    const created = makeWorkout([
+      // 3,280 ft is 999.7 m: the same 1000 m, logged after a switch to miles.
+      ski({ id: "new-1", workoutLogId: "created-1", distance: 3280, distanceUnit: "ft", time: 3.8, date: "2026-05-20" }),
+    ]);
+    const prior = [ski({ distance: 1000, distanceUnit: "m", time: 4, workoutLogId: "prior-1" })];
+
+    expect(findPersonalRecordAchievements(prior, created, { distanceUnit: "miles" })).toEqual([
+      expect.objectContaining({ metric: "bestTime", value: 3.8, previousValue: 4 }),
+    ]);
+  });
+
+  it("does not compare a time with no distance against times that have one", () => {
+    const created = makeWorkout([
+      ski({ id: "new-1", workoutLogId: "created-1", distance: null, time: 2, date: "2026-05-20" }),
+    ]);
+
+    expect(findPersonalRecordAchievements(priorSkiErg, created)).toEqual([]);
+  });
+
+  it("compares rep-sized timed work only at the same reps", () => {
+    const balls = (overrides: Partial<ExerciseSetWithDate>) =>
+      makeSet({ exerciseName: "wall_balls", category: "functional", ...overrides });
+    const prior = [balls({ reps: 100, time: 5, workoutLogId: "prior-1" })];
+
+    const fewerReps = makeWorkout([balls({ id: "new-1", workoutLogId: "created-1", reps: 50, time: 2.5, date: "2026-05-20" })]);
+    expect(findPersonalRecordAchievements(prior, fewerReps).filter((a) => a.metric === "bestTime")).toEqual([]);
+
+    const sameReps = makeWorkout([balls({ id: "new-1", workoutLogId: "created-1", reps: 100, time: 4.5, date: "2026-05-20" })]);
+    expect(findPersonalRecordAchievements(prior, sameReps).filter((a) => a.metric === "bestTime")).toEqual([
+      expect.objectContaining({ value: 4.5, previousValue: 5 }),
     ]);
   });
 });

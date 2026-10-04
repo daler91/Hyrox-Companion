@@ -143,9 +143,8 @@ export function usePlanDayExercises(planDayId: string | null) {
     enabled: !!planDayId,
   });
 
-  const patchCachedSets = (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
-    if (!planDayId) return;
-    queryClient.setQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(planDayId), (prev) => {
+  const patchCachedSets = (id: string, updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
+    queryClient.setQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(id), (prev) => {
       const data = prev ?? { exerciseSets: [], structureBlocks: [] };
       return { ...data, exerciseSets: updater(data.exerciseSets) };
     });

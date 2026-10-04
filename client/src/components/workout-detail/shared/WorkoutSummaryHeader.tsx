@@ -1,3 +1,4 @@
+import { cadenceUnitFor } from "@shared/deviceSportTypes";
 import type { TimelineEntry } from "@shared/schema";
 import { isRunningExerciseName } from "@shared/schema/exercises";
 import { formatPace, formatSpeed, metersToUserDistance } from "@shared/unitConversion";
@@ -273,7 +274,7 @@ export function buildDeviceDetails(
   if (entry.avgCadence) {
     details.push({
       key: "cadence",
-      value: `${Math.round(entry.avgCadence)} spm`,
+      value: `${Math.round(entry.avgCadence)} ${cadenceUnitFor(entry.deviceSportType)}`,
       label: "cadence",
     });
   }

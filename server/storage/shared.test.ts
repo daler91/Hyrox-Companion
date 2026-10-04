@@ -19,6 +19,8 @@ vi.mock("../logger", () => ({
 }));
 
 describe("prescribedSetToLogRow", () => {
+  const KG_ATHLETE = { weightUnit: "kg", distanceUnit: "km" };
+
   it("mirrors a prescribed set's actual values into the planned columns when no planned values exist", () => {
     const prescribed = makeExerciseSet({
       exerciseName: "back_squat",
@@ -32,7 +34,7 @@ describe("prescribedSetToLogRow", () => {
       plannedTime: null,
     });
 
-    const row = prescribedSetToLogRow(prescribed, "log-1");
+    const row = prescribedSetToLogRow(prescribed, "log-1", KG_ATHLETE);
 
     expect(row.workoutLogId).toBe("log-1");
     expect(row.planDayId).toBeNull();
@@ -57,7 +59,7 @@ describe("prescribedSetToLogRow", () => {
       plannedTime: 85,
     });
 
-    const row = prescribedSetToLogRow(prescribed, "log-1");
+    const row = prescribedSetToLogRow(prescribed, "log-1", KG_ATHLETE);
 
     expect(row.plannedReps).toBe(5);
     expect(row.plannedWeight).toBe(100);
@@ -82,7 +84,7 @@ describe("prescribedSetToLogRow", () => {
       sortOrder: 4,
     });
 
-    const row = prescribedSetToLogRow(prescribed, "log-2");
+    const row = prescribedSetToLogRow(prescribed, "log-2", KG_ATHLETE);
 
     expect(row.blockId).toBe("block-1");
     expect(row.stepNumber).toBe(2);
@@ -97,6 +99,52 @@ describe("prescribedSetToLogRow", () => {
     expect(row.notes).toBe("felt strong");
     expect(row.confidence).toBe(90);
     expect(row.sortOrder).toBe(4);
+  });
+
+  describe("unit stamps (D21, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    // The athlete has since switched to lbs/miles: the stamp the prescription
+    // was written with, not today's preference, says what its numbers mean.
+    const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+
+    it("carries the prescription's stamp onto the logged copy", () => {
+      // Dropped, the copy was a legacy row: read as the CURRENT preference, a
+      // kg-prescribed 100 showed as 100 lb in the log while the plan showed 220.
+      const prescribed = makeExerciseSet({
+        planDayId: "pd-1",
+        workoutLogId: null,
+        weight: 100,
+        weightUnit: "kg",
+        distance: 1000,
+        distanceUnit: "m",
+      });
+
+      const row = prescribedSetToLogRow(prescribed, "log-1", LB_ATHLETE);
+
+      expect(row).toMatchObject({ weight: 100, weightUnit: "kg", distance: 1000, distanceUnit: "m" });
+      expect(row.plannedWeight).toBe(100);
+      expect(row.plannedDistance).toBe(1000);
+    });
+
+    it("stamps a legacy (unstamped) prescription with the units it reads in today", () => {
+      // A pre-L4 plan row has no stamp and reads as the current preference, so
+      // that is the unit the athlete saw when they logged it.
+      const prescribed = makeExerciseSet({ weight: 225, weightUnit: null, distance: 3280, distanceUnit: null });
+
+      const row = prescribedSetToLogRow(prescribed, "log-1", LB_ATHLETE);
+
+      expect(row).toMatchObject({ weight: 225, weightUnit: "lbs", distance: 3280, distanceUnit: "ft" });
+    });
+
+    it("fills only the axis the source row is missing", () => {
+      // restampSetPatch stamps one axis at a time, so a legacy row whose weight
+      // was edited after L4 carries a weight stamp and no distance stamp.
+      const prescribed = makeExerciseSet({ weightUnit: "kg", distanceUnit: null });
+
+      const row = prescribedSetToLogRow(prescribed, "log-1", LB_ATHLETE);
+
+      expect(row.weightUnit).toBe("kg");
+      expect(row.distanceUnit).toBe("ft");
+    });
   });
 });
 

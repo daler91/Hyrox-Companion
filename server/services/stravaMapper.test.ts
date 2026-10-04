@@ -242,10 +242,49 @@ describe("mapStravaActivityToWorkout", () => {
     expect(result.maxHeartrate).toBe(175);
     expect(result.avgSpeed).toBe(3.5);
     expect(result.maxSpeed).toBe(5);
-    expect(result.avgCadence).toBe(85);
+    // A run's per-leg 85 is stored as full steps per minute (C9).
+    expect(result.avgCadence).toBe(170);
     expect(result.avgWatts).toBe(200);
     expect(result.sufferScore).toBe(75);
     expect(result.elevationGain).toBe(120);
+  });
+
+  // C9 (CODEBASE_ANALYSIS_2026-10-03): Strava reports a run's cadence for one
+  // leg, Garmin writes full steps per minute into the same column, and both
+  // are shown as "spm". A ride's cadence is pedal rpm and must not be doubled.
+  describe("cadence", () => {
+    it("stores a run's per-leg cadence as full steps per minute, like Garmin", () => {
+      for (const sport_type of ["Run", "TrailRun", "VirtualRun"]) {
+        const result = mapStravaActivityToWorkout(
+          makeActivity({ type: "Run", sport_type, average_cadence: 86 }),
+          "user-1",
+        );
+        expect(result.avgCadence, sport_type).toBe(172);
+      }
+    });
+
+    it("falls back to the legacy type when sport_type is empty", () => {
+      const result = mapStravaActivityToWorkout(
+        makeActivity({ type: "Run", sport_type: "", average_cadence: 86 }),
+        "user-1",
+      );
+      expect(result.avgCadence).toBe(172);
+    });
+
+    it("keeps a ride's pedal rpm as it is", () => {
+      const result = mapStravaActivityToWorkout(
+        makeActivity({ type: "Ride", sport_type: "Ride", average_cadence: 90 }),
+        "user-1",
+      );
+      expect(result.avgCadence).toBe(90);
+    });
+
+    it("is null when the activity has no cadence", () => {
+      expect(mapStravaActivityToWorkout(makeActivity(), "user-1").avgCadence).toBeNull();
+      expect(
+        mapStravaActivityToWorkout(makeActivity({ average_cadence: 0 }), "user-1").avgCadence,
+      ).toBeNull();
+    });
   });
 
   it("captures the true start instant from start_date (UTC)", () => {

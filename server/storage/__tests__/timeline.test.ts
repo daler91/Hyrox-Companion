@@ -248,11 +248,85 @@ describe("TimelineStorage standalone workout plan association", () => {
     // Filtering by a specific plan must thread that planId into the standalone
     // fetch so other-plan workouts can be excluded (the bug: it never was).
     await storage.getTimeline("user-1", "plan-2");
-    expect(spy).toHaveBeenLastCalledWith("user-1", "plan-2", undefined, undefined);
+    expect(spy).toHaveBeenLastCalledWith("user-1", "plan-2", undefined, undefined, undefined);
 
     // All Plans (no planId) leaves the standalone fetch unscoped.
     await storage.getTimeline("user-1");
-    expect(spy).toHaveBeenLastCalledWith("user-1", undefined, undefined, undefined);
+    expect(spy).toHaveBeenLastCalledWith("user-1", undefined, undefined, undefined, undefined);
+  });
+});
+
+describe("TimelineStorage logs linked to a plan day", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    storage = setupTimelineStorage({ plans: [{ id: "plan-1", name: "Plan One", raceDate: null }] });
+  });
+
+  it("shows every log linked to one plan day, the newest standing in for the day (C16)", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([planDay("d-1", "2026-06-02")] as never);
+    // Newest first, as the linked read orders them: an evening strength session
+    // logged against the day the morning run had already completed.
+    linkedRows = [
+      logRow("evening", { planId: "plan-1", planDayId: "d-1", date: "2026-06-02", focus: "Strength" }),
+      logRow("morning", { planId: "plan-1", planDayId: "d-1", date: "2026-06-02", focus: "Easy Run" }),
+    ];
+
+    const entries = await storage.getTimeline("user-1");
+
+    expect(entries).toHaveLength(2);
+    expect(entryFor(entries, "d-1")).toMatchObject({ id: "log-evening", type: "logged", workoutLogId: "evening" });
+    // The other log is its own entry: tagged with its plan, but it does not
+    // claim the plan day's slot (the client keys a card's identity on planDayId).
+    const morning = entries.find((e) => e.id === "log-morning");
+    expect(morning).toMatchObject({
+      type: "logged",
+      status: "completed",
+      workoutLogId: "morning",
+      focus: "Easy Run",
+      planId: "plan-1",
+      planName: "Plan One",
+    });
+    expect(morning?.planDayId).toBeUndefined();
+    // Both are hydrated, so the export can title each one's sets.
+    expect(workoutStorage.getExerciseSetsByWorkoutLogs).toHaveBeenCalledWith(
+      expect.arrayContaining(["evening", "morning"]),
+    );
+  });
+
+  it("reads logs on a retired plan's dropped days with the standalone logs, in All plans only (C17)", async () => {
+    storage = setupTimelineStorage({
+      plans: [
+        { id: "plan-old", name: "Old block", raceDate: null, retiredOn: "2026-06-02" },
+        { id: "plan-1", name: "Plan One", raceDate: null },
+      ],
+      emptyPlanDays: true,
+    });
+    const spy = vi.spyOn(storage, "fetchStandaloneWorkouts");
+    // Its day is on the cutoff, so it has no plan-day entry to ride on.
+    standaloneRows = [
+      logRow("today", { planId: "plan-old", planDayId: "d-old-today", date: "2026-06-02" }),
+    ];
+
+    const entries = await storage.getTimeline("user-1");
+
+    // The retired plan's dropped days are handed to the standalone read.
+    expect(spy.mock.lastCall?.[4]).toBeDefined();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: "log-today",
+      type: "logged",
+      status: "completed",
+      workoutLogId: "today",
+      planId: "plan-old",
+      planName: "Old block",
+    });
+    expect(entries[0].planDayId).toBeUndefined();
+
+    // Asking for the one plan keeps all its days, so the log comes through its
+    // plan day there and must not be read a second time.
+    await storage.getTimeline("user-1", "plan-old");
+    expect(spy.mock.lastCall?.[4]).toBeUndefined();
   });
 });
 

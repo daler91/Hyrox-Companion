@@ -27,6 +27,12 @@ interface ResponsiveSheetProps {
   readonly mobileFullHeight?: boolean;
   readonly desktopFullHeight?: boolean;
   readonly testId?: string;
+  /**
+   * Runs before a swipe, outside tap, Escape or the close button dismisses
+   * the sheet. Return false to keep it open, e.g. to confirm discarding
+   * unsaved input; a vetoed swipe snaps back instead of staying dragged down.
+   */
+  readonly beforeDismiss?: () => boolean;
 }
 
 /** Drag the sheet further than this (px) and let go to close it. */
@@ -43,7 +49,7 @@ const SWIPE_START_PX = 8;
  */
 function useSwipeToDismiss(
   contentRef: React.RefObject<HTMLDivElement | null>,
-  onOpenChange: (open: boolean) => void,
+  requestDismiss: () => boolean,
 ) {
   return React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -68,13 +74,11 @@ function useSwipeToDismiss(
         window.removeEventListener("pointerup", end);
         window.removeEventListener("pointercancel", end);
         if (!engaged) return;
-        if (dy > SWIPE_DISMISS_PX) {
-          // Leave the offset in place: Radix's slide-out animation starts
-          // from the current transform, so the sheet keeps falling instead of
-          // snapping back up before it leaves.
-          onOpenChange(false);
-          return;
-        }
+        // Leave the offset in place on a dismissal: Radix's slide-out
+        // animation starts from the current transform, so the sheet keeps
+        // falling instead of snapping back up before it leaves. A vetoed
+        // dismissal (beforeDismiss) snaps back like a short drag.
+        if (dy > SWIPE_DISMISS_PX && requestDismiss()) return;
         el.style.transition = "transform 200ms ease-out";
         el.style.transform = "";
       };
@@ -82,7 +86,7 @@ function useSwipeToDismiss(
       window.addEventListener("pointerup", end);
       window.addEventListener("pointercancel", end);
     },
-    [contentRef, onOpenChange],
+    [contentRef, requestDismiss],
   );
 }
 
@@ -100,9 +104,10 @@ function MobileSheet({
   contentClassName,
   testId,
   fullHeight,
-}: SheetChromeProps & { readonly fullHeight: boolean }) {
+  requestDismiss,
+}: SheetChromeProps & { readonly fullHeight: boolean; readonly requestDismiss: () => boolean }) {
   const contentRef = React.useRef<HTMLDivElement>(null);
-  const onGrabPointerDown = useSwipeToDismiss(contentRef, onOpenChange);
+  const onGrabPointerDown = useSwipeToDismiss(contentRef, requestDismiss);
   const header = (
     <SheetHeader className={fullHeight ? "sr-only" : "shrink-0 text-left"}>
       <SheetTitle>{title}</SheetTitle>
@@ -198,11 +203,28 @@ function DesktopDialog({
 export function ResponsiveSheet({
   mobileFullHeight = false,
   desktopFullHeight = false,
-  ...chrome
+  beforeDismiss,
+  onOpenChange,
+  ...rest
 }: ResponsiveSheetProps) {
   const isMobile = useIsMobile();
+  // Every close path funnels through here so `beforeDismiss` can veto it;
+  // returns true when the sheet was told to close.
+  const requestDismiss = React.useCallback((): boolean => {
+    if (beforeDismiss && !beforeDismiss()) return false;
+    onOpenChange(false);
+    return true;
+  }, [beforeDismiss, onOpenChange]);
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
+      if (next) onOpenChange(true);
+      else requestDismiss();
+    },
+    [onOpenChange, requestDismiss],
+  );
+  const chrome = { ...rest, onOpenChange: handleOpenChange };
   return isMobile ? (
-    <MobileSheet {...chrome} fullHeight={mobileFullHeight} />
+    <MobileSheet {...chrome} fullHeight={mobileFullHeight} requestDismiss={requestDismiss} />
   ) : (
     <DesktopDialog {...chrome} fullHeight={desktopFullHeight} />
   );

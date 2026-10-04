@@ -407,6 +407,26 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(prompt).toContain("Exercises: Sled Push: 225 lbs, 164ft");
   });
 
+  // AI9 (CODEBASE_ANALYSIS_2026-10-03): a prescription written in kg before the
+  // athlete switched to lbs reached the auto-coach as "100 lbs"; it proposed
+  // ~105 lbs, which was stamped lbs and cut the session to ~48 kg.
+  it("shows a kg-stamped prescription in lbs to an athlete who has since switched", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext({ weightUnit: "lbs", distanceUnit: "miles" }),
+      [
+        createMockUpcomingWorkout({
+          id: "switched-unit-day",
+          exerciseDetails: [
+            { exerciseName: "back_squat", category: "strength", setNumber: 1, reps: 5, weight: 100, weightUnit: "kg", sortOrder: 0 },
+          ],
+        }),
+      ],
+    );
+
+    expect(prompt).toContain("Exercises: Back Squat: 5 reps, 220 lbs");
+    expect(prompt).not.toContain("100 lbs");
+  });
+
   it("includes completed exercise rows and athlete note in recent workout context", () => {
     const prompt = buildSuggestionsPrompt(
       createMockTrainingContext({

@@ -19,6 +19,7 @@ import {
   loadPersistedBreakerState,
   recordBreakerFailure,
   recordBreakerSuccess,
+  releaseBreakerProbe,
 } from "./circuitBreaker";
 
 // Trip the breaker open by exhausting the failure threshold (5 consecutive).
@@ -98,6 +99,22 @@ describe("circuit breaker", () => {
       // The probe learned nothing, so it neither closed nor re-opened the
       // breaker — but it must not stay wedged either.
       expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+      expect(() => assertBreakerClosed()).not.toThrow();
+    });
+
+    it("releases a half-open probe its caller cancelled, and otherwise changes nothing (AI5)", () => {
+      for (let i = 0; i < 4; i++) recordBreakerFailure(new Error("503"));
+      releaseBreakerProbe();
+      // Closed: the run of failures neither grew nor reset.
+      recordBreakerFailure(new Error("503"));
+      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+
+      vi.advanceTimersByTime(30_000); // COOLDOWN_MS
+      assertBreakerClosed(); // -> half-open, probe in flight
+      releaseBreakerProbe();
+
+      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(false);
       expect(() => assertBreakerClosed()).not.toThrow();
     });
   });

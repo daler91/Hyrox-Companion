@@ -319,6 +319,49 @@ describe("formatExerciseSetsForPrompt", () => {
       );
     });
   });
+
+  // AI9 (CODEBASE_ANALYSIS_2026-10-03): the label is the athlete's current
+  // unit, so a value stamped in another unit is converted before it is printed.
+  describe("per-row unit stamps (L4)", () => {
+    const LBS_MILES = { weightUnit: "lbs", distanceUnit: "miles" };
+
+    it("shows a kg-stamped set in lbs for an athlete who has switched", () => {
+      expect(
+        formatExerciseSetsForPrompt([set({ reps: 5, weight: 140, weightUnit: "kg" })], LBS_MILES),
+      ).toBe(`${BACK_SQUAT_LABEL}: 5 reps, 309 lbs`);
+    });
+
+    it("shows a lbs-stamped set in kg for an athlete who switched the other way", () => {
+      expect(
+        formatExerciseSetsForPrompt([set({ reps: 5, weight: 309, weightUnit: "lbs" })], { weightUnit: "kg" }),
+      ).toBe(`${BACK_SQUAT_LABEL}: 5 reps, 140 kg`);
+    });
+
+    it("shows a metre-stamped distance in feet under a miles preference", () => {
+      expect(
+        formatExerciseSetsForPrompt([set({ distance: 1000, distanceUnit: "m" })], LBS_MILES),
+      ).toBe(`${BACK_SQUAT_LABEL}: 3281ft`);
+    });
+
+    it("leaves a set stamped in the current unit, and a legacy set, as stored", () => {
+      expect(
+        formatExerciseSetsForPrompt(
+          [set({ setNumber: 1, weight: 225, weightUnit: "lbs" }), set({ setNumber: 2, weight: 135 })],
+          LBS_MILES,
+        ),
+      ).toBe(`${BACK_SQUAT_LABEL}: set 1: 225 lbs; set 2: 135 lbs`);
+    });
+
+    it("does not collapse two sets that only share a raw number across a switch", () => {
+      const sets = [
+        set({ setNumber: 1, reps: 5, weight: 100, weightUnit: "kg" }),
+        set({ setNumber: 2, reps: 5, weight: 100, weightUnit: "lbs" }),
+      ];
+      expect(formatExerciseSetsForPrompt(sets, LBS_MILES)).toBe(
+        `${BACK_SQUAT_LABEL}: set 1: 5 reps, 220 lbs; set 2: 5 reps, 100 lbs`,
+      );
+    });
+  });
 });
 
 describe("buildWorkoutSearchText", () => {

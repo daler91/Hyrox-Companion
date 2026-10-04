@@ -120,6 +120,20 @@ describe("formatFocusedWorkout", () => {
     expect(block).toContain("Coach notes: Prior AI review: Kept at threshold: RPE trend is stable.");
   });
 
+  // AI9 (CODEBASE_ANALYSIS_2026-10-03): sets are shown in the athlete's current
+  // unit through their L4 stamp, not as the raw number under that label.
+  it("shows sets written in kg in lbs for an athlete who has since switched", () => {
+    const kgSet = { ...SQUAT_SET, weight: 140, weightUnit: "kg" } as ExerciseSet;
+    const block = formatFocusedWorkout(
+      { planDay: planDay(), plannedSets: [kgSet], log: workoutLog(), loggedSets: [kgSet] },
+      { weightUnit: "lbs", distanceUnit: "miles" },
+    );
+
+    expect(block).toContain("Planned sets: Back Squat: 5 reps, 309 lbs");
+    expect(block).toContain("Logged sets: Back Squat: 5 reps, 309 lbs");
+    expect(block).not.toContain("140 lbs");
+  });
+
   it("escapes free text the athlete wrote", () => {
     const block = formatFocusedWorkout({
       plannedSets: [],

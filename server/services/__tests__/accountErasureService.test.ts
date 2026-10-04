@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { rememberUserErased } from "../../clerkAuth";
 import { purgeUserJobs } from "../../queue";
 import { storage } from "../../storage";
 import {
@@ -24,6 +25,7 @@ vi.mock("@clerk/express", () => ({
 
 vi.mock("../../clerkAuth", () => ({
   evictUserFromSeenCache: vi.fn().mockResolvedValue(undefined),
+  rememberUserErased: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../queue", () => ({ purgeUserJobs: vi.fn().mockResolvedValue(0) }));
 vi.mock("../../strava", () => ({ deauthorizeStravaBestEffort: vi.fn() }));
@@ -71,6 +73,28 @@ describe("eraseAccount", () => {
     // be committed before the step that makes retrying impossible.
     expect(users.markErasureRequested).toHaveBeenCalledWith("user-1");
     expect(callOrder(users.markErasureRequested)).toBeLessThan(callOrder(clerkDeleteUser));
+  });
+
+  // P5 (CODEBASE_ANALYSIS_2026-10-03): a Clerk session minted before the
+  // identity was deleted still authenticates until it expires. The tombstone
+  // has to exist before the row goes, or that request re-provisions it.
+  it("tombstones the id in the auth layer before the user row is deleted", async () => {
+    await eraseAccount("user-1");
+
+    expect(rememberUserErased).toHaveBeenCalledWith("user-1");
+    expect(callOrder(clerkDeleteUser)).toBeLessThan(callOrder(vi.mocked(rememberUserErased)));
+    expect(callOrder(vi.mocked(rememberUserErased))).toBeLessThan(
+      callOrder(users.deleteUserAndPrivateCustomFoods),
+    );
+  });
+
+  it("keeps the user row when the tombstone cannot be written", async () => {
+    vi.mocked(rememberUserErased).mockRejectedValueOnce(new Error("db down"));
+
+    await expect(eraseAccount("user-1")).rejects.toThrow("db down");
+
+    // Still retriable: the row and its erasure marker stay for the sweep.
+    expect(users.deleteUserAndPrivateCustomFoods).not.toHaveBeenCalled();
   });
 
   it("leaves the marker standing when a step after the Clerk delete fails", async () => {
