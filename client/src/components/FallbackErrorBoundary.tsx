@@ -2,6 +2,7 @@ import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { isChunkLoadError, reloadPage } from "@/lib/lazyWithReload";
 
 export interface FallbackErrorBoundaryProps {
   readonly error: unknown;
@@ -10,6 +11,9 @@ export interface FallbackErrorBoundaryProps {
 
 export function FallbackErrorBoundary({ error, resetError }: Readonly<FallbackErrorBoundaryProps>) {
   const errorMessage = error instanceof Error ? error.toString() : String(error);
+  // A failed route chunk (Landing, Privacy) throws again on re-render, so Try
+  // again reloads for it (CL3, CODEBASE_ANALYSIS_2026-10-03).
+  const handleRetry = isChunkLoadError(error) ? reloadPage : resetError;
 
   return (
     <div
@@ -30,12 +34,12 @@ export function FallbackErrorBoundary({ error, resetError }: Readonly<FallbackEr
             Try again below. If this keeps happening, a full refresh usually clears it up.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button onClick={resetError} variant="default" data-testid="button-retry">
+            <Button onClick={handleRetry} variant="default" data-testid="button-retry">
               <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
               Try again
             </Button>
             <Button
-              onClick={() => globalThis.window.location.reload()}
+              onClick={reloadPage}
               variant="outline"
               data-testid="button-refresh"
             >

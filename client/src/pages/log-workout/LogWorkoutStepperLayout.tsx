@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/ui/PageContainer";
@@ -32,6 +32,8 @@ interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerci
     opts?: { onSuccess?: (parsed: ParseWorkoutStructureResponse) => void },
   ) => void;
   readonly isParsingImage: boolean;
+  /** Ends dictation; `onStopped` runs once its last words are in freeText. */
+  readonly stopListening: (onStopped?: () => void) => void;
 }
 
 const STEP_LABELS: Record<WorkoutStep, string> = {
@@ -91,16 +93,41 @@ export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
     }
   }, [autoParsing, autoParseError]);
 
-  const advanceFromCapture = () => {
-    const hasText = freeText.trim().length > 0;
+  const advanceWithText = (text: string) => {
+    const hasText = text.trim().length > 0;
     const hasBlocks = exerciseBlocks.length > 0;
     const needsParse =
-      hasText && (freeText !== lastParsedTextRef.current || !hasBlocks);
+      hasText && (text !== lastParsedTextRef.current || !hasBlocks);
     if (needsParse) {
-      pendingParseTextRef.current = freeText;
-      parseNow(freeText);
+      pendingParseTextRef.current = text;
+      parseNow(text);
     }
     setStep(2);
+  };
+
+  // "Continue to exercises" ends any dictation and waits for its last words
+  // before it parses and changes step. The mic controls unmount with Capture,
+  // so a live session went on appending everything said afterwards to a
+  // description nobody could see, and the phrase being spoken was left out
+  // of the parse. stopListening calls back once the recogniser's final result
+  // is in freeText (at once when nothing is dictating, or when a stop the mic
+  // button started has finished); the re-render that callback asks for
+  // carries that text to the effect below (CL30, CODEBASE_ANALYSIS_2026-10-03).
+  const continueRef = useRef<"idle" | "waiting" | "ready">("idle");
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+  useLayoutEffect(() => {
+    if (continueRef.current !== "ready") return;
+    continueRef.current = "idle";
+    advanceWithText(freeText);
+  });
+
+  const advanceFromCapture = () => {
+    if (continueRef.current !== "idle") return;
+    continueRef.current = "waiting";
+    stopListening(() => {
+      continueRef.current = "ready";
+      rerender();
+    });
   };
 
   // Shared props passed to both CaptureStep (which forwards them to

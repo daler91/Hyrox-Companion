@@ -11,7 +11,7 @@ import type {
 
 import { typedRequest } from "./client";
 import type { ReparseResponse } from "./constants";
-import { IMAGE_REPARSE_REQUEST_OPTIONS } from "./constants";
+import { AI_REQUEST_OPTIONS, IMAGE_REPARSE_REQUEST_OPTIONS } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import { createExerciseSetMutationApi } from "./exerciseSetMutations";
 
@@ -152,10 +152,10 @@ export const workouts = {
   combine: (data: { newWorkout: Record<string, unknown>; deleteWorkoutIds: string[]; skipPlanDayIds?: string[] }) =>
     typedRequest<WorkoutLog>("POST", "/api/v1/workouts/combine", data),
 
+  // An AI parse: waits out the server's AI budget, not the 15 s default
+  // (CL26, CODEBASE_ANALYSIS_2026-10-03).
   reparse: (id: string, payload?: ReparseWorkoutTextPayload) =>
-    payload === undefined
-      ? typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`)
-      : typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`, payload),
+    typedRequest<ReparseResponse>("POST", `/api/v1/workouts/${id}/reparse`, payload, AI_REQUEST_OPTIONS),
 
   reparseFromImage: (id: string, payload: ParseFromImagePayload) =>
     typedRequest<ReparseResponse>(

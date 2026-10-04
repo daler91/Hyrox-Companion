@@ -1,7 +1,7 @@
 import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import { typedRequest } from './client';
-import { IMAGE_REPARSE_REQUEST_OPTIONS } from './constants';
+import { AI_REQUEST_OPTIONS, IMAGE_REPARSE_REQUEST_OPTIONS } from './constants';
 import { workouts } from './workouts';
 
 vi.mock('./client', () => ({
@@ -54,9 +54,14 @@ describe('workouts API client', () => {
     expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/bulk-delete', payload);
   });
 
-  it('reparse() calls typedRequest with POST and correct id', () => {
+  it('reparse() calls typedRequest with POST, the correct id and the AI timeout', () => {
     workouts.reparse('123');
-    expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/123/reparse');
+    expect(typedRequest).toHaveBeenCalledWith(
+      'POST',
+      '/api/v1/workouts/123/reparse',
+      undefined,
+      AI_REQUEST_OPTIONS,
+    );
   });
 
   it('batchReparse() calls typedRequest with POST', () => {

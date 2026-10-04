@@ -2,6 +2,7 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { isChunkLoadError, reloadPage } from "@/lib/lazyWithReload";
 
 export interface FeatureErrorBoundaryProps {
   readonly error: unknown;
@@ -15,6 +16,11 @@ export function FeatureErrorBoundary({
   featureName = "This section",
 }: Readonly<FeatureErrorBoundaryProps>) {
   const errorMessage = error instanceof Error ? error.toString() : String(error);
+  // React keeps a failed lazy import, so re-rendering a chunk error only throws
+  // it again: Try again reloads the page onto the current build (CL3,
+  // CODEBASE_ANALYSIS_2026-10-03).
+  const isChunkError = isChunkLoadError(error);
+  const handleRetry = isChunkError ? reloadPage : resetError;
 
   return (
     <div
@@ -34,10 +40,10 @@ export function FeatureErrorBoundary({
             Your data is safe. The rest of the app is still available from the sidebar.
           </p>
           <p className="text-sm text-muted-foreground mb-4">
-            Tap Try again to reload this section.
+            Tap Try again to reload {isChunkError ? "the page" : "this section"}.
           </p>
           <Button
-            onClick={resetError}
+            onClick={handleRetry}
             variant="outline"
             size="sm"
             data-testid="button-feature-retry"

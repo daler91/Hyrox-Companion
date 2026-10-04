@@ -1,6 +1,6 @@
 import { ClerkProvider, Show } from "@clerk/react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense, useLayoutEffect } from "react";
+import { Suspense, useLayoutEffect } from "react";
 import { Route,Switch } from "wouter";
 
 import { AppSidebar } from "@/components/AppSidebar";
@@ -24,6 +24,7 @@ import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
 import { useOfflineQueueFlush } from "@/hooks/useOfflineQueueFlush";
 import { isDevPreview, shouldBypassAuth } from "@/lib/authBypass";
 import { featureFlags } from "@/lib/featureFlags";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 import NotFound from "@/pages/not-found";
 
 import { queryClient } from "./lib/queryClient";
@@ -31,14 +32,17 @@ import { queryClient } from "./lib/queryClient";
 // Lazy-loaded like the other routes (S8) so the Timeline page splits into its
 // own chunk instead of riding in the main bundle. It's wrapped by the same
 // Suspense fallback below, so first authenticated paint shows the spinner briefly.
-const Timeline = lazy(() => import("@/pages/Timeline"));
-const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const Analytics = lazy(() => import("@/pages/Analytics"));
-const Landing = lazy(() => import("@/pages/Landing"));
-const Privacy = lazy(() => import("@/pages/Privacy"));
-const Nutrition = lazy(() => import("@/pages/Nutrition"));
-const Review = lazy(() => import("@/pages/Review"));
+// lazyWithReload rather than React.lazy: a chunk a deploy removed reloads the
+// page onto the current build instead of failing until a manual reload (CL3,
+// CODEBASE_ANALYSIS_2026-10-03).
+const Timeline = lazyWithReload(() => import("@/pages/Timeline"));
+const LogWorkout = lazyWithReload(() => import("@/pages/LogWorkout"));
+const Settings = lazyWithReload(() => import("@/pages/Settings"));
+const Analytics = lazyWithReload(() => import("@/pages/Analytics"));
+const Landing = lazyWithReload(() => import("@/pages/Landing"));
+const Privacy = lazyWithReload(() => import("@/pages/Privacy"));
+const Nutrition = lazyWithReload(() => import("@/pages/Nutrition"));
+const Review = lazyWithReload(() => import("@/pages/Review"));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 

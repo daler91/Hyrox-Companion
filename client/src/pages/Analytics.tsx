@@ -45,32 +45,38 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { type AnalyticsExportFormat, api, QUERY_KEYS } from "@/lib/api";
 import { featureFlags } from "@/lib/featureFlags";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 
 // Lazy-loaded: only the "overview" tab (below) is visible on first paint, and
 // Radix unmounts inactive TabsContent, so these chunks (several pull in
 // recharts and/or react-markdown+rehype-sanitize) only download when a user
 // actually clicks that tab instead of bundling into every Analytics visit.
+// lazyWithReload rather than React.lazy, as for the routes in App.tsx: a tab
+// chunk a deploy removed reloads the page onto the current build instead of
+// failing until a manual reload (CL3, CODEBASE_ANALYSIS_2026-10-03). The two
+// range-scoped tabs stay on React.lazy until lazyWithReload is generic over
+// props: it is typed for prop-less pages, so it cannot carry `dateParams`.
 const CategoryBreakdownTab = lazy(() =>
   import("@/components/analytics/CategoryBreakdownTab").then((m) => ({
     default: m.CategoryBreakdownTab,
   })),
 );
-const SessionGradesTab = lazy(() =>
+const SessionGradesTab = lazyWithReload(() =>
   import("@/components/analytics/SessionGradesTab").then((m) => ({
     default: m.SessionGradesTab,
   })),
 );
-const CoachInsightsTab = lazy(() =>
+const CoachInsightsTab = lazyWithReload(() =>
   import("@/components/analytics/CoachInsightsTab").then((m) => ({
     default: m.CoachInsightsTab,
   })),
 );
-const RacePredictorTab = lazy(() =>
+const RacePredictorTab = lazyWithReload(() =>
   import("@/components/analytics/RacePredictorTab").then((m) => ({
     default: m.RacePredictorTab,
   })),
 );
-const MafTrendTab = lazy(() =>
+const MafTrendTab = lazyWithReload(() =>
   import("@/components/analytics/MafTrendTab").then((m) => ({ default: m.MafTrendTab })),
 );
 const FuellingTab = lazy(() =>

@@ -166,6 +166,13 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       queryClient.setQueryData(QUERY_KEYS.workout(data.id), data);
       patchTimelineEntriesForLoggedWorkout(data, variables);
       await Promise.all([
+        // The POST response is not the detail read: it carries no
+        // `structureBlocks` or `suggestedRpe`, and the primed entry counted as
+        // fresh for the full staleTime, so the review sheet of an EMOM or
+        // interval day showed no blocks to score. Marking it stale makes the
+        // sheet fetch the full detail as it mounts, behind the primed first
+        // paint (CL24, CODEBASE_ANALYSIS_2026-10-03).
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workout(data.id) }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }),

@@ -11,6 +11,7 @@ import type {
 } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
+import { AI_REQUEST_OPTIONS } from "./constants";
 import type { PlanProposalView } from "./planProposals";
 
 export type { RagInfo } from "@shared/schema";
@@ -99,8 +100,10 @@ export const chat = {
       signal: options?.signal,
     }),
 
+  // The non-streaming fallback waits for the whole AI reply, so it gets the
+  // server's AI budget rather than the 15 s default (CL26, CODEBASE_ANALYSIS_2026-10-03).
   send: (data: { message: string; photo?: ChatPhoto } & ChatFocus & ChatTurnIds) =>
-    typedRequest<ChatResponse>("POST", "/api/v1/chat", data),
+    typedRequest<ChatResponse>("POST", "/api/v1/chat", data, AI_REQUEST_OPTIONS),
 
   // Turns the chat routes don't save themselves: the Coach panel's own
   // messages (a suggestions request, an apply confirmation). The per-message

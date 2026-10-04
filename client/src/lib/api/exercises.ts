@@ -6,6 +6,7 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
+import { AI_REQUEST_TIMEOUT_MS } from "./constants";
 
 /** A logged set plus its parent workout's date — what the history endpoint has
  *  always returned, though the declared type here used to say otherwise. */
@@ -31,27 +32,42 @@ export interface ParseWorkoutStructureResponse {
   } | null;
 }
 
-export const exercises = {
-  parse: (text: string, options?: { signal?: AbortSignal }) =>
-    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises", { text }, options),
+interface ParseRequestOptions {
+  readonly signal?: AbortSignal;
+}
 
-  parseStructured: (text: string, options?: { signal?: AbortSignal }) =>
+// Every parse here is an AI call, so it waits out the server's AI budget
+// rather than the 15 s default (CL26, CODEBASE_ANALYSIS_2026-10-03).
+function aiParseOptions(options?: ParseRequestOptions) {
+  return { signal: options?.signal, timeoutMs: AI_REQUEST_TIMEOUT_MS };
+}
+
+export const exercises = {
+  parse: (text: string, options?: ParseRequestOptions) =>
+    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises", { text }, aiParseOptions(options)),
+
+  parseStructured: (text: string, options?: ParseRequestOptions) =>
     typedRequest<ParseWorkoutStructureResponse>(
       "POST",
       "/api/v1/parse-workout-structure",
       { text },
-      options,
+      aiParseOptions(options),
     ),
 
-  parseFromImage: (payload: ParseFromImagePayload, options?: { signal?: AbortSignal }) =>
-    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises-from-image", payload, options),
+  parseFromImage: (payload: ParseFromImagePayload, options?: ParseRequestOptions) =>
+    typedRequest<ParsedExercise[]>(
+      "POST",
+      "/api/v1/parse-exercises-from-image",
+      payload,
+      aiParseOptions(options),
+    ),
 
-  parseStructuredFromImage: (payload: ParseFromImagePayload, options?: { signal?: AbortSignal }) =>
+  parseStructuredFromImage: (payload: ParseFromImagePayload, options?: ParseRequestOptions) =>
     typedRequest<ParseWorkoutStructureResponse>(
       "POST",
       "/api/v1/parse-workout-structure-from-image",
       payload,
-      options,
+      aiParseOptions(options),
     ),
 
   /** Past logged sets of one exercise, newest session first. `sessions` bounds

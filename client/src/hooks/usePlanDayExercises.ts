@@ -16,6 +16,13 @@ import { queryClient } from "@/lib/queryClient";
 // fans out to multiple set ids.
 const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayId] as const;
 
+// Switching the sheet to another plan day changes this key, which detaches the
+// observer from the first day's in-flight reparse (its parsing state is not
+// the new day's) and leaves that parse its own options. Closing the sheet sets
+// no key, so the parse stays observed and reopening the day still shows it
+// running (CL21, CODEBASE_ANALYSIS_2026-10-03).
+const planDayReparseMutationKey = (planDayId: string) => ["plan-day-reparse", planDayId] as const;
+
 // Same debounce window the cell inputs used to own. Lifted to the hook
 // because LogSheet must flush pending cell edits before "log as planned"
 // (createWorkoutInTx copies the persisted plan-day rows) and before it
@@ -106,6 +113,11 @@ function isUpstreamAiError(error: unknown): boolean {
   return isUpstreamAiStatusOrCode(extractApiErrorStatusAndCode(error));
 }
 
+/** Refetch the rows a reparse replaced, for the day it was fired on (CL21, CODEBASE_ANALYSIS_2026-10-03). */
+function invalidateReparsedDay(planDayId: string) {
+  return queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planDayExercises(planDayId) });
+}
+
 function buildPartialParseWarningToast(data: ReparseResponse) {
   if ((data.rejectedCount ?? 0) <= 0) return undefined;
   const rejectedCount = data.rejectedCount ?? 0;
@@ -170,15 +182,23 @@ export function usePlanDayExercises(planDayId: string | null) {
   // state is refreshed via an explicit query invalidation rather than
   // reconciling in-hand because the response shape (`exercises[]`) is the
   // parsed-exercise DTO, not ExerciseSet rows.
+  //
+  // The plan day each parse wrote to rides in its onMutate context, captured
+  // when it was fired, and its invalidation keys off that. A render-time
+  // `invalidateQueries` list was copied onto the pending parse by every
+  // re-render, so once the sheet closed (`planDayId` null) a finishing parse
+  // invalidated nothing, and the reopened sheet showed the replaced rows and
+  // PATCHed set ids that no longer existed (CL21, CODEBASE_ANALYSIS_2026-10-03).
   const reparseFreeText = useApiMutation({
+    mutationKey: planDayId ? planDayReparseMutationKey(planDayId) : undefined,
     mutationFn: (payload?: PlanDayReparseTextPayload) => {
       if (!planDayId) return Promise.resolve(null);
       return api.plans.reparseDay(planDayId, payload);
     },
-    invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: () => ({ ownerId: planDayId }),
-    onSuccess: (data, _variables, context) => {
+    onSuccess: async (data, _variables, context) => {
       if (!context?.ownerId) return;
+      await invalidateReparsedDay(context.ownerId);
       setParseFailureState((prev) =>
         prev.ownerId === context.ownerId ? { ownerId: null, retry: null } : prev,
       );
@@ -206,14 +226,15 @@ export function usePlanDayExercises(planDayId: string | null) {
   // from a captured image. Same replace semantics: the plan day's
   // existing structured rows are wiped before the new ones land.
   const reparseFromImage = useApiMutation({
+    mutationKey: planDayId ? planDayReparseMutationKey(planDayId) : undefined,
     mutationFn: (payload: ParseFromImagePayload) => {
       if (!planDayId) return Promise.resolve(null);
       return api.plans.reparseDayFromImage(planDayId, payload);
     },
-    invalidateQueries: planDayId ? [QUERY_KEYS.planDayExercises(planDayId)] : undefined,
     onMutate: (payload) => ({ ownerId: planDayId, payload }),
-    onSuccess: (data, _variables, context) => {
+    onSuccess: async (data, _variables, context) => {
       if (!context?.ownerId) return;
+      await invalidateReparsedDay(context.ownerId);
       setParseFailureState((prev) =>
         prev.ownerId === context.ownerId ? { ownerId: null, retry: null } : prev,
       );
