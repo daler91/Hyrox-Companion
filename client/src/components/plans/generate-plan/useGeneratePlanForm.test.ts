@@ -24,6 +24,7 @@ describe("generate plan form helpers", () => {
         restDays: ["Saturday", "Sunday"],
         startDate: VALID_START,
         endDate: VALID_END,
+        endDateIsRaceDate: false,
       }).canProceedStep0,
     ).toBe(false);
   });
@@ -36,6 +37,7 @@ describe("generate plan form helpers", () => {
         restDays: ["Sunday"],
         startDate: VALID_START,
         endDate: VALID_END,
+        endDateIsRaceDate: false,
       }).canProceedStep1,
     ).toBe(false);
     expect(
@@ -45,6 +47,7 @@ describe("generate plan form helpers", () => {
         restDays: ["Saturday", "Sunday"],
         startDate: VALID_START,
         endDate: VALID_END,
+        endDateIsRaceDate: false,
       }).canProceedStep1,
     ).toBe(true);
   });
@@ -56,6 +59,7 @@ describe("generate plan form helpers", () => {
       restDays: ["Saturday", "Sunday"],
       startDate: VALID_END,
       endDate: VALID_START,
+      endDateIsRaceDate: false,
     });
     expect(validation.canProceedStep1).toBe(false);
     expect(validation.dateError).toMatch(/after the start date/);
@@ -68,6 +72,7 @@ describe("generate plan form helpers", () => {
       restDays: ["Saturday", "Sunday"],
       startDate: "2026-01-01",
       endDate: "2027-01-01",
+      endDateIsRaceDate: false,
     });
     expect(validation.canProceedStep1).toBe(false);
     expect(validation.dateError).toMatch(/between 1 and 24 weeks/);
@@ -80,9 +85,33 @@ describe("generate plan form helpers", () => {
       restDays: ["Saturday", "Sunday"],
       startDate: VALID_START,
       endDate: VALID_END,
+      endDateIsRaceDate: false,
     });
     expect(validation.canProceedStep1).toBe(true);
     expect(validation.dateError).toBeNull();
+  });
+
+  // C19 (CODEBASE_ANALYSIS_2026-10-03): the form counts weeks as the server
+  // and the Zod schema do. Wed 6 May to Sat 24 Oct rounds to 24 weeks, but a
+  // race that day sits in the 25th Monday-anchored week; accepted, the server
+  // would clamp the plan to 24 weeks and end it before the race.
+  it("refuses a race whose race week would be the 25th, with the count it used", () => {
+    const span = {
+      goal: "Race prep",
+      daysPerWeek: 5,
+      restDays: ["Saturday", "Sunday"],
+      startDate: "2026-05-06",
+      endDate: "2026-10-24",
+    };
+
+    const race = getGeneratePlanFormValidation({ ...span, endDateIsRaceDate: true });
+    expect(race.canProceedStep1).toBe(false);
+    expect(race.dateError).toBe(
+      "Plan length must be between 1 and 24 weeks (your plan runs 25 weeks to the end of race week).",
+    );
+    expect(
+      getGeneratePlanFormValidation({ ...span, endDateIsRaceDate: false }).dateError,
+    ).toBeNull();
   });
 
   it("omits blank optional fields, but always sends injuries", () => {
@@ -163,6 +192,22 @@ describe("generate plan form helpers", () => {
     expect(result.current.startDate).toBe(initialStartDate);
     expect(result.current.endDate).toBe(expectedEndDate);
     expect(result.current.endDateIsRaceDate).toBe(false);
+  });
+
+  // C19 (CODEBASE_ANALYSIS_2026-10-03): the "N-week plan" readout counts a race
+  // date through race week, as the server builds the plan.
+  it("reads a midweek-start race plan's length through race week", () => {
+    const { result } = renderHook(() =>
+      useGeneratePlanForm({ initialStartDate: "2026-10-07", initialRaceDate: "2026-11-28" }),
+    );
+
+    // Rounded, the span is 7 weeks, and the plan the server builds is 8.
+    expect(result.current.planWeeks).toBe(8);
+
+    act(() => {
+      result.current.setEndDateIsRaceDate(false);
+    });
+    expect(result.current.planWeeks).toBe(7);
   });
 
   it("ends a plan on a race date the athlete gave, flagged as race day", () => {

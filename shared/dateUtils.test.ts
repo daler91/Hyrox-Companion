@@ -9,6 +9,7 @@ import {
   MIN_PLAN_WEEKS,
   nextPlanStartDate,
   parseIsoDate,
+  planSpanWeeks,
   planWeekOneMonday,
   toIsoDateUtc,
   weekdayIndex,
@@ -50,6 +51,51 @@ describe("computePlanWeeks", () => {
 
   it("clamps to the maximum for very long spans", () => {
     expect(computePlanWeeks("2026-01-01", "2027-01-01")).toBe(MAX_PLAN_WEEKS); // 365 days
+  });
+
+  describe("an end date that is the race (C19)", () => {
+    const race = { endDateIsRaceDate: true } as const;
+
+    it("runs a midweek-start plan through the week that holds the race", () => {
+      // Wed 2026-10-07 to Sat 2026-11-28: rounded, 7 weeks ended on 22 Nov.
+      expect(computePlanWeeks("2026-10-07", "2026-11-28")).toBe(7);
+      expect(computePlanWeeks("2026-10-07", "2026-11-28", race)).toBe(8);
+    });
+
+    it("keeps a Monday-to-Thursday race on a Monday-start plan", () => {
+      expect(computePlanWeeks("2026-01-05", "2026-02-26", race)).toBe(8); // Thursday
+      expect(computePlanWeeks("2026-01-05", "2026-03-02", race)).toBe(9); // Monday of week 9
+      expect(computePlanWeeks("2026-01-05", "2026-02-28", race)).toBe(8); // Saturday, as before
+    });
+
+    it("always ends the plan in race week, whatever the weekdays", () => {
+      for (let startOffset = 0; startOffset < 7; startOffset++) {
+        const start = addDaysToISODate("2026-01-05", startOffset);
+        for (let span = 1; span <= 70; span++) {
+          const raceDate = addDaysToISODate(start, span);
+          const weeks = computePlanWeeks(start, raceDate, race);
+          const raceWeekMonday = addDaysToISODate(planWeekOneMonday(start), (weeks - 1) * 7);
+          expect(raceDate >= raceWeekMonday && raceDate <= addDaysToISODate(raceWeekMonday, 6)).toBe(
+            true,
+          );
+        }
+      }
+    });
+  });
+});
+
+describe("planSpanWeeks", () => {
+  // The unclamped count the schema and the form range-check, so a race in the
+  // 25th week is refused rather than clamped off the plan's end.
+  // C19 (CODEBASE_ANALYSIS_2026-10-03)
+  it("counts the same weeks as computePlanWeeks, without the clamp", () => {
+    // Wed 6 May to Sat 24 Oct: 24 weeks rounded, the race in week 25.
+    expect(planSpanWeeks("2026-05-06", "2026-10-24")).toBe(24);
+    expect(planSpanWeeks("2026-05-06", "2026-10-24", { endDateIsRaceDate: true })).toBe(25);
+    expect(computePlanWeeks("2026-05-06", "2026-10-24", { endDateIsRaceDate: true })).toBe(
+      MAX_PLAN_WEEKS,
+    );
+    expect(planSpanWeeks("2026-01-01", "2027-01-01")).toBe(52);
   });
 });
 

@@ -100,13 +100,16 @@ type GeneratedDayLike = {
   exercises?: unknown[];
 };
 
-// A 7-day span → a 1-week plan; individual tests widen endDate for longer plans.
+// Monday to Sunday → a 1-week plan; individual tests widen endDate for longer
+// plans. The end date is the race, and a race-dated plan runs through the week
+// holding the race (C19, CODEBASE_ANALYSIS_2026-10-03), so each end date here is a
+// Sunday.
 const baseInput: GeneratePlanInput = {
   goal: "Hyrox race prep",
   daysPerWeek: 2,
   experienceLevel: "intermediate",
   startDate: "2026-01-05",
-  endDate: "2026-01-12",
+  endDate: "2026-01-11",
   endDateIsRaceDate: true,
 };
 
@@ -448,7 +451,7 @@ describe("executePlanGeneration", () => {
   });
 
   it("splits an 8-week request into four two-week chunks and persists days in order", async () => {
-    const input = { ...baseInput, endDate: "2026-03-02" } as const; // 56-day span → 8 weeks
+    const input = { ...baseInput, endDate: "2026-03-01" } as const; // race on the Sunday of week 8
     const sortedDays = makeGeneratedWeeks(1, 8);
     setupPlanStorage(input, createPlanDaysFromGenerated(sortedDays));
     mockAiChunks(
@@ -479,7 +482,7 @@ describe("executePlanGeneration", () => {
   });
 
   it("writes every chunk around the athlete card, and gives the selection its text", async () => {
-    const input = { ...baseInput, endDate: "2026-02-02", injuries: "No sled at my gym" } as const;
+    const input = { ...baseInput, endDate: "2026-02-01", injuries: "No sled at my gym" } as const;
     setupPlanStorage(input, createPlanDaysFromGenerated(makeGeneratedWeeks(1, 4)));
     mockAiChunks(makeGeneratedWeeks(1, 2), makeGeneratedWeeks(3, 4));
     mocks.athleteFacts.list.mockResolvedValue([createMockAthleteFact({ fact: "Night shifts on Tuesdays", dedupeKey: "night shifts on tuesdays", category: "schedule" })]);
@@ -514,7 +517,7 @@ describe("executePlanGeneration", () => {
   it("gives every chunk the same exercise-selection brief and blueprint, built from the athlete's history", async () => {
     // 4 weeks → two parallel chunks. Neither can see the other, so both must
     // be handed the same familiar lifts and the same primary lifts.
-    const input = { ...baseInput, endDate: "2026-02-02" } as const;
+    const input = { ...baseInput, endDate: "2026-02-01" } as const;
     const sortedDays = makeGeneratedWeeks(1, 4);
     setupPlanStorage(input, createPlanDaysFromGenerated(sortedDays));
     mockAiChunks(makeGeneratedWeeks(1, 2), makeGeneratedWeeks(3, 4));
@@ -557,7 +560,7 @@ describe("executePlanGeneration", () => {
     // (front squat, 4 x 80 kg x 5 logged) to 3x10 @ 60 kg; the plan that is
     // saved carries the engine's week-1 target instead: 4x8 at RPE ~7 off an
     // estimated 1RM of 98.7 kg → 72.5 kg.
-    const input = { ...baseInput, endDate: "2026-02-02" } as const;
+    const input = { ...baseInput, endDate: "2026-02-01" } as const;
     const drifted = {
       mainWorkout: "A) Front Squat 3x10 @ 60 kg (RPE 7)",
       exercises: [
@@ -866,7 +869,7 @@ describe("executePlanGeneration", () => {
   });
 
   it("rejects incomplete chunk coverage and marks plan failed", async () => {
-    const input = { ...baseInput, endDate: "2026-01-19" } as const; // 14-day span → 2 weeks
+    const input = { ...baseInput, endDate: "2026-01-18" } as const; // race in week 2
     mockAiChunks(makeGeneratedWeek(1));
 
     await expect(executePlanGeneration("plan-1", input, "user-1")).rejects.toMatchObject({
@@ -948,7 +951,7 @@ describe("executePlanGeneration", () => {
     await executePlanGeneration("plan-1", baseInput, "user-1");
 
     const prompt = getPromptText(mocks.generateContent.mock.calls[0]);
-    expect(prompt).toContain("Race Date: 2026-01-12");
+    expect(prompt).toContain("Race Date: 2026-01-11");
     // Nudges the model to taper the final days into the race.
     expect(prompt).toContain("shakeout");
   });

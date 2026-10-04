@@ -1,4 +1,4 @@
-﻿import { dayDiff, MAX_PLAN_WEEKS, MIN_PLAN_WEEKS } from "../../dateUtils";
+﻿import { dayDiff, MAX_PLAN_WEEKS, MIN_PLAN_WEEKS, planSpanWeeks } from "../../dateUtils";
 import type { AthleteFactCategory, ChatFactProposalStatus } from "../enums";
 import { z } from "../zod";
 import { dateStringSchema } from "./requests";
@@ -36,11 +36,17 @@ export const generatePlanInputSchema = z
       // End-after-start ordering is enforced by the refine above; only
       // range-check a valid forward span so we don't double-report the error.
       if (span <= 0) return true;
-      const weeks = Math.round(span / 7);
+      // Counted as the server builds the plan: a race date runs through race
+      // week, so a race whose week would be the 25th is refused here rather
+      // than clamped to 24 weeks with the race cut off the end.
+      // C19 (CODEBASE_ANALYSIS_2026-10-03)
+      const weeks = planSpanWeeks(data.startDate, data.endDate, {
+        endDateIsRaceDate: data.endDateIsRaceDate,
+      });
       return weeks >= MIN_PLAN_WEEKS && weeks <= MAX_PLAN_WEEKS;
     },
     {
-      message: `Plan length must be between ${MIN_PLAN_WEEKS} and ${MAX_PLAN_WEEKS} weeks`,
+      message: `Plan length must be between ${MIN_PLAN_WEEKS} and ${MAX_PLAN_WEEKS} weeks, counting through race week when the end date is the race`,
       path: ["endDate"],
     },
   );

@@ -21,7 +21,8 @@
  * Guardrails, because an adaptation that hurts someone is worse than none:
  * nothing rises while the load governor reports fatigue or inside a taper or
  * race week; a hold or deload only ever lowers weights; one unusual session
- * moves loads by at most +5% / -10%; each logged workout is applied once
+ * moves loads by at most +5% / -10%, and one pass raises a load by at most
+ * +5% however many logs it adapts; each logged workout is applied once
  * (tracked in the plan's engine state); and days the load governor already
  * rewrote this pass are left alone.
  *
@@ -36,7 +37,7 @@ import type { CoachNoteInputs, PlanEngineState } from "@shared/schema";
 import { knownExerciseLabel } from "@shared/schema/exercises";
 import { storedWeightToDisplay, type WeightUnit } from "@shared/unitConversion";
 
-import { ASSUMED_RIR, implementFor, roundLoad } from "./loadMath";
+import { ASSUMED_RIR, customLiftLabel, implementFor, liftKey, roundLoad } from "./loadMath";
 import { rescalePaces } from "./paceRewrite";
 import { rewriteLiftLoad } from "./planRepair";
 import { buildRunPaceZones, collectRunEfforts, type EngineRunLog, paceAtFraction } from "./running";
@@ -55,6 +56,8 @@ export interface AdaptationSet {
   readonly workoutLogId: string;
   readonly date: string;
   readonly exerciseName: string;
+  /** Which custom lift a "custom" set is. D14 (CODEBASE_ANALYSIS_2026-10-03) */
+  readonly customLabel?: string | null;
   readonly category?: string | null;
   readonly setNumber?: number | null;
   readonly reps?: number | null;
@@ -70,6 +73,7 @@ export interface AdaptationSet {
 export interface AdaptablePlanSet {
   readonly id: string;
   readonly exerciseName: string;
+  readonly customLabel?: string | null;
   readonly reps?: number | null;
   readonly weight?: number | null;
   readonly weightUnit?: string | null;
@@ -179,6 +183,8 @@ const MAX_DETRAINING = 0.1;
 /** Only lifts trained regularly: a rarely rotated accessory has no habit to break. */
 const MIN_SESSIONS_FOR_BREAK = 3;
 const RATIONALE_MAX = 400;
+/** What a progression change's exercise name may hold (progressionChangeSchema). */
+const MAX_CHANGE_NAME = 100;
 
 // ---------------------------------------------------------------------------
 // Working state
@@ -189,6 +195,8 @@ interface WorkingDay {
   readonly phase: TrainingPhase | undefined;
   /** Current weight of each set, in the athlete's unit, as adapted so far. */
   readonly weights: Map<string, number>;
+  /** Each set's weight before this pass, which every raise in it is measured from. */
+  readonly startWeights: ReadonlyMap<string, number>;
   readonly touchedSets: Set<string>;
   mainWorkout: string;
   accessory: string | null;
@@ -215,6 +223,7 @@ function toWorkingDay(day: AdaptablePlanDay, input: AdaptationInput): WorkingDay
     day,
     phase: computePlanPhase(input.plan.totalWeeks, day.weekNumber)?.phaseLabel,
     weights,
+    startWeights: new Map(weights),
     touchedSets: new Set(),
     mainWorkout: day.mainWorkout,
     accessory: day.accessory ?? null,
@@ -226,7 +235,17 @@ function toWorkingDay(day: AdaptablePlanDay, input: AdaptationInput): WorkingDay
 }
 
 function exerciseLabel(exercise: string): string {
-  return knownExerciseLabel(exercise) ?? exercise.replaceAll("_", " ");
+  return customLiftLabel(exercise) ?? knownExerciseLabel(exercise) ?? exercise.replaceAll("_", " ");
+}
+
+/**
+ * The lift a logged set trained, or null for a custom set with no label:
+ * nothing tells it apart from any other custom lift, so it adapts none of them.
+ * D14 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function loggedLift(set: AdaptationSet): string | null {
+  const key = liftKey(set);
+  return key === "custom" ? null : key;
 }
 
 function weekdayName(date: string): string {
@@ -387,7 +406,7 @@ function decide(
 // ---------------------------------------------------------------------------
 
 function setsOf(day: WorkingDay, exercise: string): AdaptablePlanSet[] {
-  return day.day.sets.filter((set) => set.exerciseName === exercise && day.weights.has(set.id));
+  return day.day.sets.filter((set) => liftKey(set) === exercise && day.weights.has(set.id));
 }
 
 function topWeight(day: WorkingDay, exercise: string): number {
@@ -418,7 +437,9 @@ function recordChange(
 ): void {
   const to = topWeight(day, exercise);
   if (to === from) return;
-  day.changes.push({ exercise, kind, from, to, unit });
+  // A custom lift's key is not a name the coach note can show: its label is.
+  const name = customLiftLabel(exercise)?.slice(0, MAX_CHANGE_NAME) ?? exercise;
+  day.changes.push({ exercise: name, kind, from, to, unit });
   day.mainWorkout = rewriteLiftLoad(day.mainWorkout, exercise, to, unit);
   if (day.accessory) day.accessory = rewriteLiftLoad(day.accessory, exercise, to, unit);
 }
@@ -435,7 +456,12 @@ function applyRaise(
     const before = topWeight(day, exercise);
     for (const set of setsOf(day, exercise)) {
       const weight = day.weights.get(set.id) ?? 0;
-      const raised = roundLoad(weight * factor, exercise, unit);
+      // Each log in a pass measured its surplus against its own prescription,
+      // so a second raise is the same evidence again: it starts from the
+      // lower of the pass's starting load and the current one, never on top of
+      // an earlier raise. C14 (CODEBASE_ANALYSIS_2026-10-03)
+      const base = Math.min(weight, day.startWeights.get(set.id) ?? weight);
+      const raised = roundLoad(base * factor, exercise, unit);
       if (raised <= weight) continue;
       day.weights.set(set.id, raised);
       day.touchedSets.add(set.id);
@@ -558,11 +584,14 @@ function heaviestSet(sets: readonly AdaptationSet[], unit: WeightUnit): Adaptati
 function liftHistories(sets: readonly AdaptationSet[], unit: WeightUnit): Map<string, LiftHistory> {
   const byExercise = new Map<string, Map<string, AdaptationSet[]>>();
   for (const set of sets) {
-    if (!isAdaptableSet(set) || implementFor(set.exerciseName) === "bodyweight") continue;
-    const sessions = byExercise.get(set.exerciseName) ?? new Map<string, AdaptationSet[]>();
+    const lift = loggedLift(set);
+    if (lift == null || !isAdaptableSet(set) || implementFor(set.exerciseName) === "bodyweight") {
+      continue;
+    }
+    const sessions = byExercise.get(lift) ?? new Map<string, AdaptationSet[]>();
     const key = `${set.date}|${set.workoutLogId}`;
     sessions.set(key, [...(sessions.get(key) ?? []), set]);
-    byExercise.set(set.exerciseName, sessions);
+    byExercise.set(lift, sessions);
   }
   const histories = new Map<string, LiftHistory>();
   for (const [exercise, sessions] of byExercise) {
@@ -753,16 +782,17 @@ function sessionsOf(
 ): { session: LoggedSession; previous: AdaptationSet[] | null }[] {
   const byExercise = new Map<string, AdaptationSet[]>();
   for (const set of sets) {
-    if (set.workoutLogId !== log.id || !isAdaptableSet(set)) continue;
+    const lift = loggedLift(set);
+    if (lift == null || set.workoutLogId !== log.id || !isAdaptableSet(set)) continue;
     if (implementFor(set.exerciseName) === "bodyweight") continue;
-    const list = byExercise.get(set.exerciseName) ?? [];
+    const list = byExercise.get(lift) ?? [];
     list.push(set);
-    byExercise.set(set.exerciseName, list);
+    byExercise.set(lift, list);
   }
   return [...byExercise].map(([exercise, logged]) => {
     const earlier = sets.filter(
       (set) =>
-        set.exerciseName === exercise &&
+        liftKey(set) === exercise &&
         set.workoutLogId !== log.id &&
         set.date < log.date &&
         isAdaptableSet(set),

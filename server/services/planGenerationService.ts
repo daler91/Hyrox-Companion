@@ -29,13 +29,14 @@ import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "
 import { formatExerciseSelectionBrief } from "../prompts/exerciseSelection";
 import { describeEngineTargetLines } from "../prompts/workoutEngine";
 import { storage } from "../storage";
+import { planSlotFor } from "../storage/planSlot";
 import { getLocalDateStrSafe } from "../timezone";
 import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 import { describeLoadAnchorLines } from "./loadAnchors";
 import { describeProgramBlueprintLines, planDeloadWeeks } from "./planBlueprint";
 import { computeGenerationCalibration, type GenerationCalibration } from "./planGenerationCalibration";
 import { athleteCardLines, buildGenerationCard, type GenerationCard, generationCardConstraints } from "./planGenerationCard";
-import { loadIncrement } from "./workoutEngine/loadMath";
+import { customLiftLabel, liftKey, loadIncrement } from "./workoutEngine/loadMath";
 import { repairPrimaryLifts } from "./workoutEngine/planRepair";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
@@ -476,7 +477,12 @@ function generatedSetWeightKg(set: GeneratedExerciseSet, defaultUnit: WeightUnit
 
 /**
  * Heaviest weight per exercise per week, in kilograms:
- * exerciseName -> weekNumber -> heaviest prescribed weight that week.
+ * lift -> weekNumber -> heaviest prescribed weight that week.
+ *
+ * Keyed by liftKey, so each custom lift ("custom" + its customLabel) is its own
+ * exercise: keyed by name alone, a 150 kg custom yoke carry the week after a
+ * 40 kg custom sandbag clean read as a 275% jump and was cut to ~43 kg.
+ * D14 (CODEBASE_ANALYSIS_2026-10-03)
  *
  * Reads each set's own unit stamp: adjacent weeks come from independent
  * model calls, so one week labelled kg and the next lbs is exactly what the
@@ -496,9 +502,10 @@ function collectHeaviestWeightsByWeek(
       for (const set of exercise.sets ?? []) {
         const weightKg = generatedSetWeightKg(set, defaultUnit);
         if (weightKg == null || weightKg < MIN_TRACKED_WEIGHT) continue;
-        const weeks = byExercise.get(exercise.exerciseName) ?? new Map<number, number>();
+        const lift = liftKey(exercise);
+        const weeks = byExercise.get(lift) ?? new Map<number, number>();
         weeks.set(day.weekNumber, Math.max(weeks.get(day.weekNumber) ?? 0, weightKg));
-        byExercise.set(exercise.exerciseName, weeks);
+        byExercise.set(lift, weeks);
       }
     }
   }
@@ -587,6 +594,21 @@ export function findProgressiveOverloadViolations(
   return violations.sort((a, b) => b.increasePct - a.increasePct);
 }
 
+/**
+ * The worst violations as the overload warning logs them, at most five. A custom
+ * lift is logged as the bare "custom": its key carries the model-written label,
+ * free text that can echo the athlete's injuries or constraints.
+ * D14 (CODEBASE_ANALYSIS_2026-10-03). Exported for the regression test.
+ */
+export function overloadViolationLogEntries(violations: readonly ProgressiveOverloadViolation[]) {
+  return violations.slice(0, 5).map(({ exerciseName, fromWeek, toWeek, increasePct }) => ({
+    exerciseName: customLiftLabel(exerciseName) === undefined ? exerciseName : "custom",
+    fromWeek,
+    toWeek,
+    increasePct,
+  }));
+}
+
 /** One exercise-week whose prescribed weight was reduced to the ceiling. Weights in kg. */
 export interface ProgressiveOverloadClamp {
   exerciseName: string;
@@ -652,7 +674,7 @@ function applyWeightCeiling(
   for (const day of days) {
     if (day.weekNumber !== weekNumber) continue;
     for (const exercise of day.exercises ?? []) {
-      if (exercise.exerciseName === exerciseName) capSetWeights(exercise.sets ?? [], ceilingKg, defaultUnit);
+      if (liftKey(exercise) === exerciseName) capSetWeights(exercise.sets, ceilingKg, defaultUnit);
     }
   }
 }
@@ -668,10 +690,26 @@ function capSetWeights(sets: GeneratedExerciseSet[], ceilingKg: number, defaultU
   }
 }
 
-function assertTableFirstGeneratedDays(days: GeneratedDay[]): void {
+/**
+ * The race, as "<week> <dayName>" in the plan's own coordinates, when the end
+ * date is the athlete's race; null otherwise. The prompt tells the model race
+ * day is the event, not a training session, so an entry for it with no
+ * exercise rows is what was asked for, not a missing table — and failing the
+ * whole paid-for generation on it only met the same instruction on a retry.
+ * Only that one day is exempt: every other training day still needs its rows.
+ * D15 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function raceDaySlot(input: NormalizedGeneratePlanInput): string | null {
+  if (!input.raceDate || !input.startDate) return null;
+  const { weekNumber, dayName } = planSlotFor(input.startDate, 1, input.raceDate);
+  return `${weekNumber} ${dayName}`;
+}
+
+function assertTableFirstGeneratedDays(days: GeneratedDay[], raceDay: string | null): void {
   const missingExerciseDays = days
     .filter((day) => !isGeneratedRestDay(day) && (!day.exercises || day.exercises.length === 0))
-    .map((day) => `${day.weekNumber} ${day.dayName}`);
+    .map((day) => `${day.weekNumber} ${day.dayName}`)
+    .filter((slot) => slot !== raceDay);
 
   if (missingExerciseDays.length > 0) {
     throw new AppError(
@@ -785,7 +823,7 @@ async function generatePlanDays(
   if (days.length === 0) {
     throw new AppError(ErrorCode.AI_ERROR, "AI generated no valid plan days", 502);
   }
-  assertTableFirstGeneratedDays(days);
+  assertTableFirstGeneratedDays(days, raceDaySlot(input));
 
   // The engine's primary-lift targets are enforced before the clamp runs, so
   // the clamp sees the numbers the athlete will actually be given; a target
@@ -831,10 +869,11 @@ async function generatePlanDays(
     // to five so a long plan cannot emit a very large log line.
     //
     // What is left is two static strings, a plan length, a count, and up to five
-    // EXERCISE names with week numbers and a percentage. Bearer raises this rule
-    // on the shape rather than the content — it fires on a fixed enum in
-    // recomputeAnalyticsDispatch and on pure row counts in keyRotation — so it is
-    // suppressed here, the same way structuredExerciseHealth suppresses it on an
+    // catalogue EXERCISE names (a custom lift's free-text label is logged as
+    // "custom", see overloadViolationLogEntries) with week numbers and a
+    // percentage. Bearer raises this rule on the shape rather than the content
+    // — it fires on a fixed enum in recomputeAnalyticsDispatch and on pure row
+    // counts in keyRotation — so it is suppressed here, the same way structuredExerciseHealth suppresses it on an
     // identically shaped counter warning. Nothing may follow the rule id on the
     // directive line: Bearer splits the rest of the line into the rule-id list,
     // so a trailing justification silently no-ops the suppression.
@@ -846,14 +885,7 @@ async function generatePlanDays(
         totalWeeks: input.totalWeeks,
         violationCount: overloadViolations.length,
         clampedCount: overloadClamps.length,
-        worst: overloadViolations
-          .slice(0, 5)
-          .map(({ exerciseName, fromWeek, toWeek, increasePct }) => ({
-            exerciseName,
-            fromWeek,
-            toWeek,
-            increasePct,
-          })),
+        worst: overloadViolationLogEntries(overloadViolations),
       },
       "Generated plan exceeded the week-over-week weight ceiling; clamped to it.",
     );
@@ -891,7 +923,7 @@ function normalizeGeneratePlanInput(input: GeneratePlanInput): NormalizedGenerat
   const raw = input as LegacyGeneratePlanInput;
   const totalWeeks =
     raw.startDate && raw.endDate
-      ? computePlanWeeks(raw.startDate, raw.endDate)
+      ? computePlanWeeks(raw.startDate, raw.endDate, { endDateIsRaceDate: raw.endDateIsRaceDate })
       : (raw.totalWeeks ?? LEGACY_DEFAULT_WEEKS);
   // raceDate drives the "peak for this date" prompt line and is persisted on the
   // plan. New inputs set it only when the athlete flags the end date as their race

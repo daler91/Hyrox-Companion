@@ -30,17 +30,49 @@ export function dayDiff(startDate: string, endDate: string): number {
   return Math.round((toUtcEpoch(endDate) - toUtcEpoch(startDate)) / MS_PER_DAY);
 }
 
+/** Whether a plan's end date is the athlete's race (`endDateIsRaceDate`). */
+export interface PlanWeeksOptions {
+  readonly endDateIsRaceDate?: boolean;
+}
+
 /**
- * Plan length in weeks derived from a start → end span, clamped to
- * `[MIN_PLAN_WEEKS, MAX_PLAN_WEEKS]`.
+ * Plan length in weeks from a start → end span, NOT clamped: the one count the
+ * server's plan length (`computePlanWeeks`), the Zod schema and the form's
+ * range check all read, so a span they accept is the plan that gets built.
  *
  * Uses `round(days / 7)` (NOT `ceil`): a span of exactly 8 weeks (56 days) must
- * read as 8 weeks, preserving the historical default. The clamp is
- * defense-in-depth for the DB write and any non-UI caller — the form and the
- * Zod schema reject an out-of-range span up front rather than silently clamping.
+ * read as 8 weeks, preserving the historical default.
+ *
+ * An end date that is the athlete's race must fall inside the plan, so it is
+ * counted the way scheduling anchors weeks: week 1 starts on the start week's
+ * Monday, and the plan runs through the week that holds the race. Rounded, a
+ * Wednesday start with a Saturday race ended the Sunday before race week, and a
+ * Monday-to-Thursday race fell off a Monday-start plan.
+ * C19 (CODEBASE_ANALYSIS_2026-10-03)
  */
-export function computePlanWeeks(startDate: string, endDate: string): number {
-  const weeks = Math.round(dayDiff(startDate, endDate) / 7);
+export function planSpanWeeks(
+  startDate: string,
+  endDate: string,
+  options: PlanWeeksOptions = {},
+): number {
+  return options.endDateIsRaceDate
+    ? Math.floor(dayDiff(planWeekOneMonday(startDate), endDate) / 7) + 1
+    : Math.round(dayDiff(startDate, endDate) / 7);
+}
+
+/**
+ * Plan length in weeks derived from a start → end span (`planSpanWeeks`),
+ * clamped to `[MIN_PLAN_WEEKS, MAX_PLAN_WEEKS]`. The clamp is defense-in-depth
+ * for the DB write and any non-UI caller — the form and the Zod schema reject
+ * an out-of-range span up front rather than silently clamping, which for a race
+ * date would cut the race off the end of the plan.
+ */
+export function computePlanWeeks(
+  startDate: string,
+  endDate: string,
+  options: PlanWeeksOptions = {},
+): number {
+  const weeks = planSpanWeeks(startDate, endDate, options);
   return Math.min(MAX_PLAN_WEEKS, Math.max(MIN_PLAN_WEEKS, weeks));
 }
 

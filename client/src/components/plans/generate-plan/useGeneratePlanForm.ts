@@ -4,6 +4,7 @@ import {
   dayDiff,
   MAX_PLAN_WEEKS,
   MIN_PLAN_WEEKS,
+  planSpanWeeks,
 } from "@shared/dateUtils";
 import type { GeneratePlanInput, TrainingPlan } from "@shared/schema";
 import { useMemo, useState } from "react";
@@ -126,16 +127,26 @@ export function findOverlappingPlans(
 /**
  * Validate the start → end date range that now drives a plan's length. Returns a
  * human-readable error, or null when the span is a valid 1–24 week plan. The
- * week count is checked on the RAW rounded span (not `computePlanWeeks`, which
- * clamps) so an out-of-range span is rejected rather than silently clamped.
+ * week count is checked UNCLAMPED (`planSpanWeeks`, not `computePlanWeeks`) so
+ * an out-of-range span is rejected rather than silently clamped, and counted as
+ * the server and the Zod schema count it: a race date runs through race week,
+ * so a race whose week would be the 25th is refused instead of being clamped to
+ * 24 weeks with the race cut off. C19 (CODEBASE_ANALYSIS_2026-10-03)
  */
-export function getPlanDateError(startDate: string, endDate: string): string | null {
+export function getPlanDateError(
+  startDate: string,
+  endDate: string,
+  endDateIsRaceDate: boolean,
+): string | null {
   if (!startDate || !endDate) return "Start and end dates are required.";
   const span = dayDiff(startDate, endDate);
   if (span <= 0) return "End date must be after the start date.";
-  const weeks = Math.round(span / 7);
+  const weeks = planSpanWeeks(startDate, endDate, { endDateIsRaceDate });
   if (weeks < MIN_PLAN_WEEKS || weeks > MAX_PLAN_WEEKS) {
-    return `Plan length must be between ${MIN_PLAN_WEEKS} and ${MAX_PLAN_WEEKS} weeks (your dates span ${weeks} weeks).`;
+    const counted = endDateIsRaceDate
+      ? `your plan runs ${weeks} weeks to the end of race week`
+      : `your dates span ${weeks} weeks`;
+    return `Plan length must be between ${MIN_PLAN_WEEKS} and ${MAX_PLAN_WEEKS} weeks (${counted}).`;
   }
   return null;
 }
@@ -143,14 +154,14 @@ export function getPlanDateError(startDate: string, endDate: string): string | n
 export function getGeneratePlanFormValidation(
   values: Pick<
     GeneratePlanFormValues,
-    "goal" | "daysPerWeek" | "restDays" | "startDate" | "endDate"
+    "goal" | "daysPerWeek" | "restDays" | "startDate" | "endDate" | "endDateIsRaceDate"
   >,
 ) {
   const requiredRestDays = 7 - values.daysPerWeek;
   const canProceedStep0 = values.goal.trim().length > 0;
   const hasRequiredRestDays =
     values.daysPerWeek === 7 || values.restDays.length === requiredRestDays;
-  const dateError = getPlanDateError(values.startDate, values.endDate);
+  const dateError = getPlanDateError(values.startDate, values.endDate, values.endDateIsRaceDate);
   const canProceedStep1 = hasRequiredRestDays && dateError === null;
   return {
     requiredRestDays,
@@ -282,8 +293,10 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   };
   const validation = getGeneratePlanFormValidation(values);
   // Clamped for display; out-of-range spans surface via validation.dateError and
-  // block progression, so the readout only ever shows a sensible 1–24.
-  const planWeeks = computePlanWeeks(startDate, endDate);
+  // block progression, so the readout only ever shows a sensible 1–24. Counted
+  // with the race flag, as the server builds the plan, so the readout names the
+  // plan the athlete will get. C19 (CODEBASE_ANALYSIS_2026-10-03)
+  const planWeeks = computePlanWeeks(startDate, endDate, { endDateIsRaceDate });
 
   return {
     step,

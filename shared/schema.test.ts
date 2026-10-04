@@ -168,6 +168,26 @@ describe("generatePlanInputSchema validation", () => {
     expect(result.success).toBe(false);
   });
 
+  // C19 (CODEBASE_ANALYSIS_2026-10-03): a race date runs the plan through race
+  // week, so the range check counts weeks that way too. Wed 6 May to Sat 24 Oct
+  // rounds to 24 weeks, but the race sits in the 25th Monday-anchored week:
+  // clamped to 24, the plan would end the Sunday before the race.
+  it("counts a race date through race week, refusing a race in week 25", () => {
+    const span = { startDate: "2026-05-06", endDate: "2026-10-24" };
+
+    const race = generatePlanInputSchema.safeParse({ ...validBase, ...span, endDateIsRaceDate: true });
+    expect(race.success).toBe(false);
+    if (!race.success) {
+      expect(race.error.issues[0]?.message).toMatch(/between 1 and 24 weeks, counting through race week/);
+    }
+    // The default is a race date, so an omitted flag counts the same way.
+    expect(generatePlanInputSchema.safeParse({ ...validBase, ...span }).success).toBe(false);
+    // Not a race: the rounded span, 24 weeks, stands.
+    expect(
+      generatePlanInputSchema.safeParse({ ...validBase, ...span, endDateIsRaceDate: false }).success,
+    ).toBe(true);
+  });
+
   it("requires an end date", () => {
     const result = generatePlanInputSchema.safeParse({
       goal: "Hyrox race prep",

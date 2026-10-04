@@ -19,7 +19,7 @@ import { knownExerciseLabel } from "@shared/schema/exercises";
 import type { WeightUnit } from "@shared/unitConversion";
 
 import type { WorkoutEnginePlan } from "./enginePlan";
-import { roundLoad } from "./loadMath";
+import { customLiftLabel, roundLoad } from "./loadMath";
 import { type LiftProgram, type LiftWeekTarget, LIGHT_EXPOSURE_FRACTION } from "./strength";
 import { replaceFirstValue } from "./textScan";
 
@@ -128,9 +128,32 @@ const AT_LOAD = /@\s*/g;
 const LOAD_UNIT = /\s*(?:kg|lbs?)\b/iy;
 const RPE = /RPE[\s~]*/gi;
 
+const LETTER = /\p{L}/u;
+
 function exerciseNames(exercise: string): string[] {
-  const label = knownExerciseLabel(exercise);
-  return [label, exercise.replaceAll("_", " ")].filter((name): name is string => Boolean(name));
+  const custom = customLiftLabel(exercise);
+  const names =
+    custom == null ? [knownExerciseLabel(exercise), exercise.replaceAll("_", " ")] : [custom];
+  return names.filter((name): name is string => Boolean(name?.trim()));
+}
+
+/**
+ * Whether `line` names the exercise itself: an occurrence of the name that no
+ * word runs into from before. "Romanian Deadlift", "Trap-bar deadlift" and
+ * "Incline Bench Press" all contain a primary lift's name, and the first line
+ * containing it used to be rewritten, so the deadlift's load landed on the
+ * RDL line. C15 (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * An empty name names nothing: `indexOf("")` matches at every index, so every
+ * line would read as naming it, and the scan's `at + 1` step relies on a
+ * non-empty name to make progress. Exported for the regression test.
+ */
+export function namesExercise(line: string, name: string): boolean {
+  if (!name) return false;
+  for (let at = line.indexOf(name); at >= 0; at = line.indexOf(name, at + 1)) {
+    if (!LETTER.test(line.slice(0, at).trimEnd().at(-1) ?? "")) return true;
+  }
+  return false;
 }
 
 /** Apply `edit` to the first line of `text` that names the exercise; every other line is untouched. */
@@ -141,7 +164,9 @@ function rewriteExerciseLine(
 ): string {
   const names = exerciseNames(exercise).map((name) => name.toLowerCase());
   const lines = text.split("\n");
-  const index = lines.findIndex((line) => names.some((name) => line.toLowerCase().includes(name)));
+  const index = lines.findIndex((line) =>
+    names.some((name) => namesExercise(line.toLowerCase(), name)),
+  );
   if (index < 0) return text;
   return lines.map((line, at) => (at === index ? edit(line) : line)).join("\n");
 }

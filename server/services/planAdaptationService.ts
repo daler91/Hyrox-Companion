@@ -66,6 +66,9 @@ function toAdaptableDay(row: AdaptationPlanDayRow): AdaptablePlanDay | null {
     sets: row.sets.map((set) => ({
       id: set.id,
       exerciseName: set.exerciseName,
+      // A custom lift is keyed by its label (liftKey), so without it no logged
+      // custom lift finds its planned sets. D14 (CODEBASE_ANALYSIS_2026-10-03)
+      customLabel: set.customLabel,
       reps: set.reps,
       weight: set.weight,
       weightUnit: set.weightUnit,
