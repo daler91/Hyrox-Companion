@@ -69,7 +69,7 @@ export function SessionGradeView({
         </dl>
       ) : null}
       {grade.ungradeableReason === "no_targets" ? (
-        <Link href="/settings" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+        <Link href="/settings" className="rounded text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Add your max heart rate in Settings
         </Link>
       ) : null}

@@ -90,7 +90,7 @@ function SessionRow({ grade }: Readonly<{ grade: SessionGrade }>) {
         </span>
         <Link
           href={`/?workout=${grade.workoutLogId}`}
-          className="block font-medium underline-offset-4 hover:underline"
+          className="block rounded font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid={`link-session-grade-${grade.workoutLogId}`}
         >
           {grade.title}

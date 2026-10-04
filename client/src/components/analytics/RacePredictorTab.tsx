@@ -292,7 +292,7 @@ export function RacePredictorTab() {
           {data.genderAssumed && (
             <p className="text-xs text-muted-foreground">
               Gender not set — using a neutral standard.{" "}
-              <Link href="/settings" className="underline">
+              <Link href="/settings" className="rounded underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 Set it in Settings
               </Link>{" "}
               for division-correct loads.
