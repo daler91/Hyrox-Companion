@@ -1379,6 +1379,7 @@ export const storage: IStorage = {
   weeklyReviews: new WeeklyReviewsStorage(),
   recycleBin: new RecycleBinStorage(),
   sessionStreams: new SessionStreamStorage(),
+  dataExport: new DataExportStorage(),
 };
 ```
 
