@@ -7,6 +7,7 @@ import {
 } from "@google/genai";
 
 import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
+import { textBreakerFor } from "../circuitBreaker";
 import { getAiClient } from "../geminiSdk";
 import { retryWithBackoff, withTimeout } from "../retry";
 import { combineSignals } from "./http";
@@ -160,6 +161,7 @@ export const geminiTextProvider: TextAiProvider = {
           contents: geminiContents(request),
         }),
       request.label,
+      textBreakerFor("gemini"),
       undefined,
       undefined,
       request.timeoutMs,

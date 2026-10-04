@@ -33,6 +33,60 @@ export function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSi
   return AbortSignal.any(present);
 }
 
+/** An error the provider sent inside a stream; `status` when it gave a numeric code. */
+export class ProviderStreamError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "ProviderStreamError";
+  }
+}
+
+interface StreamErrorFields {
+  type?: unknown;
+  code?: unknown;
+  message?: unknown;
+}
+
+function streamErrorKind(fields: StreamErrorFields): string {
+  if (typeof fields.type === "string") return fields.type;
+  if (typeof fields.code === "string" || typeof fields.code === "number") return String(fields.code);
+  return "error";
+}
+
+function streamErrorDetail(error: unknown): { kind: string; message: string; status?: number } {
+  if (typeof error === "string") return { kind: "error", message: error };
+  const fields: StreamErrorFields = typeof error === "object" && error !== null ? error : {};
+  return {
+    kind: streamErrorKind(fields),
+    message: typeof fields.message === "string" ? fields.message : "",
+    ...(typeof fields.code === "number" ? { status: fields.code } : {}),
+  };
+}
+
+/**
+ * Throw the error a provider reported inside an HTTP 200 stream: Anthropic's
+ * `error` event (`{"type":"error","error":{"type":"overloaded_error",...}}`)
+ * or an OpenAI-compatible top-level `error` object. Read as an ordinary event
+ * it carried no text, so the reply stopped mid-sentence, ended as if complete,
+ * was saved as the coach's turn and counted as a breaker success during an
+ * outage. Thrown, it fails the stream like any other provider error — AI3
+ * (CODEBASE_ANALYSIS_2026-10-03). The breaker still reads it: an
+ * `invalid_request_error` says nothing about the provider's health.
+ */
+export function throwIfStreamError(provider: string, payload: unknown): void {
+  if (!payload || typeof payload !== "object") return;
+  const error = (payload as { error?: unknown }).error;
+  if (!error) return;
+  const detail = streamErrorDetail(error);
+  throw new ProviderStreamError(
+    `${provider} AI stream failed: ${detail.kind}: ${detail.message.slice(0, 500)}`,
+    detail.status,
+  );
+}
+
 export async function readJsonPayload(response: Response): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }

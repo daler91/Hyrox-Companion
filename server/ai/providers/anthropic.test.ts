@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isProviderHealthSignal } from "../circuitBreaker";
 import { retryWithBackoff } from "../retry";
 import { createAnthropicTextProvider, stripJsonCodeFence } from "./anthropic";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
@@ -176,6 +177,44 @@ describe("anthropic text provider", () => {
     const provider = createAnthropicTextProvider({});
 
     await expect(provider.generateText(baseRequest)).rejects.toThrow("ANTHROPIC_API_KEY");
+  });
+
+  // AI3 (CODEBASE_ANALYSIS_2026-10-03): Anthropic reports an overload that
+  // starts mid-reply as an `error` event inside the HTTP 200 stream.
+  it("fails a stream that reports an error part-way through instead of ending it as complete", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "event: content_block_delta\n" +
+      "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Your long run should\"}}\n\n" +
+      "event: error\n" +
+      "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n",
+      { status: 200 },
+    ));
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+
+    const received: string[] = [];
+    const error: unknown = await (async () => {
+      for await (const chunk of provider.streamText(baseRequest)) if (chunk.text) received.push(chunk.text);
+    })().catch((caught: unknown) => caught);
+
+    expect(received).toEqual(["Your long run should"]);
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).toMatch(/overloaded_error: Overloaded/);
+    // An overload is the provider's health, so it counts toward the breaker.
+    expect(isProviderHealthSignal(error)).toBe(true);
+  });
+
+  it("fails a stream on an in-stream request error without counting it against the provider", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "event: error\n" +
+      "data: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"prompt is too long\"}}\n\n",
+      { status: 200 },
+    ));
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+
+    const error: unknown = await collectTextChunks(provider.streamText(baseRequest)).catch((caught: unknown) => caught);
+
+    expect(String(error)).toMatch(/invalid_request_error/);
+    expect(isProviderHealthSignal(error)).toBe(false);
   });
 });
 

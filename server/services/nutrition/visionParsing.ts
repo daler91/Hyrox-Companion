@@ -1,3 +1,4 @@
+import { visionBreaker } from "../../ai/circuitBreaker";
 import { AppError, ErrorCode } from "../../errors";
 import { GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../../gemini/client";
 import { logger } from "../../logger";
@@ -44,6 +45,9 @@ export async function callGeminiVisionJson(opts: {
         ],
       }),
     opts.retryLabel,
+    // Vision has its own breaker, apart from the text provider's — AI2
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    visionBreaker,
   );
 
   // Track usage before the empty check — the call consumed tokens regardless.

@@ -1,3 +1,5 @@
+import { textBreakerFor } from "../circuitBreaker";
+import { AiConfigurationError } from "../errors";
 import { retryWithBackoff } from "../retry";
 import {
   combineSignals,
@@ -6,6 +8,7 @@ import {
   parseToolArguments,
   readJsonPayload,
   streamSseTextChunks,
+  throwIfStreamError,
 } from "./http";
 import type {
   ResolvedTextAiRequest,
@@ -27,7 +30,7 @@ interface AnthropicAdapterOptions {
 
 function requireApiKey(options: AnthropicAdapterOptions): string {
   if (!options.apiKey) {
-    throw new Error("ANTHROPIC_API_KEY or AI_TEXT_API_KEY is required for anthropic AI text provider");
+    throw new AiConfigurationError("ANTHROPIC_API_KEY or AI_TEXT_API_KEY is required for anthropic AI text provider");
   }
   return options.apiKey;
 }
@@ -244,6 +247,9 @@ function streamChunkFromAnthropicEvent(
   previousUsage: TextAiUsage | undefined,
   toolUses: ReturnType<typeof createToolUseAssembler>,
 ): ParsedSseTextEvent {
+  // An `error` event mid-reply (overloaded_error) is a failure, not an empty
+  // event — AI3 (CODEBASE_ANALYSIS_2026-10-03).
+  throwIfStreamError("anthropic", payload);
   const record = payload as AnthropicStreamEvent;
   const usage = mergeAnthropicUsage(previousUsage, payload);
   const toolCall = toolUses.accept(record);
@@ -268,6 +274,7 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
       const response = await retryWithBackoff(
         (signal) => postAnthropic(request, options, false, signal),
         request.label,
+        textBreakerFor("anthropic"),
         undefined,
         undefined,
         request.timeoutMs,

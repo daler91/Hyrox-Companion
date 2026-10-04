@@ -13,19 +13,26 @@ vi.mock("../sharedRuntimeState", () => ({
 import {
   __circuitBreakerInternalsForTests,
   __resetCircuitBreakerForTests,
-  assertBreakerClosed,
   CircuitBreakerOpenError,
+  embeddingBreaker,
   isProviderHealthSignal,
   loadPersistedBreakerState,
-  recordBreakerFailure,
-  recordBreakerSuccess,
-  releaseBreakerProbe,
+  textBreakerFor,
+  visionBreaker,
 } from "./circuitBreaker";
+import { AiConfigurationError } from "./errors";
+
+// The state machine is the same for every breaker; these tests drive one.
+const breaker = textBreakerFor("anthropic");
+const BREAKER_KEY = "ai-circuit-breaker:text:anthropic";
 
 // Trip the breaker open by exhausting the failure threshold (5 consecutive).
 function openBreaker(): void {
-  for (let i = 0; i < 5; i += 1) recordBreakerFailure();
+  for (let i = 0; i < 5; i += 1) breaker.recordFailure();
 }
+
+const isProbeInFlight = () => breaker.probeStateForTests().inFlight;
+const hasProbeDeadlineTimer = () => breaker.probeStateForTests().hasDeadlineTimer;
 
 describe("circuit breaker", () => {
   beforeEach(() => {
@@ -42,20 +49,20 @@ describe("circuit breaker", () => {
 
   describe("baseline behaviour", () => {
     it("passes calls through while closed", () => {
-      expect(() => assertBreakerClosed()).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
     });
 
     it("opens after FAILURE_THRESHOLD consecutive failures", () => {
-      for (let i = 0; i < 5; i += 1) recordBreakerFailure();
-      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+      for (let i = 0; i < 5; i += 1) breaker.recordFailure();
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
     });
 
     it("resets the failure counter on a success", () => {
-      for (let i = 0; i < 4; i += 1) recordBreakerFailure();
-      recordBreakerSuccess();
+      for (let i = 0; i < 4; i += 1) breaker.recordFailure();
+      breaker.recordSuccess();
       // 4 fresh failures should NOT trip — counter was reset.
-      for (let i = 0; i < 4; i += 1) recordBreakerFailure();
-      expect(() => assertBreakerClosed()).not.toThrow();
+      for (let i = 0; i < 4; i += 1) breaker.recordFailure();
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
     });
   });
 
@@ -64,18 +71,18 @@ describe("circuit breaker", () => {
       // One caller's bad prompt must not cut every other feature off from AI:
       // a 400 fails the same way against a perfectly healthy provider.
       for (let i = 0; i < 10; i++) {
-        recordBreakerFailure(Object.assign(new Error("invalid request"), { status: 400 }));
+        breaker.recordFailure(Object.assign(new Error("invalid request"), { status: 400 }));
       }
 
-      expect(() => assertBreakerClosed()).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
     });
 
     it("counts an auth failure, which does make the provider unusable for everyone", () => {
       for (let i = 0; i < 5; i++) {
-        recordBreakerFailure(Object.assign(new Error("unauthorized"), { status: 401 }));
+        breaker.recordFailure(Object.assign(new Error("unauthorized"), { status: 401 }));
       }
 
-      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
     });
 
     it("reads the message when the provider attaches no status", () => {
@@ -88,34 +95,72 @@ describe("circuit breaker", () => {
       expect(isProviderHealthSignal(undefined)).toBe(true);
     });
 
-    it("releases a half-open probe that failed for a caller-side reason", () => {
-      for (let i = 0; i < 5; i++) recordBreakerFailure(new Error("503"));
-      vi.advanceTimersByTime(30_000); // COOLDOWN_MS
-      assertBreakerClosed(); // -> half-open, probe in flight
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(true);
+    // AI2 (CODEBASE_ANALYSIS_2026-10-03): a deployment with no Gemini key, or
+    // with AI switched off, fails every call however healthy the provider is.
+    it("never counts a configuration error, however many times", () => {
+      const missingKey = new AiConfigurationError("GEMINI_API_KEY is required for AI features");
+      expect(isProviderHealthSignal(missingKey)).toBe(false);
 
-      recordBreakerFailure(Object.assign(new Error("invalid request"), { status: 422 }));
+      for (let i = 0; i < 10; i++) breaker.recordFailure(missingKey);
+
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+    });
+
+    it("releases a half-open probe that failed for a caller-side reason", () => {
+      for (let i = 0; i < 5; i++) breaker.recordFailure(new Error("503"));
+      vi.advanceTimersByTime(30_000); // COOLDOWN_MS
+      breaker.assertClosed(); // -> half-open, probe in flight
+      expect(isProbeInFlight()).toBe(true);
+
+      breaker.recordFailure(Object.assign(new Error("invalid request"), { status: 422 }));
 
       // The probe learned nothing, so it neither closed nor re-opened the
       // breaker — but it must not stay wedged either.
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
-      expect(() => assertBreakerClosed()).not.toThrow();
+      expect(isProbeInFlight()).toBe(false);
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
     });
 
     it("releases a half-open probe its caller cancelled, and otherwise changes nothing (AI5)", () => {
-      for (let i = 0; i < 4; i++) recordBreakerFailure(new Error("503"));
-      releaseBreakerProbe();
+      for (let i = 0; i < 4; i++) breaker.recordFailure(new Error("503"));
+      breaker.releaseProbe();
       // Closed: the run of failures neither grew nor reset.
-      recordBreakerFailure(new Error("503"));
-      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+      breaker.recordFailure(new Error("503"));
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
 
       vi.advanceTimersByTime(30_000); // COOLDOWN_MS
-      assertBreakerClosed(); // -> half-open, probe in flight
-      releaseBreakerProbe();
+      breaker.assertClosed(); // -> half-open, probe in flight
+      breaker.releaseProbe();
 
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(false);
-      expect(() => assertBreakerClosed()).not.toThrow();
+      expect(isProbeInFlight()).toBe(false);
+      expect(hasProbeDeadlineTimer()).toBe(false);
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+    });
+  });
+
+  // AI2 (CODEBASE_ANALYSIS_2026-10-03): one breaker for the whole process let
+  // a Gemini embedding or vision incident cut off a healthy text provider.
+  describe("one breaker per provider and capability", () => {
+    it("keeps the text provider open for business while embeddings are failing", () => {
+      for (let i = 0; i < 5; i++) embeddingBreaker.recordFailure(new Error("503 Service Unavailable"));
+
+      expect(() => { embeddingBreaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      expect(() => { textBreakerFor("anthropic").assertClosed(); }).not.toThrow();
+      expect(() => { textBreakerFor("gemini").assertClosed(); }).not.toThrow();
+      expect(() => { visionBreaker.assertClosed(); }).not.toThrow();
+    });
+
+    it("keeps embeddings and vision working while the text provider is failing", () => {
+      for (let i = 0; i < 5; i++) textBreakerFor("gemini").recordFailure(new Error("503 Service Unavailable"));
+
+      expect(() => { textBreakerFor("gemini").assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      expect(() => { embeddingBreaker.assertClosed(); }).not.toThrow();
+      expect(() => { visionBreaker.assertClosed(); }).not.toThrow();
+    });
+
+    it("gives each text provider its own breaker", () => {
+      expect(textBreakerFor("gemini")).not.toBe(textBreakerFor("anthropic"));
+      expect(textBreakerFor("anthropic")).not.toBe(textBreakerFor("openai-compatible"));
+      expect(textBreakerFor("anthropic")).toBe(textBreakerFor("anthropic"));
     });
   });
 
@@ -123,64 +168,64 @@ describe("circuit breaker", () => {
     it("starts a deadline timer when transitioning to half-open", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001); // past COOLDOWN_MS
-      expect(() => assertBreakerClosed()).not.toThrow();
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(true);
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(true);
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(isProbeInFlight()).toBe(true);
+      expect(hasProbeDeadlineTimer()).toBe(true);
     });
 
     it("clears probeInFlight if the probe never resolves before PROBE_TIMEOUT_MS", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed();
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(true);
+      breaker.assertClosed();
+      expect(isProbeInFlight()).toBe(true);
 
-      // Probe never calls recordBreakerSuccess/Failure — let the deadline fire.
+      // Probe never calls recordSuccess/recordFailure — let the deadline fire.
       vi.advanceTimersByTime(__circuitBreakerInternalsForTests.PROBE_TIMEOUT_MS + 1);
 
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(false);
+      expect(isProbeInFlight()).toBe(false);
+      expect(hasProbeDeadlineTimer()).toBe(false);
     });
 
-    it("clears the deadline timer on recordBreakerSuccess", () => {
+    it("clears the deadline timer on recordSuccess", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed();
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(true);
+      breaker.assertClosed();
+      expect(hasProbeDeadlineTimer()).toBe(true);
 
-      recordBreakerSuccess();
+      breaker.recordSuccess();
 
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(false);
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+      expect(hasProbeDeadlineTimer()).toBe(false);
+      expect(isProbeInFlight()).toBe(false);
     });
 
-    it("clears the deadline timer on recordBreakerFailure (probe failed)", () => {
+    it("clears the deadline timer on recordFailure (probe failed)", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed();
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(true);
+      breaker.assertClosed();
+      expect(hasProbeDeadlineTimer()).toBe(true);
 
-      recordBreakerFailure();
+      breaker.recordFailure();
 
-      expect(__circuitBreakerInternalsForTests.hasProbeDeadlineTimer()).toBe(false);
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+      expect(hasProbeDeadlineTimer()).toBe(false);
+      expect(isProbeInFlight()).toBe(false);
     });
 
     it("allows the next probe to fire after the deadline cleared the stuck flag", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed(); // first probe — never resolves
+      breaker.assertClosed(); // first probe — never resolves
       vi.advanceTimersByTime(__circuitBreakerInternalsForTests.PROBE_TIMEOUT_MS + 1);
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+      expect(isProbeInFlight()).toBe(false);
 
       // Re-opens by calling failure (would have happened if the wedged probe
       // ever did fail), then waits another cooldown.
-      recordBreakerFailure();
+      breaker.recordFailure();
       vi.advanceTimersByTime(30_001);
 
       // Without the deadline fix this would have thrown because probeInFlight
       // would still be stuck true from the first probe.
-      expect(() => assertBreakerClosed()).not.toThrow();
-      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(true);
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(isProbeInFlight()).toBe(true);
     });
   });
 
@@ -188,7 +233,7 @@ describe("circuit breaker", () => {
     it("persists a snapshot when the breaker opens via threshold", () => {
       openBreaker();
       expect(mockSetRuntimeCache).toHaveBeenCalledWith(
-        "ai-circuit-breaker:state",
+        BREAKER_KEY,
         expect.objectContaining({ state: "open", consecutiveFailures: 5 }),
         expect.any(Number),
       );
@@ -198,9 +243,9 @@ describe("circuit breaker", () => {
       openBreaker();
       mockSetRuntimeCache.mockClear();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed(); // transition to half-open
+      breaker.assertClosed(); // transition to half-open
       expect(mockSetRuntimeCache).toHaveBeenCalledWith(
-        "ai-circuit-breaker:state",
+        BREAKER_KEY,
         expect.objectContaining({ state: "half-open" }),
         expect.any(Number),
       );
@@ -209,11 +254,11 @@ describe("circuit breaker", () => {
     it("persists a snapshot when half-open probe fails (back to open)", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed();
+      breaker.assertClosed();
       mockSetRuntimeCache.mockClear();
-      recordBreakerFailure();
+      breaker.recordFailure();
       expect(mockSetRuntimeCache).toHaveBeenCalledWith(
-        "ai-circuit-breaker:state",
+        BREAKER_KEY,
         expect.objectContaining({ state: "open" }),
         expect.any(Number),
       );
@@ -222,11 +267,11 @@ describe("circuit breaker", () => {
     it("persists a snapshot when a successful probe closes the breaker", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001);
-      assertBreakerClosed();
+      breaker.assertClosed();
       mockSetRuntimeCache.mockClear();
-      recordBreakerSuccess();
+      breaker.recordSuccess();
       expect(mockSetRuntimeCache).toHaveBeenCalledWith(
-        "ai-circuit-breaker:state",
+        BREAKER_KEY,
         expect.objectContaining({ state: "closed", consecutiveFailures: 0 }),
         expect.any(Number),
       );
@@ -234,7 +279,7 @@ describe("circuit breaker", () => {
 
     it("does NOT persist a snapshot on a routine in-closed-state success", () => {
       mockSetRuntimeCache.mockClear();
-      recordBreakerSuccess(); // breaker was already closed
+      breaker.recordSuccess(); // breaker was already closed
       expect(mockSetRuntimeCache).not.toHaveBeenCalled();
     });
 
@@ -248,7 +293,7 @@ describe("circuit breaker", () => {
       await loadPersistedBreakerState();
 
       // Throws because state is restored to open and we're within cooldown.
-      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
     });
 
     it("loadPersistedBreakerState downgrades half-open → open on restore", async () => {
@@ -264,20 +309,42 @@ describe("circuit breaker", () => {
 
       await loadPersistedBreakerState();
 
-      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+    });
+
+    it("persists and restores each breaker under its own key", async () => {
+      for (let i = 0; i < 5; i++) embeddingBreaker.recordFailure(new Error("503"));
+      expect(mockSetRuntimeCache).toHaveBeenCalledWith(
+        "ai-circuit-breaker:embedding:gemini",
+        expect.objectContaining({ state: "open" }),
+        expect.any(Number),
+      );
+      expect(mockSetRuntimeCache).not.toHaveBeenCalledWith(BREAKER_KEY, expect.anything(), expect.anything());
+
+      __resetCircuitBreakerForTests();
+      const openSnapshot = { state: "open", consecutiveFailures: 5, openedAt: Date.now() - 1000 };
+      mockGetRuntimeCache.mockImplementation((key: string) =>
+        Promise.resolve(key === "ai-circuit-breaker:embedding:gemini" ? openSnapshot : undefined),
+      );
+
+      await loadPersistedBreakerState();
+
+      expect(() => { embeddingBreaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(() => { visionBreaker.assertClosed(); }).not.toThrow();
     });
 
     it("loadPersistedBreakerState no-ops on empty cache", async () => {
       mockGetRuntimeCache.mockResolvedValue(undefined);
       await loadPersistedBreakerState();
       // Default state is "closed" — calls pass through.
-      expect(() => assertBreakerClosed()).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
     });
 
     it("loadPersistedBreakerState swallows cache errors and stays closed", async () => {
       mockGetRuntimeCache.mockRejectedValue(new Error("db unreachable"));
       await expect(loadPersistedBreakerState()).resolves.toBeUndefined();
-      expect(() => assertBreakerClosed()).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
     });
   });
 });

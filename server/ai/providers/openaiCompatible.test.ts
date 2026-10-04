@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isProviderHealthSignal } from "../circuitBreaker";
 import { retryWithBackoff } from "../retry";
-import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
+import { createOpenAiCompatibleTextProvider, unwrapArrayEnvelope } from "./openaiCompatible";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
 
@@ -49,7 +50,8 @@ describe("openai-compatible text provider", () => {
       response_format: { type: "json_object" },
       reasoning_effort: "high",
       messages: [
-        { role: "system", content: "System rules" },
+        // JSON mode adds how to wrap a top-level array (AI6, CODEBASE_ANALYSIS_2026-10-03).
+        { role: "system", content: expect.stringMatching(/^System rules\n\nRespond with a single JSON object\./) as unknown },
         { role: "user", content: "Hello" },
       ],
     });
@@ -205,6 +207,41 @@ describe("openai-compatible text provider", () => {
     expect(calls).toEqual([{ id: "call_2", name: "get_personal_records", arguments: {} }]);
   });
 
+  // AI3 (CODEBASE_ANALYSIS_2026-10-03): OpenAI-compatible APIs report a failure
+  // that starts mid-reply as a top-level `error` inside the HTTP 200 stream.
+  it("fails a stream that reports an error part-way through instead of ending it as complete", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "data: {\"choices\":[{\"delta\":{\"content\":\"Your long run should\"}}]}\n\n" +
+      "data: {\"error\":{\"message\":\"The server had an error while processing your request\",\"type\":\"server_error\"}}\n\n" +
+      "data: [DONE]\n\n",
+      { status: 200 },
+    ));
+    const provider = createOpenAiCompatibleTextProvider({ apiKey: TEST_KEY, baseUrl: "https://api.x.ai/v1", profile: "xai", supportsReasoningEffort: false });
+
+    const received: string[] = [];
+    const error: unknown = await (async () => {
+      for await (const chunk of provider.streamText(baseRequest)) if (chunk.text) received.push(chunk.text);
+    })().catch((caught: unknown) => caught);
+
+    expect(received).toEqual(["Your long run should"]);
+    expect(String(error)).toMatch(/openai-compatible xai AI stream failed: server_error/);
+    expect(isProviderHealthSignal(error)).toBe(true);
+  });
+
+  it("reads a numeric in-stream error code as the status the breaker classifies by", async () => {
+    // OpenRouter's shape: the upstream status as `code`, alongside finish_reason "error".
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "data: {\"error\":{\"code\":400,\"message\":\"context length exceeded\"},\"choices\":[{\"delta\":{\"content\":\"\"},\"finish_reason\":\"error\"}]}\n\n",
+      { status: 200 },
+    ));
+    const provider = createOpenAiCompatibleTextProvider({ apiKey: TEST_KEY, baseUrl: "https://openrouter.ai/api/v1", profile: "openrouter", supportsReasoningEffort: false });
+
+    const error: unknown = await collectTextChunks(provider.streamText(baseRequest)).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ status: 400 });
+    expect(isProviderHealthSignal(error)).toBe(false);
+  });
+
   it("fails clearly when no compatible API key is configured", async () => {
     const provider = createOpenAiCompatibleTextProvider({
       baseUrl: "https://api.x.ai/v1",
@@ -213,5 +250,87 @@ describe("openai-compatible text provider", () => {
     });
 
     await expect(provider.generateText(baseRequest)).rejects.toThrow("AI_TEXT_API_KEY");
+  });
+});
+
+// AI6 (CODEBASE_ANALYSIS_2026-10-03): json_object mode only returns an object,
+// but the suggestions, review-notes and plan-generation prompts ask for a
+// top-level array, and their parsers read an object as nothing.
+describe("openai-compatible JSON mode and top-level arrays", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const provider = () =>
+    createOpenAiCompatibleTextProvider({ apiKey: TEST_KEY, baseUrl: "https://api.openai.com/v1", profile: "openai", supportsReasoningEffort: false });
+
+  it("hands back the array a JSON-mode reply wrapped, as array-expecting callers parse it", async () => {
+    const days = [{ day: 1, focus: "Engine" }, { day: 2, focus: "Strength" }];
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      choices: [{ message: { content: JSON.stringify({ jsonArray: days }) } }],
+    }));
+
+    const response = await provider().generateText({ ...baseRequest, json: true });
+
+    const parsed: unknown = JSON.parse(response.text);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toEqual(days);
+  });
+
+  it("tells the model how to wrap an array, since the API will not return one", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      choices: [{ message: { content: "{\"jsonArray\":[]}" } }],
+    }));
+
+    const response = await provider().generateText({ ...baseRequest, json: true });
+
+    expect(response.text).toBe("[]");
+    const body = requestJsonBody(fetchSpy.mock.calls[0][1]) as { messages: { role: string; content: string }[] };
+    expect(body.messages[0]).toMatchObject({ role: "system" });
+    expect(body.messages[0].content).toMatch(/^System rules\n\n/);
+    expect(body.messages[0].content).toMatch(/top-level JSON array, return \{"jsonArray": <that array>\} instead\./);
+  });
+
+  it("leaves a reply that is meant to be an object alone", () => {
+    const multiKey = JSON.stringify({ summaryMessage: "Moved it", changes: [] });
+    const recordOfText = JSON.stringify({ sections: { load: "Steady" } });
+    const envelopeNotArray = JSON.stringify({ jsonArray: { day: 1 } });
+    const envelopePlusKey = JSON.stringify({ jsonArray: [1], note: "extra" });
+    expect(unwrapArrayEnvelope(multiKey)).toBe(multiKey);
+    expect(unwrapArrayEnvelope(recordOfText)).toBe(recordOfText);
+    expect(unwrapArrayEnvelope(envelopeNotArray)).toBe(envelopeNotArray);
+    expect(unwrapArrayEnvelope(envelopePlusKey)).toBe(envelopePlusKey);
+    expect(unwrapArrayEnvelope("[1,2]")).toBe("[1,2]");
+    expect(unwrapArrayEnvelope("not json")).toBe("not json");
+  });
+
+  // A legitimate object reply can hold one array of its own: meal parsing's
+  // warnings-only reply, exercise parsing's structure blocks. Only the fixed
+  // `jsonArray` envelope is unwrapped, so these reach their parsers intact.
+  it("passes a single-key object whose array is the reply's own field through untouched", async () => {
+    const warningsOnly = JSON.stringify({ warnings: ["Could not read the portion size"] });
+    const itemsOnly = JSON.stringify({ items: [{ name: "Oats", grams: 80 }] });
+    expect(unwrapArrayEnvelope(warningsOnly)).toBe(warningsOnly);
+    expect(unwrapArrayEnvelope(itemsOnly)).toBe(itemsOnly);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      choices: [{ message: { content: warningsOnly } }],
+    }));
+    const response = await provider().generateText({ ...baseRequest, json: true });
+    expect(response.text).toBe(warningsOnly);
+  });
+
+  it("neither instructs nor unwraps when JSON was not requested", async () => {
+    const reply = JSON.stringify({ jsonArray: [1] });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      choices: [{ message: { content: reply } }],
+    }));
+
+    const response = await provider().generateText(baseRequest);
+
+    expect(response.text).toBe(reply);
+    expect(requestJsonBody(fetchSpy.mock.calls[0][1])).toMatchObject({
+      messages: [{ role: "system", content: "System rules" }, { role: "user", content: "Hello" }],
+    });
   });
 });

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  __circuitBreakerInternalsForTests,
   __resetCircuitBreakerForTests,
   CircuitBreakerOpenError,
+  textBreakerFor,
 } from "../circuitBreaker";
 
 // ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ describe("a stream its caller cancelled, and the circuit breaker", () => {
     rejectsOnAbort();
     await drainAndCancel();
 
-    expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
+    expect(textBreakerFor("gemini").probeStateForTests().inFlight).toBe(false);
     respondWith(["back up"]);
     await expect(drain()).resolves.toEqual({ text: "back up" });
   });
