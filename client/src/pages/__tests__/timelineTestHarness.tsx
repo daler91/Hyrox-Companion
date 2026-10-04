@@ -32,6 +32,8 @@ const harnessState: HarnessState = {
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/hooks/useAuth", () => ({
+  // AdhocLogSheet keys its "Open full editor" /log draft by the signed-in user (U2).
+  useAuth: () => ({ user: { id: "user-1" }, isLoading: false, isAuthenticated: true, isAppUserLoaded: true }),
   useIsAiCoachEnabled: () => true,
   useIsAuthUserLoaded: () => true,
   useIsAutoCoaching: () => false,

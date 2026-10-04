@@ -1,18 +1,31 @@
 import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { Dumbbell, ExternalLink, Gauge, ListChecks, Loader2, NotebookPen } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { FIRST_STEP, saveLogWorkoutDraft } from "@/hooks/useLogWorkoutDraft";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { api } from "@/lib/api";
 import { getTodayString } from "@/lib/dateUtils";
+import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
@@ -207,13 +220,20 @@ function setsToParsed(rows: readonly ExerciseSet[]): ParsedExercise[] {
  * Power-user features that the legacy `/log` stepper still has but
  * this sheet intentionally skips for now: voice input, draft
  * persistence to localStorage, structured-EMOM builder. Users who
- * need those can tap "Open full editor" to fall through to /log.
+ * need those can tap "Open full editor" to fall through to /log, which
+ * carries what was entered over as the /log draft. Without draft
+ * persistence, dismissing the sheet with something entered asks before
+ * discarding it — U2 (CODEBASE_ANALYSIS_2026-10-03).
  */
 export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
   const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  // The key LogWorkout reads its draft under, so "Open full editor" can
+  // hand the entered workout over.
+  const { user } = useAuth();
+  const userKey = user?.id ?? "anon";
 
   // Empty default + "Workout" placeholder (not a pre-filled value) so the
   // user never has to clear the field on a quick log. Save still falls back
@@ -226,6 +246,11 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const [rpe, setRpe] = useState<number | null>(null);
   const [durationMinutes, setDurationMinutes] = useState("");
   const [exerciseSets, setExerciseSets] = useState<ExerciseSet[]>([]);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  // Keystroke-level copy of the prescription textareas. Their onSaveField is
+  // debounced, so an Escape straight after typing would otherwise read the
+  // pre-keystroke state and discard the text without asking.
+  const typedTextRef = useRef({ mainWorkout: "", accessory: "" });
 
   const resetState = () => {
     setTitle("");
@@ -236,6 +261,8 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     setRpe(null);
     setDurationMinutes("");
     setExerciseSets([]);
+    setConfirmingDiscard(false);
+    typedTextRef.current = { mainWorkout: "", accessory: "" };
   };
 
   // Re-evaluate getTodayString() on every open transition so a long-lived
@@ -251,6 +278,24 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const handleClose = () => {
     resetState();
     onClose();
+  };
+
+  // The date is left out: it is prefilled, not something the athlete entered.
+  const hasEnteredWorkout = () =>
+    exerciseSets.length > 0 ||
+    typedTextRef.current.mainWorkout.trim().length > 0 ||
+    typedTextRef.current.accessory.trim().length > 0 ||
+    title.trim().length > 0 ||
+    notes.trim().length > 0 ||
+    rpe !== null ||
+    durationMinutes.trim().length > 0;
+
+  // A swipe, outside tap or Escape must not silently throw away an entered
+  // workout — U2 (CODEBASE_ANALYSIS_2026-10-03).
+  const beforeDismiss = () => {
+    if (!hasEnteredWorkout()) return true;
+    setConfirmingDiscard(true);
+    return false;
   };
 
   const handleAddSet = (data: AddExerciseSetPayload) => {
@@ -384,6 +429,39 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   });
 
   const openFullEditor = () => {
+    // Seed the /log draft with what was entered so the full editor opens with
+    // it rather than empty (U2). This replaces any earlier /log draft; with
+    // nothing entered, that draft is left for /log to restore as before.
+    if (hasEnteredWorkout()) {
+      const typed = typedTextRef.current;
+      // No unit conversion: the sheet's rows are unstamped drafts in the
+      // athlete's current unit, which is what /log's draft rows mean too.
+      const structured = exerciseSetsToStructured(exerciseSets);
+      saveLogWorkoutDraft(userKey, {
+        title,
+        date,
+        // /log has no accessory field, so it joins the free text (as in
+        // saveLogWorkoutDraftFromTimelineEntry).
+        freeText: [typed.mainWorkout, typed.accessory]
+          .filter((part) => part.trim().length > 0)
+          .join("\n\n"),
+        notes,
+        rpe,
+        timeOfDayMin: null,
+        durationMinutes,
+        distance: "",
+        avgHeartrate: "",
+        maxHeartrate: "",
+        planId: null,
+        planDayId: null,
+        useTextMode: structured.names.length === 0,
+        exerciseBlocks: structured.names,
+        exerciseData: structured.data,
+        structureBlocks: [],
+        blockCounter: structured.names.length,
+        step: FIRST_STEP,
+      });
+    }
     onClose();
     setLocation("/log");
   };
@@ -394,6 +472,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     <ResponsiveSheet
       open={open}
       onOpenChange={(next) => !next && handleClose()}
+      beforeDismiss={beforeDismiss}
       title="Log a workout"
       description="Add an unplanned workout for any date."
       contentClassName="sm:max-w-2xl"
@@ -457,6 +536,11 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
                   if (field === "mainWorkout") setMainWorkout(next);
                   else if (field === "accessory") setAccessory(next);
                   else if (field === "notes") setNotes(next);
+                }}
+                onDraftFieldChange={(field, value) => {
+                  if (field === "mainWorkout" || field === "accessory") {
+                    typedTextRef.current[field] = value;
+                  }
                 }}
                 onParseText={() => {
                   if (!mainWorkout.trim()) {
@@ -527,6 +611,27 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard this workout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You've entered a workout that hasn't been saved. Discard it and close?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="adhoc-keep-editing">Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleClose}
+              data-testid="adhoc-discard-workout"
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ResponsiveSheet>
   );
 }

@@ -44,6 +44,8 @@ vi.mock("@/hooks/useOpenWorkoutId", () => ({
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
+  // AdhocLogSheet keys its "Open full editor" /log draft by the signed-in user (U2).
+  useAuth: () => ({ user: { id: "user-1" }, isLoading: false, isAuthenticated: true, isAppUserLoaded: true }),
   useIsAiCoachEnabled: () => authState.aiCoachEnabled,
   useIsAuthUserLoaded: () => true,
   useIsAutoCoaching: () => false,
