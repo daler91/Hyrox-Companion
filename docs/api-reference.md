@@ -270,7 +270,7 @@ Permanently delete the authenticated user's account and all associated data (GDP
   4. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
   5. **DB user row and private custom foods are deleted in one transaction.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`. Public custom foods survive by explicit opt-in.
   6. **Best-effort purge** of the user's rate-limit buckets, then their queued pg-boss jobs.
-  7. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
+  7. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache. A Clerk session minted before step 3 still authenticates until it expires, so before step 5 the erasure writes a 10-minute `auth-erased` tombstone (`rememberUserErased`) and `ensureUserExists` answers such a session with 401 instead of re-provisioning the account.
 - **Stranded runs:** if a run dies after step 3, `runStrandedErasureSweep` (hourly cron) finds the still-stamped row and finishes it — the athlete can no longer authenticate to retry themselves.
 
 ---
@@ -2072,7 +2072,7 @@ Export all training data as CSV or JSON.
 - **Auth:** Required
 - **Rate limit:** `export` category, 5/min
 - **Query:** `format` — `"csv"` (default) or `"json"`
-- **Response:** File download with appropriate Content-Type and Content-Disposition headers. Records sitting in the [recycle bin](#recycle-bin-routes) are not included.
+- **Response:** File download with appropriate Content-Type and Content-Disposition headers. The CSV holds workout and exercise-set rows only, and leaves out records sitting in the [recycle bin](#recycle-bin-routes). The JSON is the full data-subject export (P7, CODEBASE_ANALYSIS_2026-10-03): plans with every day and its prescription, nutrition, reviews, consents, MAF data, analytics results and the recycle bin's contents among them. Secrets (OAuth tokens, Garmin credentials, push keys) and server-internal caches are left out.
 
 ---
 

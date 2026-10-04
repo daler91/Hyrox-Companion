@@ -1,5 +1,5 @@
 import { pushSubscriptions } from "@shared/schema";
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 
 import { db } from "../db";
 
@@ -20,6 +20,20 @@ export class PushStorage {
     userId: string,
     subscription: { endpoint: string; p256dh: string; auth: string },
   ): Promise<void> {
+    // An endpoint identifies a browser, not an athlete. When a second athlete
+    // subscribes on a shared device, the endpoint moves to them: keeping the
+    // previous owner's row (the old (user_id, endpoint) upsert did) sent both
+    // athletes' notifications to that one screen. Deleted before the insert so
+    // a failure in between leaves the device subscribed to nobody, never to
+    // both. P3 (CODEBASE_ANALYSIS_2026-10-03)
+    await db
+      .delete(pushSubscriptions)
+      .where(
+        and(
+          eq(pushSubscriptions.endpoint, subscription.endpoint),
+          ne(pushSubscriptions.userId, userId),
+        ),
+      );
     await db
       .insert(pushSubscriptions)
       .values({ userId, ...subscription })

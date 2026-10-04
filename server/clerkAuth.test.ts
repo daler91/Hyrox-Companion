@@ -2,7 +2,7 @@ import { clerkClient, getAuth } from "@clerk/express";
 import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { clearUserSeenCache, isAuthenticated } from "./clerkAuth";
+import { clearUserSeenCache, evictUserFromSeenCache, isAuthenticated, rememberUserErased } from "./clerkAuth";
 import { storage } from "./storage";
 
 vi.mock("@clerk/express", () => ({
@@ -158,6 +158,37 @@ describe("isAuthenticated middleware", () => {
     });
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  // P5 (CODEBASE_ANALYSIS_2026-10-03): Clerk verifies session JWTs locally, so
+  // one minted before the erasure deleted the identity still authenticates for
+  // its remaining lifetime. Once the row is gone, that request must not be read
+  // as a first sign-in.
+  it("refuses, rather than re-provisions, a still-valid session for an erased account", async () => {
+    vi.mocked(getAuth).mockReturnValue({ userId: "test-user-id" });
+    vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
+
+    await rememberUserErased("test-user-id");
+    await evictUserFromSeenCache("test-user-id");
+    await isAuthenticated(req, res, next);
+
+    expect(storage.users.upsertUser).not.toHaveBeenCalled();
+    expect(clerkClient.users.getUser).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: "Unauthorized", code: "UNAUTHORIZED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("only refuses the erased account, not other first sign-ins", async () => {
+    vi.mocked(getAuth).mockReturnValue({ userId: "new-user-id" });
+    vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
+    vi.mocked(clerkClient.users.getUser).mockRejectedValue(new Error("Clerk unavailable"));
+
+    await rememberUserErased("test-user-id");
+    await isAuthenticated(req, res, next);
+
+    expect(storage.users.upsertUser).toHaveBeenCalledWith({ id: "new-user-id" });
+    expect(next).toHaveBeenCalled();
   });
 
   it("returns 500 when the minimal user row cannot be created", async () => {

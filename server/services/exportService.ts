@@ -1,4 +1,4 @@
-import type { GarminConnection,StravaConnection } from "@shared/schema";
+import type { GarminConnection, StravaConnection, StructureBlockInput } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
@@ -166,13 +166,31 @@ function scrubPushSubscription(sub: { endpoint: string }): ScrubbedPushSubscript
   return { endpoint: sub.endpoint };
 }
 
+/** Attach each plan's days, every one of them, with each day's workout structure. */
+function attachPlanDays<P extends { id: string }, D extends { id: string; planId: string }>(
+  plans: P[],
+  days: D[],
+  structures: Map<string, StructureBlockInput[]>,
+) {
+  const daysByPlan = new Map<string, (D & { structure: StructureBlockInput[] })[]>();
+  for (const day of days) {
+    const group = daysByPlan.get(day.planId) ?? [];
+    group.push({ ...day, structure: structures.get(day.id) ?? [] });
+    daysByPlan.set(day.planId, group);
+  }
+  return plans.map((plan) => ({ ...plan, days: daysByPlan.get(plan.id) ?? [] }));
+}
+
 export async function generateJSON(userId: string, storage: IStorage) {
   // Fetch everything in parallel — independent queries against tables the
-  // user owns. Each helper is already scoped to userId on its own.
+  // user owns. Each helper is already scoped to userId on its own. Which
+  // section carries each user-owned table is pinned by the closed-world sweep
+  // in exportService.test.ts (P7, CODEBASE_ANALYSIS_2026-10-03).
   const [
     user,
     timeline,
     plans,
+    planDays,
     allExerciseSets,
     chatMessages,
     coachingMaterials,
@@ -183,11 +201,14 @@ export async function generateJSON(userId: string, storage: IStorage) {
     garminConn,
     pushSubs,
     aiUsageLogs,
+    nutrition,
+    userKeyed,
   ] = await Promise.all([
     storage.users.getUser(userId),
     storage.timeline.getTimeline(userId),
     storage.plans.listTrainingPlans(userId),
-    storage.analytics.getAllExerciseSetsWithDates(userId),
+    storage.dataExport.listPlanDaysWithSets(userId),
+    storage.dataExport.listLoggedExerciseSets(userId),
     storage.users.getAllChatMessagesForExport(userId),
     storage.coaching.listCoachingMaterials(userId),
     storage.users.getCustomExercises(userId),
@@ -197,7 +218,11 @@ export async function generateJSON(userId: string, storage: IStorage) {
     storage.users.getGarminConnection(userId),
     storage.push.getSubscriptionsForUser(userId),
     storage.aiUsage.listForUser(userId),
+    storage.dataExport.listNutrition(userId),
+    storage.dataExport.listUserKeyedRows(userId),
   ]);
+  // Needs the day ids, so it cannot join the wave above.
+  const planDayStructures = await storage.workouts.getWorkoutStructuresByPlanDays(planDays.map((day) => day.id));
 
   const workoutLogTitles = buildWorkoutLogTitles(timeline);
 
@@ -231,7 +256,9 @@ export async function generateJSON(userId: string, storage: IStorage) {
       distanceUnit: user?.distanceUnit ?? "km",
     },
     timeline,
-    plans,
+    // Each plan with ALL its days: the timeline above shows only scheduled days
+    // inside a plan's lifetime, so a never-scheduled import was missing.
+    plans: attachPlanDays(plans, planDays, planDayStructures),
     exerciseSets: exerciseSetRows,
     chatMessages,
     coachingMaterials,
@@ -245,6 +272,18 @@ export async function generateJSON(userId: string, storage: IStorage) {
     },
     pushSubscriptions: pushSubs.map(scrubPushSubscription),
     aiUsageLogs,
+    nutrition,
+    weeklyReviews: userKeyed.weeklyReviews,
+    // Heart-rate/pace series per session (health data).
+    workoutStreams: userKeyed.workoutStreams,
+    planDayMoves: userKeyed.planDayMoves,
+    planAdjustmentProposals: userKeyed.planAdjustmentProposals,
+    consents: userKeyed.consents,
+    trainingStyleHistory: userKeyed.trainingStyleHistory,
+    analyticsResults: userKeyed.analyticsResults,
+    maf: userKeyed.maf,
+    // Deleted records still held until their recycle-bin expiry.
+    recycleBin: userKeyed.recycleBin,
   };
 }
 

@@ -70,15 +70,23 @@ export function PrivacyConsentBanner() {
   // Always record the notice acknowledgement; when the user made an explicit
   // telemetry choice (Accept/Decline), also apply + record the error-reporting
   // decision. The bare X dismisses the notice without implying telemetry consent.
+  //
+  // The decision is stored BEFORE the acknowledgement: recordPrivacyConsent()
+  // synchronously fires the change event that errorReporting's boot listener
+  // answers with Sentry.init, and that init reads the opt-out. Written the other
+  // way round, "Decline analytics" started Sentry for the rest of the session.
+  // P1 (CODEBASE_ANALYSIS_2026-10-03)
   const acknowledge = (errorReportingDecision?: boolean) => {
-    recordPrivacyConsent();
-    void recordServerConsent("privacy_notice", true);
     if (errorReportingDecision !== undefined) {
       if (errorReportingDecision) {
         enableErrorReporting();
       } else {
         disableErrorReporting();
       }
+    }
+    recordPrivacyConsent();
+    void recordServerConsent("privacy_notice", true);
+    if (errorReportingDecision !== undefined) {
       void recordServerConsent("error_reporting", errorReportingDecision);
     }
     setVisible(false);

@@ -1,3 +1,7 @@
+import * as allTables from '@shared/schema/tables';
+import { users } from '@shared/schema/tables';
+import { is } from 'drizzle-orm';
+import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { IStorage } from '../storage';
@@ -217,6 +221,10 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     garminConnection: unknown;
     pushSubscriptions: unknown[];
     aiUsageLogs: unknown[];
+    planDays: Array<{ id: string; planId: string }>;
+    planDayStructures: Map<string, unknown[]>;
+    nutrition: Record<string, unknown>;
+    userKeyedRows: Record<string, unknown>;
   }> = {}): IStorage => {
     return {
       users: {
@@ -228,12 +236,42 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       },
       timeline: { getTimeline: vi.fn().mockResolvedValue(overrides.timeline ?? []) },
       plans: { listTrainingPlans: vi.fn().mockResolvedValue(overrides.plans ?? []) },
-      analytics: { getAllExerciseSetsWithDates: vi.fn().mockResolvedValue(overrides.exerciseSets ?? []) },
       coaching: { listCoachingMaterials: vi.fn().mockResolvedValue(overrides.coachingMaterials ?? []) },
       timelineAnnotations: { list: vi.fn().mockResolvedValue(overrides.timelineAnnotations ?? []) },
       athleteFacts: { list: vi.fn().mockResolvedValue(overrides.athleteFacts ?? []) },
       push: { getSubscriptionsForUser: vi.fn().mockResolvedValue(overrides.pushSubscriptions ?? []) },
       aiUsage: { listForUser: vi.fn().mockResolvedValue(overrides.aiUsageLogs ?? []) },
+      workouts: {
+        getWorkoutStructuresByPlanDays: vi.fn().mockResolvedValue(overrides.planDayStructures ?? new Map()),
+      },
+      dataExport: {
+        listLoggedExerciseSets: vi.fn().mockResolvedValue(overrides.exerciseSets ?? []),
+        listPlanDaysWithSets: vi.fn().mockResolvedValue(overrides.planDays ?? []),
+        listNutrition: vi.fn().mockResolvedValue(
+          overrides.nutrition ?? {
+            foodLog: [],
+            nutritionTargets: [],
+            mealTargets: [],
+            foodFavorites: [],
+            recipes: [],
+            customFoods: [],
+            customFoodServings: [],
+          },
+        ),
+        listUserKeyedRows: vi.fn().mockResolvedValue(
+          overrides.userKeyedRows ?? {
+            weeklyReviews: [],
+            workoutStreams: [],
+            planDayMoves: [],
+            planAdjustmentProposals: [],
+            consents: [],
+            trainingStyleHistory: [],
+            analyticsResults: [],
+            maf: { profile: [], testResults: [], workoutAnalysis: [] },
+            recycleBin: [],
+          },
+        ),
+      },
     } as unknown as IStorage;
   };
 
@@ -255,7 +293,81 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       connections: { strava: null, garmin: null },
       pushSubscriptions: [],
       aiUsageLogs: [],
+      nutrition: {
+        foodLog: [],
+        nutritionTargets: [],
+        mealTargets: [],
+        foodFavorites: [],
+        recipes: [],
+        customFoods: [],
+        customFoodServings: [],
+      },
+      weeklyReviews: [],
+      workoutStreams: [],
+      planDayMoves: [],
+      planAdjustmentProposals: [],
+      consents: [],
+      trainingStyleHistory: [],
+      analyticsResults: [],
+      maf: { profile: [], testResults: [], workoutAnalysis: [] },
+      recycleBin: [],
     });
+  });
+
+  // P7 (CODEBASE_ANALYSIS_2026-10-03): plans used to go out as bare rows, and
+  // the timeline only carries scheduled days inside a plan's lifetime, so an
+  // imported plan that was never scheduled was missing from the export.
+  it('exports every plan with all of its days, scheduled or not, and their structure', async () => {
+    const plans = [{ id: 'plan-1', name: 'Imported, never scheduled' }, { id: 'plan-2', name: 'Live' }];
+    const planDays = [
+      { id: 'd1', planId: 'plan-1', scheduledDate: null, focus: 'Threshold', exerciseSets: [{ id: 's1' }] },
+      { id: 'd2', planId: 'plan-1', scheduledDate: null, focus: 'Long run', exerciseSets: [] },
+      { id: 'd3', planId: 'plan-2', scheduledDate: '2026-10-05', focus: 'Sled', exerciseSets: [] },
+    ];
+    const structure = [{ sectionType: 'main', steps: [] }];
+    const storage = createMockStorage({ plans, planDays, planDayStructures: new Map([['d1', structure]]) });
+
+    const result = await generateJSON(mockUserId, storage);
+
+    expect(storage.workouts.getWorkoutStructuresByPlanDays).toHaveBeenCalledWith(['d1', 'd2', 'd3']);
+    expect(result.plans).toEqual([
+      {
+        ...plans[0],
+        days: [
+          { ...planDays[0], structure },
+          { ...planDays[1], structure: [] },
+        ],
+      },
+      { ...plans[1], days: [{ ...planDays[2], structure: [] }] },
+    ]);
+  });
+
+  it('includes the nutrition, MAF, weekly-review, stream, consent and other user-keyed rows verbatim', async () => {
+    const nutrition = {
+      foodLog: [{ id: 'fl1', quantityG: 150, food: { name: 'Oats', brand: null } }],
+      nutritionTargets: [{ id: 'nt1', calories: 2600 }],
+      mealTargets: [{ id: 'mt1', mealType: 'breakfast' }],
+      foodFavorites: [{ id: 'ff1', food: { name: 'Oats', brand: null } }],
+      recipes: [{ id: 'r1', name: 'Overnight oats', ingredients: [{ id: 'ri1' }] }],
+      customFoods: [{ id: 'f1', name: 'Gran\'s flapjack', isPublic: false }],
+      customFoodServings: [{ id: 'fs1', label: '1 bar' }],
+    };
+    const userKeyedRows = {
+      weeklyReviews: [{ id: 'wr1', intent: 'Easy week, sleep more' }],
+      workoutStreams: [{ id: 'st1', samples: { hr: [120, 131] } }],
+      planDayMoves: [{ id: 'mv1', fromDate: '2026-10-01', toDate: '2026-10-02' }],
+      planAdjustmentProposals: [{ id: 'pp1', userRequest: 'move my long run' }],
+      consents: [{ id: 'c1', consentType: 'ai_coach', granted: true }],
+      trainingStyleHistory: [{ id: 'ts1', style: 'hyrox' }],
+      analyticsResults: [{ id: 'ar1', feature: 'coach_insights' }],
+      maf: { profile: [{ id: 'mp1' }], testResults: [{ id: 'mtr1' }], workoutAnalysis: [{ id: 'mwa1' }] },
+      recycleBin: [{ id: 'rb1', entityType: 'workout' }],
+    };
+
+    const result = await generateJSON(mockUserId, createMockStorage({ nutrition, userKeyedRows }));
+
+    expect(result.nutrition).toEqual(nutrition);
+    expect(result).toMatchObject(userKeyedRows);
   });
 
   it('returns an ISO-8601 timestamp for exportedAt', async () => {
@@ -382,5 +494,125 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     expect(result.timelineAnnotations).toEqual(timelineAnnotations);
     expect(result.athleteFacts).toEqual(athleteFacts);
     expect(result.aiUsageLogs).toEqual(aiUsageLogs);
+  });
+
+  // P7 (CODEBASE_ANALYSIS_2026-10-03): the export was a hand-picked list, so every
+  // user-owned table added after it dropped out of Art. 15/20 copies silently.
+  // Like tables.cascade.test.ts, this sweep is closed-world: EVERY table that
+  // reaches users.id, directly or through FK parents, must name the export
+  // section that carries it, or be excluded here with the reason.
+  describe('covers every user-owned table', () => {
+    const EXPORTED_IN: Record<string, string> = {
+      users: 'profile',
+      trainingPlans: 'plans',
+      planDays: 'plans', // plans[].days, never-scheduled days included
+      workoutLogs: 'timeline',
+      // Logged sets; prescribed ones ride on plans[].days[].exerciseSets.
+      exerciseSets: 'exerciseSets',
+      // Hydrated onto timeline entries and plans[].days[].structure.
+      workoutStructureBlocks: 'timeline',
+      workoutStructureSteps: 'timeline',
+      chatMessages: 'chatMessages',
+      coachingMaterials: 'coachingMaterials',
+      customExercises: 'customExercises',
+      timelineAnnotations: 'timelineAnnotations',
+      athleteFacts: 'athleteFacts',
+      stravaConnections: 'connections.strava', // tokens redacted
+      garminConnections: 'connections.garmin', // credentials redacted
+      pushSubscriptions: 'pushSubscriptions', // encryption keys redacted
+      aiUsageLogs: 'aiUsageLogs',
+      foodLogEntries: 'nutrition.foodLog',
+      nutritionTargets: 'nutrition.nutritionTargets',
+      mealTargets: 'nutrition.mealTargets',
+      foodFavorites: 'nutrition.foodFavorites',
+      recipes: 'nutrition.recipes',
+      recipeIngredients: 'nutrition.recipes', // recipes[].ingredients
+      foods: 'nutrition.customFoods', // only the athlete's own; the rest is a shared catalogue
+      foodServings: 'nutrition.customFoodServings',
+      weeklyReviews: 'weeklyReviews',
+      workoutLogStreams: 'workoutStreams',
+      planDayMoves: 'planDayMoves',
+      planAdjustmentProposals: 'planAdjustmentProposals',
+      userConsents: 'consents',
+      userTrainingStyle: 'trainingStyleHistory',
+      analyticsResults: 'analyticsResults',
+      mafProfile: 'maf.profile',
+      mafTestResults: 'maf.testResults',
+      mafWorkoutAnalysis: 'maf.workoutAnalysis',
+      recycleBinItems: 'recycleBin',
+    };
+
+    const EXCLUDED: Record<string, string> = {
+      idempotencyKeys:
+        'server-internal replay cache: stored responses to the athlete\'s own requests, kept for 7 days, whose data is exported from its source tables',
+      documentChunks:
+        'search index derived from coaching materials: chunk copies of text exported verbatim under coachingMaterials, plus embedding vectors',
+      structuredExerciseBackfillReviews:
+        'server-internal bookkeeping for a data-migration job (a status and reason per migrated record), not information about the athlete',
+    };
+
+    function userOwnedTableNames(): string[] {
+      const named = Object.entries(allTables).flatMap(([name, value]): [string, PgTable][] =>
+        is(value, PgTable) ? [[name, value]] : [],
+      );
+      const nameOf = new Map<unknown, string>(named.map(([name, table]) => [table, name]));
+      const parentsOf = new Map(
+        named.map(([name, table]) => [
+          name,
+          getTableConfig(table).foreignKeys.map((fk) => nameOf.get(fk.reference().foreignTable)),
+        ]),
+      );
+      const owned = new Set<string>([nameOf.get(users)!]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const [name, parents] of parentsOf) {
+          if (!owned.has(name) && parents.some((parent) => parent !== undefined && owned.has(parent))) {
+            owned.add(name);
+            grew = true;
+          }
+        }
+      }
+      return [...owned].sort();
+    }
+
+    function hasPath(value: unknown, path: string): boolean {
+      let node = value;
+      for (const key of path.split('.')) {
+        if (node === null || typeof node !== 'object' || !(key in node)) return false;
+        node = (node as Record<string, unknown>)[key];
+      }
+      return true;
+    }
+
+    it('maps every table that reaches users.id to an export section or a documented exclusion', () => {
+      const owned = userOwnedTableNames();
+      const unaccounted = owned.filter((name) => !(name in EXPORTED_IN) && !(name in EXCLUDED));
+
+      expect(
+        unaccounted,
+        'A new user-owned table must be added to the GDPR export (generateJSON + EXPORTED_IN) or to EXCLUDED with a reason',
+      ).toEqual([]);
+      // Guards the guard: a schema refactor that hides tables from this sweep
+      // must fail it rather than let it pass vacuously.
+      expect(owned.length).toBeGreaterThanOrEqual(38);
+    });
+
+    it('names only real user-owned tables, each exactly once', () => {
+      const owned = new Set(userOwnedTableNames());
+      const listed = [...Object.keys(EXPORTED_IN), ...Object.keys(EXCLUDED)];
+
+      expect(listed.filter((name) => !owned.has(name))).toEqual([]);
+      expect(Object.keys(EXPORTED_IN).filter((name) => name in EXCLUDED)).toEqual([]);
+    });
+
+    it('emits every section the map names', async () => {
+      const result = await generateJSON(mockUserId, createMockStorage());
+
+      const missing = Object.entries(EXPORTED_IN)
+        .filter(([, section]) => !hasPath(result, section))
+        .map(([table, section]) => `${table} -> ${section}`);
+      expect(missing).toEqual([]);
+    });
   });
 });

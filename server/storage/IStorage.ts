@@ -4,6 +4,7 @@ import type { AnalyticsResultsStorage } from "./analyticsResults";
 import type { AthleteFactsStorage } from "./athleteFacts";
 import type { CoachingStorage } from "./coaching";
 import type { ConsentStorage } from "./consent";
+import type { DataExportStorage } from "./dataExport";
 import type { IdempotencyStorage } from "./idempotency";
 import type { MafTestStorage } from "./mafTests";
 import type { NutritionStorage } from "./nutrition";
@@ -54,4 +55,5 @@ export interface IStorage {
   weeklyReviews: WeeklyReviewsStorage;
   recycleBin: RecycleBinStorage;
   sessionStreams: SessionStreamStorage;
+  dataExport: DataExportStorage;
 }

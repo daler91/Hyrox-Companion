@@ -1,6 +1,27 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { apiRequest } from "./queryClient";
 import { clearUserLocalData } from "./userLocalData";
+
+vi.mock("./queryClient", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./queryClient")>()),
+  apiRequest: vi.fn(),
+}));
+
+const PUSH_ENDPOINT = "https://fcm.googleapis.com/fcm/send/device-1";
+
+function stubPushSubscription() {
+  const unsubscribe = vi.fn(() => Promise.resolve(true));
+  const subscription = { endpoint: PUSH_ENDPOINT, unsubscribe };
+  vi.stubGlobal("navigator", {
+    ...globalThis.navigator,
+    serviceWorker: {
+      getRegistration: () =>
+        Promise.resolve({ pushManager: { getSubscription: () => Promise.resolve(subscription) } }),
+    },
+  });
+  return { unsubscribe };
+}
 
 describe("clearUserLocalData", () => {
   beforeEach(() => {
@@ -75,5 +96,53 @@ describe("clearUserLocalData", () => {
 
   it("resolves even when Cache Storage is unavailable", async () => {
     await expect(clearUserLocalData()).resolves.toBeUndefined();
+  });
+
+  // P3 (CODEBASE_ANALYSIS_2026-10-03): a push subscription belongs to the
+  // browser, not the athlete, so without this a shared device kept receiving
+  // the signed-out athlete's notifications.
+  describe("push subscription", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.mocked(apiRequest).mockReset();
+    });
+
+    it("removes the server row while the session is valid, then unsubscribes the browser", async () => {
+      const { unsubscribe } = stubPushSubscription();
+      vi.mocked(apiRequest).mockResolvedValue(new Response("{}"));
+
+      await clearUserLocalData();
+
+      expect(apiRequest).toHaveBeenCalledWith(
+        "DELETE",
+        "/api/v1/push/unsubscribe",
+        { endpoint: PUSH_ENDPOINT },
+        expect.any(AbortSignal),
+      );
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(apiRequest).mock.invocationCallOrder[0]).toBeLessThan(
+        unsubscribe.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("still unsubscribes the browser when the server request fails (e.g. after account deletion)", async () => {
+      const { unsubscribe } = stubPushSubscription();
+      vi.mocked(apiRequest).mockRejectedValue(new Error("401: Unauthorized"));
+
+      await expect(clearUserLocalData()).resolves.toBeUndefined();
+
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it("does nothing when the browser has no push subscription", async () => {
+      vi.stubGlobal("navigator", {
+        ...globalThis.navigator,
+        serviceWorker: { getRegistration: () => Promise.resolve(undefined) },
+      });
+
+      await expect(clearUserLocalData()).resolves.toBeUndefined();
+
+      expect(apiRequest).not.toHaveBeenCalled();
+    });
   });
 });

@@ -20,7 +20,7 @@ export default function Privacy() {
 
         <article className="prose prose-neutral dark:prose-invert max-w-none">
           <h1>Privacy Policy</h1>
-          <p className="text-muted-foreground">Last updated: June 6, 2026</p>
+          <p className="text-muted-foreground">Last updated: October 4, 2026</p>
 
           <h2>1. Data We Collect</h2>
           <p>
@@ -37,31 +37,54 @@ export default function Privacy() {
               durations, RPE ratings, and notes you log manually or sync from connected services.
             </li>
             <li>
-              <strong>Health metrics</strong> &mdash; heart rate, calories, cadence, and power data
-              synced from Strava or Garmin.
+              <strong>Health metrics</strong> &mdash; heart rate (including per-session heart-rate
+              and pace series), calories, cadence, and power data synced from Strava or Garmin.
             </li>
             <li>
-              <strong>Training plans</strong> &mdash; plans you create, import, or generate via AI.
+              <strong>Body and health profile</strong> &mdash; bodyweight, height, age, gender,
+              resting and maximum heart rate, FTP, activity level, weight goal, training constraints,
+              and your MAF heart-rate questionnaire answers (including injury, illness and medication)
+              and test results.
             </li>
             <li>
-              <strong>Chat messages</strong> &mdash; conversations with the AI Coach.
+              <strong>Nutrition</strong> &mdash; your food log, meal descriptions and photos, nutrition
+              label photos, nutrition targets, favourite foods, recipes, and custom foods.
+            </li>
+            <li>
+              <strong>Training plans</strong> &mdash; plans you create, import, or generate via AI,
+              and changes you or the coach make to them.
+            </li>
+            <li>
+              <strong>Chat messages</strong> &mdash; conversations with the AI Coach, including photos
+              you attach.
             </li>
             <li>
               <strong>Coaching materials</strong> &mdash; documents you upload for the AI knowledge
               pipeline.
             </li>
             <li>
-              <strong>Preferences</strong> &mdash; unit settings, email notification preferences,
-              and training goals.
+              <strong>Notes about your training</strong> &mdash; weekly review intents, timeline
+              annotations, and facts on your athlete card.
+            </li>
+            <li>
+              <strong>Preferences and consents</strong> &mdash; unit settings, notification
+              preferences, training goals, your consent decisions, and the push-notification address of
+              each device you enable.
             </li>
           </ul>
+          <p>
+            Heart-rate data, the body and health profile, MAF answers and nutrition logs are health
+            data. We use them only to provide the features you use.
+          </p>
 
           <h2>2. How We Use Your Data</h2>
           <ul>
             <li>To provide personalized workout tracking and analytics.</li>
             <li>To generate AI coaching recommendations (when you have opted in).</li>
             <li>To sync activities from connected services (Strava, Garmin).</li>
-            <li>To send email notifications you have opted into (weekly summaries, reminders).</li>
+            <li>To look up the foods you search for or scan.</li>
+            <li>To send email and push notifications you have opted into (weekly summaries,
+              reminders, session briefs, coach insights).</li>
             <li>To monitor and fix errors via our error tracking service.</li>
           </ul>
 
@@ -82,9 +105,22 @@ export default function Privacy() {
                 <td>Email, name, profile image</td>
               </tr>
               <tr>
-                <td>Configured AI provider</td>
-                <td>AI coaching (opt-in only)</td>
-                <td>Workout history, chat messages, training context</td>
+                <td>Configured AI text provider (Google Gemini by default)</td>
+                <td>AI coaching, chat, plan generation, text parsing (opt-in only)</td>
+                <td>Workout history, training plans, performance and body metrics, chat messages,
+                  meal and workout descriptions, coaching materials</td>
+              </tr>
+              <tr>
+                <td>Google (Gemini API), whichever text provider is configured</td>
+                <td>Photo parsing and search embeddings</td>
+                <td>Meal, nutrition-label, workout and chat photos, plus coaching-material text and
+                  chat questions turned into search embeddings (all opt-in only); food searches and
+                  food names, including your custom foods, when semantic food search is enabled</td>
+              </tr>
+              <tr>
+                <td>Open Food Facts, USDA FoodData Central, Edamam</td>
+                <td>Food search and barcode lookup</td>
+                <td>The search terms and barcodes you enter, without your name or account</td>
               </tr>
               <tr>
                 <td>Strava</td>
@@ -99,12 +135,20 @@ export default function Privacy() {
               <tr>
                 <td>Resend</td>
                 <td>Email delivery (opt-in only)</td>
-                <td>Email address, first name</td>
+                <td>Email address, first name, and each email&rsquo;s content: training summaries,
+                  reminders, session briefs, coach insights and race predictions</td>
+              </tr>
+              <tr>
+                <td>Your browser&rsquo;s push service (e.g. Google, Mozilla, Apple, Microsoft)</td>
+                <td>Push notifications (opt-in only)</td>
+                <td>Your device&rsquo;s push address and end-to-end encrypted notification
+                  content</td>
               </tr>
               <tr>
                 <td>Sentry</td>
                 <td>Error monitoring</td>
-                <td>Error context (no PII)</td>
+                <td>Error reports with personal data scrubbed (in your browser only if you have not
+                  declined error reporting)</td>
               </tr>
             </tbody>
           </table>
@@ -112,20 +156,24 @@ export default function Privacy() {
           <h2>4. AI Coach Data Processing</h2>
           <p>
             When you enable the AI Coach, your workout history, training plan details, performance
-            metrics, and chat messages are sent to the configured AI provider to generate
-            personalized coaching responses. This data is used by this app solely for generating
-            responses. You must explicitly opt in before any data is sent, and you can disable the
-            AI Coach at any time in Settings.
+            and body metrics, chat messages, and the meals and workouts you describe or photograph
+            are sent to an AI provider to generate personalized coaching responses and parse your
+            entries. This data is used by this app solely for those features. You must explicitly opt
+            in first, and you can disable the AI Coach at any time in Settings.
           </p>
           <p>
-            Once your data reaches the AI provider, its handling is governed by that provider&rsquo;s
-            data-processing agreement (DPA) and retention policy rather than by fitai.coach.
-            fitai.coach&rsquo;s default provider is <strong>Google Gemini</strong>; an operator may
-            instead configure Anthropic or an OpenAI-compatible endpoint, in which case that
-            provider&rsquo;s terms apply. We do not authorize providers to use your data to train
-            their models, but we cannot control a provider&rsquo;s independent retention windows, so
-            we recommend reviewing the configured provider&rsquo;s privacy and data-retention policy
-            (for the default, see Google&rsquo;s Gemini API terms).
+            Text goes to the configured text provider. fitai.coach&rsquo;s default is{" "}
+            <strong>Google Gemini</strong>; an operator may instead configure Anthropic or an
+            OpenAI-compatible endpoint (such as OpenAI, xAI, Groq, Together, OpenRouter or DeepSeek).
+            Photos and search embeddings always go to <strong>Google Gemini</strong>, whichever text
+            provider is configured, so Google&rsquo;s Gemini API terms apply to them in every case.
+          </p>
+          <p>
+            Once your data reaches a provider, its handling is governed by that provider&rsquo;s
+            data-processing agreement (DPA) and retention policy rather than by fitai.coach. We do not
+            authorize providers to use your data to train their models, but we cannot control a
+            provider&rsquo;s independent retention windows, so we recommend reviewing their privacy
+            and data-retention policies.
           </p>
 
           <h2>5. Garmin Integration</h2>
@@ -163,13 +211,17 @@ export default function Privacy() {
               account.</li>
             <li>Chat messages are retained until you clear your chat history or delete your
               account.</li>
+            <li>Records you delete stay in the recycle bin for 90 days so you can restore them, then
+              are removed.</li>
             <li>Idempotency cache entries expire after 7 days.</li>
             <li>Offline workout-save queue entries stay on your device until they sync, expire,
               are dropped after retry limits, or you sign out/delete your account.</li>
             <li>AI usage logs are retained for 7 days.</li>
-            <li>Data sent to the configured AI provider (by default Google Gemini) is retained
-              according to that provider&rsquo;s data-processing terms, not by fitai.coach; consult
-              the provider&rsquo;s policy for specifics.</li>
+            <li>A device&rsquo;s push subscription is kept until you turn notifications off or sign
+              out on that device.</li>
+            <li>Data sent to an AI provider (Section 4) is retained according to that
+              provider&rsquo;s data-processing terms, not by fitai.coach; consult the
+              provider&rsquo;s policy for specifics.</li>
           </ul>
 
           <h2>8. Your Rights</h2>
@@ -177,13 +229,19 @@ export default function Privacy() {
           <ul>
             <li>
               <strong>Access</strong> your data via the export feature in Settings. The JSON export
-              covers everything we hold for your account: profile, preferences, workout timeline,
-              training plans, exercise sets, chat history with the AI coach, uploaded coaching
-              materials, custom exercises, timeline annotations, AI usage logs, push-notification
-              endpoints, and metadata for connected Strava and Garmin accounts. OAuth tokens,
-              stored credentials, and push-message encryption keys are intentionally excluded so a
-              leaked export file cannot be used to act on your behalf with third parties. The CSV
-              export is workout-focused and intended for spreadsheet use.
+              covers the data we hold for your account: profile and body metrics, preferences,
+              workout timeline, every training plan with all its days, exercise sets, heart-rate
+              streams, nutrition log, targets, favourites, recipes and custom foods, MAF tests,
+              weekly reviews, chat history with the AI coach, uploaded coaching materials, athlete
+              card facts, custom exercises, timeline annotations, plan-change proposals and session
+              moves, stored coach insights and race predictions, consent records, training-style
+              history, recycle-bin contents, AI usage logs, push-notification endpoints, and metadata
+              for connected Strava and Garmin accounts. OAuth tokens, stored credentials, and
+              push-message encryption keys are intentionally excluded so a leaked export file cannot
+              be used to act on your behalf with third parties. Server-internal records are left out
+              too: the short-lived request-replay cache, the search index built from your coaching
+              materials (whose text is exported), and data-migration bookkeeping. The CSV export is
+              workout-focused and intended for spreadsheet use.
             </li>
             <li>
               <strong>Delete</strong> your account and all associated data via Settings. Deletion is
@@ -221,12 +279,12 @@ export default function Privacy() {
           </p>
           <h3>Limit the Use of My Sensitive Personal Information</h3>
           <p>
-            Health and fitness metrics (such as heart rate and workout performance) are sensitive
-            personal information. We use them only to provide the features you enable, never to infer
-            characteristics about you or for advertising. This data is sent to an AI provider{" "}
-            <em>only</em> when you opt in to AI coaching. To exercise your &sect;1798.120 right to
-            opt out, leave <strong>AI Coach</strong> disabled (the default) or turn it off in
-            Settings &mdash; no health data is sent to any AI processor while it is off.
+            Health and fitness data (such as heart rate, workout performance, your body and health
+            profile, and nutrition logs) is sensitive personal information. We use it only to provide
+            the features you enable, never to infer characteristics about you or for advertising. The
+            AI Coach features send it to an AI provider <em>only</em> when you opt in to AI coaching.
+            To exercise your &sect;1798.120 right to opt out, leave <strong>AI Coach</strong>{" "}
+            disabled (the default) or turn it off in Settings, which turns those features off.
           </p>
 
           <h2>10. Cookies</h2>

@@ -4,6 +4,7 @@ import { AnalyticsResultsStorage } from "./analyticsResults";
 import { AthleteFactsStorage } from "./athleteFacts";
 import { CoachingStorage } from "./coaching";
 import { ConsentStorage } from "./consent";
+import { DataExportStorage } from "./dataExport";
 import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
 import { MafTestStorage } from "./mafTests";
@@ -45,4 +46,5 @@ export const storage: IStorage = {
   weeklyReviews: new WeeklyReviewsStorage(),
   recycleBin: new RecycleBinStorage(),
   sessionStreams: new SessionStreamStorage(),
+  dataExport: new DataExportStorage(),
 };

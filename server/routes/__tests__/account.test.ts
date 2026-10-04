@@ -24,6 +24,7 @@ vi.mock("../../clerkAuth", () => ({
     next();
   },
   evictUserFromSeenCache: vi.fn().mockResolvedValue(undefined),
+  rememberUserErased: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
