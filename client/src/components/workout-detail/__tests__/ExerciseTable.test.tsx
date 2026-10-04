@@ -368,7 +368,7 @@ describe("ExerciseTable unit stamps (finding D2)", () => {
     expect(screen.getByTestId("exercise-row-planned-diff")).toHaveTextContent("planned 198 lb");
 
     await userEvent.setup().click(screen.getByLabelText(/Edit Back Squat/));
-    expect(screen.getByTestId("input-weight-kg-row")).toHaveValue(220);
+    expect(screen.getByTestId("input-weight-kg-row")).toHaveValue("220");
     expect(screen.getByTestId("planned-weight-kg-row")).toHaveTextContent("planned 198 lb");
   });
 

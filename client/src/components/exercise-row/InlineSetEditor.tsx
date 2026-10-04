@@ -419,9 +419,17 @@ const FieldInput = memo(function FieldInput({
 
   const commitDraft = () => {
     if (!isDirty) return;
-    // parseDraft maps unparseable input to null, so there is no NaN case:
-    // an empty or invalid cell commits as a cleared value.
-    const next = parseDraft(draft) ?? undefined;
+    const parsed = parseDraft(draft, field);
+    if (parsed === INVALID_DRAFT) {
+      // An entry that isn't a valid value for this field is dropped, never
+      // committed as a clear: the cell returns to the last committed value
+      // and nothing is sent (CL7, CODEBASE_ANALYSIS_2026-10-03).
+      setDraft(committedDraft);
+      setIsDirty(false);
+      return;
+    }
+    // Only an emptied cell clears the stored value.
+    const next = parsed ?? undefined;
     const nextDraft = formatInitial(next);
     const storedNext = getStoredFieldValue(next, field, displayUnit, distanceUnit);
     setLastCommitted(next);
@@ -440,8 +448,13 @@ const FieldInput = memo(function FieldInput({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="relative">
+        {/*
+          type="text", not "number": a number input reports a decimal comma
+          ("62,5") as "", so the typed value could never be read (CL7).
+          inputMode keeps the decimal keypad on phones.
+        */}
         <Input
-          type="number"
+          type="text"
           inputMode="decimal"
           value={inputValue}
           onChange={(e) => {
@@ -489,10 +502,16 @@ interface NotesFieldProps {
 function NotesField({ set, onUpdate }: NotesFieldProps) {
   const initial = set.notes ?? "";
   const [draft, setDraft] = useState(initial);
-  const [lastSaved, setLastSaved] = useState(initial);
-  if (initial !== lastSaved) {
-    setLastSaved(initial);
-    setDraft(initial);
+  // `lastExternal` mirrors only the prop. It used to be set from onChange
+  // too, so under a debounced owner (LogSheet, ReviewSurface) — where
+  // `set.notes` doesn't move until the save fires — every keystroke read as a
+  // prop change and reset the box (CL8, CODEBASE_ANALYSIS_2026-10-03). A new
+  // prop is adopted only while the draft still matches the last one seen, so
+  // a save landing mid-sentence can't clobber the rest of the note either.
+  const [lastExternal, setLastExternal] = useState(initial);
+  if (initial !== lastExternal) {
+    setLastExternal(initial);
+    if (draft === lastExternal) setDraft(initial);
   }
 
   return (
@@ -501,9 +520,7 @@ function NotesField({ set, onUpdate }: NotesFieldProps) {
       onChange={(e) => {
         const next = e.target.value;
         setDraft(next);
-        const stored = next.trim() === "" ? null : next;
-        setLastSaved(stored ?? "");
-        onUpdate({ notes: stored });
+        onUpdate({ notes: next.trim() === "" ? null : next });
       }}
       placeholder="Note for this set"
       className="min-h-[48px] text-sm"
@@ -561,10 +578,25 @@ function getStoredFieldValue(
 
 const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
-function parseDraft(raw: string): number | null {
-  if (raw.trim() === "") return null;
-  const n = Number.parseFloat(raw);
-  return Number.isNaN(n) ? null : n;
+/** A non-empty entry that isn't a valid value for its field. */
+const INVALID_DRAFT = Symbol("invalid-draft");
+
+// Digits with at most one decimal separator, which may be "." or "," — the
+// iOS decimal keypad types "," in comma-decimal regions (CL7).
+const DECIMAL_DRAFT = /^\d*[.,]?\d*$/;
+// "1,000" is 1 to a comma-decimal athlete and 1000 to everyone else, so a
+// comma followed by exactly one 3-digit group is refused rather than guessed.
+const AMBIGUOUS_THOUSANDS = /^[1-9]\d{0,2},\d{3}$/;
+
+function parseDraft(raw: string, field: FieldKey): number | null | typeof INVALID_DRAFT {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  if (!DECIMAL_DRAFT.test(trimmed) || AMBIGUOUS_THOUSANDS.test(trimmed)) return INVALID_DRAFT;
+  const n = Number(trimmed.replace(",", "."));
+  if (!Number.isFinite(n)) return INVALID_DRAFT;
+  // Same bound as the server's set schema: reps is a whole number >= 1.
+  if (field === "reps" && (!Number.isInteger(n) || n < 1)) return INVALID_DRAFT;
+  return n;
 }
 
 function getPlannedValue(set: ExerciseSet, field: FieldKey): number | null | undefined {

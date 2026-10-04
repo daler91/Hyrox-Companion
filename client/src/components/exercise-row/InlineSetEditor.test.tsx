@@ -1,5 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { InlineSetEditor } from "./InlineSetEditor";
@@ -42,7 +43,7 @@ describe("InlineSetEditor field commit flow", () => {
     fireEvent.change(input, { target: { value: "12" } });
     fireEvent.change(input, { target: { value: "123" } });
 
-    expect(input).toHaveValue(123);
+    expect(input).toHaveValue("123");
     expect(onUpdateSet).not.toHaveBeenCalled();
 
     fireEvent.blur(input);
@@ -98,7 +99,7 @@ describe("InlineSetEditor field commit flow", () => {
     fireEvent.blur(input);
 
     expect(onUpdateSet).toHaveBeenCalledWith("set-1", { reps: 42 });
-    expect(input).toHaveValue(42);
+    expect(input).toHaveValue("42");
 
     rerender(
       <InlineSetEditor
@@ -113,7 +114,7 @@ describe("InlineSetEditor field commit flow", () => {
       />,
     );
 
-    expect(screen.getByTestId("input-reps-set-1")).toHaveValue(42);
+    expect(screen.getByTestId("input-reps-set-1")).toHaveValue("42");
 
     rerender(
       <InlineSetEditor
@@ -128,7 +129,7 @@ describe("InlineSetEditor field commit flow", () => {
       />,
     );
 
-    expect(screen.getByTestId("input-reps-set-1")).toHaveValue(42);
+    expect(screen.getByTestId("input-reps-set-1")).toHaveValue("42");
   });
 
   it("displays mile-scale stored feet as miles and patches stored feet on edit", () => {
@@ -158,7 +159,7 @@ describe("InlineSetEditor field commit flow", () => {
 
     expect(screen.getByText("Distance")).toBeInTheDocument();
     expect(screen.queryByText("Distance (ft)")).not.toBeInTheDocument();
-    expect(screen.getByTestId("input-distance-set-1")).toHaveValue(3);
+    expect(screen.getByTestId("input-distance-set-1")).toHaveValue("3");
     expect(screen.getByTestId("unit-distance-set-1")).toHaveTextContent("mi");
     expect(screen.getByTestId("planned-distance-set-1")).toHaveTextContent("planned 5000 m");
 
@@ -192,7 +193,7 @@ describe("InlineSetEditor field commit flow", () => {
     );
 
     const input = screen.getByTestId("input-distance-set-1");
-    expect(input).toHaveValue(3);
+    expect(input).toHaveValue("3");
 
     fireEvent.blur(input);
 
@@ -223,7 +224,7 @@ describe("InlineSetEditor field commit flow", () => {
       />,
     );
 
-    expect(screen.getByTestId("input-distance-set-1")).toHaveValue(3);
+    expect(screen.getByTestId("input-distance-set-1")).toHaveValue("3");
     expect(screen.getByTestId("planned-distance-set-1")).toHaveTextContent("planned 3 mi");
   });
 
@@ -252,7 +253,7 @@ describe("InlineSetEditor field commit flow", () => {
     );
 
     const input = screen.getByTestId("input-weight-set-1");
-    expect(input).toHaveValue(220);
+    expect(input).toHaveValue("220");
     expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 198 lbs");
 
     fireEvent.change(input, { target: { value: "225" } });
@@ -285,7 +286,7 @@ describe("InlineSetEditor field commit flow", () => {
       />,
     );
 
-    expect(screen.getByTestId("input-distance-set-1")).toHaveValue(400);
+    expect(screen.getByTestId("input-distance-set-1")).toHaveValue("400");
     expect(screen.getByTestId("unit-distance-set-1")).toHaveTextContent("m");
   });
 });
@@ -332,7 +333,7 @@ describe("InlineSetEditor failed-save reconciliation", () => {
     // That is not a rollback and must not clear what the athlete typed.
     storedRepsBecome(10);
 
-    expect(input()).toHaveValue(42);
+    expect(input()).toHaveValue("42");
   });
 
   it("returns to the stored value when the save fails and the optimistic write is rolled back", () => {
@@ -341,13 +342,13 @@ describe("InlineSetEditor failed-save reconciliation", () => {
 
     // The mutation patches the cache optimistically...
     storedRepsBecome(42);
-    expect(input()).toHaveValue(42);
+    expect(input()).toHaveValue("42");
 
     // ...then the request fails and the patch is rolled back. 42 was never
     // stored, so the field must stop showing it.
     storedRepsBecome(10);
 
-    expect(input()).toHaveValue(10);
+    expect(input()).toHaveValue("10");
   });
 
   it("honours another device reverting the value back to what it was before the edit", () => {
@@ -358,6 +359,150 @@ describe("InlineSetEditor failed-save reconciliation", () => {
     // pre-edit value alone would alias this onto "nothing changed".
     storedRepsBecome(10);
 
-    expect(input()).toHaveValue(10);
+    expect(input()).toHaveValue("10");
+  });
+});
+
+/**
+ * CL7 (CODEBASE_ANALYSIS_2026-10-03): the cell was a `type="number"` input,
+ * which reports a decimal comma ("62,5") as "", and the blur then committed
+ * that "" as a clear of the stored value while the cell still showed 62,5.
+ */
+describe("InlineSetEditor number entry", () => {
+  function renderEditor(set: ExerciseSet = baseSet) {
+    const onUpdateSet = vi.fn();
+    render(
+      <InlineSetEditor
+        sets={[set]}
+        exerciseName={set.exerciseName}
+        customLabel={null}
+        category={set.category}
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+    return onUpdateSet;
+  }
+
+  function enter(field: string, value: string) {
+    const input = screen.getByTestId(`input-${field}-set-1`);
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+    return input;
+  }
+
+  it("saves a decimal comma as a decimal point", () => {
+    const onUpdateSet = renderEditor();
+
+    const input = enter("weight", "62,5");
+
+    expect(onUpdateSet).toHaveBeenCalledWith("set-1", { weight: 62.5 });
+    expect(input).toHaveValue("62.5");
+  });
+
+  it("keeps the stored value instead of clearing it when the entry can't be read", () => {
+    const onUpdateSet = renderEditor();
+
+    const input = enter("weight", "6O");
+
+    expect(onUpdateSet).not.toHaveBeenCalled();
+    expect(input).toHaveValue("6");
+  });
+
+  it("does not guess at a comma that could be a thousands separator", () => {
+    const onUpdateSet = renderEditor({
+      ...baseSet,
+      exerciseName: "skierg",
+      category: "functional",
+      reps: null,
+      weight: null,
+      distance: 500,
+    });
+
+    // 1 m or 1000 m? Neither is safe to store, so the cell keeps 500.
+    const input = enter("distance", "1,000");
+
+    expect(onUpdateSet).not.toHaveBeenCalled();
+    expect(input).toHaveValue("500");
+  });
+
+  it("keeps the stored reps when the entry is not a whole number of at least one", () => {
+    const onUpdateSet = renderEditor();
+
+    expect(enter("reps", "8.5")).toHaveValue("10");
+    expect(enter("reps", "-3")).toHaveValue("10");
+    expect(onUpdateSet).not.toHaveBeenCalled();
+  });
+
+  it("still clears the stored value when the athlete empties the cell", () => {
+    const onUpdateSet = renderEditor();
+
+    enter("weight", "");
+
+    expect(onUpdateSet).toHaveBeenCalledWith("set-1", { weight: null });
+  });
+});
+
+/**
+ * CL8 (CODEBASE_ANALYSIS_2026-10-03): LogSheet and ReviewSurface debounce set
+ * patches, so `set.notes` does not move while the athlete types. The notes
+ * box used to reset itself to that unchanged prop after every keystroke.
+ */
+describe("InlineSetEditor set notes", () => {
+  function editor(set: ExerciseSet, onUpdateSet = vi.fn()) {
+    return (
+      <InlineSetEditor
+        sets={[set]}
+        exerciseName="wall_balls"
+        customLabel={null}
+        category="functional"
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />
+    );
+  }
+
+  it("keeps every keystroke while a debounced owner has not saved yet", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
+    render(editor(baseSet, onUpdateSet));
+
+    await user.click(screen.getByTestId("button-toggle-note-set-1"));
+    const notes = screen.getByTestId("input-notes-set-1");
+    await user.type(notes, "felt heavy");
+
+    expect(notes).toHaveValue("felt heavy");
+    expect(onUpdateSet).toHaveBeenLastCalledWith("set-1", { notes: "felt heavy" });
+  });
+
+  it("keeps typing when the debounced save lands mid-sentence", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
+    const { rerender } = render(editor(baseSet, onUpdateSet));
+
+    await user.click(screen.getByTestId("button-toggle-note-set-1"));
+    const notes = screen.getByTestId("input-notes-set-1");
+    await user.type(notes, "felt");
+    // The debounce fires and the cache takes "felt" while the athlete is
+    // still typing the rest of the note.
+    await user.type(notes, " hea");
+    rerender(editor({ ...baseSet, notes: "felt" }, onUpdateSet));
+    await user.type(notes, "vy");
+
+    expect(notes).toHaveValue("felt heavy");
+    expect(onUpdateSet).toHaveBeenLastCalledWith("set-1", { notes: "felt heavy" });
+  });
+
+  it("adopts a note changed elsewhere while the athlete is not editing it", () => {
+    const { rerender } = render(editor({ ...baseSet, notes: "first" }));
+    expect(screen.getByTestId("input-notes-set-1")).toHaveValue("first");
+
+    rerender(editor({ ...baseSet, notes: "from the phone" }));
+
+    expect(screen.getByTestId("input-notes-set-1")).toHaveValue("from the phone");
   });
 });

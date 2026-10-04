@@ -1,5 +1,5 @@
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
@@ -316,20 +316,16 @@ function EditablePrescription({
     lastSavedRef.current = value;
   }, [value]);
 
+  // useDebouncedCallback flushes the pending (latest) draft on unmount, so a
+  // fast collapse or sheet close still saves the last keystroke. There is
+  // deliberately no separate unmount effect here: the one this replaced
+  // closed over the mount-time draft and PATCHed it back over an edit that
+  // had already autosaved (CL1, CODEBASE_ANALYSIS_2026-10-03).
   const debouncedSave = useDebouncedCallback((next: string) => {
     if (next === lastSavedRef.current) return;
     lastSavedRef.current = next;
     onSave(field, next);
   }, PRESCRIPTION_SAVE_DEBOUNCE_MS);
-
-  // Flush any pending edit on unmount so a fast dialog close doesn't drop
-  // the last keystroke before the debounce timer fires.
-  useEffect(() => {
-    return () => {
-      if (draft !== lastSavedRef.current) onSave(field, draft);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const placeholder = placeholderFor(field);
 
