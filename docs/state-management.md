@@ -254,7 +254,8 @@ All other mutations use direct server requests.
 - **Queue storage:** `localStorage` under the key `fitai-offline-queue`.
 - **Max queue size:** 100 mutations (oldest evicted when full).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
-- **Max retries:** 5 per mutation -- dropped after exceeding.
+- **Max retries:** 5 definitive rejections per mutation -- dropped after exceeding. Only a 4xx that a retry won't change counts: not a 401 (session lapsed while offline), 408, 429, a 409 `IDEMPOTENT_REQUEST_IN_PROGRESS` or a 403 `EBADCSRFTOKEN`. Network errors, timeouts and 5xx keep the mutation's count, so a flaky connection can't drop it; the max age still bounds those. A plain 500 counts toward a separate cap of 20 instead (502/503/504 never count): because a replay stops at a failed entry, a write the server fails every time would otherwise hold everything queued behind it for the full 7 days.
+- **Ordering:** Replay goes one mutation at a time, oldest first, and stops at the first one that fails. The mutations behind it stay queued in order, so a newer edit to the same record can never land before an older one.
 - **Idempotency:** Each queue-backed write generates a crypto-backed unique ID before the first request, sends it as `X-Idempotency-Key`, and reuses it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
 - **Privacy cleanup:** Signout and account deletion clear queued mutation bodies and user-scoped drafts from browser storage.
 
@@ -264,20 +265,20 @@ All other mutations use direct server requests.
 |----------|-------------|
 | `enqueueMutation(method, url, body, options?)` | Adds a mutation to the queue (`options.id` overrides the generated ID). Returns the mutation ID. |
 | `getPendingCount()` | Returns the number of queued mutations. |
-| `flushQueue()` | Replays all pending mutations. Returns `{ synced, failed, dropped }`. |
+| `flushQueue()` | Replays pending mutations in order, stopping at the first failure. Returns `{ synced, failed, dropped }`. |
 | `clearOfflineQueue()` | Removes queued mutation bodies from localStorage and notifies listeners. |
 | `createOfflineMutationId()` | Generates a crypto-backed unique mutation ID (`crypto.randomUUID()` with a `getRandomValues` fallback). |
 | `onMutationDropped(cb)` | Registers a callback fired whenever a mutation is permanently dropped. Returns an unsubscribe function. Used by `useOfflineDropNotifier`. |
 
 ### Auto-flush
 
-When the browser fires the `online` event, `flushQueue()` runs automatically. Queue writes dispatch the `OFFLINE_QUEUE_CHANGE_EVENT` (`"offline-queue-change"`); replays that synced or dropped at least one mutation dispatch the `OFFLINE_SYNC_COMPLETE_EVENT` (`"offline-sync-complete"`) for the UI to react. Both event names are exported constants.
+When the browser fires the `online` event, `flushQueue()` runs automatically. A device that never went offline gets no `online` event (a save queued after a timeout on slow wifi, say), so while mutations are pending and the browser reports online the queue also retries on a timer (5s, doubling after each replay that stopped on a failure, capped at 5 minutes) and when the app regains focus or becomes visible. These automatic retries run only while `reconcileQueueOwner` has confirmed the signed-in user: `useOfflineQueueFlush` releases that confirmation (`releaseQueueOwner()`) when the user signs out or switches, and `clearOfflineQueue()` cancels any pending retry. Queue writes dispatch the `OFFLINE_QUEUE_CHANGE_EVENT` (`"offline-queue-change"`); replays that synced or dropped at least one mutation dispatch the `OFFLINE_SYNC_COMPLETE_EVENT` (`"offline-sync-complete"`) for the UI to react. Both event names are exported constants.
 
 ### Error Handling
 
 - `QuotaExceededError` on save: Evicts the oldest half of the queue, retries once, then clears entirely if still failing.
 - Corrupted localStorage: Returns empty queue (gets overwritten on next save).
-- Individual mutation failures: Incremented `retryCount`, kept in queue for next flush.
+- Individual mutation failures: the replay stops there and keeps that mutation and everything after it for the next retry. A definitive rejection increments its `retryCount` and a plain 500 its `serverErrorCount`; any other failure leaves both unchanged. A replay still in flight when the queue is cleared (sign-out) or dropped for another athlete doesn't write its leftovers back.
 
 ### Offline Queue Lifecycle
 
@@ -299,14 +300,18 @@ sequenceDiagram
         Queue->>User: Queued (offline indicator)
     end
     
-    Note over Queue: Browser fires 'online' event
+    Note over Queue: 'online' event, retry timer, or app focus/visible
     Queue->>Queue: flushQueue()
-    loop Each pending mutation
+    loop Each pending mutation, oldest first
         Queue->>Server: Replay with X-Idempotency-Key header
         alt Success
             Queue->>Storage: Remove from queue
-        else Failure (retryCount < 5)
-            Queue->>Storage: Increment retryCount
+        else Definitive 4xx rejection
+            Queue->>Storage: Increment retryCount, keep the rest in order
+            Queue->>Queue: Stop and schedule a backed-off retry
+        else Network error, timeout, 401, 408, 429 or 5xx
+            Queue->>Storage: Keep it and the rest in order
+            Queue->>Queue: Stop and schedule a backed-off retry
         else Stale (> 7 days) or max retries
             Queue->>Storage: Drop mutation
         end

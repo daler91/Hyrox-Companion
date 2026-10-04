@@ -10,6 +10,8 @@ export interface PendingMutation {
   body: unknown;
   timestamp: number;
   retryCount?: number;
+  /** Replays answered with a plain 500, counted apart from retryCount. */
+  serverErrorCount?: number;
 }
 
 export interface SyncedRequest {
@@ -93,6 +95,7 @@ const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
   body: z.unknown(),
   timestamp: z.number(),
   retryCount: z.number().optional(),
+  serverErrorCount: z.number().optional(),
 });
 const pendingMutationArraySchema = z.array(pendingMutationSchema);
 
@@ -102,8 +105,66 @@ const STORAGE_KEY = "fitai-offline-queue";
 // (the queue itself carries no per-mutation owner — see reconcileQueueOwner).
 const OWNER_KEY = "fitai-offline-queue-owner";
 const MAX_RETRIES = 5;
+// A 500 can be a passing fault (a DB blip) or one this exact write hits every
+// time. It doesn't spend MAX_RETRIES, but since the flush stops at a failed
+// entry, an endless 500 would hold every write queued behind it for MAX_AGE_MS;
+// this many (about an hour of backed-off retries) bounds that. 502/503/504
+// (a deploy, an overloaded proxy) never count.
+const MAX_SERVER_ERROR_RETRIES = 20;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_QUEUE_SIZE = 100;
+// Retry delay while writes are pending and the browser reports online: 5s,
+// doubling with each replay that stopped on a failure, up to 5 minutes.
+const RETRY_BASE_DELAY_MS = 5_000;
+const RETRY_MAX_DELAY_MS = 5 * 60 * 1000;
+
+// The user reconcileQueueOwner last confirmed in this page. Automatic retries
+// wait for it, so they never replay a queue that a previous athlete left on the
+// device before the signed-in athlete's reconcile has had the chance to drop it.
+let reconciledOwner: string | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+// Replays in a row that stopped on a failed entry; sets the retry backoff.
+let failedRuns = 0;
+// Bumped whenever the stored queue is thrown away (sign-out, or another
+// athlete's queue dropped), so a replay that was in flight at that moment
+// doesn't write its leftovers back into the next athlete's queue.
+let queueGeneration = 0;
+
+function browserReportsOffline(): boolean {
+  return globalThis.navigator?.onLine === false;
+}
+
+/**
+ * Retry the queue later while it holds writes and the browser reports online
+ * (CL27, CODEBASE_ANALYSIS_2026-10-03). The `online` event only covers a device
+ * that actually went offline: a write queued after a timeout, or one a failed
+ * replay left behind, used to wait for a reload. One timer at a time; its delay
+ * doubles with each failed replay, up to RETRY_MAX_DELAY_MS.
+ */
+function scheduleQueueRetry(): void {
+  if (retryTimer !== null) return;
+  const delayMs = Math.min(RETRY_BASE_DELAY_MS * 2 ** failedRuns, RETRY_MAX_DELAY_MS);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    retryPendingWrites();
+  }, delayMs);
+}
+
+function resetRetryBackoff(): void {
+  failedRuns = 0;
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
+
+/** Flush if there is a write to send, a reconciled owner to send it as, and a network. */
+function retryPendingWrites(): void {
+  if (reconciledOwner === null || browserReportsOffline() || getPendingCount() === 0) return;
+  void flushQueue().catch(() => {
+    // Individual mutation failures are already handled inside flushQueue.
+  });
+}
 
 function getQueue(): PendingMutation[] {
   try {
@@ -198,6 +259,9 @@ export function enqueueMutation(method: string, url: string, body: unknown, opti
 
   queue.push({ id, method, url, body, timestamp: Date.now(), retryCount: 0 });
   saveQueue(queue);
+  // Queued while the browser still reports online (a request that timed out on
+  // slow wifi, say): no `online` event will come to replay it (CL27).
+  if (!browserReportsOffline()) scheduleQueueRetry();
   return id;
 }
 
@@ -220,6 +284,9 @@ export function clearOfflineQueue(): void {
   } catch {
     // ignore
   }
+  reconciledOwner = null;
+  queueGeneration++;
+  resetRetryBackoff();
   notifyQueueChanged();
 }
 
@@ -241,12 +308,79 @@ export function reconcileQueueOwner(currentUserId: string | null | undefined): v
       if (queue.length > 0) {
         notifyDroppedAll(queue, "wrong_account");
         localStorage.removeItem(STORAGE_KEY);
+        queueGeneration++;
+        // The previous athlete's backoff mustn't delay this athlete's retries.
+        resetRetryBackoff();
         notifyQueueChanged();
       }
     }
     localStorage.setItem(OWNER_KEY, currentUserId);
+    reconciledOwner = currentUserId;
   } catch {
     // Storage unavailable — best-effort only.
+  }
+}
+
+/**
+ * The signed-in user is gone or changing: hold automatic retries until the
+ * next reconcileQueueOwner, so a sign-in without a reload can't have the retry
+ * timer replay the previous athlete's queue under the new session (CL27).
+ */
+export function releaseQueueOwner(): void {
+  reconciledOwner = null;
+}
+
+// Rejections that mean "not yet" rather than "never": the idempotency
+// middleware's answer while the original, timed-out request is still running,
+// and a CSRF token that went stale.
+const RETRYABLE_REJECTION_CODES = new Set(["IDEMPOTENT_REQUEST_IN_PROGRESS", "EBADCSRFTOKEN"]);
+
+/**
+ * Whether the server answered a replay with a client error that retrying won't
+ * change. Only these spend the retry budget (CL28, CODEBASE_ANALYSIS_2026-10-03):
+ * no response at all, a 401 from a session that lapsed while offline, a 408,
+ * a 429 or a 5xx says nothing about the write, and counting them dropped
+ * queued workouts on a flaky connection. MAX_AGE_MS still bounds those.
+ */
+function isDefinitiveRejection(error: unknown): boolean {
+  const status = responseStatus(error);
+  if (status === null || status < 400 || status >= 500 || status === 401 || status === 408 || status === 429) {
+    return false;
+  }
+  const { message } = error as Error;
+  return !RETRYABLE_REJECTION_CODES.has(rejectionCode(message.slice(message.indexOf(":") + 1)));
+}
+
+/**
+ * The HTTP status of a failed replay, or null when there was no response.
+ * apiRequest throws `${status}: ${body}` for a non-ok response. A TypeError, a
+ * timeout, RateLimitError or a failed CSRF token fetch has no such prefix.
+ * String ops, not a regex, as in humanizeApiError.
+ */
+function responseStatus(error: unknown): number | null {
+  if (!(error instanceof Error)) return null;
+  const { message } = error;
+  const colonIdx = message.indexOf(":");
+  const head = colonIdx >= 0 ? message.slice(0, colonIdx) : "";
+  if (head.length !== 3 || ![...head].every((c) => c >= "0" && c <= "9")) return null;
+  return Number(head);
+}
+
+/** The entry after a failed replay: which failure budget it spends, if any. */
+function afterFailedReplay(mutation: PendingMutation, error: unknown): PendingMutation {
+  if (isDefinitiveRejection(error)) return { ...mutation, retryCount: (mutation.retryCount ?? 0) + 1 };
+  if (responseStatus(error) === 500) {
+    return { ...mutation, serverErrorCount: (mutation.serverErrorCount ?? 0) + 1 };
+  }
+  return mutation;
+}
+
+function rejectionCode(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { code?: unknown } | null;
+    return typeof parsed?.code === "string" ? parsed.code : "";
+  } catch {
+    return "";
   }
 }
 
@@ -271,8 +405,10 @@ export function flushQueue(): Promise<{ synced: number; failed: number; dropped:
   flushInFlight = doFlushQueue().finally(() => {
     flushInFlight = null;
     // A caller triggered a flush mid-run (its mutations weren't in this run's
-    // snapshot). They're preserved in the queue; drain once more to send them.
-    if (flushRequestedDuringRun && getPendingCount() > 0) {
+    // snapshot). They're preserved in the queue; drain once more to send them,
+    // unless the run stopped on a failed entry: they wait behind it, and its
+    // backed-off retry is already scheduled.
+    if (flushRequestedDuringRun && failedRuns === 0 && getPendingCount() > 0) {
       flushRequestedDuringRun = false;
       void flushQueue();
     }
@@ -282,6 +418,7 @@ export function flushQueue(): Promise<{ synced: number; failed: number; dropped:
 
 async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped: number }> {
   const now = Date.now();
+  const generation = queueGeneration;
   const queue = getQueue();
   if (queue.length === 0) return { synced: 0, failed: 0, dropped: 0 };
 
@@ -292,7 +429,11 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
   const remaining: PendingMutation[] = [];
 
   // One at a time, in the order they were queued: two edits to the same
-  // record must land in the order they were made.
+  // record must land in the order they were made. So the run stops at the
+  // first entry that fails; sending the ones behind it would let a newer edit
+  // land first and the older one overwrite it on a later run (CL29,
+  // CODEBASE_ANALYSIS_2026-10-03). They stay queued, in order, for the retry.
+  let halted = false;
   await inSequence(queue, async (mutation) => {
     const retryCount = mutation.retryCount ?? 0;
     const ageMs = now - mutation.timestamp;
@@ -305,9 +446,14 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
     }
 
     // Drop mutations that have exceeded MAX_RETRIES
-    if (retryCount >= MAX_RETRIES) {
+    if (retryCount >= MAX_RETRIES || (mutation.serverErrorCount ?? 0) >= MAX_SERVER_ERROR_RETRIES) {
       dropped++;
       notifyDropped({ id: mutation.id, method: mutation.method, url: mutation.url, retryCount, reason: "max_retries", ageMs });
+      return;
+    }
+
+    if (halted) {
+      remaining.push(mutation);
       return;
     }
 
@@ -317,12 +463,19 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
       });
       synced++;
       syncedRequests.push({ url: mutation.url, method: mutation.method });
-    } catch {
-      // Network/server error — increment retry count; mutation will be dropped after MAX_RETRIES
+    } catch (error) {
+      // Only a definitive rejection counts toward MAX_RETRIES (CL28), and a
+      // plain 500 toward MAX_SERVER_ERROR_RETRIES, so neither can hold the queue
+      // forever; any other failure keeps its counts.
       failed++;
-      remaining.push({ ...mutation, retryCount: retryCount + 1 });
+      halted = true;
+      remaining.push(afterFailedReplay(mutation, error));
     }
   });
+
+  // The queue was cleared (sign-out) or handed to another athlete while this
+  // run was replaying: what it holds is no longer this queue's to write back.
+  if (generation !== queueGeneration) return { synced, failed, dropped };
 
   // Preserve mutations enqueued during this flush: they weren't in our snapshot
   // so they weren't replayed, and writing back only `remaining` would drop
@@ -330,6 +483,14 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
   const processedIds = new Set(queue.map((m) => m.id));
   const enqueuedDuringFlush = getQueue().filter((m) => !processedIds.has(m.id));
   saveQueue([...remaining, ...enqueuedDuringFlush]);
+  if (failed > 0) {
+    failedRuns++;
+    scheduleQueueRetry();
+  } else {
+    resetRetryBackoff();
+    // A write queued mid-run may have found the old timer and not set its own.
+    if (enqueuedDuringFlush.length > 0) scheduleQueueRetry();
+  }
   if (synced > 0 || dropped > 0) {
     notifySyncComplete({ synced, failed, dropped, syncedRequests });
   }
@@ -339,10 +500,18 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
 // Auto-flush when coming back online
 if (globalThis.window !== undefined) {
   globalThis.addEventListener("online", () => {
+    // A new connection: replay now, and start any backoff again from the base.
+    resetRetryBackoff();
     void flushQueue()
       .catch(() => {
         // Individual mutation failures are already handled inside flushQueue.
         // This catches unexpected errors (e.g. localStorage unavailable).
       });
+  });
+  // A device that never lost its network gets no `online` event, so returning
+  // to the app is the other moment to retry a pending write (CL27).
+  globalThis.addEventListener("focus", retryPendingWrites);
+  globalThis.document?.addEventListener("visibilitychange", () => {
+    if (globalThis.document.visibilityState !== "hidden") retryPendingWrites();
   });
 }
