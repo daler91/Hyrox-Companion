@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Link } from "wouter";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -207,7 +208,13 @@ function legendPercent(data: ReadonlyArray<{ name: string; value: number }>, nam
 
 export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) {
   const isMobile = useIsMobile();
-  const { data: overview, isLoading } = useQuery<TrainingOverview>({
+  const {
+    data: overview,
+    isLoading,
+    isError,
+    isRefetching,
+    refetch,
+  } = useQuery<TrainingOverview>({
     queryKey: ["/api/v1/training-overview", dateParams],
     queryFn: () => api.analytics.getTrainingOverview(dateParams),
   });
@@ -243,6 +250,18 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
       <div className="flex items-center justify-center py-12">
         <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
+    );
+  }
+
+  // A failed fetch is not "log a handful of workouts". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (isError && !overview) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your training mix"
+        onRetry={() => void refetch()}
+        isRetrying={isRefetching}
+        testId="category-breakdown-error"
+      />
     );
   }
 

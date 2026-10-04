@@ -6,9 +6,17 @@ import { queryClient } from "@/lib/queryClient";
 
 import { TYPE_LABELS } from "../annotation-style";
 
+/**
+ * Every query an annotation create or delete changes. The timeline is one of
+ * them: the server derives a card's `excused`, `status` and `recoverable` from
+ * the athlete's annotations, so without it an excused day kept its "Missed"
+ * badge and recovery prompt, and a deleted one kept "Not counted".
+ * CL10 (CODEBASE_ANALYSIS_2026-10-03)
+ */
 export function invalidateTimelineAnnotationQueries() {
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timelineAnnotations }).catch(() => {});
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
 }
 
 export function handleCreateAnnotationSuccess({

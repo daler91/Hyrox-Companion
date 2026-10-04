@@ -3,6 +3,7 @@ import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
 import { ChevronLeft, ChevronRight, CopyPlus, Loader2 } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
@@ -48,6 +49,46 @@ function isValidYmd(s: string): boolean {
   const [y, m, d] = s.split("-").map(Number);
   if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
   return m >= 1 && m <= 12 && d >= 1 && d <= 31;
+}
+
+type NutritionDayQuery = ReturnType<typeof useNutritionDay>;
+
+/** A summary request that failed with nothing cached: no day to show at all. */
+function isDayLoadFailure(day: NutritionDayQuery): boolean {
+  return day.isError && day.data === undefined;
+}
+
+/**
+ * The day's totals and energy balance, or, when the summary failed to load,
+ * an error with a retry. A failed fetch has no summary, which rendered as a
+ * 0 kcal day: an athlete could re-log meals that were already recorded.
+ * U5 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function NutritionDayHeader({
+  day,
+  onSetTargets,
+}: Readonly<{ day: NutritionDayQuery; onSetTargets: () => void }>) {
+  if (isDayLoadFailure(day)) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load this day's food log"
+        onRetry={() => void day.refetch()}
+        isRetrying={day.isRefetching}
+        testId="nutrition-day-error"
+      />
+    );
+  }
+  const summary = day.data;
+  return (
+    <>
+      <DailyTotalsHeader
+        totals={summary?.totals ?? EMPTY_TOTALS}
+        effectiveTarget={summary?.effectiveTarget ?? null}
+        onSetTargets={onSetTargets}
+      />
+      <EnergyBalanceCard energy={summary?.energy ?? null} />
+    </>
+  );
 }
 
 /** Initial day from an optional ?date=YYYY-MM-DD deep-link (the Timeline fuelling
@@ -174,6 +215,10 @@ export default function Nutrition() {
         <LoadingSpinner />
       </div>
     );
+  } else if (isDayLoadFailure(day)) {
+    // No meals to list: NutritionDayHeader shows the error and its retry.
+    // U5 (CODEBASE_ANALYSIS_2026-10-03)
+    dayBody = null;
   } else if (isEmpty && !hasMealTargets) {
     // Nothing logged and no targets to plan around — the classic empty prompt.
     dayBody = isFirstRun ? (
@@ -341,12 +386,12 @@ export default function Nutrition() {
           </span>
         </div>
 
-        <DailyTotalsHeader
-          totals={summary?.totals ?? EMPTY_TOTALS}
-          effectiveTarget={summary?.effectiveTarget ?? null}
-          onSetTargets={() => setTargetsOpen(true)}
+        <NutritionDayHeader
+          day={day}
+          onSetTargets={() => {
+            setTargetsOpen(true);
+          }}
         />
-        <EnergyBalanceCard energy={summary?.energy ?? null} />
 
         <FoodSearch onSelect={openCreateDialog} />
         <QuickAddBar onSelect={openCreateDialog} date={date} />

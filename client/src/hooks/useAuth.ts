@@ -139,28 +139,35 @@ export const useAuth = shouldBypassAuth() ? useTestAuthImpl : useClerkAuthImpl;
  * the user query refetches every 2 seconds, but consumers of this
  * helper stay stable until the field flips.
  */
-function useAuthUserBoolean(field: "isAutoCoaching" | "aiCoachEnabled" | "onboardingCompleted"): boolean {
+function useAuthUserBoolean(field: "isAutoCoaching" | "aiCoachEnabled" | "onboardingCompleted"): boolean | undefined {
   // We can't use `enabled: !!isSignedIn` here without re-reading the
   // Clerk hook, but every other useAuth call already gates the query;
   // this subscriber just rides on the existing cache entry. When the
-  // user is signed out, the query has no data and select returns
-  // `false`, which is the right default.
+  // user is signed out, or the query is loading or failed with nothing
+  // cached, there is no data and this is undefined.
   const { data } = useQuery<User, Error, boolean>({
     queryKey: QUERY_KEYS.authUser,
     select: (user) => !!user?.[field],
   });
-  return data ?? false;
+  return data;
 }
 
 export function useIsAutoCoaching(): boolean {
-  return useAuthUserBoolean("isAutoCoaching");
+  return useAuthUserBoolean("isAutoCoaching") ?? false;
 }
 
 export function useIsAiCoachEnabled(): boolean {
-  return useAuthUserBoolean("aiCoachEnabled");
+  return useAuthUserBoolean("aiCoachEnabled") ?? false;
 }
 
-export function useIsOnboardingCompleted(): boolean {
+/**
+ * Whether the athlete finished onboarding, or undefined while that is unknown:
+ * the auth user is loading, or failed to load with nothing cached. A failure
+ * is not "never onboarded"; reading it as false launched the wizard for an
+ * onboarded athlete on a device without the local completion flag.
+ * U5 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function useIsOnboardingCompleted(): boolean | undefined {
   return useAuthUserBoolean("onboardingCompleted");
 }
 

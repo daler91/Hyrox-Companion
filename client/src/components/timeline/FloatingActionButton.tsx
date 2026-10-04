@@ -1,4 +1,5 @@
 import { MessageSquare, Plus } from "lucide-react";
+import type { Ref } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
@@ -7,12 +8,18 @@ interface FloatingActionButtonProps {
   readonly coachPanelOpen?: boolean;
   readonly onCoachToggle?: () => void;
   readonly onLogWorkout: () => void;
+  /**
+   * The coach button, so the phone coach overlay can hand focus back to it on
+   * close (U4, CODEBASE_ANALYSIS_2026-10-03).
+   */
+  readonly coachButtonRef?: Ref<HTMLButtonElement>;
 }
 
 export default function FloatingActionButton({
   coachPanelOpen,
   onCoachToggle,
   onLogWorkout,
+  coachButtonRef,
 }: Readonly<FloatingActionButtonProps>) {
   const rightPosition = coachPanelOpen
     ? "!right-6 md:!right-[calc(20rem+1.5rem)] lg:!right-[calc(24rem+1.5rem)] max-md:hidden"
@@ -28,6 +35,7 @@ export default function FloatingActionButton({
       className={`!fixed !bottom-[calc(1.5rem+var(--mobile-nav-h,0px)+env(safe-area-inset-bottom))] z-40 flex flex-col gap-3 items-end transition-all duration-300 ${rightPosition}`}
     >
       <Button
+        ref={coachButtonRef}
         className="rounded-full shadow-lg gap-2"
         onClick={onCoachToggle}
         data-testid="button-coach-fab"

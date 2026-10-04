@@ -2,10 +2,10 @@ import type { TimelineAnnotation } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
+import { handleDeleteAnnotationSuccess } from "@/components/timeline/annotations/timelineAnnotationMutations.utils";
 import { useToast } from "@/hooks/use-toast";
 import { useMoveTimelineEntry } from "@/hooks/useMoveTimelineEntry";
-import { api, QUERY_KEYS } from "@/lib/api";
-import { queryClient } from "@/lib/queryClient";
+import { api } from "@/lib/api";
 
 export function useTimelinePageController(selectedPlanId: string | null, annotations: TimelineAnnotation[]) {
   const { toast } = useToast();
@@ -25,10 +25,10 @@ export function useTimelinePageController(selectedPlanId: string | null, annotat
 
   const deleteAnnotationMutation = useMutation({
     mutationFn: (id: string) => api.timelineAnnotations.delete(id),
+    // The same refresh as the annotations dialog's delete, timeline included.
+    // CL10 (CODEBASE_ANALYSIS_2026-10-03)
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timelineAnnotations }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
-      toast({ title: "Annotation removed" });
+      handleDeleteAnnotationSuccess(toast);
     },
     onError: () => toast({ title: "Couldn't delete annotation", description: "Please try again.", variant: "destructive" }),
   });

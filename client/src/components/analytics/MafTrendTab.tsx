@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, HeartPulse } from "lucide-react";
 import { useMemo } from "react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -56,7 +57,7 @@ export function MafTrendTab() {
     () => (snapshotKey ? readAnalyticsSnapshot<MafTestsListResponse>(snapshotKey) : undefined),
     [snapshotKey],
   );
-  const { data, isLoading, isPlaceholderData } = useQuery<MafTestsListResponse>({
+  const { data, isLoading, isPlaceholderData, isError, isRefetching, refetch } = useQuery<MafTestsListResponse>({
     queryKey: QUERY_KEYS.mafTests,
     queryFn: () => api.mafTests.list(),
     placeholderData: placeholder,
@@ -64,6 +65,17 @@ export function MafTrendTab() {
   useWriteAnalyticsSnapshot(snapshotKey, data, isPlaceholderData);
 
   if (isLoading && !data) return <LoadingSpinner />;
+  // A failed fetch is not "No MAF tests yet". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (isError && !data) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your MAF tests"
+        onRetry={() => void refetch()}
+        isRetrying={isRefetching}
+        testId="maf-trend-error"
+      />
+    );
+  }
 
   const rows = buildTestRows(data);
   if (rows.length === 0) return <EmptyState />;

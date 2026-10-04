@@ -158,6 +158,23 @@ describe("useOnboarding", () => {
     });
   });
 
+  // A failed auth-user query has no onboardingCompleted to read. Taking that
+  // as false launched the wizard for an onboarded athlete with no plan or log
+  // on a device without the local completion flag. U5 (CODEBASE_ANALYSIS_2026-10-03)
+  it("does not launch onboarding while the server's completion is unknown", () => {
+    const fileInputRef = { current: document.createElement("input") };
+    const { result, rerender } = renderHook(
+      ({ onboardingCompleted }: { onboardingCompleted: boolean | undefined }) =>
+        useOnboarding(true, fileInputRef, { onboardingCompleted }),
+      { initialProps: { onboardingCompleted: undefined as boolean | undefined } },
+    );
+
+    expect(result.current.showOnboarding).toBe(false);
+
+    rerender({ onboardingCompleted: false });
+    expect(result.current.showOnboarding).toBe(true);
+  });
+
   it("opens onboarding for the forced URL override even when completion is durable", async () => {
     globalThis.history.replaceState(null, "", "/?onboarding=run");
     const fileInputRef = { current: document.createElement("input") };

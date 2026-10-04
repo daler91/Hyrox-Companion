@@ -5,6 +5,7 @@ import { Link } from "wouter";
 
 import { ExerciseProgressionCharts } from "@/components/analytics/ExerciseProgressionCharts";
 import { type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -33,7 +34,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const dLabel = distanceUnit === "km" ? "m" : "ft";
 
-  const { data: rawPRs, isLoading: prsLoading } = useQuery<Record<string, RawPREntry>>({
+  const prsQuery = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
     // ⚡ Perf: kill rapid tab-toggle refetches but auto-heal after 5 min in
@@ -44,6 +45,8 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: rawPRs, isLoading: prsLoading } = prsQuery;
+
   const availableExercises = useMemo(() => {
     if (!rawPRs) return [];
     return Object.entries(rawPRs).map(([exerciseName, pr]) => ({
@@ -53,7 +56,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     }));
   }, [rawPRs]);
 
-  const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<
+  const analyticsQuery = useQuery<
     Record<string, ExerciseAnalyticDay[]>
   >({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
@@ -64,6 +67,24 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     // ⚡ Perf: see note above on personal-records query.
     staleTime: 5 * 60 * 1000,
   });
+  const { data: allAnalytics, isLoading: analyticsLoading } = analyticsQuery;
+
+  // A failed fetch is not "appear here once you've logged a few structured
+  // workouts". Either query failing with nothing cached leaves the tab with
+  // nothing true to show. U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const failedQueries = [prsQuery, analyticsQuery].filter((query) => query.isError && !query.data);
+  if (failedQueries.length > 0) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your exercise progression"
+        onRetry={() => {
+          for (const query of failedQueries) void query.refetch();
+        }}
+        isRetrying={failedQueries.some((query) => query.isRefetching)}
+        testId="exercise-progression-error"
+      />
+    );
+  }
 
   const loadedContent =
     availableExercises.length === 0 ? (

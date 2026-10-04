@@ -126,6 +126,9 @@ export default function Timeline() {
     personalRecords,
     timelineData,
     timelineLoading,
+    isError: timelineError,
+    isRetrying: isRetryingTimeline,
+    retry: retryTimeline,
     annotations,
     isNewUser,
     todayRef,
@@ -165,6 +168,9 @@ export default function Timeline() {
   const { handleMarkComplete, bulkDeleteWorkoutMutation } = workoutActions;
   const { combiningEntry, handleCombine } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The phone coach overlay hands focus back here when it closes
+  // (U4, CODEBASE_ANALYSIS_2026-10-03).
+  const coachFabRef = useRef<HTMLButtonElement>(null);
   const initialTodayScrollKeyRef = useRef<string | null>(null);
   const surfaceSelection = useTimelineSurfaceSelection(timelineData);
   const {
@@ -470,6 +476,9 @@ export default function Timeline() {
             >
               <TimelineContent
                 timelineLoading={timelineLoading}
+                timelineError={timelineError}
+                isRetryingTimeline={isRetryingTimeline}
+                onRetryTimeline={retryTimeline}
                 filterStatus={filterStatus}
                 selectedPlanId={selectedPlanId}
                 plans={plans}
@@ -515,6 +524,7 @@ export default function Timeline() {
 
             {!isWorkoutSurfaceOpen && !bulkDeleteMode && (
               <FloatingActionButton
+                coachButtonRef={coachFabRef}
                 coachPanelOpen={coachOpen}
                 onCoachToggle={() => handleCoachToggle(!coachOpen)}
                 onLogWorkout={() => setAdhocOpen(true)}
@@ -546,6 +556,7 @@ export default function Timeline() {
           timelineData={timelineData}
           isNewUser={isNewUser}
           onCoachClose={() => setCoachOpen(false)}
+          returnFocusRef={coachFabRef}
           showAIConsent={showAIConsent}
           onAIConsentAccept={handleAIConsentAccept}
           onAIConsentDecline={clearPendingCoachIntent}

@@ -3,6 +3,7 @@ import { Dumbbell, Sparkles,Trophy } from "lucide-react";
 import { useMemo,useState } from "react";
 import { Link } from "wouter";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -37,7 +38,13 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const dLabel = distanceUnit === "km" ? "m" : "ft";
 
-  const { data: rawPRs, isLoading } = useQuery<Record<string, RawPREntry>>({
+  const {
+    data: rawPRs,
+    isLoading,
+    isError,
+    isRefetching,
+    refetch,
+  } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
     // ⚡ Perf: kill rapid tab-toggle refetches but auto-heal after 5 min if
@@ -92,6 +99,18 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
     }
     return { filteredPRs: results, recentPRs: recent };
   }, [rawPRs, categoryFilter]);
+
+  // A failed fetch is not "No personal records yet". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (isError && !rawPRs) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your personal records"
+        onRetry={() => void refetch()}
+        isRetrying={isRefetching}
+        testId="personal-records-error"
+      />
+    );
+  }
 
   return (
     <Card>

@@ -1,21 +1,65 @@
 import type { WeeklyReview } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, type QueryState, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { addDays, mondayOf, todayLocalDateStr } from "@/lib/weekDates";
+
+/** How long a review that can still change is trusted before a refetch. */
+const SHORT_STALE_MS = 60_000;
 
 function hasPendingGrade(review: WeeklyReview | undefined): boolean {
   return review?.sessions.some((session) => session.grade?.streamStatus === "pending") ?? false;
 }
 
 /**
+ * Whether the timeline has moved on since `reviewUpdatedAt`: a timeline cache
+ * was invalidated by a write, or refetched after the review was. Every
+ * timeline write (log, complete, skip, move, delete, annotation) invalidates
+ * QUERY_KEYS.timeline, and the server builds the review from those same rows,
+ * so this is the review's staleness signal without a key of its own on every
+ * write path. Undefined when no loaded timeline cache exists to vouch either
+ * way (never visited, garbage-collected, or only ever failed).
+ */
+function timelineChangedSince(queryClient: QueryClient, reviewUpdatedAt: number): boolean | undefined {
+  const timelineQueries = queryClient
+    .getQueryCache()
+    .findAll({ queryKey: QUERY_KEYS.timeline })
+    .filter((timeline) => timeline.state.data !== undefined);
+  if (timelineQueries.length === 0) return undefined;
+  return timelineQueries.some(
+    (timeline) => timeline.state.isInvalidated || timeline.state.dataUpdatedAt > reviewUpdatedAt,
+  );
+}
+
+/**
+ * A closed week is served from cache indefinitely only while the timeline
+ * cache vouches nothing changed under it. It was `Infinity` outright, so a
+ * late log, skip or move left the week's review showing the old verdict and
+ * counts for its whole 30-minute gcTime. CL22 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function reviewStaleTime(
+  queryClient: QueryClient,
+  state: QueryState<WeeklyReview>,
+  isCurrentWeek: boolean,
+): number {
+  const timelineChanged = timelineChangedSince(queryClient, state.dataUpdatedAt);
+  if (timelineChanged === true) return 0;
+  // A closed week can still change in one way: a run's grade sharpens once
+  // its Strava stream arrives. Until then it stays short-lived like the
+  // current week.
+  if (isCurrentWeek || hasPendingGrade(state.data)) return SHORT_STALE_MS;
+  return timelineChanged === false ? Infinity : SHORT_STALE_MS;
+}
+
+/**
  * The weekly review for `week` (any date inside the wanted week), defaulting to
  * the most recently completed one.
  *
- * A closed week never changes, so it is cached indefinitely — paging back
- * through the year re-fetches nothing. The in-progress week keeps normal
- * staleness because sessions are still landing in it.
+ * A closed week is cached until a timeline write could have changed it, so
+ * paging back through the year re-fetches nothing while nothing changed (see
+ * reviewStaleTime). The in-progress week keeps normal staleness because
+ * sessions are still landing in it.
  *
  * Note the week is resolved client-side for the query key and the "is this week
  * still running" decision, using the browser's local calendar. The server
@@ -24,6 +68,7 @@ function hasPendingGrade(review: WeeklyReview | undefined): boolean {
  * stale `userTimezone`) shows the server's week rather than a broken page.
  */
 export function useWeeklyReview(week?: string) {
+  const queryClient = useQueryClient();
   const resolvedWeek = week ?? mondayOf(addDays(todayLocalDateStr(), -7));
   const currentWeekStart = mondayOf(todayLocalDateStr());
   const isCurrentWeek = mondayOf(resolvedWeek) === currentWeekStart;
@@ -31,11 +76,7 @@ export function useWeeklyReview(week?: string) {
   return useQuery({
     queryKey: QUERY_KEYS.weeklyReview(resolvedWeek),
     queryFn: () => api.analytics.getWeeklyReview(resolvedWeek),
-    // A closed week can still change in one way: a run's grade sharpens once
-    // its Strava stream arrives. Until then it stays short-lived like the
-    // current week.
-    staleTime: (query) =>
-      isCurrentWeek || hasPendingGrade(query.state.data) ? 60_000 : Infinity,
+    staleTime: (query) => reviewStaleTime(queryClient, query.state, isCurrentWeek),
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: isCurrentWeek,
   });

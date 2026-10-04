@@ -28,10 +28,11 @@ function clearOnboardingForceParam(): void {
 export function useOnboarding(
   isNewUser: boolean,
   fileInputRef: RefObject<HTMLInputElement | null>,
+  /** `onboardingCompleted` is undefined while the server's answer is unknown (see useIsOnboardingCompleted). */
   options: { aiCoachEnabled?: boolean; onboardingCompleted?: boolean; isAuthUserLoaded?: boolean } = {},
 ) {
   const aiCoachEnabled = options.aiCoachEnabled ?? true;
-  const onboardingCompleted = options.onboardingCompleted ?? false;
+  const { onboardingCompleted } = options;
   const isAuthUserLoaded = options.isAuthUserLoaded ?? true;
   const completeOnboarding = useCompleteOnboarding();
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -52,7 +53,10 @@ export function useOnboarding(
   useEffect(() => {
     if (onboardingTriggered) return;
     const forcedByUrl = hasOnboardingForceParam();
-    const isFirstTime = isNewUser && !onboardingCompleted && !hasLocalOnboardingComplete();
+    // Only a server that answered "not completed" launches it: a failed
+    // auth-user query leaves completion unknown, and a returning athlete on a
+    // device without the local flag got the wizard. U5 (CODEBASE_ANALYSIS_2026-10-03)
+    const isFirstTime = isNewUser && onboardingCompleted === false && !hasLocalOnboardingComplete();
     if (forcedByUrl || isFirstTime) {
       if (forcedByUrl) {
         clearOnboardingForceParam();

@@ -7,7 +7,13 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { buildAnnotationBands, buildTrendData } from "./utils";
 
 export function useTrainingOverviewData(dateParams: string) {
-  const { data: overview, isLoading } = useQuery<TrainingOverview>({
+  const {
+    data: overview,
+    isLoading,
+    isError,
+    isRefetching,
+    refetch,
+  } = useQuery<TrainingOverview>({
     queryKey: ["/api/v1/training-overview", dateParams],
     queryFn: () => api.analytics.getTrainingOverview(dateParams),
   });
@@ -27,6 +33,11 @@ export function useTrainingOverviewData(dateParams: string) {
   return {
     overview,
     isLoading,
+    // Only a failure with nothing cached is a load error; a failed refetch
+    // keeps showing the overview it already has.
+    loadFailed: isError && !overview,
+    isRetrying: isRefetching,
+    retry: refetch,
     stats: overview?.currentStats ?? null,
     previousStats: overview?.previousStats,
     rpeData,

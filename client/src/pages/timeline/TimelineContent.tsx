@@ -4,6 +4,7 @@ import { format, isToday, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { TimelineDateGroup, TimelineEmptyState, TimelineSkeleton } from "@/components/timeline";
 import type { RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,11 @@ type PlanImportState = TimelineState["planImport"];
 
 interface TimelineContentProps {
   timelineLoading: TimelineData["timelineLoading"];
+  /** The timeline (or, under an empty one, the plans) could not be loaded. */
+  timelineError: TimelineData["isError"];
+  /** A retry of the failed load is in flight; the error card stays up meanwhile. */
+  isRetryingTimeline: TimelineData["isRetrying"];
+  onRetryTimeline: TimelineData["retry"];
   filterStatus: TimelineFiltersState["filterStatus"];
   selectedPlanId: TimelineState["selectedPlanId"];
   plans: TimelineData["plans"];
@@ -62,6 +68,9 @@ interface TimelineContentProps {
 
 export function TimelineContent({
   timelineLoading,
+  timelineError,
+  isRetryingTimeline,
+  onRetryTimeline,
   filterStatus,
   selectedPlanId,
   plans,
@@ -105,6 +114,20 @@ export function TimelineContent({
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
+  }
+
+  // Before the empty state: a failed fetch rendered as a first-run account,
+  // whose template and plan buttons could create a duplicate plan.
+  // U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (timelineError) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your timeline"
+        onRetry={onRetryTimeline}
+        isRetrying={isRetryingTimeline}
+        testId="timeline-load-error"
+      />
+    );
   }
 
   // `allVisibleGroups` includes annotation-only rows from useTimelineFilters,

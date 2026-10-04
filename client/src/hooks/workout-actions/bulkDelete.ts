@@ -14,10 +14,15 @@ export function buildBulkDeleteWorkoutTargets(entries: readonly TimelineEntry[])
   const planDayIds = new Set<string>();
 
   for (const entry of entries) {
-    if (entry.planDayId) {
-      planDayIds.add(entry.planDayId);
-    } else if (entry.workoutLogId) {
+    // The same rule as the single delete (useWorkoutActions.handleDelete): a
+    // completed planned session's log is the workout, and deleting it lets
+    // the server re-sync its plan day to planned or missed. Sending the plan
+    // day instead left the log behind as an unplanned workout. Only an entry
+    // with no log deletes its plan day. CL23 (CODEBASE_ANALYSIS_2026-10-03)
+    if (entry.workoutLogId) {
       workoutLogIds.add(entry.workoutLogId);
+    } else if (entry.planDayId) {
+      planDayIds.add(entry.planDayId);
     }
   }
 
