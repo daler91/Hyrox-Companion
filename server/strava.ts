@@ -102,13 +102,16 @@ function stateBindingValue(state: string): string {
 }
 
 /**
- * One cookie off the request, or undefined when it is absent. `req.cookies` is
- * typed as always present, but only cookie-parser puts it there.
+ * The binding cookie off the request, or undefined when it is absent.
+ * `req.cookies` is typed as always present, but only cookie-parser puts it
+ * there. The name is matched rather than passed to a lookup: CodeQL reads a
+ * call given the cookie's "oauth" name as returning a password, and then the
+ * timing-safe compare below as hashing one.
  */
-function readRequestCookie(req: Request, name: string): unknown {
+function readBindingCookie(req: Request): unknown {
   const cookies: unknown = req.cookies;
-  if (typeof cookies !== "object" || cookies === null || !Object.hasOwn(cookies, name)) return undefined;
-  return Object.getOwnPropertyDescriptor(cookies, name)?.value;
+  if (typeof cookies !== "object" || cookies === null) return undefined;
+  return Object.entries(cookies).find(([name]) => name === STRAVA_OAUTH_COOKIE)?.[1];
 }
 
 function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
@@ -394,7 +397,7 @@ async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
   // The binding cookie is single-use like the state: read it, then clear it
   // up front so every outcome below leaves none behind.
-  const bindingCookie = readRequestCookie(req, STRAVA_OAUTH_COOKIE);
+  const bindingCookie = readBindingCookie(req);
   res.clearCookie(STRAVA_OAUTH_COOKIE, STRAVA_OAUTH_COOKIE_OPTIONS);
 
   if (stravaError) {

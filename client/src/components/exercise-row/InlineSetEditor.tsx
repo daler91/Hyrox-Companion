@@ -582,8 +582,11 @@ function getStoredFieldValue(
 const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 // Digits with at most one decimal separator, which may be "." or "," — the
-// iOS decimal keypad types "," in comma-decimal regions (CL7).
-const DECIMAL_DRAFT = /^\d*[.,]?\d*$/;
+// iOS decimal keypad types "," in comma-decimal regions (CL7). Two patterns,
+// so each digit has one place to match: `^\d*[.,]?\d*$` accepts the same
+// drafts but backtracks quadratically on a long rejected one.
+const DIGITS_ONLY = /^\d*$/;
+const DIGITS_WITH_SEPARATOR = /^\d*[.,]\d*$/;
 // "1,000" is 1 to a comma-decimal athlete and 1000 to everyone else, so a
 // comma followed by exactly one 3-digit group is refused rather than guessed.
 const AMBIGUOUS_THOUSANDS = /^[1-9]\d{0,2},\d{3}$/;
@@ -591,7 +594,8 @@ const AMBIGUOUS_THOUSANDS = /^[1-9]\d{0,2},\d{3}$/;
 function parseDraft(raw: string, field: FieldKey): number | null | typeof INVALID_DRAFT {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
-  if (!DECIMAL_DRAFT.test(trimmed) || AMBIGUOUS_THOUSANDS.test(trimmed)) return INVALID_DRAFT;
+  const decimalDraft = DIGITS_ONLY.test(trimmed) || DIGITS_WITH_SEPARATOR.test(trimmed);
+  if (!decimalDraft || AMBIGUOUS_THOUSANDS.test(trimmed)) return INVALID_DRAFT;
   const n = Number(trimmed.replace(",", "."));
   if (!Number.isFinite(n)) return INVALID_DRAFT;
   // Same bound as the server's set schema: reps is a whole number >= 1.

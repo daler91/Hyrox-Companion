@@ -26,11 +26,11 @@ export function classificationMeta(classification: string | null): {
   );
 }
 
-/**
- * The LOCAL calendar day of a timestamp. `createdAt` arrives as an ISO string
- * over JSON though the row type says Date.
- */
-function localDateOnly(value: string | Date | null | undefined): string | null {
+/** A row timestamp: `createdAt` arrives as an ISO string over JSON though the row type says Date. */
+type RowTimestamp = string | Date | null | undefined;
+
+/** The LOCAL calendar day of a timestamp. */
+function localDateOnly(value: RowTimestamp): string | null {
   if (!value) return null;
   // ⚡ Bolt Performance Optimization:
   // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
@@ -48,7 +48,7 @@ function localDateOnly(value: string | Date | null | undefined): string | null {
  */
 function testDate(
   workoutLogId: string | null,
-  createdAt: string | Date | null | undefined,
+  createdAt: RowTimestamp,
   workoutDates: ReadonlyMap<string, string>,
 ): string | null {
   const workoutDate = workoutLogId ? workoutDates.get(workoutLogId) : undefined;
@@ -68,7 +68,7 @@ function compareDateDesc(a: string | null, b: string | null): number {
   return a < b ? 1 : -1;
 }
 
-function createdAtTime(value: string | Date | null | undefined): number {
+function createdAtTime(value: RowTimestamp): number {
   if (!value) return 0;
   // ⚡ Bolt Performance Optimization:
   // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
