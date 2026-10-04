@@ -24,9 +24,10 @@ behave differently. Read it before assuming a redeploy will fix anything.
 **Primary DB — boot repairs nothing, and will refuse to serve.**
 `runDrizzleMigrations()` (`server/maintenance.ts`) is strict: a migration error
 that is not an idempotency error aborts startup, sets `startupState.startupError`,
-and both health endpoints go 503 so the platform stops routing and retries the
-deploy. Serving traffic against a schema whose migration just failed — worst
-case, an empty database — is strictly worse than a blocked deploy. A restore
+and both health endpoints go 503, so the deploy fails Railway's readiness
+healthcheck and the previous deployment keeps serving. Serving traffic against
+a schema whose migration just failed — worst case, an empty database — is
+strictly worse than a blocked deploy. A restore
 whose schema does not match the deployed code therefore blocks the deploy; it
 does not heal.
 

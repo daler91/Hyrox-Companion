@@ -8,7 +8,7 @@ import { runAnalyticsRecomputeScan } from "../analyticsRecomputeScheduler";
 const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }));
 vi.mock("../../queue", () => ({
   queue: { send: sendMock },
-  DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInMinutes: 60 },
+  DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInSeconds: 3600 },
   RECOMPUTE_ANALYTICS_QUEUE: "recompute-analytics",
 }));
 

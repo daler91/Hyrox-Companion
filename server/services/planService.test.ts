@@ -87,7 +87,7 @@ vi.mock("../queue", () => {
     DEFAULT_JOB_OPTIONS: {
       retryLimit: 3,
       retryBackoff: true,
-      expireInMinutes: 60,
+      expireInSeconds: 3600,
     },
   };
 });

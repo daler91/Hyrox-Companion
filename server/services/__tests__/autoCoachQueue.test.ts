@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../queue", () => ({
   queue: { sendDebounced: mocks.sendDebounced },
-  DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInMinutes: 60 },
+  DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInSeconds: 3600 },
 }));
 vi.mock("../../logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: mocks.error },
@@ -35,7 +35,7 @@ describe("enqueueAutoCoach", () => {
     expect(mocks.sendDebounced).toHaveBeenCalledWith(
       AUTO_COACH_QUEUE,
       { userId: "user-1", trigger: "logged-sets-edited" },
-      { retryLimit: 3, retryBackoff: true, expireInMinutes: 60 },
+      { retryLimit: 3, retryBackoff: true, expireInSeconds: 3600 },
       AUTO_COACH_DEBOUNCE_SECONDS,
       "auto-coach:user-1",
     );

@@ -303,7 +303,7 @@ Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`).
 
 `server/index.ts` wires `registerShutdownHandlers()` (`server/bootstrap/lifecycle.ts`) for `SIGTERM` and `SIGINT`. The shutdown sequence:
 
-1. **Force-exit timer** -- A 60-second timeout (`SHUTDOWN_TIMEOUT_MS`) is set. If graceful shutdown does not complete within this window, `process.exit(1)` is called. The timer is `unref()`-ed so it does not keep the event loop alive.
+1. **Force-exit timer** -- A 60-second timeout (`SHUTDOWN_TIMEOUT_MS`) is set. If graceful shutdown does not complete within this window, `process.exit(1)` is called. The timer is `unref()`-ed so it does not keep the event loop alive. On a deploy, Railway gives the outgoing deployment `drainingSeconds = 65` (`railway.toml`) between `SIGTERM` and `SIGKILL`, so this budget runs to the end; Railway's default is 0 seconds.
 
 2. **Stop cron** -- `stopCron()` halts the `node-cron` scheduler.
 
@@ -326,7 +326,8 @@ Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`).
 - `GET /api/v1/health` (readiness) returns `503` `{ status: "starting", phase, ... }` while bootstrapping
 - Once the `ready` phase sets `isReady = true` (after `registerRoutes()` and the post-route wiring), it probes the main DB and, when `VECTOR_DATABASE_URL` is set, the vector DB (results cached for 5 s). It returns `{ status: "ok", vectorSchema, ... }` when both answer, otherwise `503` `{ status: "degraded", db, vectorDb, ... }`
 - If startup throws, `startupError` is set -- returns `503` `{ status: "error", error: "startup_error", phase, ... }`. The raw error message is only logged, never returned
-- `GET /api/v1/health/live` (liveness) never touches the DB: it returns `{ status: "alive", uptimeMs, ... }`, or `503` `{ status: "startup_failed", phase, ... }` once startup has failed. `railway.toml` points the platform healthcheck here
+- `GET /api/v1/health/live` (liveness) never touches the DB: it returns `{ status: "alive", uptimeMs, ... }`, or `503` `{ status: "startup_failed", phase, ... }` once startup has failed. It answers 200 before boot has finished, so it is not a deploy gate
+- `railway.toml` points Railway's healthcheck at `/api/v1/health` (readiness). Railway polls it only while a deploy rolls out: the first 2xx makes the new deployment active and retires the old one, and it is not polled after go-live. A release whose boot fails therefore fails its deploy, and the previous deployment keeps serving (D2, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md))
 - CI polls `/api/v1/health` via `script/wait-for-health.js` to know when the server is ready
 
 ---

@@ -1,6 +1,19 @@
 [phases.setup]
 nixPkgs = ["nodejs_22", "pnpm-9_x", "openssl"]
 
+# Replaces nixpacks' default install command, which runs every dependency's
+# lifecycle scripts with the service's secrets in the build environment. Same
+# flag and reasoning as railway.toml's buildCommand (S4, CODEBASE_ANALYSIS_2026-10-03).
+# The first command is the default phase's own corepack step (package.json has
+# a packageManager field), kept so pnpm stays the pinned 9.12.0 that CI uses
+# rather than nixpkgs' pnpm-9_x. corepack has no install scripts; the flag
+# keeps it that way.
+[phases.install]
+cmds = [
+  "npm install -g corepack@0.24.1 --ignore-scripts && corepack enable",
+  "pnpm install --frozen-lockfile --ignore-scripts",
+]
+
 # Disable the Caddy reverse proxy phase — our Express server handles HTTP directly
 [phases.caddy]
 nixPkgs = []

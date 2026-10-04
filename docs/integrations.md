@@ -650,7 +650,7 @@ Errors on the queue emit to a global error handler that logs via the application
 - **Purpose**: Runs an AI training-plan generation in the background so the request returns immediately
 - **Payload**: `{ planId: string, userId: string, input: GeneratePlanInput }`
 - **Worker**: Calls `executePlanGeneration(planId, input, userId, signal)`; the in-flight plan row is reconciled if the job fails, and a new generation is rejected while one is already running for the user (see [API Reference — `POST /api/v1/plans/generate`](api-reference.md))
-- **Enqueued via**: `sendJobNoRetry()` from `POST /api/v1/plans/generate` — `retryLimit: 0`, so a failed generation is not replayed. `executePlanGeneration()` marks the plan `failed` when it throws, and a plan left in `pending`/`generating` by a crashed worker is failed on the next boot once its generation started more than an hour ago (`storage.plans.failStalePlanGenerations()`; see [Startup Maintenance](#startup-maintenance)).
+- **Enqueued via**: `sendJobNoRetry()` from `POST /api/v1/plans/generate` — `retryLimit: 0`, so a failed generation is not replayed. `executePlanGeneration()` marks the plan `failed` when it throws, and a plan left in `pending`/`generating` by a crashed or interrupted worker is failed once its generation started more than an hour ago (`storage.plans.failStalePlanGenerations()`, `STALE_PLAN_GENERATION_THRESHOLD_MS`), at boot (see [Startup Maintenance](#startup-maintenance)) and by the `stalePlanGenerations` cron every 10 minutes, since the boot that follows a deploy finds an interrupted generation only minutes old. If the enqueue itself fails, the route marks the new stub `failed` before returning the error, so it never holds the in-flight slot.
 
 #### `recompute-analytics`
 
@@ -675,7 +675,7 @@ Errors on the queue emit to a global error handler that logs via the application
 
 ### Job Processing Pattern
 
-Every worker receives an array of `Job[]` objects and processes them concurrently via the shared `runBatch()` helper, which uses a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll. Each job is additionally wrapped in a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`) that aborts the job — deliberately 10 minutes below the 60-minute `expireInMinutes` so an orphaned upstream call can tear down before pg-boss treats the job as re-dispatchable.
+Every worker receives an array of `Job[]` objects and processes them concurrently via the shared `runBatch()` helper, which uses a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll. Each job is additionally wrapped in a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`) that aborts the job — deliberately 10 minutes below the 60-minute job expiry (`expireInSeconds: 3600`) so an orphaned upstream call can tear down before pg-boss treats the job as re-dispatchable. pg-boss 12 reads `expireInSeconds` only; the options are typed `satisfies SendOptions`, so a misspelt key (the earlier `expireInMinutes`, which left every job on the 15-minute default) fails to compile.
 
 ### Scoped Retries (Idempotent vs. Side-Effectful Jobs)
 
@@ -683,8 +683,8 @@ Every worker receives an array of `Job[]` objects and processes them concurrentl
 
 | Helper | Retries | Use for |
 |---|---|---|
-| `sendJob(name, data)` | `retryLimit: 3`, `retryBackoff: true`, `expireInMinutes: 60` (`DEFAULT_JOB_OPTIONS`) | Handlers that are safe to invoke multiple times for the same payload: pure DB reads/writes keyed by an ID, operations protected by DB-level uniqueness, embedding generation. |
-| `sendJobNoRetry(name, data)` | `retryLimit: 0`, `expireInMinutes: 60` (`NO_RETRY_JOB_OPTIONS`) | Handlers with side effects that cannot be safely replayed. The canonical case is email sending: the "sent" marker is persisted *after* the external send, so a retry after a post-send DB failure would deliver a duplicate. |
+| `sendJob(name, data)` | `retryLimit: 3`, `retryBackoff: true`, `expireInSeconds: 3600` (`DEFAULT_JOB_OPTIONS`) | Handlers that are safe to invoke multiple times for the same payload: pure DB reads/writes keyed by an ID, operations protected by DB-level uniqueness, embedding generation. |
+| `sendJobNoRetry(name, data)` | `retryLimit: 0`, `expireInSeconds: 3600` (`NO_RETRY_JOB_OPTIONS`) | Handlers with side effects that cannot be safely replayed. The canonical case is email sending: the "sent" marker is persisted *after* the external send, so a retry after a post-send DB failure would deliver a duplicate. |
 
 ### Queue Enqueue Reliability
 
@@ -730,6 +730,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | Session-stream backfill | `11,26,41,56 * * * *` UTC (every 15 minutes, offset from the auto-sync scan) | `sessionStreamBackfill` |
 | Recycle bin purge | `45 3 * * *` UTC (drops `recycle_bin_items` past their 90-day expiry; see [database.md](database.md#recycle_bin_items)) | `recycleBinPurge` |
 | Plan-day move prune | `55 3 * * *` UTC (drops `plan_day_moves` older than 30 days, past the coach's two-week record; see [database.md](database.md#plan_day_moves)) | `planDayMovePrune` |
+| Stale plan-generation sweep | `3,13,23,33,43,53 * * * *` UTC (every 10 minutes; fails plans still `pending`/`generating` an hour after their generation started, see [plan-generation](#plan-generation)) | `stalePlanGenerations` |
 
 #### Analytics Recompute Scan
 
@@ -822,7 +823,7 @@ Both Sentry inits also pass an explicit `release` field:
 - Server (`server/bootstrap/observability.ts`): reads `process.env.SENTRY_RELEASE` first (the value injected by the esbuild plugin at build time), then falls back to `fitai-coach@${npm_package_version}`.
 - Client (`client/src/main.tsx`): reads `import.meta.env.VITE_SENTRY_RELEASE` first (a manual override), then `import.meta.env.SENTRY_RELEASE` (the value injected by the Vite plugin at build time). Resolves to `undefined` in dev/contributor builds; Sentry buckets such events as releaseless, which is acceptable.
 
-**Railway:** the production build runs on Railway (`pnpm install --frozen-lockfile && pnpm run build` via `railway.toml`). To enable sourcemap upload, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT_CLIENT`, and `SENTRY_PROJECT_SERVER` as build-time environment variables in the Railway service settings. They are not required at runtime.
+**Railway:** the production build runs on Railway (`pnpm install --frozen-lockfile --ignore-scripts && pnpm run build` via `railway.toml`; dependency install scripts never run there, as in CI). To enable sourcemap upload, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT_CLIENT`, and `SENTRY_PROJECT_SERVER` as build-time environment variables in the Railway service settings. They are not required at runtime.
 
 ---
 
@@ -840,6 +841,8 @@ The `runStartupMaintenance(storage)` function runs a consolidated sequence of ch
 
 3. **Assert critical tables exist** -- `assertCriticalTablesExist()` (`server/migrationGuards.ts`) throws if any of `users`, `workout_logs`, `plan_days`, `foods` or `analytics_results` is missing, so a failed or skipped migration cannot boot against an empty or partial schema.
 
+   **Assert the schema has every declared column** -- `assertSchemaColumnsExist()` (same file) reads `information_schema.columns` once and throws if the database lacks any table or column the Drizzle schema declares (`document_chunks`, which lives on the vector DB, excepted). Production's schema only changes when someone runs `drizzle-kit push`, so a release deployed before its push would otherwise go live with every query on the new columns failing while readiness answered `ok`. Failing boot keeps readiness at 503, so the deploy fails Railway's healthcheck and the previous deployment keeps serving: push the schema, then redeploy (D7, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
+
 4. **Ensure pgvector extension** -- Runs `CREATE EXTENSION IF NOT EXISTS vector` on the vector database to enable vector similarity search. A failure is logged as a warning.
 
 5. **Ensure vector schema** -- Creates the `document_chunks` and `food_embeddings` tables on the vector database if they do not exist, converts a `text` `embedding` column on `document_chunks` to the native `vector` type, and creates the halfvec HNSW indexes (`idx_document_chunks_embedding_hnsw`, `idx_food_embeddings_hnsw`). Non-fatal: an index that cannot be created leaves search on a sequential scan (status `degraded`), and any other failure is reported to Sentry (status `failed`); `/api/v1/health` reports the status as `vectorSchema` but does not gate readiness on it. This step runs on the separate `vectorPool` that Drizzle migrations do not manage.
@@ -848,7 +851,7 @@ The `runStartupMaintenance(storage)` function runs a consolidated sequence of ch
 
 7. **Reset stale auto-coaching flags** -- Calls `storage.users.resetStaleAutoCoaching()` to clear the `is_auto_coaching` flag on any user whose previous server process died mid-coach. Non-fatal; logged as a warning if it fails.
 
-8. **Fail stale plan generations** -- Calls `storage.plans.failStalePlanGenerations()` to mark plans still `pending`/`generating` whose generation started more than an hour ago as `failed` (the `plan-generation` job is not retried, so a worker that crashed mid-job would otherwise leave them loading forever). Non-fatal; logged as a warning if it fails.
+8. **Fail stale plan generations** -- Calls `storage.plans.failStalePlanGenerations()` to mark plans still `pending`/`generating` whose generation started more than an hour ago as `failed` (the `plan-generation` job is not retried, so a worker that crashed mid-job would otherwise leave them loading forever). The `stalePlanGenerations` cron repeats it every 10 minutes. Non-fatal; logged as a warning if it fails.
 
 9. **Restore AI circuit-breaker state** -- `loadPersistedBreakerState()` (`server/ai/circuitBreaker.ts`) reloads the breaker snapshot from `server_runtime_cache`, so a deploy in the middle of a provider outage does not reset it to closed (see [AI and RAG → Circuit Breaker](ai-and-rag.md#circuit-breaker)). Swallows its own errors.
 

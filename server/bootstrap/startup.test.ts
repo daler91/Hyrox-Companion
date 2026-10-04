@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { __resetHealthCacheForTests, registerHealthEndpoint } from "./health";
-import { registerShutdownHandlers } from "./lifecycle";
+import { registerShutdownHandlers, SHUTDOWN_TIMEOUT_MS } from "./lifecycle";
 import { registerProcessErrorHandlers } from "./observability";
 
 describe("bootstrap startup parity", () => {
@@ -62,7 +65,7 @@ describe("bootstrap startup parity", () => {
     expect(liveRes.status).toBe(200);
     expect(liveRes.body.status).toBe("alive");
 
-    // Definitive startup failure → liveness 503 so the platform restarts boot.
+    // Definitive startup failure → liveness 503 too: boot failed for good.
     const failedApp = express();
     const failed = { isReady: false, startupError: "db_maintenance failed", startupPhase: "db_maintenance", startupBeganAt: Date.now() };
     registerHealthEndpoint(failedApp, { state: failed, probeDatabase: async () => true, probeVectorDatabase: async () => true });
@@ -136,5 +139,64 @@ describe("bootstrap startup parity", () => {
     shutdown();
     await new Promise((r) => setTimeout(r, 0));
     expect(calls).toEqual(["stopCron", "drainSseStreams", "close", "stopQueue", "drainPools", "flushSentry", "exit"]);
+  });
+});
+
+/**
+ * railway.toml and nixpacks.toml are what production actually runs, and no
+ * other test reads them. Both are flat, so a line match stands in for a TOML
+ * parser (none is in the dependency tree).
+ */
+describe("Railway deploy config", () => {
+  const readRepoFile = (relative: string) => readFileSync(path.resolve(process.cwd(), relative), "utf8");
+  const tomlValue = (file: string, key: string): string | undefined =>
+    new RegExp(`^${key}\\s*=\\s*(.+)$`, "m").exec(readRepoFile(file))?.[1].trim();
+
+  it("gates the deploy on readiness: the healthcheck path is non-2xx until every route is mounted (D2)", async () => {
+    // Railway promotes a deployment, and retires the old one, on the first 2xx
+    // from this path, and never polls it again after go-live. Pointed at the
+    // liveness route it answered 200 as soon as the port bound — before the DB
+    // was reached or any route existed — so a release whose boot then failed
+    // replaced the healthy one.
+    const healthcheckPath = JSON.parse(tomlValue("railway.toml", "healthcheckPath") ?? "null") as string;
+    const probe = async (state: { isReady: boolean; startupError: string | null }) => {
+      __resetHealthCacheForTests();
+      const app = express();
+      registerHealthEndpoint(app, {
+        state: { ...state, startupPhase: "db_maintenance", startupBeganAt: Date.now() },
+        probeDatabase: async () => true,
+        probeVectorDatabase: async () => true,
+      });
+      return (await request(app).get(healthcheckPath)).status;
+    };
+
+    expect(await probe({ isReady: false, startupError: null })).toBe(503);
+    expect(await probe({ isReady: false, startupError: "migration failed" })).toBe(503);
+    expect(await probe({ isReady: true, startupError: null })).toBe(200);
+  });
+
+  it("gives the outgoing deployment its whole graceful-shutdown budget before SIGKILL (D3)", () => {
+    // Railway's default is 0 s between SIGTERM and SIGKILL, which killed the
+    // old instance before registerShutdownHandlers could drain anything.
+    // Unquoted: Railway's config schema types it as a number.
+    const drainingSeconds = tomlValue("railway.toml", "drainingSeconds");
+    expect(drainingSeconds).toMatch(/^\d+$/);
+    expect(Number(drainingSeconds) * 1000).toBeGreaterThan(SHUTDOWN_TIMEOUT_MS);
+  });
+
+  it("never runs dependency install scripts in the production build (S4)", () => {
+    // The build environment carries every Railway service variable, and CI
+    // installs with --ignore-scripts, so a malicious postinstall would first
+    // execute here. nixpacks' default install phase runs scripts too, so it
+    // must be overridden, not just the build command. npm counts as well: the
+    // override keeps the default phase's global corepack install.
+    const installs = ["railway.toml", "nixpacks.toml"].flatMap((file) =>
+      readRepoFile(file)
+        .split("\n")
+        .filter((line) => !line.trimStart().startsWith("#"))
+        .flatMap((line) => [...line.matchAll(/\bp?npm (?:install|i)\b[^"&]*/g)].map((m) => `${file}: ${m[0].trim()}`)),
+    );
+    expect(installs.some((line) => line.startsWith("nixpacks.toml: pnpm"))).toBe(true);
+    expect(installs.filter((line) => !line.includes("--ignore-scripts"))).toEqual([]);
   });
 });

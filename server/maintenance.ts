@@ -6,10 +6,11 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { loadPersistedBreakerState } from "./ai/circuitBreaker";
+import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
-import { assertCriticalTablesExist, isBenignIdempotencyError } from "./migrationGuards";
+import { assertCriticalTablesExist, assertSchemaColumnsExist, isBenignIdempotencyError } from "./migrationGuards";
 import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { vectorPool } from "./vectorDb";
@@ -64,10 +65,11 @@ async function runDrizzleMigrations() {
     // or a backfilled row, "already exists"/"duplicate") — those are benign and
     // logged at info. Anything else is a genuine migration failure and aborts
     // startup: the error reaches the catch in server/index.ts, which sets
-    // startupState.startupError so liveness and readiness go 503 and the
-    // platform stops routing / retries the deploy. Serving traffic against a
-    // schema whose migration just failed (worst case: an empty database) is
-    // strictly worse than a blocked deploy.
+    // startupState.startupError so liveness and readiness go 503, and the
+    // deploy fails Railway's readiness healthcheck while the previous
+    // deployment keeps serving. Serving traffic against a schema whose
+    // migration just failed (worst case: an empty database) is strictly worse
+    // than a blocked deploy.
     if (isBenignIdempotencyError(error)) {
       logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
     } else {
@@ -315,9 +317,14 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   // this check existed, the app would boot green with zero tables. Rolling
   // deploys: an instance that skipped migrations on the advisory lock could
   // assert here while another instance is mid-first-migration on a fresh DB —
-  // it crashes, the orchestrator restarts it, and by then the tables exist.
+  // it fails its readiness check and stays out of service (the process does
+  // not exit), and a redeploy finds the tables in place.
   // On any established database the tables exist regardless of lock outcome.
   await assertCriticalTablesExist(pool);
+  // A release whose columns were never pushed must not go live: its queries on
+  // those tables would all fail while readiness said ok (D7,
+  // CODEBASE_ANALYSIS_2026-10-03).
+  await assertSchemaColumnsExist(pool);
   await ensurePgvectorExtension();
   await ensureVectorSchema();
   try {
@@ -334,9 +341,12 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   }
   // Fail plans stranded in pending/generating by a worker that crashed mid-job
   // (S2). 1h ≫ real generation time, so a job legitimately in flight on another
-  // instance during a rolling deploy is never failed by mistake.
+  // instance during a rolling deploy is left alone (the queue-wait caveat is on
+  // STALE_PLAN_GENERATION_THRESHOLD_MS). The stalePlanGenerations cron repeats
+  // this every 10 minutes: a generation cut off by a deploy is minutes old at
+  // the boot that follows.
   try {
-    const failed = await storage.plans.failStalePlanGenerations(60 * 60 * 1000);
+    const failed = await storage.plans.failStalePlanGenerations(STALE_PLAN_GENERATION_THRESHOLD_MS);
     if (failed > 0) logger.info({ context: "db", failed }, "Failed stale plan generation(s) on startup");
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Fail stale plan generations skipped");

@@ -29,7 +29,7 @@ const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
 vi.mock("../../storage", async () => {
   const mocked = (await import("./testUtils")).mockStorageModule({
     workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
-    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
+    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "updateGenerationStatus", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
   });
   return { storage: { ...mocked.storage, plans: { ...mocked.storage.plans, schedulePlan } } };
@@ -513,6 +513,37 @@ describe("POST /api/v1/plans/generate", () => {
     await request(app).post("/api/v1/plans/generate").send({ ...generatePlanPayload, injuries: "Bad left knee" });
 
     expect(createPendingPlan).toHaveBeenCalled();
+  });
+
+  it("fails the stub when the job cannot be enqueued, so it does not block the athlete's retry (D20)", async () => {
+    // With no job behind it, a pending stub held uq_training_plans_user_in_flight
+    // and every retry answered 409 until the stale-generation sweep reached it.
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    vi.mocked(createPendingPlan).mockResolvedValue({ id: "plan-1", generationStatus: "pending", days: [] } as never);
+    vi.mocked(sendJobNoRetry).mockRejectedValueOnce(new Error("pg-boss unavailable"));
+    vi.mocked(storage.plans.updateGenerationStatus).mockResolvedValue(undefined);
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(500);
+    expect(storage.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.any(String));
+  });
+
+  it("still reports the enqueue failure when the stub cannot be marked failed either", async () => {
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    vi.mocked(createPendingPlan).mockResolvedValue({ id: "plan-1", generationStatus: "pending", days: [] } as never);
+    vi.mocked(sendJobNoRetry).mockRejectedValueOnce(new Error("pg-boss unavailable"));
+    vi.mocked(storage.plans.updateGenerationStatus).mockRejectedValueOnce(new Error("db down"));
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(500);
   });
 
   it("returns 409 and does not enqueue a job when a generation is already in flight (W13)", async () => {

@@ -18,10 +18,94 @@ ownerless private rows, no duplicate target versions, at most one in-flight plan
 generation per user) against whatever database you point it at, so the monthly
 restore drill
 ([backup-restore.md §6](./backup-restore.md#6-restore-drill-cadence--verification))
-re-verifies those for free. It does **not** check the older-migration audit, 0093 or
-0094 — use the verification queries in those sections. Note the reverse hazard too: a restored database is
-as old as its backup, so a step ticked _after_ that backup was taken has been
-rolled back and must be run again.
+re-verifies those for free. It does **not** check the older-migration audit, 0074,
+0093, 0094, 0117 or the C9 backfill — use the verification queries in those
+sections. Note the reverse hazard too: a restored database is as old as its
+backup, so a step ticked _after_ that backup was taken has been rolled back and
+must be run again.
+
+---
+
+## [ ] Before 2026-12-01 — move Railway's deploy config off `railway.toml`
+
+- **Config:** `railway.toml` (Railway config-as-code); `nixpacks.toml`
+- **Shipped:** identified 2026-10-03 (D4, `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
+- **Deadline:** **2026-12-01, a hard cutoff.** Railway's docs mark config-as-code
+  (`railway.toml` / `railway.json`) deprecated: existing files "stop being read
+  on 2026-12-01". The replacement is Infrastructure as Code, `.railway/railway.ts`.
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** it needs the Railway CLI logged in and linked to the production
+  project, which neither the repo nor CI has. **Do not hand-write
+  `.railway/railway.ts`**: `railway config migrate` generates it from the
+  existing files and keeps the linked service's name.
+- **What is at stake:** every deploy setting lives in `railway.toml`: the
+  nixpacks builder, the build command (its `--ignore-scripts`, S4), the start
+  command, the healthcheck on `/api/v1/health` (readiness, D2) with its 120 s
+  timeout, `drainingSeconds = 65` (D3) and the `on_failure` restart policy. The
+  first deploy after the cutoff falls back to whatever the dashboard holds:
+  possibly no healthcheck gate, 0 s of draining and dependency install scripts
+  running with the service's secrets, with no repo change to explain it.
+- **How:** in one sitting, from a checkout of the deploy branch, with nothing
+  merging to that branch until `railway config apply` has run:
+
+  ```bash
+  railway login
+  railway link                     # the production project and service
+  pnpm add -D railway              # the SDK the CLI needs to evaluate .railway/railway.ts
+  railway config migrate           # preview the generated .railway/railway.ts
+  railway config migrate --apply   # write it and clear the service's Railway Config File setting
+  railway config plan              # review: only the settings moved out of railway.toml
+  railway config apply             # write them to the service
+  ```
+
+  **`migrate --apply` applies nothing by itself, and neither does committing
+  the file.** It clears the service's Railway Config File setting, so
+  `railway.toml` stops being read at once, and `.railway/railway.ts` is only
+  evaluated by the CLI on `plan` / `apply`. A deploy that starts between
+  `migrate --apply` and `apply` runs on the dashboard values: the exact fallback
+  described above, brought forward. Run `plan` and `apply` straight away.
+  Apply only if the plan lists nothing beyond the settings moved out of
+  `railway.toml`: builder nixpacks, build command
+  `pnpm install --frozen-lockfile --ignore-scripts && pnpm run build`, start
+  command `node script/start.js`, healthcheck path `/api/v1/health`,
+  healthcheck timeout 120, draining 65 s, restart policy `on_failure` with 3
+  retries. If it shows anything else (another service, a variable, a destructive
+  change), stop and do not apply.
+
+  Then open one PR with `.railway/railway.ts`, `package.json` and
+  `pnpm-lock.yaml` (the production install is `--frozen-lockfile`, so the lock
+  file must carry the new devDependency). In the same PR, delete `railway.toml`,
+  since a service cannot be managed by both systems at once, and add
+  `".railway/**"` to the global `ignores` in `eslint.config.js`: CI's
+  `pnpm eslint .` lints every `.ts` file against `tsconfig.eslint.json`, which
+  does not include it, so it fails with a parsing error. Deleting
+  `railway.toml` also breaks the `Railway deploy config` tests in
+  `server/bootstrap/startup.test.ts`, which read it to pin the healthcheck
+  path (D2), `drainingSeconds` (D3) and `--ignore-scripts` (S4): point them
+  at `.railway/railway.ts` in the same PR rather than deleting them, and
+  update the `railway.toml` mentions in `server/bootstrap/health.ts` and
+  `docs/server.md`. From then on an edit to `.railway/railway.ts` changes
+  nothing until someone runs `plan` and `apply` again, or the repo adopts
+  Railway's `railwayapp/config` GitHub Action (plan comment on a PR that
+  touches `.railway/**`, apply on merge; it needs a project token in the
+  `RAILWAY_TOKEN` secret).
+
+  `nixpacks.toml` is read by the nixpacks builder itself, not by config-as-code,
+  so its install-phase override keeps working only while the builder is nixpacks.
+
+- **Builder:** Railway's docs say Nixpacks "has been replaced by Railpack". If
+  the migrated config (or a later change) moves to Railpack, validate it on a
+  staging service first: Node 22 and pnpm 9.12 resolution, an install that still
+  passes `--ignore-scripts` (nixpacks.toml's override does not apply there), and
+  a boot that passes the `/api/v1/health` healthcheck.
+- **Verify afterwards:** `railway config plan` shows no pending change (again
+  after the PR merges; if it shows one, review it as above and run
+  `railway config apply` before the next deploy), the service's Railway Config
+  File setting is empty, and its settings show healthcheck path
+  `/api/v1/health`, draining time 65 s and the `--ignore-scripts` build
+  command. On the next deploy, the build log
+  shows the install without lifecycle scripts and the deploy log shows the
+  healthcheck polling `/api/v1/health`.
 
 ---
 
@@ -65,6 +149,39 @@ rolled back and must be run again.
   SELECT to_regclass('public.data_remediation_log'),
          to_regclass('public.v_maf_post_migration_validation');
   -- both NULL = never created, by migrate() or push
+  ```
+
+## [ ] 0074 — `pg_trgm` extension and the trigram indexes for fuzzy food search
+
+- **Migration:** `migrations/0074_food_search_trigram.sql`
+- **Shipped:** PR #1851 (2026-08-26)
+- **Run on production:** _not yet (status unknown, check first) — date / operator:_
+- **Why manual:** `drizzle-kit push` never creates extensions, and the two GIN
+  indexes are deliberately not declared in `shared/schema/tables.ts`, so push
+  neither creates them nor keeps them: push drops indexes the schema does not
+  declare, so a later push removes them if they were created by hand. Boot only
+  creates the `vector` extension. Identified as PF3
+  (`docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+- **What it does:** enables `pg_trgm` and creates `idx_foods_name_trgm` and
+  `idx_foods_brand_trgm`. `NUTRITION_FUZZY_ENABLED` defaults to `true`, so
+  `searchLocalFoods` emits `similarity()` and the `%` operator. Without the
+  extension every local food search (and the meal parser's local lookup) fails
+  with `function similarity(text, unknown) does not exist`; without the indexes
+  the `%` predicate scans the whole shared `foods` cache.
+- **Safe to re-run:** yes. Every statement is `IF NOT EXISTS`.
+- **How:** check first (verification query below). If anything is missing, run
+  all three statements from the migration file via `psql "$DATABASE_URL"`.
+  `pg_trgm` is a trusted extension (PostgreSQL 13+), so the database owner can
+  create it. Until the extension exists, `NUTRITION_FUZZY_ENABLED=false` is the
+  kill switch that keeps food search working without it. **Re-check after every
+  `drizzle-kit push`** until the indexes are declared in `tables.ts`.
+- **Verify afterwards:**
+  ```sql
+  SELECT extname FROM pg_extension WHERE extname = 'pg_trgm';
+  -- expect 1 row
+  SELECT indexname FROM pg_indexes
+  WHERE tablename = 'foods' AND indexname IN ('idx_foods_name_trgm', 'idx_foods_brand_trgm');
+  -- expect 2 rows
   ```
 
 ## [ ] 0081 — purge orphaned private custom foods
@@ -201,4 +318,97 @@ rolled back and must be run again.
   ```sql
   SELECT counts_as_training, count(*) FROM workout_logs GROUP BY 1;
   -- expect a non-zero `false` bucket once walks/commutes/yoga are reclassified
+  ```
+
+## [ ] 0117 — put plan days moved before 2026-10-02 back in their week and weekday
+
+- **Migration:** `migrations/0117_plan_day_slot_repair.sql`
+- **Shipped:** 2026-10-02 (commit `f6ec1d6`)
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** the migration is a single `UPDATE`, which push-managed
+  production never applies. It shipped without an entry here; identified as D1
+  (`docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+- **What it does:** a move used to change a plan day's date alone. This
+  recomputes `week_number` and `day_name` from the date (week 1's Monday and the
+  plan's first week number, as `planSlotFor` does) for every scheduled day in a
+  scheduled plan that is out of step. Until it runs, a session moved before the
+  fix keeps its old week and weekday: the timeline shows "Week 8" among week-7
+  days, the workout engine reads the wrong phase (race week versus build), and
+  rescheduling the plan, which recomputes dates from week and weekday, snaps
+  those moves back to their old days.
+- **Safe to re-run:** yes. It writes only days out of step with the computed
+  slot, and a weekday that differs only in case is left alone.
+- **How:** run the whole `UPDATE` from the migration file via `psql "$DATABASE_URL"`.
+- **Verify afterwards:**
+  ```sql
+  SELECT count(*)
+  FROM plan_days d
+  JOIN training_plans tp ON tp.id = d.plan_id
+  JOIN (
+    SELECT plan_id, min(week_number) AS week_number FROM plan_days GROUP BY plan_id
+  ) first_week ON first_week.plan_id = d.plan_id
+  CROSS JOIN LATERAL (
+    SELECT tp.start_date - (extract(isodow FROM tp.start_date)::int - 1) AS monday
+  ) week_one
+  WHERE d.scheduled_date IS NOT NULL
+    AND tp.start_date IS NOT NULL
+    AND (d.week_number <> first_week.week_number + greatest(0, (d.scheduled_date - week_one.monday) / 7)
+         OR lower(d.day_name) <> lower(to_char(d.scheduled_date, 'FMDay')));
+  -- expect 0
+  ```
+
+## [ ] C9 — double the Strava run cadence stored at its one-leg value (**needs review before running**)
+
+- **Script:** none; the SQL below. **Not reviewed and not run.** Have a second
+  person check it against the current `stravaMapper.ts` and
+  `deviceActivityLink.ts`, and take a backup of `workout_logs`, before running it.
+- **Shipped:** the mapper fix, commit `0f868e4` (2026-10-04). C9 in
+  `docs/CODEBASE_ANALYSIS_2026-10-03.md`.
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** the mapper now doubles Strava's run `average_cadence` (Strava
+  reports one leg, so a 172 steps/min run read 86) for new imports only. Runs
+  imported before it still hold the one-leg value, and no migration touches them.
+- **What it does:** doubles `avg_cadence` only where the stored activity
+  snapshot proves the row came from a Strava run and still holds the raw
+  one-leg value.
+- **Safe to re-run:** yes. A doubled row no longer equals its raw value, so a
+  second run matches nothing.
+- **How:** check the count first (verification query), then:
+  ```sql
+  UPDATE workout_logs
+  SET avg_cadence = (device_activity->'raw'->>'average_cadence')::real * 2
+  WHERE device_activity->>'provider' = 'strava'
+    AND (device_activity->'raw'->>'average_cadence') IS NOT NULL
+    AND avg_cadence = (device_activity->'raw'->>'average_cadence')::real
+    AND lower(regexp_replace(
+          coalesce(nullif(device_activity->'raw'->>'sport_type', ''), device_activity->'raw'->>'type'),
+          '[^A-Za-z0-9]', '', 'g'
+        )) IN ('run', 'trailrun', 'virtualrun');
+  ```
+- **Caveats:**
+  - Strava rows with no snapshot (`device_activity IS NULL AND source = 'strava'`)
+    hold the one-leg value too, and the statement above leaves them alone. To
+    backfill them as well (for example
+    `... WHERE device_activity IS NULL AND source = 'strava' AND lower(regexp_replace(focus, '[^A-Za-z0-9]', '', 'g')) IN ('run', 'trailrun', 'virtualrun')`),
+    `legacyRawFromLog` in `server/services/deviceActivityLink.ts` must halve run
+    cadence in the same change. Otherwise releasing such a row re-maps it and
+    doubles it a second time.
+  - Product decision still open: Strava's Walk/Hike `average_cadence` is very
+    likely one-leg as well, but it is stored as-is and labelled spm. Decide
+    whether walk and hike cadence should be doubled too before widening the
+    statement.
+  - Garmin is unaffected: its mapper stores only
+    `averageRunningCadenceInStepsPerMinute` (full steps per minute) and never
+    maps ride cadence (`averageBikingCadenceInRevPerMinute`).
+- **Verify afterwards:** the same predicate as the `UPDATE`, counted:
+  ```sql
+  SELECT count(*) FROM workout_logs
+  WHERE device_activity->>'provider' = 'strava'
+    AND (device_activity->'raw'->>'average_cadence') IS NOT NULL
+    AND avg_cadence = (device_activity->'raw'->>'average_cadence')::real
+    AND lower(regexp_replace(
+          coalesce(nullif(device_activity->'raw'->>'sport_type', ''), device_activity->'raw'->>'type'),
+          '[^A-Za-z0-9]', '', 'g'
+        )) IN ('run', 'trailrun', 'virtualrun');
+  -- before: the rows to be fixed; after: expect 0 (bar runs whose raw cadence is 0)
   ```

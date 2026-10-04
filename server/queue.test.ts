@@ -24,7 +24,9 @@ import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { pool } from "./db";
 import {
   buildQueueConnectionString,
+  DEFAULT_JOB_OPTIONS,
   jobDataKeys,
+  NO_RETRY_JOB_OPTIONS,
   purgeUserJobs,
   runBatch,
   runWithTimeout,
@@ -62,10 +64,24 @@ describe("buildQueueConnectionString (W12)", () => {
     expect(url.searchParams.get("sslmode")).toBe("require");
   });
 
-  it("uses a timeout below pg-boss expireInMinutes=60 so PG kills before pg-boss reaps", () => {
-    expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeLessThan(60 * 60 * 1000);
+  it("uses a timeout below the 60-minute pg-boss job expiry so PG kills before pg-boss reaps", () => {
+    expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeLessThan(DEFAULT_JOB_OPTIONS.expireInSeconds * 1000);
     // And above the longest legitimate job query (plan-gen retries ~5min).
     expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeGreaterThan(10 * 60 * 1000);
+  });
+});
+
+describe("job options (D9)", () => {
+  // pg-boss 12 reads `expireInSeconds` only. The options used to say
+  // `expireInMinutes: 60`, which pg-boss ignored, so every job fell back to the
+  // 15-minute queue default: a long plan generation was failed (and a
+  // retrying job re-dispatched) while its first run was still going.
+  it.each([
+    ["DEFAULT_JOB_OPTIONS", DEFAULT_JOB_OPTIONS],
+    ["NO_RETRY_JOB_OPTIONS", NO_RETRY_JOB_OPTIONS],
+  ])("%s expires jobs after 60 minutes, in the option pg-boss reads", (_name, options) => {
+    expect(options).toMatchObject({ expireInSeconds: 60 * 60 });
+    expect(options).not.toHaveProperty("expireInMinutes");
   });
 });
 

@@ -213,7 +213,22 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
       }
       throw err;
     }
-    await sendJobNoRetry("plan-generation", { planId: stub.id, userId, input: req.body });
+    try {
+      await sendJobNoRetry("plan-generation", { planId: stub.id, userId, input: req.body });
+    } catch (err) {
+      // D20 (CODEBASE_ANALYSIS_2026-10-03): with no job behind it, the pending
+      // stub would hold the in-flight slot and answer every retry with a 409
+      // until the stale-generation sweep reached it. Fail it now; the enqueue
+      // error still decides the response.
+      await storage.plans
+        .updateGenerationStatus(stub.id, "failed", "Plan generation could not be started. Please try again.")
+        .catch((cleanupError: unknown) => {
+          // A storage error and an opaque plan id; no athlete text.
+          // bearer:disable javascript_lang_logger_leak
+          reqLogger(req).error({ err: cleanupError, planId: stub.id }, "[plans] Could not fail a plan whose generation never enqueued");
+        });
+      throw err;
+    }
     return res.status(202).json(stub);
   });
 

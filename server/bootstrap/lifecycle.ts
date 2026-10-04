@@ -11,7 +11,7 @@ export interface ShutdownDeps {
   exit: (code: number) => void;
 }
 
-const SHUTDOWN_TIMEOUT_MS = 60_000;
+export const SHUTDOWN_TIMEOUT_MS = 60_000;
 
 async function runGracefulShutdown(httpServer: Server, deps: ShutdownDeps, forceExit: NodeJS.Timeout): Promise<void> {
   try {
