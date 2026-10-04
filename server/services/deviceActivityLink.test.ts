@@ -1,9 +1,8 @@
 import type { StravaActivitySummary, WorkoutLog } from "@shared/schema";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { db } from "../db";
-import { storage } from "../storage";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
 import {
   attachStravaActivityToLogInTx,
@@ -24,8 +23,12 @@ import { createWorkoutInTx } from "./workoutService";
 
 vi.mock("../db", () => ({ db: { transaction: vi.fn(), update: vi.fn() } }));
 const streamMocks = vi.hoisted(() => ({ deleteForLog: vi.fn() }));
+const planMocks = vi.hoisted(() => ({ getPlanDay: vi.fn() }));
 vi.mock("../storage", () => ({
-  storage: { plans: { getPlanDay: vi.fn() }, sessionStreams: { deleteForLog: streamMocks.deleteForLog } },
+  storage: {
+    plans: { getPlanDay: planMocks.getPlanDay },
+    sessionStreams: { deleteForLog: streamMocks.deleteForLog },
+  },
 }));
 vi.mock("../storage/planDayStatus", () => ({ syncPlanDayStatusFromWorkouts: vi.fn() }));
 vi.mock("./workoutService", () => ({ createWorkoutInTx: vi.fn() }));
@@ -118,6 +121,13 @@ function makeTx() {
     delete: vi.fn().mockReturnThis(),
     returning: vi.fn(),
   };
+}
+
+/** The first argument of a transaction builder's first call, e.g. the patch the first `.set()` wrote. */
+function firstCallArg(builderMock: Mock): Record<string, unknown> {
+  const call = builderMock.mock.calls.at(0);
+  if (!call) throw new Error("The transaction builder was never called.");
+  return call[0] as Record<string, unknown>;
 }
 
 describe("attachStravaActivityToLogInTx", () => {
@@ -312,7 +322,7 @@ describe("unlinkDeviceActivity", () => {
   function givenLinkCreatedLog(log: WorkoutLog, contents: Partial<LinkCreatedLogContents> = {}) {
     const { planDay = LINK_PLAN_DAY, sets = [UNTOUCHED_SET], scoredBlocks = 0 } = contents;
     tx.for.mockResolvedValue([log]);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(planDay as never);
+    planMocks.getPlanDay.mockResolvedValue(planDay);
     tx.where
       .mockReturnValueOnce(tx) // the log select, finished by .for()
       .mockResolvedValueOnce(sets)
@@ -356,7 +366,7 @@ describe("unlinkDeviceActivity", () => {
 
     expect(tx.delete).not.toHaveBeenCalled();
     expect(syncPlanDayStatusFromWorkouts).not.toHaveBeenCalled();
-    const [patch] = tx.set.mock.calls[0];
+    const patch = firstCallArg(tx.set);
     expect(patch).toEqual({
       duration: null,
       distanceMeters: null,
@@ -372,7 +382,7 @@ describe("unlinkDeviceActivity", () => {
     // Their RPE was never the recording's, so it neither leaves the log nor
     // travels with the recording.
     expect(patch.rpe).toBeUndefined();
-    expect(tx.values.mock.calls[0][0].rpe).toBeNull();
+    expect(firstCallArg(tx.values).rpe).toBeNull();
     expect(streamMocks.deleteForLog).toHaveBeenCalledWith("log-2", USER, tx);
     expect(result.log?.source).toBe("manual");
     expect(result.standalone.id).toBe("standalone");

@@ -314,9 +314,9 @@ describe("createPlanAdjustmentProposal", () => {
 
   describe("stopped by the athlete mid-draft (AI7)", () => {
     beforeEach(() => {
-      vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([upcomingDay()] as never);
-      vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([planDayRow()]);
-      vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map());
+      vi.mocked(storage.timeline).getUpcomingPlannedDays.mockResolvedValue([upcomingDay()] as never);
+      vi.mocked(storage.plans).getPlanDaysByIds.mockResolvedValue([planDayRow()]);
+      vi.mocked(storage.workouts).getExerciseSetsByPlanDays.mockResolvedValue(new Map());
     });
 
     it("hands the chat's cancel signal to the drafting call", async () => {
@@ -342,7 +342,7 @@ describe("createPlanAdjustmentProposal", () => {
       const result = await createPlanAdjustmentProposal({ ...input, signal: controller.signal });
 
       expect(result).toEqual({ kind: "aborted" });
-      expect(storage.planProposals.create).not.toHaveBeenCalled();
+      expect(vi.mocked(storage.planProposals).create.mock.calls).toEqual([]);
     });
 
     it("creates no proposal when Stop lands during the day reads after the draft", async () => {
@@ -351,7 +351,7 @@ describe("createPlanAdjustmentProposal", () => {
         summaryMessage: "Moved Thursday.",
         changes: [{ planDayId: "day-1", updatedFields: { notes: "Keep it easy" }, rationale: "Class day." }],
       });
-      vi.mocked(storage.plans.getPlanDaysByIds).mockImplementation(async () => {
+      vi.mocked(storage.plans).getPlanDaysByIds.mockImplementation(async () => {
         controller.abort();
         return [planDayRow()];
       });
@@ -359,7 +359,7 @@ describe("createPlanAdjustmentProposal", () => {
       const result = await createPlanAdjustmentProposal({ ...input, signal: controller.signal });
 
       expect(result).toEqual({ kind: "aborted" });
-      expect(storage.planProposals.create).not.toHaveBeenCalled();
+      expect(vi.mocked(storage.planProposals).create.mock.calls).toEqual([]);
     });
 
     it("reports a draft the cancel cut off as stopped, not as a generation failure", async () => {
@@ -370,7 +370,7 @@ describe("createPlanAdjustmentProposal", () => {
       });
 
       await expect(createPlanAdjustmentProposal({ ...input, signal: controller.signal })).resolves.toEqual({ kind: "aborted" });
-      expect(storage.planProposals.create).not.toHaveBeenCalled();
+      expect(vi.mocked(storage.planProposals).create.mock.calls).toEqual([]);
     });
   });
 });

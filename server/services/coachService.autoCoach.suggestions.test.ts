@@ -406,6 +406,11 @@ describe("coachService triggerAutoCoach suggestion application", () => {
 
     function yellowContext(exerciseDetails: ReturnType<typeof squatSet>[]): TrainingContext {
       const base = loadGovernorTrainingContext();
+      const insights = base.coachingInsights;
+      const loadGovernor = insights?.loadGovernor;
+      if (!insights || !loadGovernor) {
+        throw new Error("loadGovernorTrainingContext() returned no load-governor insights");
+      }
       return {
         ...base,
         upcomingWorkouts: [
@@ -419,9 +424,9 @@ describe("coachService triggerAutoCoach suggestion application", () => {
           },
         ],
         coachingInsights: {
-          ...base.coachingInsights!,
+          ...insights,
           loadGovernor: {
-            ...base.coachingInsights!.loadGovernor!,
+            ...loadGovernor,
             acwr: 1.4,
             zone: "yellow",
             flaggedVectors: [],
@@ -445,11 +450,11 @@ describe("coachService triggerAutoCoach suggestion application", () => {
         yellowContext([1, 2, 3, 4, 5, 6].map((n) => squatSet(n, null))),
       );
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
-      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+      vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       expect(dbMockState.insertValues).toHaveBeenCalledWith(
-        [1, 2, 3, 4].map(() => expect.objectContaining({ exerciseName: "back_squat" })),
+        [1, 2, 3, 4].map((): unknown => expect.objectContaining({ exerciseName: "back_squat" })),
       );
       expectPlanDayUpdate("day-1", {
         aiSource: "load_governor",
@@ -458,7 +463,7 @@ describe("coachService triggerAutoCoach suggestion application", () => {
             focus: "Lower Strength",
             mainWorkout: "Back squat 6x5 @ 100kg",
             notes: "Gym closed Friday",
-          }),
+          }) as unknown,
         }),
       });
     });
@@ -471,12 +476,12 @@ describe("coachService triggerAutoCoach suggestion application", () => {
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
         makeSuggestion({ recommendation: "Back squat 6x5 @ 105kg", rationale: "Add volume back" }),
       ]);
-      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+      vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
       expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
       expect(dbMockState.insertValues).not.toHaveBeenCalled();
-      expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+      expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
       expect(generateReviewNotes).not.toHaveBeenCalled();
     });
   });

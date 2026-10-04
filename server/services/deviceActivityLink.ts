@@ -405,7 +405,7 @@ export function hasAthleteEdits(log: WorkoutLog, contents: LinkCreatedLogContent
     (log.notes ?? null) !== (log.prescribedNotes ?? null) ||
     // Every metric the recording did not fill started NULL; a value there
     // (an RPE above all) was typed here.
-    DEVICE_METRIC_COLUMNS.some((col) => !filled.has(col) && log[col] != null) ||
+    Object.entries(pickDeviceMetrics(log)).some(([col, value]) => !filled.has(col) && value != null) ||
     log.timeOfDayMin != null ||
     !log.countsAsTraining ||
     !planDay ||

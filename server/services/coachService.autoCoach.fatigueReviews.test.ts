@@ -157,10 +157,10 @@ describe("coachService triggerAutoCoach fatigue suppression and review notes", (
     vi.mocked(generateReviewNotes).mockResolvedValue([
       { workoutId: "day-1", note: "Already reduced for the current fatigue trend." },
     ]);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
-    const [, reviewWrite] = vi.mocked(storage.plans.updatePlanDay).mock.calls[0];
+    const [, reviewWrite] = vi.mocked(storage.plans).updatePlanDay.mock.calls[0];
     expect(reviewWrite.aiSource).toBe("review");
     expect(reviewWrite.aiInputsUsed).toEqual(
       expect.objectContaining({
@@ -189,13 +189,13 @@ describe("coachService triggerAutoCoach fatigue suppression and review notes", (
         rationale: "Sled Push has not been trained recently.",
       }),
     ]);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-    const [, write] = vi.mocked(storage.plans.updatePlanDay).mock.calls[0];
+    const [, write] = vi.mocked(storage.plans).updatePlanDay.mock.calls[0];
     expect(write.aiInputsUsed).toEqual(
       expect.objectContaining({
-        lastModification: expect.objectContaining({ kind: "workload_adjustment" }),
+        lastModification: expect.objectContaining({ kind: "workload_adjustment" }) as unknown,
         lastFatigueReduction: priorReduction,
       }),
     );

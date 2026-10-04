@@ -11,6 +11,14 @@ import { storage } from "./storage";
 
 export const DEV_USER_ID = "dev-user";
 
+/** Thrown by ensureUserExists for a session whose account has been erased. */
+class ErasedAccountError extends Error {
+  constructor() {
+    super("Account has been erased");
+    this.name = "ErasedAccountError";
+  }
+}
+
 // Clerk SDK does not accept an AbortSignal, so bound its network calls
 // with Promise.race to keep auth middleware from stalling worker threads
 // when Clerk's API hangs. Clear the timer once `promise` settles so we
@@ -128,14 +136,6 @@ const USER_SEEN_TTL_MS = 5 * 60_000; // 5 minutes
 const ERASED_USER_TTL_MS = 10 * 60_000;
 /** userId -> when its erasure tombstone lapses (epoch ms). */
 const erasedUserCache = new Map<string, number>();
-
-/** Thrown by ensureUserExists for a session whose account has been erased. */
-class ErasedAccountError extends Error {
-  constructor() {
-    super("Account has been erased");
-    this.name = "ErasedAccountError";
-  }
-}
 
 function userSeenCacheKey(userId: string): string {
   return runtimeCacheKey("auth-seen", userId);

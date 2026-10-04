@@ -101,6 +101,16 @@ function stateBindingValue(state: string): string {
   return crypto.createHash("sha256").update(state).digest("base64url");
 }
 
+/**
+ * One cookie off the request, or undefined when it is absent. `req.cookies` is
+ * typed as always present, but only cookie-parser puts it there.
+ */
+function readRequestCookie(req: Request, name: string): unknown {
+  const cookies: unknown = req.cookies;
+  if (typeof cookies !== "object" || cookies === null || !Object.hasOwn(cookies, name)) return undefined;
+  return Object.getOwnPropertyDescriptor(cookies, name)?.value;
+}
+
 function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
   if (typeof cookieValue !== "string" || cookieValue === "") return false;
   // Hash both sides to equal-length buffers so timingSafeEqual never throws
@@ -384,8 +394,7 @@ async function handleStravaCallback(req: Request, res: Response) {
   const { code, state, error: stravaError } = req.query;
   // The binding cookie is single-use like the state: read it, then clear it
   // up front so every outcome below leaves none behind.
-  const cookies: Record<string, unknown> | undefined = req.cookies;
-  const bindingCookie = cookies?.[STRAVA_OAUTH_COOKIE];
+  const bindingCookie = readRequestCookie(req, STRAVA_OAUTH_COOKIE);
   res.clearCookie(STRAVA_OAUTH_COOKIE, STRAVA_OAUTH_COOKIE_OPTIONS);
 
   if (stravaError) {
@@ -412,7 +421,8 @@ async function handleStravaCallback(req: Request, res: Response) {
       { hasBindingCookie: typeof bindingCookie === "string" },
       "Strava OAuth state not bound to this browser - possible CSRF attack",
     );
-    return res.redirect("/settings?strava=error");
+    res.redirect("/settings?strava=error");
+    return;
   }
 
   // Single-use state: the HMAC makes the state unforgeable but not

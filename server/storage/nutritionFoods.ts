@@ -268,16 +268,22 @@ export async function createCustomFood(userId: string, data: CreateCustomFoodInp
 
 
 /**
- * The per-100g columns a logged entry's nutrition is computed from. Log
- * entries store only `foodId` + `quantityG` and every read joins `foods` live.
+ * The per-100g columns a logged entry's nutrition is computed from, each as
+ * (patched, stored). Log entries store only `foodId` + `quantityG` and every
+ * read joins `foods` live.
  */
-const LOGGED_MACRO_COLUMNS = [
-  "caloriesPer100g",
-  "proteinPer100g",
-  "carbPer100g",
-  "fatPer100g",
-  "fiberPer100g",
-] as const;
+function loggedMacroPairs(
+  current: Food,
+  patch: UpdateCustomFoodInput,
+): [patched: number | null | undefined, stored: number | null][] {
+  return [
+    [patch.caloriesPer100g, current.caloriesPer100g],
+    [patch.proteinPer100g, current.proteinPer100g],
+    [patch.carbPer100g, current.carbPer100g],
+    [patch.fatPer100g, current.fatPer100g],
+    [patch.fiberPer100g, current.fiberPer100g],
+  ];
+}
 
 /** Equal as stored: the macro columns are float4, so compare at that precision. */
 function sameStoredReal(a: number | null, b: number | null): boolean {
@@ -294,8 +300,8 @@ function sameStoredReal(a: number | null, b: number | null): boolean {
 function rewritesLoggedHistory(current: Food, patch: UpdateCustomFoodInput): boolean {
   if (patch.name !== undefined && patch.name !== current.name) return true;
   if (patch.brand !== undefined && (patch.brand || null) !== (current.brand || null)) return true;
-  return LOGGED_MACRO_COLUMNS.some(
-    (col) => patch[col] !== undefined && !sameStoredReal(patch[col] ?? null, current[col]),
+  return loggedMacroPairs(current, patch).some(
+    ([patched, stored]) => patched !== undefined && !sameStoredReal(patched, stored),
   );
 }
 
@@ -305,19 +311,19 @@ async function isReferencedByOtherUsers(
   foodId: string,
   ownerId: string,
 ): Promise<boolean> {
-  const [logged] = await executor
+  const logged = await executor
     .select({ id: foodLogEntries.id })
     .from(foodLogEntries)
     .where(and(eq(foodLogEntries.foodId, foodId), ne(foodLogEntries.userId, ownerId)))
     .limit(1);
-  if (logged) return true;
-  const [inRecipe] = await executor
+  if (logged.length > 0) return true;
+  const inRecipe = await executor
     .select({ id: recipeIngredients.id })
     .from(recipeIngredients)
     .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
     .where(and(eq(recipeIngredients.foodId, foodId), ne(recipes.userId, ownerId)))
     .limit(1);
-  return Boolean(inRecipe);
+  return inRecipe.length > 0;
 }
 
 export const SHARED_FOOD_EDIT_CONFLICT =
@@ -330,16 +336,17 @@ export const SHARED_FOOD_EDIT_CONFLICT =
  * FOR UPDATE. Shared by the custom-food edit and the recipe edit, which
  * rewrites its backing food's name and macros.
  */
-export async function assertLoggedHistoryKept(
+export function assertLoggedHistoryKept(
   executor: DbExecutor,
   current: Food,
   next: UpdateCustomFoodInput,
   ownerId: string,
   message = SHARED_FOOD_EDIT_CONFLICT,
 ): Promise<void> {
-  if (rewritesLoggedHistory(current, next) && (await isReferencedByOtherUsers(executor, current.id, ownerId))) {
-    throw new AppError(ErrorCode.CONFLICT, message, 409);
-  }
+  if (!rewritesLoggedHistory(current, next)) return Promise.resolve();
+  return isReferencedByOtherUsers(executor, current.id, ownerId).then((referenced) => {
+    if (referenced) throw new AppError(ErrorCode.CONFLICT, message, 409);
+  });
 }
 
 /**
@@ -368,7 +375,7 @@ export async function updateCustomFood(
     // Matching it here let this PATCH share it, and the recipe edit then
     // rewrote it in place around the freeze below (D18).
     const notARecipe = sql`NOT EXISTS (SELECT 1 FROM ${recipes} WHERE ${recipes.foodId} = ${foods.id})`;
-    const [current] = await tx.select().from(foods).where(and(ownCustomFood, notARecipe)).for("update");
+    const current = (await tx.select().from(foods).where(and(ownCustomFood, notARecipe)).for("update")).at(0);
     if (!current) return undefined;
 
     await assertLoggedHistoryKept(tx, current, patch, userId);

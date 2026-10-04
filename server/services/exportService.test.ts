@@ -329,7 +329,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
 
     const result = await generateJSON(mockUserId, storage);
 
-    expect(storage.workouts.getWorkoutStructuresByPlanDays).toHaveBeenCalledWith(['d1', 'd2', 'd3']);
+    expect(vi.mocked(storage.workouts).getWorkoutStructuresByPlanDays.mock.calls).toContainEqual([['d1', 'd2', 'd3']]);
     expect(result.plans).toEqual([
       {
         ...plans[0],
@@ -562,7 +562,9 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
           getTableConfig(table).foreignKeys.map((fk) => nameOf.get(fk.reference().foreignTable)),
         ]),
       );
-      const owned = new Set<string>([nameOf.get(users)!]);
+      const usersTable = nameOf.get(users);
+      if (usersTable === undefined) throw new Error('The users table is not exported from @shared/schema/tables.');
+      const owned = new Set<string>([usersTable]);
       let grew = true;
       while (grew) {
         grew = false;

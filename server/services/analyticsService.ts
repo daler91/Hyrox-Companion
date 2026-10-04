@@ -303,28 +303,41 @@ export function tallyPersonalRecords(
   allSets: SlimLoggedExerciseSet[],
   preferences?: UnitPreferences,
 ): PersonalRecordTally {
-  const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
-  const bestTimesBySize = Object.create(null) as Record<string, SizedBestTime[]>;
+  const tallies = new Map<string, { record: PersonalRecord; bestTimes: SizedBestTime[] }>();
 
   for (const set of allSets) {
     const prKey = getExerciseKey(set);
-    if (!prs[prKey]) {
-      prs[prKey] = { category: set.category, customLabel: set.customLabel };
-      bestTimesBySize[prKey] = [];
+    let tally = tallies.get(prKey);
+    if (!tally) {
+      tally = { record: { category: set.category, customLabel: set.customLabel }, bestTimes: [] };
+      tallies.set(prKey, tally);
     }
-    const pr = prs[prKey];
+    const pr = tally.record;
     updateMaxWeight(pr, set, preferences);
     updateMaxDistance(pr, set, preferences);
-    updateBestTime(bestTimesBySize[prKey], set, preferences);
+    updateBestTime(tally.bestTimes, set, preferences);
     updateE1RM(pr, set, preferences);
   }
 
-  for (const [prKey, bestTimes] of Object.entries(bestTimesBySize)) {
+  for (const { record, bestTimes } of tallies.values()) {
     const bestTime = headlineBestTime(bestTimes);
-    if (bestTime) prs[prKey].bestTime = bestTime;
+    if (bestTime) record.bestTime = bestTime;
   }
 
-  return { records: prs, bestTimesBySize };
+  const entries = [...tallies];
+  return {
+    records: prototypelessRecord(entries.map(([prKey, { record }]) => [prKey, record])),
+    bestTimesBySize: prototypelessRecord(entries.map(([prKey, { bestTimes }]) => [prKey, bestTimes])),
+  };
+}
+
+/**
+ * A record with no prototype, so a key taken from a custom label (such as
+ * "constructor") reads as absent instead of hitting Object.prototype, which
+ * callers that look keys up with `?? []` rely on.
+ */
+function prototypelessRecord<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, Object.fromEntries(entries));
 }
 
 export function calculatePersonalRecords(

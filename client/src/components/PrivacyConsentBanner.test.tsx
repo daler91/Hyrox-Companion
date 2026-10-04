@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/react";
+import { init as initSentry } from "@sentry/react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -194,7 +194,7 @@ describe("PrivacyConsentBanner", () => {
 describe("PrivacyConsentBanner with error reporting wired up", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.mocked(Sentry.init).mockClear();
+    vi.mocked(initSentry).mockClear();
     vi.stubEnv("VITE_SENTRY_DSN", "https://public@o0.ingest.sentry.io/0");
   });
 
@@ -210,16 +210,16 @@ describe("PrivacyConsentBanner with error reporting wired up", () => {
     fireEvent.click(screen.getByTestId("btn-consent-decline"));
 
     expect(localStorage.getItem(ERROR_REPORTING_CONSENT_KEY)).toBe("off");
-    expect(Sentry.init).not.toHaveBeenCalled();
+    expect(initSentry).not.toHaveBeenCalled();
   });
 
   it("starts Sentry once the notice is accepted", () => {
     setupErrorReporting();
     render(<PrivacyConsentBanner />);
-    expect(Sentry.init).not.toHaveBeenCalled();
+    expect(initSentry).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId("btn-consent-ack"));
 
-    expect(Sentry.init).toHaveBeenCalledTimes(1);
+    expect(initSentry).toHaveBeenCalledTimes(1);
   });
 });

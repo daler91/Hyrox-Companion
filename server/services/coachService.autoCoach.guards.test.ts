@@ -86,7 +86,7 @@ describe("coachService triggerAutoCoach guards", () => {
       dayIds: new Set(["day-1", "day-3"]),
       adaptation: false,
     });
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
     // Every day the pass writes is checked, inside the write transaction.
@@ -94,7 +94,7 @@ describe("coachService triggerAutoCoach guards", () => {
     expect(tx).toBe(dbMockState.tx);
     expect(userId).toBe("user-1");
     expect(targets.days.map((day) => day.id).sort()).toEqual(["day-1", "day-2", "day-3"]);
-    expect(vi.mocked(storage.plans.updatePlanDay).mock.calls.map((call) => call[0])).toEqual([
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls.map((call) => call[0])).toEqual([
       "day-2",
     ]);
   });

@@ -266,7 +266,7 @@ describe("applyTimelineAiSuggestion", () => {
             accessory: "Old accessory",
             notes: null,
           },
-        }),
+        }) as unknown,
       }),
     );
   });
@@ -291,13 +291,13 @@ describe("applyTimelineAiSuggestion", () => {
       applied: false,
       structured: false,
       reason: "structured_partial_replace",
-      message: expect.stringContaining("left the workout unchanged"),
+      message: expect.stringContaining("left the workout unchanged") as unknown,
     });
     // Refused before the AI parse it would have spent.
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
     expect(dbMockState.insertValues).not.toHaveBeenCalled();
-    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
   });
 
   it("still appends to a table-backed day's accessory work without touching its text", async () => {
@@ -319,7 +319,7 @@ describe("applyTimelineAiSuggestion", () => {
 
     expect(result).toEqual({ applied: true, structured: true });
     expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
-    const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1];
+    const updatePayload = vi.mocked(storage.plans).updatePlanDay.mock.calls[0][1];
     expect(updatePayload).not.toHaveProperty("mainWorkout");
     expect(updatePayload).not.toHaveProperty("accessory");
     expect(updatePayload.aiInputsUsed).not.toHaveProperty("replacedPrescription");

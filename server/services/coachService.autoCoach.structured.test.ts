@@ -118,10 +118,10 @@ describe("coachService triggerAutoCoach structured exercise writes", () => {
         sets: [{ setNumber: 1, reps: 5, weight: 105 }],
       },
     ]);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-    const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1];
+    const updatePayload = vi.mocked(storage.plans).updatePlanDay.mock.calls[0][1];
     expect(updatePayload.aiInputsUsed?.replacedPrescription).toEqual(original);
   });
 
@@ -151,13 +151,13 @@ describe("coachService triggerAutoCoach structured exercise writes", () => {
     vi.mocked(generateReviewNotes).mockResolvedValue([
       { workoutId: "day-1", note: "Keep the squats crisp; trim accessories if tired." },
     ]);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
     expect(dbMockState.insertValues).not.toHaveBeenCalled();
-    const writes = vi.mocked(storage.plans.updatePlanDay).mock.calls;
+    const writes = vi.mocked(storage.plans).updatePlanDay.mock.calls;
     expect(writes).toHaveLength(1);
     expect(writes[0][1]).toEqual(
       expect.objectContaining({
@@ -176,10 +176,10 @@ describe("coachService triggerAutoCoach structured exercise writes", () => {
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
       makeSuggestion({ targetField: "accessory", action: "replace", recommendation: "Plank 2x45s" }),
     ]);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-    expect(vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1]).toEqual(
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls[0][1]).toEqual(
       expect.objectContaining({ accessory: "Plank 2x45s" }),
     );
   });

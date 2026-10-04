@@ -90,7 +90,7 @@ describe("calculatePersonalRecords", () => {
       makeSet({ exerciseName: "run_1k", category: "running", time: 4.3, date: "2026-01-20", workoutLogId: "w3" }),
     ];
     const prs = calculatePersonalRecords(sets);
-    expect(prs["run_1k"].bestTime).toEqual({
+    expect(prs.run_1k.bestTime).toEqual({
       value: 4.1,
       date: "2026-01-15",
       workoutLogId: "w2",

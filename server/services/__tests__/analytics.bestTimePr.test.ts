@@ -37,7 +37,7 @@ describe("best time compares like-for-like work only (C1)", () => {
       ski(1000, 3.9, "2026-01-08", "w2"),
       ski(250, 0.9, "2026-01-12", "w3"),
     ]);
-    expect(prs["skierg"].bestTime).toEqual({ value: 3.9, date: "2026-01-08", workoutLogId: "w2" });
+    expect(prs.skierg.bestTime).toEqual({ value: 3.9, date: "2026-01-08", workoutLogId: "w2" });
   });
 
   it("records no best time for runs logged by time alone", () => {
@@ -47,7 +47,8 @@ describe("best time compares like-for-like work only (C1)", () => {
       makeSet({ exerciseName: "easy_run", category: "running", time: 30, date: "2026-01-10", workoutLogId: "w1" }),
       makeSet({ exerciseName: "easy_run", category: "running", time: 20, date: "2026-01-15", workoutLogId: "w2" }),
     ]);
-    expect(prs["easy_run"]?.bestTime).toBeUndefined();
+    // With no best time there may be no record at all; either way, none here.
+    expect(new Map(Object.entries(prs)).get("easy_run")?.bestTime).toBeUndefined();
   });
 
   it("does not count a shorter piece as a PR in the weekly email's count", () => {
@@ -67,7 +68,7 @@ describe("best time compares like-for-like work only (C1)", () => {
       ski(250, 0.9, "2026-01-12", "w3"),
       ski(250, 0.92, "2026-01-15", "w4"),
     ]);
-    expect(prs["skierg"].bestTime?.value).toBe(0.9);
+    expect(prs.skierg.bestTime?.value).toBe(0.9);
   });
 
   it("reports no best time for runs that never repeat a distance", () => {
@@ -80,8 +81,8 @@ describe("best time compares like-for-like work only (C1)", () => {
       run(3000, 15, "2026-01-08", "w2"),
       run(12000, 65, "2026-01-12", "w3"),
     ]);
-    expect(prs["run"].bestTime).toBeUndefined();
-    expect(prs["run"].maxDistance?.value).toBe(12000);
+    expect(prs.run.bestTime).toBeUndefined();
+    expect(prs.run.maxDistance?.value).toBe(12000);
   });
 
   it("treats distances within a small tolerance, read through their unit stamps, as one piece", () => {
@@ -96,7 +97,7 @@ describe("best time compares like-for-like work only (C1)", () => {
       ],
       { distanceUnit: "km" },
     );
-    expect(prs["rowing"].bestTime).toEqual({ value: 3.7, date: "2026-01-12", workoutLogId: "w2" });
+    expect(prs.rowing.bestTime).toEqual({ value: 3.7, date: "2026-01-12", workoutLogId: "w2" });
   });
 
   it("keeps a time with no distance apart from times that have one", () => {
@@ -105,7 +106,7 @@ describe("best time compares like-for-like work only (C1)", () => {
       ski(1000, 3.9, "2026-01-08", "w2"),
       ski(null, 2, "2026-01-12", "w3"),
     ]);
-    expect(prs["skierg"].bestTime?.value).toBe(3.9);
+    expect(prs.skierg.bestTime?.value).toBe(3.9);
   });
 
   it("compares rep-sized timed work only at the same reps", () => {
@@ -116,7 +117,7 @@ describe("best time compares like-for-like work only (C1)", () => {
       balls(100, 4.8, "2026-01-08", "w2"),
       balls(50, 2.2, "2026-01-12", "w3"),
     ]);
-    expect(prs["wall_balls"].bestTime?.value).toBe(4.8);
+    expect(prs.wall_balls.bestTime?.value).toBe(4.8);
   });
 
   it("still keeps the LONGEST hold, however many holds a set records", () => {
@@ -126,6 +127,6 @@ describe("best time compares like-for-like work only (C1)", () => {
       plank(null, 1.5, "2026-01-05", "w1"),
       plank(3, 1, "2026-01-12", "w2"),
     ]);
-    expect(prs["plank"].bestTime?.value).toBe(1.5);
+    expect(prs.plank.bestTime?.value).toBe(1.5);
   });
 });

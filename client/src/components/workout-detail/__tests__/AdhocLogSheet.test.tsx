@@ -257,9 +257,9 @@ describe("AdhocLogSheet", () => {
 
       await user.click(screen.getByTestId("adhoc-keep-editing"));
 
-      await waitFor(() =>
-        expect(screen.queryByText("Discard this workout?")).not.toBeInTheDocument(),
-      );
+      await waitFor(() => {
+        expect(screen.queryByText("Discard this workout?")).not.toBeInTheDocument();
+      });
       expect(onClose).not.toHaveBeenCalled();
       expect(screen.getByTestId("adhoc-save-workout")).toBeEnabled();
     });
@@ -308,7 +308,7 @@ describe("AdhocLogSheet", () => {
         exerciseBlocks: ["back_squat__1"],
         step: 1,
       });
-      expect(draft?.exerciseData["back_squat__1"]).toMatchObject({
+      expect(draft?.exerciseData.back_squat__1).toMatchObject({
         exerciseName: "back_squat",
         category: "strength",
       });
