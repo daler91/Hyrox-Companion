@@ -1,10 +1,12 @@
 import { describe, expect,it } from "vitest";
 
 import {
+  addExerciseSetBodySchema,
   exercisesPayloadSchema,
   generatePlanInputSchema,
   importPlanRequestSchema,
   parseExercisesFromImageRequestSchema,
+  patchExerciseSetBodySchema,
   SET_TIME_MAX_MINUTES,
   updateWorkoutLogSchema,
 } from "./schema";
@@ -221,5 +223,31 @@ describe("set time bounds are minutes-shaped (audit C7)", () => {
     expect(SET_TIME_MAX_MINUTES).toBe(1_440);
     expect(run(SET_TIME_MAX_MINUTES).success).toBe(true);
     expect(run(SET_TIME_MAX_MINUTES + 1).success).toBe(false);
+  });
+});
+
+describe("set bodies name the units they were composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  const ADD = { exerciseName: "back_squat", category: "strength" };
+
+  it("keeps a preference-shaped unit on both bodies so the server can stamp with it", () => {
+    expect(patchExerciseSetBodySchema.parse({ weight: 100, weightUnit: "kg" })).toEqual({
+      weight: 100,
+      weightUnit: "kg",
+    });
+    expect(addExerciseSetBodySchema.parse({ ...ADD, distance: 1000, weightUnit: "lbs", distanceUnit: "miles" })).toMatchObject({
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+    });
+  });
+
+  it("still accepts a body without units, as an older client sends", () => {
+    expect(patchExerciseSetBodySchema.safeParse({ weight: 100 }).success).toBe(true);
+    expect(addExerciseSetBodySchema.safeParse(ADD).success).toBe(true);
+  });
+
+  it("rejects a unit the stamp cannot represent", () => {
+    expect(patchExerciseSetBodySchema.safeParse({ weight: 100, weightUnit: "stone" }).success).toBe(false);
+    // The row's stored form ("m") is not a preference: the body names what the athlete saw.
+    expect(addExerciseSetBodySchema.safeParse({ ...ADD, distanceUnit: "m" }).success).toBe(false);
   });
 });

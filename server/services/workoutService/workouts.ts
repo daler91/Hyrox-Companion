@@ -186,7 +186,13 @@ export async function createWorkoutInTx(
     clientSuppliedSetCount = savedSets.length;
   } else if (enrichedData.planDayId) {
     const blockIdMap = await copyPrescribedStructureIntoLog(tx, enrichedData.planDayId, log.id);
-    savedSets = await copyPrescribedSetsIntoLog(tx, enrichedData.planDayId, log.id, blockIdMap);
+    savedSets = await copyPrescribedSetsIntoLog(
+      tx,
+      enrichedData.planDayId,
+      log.id,
+      blockIdMap,
+      await loadUnitPreferences(userId),
+    );
   }
 
   if (enrichedData.planDayId) {

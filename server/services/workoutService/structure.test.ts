@@ -5,7 +5,9 @@ import { db } from "../../db";
 import { AppError } from "../../errors";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
+import { makeExerciseSet } from "../ai/testFixtures";
 import {
+  copyPrescribedSetsIntoLog,
   deriveMissingPlanDaySetsFromStructure,
   deriveMissingWorkoutSetsFromStructure,
   replacePlanDayStructure,
@@ -307,5 +309,35 @@ describe("deriveMissingWorkoutSetsFromStructure", () => {
   it("returns null when the workout log is missing", async () => {
     vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(undefined);
     expect(await deriveMissingWorkoutSetsFromStructure("w1", "user-1")).toBeNull();
+  });
+});
+
+describe("copyPrescribedSetsIntoLog", () => {
+  /** A transaction that serves `prescribed` to the plan-day read and echoes the insert. */
+  function fakeTx(prescribed: ReturnType<typeof makeExerciseSet>[]) {
+    const values = vi.fn((rows: unknown[]) => ({ returning: () => Promise.resolve(rows) }));
+    const tx = {
+      select: () => ({ from: () => ({ where: () => ({ orderBy: () => Promise.resolve(prescribed) }) }) }),
+      insert: () => ({ values }),
+    };
+    return { tx: tx as unknown as Parameters<typeof copyPrescribedSetsIntoLog>[0], values };
+  }
+
+  it("keeps the plan day's unit stamp on every logged copy (D21, CODEBASE_ANALYSIS_2026-10-03)", async () => {
+    // Confirming a plan day (and the Strava auto-complete, which goes through
+    // the same createWorkoutInTx) wrote these rows unstamped, so a kg
+    // prescription read as lbs for an athlete who had since switched.
+    const { tx, values } = fakeTx([
+      makeExerciseSet({ id: "p1", planDayId: "pd1", workoutLogId: null, weight: 100, weightUnit: "kg", distanceUnit: "m" }),
+      makeExerciseSet({ id: "p2", planDayId: "pd1", workoutLogId: null, weight: 60, weightUnit: null, distanceUnit: null }),
+    ]);
+
+    await copyPrescribedSetsIntoLog(tx, "pd1", "log-1", new Map(), { weightUnit: "lbs", distanceUnit: "miles" });
+
+    expect(values).toHaveBeenCalledWith([
+      expect.objectContaining({ workoutLogId: "log-1", weight: 100, weightUnit: "kg", distanceUnit: "m" }),
+      // A legacy prescription reads as the current preference, so it is stamped with it.
+      expect.objectContaining({ workoutLogId: "log-1", weight: 60, weightUnit: "lbs", distanceUnit: "ft" }),
+    ]);
   });
 });

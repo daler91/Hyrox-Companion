@@ -710,6 +710,18 @@ const measurableSetFields = {
   notes: z.string().max(1000).nullable().optional(),
 };
 
+// The units the client composed this body's weight/distance numbers in: the
+// preferences it displayed them under, which can be stale against the server's
+// (a unit switch on another device). The server stamps the row with these
+// instead of the preference it reads at write time, which stored a kg number
+// under an lbs stamp in that case (D22, CODEBASE_ANALYSIS_2026-10-03). Optional
+// per axis: a body without one (an older client) is read in the athlete's
+// current preference, as before.
+const composedUnitFields = {
+  weightUnit: z.enum(["kg", "lbs"]).optional(),
+  distanceUnit: z.enum(["km", "miles"]).optional(),
+};
+
 // Discriminated ownership for set-level routes and callers that may target
 // either a logged workout or a planned day. Exported from shared schema so
 // both server and client code narrow safely via `ownerType`.
@@ -753,6 +765,7 @@ export const patchExerciseSetBodySchema = disallowLegacyEmomRowName(
         category: z.string().max(50).optional(),
         setNumber: z.number().int().min(1).max(SET_NUMBER_MAX).optional(),
         ...measurableSetFields,
+        ...composedUnitFields,
         sortOrder: z.number().int().nullable().optional(),
         // Optional optimistic-lock version (W18). When omitted, the update
         // is a blind UPDATE (last-write-wins, the historical behaviour).
@@ -773,6 +786,7 @@ export const addExerciseSetBodySchema = disallowLegacyEmomRowName(
       category: z.string().max(50),
       setNumber: z.number().int().min(1).max(SET_NUMBER_MAX).default(1),
       ...measurableSetFields,
+      ...composedUnitFields,
       confidence: z.number().int().min(0).max(100).nullable().optional(),
     }),
   ),

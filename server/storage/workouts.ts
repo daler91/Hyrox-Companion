@@ -8,6 +8,7 @@ import {
   type StructureBlockInput,
   trainingPlans,
   type UpdateWorkoutLog,
+  users,
   type WorkoutLog,
   type WorkoutLogDeviceLinkColumns,
   workoutLogs,
@@ -1011,7 +1012,15 @@ export class WorkoutStorage {
         .orderBy(asc(exerciseSets.sortOrder));
       if (prescribed.length === 0) return 0;
 
-      const rows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId));
+      // Only consulted for a prescription the plan day never stamped; every
+      // other copy keeps its own unit (D21, CODEBASE_ANALYSIS_2026-10-03). A
+      // missing user falls back to the column defaults, as loadUnitPreferences does.
+      const [unitPreferences] = await tx
+        .select({ weightUnit: users.weightUnit, distanceUnit: users.distanceUnit })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const rows = prescribed.map((p) => prescribedSetToLogRow(p, workoutLogId, unitPreferences ?? {}));
       await tx.insert(exerciseSets).values(rows);
       return rows.length;
     });

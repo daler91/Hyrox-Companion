@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef } from "react";
 interface PendingSetPatch<TPatch> {
   timer: ReturnType<typeof setTimeout>;
   patch: TPatch;
+  /** The owner the edit was made under, so a flush after an owner change still targets it. */
+  ownerId: string | undefined;
 }
 
 /**
@@ -18,10 +20,18 @@ interface PendingSetPatch<TPatch> {
  * Flushes on unmount so closing the dialog mid-edit doesn't drop the
  * last keystroke — same guarantee `useDebouncedCallback` gave when
  * the debounce lived inside each cell input.
+ *
+ * It also flushes when `ownerId` changes, and every patch is sent with the
+ * owner it was made under. The planned-session sheet stays mounted when it
+ * closes — its owner just goes to null — so the unmount flush never ran there,
+ * and the owner switch used to CANCEL the queue (firing it would have PATCHed
+ * the new owner). Closing the sheet any way but its Done/Log buttons dropped
+ * the last edit (CL18, CODEBASE_ANALYSIS_2026-10-03).
  */
 export function useDebouncedSetPatches<TPatch extends object>(
-  mutate: (args: { setId: string; data: TPatch }) => void | Promise<unknown>,
+  mutate: (args: { setId: string; data: TPatch; ownerId?: string }) => void | Promise<unknown>,
   debounceMs: number,
+  ownerId?: string | null,
 ) {
   const pendingRef = useRef<Map<string, PendingSetPatch<TPatch>>>(new Map());
   const fireRef = useRef<(setId: string) => Promise<void>>(() => Promise.resolve());
@@ -36,7 +46,7 @@ export function useDebouncedSetPatches<TPatch extends object>(
       if (!entry) return;
       clearTimeout(entry.timer);
       pendingRef.current.delete(setId);
-      await Promise.resolve(mutate({ setId, data: entry.patch })).catch(() => undefined);
+      await Promise.resolve(mutate({ setId, data: entry.patch, ownerId: entry.ownerId })).catch(() => undefined);
     };
   }, [mutate]);
 
@@ -55,8 +65,8 @@ export function useDebouncedSetPatches<TPatch extends object>(
     const timer = setTimeout(() => {
       fireRef.current(setId).catch(() => undefined);
     }, debounceMs);
-    pendingRef.current.set(setId, { timer, patch: merged });
-  }, [debounceMs]);
+    pendingRef.current.set(setId, { timer, patch: merged, ownerId: ownerId ?? undefined });
+  }, [debounceMs, ownerId]);
 
   const flushPendingSetPatches = useCallback(async () => {
     const ids = Array.from(pendingRef.current.keys());
@@ -70,19 +80,9 @@ export function useDebouncedSetPatches<TPatch extends object>(
     }));
   }, []);
 
-  // Drop every pending timer without firing. Callers use this when the
-  // owning entity changes (e.g. the dialog switches from workout A to
-  // workout B) — by that time `mutate` already closes over the new
-  // owner, so firing the queued patches would PATCH the wrong owner.
-  // The edits that didn't make the debounce window are lost, which is
-  // the same outcome as navigating away before typing finished.
-  const cancelPending = useCallback(() => {
-    for (const entry of pendingRef.current.values()) {
-      clearTimeout(entry.timer);
-    }
-    pendingRef.current.clear();
-  }, []);
-
+  // Runs on unmount and whenever the owner changes. Each entry carries its
+  // own owner, so the flush PATCHes the owner the edit was made under even
+  // though the caller has already moved on.
   useEffect(() => {
     const pending = pendingRef.current;
     const fire = fireRef;
@@ -90,12 +90,11 @@ export function useDebouncedSetPatches<TPatch extends object>(
       const ids = Array.from(pending.keys());
       Promise.all(ids.map((setId) => fire.current(setId))).catch(() => undefined);
     };
-  }, []);
+  }, [ownerId]);
 
   return {
     patchSetDebounced,
     flushPendingSetPatches,
-    cancelPending,
     getPendingPatches,
   };
 }

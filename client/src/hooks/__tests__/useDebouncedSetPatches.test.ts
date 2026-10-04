@@ -66,27 +66,51 @@ describe("useDebouncedSetPatches", () => {
     expect(mutate).toHaveBeenCalledTimes(2);
   });
 
-  it("cancelPending drops queued PATCHes so they never fire", () => {
-    // Codex flagged that when the owning entity (plan day / workout)
-    // changes, queued timers survive and fire against the new owner's
-    // mutate binding — corrupting data. The consumer hooks now call
-    // cancelPending() in their owner-switch sentinel; this guards that
-    // cancellation contract.
+  it("flushes a queued PATCH to the owner it was made under the moment the owner changes", () => {
+    // Codex flagged that queued timers fired against the NEW owner's mutate
+    // binding, so owner switches cancelled them instead — which silently
+    // dropped the last edit whenever the planned-session sheet closed (its
+    // owner goes to null), however it was closed (CL18,
+    // CODEBASE_ANALYSIS_2026-10-03). Each patch now names its own owner.
     const mutate = vi.fn();
-    const { result } = renderHook(() =>
-      useDebouncedSetPatches<TestPatch>(mutate, DEBOUNCE_MS),
+    const initialProps: { ownerId: string | null } = { ownerId: "plan-day-a" };
+    const { result, rerender } = renderHook(
+      ({ ownerId }) => useDebouncedSetPatches<TestPatch>(mutate, DEBOUNCE_MS, ownerId),
+      { initialProps },
     );
 
     act(() => {
       result.current.patchSetDebounced("set-1", { weight: 60 });
-      result.current.cancelPending();
     });
+    expect(mutate).not.toHaveBeenCalled();
 
+    rerender({ ownerId: null });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith({ setId: "set-1", data: { weight: 60 }, ownerId: "plan-day-a" });
+
+    // Sent once: the flush emptied the queue, so the timer has nothing left.
     act(() => {
       vi.advanceTimersByTime(DEBOUNCE_MS * 2);
     });
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
 
-    expect(mutate).not.toHaveBeenCalled();
+  it("tags each patch with the owner current when it was made", () => {
+    const mutate = vi.fn();
+    const initialProps: { ownerId: string | null } = { ownerId: "workout-a" };
+    const { result, rerender } = renderHook(
+      ({ ownerId }) => useDebouncedSetPatches<TestPatch>(mutate, DEBOUNCE_MS, ownerId),
+      { initialProps },
+    );
+    rerender({ ownerId: "workout-b" });
+
+    act(() => {
+      result.current.patchSetDebounced("set-9", { reps: 4 });
+      vi.advanceTimersByTime(DEBOUNCE_MS);
+    });
+
+    expect(mutate).toHaveBeenCalledWith({ setId: "set-9", data: { reps: 4 }, ownerId: "workout-b" });
   });
 
   it("flushes pending PATCHes on unmount so dialog-close mid-edit doesn't drop the last keystroke", () => {

@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
+import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
 import { queryClient as appQueryClient } from "@/lib/queryClient";
 import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 
@@ -30,38 +30,42 @@ const CONFLICT_BODY =
 
 type Snapshot = { exerciseSets: ExerciseSet[] };
 type UpdateSetRequest = (ownerId: string, setId: string, data: PatchExerciseSetPayload) => Promise<ExerciseSet>;
+type AddSetRequest = (ownerId: string, data: AddExerciseSetPayload) => Promise<ExerciseSet>;
 
 const invalidateSpy = vi.spyOn(appQueryClient, "invalidateQueries").mockResolvedValue(undefined);
 
-/** An in-memory stand-in for the owner's cached sets, as useWorkoutDetail keeps them. */
+/** An in-memory stand-in for each owner's cached sets, as useWorkoutDetail keeps them. */
 function createHarness(initialSets: ExerciseSet[]) {
-  let cache: Snapshot | undefined = { exerciseSets: initialSets };
+  const caches = new Map<string, Snapshot>([[OWNER_ID, { exerciseSets: initialSets }]]);
   const updateSetRequest = vi.fn<UpdateSetRequest>();
-  const restoreSnapshot = vi.fn((_ownerId: string, snapshot: Snapshot) => {
-    cache = snapshot;
+  const addSetRequest = vi.fn<AddSetRequest>();
+  const restoreSnapshot = vi.fn((ownerId: string, snapshot: Snapshot) => {
+    caches.set(ownerId, snapshot);
   });
   const params = {
-    ownerId: OWNER_ID,
+    ownerId: OWNER_ID as string | null,
     mutationKeyFamily: (id: string) => ["owner-sets", id] as const,
     setsQueryKey: (id: string) => ["/api/v1/workouts", id] as const,
-    patchCachedSets: (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
-      if (cache) cache = { exerciseSets: updater(cache.exerciseSets) };
+    patchCachedSets: (ownerId: string, updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
+      const cache = caches.get(ownerId);
+      if (cache) caches.set(ownerId, { exerciseSets: updater(cache.exerciseSets) });
     },
-    getSnapshot: () => cache,
+    getSnapshot: (ownerId: string) => caches.get(ownerId),
     restoreSnapshot,
     updateSetRequest,
-    addSetRequest: vi.fn(),
+    addSetRequest,
     deleteSetRequest: vi.fn(),
     cellSaveDebounceMs: 10,
   };
   return {
     params,
     updateSetRequest,
+    addSetRequest,
     restoreSnapshot,
-    setCache: (sets: ExerciseSet[]) => {
-      cache = { exerciseSets: sets };
+    setCache: (sets: ExerciseSet[], ownerId = OWNER_ID) => {
+      caches.set(ownerId, { exerciseSets: sets });
     },
-    getSets: () => cache?.exerciseSets ?? [],
+    getSets: (ownerId = OWNER_ID) => caches.get(ownerId)?.exerciseSets ?? [],
   };
 }
 
@@ -72,7 +76,11 @@ function renderOwnerHook(params: ReturnType<typeof createHarness>["params"]) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useExerciseSetsForOwner<Snapshot>(params), { wrapper });
+  // The owner is a prop so a test can close the sheet (null) or switch owners.
+  return renderHook(
+    ({ ownerId }: { ownerId: string | null }) => useExerciseSetsForOwner<Snapshot>({ ...params, ownerId }),
+    { wrapper, initialProps: { ownerId: params.ownerId } },
+  );
 }
 
 function deferred<T>() {
@@ -103,6 +111,7 @@ describe("useExerciseSetsForOwner optimistic lock (finding D5)", () => {
 
     expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1", {
       weight: 70,
+      weightUnit: "kg",
       expectedVersion: 7,
     });
     expect(harness.getSets()[0]).toMatchObject({ weight: 70, version: 8 });
@@ -152,6 +161,7 @@ describe("useExerciseSetsForOwner optimistic lock (finding D5)", () => {
 
     expect(harness.updateSetRequest).toHaveBeenNthCalledWith(1, OWNER_ID, "s1", {
       weight: 70,
+      weightUnit: "kg",
       expectedVersion: 3,
     });
     expect(harness.updateSetRequest).toHaveBeenNthCalledWith(2, OWNER_ID, "s1", {
@@ -295,8 +305,119 @@ describe("useExerciseSetsForOwner optimistic lock (finding D5)", () => {
     await waitFor(() =>
       expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1", {
         weight: 75,
+        weightUnit: "kg",
         expectedVersion: 7,
       }),
     );
+  });
+});
+
+describe("useExerciseSetsForOwner sends the units an edit was composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  beforeEach(() => {
+    mocks.toast.mockClear();
+    // This tab shows lbs/miles. If the athlete has since switched on another
+    // device, the server's preference is not what these numbers are in.
+    mocks.preferences = { weightUnit: "lbs", distanceUnit: "miles" };
+  });
+
+  it("names the weight unit alongside a weight edit", async () => {
+    const harness = createHarness([makeExerciseSet({ id: "s1", version: 7 })]);
+    harness.updateSetRequest.mockResolvedValue(makeExerciseSet({ id: "s1", weight: 225, version: 8 }));
+    const { result } = renderOwnerHook(harness.params);
+
+    await act(async () => {
+      await result.current.updateSet.mutateAsync({ setId: "s1", data: { weight: 225 } });
+    });
+
+    expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1", {
+      weight: 225,
+      weightUnit: "lbs",
+      expectedVersion: 7,
+    });
+  });
+
+  it("names the distance unit alongside a distance edit, and no unit alongside a reps edit", async () => {
+    const harness = createHarness([makeExerciseSet({ id: "s1", version: 7 }), makeExerciseSet({ id: "s2", version: 2 })]);
+    harness.updateSetRequest.mockImplementation((_ownerId, setId) => Promise.resolve(makeExerciseSet({ id: setId })));
+    const { result } = renderOwnerHook(harness.params);
+
+    await act(async () => {
+      await result.current.updateSet.mutateAsync({ setId: "s1", data: { distance: 3281 } });
+      await result.current.updateSet.mutateAsync({ setId: "s2", data: { reps: 6 } });
+    });
+
+    expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1", {
+      distance: 3281,
+      distanceUnit: "miles",
+      expectedVersion: 7,
+    });
+    expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s2", { reps: 6, expectedVersion: 2 });
+  });
+
+  it("names both units on a new row, which is stamped on both axes", async () => {
+    const harness = createHarness([]);
+    harness.addSetRequest.mockResolvedValue(makeExerciseSet({ id: "s3" }));
+    const { result } = renderOwnerHook(harness.params);
+
+    await act(async () => {
+      await result.current.addSet.mutateAsync({ exerciseName: "back_squat", category: "strength", weight: 225 });
+    });
+
+    expect(harness.addSetRequest).toHaveBeenCalledWith(OWNER_ID, {
+      exerciseName: "back_squat",
+      category: "strength",
+      weight: 225,
+      weightUnit: "lbs",
+      distanceUnit: "miles",
+    });
+  });
+});
+
+describe("useExerciseSetsForOwner owner changes (CL18, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  beforeEach(() => {
+    mocks.toast.mockClear();
+    mocks.preferences = { weightUnit: "kg", distanceUnit: "km" };
+  });
+
+  it("sends a pending edit to its own owner when the sheet closes and the owner goes null", async () => {
+    // LogSheet stays mounted on close with a null plan day. The owner switch
+    // used to cancel the queue, so X / Escape / swipe / overlay dropped the edit.
+    const harness = createHarness([makeExerciseSet({ id: "s1", reps: 8, version: 7 })]);
+    harness.updateSetRequest.mockResolvedValue(makeExerciseSet({ id: "s1", reps: 9, version: 8 }));
+    const { result, rerender } = renderOwnerHook(harness.params);
+
+    act(() => {
+      result.current.patchSetDebounced("s1", { reps: 9 });
+    });
+    rerender({ ownerId: null });
+
+    // Carries the lock too: the owner change no longer forgets set versions.
+    await waitFor(() =>
+      expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1", { reps: 9, expectedVersion: 7 }),
+    );
+    // The closed day's cache holds the saved row, so reopening it shows the edit.
+    await waitFor(() => expect(harness.getSets()[0]).toMatchObject({ reps: 9, version: 8 }));
+    expect(harness.updateSetRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the earlier owner's pending edit to the earlier owner when switching owners", async () => {
+    const harness = createHarness([makeExerciseSet({ id: "s1", weight: 60, version: 3 })]);
+    harness.setCache([makeExerciseSet({ id: "b1", version: 1 })], "log-2");
+    harness.updateSetRequest.mockResolvedValue(makeExerciseSet({ id: "s1", weight: 62.5, version: 4 }));
+    const { result, rerender } = renderOwnerHook(harness.params);
+
+    act(() => {
+      result.current.patchSetDebounced("s1", { weight: 62.5 });
+    });
+    rerender({ ownerId: "log-2" });
+
+    await waitFor(() => expect(harness.updateSetRequest).toHaveBeenCalledTimes(1));
+    expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1", {
+      weight: 62.5,
+      weightUnit: "kg",
+      expectedVersion: 3,
+    });
+    await waitFor(() => expect(harness.getSets()[0]).toMatchObject({ weight: 62.5, version: 4 }));
+    expect(harness.getSets("log-2")).toEqual([makeExerciseSet({ id: "b1", version: 1 })]);
   });
 });

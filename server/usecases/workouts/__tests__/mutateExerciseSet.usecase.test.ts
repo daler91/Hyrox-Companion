@@ -8,6 +8,8 @@ vi.mock("../../../services/workoutService/loggedSetChange", () => ({
   refreshDerivedStateAfterLoggedSetChange: vi.fn().mockResolvedValue(undefined),
 }));
 
+import { restampSetPatch } from "@shared/unitConversion";
+
 import { invalidateAnalyticsCachesForUser } from "../../../services/analyticsRouteCache";
 import { refreshDerivedStateAfterLoggedSetChange } from "../../../services/workoutService/loggedSetChange";
 import { createMutateExerciseSetUseCase } from "../mutateExerciseSet.usecase";
@@ -173,5 +175,70 @@ describe("mutateExerciseSet use case — unit stamps (audit L4)", () => {
       { exerciseName: "row", plannedDistance: 1000, weightUnit: "kg", distanceUnit: "m" },
       "user-1",
     );
+  });
+});
+
+describe("mutateExerciseSet use case — units the client composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  // The athlete switched to lbs on their phone; this desktop tab still shows kg.
+
+  it("stamps a PATCH with the unit the client composed it in, not the server's current preference", async () => {
+    // Stamped with the server's lbs, the 100 typed under a "kg" header was
+    // stored as 100 lb — a silent 2.2x error every PR and load read.
+    const existing = { weight: 90, weightUnit: "lbs", plannedWeight: 200, distance: null, plannedDistance: null };
+    const { storage, useCase } = makeUseCase({
+      // What storage does with the patch (updateExerciseSetNormalized).
+      updateSet: vi.fn(async (_owner, _setId, { unitPreferences, ...patch }) => ({
+        ...existing,
+        ...restampSetPatch(existing, patch, unitPreferences),
+      })),
+    });
+
+    const stored = await useCase.updateSet(WORKOUT, "s1", { weight: 100, weightUnit: "kg" }, "user-1");
+
+    expect(stored).toMatchObject({ weight: 100, weightUnit: "kg", plannedWeight: 90.5 });
+    // The unit is consumed here; it never reaches the SET clause as a raw column.
+    expect(storage.updateSet).toHaveBeenCalledWith(
+      WORKOUT,
+      "s1",
+      { weight: 100, unitPreferences: { weightUnit: "kg", distanceUnit: "miles" } },
+      "user-1",
+    );
+  });
+
+  it("falls back per axis to the current preference for a unit the body omits", async () => {
+    const { storage, useCase } = makeUseCase();
+
+    await useCase.updateSet(PLAN_DAY, "s1", { distance: 1000, distanceUnit: "km" }, "user-1");
+
+    expect(storage.updateSet).toHaveBeenCalledWith(
+      PLAN_DAY,
+      "s1",
+      { distance: 1000, unitPreferences: { weightUnit: "lbs", distanceUnit: "km" } },
+      "user-1",
+    );
+  });
+
+  it("stamps a new row with the units the client composed it in", async () => {
+    const { storage, useCase } = makeUseCase();
+
+    await useCase.addSet(
+      WORKOUT,
+      { exerciseName: "row", category: "cardio", setNumber: 1, distance: 1000, weightUnit: "kg", distanceUnit: "km" },
+      "user-1",
+    );
+
+    expect(storage.addSet).toHaveBeenCalledWith(
+      WORKOUT,
+      { exerciseName: "row", category: "cardio", setNumber: 1, distance: 1000, weightUnit: "kg", distanceUnit: "m" },
+      "user-1",
+    );
+  });
+
+  it("does not read the stored preference when the body names both units", async () => {
+    const { storage, useCase } = makeUseCase();
+
+    await useCase.updateSet(WORKOUT, "s1", { weight: 100, weightUnit: "kg", distanceUnit: "km" }, "user-1");
+
+    expect(storage.getUnitPreferences).not.toHaveBeenCalled();
   });
 });

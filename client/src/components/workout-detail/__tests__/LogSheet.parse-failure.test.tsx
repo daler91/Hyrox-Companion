@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,9 +24,21 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 }));
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
-  ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
+  ResponsiveSheet: ({
+    children,
+    title,
+    onOpenChange,
+  }: {
+    children: ReactNode;
+    title: ReactNode;
+    onOpenChange: (open: boolean) => void;
+  }) => (
     <div>
       <h1>{title}</h1>
+      {/* Stands in for Escape / swipe / overlay: closes without moving focus. */}
+      <button type="button" data-testid="mock-sheet-dismiss" onClick={() => onOpenChange(false)}>
+        Dismiss
+      </button>
       {children}
     </div>
   ),
@@ -241,6 +253,29 @@ describe("LogSheet parse failures", () => {
 
     expect(screen.getByText(/How hard/i)).toBeInTheDocument();
     expect(screen.getByTestId("log-as-planned-entry-1")).toHaveTextContent("Complete workout");
+  });
+
+  it("commits a cell's typed draft before the sheet closes without a blur (CL18, CODEBASE_ANALYSIS_2026-10-03)", async () => {
+    // Escape, a swipe or a desktop overlay click close the sheet while the
+    // cell still has focus, so its blur-commit never ran and the edit was lost.
+    const patchSetDebounced = vi.fn();
+    const onClose = vi.fn();
+    mockPlanDayExerciseState({ exerciseSets: [makeExerciseSet()], patchSetDebounced });
+
+    render(<LogSheet entry={baseEntry} onClose={onClose} onLogAsPlanned={vi.fn()} />);
+
+    const user = userEvent.setup();
+    const reps = screen.getByTestId("input-reps-set-1");
+    await user.clear(reps);
+    await user.type(reps, "7");
+    expect(patchSetDebounced).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("mock-sheet-dismiss"));
+
+    expect(patchSetDebounced).toHaveBeenCalledWith("set-1", { reps: 7 });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // Queued before the close: the owner change onClose causes is what flushes it.
+    expect(patchSetDebounced.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
   it("renames a planned workout title from the sheet header", async () => {

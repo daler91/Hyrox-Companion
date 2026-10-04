@@ -4,6 +4,7 @@ import {
   type StructureBlockInput,
   workoutLogs,
 } from "@shared/schema";
+import { stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { db } from "../db";
@@ -14,12 +15,23 @@ import { logger } from "../logger";
  * log, mirroring the prescription into both actual and planned columns.
  * Used by both copyPrescribedSetsIntoLog (workoutService) and
  * seedExerciseSetsFromPlanDay (WorkoutStorage) to ensure consistency.
+ *
+ * The copy keeps the prescription's unit stamp (audit L4): its numbers are
+ * copied verbatim, so they are still in the unit the plan day recorded. Without
+ * the stamp the copy was a legacy row, read as the CURRENT preference, so a kg
+ * prescription logged by an athlete who had switched to lbs read 2.2x light
+ * everywhere (D21, CODEBASE_ANALYSIS_2026-10-03). `preferences` is only the
+ * fallback for an axis the source row never stamped: a pre-L4 row reads as the
+ * current preference, so that is the unit the athlete saw when they logged it.
+ * Required, like expandExercisesToRows' preferences, so no copy path can forget it.
  */
 export function prescribedSetToLogRow(
   p: ExerciseSet,
   workoutLogId: string,
+  preferences: UnitPreferences,
 ): InsertExerciseSet {
   const jsonValue = (value: unknown) => value as InsertExerciseSet["intensity"];
+  const current = stampForPreferences(preferences);
   return {
     workoutLogId,
     planDayId: null,
@@ -30,6 +42,8 @@ export function prescribedSetToLogRow(
     reps: p.reps,
     weight: p.weight,
     distance: p.distance,
+    weightUnit: p.weightUnit ?? current.weightUnit,
+    distanceUnit: p.distanceUnit ?? current.distanceUnit,
     time: p.time,
     plannedReps: p.plannedReps ?? p.reps,
     plannedWeight: p.plannedWeight ?? p.weight,

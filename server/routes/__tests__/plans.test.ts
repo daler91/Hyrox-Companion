@@ -699,4 +699,49 @@ describe("plan-day exercise routes", () => {
     expect(response.status).toBe(200);
     expect(replacePlanDayStructure).toHaveBeenCalledWith("day-1", "test_user_id", []);
   });
+
+  describe("set writes carry the units they were composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    const PLAN_DAY = { kind: "planDay", ownerId: "day-1" };
+
+    beforeEach(() => {
+      // The athlete has switched to lbs on another device.
+      vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lbs", distanceUnit: "miles" });
+      vi.mocked(storage.workouts.mutateExerciseSetUpdate).mockResolvedValue({ id: "set-1" } as never);
+    });
+
+    it("stamps a PATCH composed in kg as kg while the stored preference is lbs", async () => {
+      const response = await request(app)
+        .patch("/api/v1/plans/days/day-1/sets/set-1")
+        .send({ weight: 100, weightUnit: "kg" });
+
+      expect(response.status).toBe(200);
+      expect(storage.workouts.mutateExerciseSetUpdate).toHaveBeenCalledWith(
+        PLAN_DAY,
+        "set-1",
+        { weight: 100, unitPreferences: { weightUnit: "kg", distanceUnit: "miles" } },
+        "test_user_id",
+      );
+    });
+
+    it("reads a PATCH without units in the stored preference, as before", async () => {
+      const response = await request(app).patch("/api/v1/plans/days/day-1/sets/set-1").send({ weight: 225 });
+
+      expect(response.status).toBe(200);
+      expect(storage.workouts.mutateExerciseSetUpdate).toHaveBeenCalledWith(
+        PLAN_DAY,
+        "set-1",
+        { weight: 225, unitPreferences: { weightUnit: "lbs", distanceUnit: "miles" } },
+        "test_user_id",
+      );
+    });
+
+    it("rejects a unit outside the preference enum", async () => {
+      const response = await request(app)
+        .patch("/api/v1/plans/days/day-1/sets/set-1")
+        .send({ weight: 100, weightUnit: "stone" });
+
+      expect(response.status).toBe(400);
+      expect(storage.workouts.mutateExerciseSetUpdate).not.toHaveBeenCalled();
+    });
+  });
 });
