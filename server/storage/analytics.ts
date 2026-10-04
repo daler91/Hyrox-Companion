@@ -145,6 +145,13 @@ export class AnalyticsStorage {
    *
    * User-scoped in SQL via the parent plan, like getMissedWorkoutsForDate, so
    * it stays an indexed lookup over one athlete's plans.
+   *
+   * Only days inside their plan's lifetime, the rule getDueSessionCount and
+   * the timeline apply. A retired plan's days from `retired_on` on stay
+   * `planned` for good, so after a mid-week switch the review listed the old
+   * plan's remaining sessions as outstanding beside the new plan's, inflating
+   * `sessionsPlanned` for a week the timeline shows without them.
+   * AI17 (CODEBASE_ANALYSIS_2026-10-03)
    */
   async getPlanDaysByDateRange(
     userId: string,
@@ -170,6 +177,7 @@ export class AnalyticsStorage {
           eq(trainingPlans.userId, userId),
           gte(planDays.scheduledDate, from),
           lte(planDays.scheduledDate, to),
+          planDayWithinPlanLifetime(),
         ),
       );
 

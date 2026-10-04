@@ -151,6 +151,8 @@ interface ReviewNotesInput {
   readonly userId: string;
   readonly stylePromptContext: TrainingStylePromptContext;
   readonly forcedSafetyNote: string | null;
+  /** The suggestions call failed: the model evaluated no day (AI8). */
+  readonly suggestionsFailed: boolean;
 }
 
 interface AutoCoachApplyInput {
@@ -488,6 +490,7 @@ async function buildReviewNotes({
   userId,
   stylePromptContext,
   forcedSafetyNote,
+  suggestionsFailed,
 }: ReviewNotesInput): Promise<ReviewNote[]> {
   if (unchangedWorkouts.length === 0) return [];
   if (forcedSafetyNote) {
@@ -496,6 +499,10 @@ async function buildReviewNotes({
       note: forcedSafetyNote,
     }));
   }
+  // A review note says why the coach left a day alone. When the suggestions
+  // call failed nothing was weighed, so no "the plan still fits" note is
+  // written; the safety note above needs no model and still goes (AI8).
+  if (suggestionsFailed) return [];
   return generateReviewNotes(
     trainingContext,
     unchangedWorkouts,
@@ -504,6 +511,23 @@ async function buildReviewNotes({
     userId,
     stylePromptContext,
   );
+}
+
+/**
+ * One of the model's calls, its failure held in `failures` rather than thrown,
+ * so the pass still writes what needs no model — the load governor, the plan
+ * adaptation, a safety note — before it fails the job for pg-boss to retry.
+ * The suggestion service no longer turns a failure into `[]`, which read as
+ * "nothing to change" and wrote "the plan still fits" notes during an outage.
+ * AI8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function attemptModelCall<T>(call: () => Promise<T[]>, failures: unknown[]): Promise<T[]> {
+  try {
+    return await call();
+  } catch (error) {
+    failures.push(error);
+    return [];
+  }
 }
 
 function deduplicateReviewNotes(
@@ -691,7 +715,9 @@ async function applyDeterministicStagesOnly(
 /**
  * Auto-coach: fires after a workout is completed.
  * Reads the user's active plan goal + recent performance, then applies AI-suggested
- * adjustments directly to upcoming plan_days. Fire-and-forget — never throws.
+ * adjustments directly to upcoming plan_days. Throws on failure so the
+ * auto-coach job is retried — including a failed model call, after the
+ * rule-based stages are written (AI8).
  */
 export async function triggerAutoCoach(userId: string): Promise<{ adjusted: number }> {
   try {
@@ -767,13 +793,18 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     const safetySignals = analyzeSafetySignals(trainingContext, upcomingWorkouts);
 
-    const rawSuggestions = await generateWorkoutSuggestions(
-      trainingContext,
-      upcomingWorkouts,
-      activePlanGoal,
-      coachingContext.text,
-      userId,
-      stylePromptContext,
+    const failures: unknown[] = [];
+    const rawSuggestions = await attemptModelCall(
+      () =>
+        generateWorkoutSuggestions(
+          trainingContext,
+          upcomingWorkouts,
+          activePlanGoal,
+          coachingContext.text,
+          userId,
+          stylePromptContext,
+        ),
+      failures,
     );
     const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
     const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
@@ -818,15 +849,21 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const unchanged = selectUnchangedWorkouts(upcomingWorkouts, modifiedIds);
 
     const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
-    const rawReviewNotes = await buildReviewNotes({
-      trainingContext,
-      unchangedWorkouts: unchanged.workouts,
-      activePlanGoal,
-      coachingText: coachingContext.text,
-      userId,
-      stylePromptContext,
-      forcedSafetyNote,
-    });
+    const suggestionsFailed = failures.length > 0;
+    const rawReviewNotes = await attemptModelCall(
+      () =>
+        buildReviewNotes({
+          trainingContext,
+          unchangedWorkouts: unchanged.workouts,
+          activePlanGoal,
+          coachingText: coachingContext.text,
+          userId,
+          stylePromptContext,
+          forcedSafetyNote,
+          suggestionsFailed,
+        }),
+      failures,
+    );
     // Drop any review note whose workoutId isn't actually an unchanged day:
     // AI providers occasionally hallucinate IDs, and a review-note write against
     // a modified day would overwrite its aiSource/aiRationale and mislabel
@@ -851,6 +888,11 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     if (adjusted > 0 || noted > 0) {
       logger.info({ userId, adjusted, noted }, "[coach] Auto-coach applied adjustments and notes");
+    }
+    if (failures.length > 0) {
+      // Fail the job so pg-boss retries the model's pass (AI8).
+      logger.warn({ adjusted, noted }, "[coach] A model call failed; wrote what needs no model, retrying");
+      throw failures[0];
     }
     return { adjusted };
   } catch (error) {

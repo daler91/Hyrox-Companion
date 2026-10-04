@@ -4,6 +4,7 @@ import { formatMinutes, minutes } from "@shared/units";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
+import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { formatAthleteConstraints } from "../prompts/athleteConstraints";
@@ -60,19 +61,48 @@ export const workoutSuggestionSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
 });
 
-export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
+/**
+ * The two coach calls below used to catch every failure — provider, breaker,
+ * timeout, an unreadable reply — and return `[]`. That is also the model's own
+ * answer "nothing to change", so during an outage the auto-coach wrote "the
+ * plan still fits" notes it never evaluated, the job completed with no retry,
+ * and a manual request got a 200 with nothing in it. A failed call now throws
+ * an AppError; `[]` only ever means the model looked and found nothing.
+ * AI8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function coachCallFailure(error: unknown, label: string): AppError {
+  // Already classified: an unreadable reply, logged where it was read.
+  if (error instanceof AppError) return error;
+  logger.error({ err: error }, `[gemini] ${label} error:`);
+  const classified = classifyAiError(error);
+  return new AppError(classified.code, classified.message, classified.status);
+}
+
+function unreadableReply(): AppError {
+  return new AppError(ErrorCode.AI_ERROR, "The AI coach's reply couldn't be read. Please try again.", 502);
+}
+
+/**
+ * The reply as the JSON array both prompts ask for. Unparseable, empty or any
+ * other shape is a failed call, not an empty answer (AI8).
+ */
+function parseReplyArray(text: string, label: string): unknown[] {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    logger.error(
-      { err: parseErr, responseLength: text.length },
-      "[gemini] suggestions JSON.parse failed.",
-    );
-    return [];
+    logger.error({ err: parseErr, responseLength: text.length }, `[gemini] ${label} JSON.parse failed.`);
+    throw unreadableReply();
   }
+  if (!Array.isArray(raw)) {
+    logger.error({ responseLength: text.length }, `[gemini] ${label} reply is not a JSON array.`);
+    throw unreadableReply();
+  }
+  return raw;
+}
 
-  const rawArray = Array.isArray(raw) ? raw : [];
+export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
+  const rawArray = parseReplyArray(text, "suggestions");
   const validated: WorkoutSuggestion[] = [];
   for (const item of rawArray) {
     const result = workoutSuggestionSchema.safeParse(item);
@@ -364,17 +394,7 @@ Your job is to write one note per upcoming workout ID, explaining in 1-2 sentenc
 Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
 
 export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (parseErr) {
-    logger.error(
-      { err: parseErr, responseLength: text.length },
-      "[gemini] review-notes JSON.parse failed.",
-    );
-    return [];
-  }
-  const rawArray = Array.isArray(raw) ? raw : [];
+  const rawArray = parseReplyArray(text, "review-notes");
   const validated: ReviewNote[] = [];
   for (const item of rawArray) {
     const result = reviewNoteSchema.safeParse(item);
@@ -427,10 +447,9 @@ export async function generateReviewNotes(
       userId,
     });
 
-    return parseAndValidateReviewNotes(response.text || "[]");
+    return parseAndValidateReviewNotes(response.text);
   } catch (error) {
-    logger.error({ err: error }, "[gemini] review-notes error:");
-    return [];
+    throw coachCallFailure(error, "review-notes");
   }
 }
 
@@ -466,11 +485,8 @@ export async function generateWorkoutSuggestions(
       userId,
     });
 
-    const text = response.text || "[]";
-
-    return parseAndValidateSuggestions(text);
+    return parseAndValidateSuggestions(response.text);
   } catch (error) {
-    logger.error({ err: error }, "[gemini] suggestions error:");
-    return [];
+    throw coachCallFailure(error, "suggestions");
   }
 }

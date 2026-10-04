@@ -46,6 +46,7 @@ import {
   collectRecentMisses,
   collectRecentSkips,
   collectRecentWorkouts,
+  countCompletedThrough,
   getExerciseBreakdown,
   getStructuredExerciseStats,
 } from "./trainingStats";
@@ -160,9 +161,10 @@ function mapTestTrendDirection(
   return trendDirectionMap[trend];
 }
 
-function classifyExperienceLevel(totalWorkouts: number): ExperienceLevel {
-  if (totalWorkouts < 20) return "beginner";
-  if (totalWorkouts < 80) return "intermediate";
+/** By sessions done (countCompletedThrough), never by planned ones (AI11). */
+function classifyExperienceLevel(sessionsDone: number): ExperienceLevel {
+  if (sessionsDone < 20) return "beginner";
+  if (sessionsDone < 80) return "intermediate";
   return "advanced";
 }
 
@@ -254,7 +256,7 @@ function buildSupplementaryInsights(params: {
   loadExerciseSets: LoadExerciseSets;
   loadWorkoutLogs: LoadWorkoutLogs;
   loadGovernor: TrainingLoadOverview;
-  totalWorkouts: number;
+  sessionsDone: number;
   weightUnit: string;
   distanceUnit: string;
   userTimezone: string | null | undefined;
@@ -265,7 +267,7 @@ function buildSupplementaryInsights(params: {
     loadExerciseSets,
     loadWorkoutLogs,
     loadGovernor,
-    totalWorkouts,
+    sessionsDone,
     weightUnit,
     distanceUnit,
     userTimezone,
@@ -299,7 +301,8 @@ function buildSupplementaryInsights(params: {
       : undefined;
 
   // Movement-pattern / muscle-group balance gaps (distinct from station gaps).
-  const hasCoverageHistory = totalWorkouts >= 10;
+  // History is sessions done: the plan's future days are not history (AI11).
+  const hasCoverageHistory = sessionsDone >= 10;
   const neglectedPatterns = pickNeglectedCoverage(
     buildMovementPatternCoverage(loadExerciseSets, today),
     hasCoverageHistory,
@@ -573,7 +576,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     const days = Math.floor((Date.now() - Date.parse(w.date)) / (1000 * 60 * 60 * 24));
     return days >= 0 && days <= 7;
   }).length;
-  const experienceLevel = classifyExperienceLevel(totalWorkouts);
+  const sessionsDone = countCompletedThrough(timeline, today);
+  const experienceLevel = classifyExperienceLevel(sessionsDone);
 
   const raceContext = resolveRaceContext(activePlanRecord?.raceDate ?? null, today);
 
@@ -638,7 +642,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     loadExerciseSets: trainingSets,
     loadWorkoutLogs: trainingLogs,
     loadGovernor,
-    totalWorkouts,
+    sessionsDone,
     weightUnit,
     distanceUnit,
     userTimezone,

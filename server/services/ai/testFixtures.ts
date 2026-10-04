@@ -56,3 +56,20 @@ export function makeExerciseSet(overrides: Partial<ExerciseSet> = {}): ExerciseS
     ...overrides,
   };
 }
+
+/**
+ * `count` timeline entries in one status, a day apart from `from` — backwards
+ * by default (history), forwards with `step = 1` (the plan ahead).
+ */
+export function makeTimelineDays(
+  count: number,
+  status: "completed" | "planned",
+  from: string,
+  step = -1,
+): TimelineEntry[] {
+  return Array.from({ length: count }, (_, i) => {
+    const date = new Date(`${from}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + i * step);
+    return makeTimelineEntry({ status, date: date.toISOString().slice(0, 10), focus: "Run" });
+  });
+}

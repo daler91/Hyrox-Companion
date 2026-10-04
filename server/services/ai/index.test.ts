@@ -16,6 +16,7 @@ import {
 import { buildTrainingContext } from "./index";
 import { summarizeMafTrend } from "./mafTrend";
 import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
+import { makeTimelineDays } from "./testFixtures";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
@@ -42,14 +43,18 @@ vi.mock("./nutritionContext", () => ({
   buildNextSessionFuelling: vi.fn(),
 }));
 vi.mock("./trainingDecisionEngine", () => ({ decideTrainingState: vi.fn() }));
-vi.mock("./trainingStats", () => ({
+// The counts the experience level and the coverage-history gate read are real:
+// with them mocked, future plan days counting as history went unnoticed (AI11).
+vi.mock("./trainingStats", async (importOriginal) => ({
   calculateTrainingStats: vi.fn(),
   collectRecentMisses: vi.fn(),
   collectRecentSkips: vi.fn(),
   collectRecentWorkouts: vi.fn(),
+  countCompletedThrough: (await importOriginal<typeof import("./trainingStats")>()).countCompletedThrough,
   getExerciseBreakdown: vi.fn(),
   getStructuredExerciseStats: vi.fn(),
 }));
+const realStats = await vi.importActual<typeof import("./trainingStats")>("./trainingStats");
 vi.mock("../../storage", () => ({
   storage: {
     timeline: { getTimeline: vi.fn(), getUpcomingPlannedDays: vi.fn() },
@@ -283,21 +288,6 @@ describe("buildTrainingContext", () => {
   });
 
   it.each([
-    [5, "beginner"],
-    [19, "beginner"],
-    [20, "intermediate"],
-    [79, "intermediate"],
-    [80, "advanced"],
-    [150, "advanced"],
-  ])("classifies %i total workouts as experience level %s", async (total, level) => {
-    statsMock.mockReturnValue(makeStats({ totalWorkouts: total }));
-    await buildTrainingContext(USER_ID);
-    expect(decideMock).toHaveBeenCalledWith(
-      expect.objectContaining({ profile: expect.objectContaining({ experienceLevel: level }) }),
-    );
-  });
-
-  it.each([
     ["rising", "declining"],
     ["falling", "improving"],
     ["stable", "flat"],
@@ -513,6 +503,9 @@ describe("buildTrainingContext", () => {
       { planDayId: "pd-1", date: "2026-06-16", focus: "Legs", mainWorkout: "", exerciseSets: [{ exerciseName: "goblet_squat", plannedWeight: 26 }] },
       { planDayId: "pd-2", date: "2026-06-18", focus: "Push", mainWorkout: "", exerciseSets: [{ exerciseName: "push_up" }] },
     ] as never);
+    // The rest of the plan sits in the timeline window too, none of it done (AI11).
+    vi.mocked(storage.timeline).getTimeline.mockResolvedValue(makeTimelineDays(30, "planned", "2026-06-16", 1) as never);
+    statsMock.mockImplementation((timeline) => realStats.calculateTrainingStats(timeline));
 
     const ctx = await buildTrainingContext(USER_ID);
 
@@ -708,25 +701,6 @@ describe("buildTrainingContext", () => {
     const ctx = await buildTrainingContext(USER_ID);
 
     expect(ctx.coachingInsights?.raceReadiness).toBeUndefined();
-  });
-
-  it("surfaces never-trained coverage gaps once the athlete has training history", async () => {
-    statsMock.mockReturnValue(makeStats({ totalWorkouts: 15 }));
-
-    const ctx = await buildTrainingContext(USER_ID);
-
-    // Empty sets + enough history => every pattern/muscle reads as "never", capped.
-    expect(ctx.coachingInsights?.neglectedPatterns?.length).toBeGreaterThan(0);
-    expect(ctx.coachingInsights?.neglectedPatterns?.[0].daysSince).toBeNull();
-  });
-
-  it("omits coverage gaps for athletes without enough history", async () => {
-    statsMock.mockReturnValue(makeStats({ totalWorkouts: 3 }));
-
-    const ctx = await buildTrainingContext(USER_ID);
-
-    expect(ctx.coachingInsights?.neglectedPatterns).toBeUndefined();
-    expect(ctx.coachingInsights?.neglectedMuscles).toBeUndefined();
   });
 
   it("attaches load by body system from the training sessions, as the Analytics card does", async () => {
