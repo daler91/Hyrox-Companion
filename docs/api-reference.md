@@ -2090,7 +2090,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST   | `/foods/barcode`                       | Barcode → food (Open Food Facts)                                                                                 | `nutritionBarcode` (30)              |
 | POST   | `/foods`                               | Create a custom food (+ servings)                                                                                | `nutritionWrite` (30)                |
 | GET    | `/foods/:id`                           | Food + named servings                                                                                            | `nutritionRead` (60)                 |
-| PATCH  | `/foods/:id`                           | Edit a custom food                                                                                               | `nutritionWrite` (30)                |
+| PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete has logged it and the name or macros change)                      | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id`                           | Delete a custom food (`409` if referenced by a log)                                                              | `nutritionWrite` (30)                |
 | POST   | `/foods/:id/servings`                  | Add a named serving                                                                                              | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id/servings/:servingId`       | Delete a serving                                                                                                 | `nutritionWrite` (30)                |
@@ -2120,7 +2120,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | GET    | `/recipes`                             | List recipes                                                                                                     | `nutritionRead` (60)                 |
 | POST   | `/recipes`                             | Create a recipe                                                                                                  | `nutritionWrite` (30)                |
 | GET    | `/recipes/:id`                         | Recipe + ingredients + per-serving macros                                                                        | `nutritionRead` (60)                 |
-| PATCH  | `/recipes/:id`                         | Edit a recipe                                                                                                    | `nutritionWrite` (30)                |
+| PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete has logged it)                                                         | `nutritionWrite` (30)                |
 | DELETE | `/recipes/:id`                         | Delete a recipe                                                                                                  | `nutritionWrite` (30)                |
 
 `/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its
