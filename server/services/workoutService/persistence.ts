@@ -1,4 +1,10 @@
-import { exerciseSets, type InsertExerciseSet, type StructureBlockInput, workoutStructureBlocks } from "@shared/schema";
+import {
+  exerciseSets,
+  type InsertExerciseSet,
+  type StructureBlockInput,
+  workoutLogs,
+  workoutStructureBlocks,
+} from "@shared/schema";
 import { inArray } from "drizzle-orm";
 
 import { db } from "../../db";
@@ -15,51 +21,78 @@ export async function saveParsedWorkout(
 }
 
 /**
- * Batch replace exercise sets for several workouts at once, so a chunked
- * reparse pays one DELETE and one INSERT rather than two per workout.
+ * Batch write parsed exercise sets for several workouts at once, so a chunked
+ * reparse pays one INSERT rather than one per workout.
  *
- * The delete and the insert MUST share a transaction, which the comment here
- * used to claim and the code did not do. The insert is one multi-row statement
- * across the whole chunk, so a single bad parsed row (a negative weight, a
- * `set_number` of 0 — anything the CHECK constraints reject) fails the insert
- * for every workout in it. With the delete already committed, that left those
- * workouts with no sets at all and returned `failed`, having destroyed rows it
- * could not put back.
+ * Every workout in a chunk came from `getWorkoutsWithoutExerciseSets`, so the
+ * batch only ever ADDS sets; it never deletes. That snapshot is taken once and
+ * `batchReparseWorkouts` then spends minutes on AI parses, chunk by chunk, so
+ * by the time a late chunk is written the athlete may have opened one of those
+ * workouts and logged sets by hand (or parsed it on its own). This used to run
+ * `DELETE ... WHERE workout_log_id IN (chunk)` and then insert, which silently
+ * replaced those hand-logged rows with the AI's guess. D17
+ * (CODEBASE_ANALYSIS_2026-10-03): the earlier transaction-only fix stopped the
+ * loss on a failed insert but not on a successful one.
  *
- * Reaching it needs the delete to have something to delete. `batchReparse-
- * Workouts` snapshots "workouts with no sets" once, then works through chunks
- * of five with AI parses in between, so minutes can pass between the snapshot
- * and a late chunk's delete — long enough for the athlete to open one of those
- * workouts and log sets by hand. Those are the rows that went missing.
+ * So inside the transaction the chunk's `workout_logs` rows are locked FOR
+ * UPDATE and re-checked: a workout that has gained sets since the snapshot, or
+ * has been deleted, is skipped and its parse is discarded. The lock is what
+ * makes the re-check hold until commit: inserting a set takes FOR KEY SHARE on
+ * its workout_logs row through the foreign key, which FOR UPDATE blocks.
  *
- * `replaceExerciseSetsByOwner` and `replaceExerciseSetsAndStructureByOwner`
- * below already do this correctly; this is the same shape.
+ * The insert is still one multi-row statement across the chunk, so a single
+ * rejected row (a CHECK violation from a misparse) fails it for every workout
+ * in the chunk; the transaction rolls back and they are all counted `failed`.
  */
 export async function saveParsedWorkoutsBatch(
   workouts: { workoutId: string; setRows: InsertExerciseSet[] }[],
-): Promise<{ saved: number; failed: number }> {
-  if (workouts.length === 0) return { saved: 0, failed: 0 };
+): Promise<{ saved: number; failed: number; skipped: number }> {
+  if (workouts.length === 0) return { saved: 0, failed: 0, skipped: 0 };
 
   const workoutIds = workouts.map((w) => w.workoutId);
 
   try {
-    await db.transaction(async (tx) => {
-      await tx.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
-      const allSetRows = workouts.flatMap((w) => w.setRows);
+    const saved = await db.transaction(async (tx) => {
+      const lockedLogs = await tx
+        .select({ id: workoutLogs.id })
+        .from(workoutLogs)
+        .where(inArray(workoutLogs.id, workoutIds))
+        .orderBy(workoutLogs.id)
+        .for("update");
+      const logsWithSets = await tx
+        .selectDistinct({ workoutLogId: exerciseSets.workoutLogId })
+        .from(exerciseSets)
+        .where(inArray(exerciseSets.workoutLogId, workoutIds));
+
+      const stillPresent = new Set(lockedLogs.map((row) => row.id));
+      const alreadyHasSets = new Set(logsWithSets.map((row) => row.workoutLogId));
+      const writable = workouts.filter(
+        (w) => stillPresent.has(w.workoutId) && !alreadyHasSets.has(w.workoutId),
+      );
+
+      const allSetRows = writable.flatMap((w) => w.setRows);
       if (allSetRows.length > 0) {
         await tx.insert(exerciseSets).values(allSetRows);
       }
+      return writable.length;
     });
-    return { saved: workouts.length, failed: 0 };
+
+    const skipped = workouts.length - saved;
+    if (skipped > 0) {
+      logger.info(
+        { skipped, workoutCount: workouts.length },
+        "Batch reparse skipped workouts that gained exercise sets (or were deleted) since the snapshot",
+      );
+    }
+    return { saved, failed: 0, skipped };
   } catch (err) {
-    // The transaction rolled back, so the existing sets are still there; the
-    // caller counts these workouts as unparsed and they stay eligible for a
-    // later reparse.
+    // The transaction rolled back, so nothing was written; the caller counts
+    // these workouts as unparsed and they stay eligible for a later reparse.
     logger.error(
       { err, workoutCount: workouts.length },
       "Failed to persist parsed exercise sets during batch reparse; rolled back",
     );
-    return { saved: 0, failed: workouts.length };
+    return { saved: 0, failed: workouts.length, skipped: 0 };
   }
 }
 

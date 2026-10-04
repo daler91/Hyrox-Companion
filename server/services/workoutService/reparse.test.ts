@@ -142,7 +142,7 @@ beforeEach(() => {
   textMock.mockResolvedValue(parseResult());
   imageMock.mockResolvedValue(parseResult());
   prepareMock.mockResolvedValue(null);
-  saveBatchMock.mockResolvedValue({ saved: 0, failed: 0 });
+  saveBatchMock.mockResolvedValue({ saved: 0, failed: 0, skipped: 0 });
   vi.mocked(storage.workouts.getWorkoutsWithoutExerciseSets).mockResolvedValue([]);
   vi.mocked(storage.users.getUser).mockResolvedValue({
     weightUnit: "kg",
@@ -303,7 +303,7 @@ describe("processBatchChunk", () => {
 
   it("counts successful parses saved by the batch writer", async () => {
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 2, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 2, failed: 0, skipped: 0 });
 
     const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
@@ -319,7 +319,7 @@ describe("processBatchChunk", () => {
     prepareMock
       .mockRejectedValueOnce(new Error("provider down"))
       .mockResolvedValueOnce({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 0 });
 
     const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
@@ -331,7 +331,7 @@ describe("processBatchChunk", () => {
     prepareMock
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 0 });
 
     const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
@@ -340,11 +340,23 @@ describe("processBatchChunk", () => {
 
   it("adds batch write failures to the failed count", async () => {
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 1 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 1, skipped: 0 });
 
     const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
 
     expect(result).toEqual({ parsed: 1, failed: 1 });
+  });
+
+  it("counts a workout skipped by the batch writer as neither parsed nor failed", async () => {
+    // Skipped means the athlete logged sets into it after the snapshot, so it
+    // is no longer unstructured and its parse was discarded (D17,
+    // CODEBASE_ANALYSIS_2026-10-03).
+    prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 1 });
+
+    const result = await processBatchChunk([{ id: "w1" }, { id: "w2" }], UNITS, USER_ID);
+
+    expect(result).toEqual({ parsed: 1, failed: 0 });
   });
 });
 
@@ -361,7 +373,7 @@ describe("batchReparseWorkouts", () => {
     ] as never);
     vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0 });
+    saveBatchMock.mockResolvedValue({ saved: 1, failed: 0, skipped: 0 });
 
     const result = await batchReparseWorkouts("user1");
 
@@ -381,7 +393,7 @@ describe("batchReparseWorkouts", () => {
       distanceUnit: "miles",
     } as never);
     prepareMock.mockResolvedValue({ exercises: [], setRows: [{}] as InsertExerciseSet[] });
-    saveBatchMock.mockImplementation((arr) => Promise.resolve({ saved: arr.length, failed: 0 }));
+    saveBatchMock.mockImplementation((arr) => Promise.resolve({ saved: arr.length, failed: 0, skipped: 0 }));
 
     const result = await batchReparseWorkouts("user1");
 
