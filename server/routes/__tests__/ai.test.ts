@@ -17,7 +17,7 @@ import { retrieveRelevantChunks } from "../../services/ragService";
 import { drainSseStreams } from "../../sseRegistry";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
-import { createTestApp, resetRouteTestState } from "./testUtils";
+import { createTestApp, resetRouteTestState, setupTestErrorHandler } from "./testUtils";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
 const NO_CHAT_SAFETY = { chatSafety: { redFlagDetected: false, hrMedicationDetected: false } };
@@ -616,6 +616,32 @@ describe("POST /api/chat", () => {
     expect(vi.mocked(chatWithCoach).mock.calls[0][6]).toEqual({
       chatSafety: { redFlagDetected: false, hrMedicationDetected: true },
     });
+  });
+
+  // S5 (CODEBASE_ANALYSIS_2026-10-03): a request without message ids reads
+  // the history it sent, and the chat send paths accept 5 MB bodies, so that
+  // history must get the same character window the saved conversation does.
+  it("windows a huge client-sent history before it reaches the coach", async () => {
+    const bigBodyApp = express();
+    bigBodyApp.use(express.json({ limit: "5mb" })); // server/index.ts chatSendJsonParser
+    bigBodyApp.use(aiRouter);
+    setupTestErrorHandler(bigBodyApp);
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(chatWithCoach).mockResolvedValue("Coach response");
+    const history = [
+      ...Array.from({ length: 19 }, (_, i) => ({ role: i % 2 === 0 ? "user" : "assistant", content: "x".repeat(50_000) })),
+      { role: "assistant", content: "Want me to ease off Thursday?" },
+    ];
+
+    const response = await request(bigBodyApp).post(CHAT_ENDPOINT).send({ message: "Yes", history });
+
+    expect(response.status).toBe(200);
+    const sentHistory = vi.mocked(chatWithCoach).mock.calls[0][1];
+    expect(sentHistory).toHaveLength(20);
+    // The latest turn stays whole; the 50k-character ones are cut down.
+    expect(sentHistory.at(-1)?.content).toBe("Want me to ease off Thursday?");
+    const sentChars = sentHistory.reduce((sum, turn) => sum + turn.content.length, 0);
+    expect(sentChars).toBeLessThan(35_000);
   });
 
   it("should return 400 if message is missing", async () => {

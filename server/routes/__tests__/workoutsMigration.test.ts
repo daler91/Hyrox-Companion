@@ -2,11 +2,13 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { checkAiBudget } from "../../services/aiUsageService";
 import {
   listBackfillReviews,
   resolveBackfillReview,
   runAssistedMigrationBackfill,
 } from "../../services/assistedMigrationService";
+import { storage } from "../../storage";
 import { registerWorkoutMigrationRoutes } from "../workouts/workoutsMigration.routes";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
@@ -28,6 +30,14 @@ vi.mock("../../services/assistedMigrationService", () => ({
   resolveBackfillReview: vi.fn(),
 }));
 
+// The real aiConsentCheck and aiBudgetCheck run; these are what they read.
+vi.mock("../../storage", async () => (await import("./testUtils")).mockStorageModule({ users: ["getUser"] }));
+
+vi.mock("../../services/aiUsageService", () => ({
+  DAILY_LIMIT_CENTS: 200,
+  checkAiBudget: vi.fn(),
+}));
+
 describe("Workout Migration Routes", () => {
   let app: express.Express;
 
@@ -37,6 +47,8 @@ describe("Workout Migration Routes", () => {
     const router = express.Router();
     registerWorkoutMigrationRoutes(router);
     app = createTestApp(router);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: TEST_USER, aiCoachEnabled: true } as never);
+    vi.mocked(checkAiBudget).mockResolvedValue({ allowed: true, warning: false, currentCostCents: 0, limitCents: 200 });
   });
 
   describe("POST /api/v1/workouts/migration/backfill", () => {
@@ -49,6 +61,30 @@ describe("Workout Migration Routes", () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockResult);
       expect(runAssistedMigrationBackfill).toHaveBeenCalledWith(TEST_USER);
+    });
+
+    // P6 (CODEBASE_ANALYSIS_2026-10-03): every call sends workout and plan
+    // text to the AI parser, so it is gated like the other parse routes.
+    it("refuses an athlete who has not opted in to AI before any parse", async () => {
+      vi.mocked(storage.users.getUser).mockResolvedValueOnce({ id: TEST_USER, aiCoachEnabled: false } as never);
+
+      const response = await request(app).post("/api/v1/workouts/migration/backfill").send();
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("AI_COACH_DISABLED");
+      expect(checkAiBudget).not.toHaveBeenCalled();
+      expect(runAssistedMigrationBackfill).not.toHaveBeenCalled();
+    });
+
+    it("refuses an athlete over the daily AI budget before any parse", async () => {
+      vi.mocked(checkAiBudget).mockResolvedValueOnce({ allowed: false, warning: true, currentCostCents: 210, limitCents: 200, deniedBy: "user" });
+
+      const response = await request(app).post("/api/v1/workouts/migration/backfill").send();
+
+      expect(response.status).toBe(429);
+      expect(response.body.code).toBe("AI_BUDGET_EXCEEDED");
+      expect(checkAiBudget).toHaveBeenCalledWith(TEST_USER);
+      expect(runAssistedMigrationBackfill).not.toHaveBeenCalled();
     });
   });
 

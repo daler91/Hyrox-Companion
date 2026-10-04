@@ -19,7 +19,7 @@ import { type AIContext, buildAIContext, type ChatInput } from "../services/aiCo
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
-import { type CoachReply, type Conversation, type ConversationTurn, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
+import { type CoachReply, type Conversation, type ConversationTurn, fitHistoryWindow, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
 import { readChatPhoto } from "../services/chatPhoto";
@@ -169,6 +169,11 @@ function turnFocus(body: z.infer<typeof chatRequestSchema>): TurnFocus {
 /**
  * What the coach reads: the saved conversation when the server owns the turn,
  * else the history the client sent (an old client, open across a deploy).
+ *
+ * The sent history gets the saved conversation's character window too: any
+ * caller can pick this branch by leaving out the message ids, and the 5 MB
+ * chat body limit otherwise let one request carry ~1M characters of history to
+ * the reasoning model — S5 (CODEBASE_ANALYSIS_2026-10-03).
  */
 function conversationFor(
   userId: string,
@@ -176,7 +181,7 @@ function conversationFor(
   body: z.infer<typeof chatRequestSchema>,
 ): Promise<Conversation> | Conversation {
   if (turn) return loadConversation(userId, turn, turnFocus(body));
-  return { turns: body.history, notes: [] };
+  return { turns: fitHistoryWindow(body.history), notes: [] };
 }
 
 protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {

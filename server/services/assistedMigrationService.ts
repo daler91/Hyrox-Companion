@@ -82,7 +82,9 @@ export async function runAssistedMigrationBackfill(userId: string) {
   // One candidate at a time: each one is a call to the AI parser.
   const migrated = await inSequence(queue, async (item) => {
     try {
-      const parsed = await parseExercisesFromText(item.text, MIGRATION_PARSE_UNITS, undefined, item.userId ?? undefined);
+      // Recorded against the athlete whose budget the route checked — P6
+      // (CODEBASE_ANALYSIS_2026-10-03).
+      const parsed = await parseExercisesFromText(item.text, MIGRATION_PARSE_UNITS, undefined, userId);
       if (!parsed.length) {
         await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_returned_no_rows" });
         return false;

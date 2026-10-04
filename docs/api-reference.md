@@ -573,6 +573,7 @@ Run an assisted-migration backfill pass for the current user.
 
 - **Auth:** Required
 - **Rate limit:** `migrationBackfill` category, 2/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** Backfill result summary
 
 ### POST /api/v1/workouts/migration/reviews/resolve

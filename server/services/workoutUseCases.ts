@@ -2,10 +2,12 @@ import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutSt
 import type { z } from "zod";
 
 import { isTextAiProviderConfigured } from "../ai/providers";
+import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
+import { checkAiBudget } from "./aiUsageService";
 import { findInconsistentHeartRate } from "./heartRateConsistency";
 import { findPersonalRecordAchievements } from "./personalRecordAchievements";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
@@ -18,6 +20,25 @@ type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
   structureBlocks?: StructureBlockInput[];
 };
+
+/**
+ * Whether createWorkout's legacy text parse may call the AI. POST /workouts is
+ * not an AI route and carries no AI middleware, so this branch — reachable
+ * while the structured-write gate is rolled back — checks consent, the budget
+ * and the kill switch itself. When any says no, the workout is saved with its
+ * text and no rows, as it is when no provider is configured — P15
+ * (CODEBASE_ANALYSIS_2026-10-03).
+ */
+async function legacyParseAllowed(userId: string, aiCoachEnabled: boolean | null | undefined): Promise<boolean> {
+  if (env.AI_FEATURES_ENABLED === "false" || aiCoachEnabled !== true) return false;
+  try {
+    return (await checkAiBudget(userId)).allowed;
+  } catch (err) {
+    // Don't spend what can't be confirmed; the workout still saves.
+    logger.warn({ err, context: "workout-structure", event: "legacy_parse_budget_check_failed", userId }, "AI budget check failed; saving the workout without the legacy parse.");
+    return false;
+  }
+}
 
 export async function createWorkout(input: {
   userId: string;
@@ -37,14 +58,18 @@ export async function createWorkout(input: {
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
       const user = await storage.users.getUser(input.userId);
-      structured = await parseExercisesFromText(
-        textToParse,
-        { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
-        undefined,
-        input.userId,
-      );
-      if (structured.length === 0) {
-        throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
+      if (await legacyParseAllowed(input.userId, user?.aiCoachEnabled)) {
+        structured = await parseExercisesFromText(
+          textToParse,
+          { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+          undefined,
+          input.userId,
+        );
+        if (structured.length === 0) {
+          throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
+        }
+      } else {
+        logger.info({ context: "workout-structure", event: "legacy_only_parse_skipped_create", userId: input.userId }, "Legacy parse not allowed (AI consent, budget or kill switch); saving the workout text without rows.");
       }
     }
   }
