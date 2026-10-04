@@ -538,7 +538,9 @@ async function handlePlanEditRequest(
   // A failed draft with nothing on screen yet answers in prose instead. Under
   // a summary that broke off, a second answer would read as nonsense; under a
   // stream that was cut off, nobody is waiting for one.
-  if (drafted.finalText === null && !summary.began() && !controller.signal.aborted) return false;
+  // Read through `options`: the check above narrowed `controller`'s flag to
+  // false for the type checker, but the draft can outlast the stream.
+  if (drafted.finalText === null && !summary.began() && !options.controller.signal.aborted) return false;
   await finishProposalReply(options, summary, drafted);
   return true;
 }
@@ -789,20 +791,28 @@ function unlessRedFlag<T>(step: T | null, chatSafety: ChatSafetySignals): T | nu
   return chatSafety.redFlagDetected ? null : step;
 }
 
+/**
+ * Bridge a client disconnect -> AbortController so upstream provider
+ * generation is torn down promptly on Stop, panel close or tab close
+ * (CODEBASE_AUDIT.md §3). On the response, before the first await: the
+ * request emits its own `close` as soon as express.json() has read the
+ * body, so a listener on it added later never fired — AI10
+ * (CODEBASE_ANALYSIS_2026-10-03). A response that finished also closes;
+ * only one cut off mid-way aborts.
+ */
+function abortOnDisconnect(res: Response): AbortController {
+  const controller = new AbortController();
+  res.on("close", () => {
+    if (!res.writableFinished) controller.abort();
+  });
+  // Gone already, during the consent and budget checks.
+  if (res.destroyed) controller.abort();
+  return controller;
+}
+
 protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
-    // Bridge a client disconnect -> AbortController so upstream provider
-    // generation is torn down promptly on Stop, panel close or tab close
-    // (CODEBASE_AUDIT.md §3). On the response, before the first await: the
-    // request emits its own `close` as soon as express.json() has read the
-    // body, so a listener on it added later never fired — AI10
-    // (CODEBASE_ANALYSIS_2026-10-03). A response that finished also closes;
-    // only one cut off mid-way aborts.
-    const controller = new AbortController();
-    res.on("close", () => {
-      if (!res.writableFinished) controller.abort();
-    });
-    // Gone already, during the consent and budget checks.
-    if (res.destroyed) controller.abort();
+    // Before the first await (AI10).
+    const controller = abortOnDisconnect(res);
 
     const useTools = chatToolsEnabled();
     const telemetry = startChatTurn(useTools ? "tools" : "classic", req.body.replaceAssistantId !== undefined);
@@ -867,12 +877,13 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       await offerFact();
       endSseStream(res, controller, abortState);
     } catch (streamError) {
-      telemetry.outcome = controller.signal.aborted ? "aborted" : "error";
       // The abort cut a provider read short, its usual landing place.
       if (controller.signal.aborted) {
+        telemetry.outcome = "aborted";
         endSseStream(res, controller, abortState);
         return;
       }
+      telemetry.outcome = "error";
       reqLogger(req).error({ err: streamError }, "Stream error:");
       res.write(sseEvent({ error: "Stream error" }));
       res.end();

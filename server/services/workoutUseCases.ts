@@ -42,6 +42,31 @@ async function legacyParseAllowed(userId: string, aiCoachEnabled: boolean | null
   }
 }
 
+/**
+ * createWorkout's legacy text parse, behind legacyParseAllowed. Returns
+ * undefined when the parse isn't allowed, so the caller keeps the payload's
+ * own exercises and the workout saves with its text and no rows.
+ */
+async function parseLegacyWorkoutText(userId: string, textToParse: string): Promise<ParsedExercise[] | undefined> {
+  const user = await storage.users.getUser(userId);
+  if (!(await legacyParseAllowed(userId, user?.aiCoachEnabled))) {
+    // A static event and an internal user id only, no workout text.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ context: "workout-structure", event: "legacy_only_parse_skipped_create", userId }, "Legacy parse not allowed (AI consent, budget or kill switch); saving the workout text without rows.");
+    return undefined;
+  }
+  const structured = await parseExercisesFromText(
+    textToParse,
+    { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+    undefined,
+    userId,
+  );
+  if (structured.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
+  }
+  return structured;
+}
+
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutPayload;
@@ -59,22 +84,7 @@ export async function createWorkout(input: {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_create", userId: input.userId }, "Missing structure-editor payload on create; using legacy parse fallback.");
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
-      const user = await storage.users.getUser(input.userId);
-      if (await legacyParseAllowed(input.userId, user?.aiCoachEnabled)) {
-        structured = await parseExercisesFromText(
-          textToParse,
-          { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
-          undefined,
-          input.userId,
-        );
-        if (structured.length === 0) {
-          throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
-        }
-      } else {
-        // A static event and an internal user id only, no workout text.
-        // bearer:disable javascript_lang_logger_leak
-        logger.info({ context: "workout-structure", event: "legacy_only_parse_skipped_create", userId: input.userId }, "Legacy parse not allowed (AI consent, budget or kill switch); saving the workout text without rows.");
-      }
+      structured = (await parseLegacyWorkoutText(input.userId, textToParse)) ?? structured;
     }
   }
 

@@ -34,6 +34,7 @@ import { sortAndWindowTimelineEntries, type TimelinePageWindow, windowTimelinePa
 import type { WorkoutStorage } from "./workouts";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
+  const raw = log.deviceActivity?.raw;
   return {
     source: (log.source as "manual" | "strava") || "manual",
     // A Strava recording sits on a standalone import (source "strava") or on a
@@ -44,12 +45,11 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
     // So the card and the review sheet can show (and flip) the training flag
     // without a second fetch.
     countsAsTraining: log.countsAsTraining,
-    deviceActivityName: log.deviceActivity?.raw?.name ?? null,
+    deviceActivityName: raw?.name ?? null,
     // Names the unit avg_cadence is in (rpm for a ride, spm otherwise). A
     // standalone import from before the snapshot column carries its sport in
     // `focus` (see legacyRawFromLog) -- C9 (CODEBASE_ANALYSIS_2026-10-03).
-    deviceSportType:
-      log.deviceActivity?.raw?.sport_type ?? (log.source === "strava" ? log.focus : null),
+    deviceSportType: raw?.sport_type ?? (log.source === "strava" ? log.focus : null),
     // `duration` is moving time, so the stop it drops is worth showing next to
     // it — see the workout_logs.duration column note.
     stoppedSeconds: stoppedSecondsFor(log.deviceActivity),
@@ -421,6 +421,16 @@ function groupExerciseSetsByWorkoutLogId(sets: ExerciseSet[]): Map<string, Exerc
   return setsByWorkoutId;
 }
 
+function groupWorkoutLogsByPlanDayId(logs: WorkoutLog[]): Map<string, WorkoutLog[]> {
+  const logsByPlanDayId = new Map<string, WorkoutLog[]>();
+  for (const log of logs) {
+    if (log.planDayId) {
+      addToGroup(logsByPlanDayId, log.planDayId, log);
+    }
+  }
+  return logsByPlanDayId;
+}
+
 async function fetchPlanDayExerciseSets(planDayIds: string[]): Promise<Map<string, ExerciseSet[]>> {
   if (planDayIds.length === 0) return new Map();
 
@@ -672,12 +682,7 @@ export class TimelineStorage {
     // a last-write-wins Map that hid all but one — C16
     // (CODEBASE_ANALYSIS_2026-10-03). The first, the newest in the linked
     // read's order, stands in for the plan day; the rest show as logs of their own.
-    const workoutsByPlanDayId = new Map<string, WorkoutLog[]>();
-    for (const log of linkedWorkouts) {
-      if (log.planDayId) {
-        addToGroup(workoutsByPlanDayId, log.planDayId, log);
-      }
-    }
+    const workoutsByPlanDayId = groupWorkoutLogsByPlanDayId(linkedWorkouts);
 
     for (const row of scheduledDays) {
       const day = row.planDay;

@@ -195,6 +195,18 @@ function updateExerciseStat(
   }
 }
 
+/** The set with its weight and distance read through its own L4 stamp (AI9). */
+function setInDisplayUnits(
+  es: NonNullable<TimelineEntry["exerciseSets"]>[number],
+  preferences: UnitPreferences,
+) {
+  return {
+    ...es,
+    weight: es.weight == null ? null : storedWeightToDisplay(es.weight, es, preferences),
+    distance: es.distance == null ? null : storedDistanceToDisplay(es.distance, es, preferences),
+  };
+}
+
 /**
  * Per-exercise bests for the coach, in the athlete's CURRENT units (the prompt
  * labels them so). Each row is converted through its L4 stamp before the max:
@@ -210,11 +222,7 @@ export function getStructuredExerciseStats(timeline: TimelineEntry[], preference
       for (const es of entry.exerciseSets) {
         hasStats = true;
         if (!stats[es.exerciseName]) stats[es.exerciseName] = { count: 0 };
-        updateExerciseStat(stats[es.exerciseName], {
-          ...es,
-          weight: es.weight == null ? null : storedWeightToDisplay(es.weight, es, preferences),
-          distance: es.distance == null ? null : storedDistanceToDisplay(es.distance, es, preferences),
-        });
+        updateExerciseStat(stats[es.exerciseName], setInDisplayUnits(es, preferences));
       }
     }
   }
