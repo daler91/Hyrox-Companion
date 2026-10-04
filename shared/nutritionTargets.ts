@@ -222,9 +222,9 @@ export interface TrainingLoadWindow {
   dayUtss: number;
   /** Trailing actual daily UTSS (excluding today), for the recovery signal. */
   recentLoads: number[];
-  /** Acute fatigue (7-day EWMA of UTSS); null until the load engine is seeded. */
+  /** Acute fatigue (7-day EWMA of UTSS); null before the first log. */
   acuteEwma: number | null;
-  /** Chronic fitness (28-day EWMA of UTSS); null until seeded. */
+  /** Chronic fitness (28-day EWMA of UTSS); null before the first log. */
   chronicEwma: number | null;
   /** Training Stress Balance / "Form" (chronic − acute); negative ⇒ fatigued. */
   tsb: number | null;

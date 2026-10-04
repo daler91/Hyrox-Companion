@@ -468,7 +468,7 @@ describe("trainingLoadService", () => {
   it("estimates LTHR at ~88% of max HR, floored above resting", () => {
     expect(estimateLthr({ maxHr: 190, restingHr: 50 })).toBe(167); // 0.88 × 190 = 167.2
     expect(estimateLthr({ age: 30 })).toBe(165); // Tanaka(30)=187 → 0.88 × 187 = 164.6
-    expect(estimateLthr({})).toBe(167); // default max 190
+    expect(estimateLthr({})).toBeNull(); // INVERTED (C10, CODEBASE_ANALYSIS_2026-10-03): no max HR and no age, no LTHR
     expect(estimateLthr({ maxHr: 100, restingHr: 95 })).toBe(96); // floored to rest + 1
   });
 

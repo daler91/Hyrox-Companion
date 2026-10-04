@@ -174,11 +174,23 @@ describe("buildOverviewChartFacts — load by body system", () => {
 describe("the metric reference the model is given (audit M27)", () => {
   it("does not tell the model UTSS is subjective", () => {
     // calculateCardioStressScore tries heart rate FIRST, then power, and only
-    // then RPE — so a session with HR data barely uses RPE at all. The prompt
-    // called UTSS "subjective (from RPE)", and the model repeated that to the
-    // athlete as fact.
+    // then RPE. The prompt called UTSS "subjective (from RPE)", and the model
+    // repeated that to the athlete as fact.
     expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).not.toMatch(/UTSS is subjective/i);
-    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/heart rate, then power, then/i);
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(
+      /from heart rate when it has HR data and the athlete's max HR or age is on file, otherwise from power, otherwise from the athlete's RPE/,
+    );
+  });
+
+  it("does not tell the model a session with heart rate ignores RPE (C10, C12)", () => {
+    // A lifting import is scored from its RPE whatever its heart rate
+    // (heartRateReflectsEffort), and no session uses heart rate without a max
+    // HR or an age on file, so "a session with HR data barely uses RPE at all"
+    // was wrong for both.
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).not.toMatch(/barely uses RPE/i);
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(
+      /Heart rate is not used for lifting .* so those sessions are scored from the athlete's RPE/,
+    );
   });
 
   it("does not tell the model hrTSS and UTSS should agree", () => {
@@ -187,6 +199,37 @@ describe("the metric reference the model is given (audit M27)", () => {
     // readings about an "inconsistency" that is by design.
     expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).not.toMatch(/should broadly agree/i);
     expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/never feed UTSS/i);
+  });
+});
+
+// C10 (CODEBASE_ANALYSIS_2026-10-03): hrTSS is null without a measured max HR
+// or an age even when every session carries heart rate, so the fact the model
+// reads is named for hrTSS, and estimatedLthr says why it is missing.
+describe("objectiveLoad and heart-rate data without a max HR or age (C10)", () => {
+  const strainTrend = [trendPoint({ strain: 300 }), trendPoint({ date: "2026-06-02", strain: 320 })];
+
+  it("does not tell the model the athlete has no heart-rate data when hrTSS is missing", () => {
+    const facts = buildOverviewChartFacts(
+      overview({ trainingLoad: trainingLoad({ trend: strainTrend, estimatedLthr: null }) }),
+    ).objectiveLoad?.facts;
+
+    expect(facts).toMatchObject({ hasHrTssData: false, estimatedLthr: null });
+    expect(facts).not.toHaveProperty("hasHeartRateData");
+  });
+
+  it("reports hrTSS once there is an LTHR to anchor it", () => {
+    const trend = strainTrend.map((point) => ({ ...point, hrTss: 60 }));
+    const facts = buildOverviewChartFacts(
+      overview({ trainingLoad: trainingLoad({ trend, hrTss: 60, estimatedLthr: 160 }) }),
+    ).objectiveLoad?.facts;
+
+    expect(facts).toMatchObject({ hasHrTssData: true, currentHrTss: 60, estimatedLthr: 160 });
+  });
+
+  it("tells the model a null estimatedLthr means no max HR or age, not no heart rate", () => {
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(
+      /When estimatedLthr is null, hrTSS is missing for that reason, not because the athlete has no heart-rate data/,
+    );
   });
 });
 

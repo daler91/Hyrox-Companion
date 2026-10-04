@@ -137,8 +137,15 @@ export function hrZoneRank(zone: HrZone): number {
 // Estimated lactate-threshold HR. No schema field — derived from (estimated) max
 // HR at ~88% HRmax, the common no-field-test heuristic. Floored strictly above
 // resting HR so the hrTSS denominator (LTHR − rest) is always positive.
-export function estimateLthr(athlete?: AthleteLoadContext): number {
-  const { hrMax } = resolveHrMax(athlete);
+//
+// Null without a measured max or an age, for the same reason hrReserveRatio and
+// hrZoneBoundaries withhold then (audit H3). 88% of the assumed 190 is 167, so a
+// 52-year-old's 60 minutes at threshold scored 78.8 hrTSS instead of about 100,
+// and the coach was told "estimatedLthr 167" as if it were measured (C10,
+// CODEBASE_ANALYSIS_2026-10-03).
+export function estimateLthr(athlete?: AthleteLoadContext): number | null {
+  const { hrMax, basis } = resolveHrMax(athlete);
+  if (basis === "assumed") return null;
   const hrRest = resolveHrRest(athlete);
   return Math.max(Math.round(0.88 * hrMax), hrRest + 1);
 }
@@ -187,7 +194,9 @@ export function classifyHrZone(
 // hrTSS — display-only objective internal load on the 100-pt TSS scale, parallel
 // to powerTss (NOT added to UTSS). IF_hr is the LTHR-reserve fraction clamped to
 // [0,1]; IF_hr = 1.0 exactly when avgHr == LTHR. Average HR above threshold caps
-// at 1.0 — a deliberate averages-only choice. Null without usable HR + duration.
+// at 1.0 — a deliberate averages-only choice. Null without usable HR + duration,
+// or without an LTHR to anchor on (no measured max HR and no age; C10,
+// CODEBASE_ANALYSIS_2026-10-03).
 export function hrTss(
   durationMin: number | null | undefined,
   avgHr: number | null | undefined,
@@ -198,7 +207,7 @@ export function hrTss(
   if (duration <= 0 || hr <= 0) return null;
   const hrRest = resolveHrRest(athlete);
   const lthr = estimateLthr(athlete);
-  if (lthr <= hrRest) return null;
+  if (lthr == null || lthr <= hrRest) return null;
   const intensity = Math.max(0, Math.min(1, (hr - hrRest) / (lthr - hrRest)));
   if (intensity <= 0) return null;
   return round((duration / 60) * intensity * intensity * 100, 1);

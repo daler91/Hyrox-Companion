@@ -15,6 +15,7 @@
 import type { WorkoutLog } from "@shared/schema";
 import { storedDistanceToMetersStamped, storedWeightToKg } from "@shared/unitConversion";
 
+import { hasUsableHeartRate } from "./heartRateRpe";
 import { hrIntensityFactor, hrReserveRatio, powerIntensityFactor } from "./hrModel";
 import {
   type AthleteLoadContext,
@@ -142,21 +143,39 @@ export function bodyweightRepLoadKg(bodyweightKg?: number | null): number {
   return round(BODYWEIGHT_REP_LOAD_KG * ratio, 2);
 }
 
+/** The log fields the cardio stress score reads. */
+type CardioStressLog = Pick<
+  WorkoutLog,
+  | "duration"
+  | "rpe"
+  | "avgHeartrate"
+  | "avgWatts"
+  | "focus"
+  | "mainWorkout"
+  | "accessory"
+  | "notes"
+  | "source"
+  | "deviceActivity"
+>;
+
 // Priority: objective HR → objective power → logged RPE → high-risk exercise →
 // keyword heuristic. The HR/power branches only engage when the workout carries
 // that data, so legacy logs fall straight through to the original RPE/keyword
 // path (unchanged). The keyword fallback stays a coarse heuristic with known
 // blind spots (no negation handling — "not easy" still matches "easy").
+//
+// Heart rate is skipped for a recorded sport whose average HR does not reflect
+// effort (`hasUsableHeartRate`, the rule bodySystemLoad and the RPE suggestion
+// already follow). A lifting import spends most of its time resting between
+// sets, so 60 min at HR 105 rated RPE 8 scored 51.6 UTSS instead of 112.8
+// (C12, CODEBASE_ANALYSIS_2026-10-03).
 function inferCardioIntensityFactor(
-  log: Pick<
-    WorkoutLog,
-    "rpe" | "avgHeartrate" | "avgWatts" | "focus" | "mainWorkout" | "accessory" | "notes"
-  >,
+  log: Omit<CardioStressLog, "duration">,
   sets: TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
   athlete?: AthleteLoadContext,
 ): number {
-  const hrr = hrReserveRatio(log.avgHeartrate, athlete);
+  const hrr = hasUsableHeartRate(log) ? hrReserveRatio(log.avgHeartrate, athlete) : null;
   if (hrr != null) return hrIntensityFactor(hrr);
   const powerIf = powerIntensityFactor(log.avgWatts, athlete?.ftp);
   if (powerIf != null) return powerIf;
@@ -175,17 +194,7 @@ function inferCardioIntensityFactor(
 }
 
 export function calculateCardioStressScore(
-  log: Pick<
-    WorkoutLog,
-    | "duration"
-    | "rpe"
-    | "avgHeartrate"
-    | "avgWatts"
-    | "focus"
-    | "mainWorkout"
-    | "accessory"
-    | "notes"
-  >,
+  log: CardioStressLog,
   sets: TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput> = normalizeTags([]),
   athlete?: AthleteLoadContext,

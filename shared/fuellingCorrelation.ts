@@ -10,6 +10,8 @@
  */
 
 export interface FuellingCorrelationDay {
+  /** Calories logged that day (kcal). 0 means no food was logged. */
+  calories: number;
   /** Carbs logged that day (g). */
   carbG: number;
   /** The day's effective carb target (g), or null when no target was in force. */
@@ -33,7 +35,7 @@ export interface FuellingCorrelationResult {
   status: "ok" | "insufficient_data";
   rpe: FuellingMetricComparison | null;
   compliance: FuellingMetricComparison | null;
-  /** Days with both a carb target and at least one recorded outcome metric. */
+  /** Days with food logged, a carb target and at least one recorded outcome metric. */
   eligibleDays: number;
   /** The hit threshold as a percentage of the carb target (e.g. 90). */
   carbHitPct: number;
@@ -83,23 +85,34 @@ function compareMetric(
   };
 }
 
+/**
+ * Whether a day can be scored at all: food was logged, "hit the carb target" is
+ * defined, and something measurable happened in training.
+ *
+ * Food logged means calories above zero, the rule the nutrition summary's
+ * logged-day count and the Fuelling tab already use. Without it a day the
+ * athlete simply did not log scored 0 g of carbs and counted as a miss, so for
+ * someone who logs food on half their training days the comparison mostly
+ * measured logged against unlogged days (C20 (CODEBASE_ANALYSIS_2026-10-03)).
+ */
+function isEligibleDay(d: FuellingCorrelationDay): d is FuellingCorrelationDay & { carbTargetG: number } {
+  return (
+    d.calories > 0 &&
+    d.carbTargetG != null &&
+    d.carbTargetG > 0 &&
+    (d.avgRpe != null || d.compliancePct != null)
+  );
+}
+
 export function analyzeFuellingCorrelation(
   days: readonly FuellingCorrelationDay[],
 ): FuellingCorrelationResult {
   const reasonCodes: string[] = [];
 
-  // Only days where "hit the carb target" is even defined, and something
-  // measurable happened in training.
   // Replaced chained .filter().filter().map() with a single for...of loop to reduce garbage collection overhead
   const eligible: (FuellingCorrelationDay & { hit: boolean })[] = [];
   for (const d of days) {
-    if (
-      d.carbTargetG != null &&
-      d.carbTargetG > 0 &&
-      (d.avgRpe != null || d.compliancePct != null)
-    ) {
-      eligible.push({ ...d, hit: d.carbG >= CARB_HIT_RATIO * d.carbTargetG });
-    }
+    if (isEligibleDay(d)) eligible.push({ ...d, hit: d.carbG >= CARB_HIT_RATIO * d.carbTargetG });
   }
 
   if (eligible.length === 0) reasonCodes.push("no_eligible_days");
@@ -131,6 +144,7 @@ export function analyzeFuellingCorrelation(
     explanation:
       `Compares training days where you reached at least ${Math.round(CARB_HIT_RATIO * 100)}% of ` +
       `your carb target with days you didn't (minimum ${MIN_DAYS_PER_BUCKET} days per group). ` +
+      `Only days with food logged count, so a day you didn't log is not read as a miss. ` +
       `An association, not causation — guidance only.`,
   };
 }

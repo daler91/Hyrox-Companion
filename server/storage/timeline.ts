@@ -839,15 +839,20 @@ export class TimelineStorage {
   }
 
   /**
-   * The distinct calendar dates on which this athlete has a "completed"
-   * timeline entry — every logged workout's date plus every plan day marked
-   * completed (within its plan's lifetime, exactly as getTimeline scopes them).
+   * The distinct calendar dates on which this athlete trained — the date of
+   * every log that counts as training (`counts_as_training`) plus every plan day
+   * marked completed (within its plan's lifetime, exactly as getTimeline scopes
+   * them).
    *
    * This is the streak input. The weekly email used to hydrate the athlete's
    * ENTIRE timeline (every plan day, every log, every exercise set and
    * structure block) and keep only the dates, for every subscriber, every
-   * Monday. Two DISTINCT projections return the same set for a few hundred
+   * Monday. Two DISTINCT projections return the dates for a few hundred
    * bytes.
+   *
+   * Only logs that count as training, so a synced dog walk no longer keeps the
+   * home-card and weekly-email streak alive while the Analytics streak reads 0
+   * (C18, CODEBASE_ANALYSIS_2026-10-03). A completed plan day still counts.
    */
   async getCompletedWorkoutDates(userId: string): Promise<Set<string>> {
     const userPlans = await db.query.trainingPlans.findMany({
@@ -860,7 +865,7 @@ export class TimelineStorage {
       db
         .selectDistinct({ date: workoutLogs.date })
         .from(workoutLogs)
-        .where(eq(workoutLogs.userId, userId)),
+        .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.countsAsTraining, true))),
       planScope
         ? db
             .selectDistinct({ date: planDays.scheduledDate })

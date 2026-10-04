@@ -22,6 +22,8 @@ import { storedDistanceToMeters } from "./unitConversion";
 
 /** Block-level timing/intensity fields (a structural subset of StructureBlockInput). */
 export interface PlannedSessionBlock {
+  /** Matched against a set's `blockId` to find the sets inside this block. */
+  id?: string | null;
   formatType?: string | null;
   sectionType?: string | null;
   durationMinutes?: number | null;
@@ -51,11 +53,14 @@ export interface PlannedSessionSet {
    * The structure block this set belongs to, when it belongs to one.
    *
    * Load-bearing for the duration estimate: a set inside a timed block is already
-   * counted by that block's minutes, so only UNATTACHED sets add time on top.
-   * Without it the estimator could not tell the two apart and simply threw every
-   * set away as soon as one block carried timing (audit M15).
+   * counted by that block's minutes, a set inside an untimed block is one round
+   * of it, and an UNATTACHED set adds time on top. Without it the estimator could
+   * not tell these apart and simply threw every set away as soon as one block
+   * carried timing (audit M15).
    */
   blockId?: string | null;
+  /** Which round of its block this row is. Rows that carry one list each round separately. */
+  cycleNumber?: number | null;
 }
 
 export interface PlannedSessionEstimateInput {
@@ -344,17 +349,64 @@ function setsRpe(sets: readonly PlannedSessionSet[]): number | null {
   return max;
 }
 
+/** How many times an untimed block's sets are performed. */
+function roundsOf(block: PlannedSessionBlock, blockSets: readonly PlannedSessionSet[]): number {
+  // Rows numbered by cycle already list every round, so multiplying them by the
+  // round count again would count each round that many times over.
+  if (blockSets.some((s) => s.cycleNumber != null)) return 1;
+  return firstPositive(block.roundCount, block.rounds) ?? 1;
+}
+
+/**
+ * Minutes from sets that carry block linkage, each attributed to its own block.
+ *
+ * A set inside a timed block is already inside that block's minutes and adds
+ * nothing. A set inside an UNTIMED block is one round of it, so the block's sets
+ * are multiplied by its round count. A set with no block adds its own minutes.
+ * A set naming a block this estimate was not given (blocks passed without ids)
+ * cannot be placed, so it only counts when no block is timed, as before.
+ *
+ * This used to drop every linked set once any block was timed and never read a
+ * round count, so a 10-minute warm-up, a 4-round main block and a 5-minute
+ * cool-down were estimated at 15 minutes instead of about an hour, and that
+ * figure fed the fuelling targets, forward-fuelling planned load, the AI
+ * refinement's base value and missed-session recovery sizing (C22,
+ * CODEBASE_ANALYSIS_2026-10-03).
+ */
+function linkedSetMinutes(
+  blocks: readonly PlannedSessionBlock[],
+  sets: readonly PlannedSessionSet[],
+  hasTimedBlock: boolean,
+  minutesOf: (set: PlannedSessionSet) => number,
+): number {
+  const blockById = new Map<string, PlannedSessionBlock>();
+  for (const block of blocks) if (block.id) blockById.set(block.id, block);
+
+  const untimedBlockSets = new Map<PlannedSessionBlock, PlannedSessionSet[]>();
+  let total = 0;
+  for (const set of sets) {
+    const block = set.blockId == null ? undefined : blockById.get(set.blockId);
+    if (block === undefined) {
+      if (set.blockId == null || !hasTimedBlock) total += minutesOf(set);
+    } else if (blockMinutes(block) <= 0) {
+      untimedBlockSets.set(block, [...(untimedBlockSets.get(block) ?? []), set]);
+    }
+  }
+  for (const [block, blockSets] of untimedBlockSets) {
+    let oneRound = 0;
+    for (const set of blockSets) oneRound += minutesOf(set);
+    total += oneRound * roundsOf(block, blockSets);
+  }
+  return total;
+}
+
 /**
  * Estimated duration (min), its source, and whether a bound was hit.
  *
  * Block timing and per-set estimates are ADDED, not chosen between. The old code
  * returned block timing alone the moment any block carried it, so a session with
  * a timed 10-minute warm-up and twenty untimed strength sets was estimated at ten
- * minutes (audit M15).
- *
- * Sets carrying a `blockId` are skipped when blocks contributed, because a set
- * inside a timed block is already inside that block's minutes — adding it again
- * would double-count. Sets with no block are the ones nothing else accounts for.
+ * minutes (audit M15). Linked sets are placed by `linkedSetMinutes`.
  */
 function estimateDuration(
   blocks: readonly PlannedSessionBlock[],
@@ -364,16 +416,18 @@ function estimateDuration(
 ): { durationMin: number | null; source: PlannedSessionEstimate["source"]; clamped: boolean } {
   let blockTotal = 0;
   for (const b of blocks) blockTotal += blockMinutes(b);
+  const minutesOf = (set: PlannedSessionSet): number => estimateSetMinutes(set, distanceUnit, runPaceRatio);
 
   // Only trust "no blockId means unattached" when the data demonstrably USES block
   // linkage. A session whose sets carry no blockId at all may simply predate it,
   // or be an AI structure whose sets ARE the block's content — there adding the
   // sets on top would double-count, so blocks keep winning exactly as before.
-  const setsAreLinked = sets.some((s) => s.blockId != null);
-  const countable = blockTotal > 0 && setsAreLinked ? sets.filter((s) => s.blockId == null) : [];
-  const contributing = blockTotal > 0 ? countable : sets;
   let setTotal = 0;
-  for (const s of contributing) setTotal += estimateSetMinutes(s, distanceUnit, runPaceRatio);
+  if (sets.some((s) => s.blockId != null)) {
+    setTotal = linkedSetMinutes(blocks, sets, blockTotal > 0, minutesOf);
+  } else if (blockTotal <= 0) {
+    for (const s of sets) setTotal += minutesOf(s);
+  }
 
   const total = blockTotal + setTotal;
   if (total <= 0) return { durationMin: null, source: "none", clamped: false };

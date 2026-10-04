@@ -189,16 +189,20 @@ describe("C3 — Form/TSB and the history gate (FIXED)", () => {
    *     withheld for the same first 14 days as ACWR.
    *  2. `computeRaceReadiness` now takes acute load. The gate alone does not
    *     cover this athlete — their one workout is 20 days old, i.e. past the
-   *     gate — so TSB is legitimately computed and still large and positive.
+   *     gate — so TSB is legitimately computed and still positive.
    *     Acute load is what separates a taper from having simply stopped.
    */
   it("no longer calls an athlete with one workout 20 days ago race-ready", () => {
     const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: 60, rpe: 7 })]);
 
-    // Past the 14-day gate, so ACWR and TSB are both computed...
-    expect(today.acwr).toBe(0.01);
+    // Past the 14-day gate, so ACWR and TSB are both computed, and Form is
+    // positive. It read above 15 while both EWMAs were seeded with this one
+    // workout; bias-corrected they no longer let one day stand in for a
+    // baseline, so ACWR is 0.04 rather than 0.01 and Form is about 2 (C11,
+    // CODEBASE_ANALYSIS_2026-10-03)...
+    expect(today.acwr).toBe(0.04);
     expect(today.zone).toBe("undertraining");
-    expect(today.tsb).toBeGreaterThan(15);
+    expect(today.tsb).toBeGreaterThan(0);
 
     // ...but acute load has collapsed, so there is no form to read.
     expect(today.acuteEwma!).toBeLessThan(5);
