@@ -175,8 +175,28 @@ describe("protected route builder compliance", () => {
 
     const parserReaching = [...PARSER_FUNCTIONS, ...Object.values(PARSER_CALLERS).filter((v) => Array.isArray(v)).flat()];
     const withoutComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    const callsOneOf = (src: string, names: readonly string[]) =>
-      names.some((name) => new RegExp(String.raw`(?<!function\s+)\b${name}\s*\(`).test(src));
+    // String scans rather than a RegExp built from each name.
+    const isIdentChar = (c: string | undefined) => c !== undefined && /[\w$]/.test(c);
+    /** Whether `src` calls `name(`, as opposed to declaring `function name(`. */
+    const callsName = (src: string, name: string) => {
+      for (let i = src.indexOf(name); i !== -1; i = src.indexOf(name, i + 1)) {
+        if (isIdentChar(src[i - 1])) continue;
+        let j = i + name.length;
+        while (j < src.length && /\s/.test(src[j])) j++;
+        if (src[j] !== "(") continue;
+        if (/function\s+$/.test(src.slice(Math.max(0, i - 40), i))) continue;
+        return true;
+      }
+      return false;
+    };
+    const callsOneOf = (src: string, names: readonly string[]) => names.some((name) => callsName(src, name));
+    const exportsName = (contents: string, name: string) =>
+      [`export function ${name}`, `export async function ${name}`, `export const ${name}`].some((decl) => {
+        for (let i = contents.indexOf(decl); i !== -1; i = contents.indexOf(decl, i + 1)) {
+          if (!isIdentChar(contents[i + decl.length])) return true;
+        }
+        return false;
+      });
 
     const aiParseRoutes = registrations.filter(({ call }) => callsOneOf(withoutComments(call), parserReaching));
 
@@ -196,7 +216,7 @@ describe("protected route builder compliance", () => {
         if (typeof entry === "string") return [];
         const contents = readFileSync(file, "utf8");
         return entry
-          .filter((name) => !new RegExp(String.raw`export\s+(?:async\s+)?(?:function\s+|const\s+)${name}\b`).test(contents))
+          .filter((name) => !exportsName(contents, name))
           .map((name) => `${file} :: ${name}`);
       });
       expect(missing).toEqual([]);

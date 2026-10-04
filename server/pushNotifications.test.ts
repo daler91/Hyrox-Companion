@@ -123,8 +123,8 @@ describe("sendPushToUser (S2 CODEBASE_ANALYSIS_2026-10-03: bounded sends to know
 
   it("removes a stored row whose host only looks allowlisted to the WHATWG parser", async () => {
     // web-push connects to url.parse()'s hostname, which stops at the '%' and
-    // would reach 127.0.0.1 here while new URL() sees a *.push.apple.com host.
-    const spoofed = { ...SUB, id: "sub-spoof", endpoint: "https://127.0.0.1%2eweb.push.apple.com/p" };
+    // would reach 127.0.0.1 here while new URL() sees a *.push.apple.com host. DevSkim: ignore DS162092
+    const spoofed = { ...SUB, id: "sub-spoof", endpoint: "https://127.0.0.1%2eweb.push.apple.com/p" }; // DevSkim: ignore DS162092
     vi.mocked(storage.push.getSubscriptionsForUser).mockResolvedValue([spoofed]);
 
     const { sendPushToUser } = await import("./pushNotifications");
@@ -152,7 +152,7 @@ describe("isAllowedPushEndpoint (S2 CODEBASE_ANALYSIS_2026-10-03)", () => {
 
   it.each([
     "https://evil.example/p",
-    "http://fcm.googleapis.com/fcm/send/abc",
+    "http://fcm.googleapis.com/fcm/send/abc", // DevSkim: ignore DS137138
     "https://fcm.googleapis.com.evil.example/fcm/send/abc",
     "https://evilfcm.googleapis.com/fcm/send/abc",
     "https://storage.googleapis.com/bucket/p",
@@ -163,7 +163,7 @@ describe("isAllowedPushEndpoint (S2 CODEBASE_ANALYSIS_2026-10-03)", () => {
     // Hosts web-push's legacy url.parse() reads differently from new URL().
     "https://evil.example%2eweb.push.apple.com/p",
     "https://evil.example;web.push.apple.com/p",
-    "https://127.0.0.1%2eweb.push.apple.com/p",
+    "https://127.0.0.1%2eweb.push.apple.com/p", // DevSkim: ignore DS162092
     "https://evil.example%2eupdates.push.services.mozilla.com/p",
     "https://evil.example%2ewns2-par02p.notify.windows.com/w",
     "not a url",

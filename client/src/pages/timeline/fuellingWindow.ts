@@ -1,5 +1,5 @@
 import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
-import { NUTRITION_RANGE_MAX_DAYS } from "@shared/schema";
+import { NUTRITION_RANGE_MAX_DAYS } from "@shared/nutritionRange";
 
 /**
  * The date range the Timeline asks /nutrition/summary-range for: its visible

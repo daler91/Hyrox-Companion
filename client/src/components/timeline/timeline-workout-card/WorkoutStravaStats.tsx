@@ -1,6 +1,6 @@
 import { cadenceUnitFor } from "@shared/deviceSportTypes";
 import { formatSpeed } from "@shared/unitConversion";
-import { Activity, Flame, TrendingUp,Zap } from "lucide-react";
+import { Activity, Flame, TrendingUp, Zap } from "lucide-react";
 
 import type { WorkoutStravaStatsProps } from "./types";
 

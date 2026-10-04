@@ -51,7 +51,7 @@ describe("Privacy policy", () => {
     expect(screen.queryByText(/covers everything we hold/)).not.toBeInTheDocument();
     const access = screen.getByText("Access").parentElement as HTMLElement;
     for (const section of ["nutrition log", "heart-rate", "MAF tests", "weekly reviews", "consent records"]) {
-      expect(access).toHaveTextContent(new RegExp(section));
+      expect(access).toHaveTextContent(section);
     }
   });
 });

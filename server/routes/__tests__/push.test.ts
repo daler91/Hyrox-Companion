@@ -46,10 +46,10 @@ describe("POST /api/v1/push/subscribe (S2 CODEBASE_ANALYSIS_2026-10-03: push-ser
     "https://evil.example/p",
     "https://fcm.googleapis.com.evil.example/fcm/send/abc",
     "https://evilfcm.googleapis.com/fcm/send/abc",
-    // web-push's url.parse() would connect to evil.example / 127.0.0.1 here.
+    // web-push's url.parse() would connect to evil.example / 127.0.0.1 here. DevSkim: ignore DS162092
     "https://evil.example%2eweb.push.apple.com/p",
     "https://evil.example;web.push.apple.com/p",
-    "https://127.0.0.1%2eweb.push.apple.com/p",
+    "https://127.0.0.1%2eweb.push.apple.com/p", // DevSkim: ignore DS162092
   ])("rejects an endpoint outside the known push services (%s)", async (endpoint) => {
     const response = await request(app).post("/api/v1/push/subscribe").send({ endpoint, keys: KEYS });
 
@@ -60,7 +60,7 @@ describe("POST /api/v1/push/subscribe (S2 CODEBASE_ANALYSIS_2026-10-03: push-ser
   it("still rejects a plain-http push service endpoint", async () => {
     const response = await request(app)
       .post("/api/v1/push/subscribe")
-      .send({ endpoint: "http://fcm.googleapis.com/fcm/send/abc", keys: KEYS });
+      .send({ endpoint: "http://fcm.googleapis.com/fcm/send/abc", keys: KEYS }); // DevSkim: ignore DS137138
 
     expect(response.status).toBe(400);
     expect(storage.push.saveSubscription).not.toHaveBeenCalled();

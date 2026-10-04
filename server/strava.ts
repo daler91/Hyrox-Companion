@@ -82,14 +82,18 @@ const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 // for. A cookie rather than a Clerk-session comparison: the __session JWT
 // lives 60 s, so it has usually lapsed by the time the athlete returns from
 // Strava's consent screen, and the dev auth bypass has no session at all.
-// Naming and Secure follow the CSRF cookie: the __Host- prefix (which
-// requires Path=/) stops a sibling subdomain from planting one. SameSite=Lax,
-// not Strict, so it rides Strava's cross-site top-level redirect back.
+// Naming follows the CSRF cookie: the __Host- prefix (which requires Path=/)
+// stops a sibling subdomain from planting one. SameSite=Lax, not Strict, so it
+// rides Strava's cross-site top-level redirect back. Secure in every
+// environment, not only production: CodeQL's clear-text-cookie check can only
+// verify a literal `true`, and Chromium and Firefox accept a Secure cookie
+// over plain http on the local machine. Safari does not, so connect Strava
+// from one of those in local dev.
 const STRAVA_OAUTH_COOKIE = env.NODE_ENV === "production" ? "__Host-fitai.strava-oauth" : "fitai.strava-oauth";
 const STRAVA_OAUTH_COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
   sameSite: "lax",
-  secure: env.NODE_ENV === "production",
+  secure: true,
   path: "/",
 };
 
@@ -364,8 +368,13 @@ function handleStravaAuth(req: Request, res: Response) {
   // already authorized the app, so a link would connect them silently (S3).
   authUrl.searchParams.set("approval_prompt", "force");
 
+  // Spelled out rather than spread from STRAVA_OAUTH_COOKIE_OPTIONS: CodeQL
+  // reads a cookie's flags only from an object literal at the call.
   res.cookie(STRAVA_OAUTH_COOKIE, stateBindingValue(state), {
-    ...STRAVA_OAUTH_COOKIE_OPTIONS,
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
     maxAge: STATE_MAX_AGE_MS,
   });
   res.json({ authUrl: authUrl.toString() });

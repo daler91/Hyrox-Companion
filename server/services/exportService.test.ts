@@ -579,8 +579,9 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     function hasPath(value: unknown, path: string): boolean {
       let node = value;
       for (const key of path.split('.')) {
-        if (node === null || typeof node !== 'object' || !(key in node)) return false;
-        node = (node as Record<string, unknown>)[key];
+        if (node === null || typeof node !== 'object' || !Object.hasOwn(node, key)) return false;
+        // An own property's value, read without indexing the object by key.
+        node = Object.getOwnPropertyDescriptor(node, key)?.value;
       }
       return true;
     }

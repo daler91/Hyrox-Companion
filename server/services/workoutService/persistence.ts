@@ -79,6 +79,8 @@ export async function saveParsedWorkoutsBatch(
 
     const skipped = workouts.length - saved;
     if (skipped > 0) {
+      // Counts only.
+      // bearer:disable javascript_lang_logger_leak
       logger.info(
         { skipped, workoutCount: workouts.length },
         "Batch reparse skipped workouts that gained exercise sets (or were deleted) since the snapshot",

@@ -617,7 +617,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Discard this workout?</AlertDialogTitle>
             <AlertDialogDescription>
-              You've entered a workout that hasn't been saved. Discard it and close?
+              You&apos;ve entered a workout that hasn&apos;t been saved. Discard it and close?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

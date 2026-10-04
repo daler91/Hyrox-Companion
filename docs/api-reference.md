@@ -1869,7 +1869,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes, per user (the limiter runs after `isAuthenticated`; the bucket is shared with `/callback`)
 - **Response:** `{ url: string }` — Redirect URL for Strava OAuth
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
-- **Cookie:** sets the `HttpOnly`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
+- **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
 
 ### GET /api/v1/strava/callback
 

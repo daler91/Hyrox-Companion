@@ -181,6 +181,8 @@ function isRefusedStructuredReplace(
   entry: UpcomingWorkout | undefined,
 ): boolean {
   if (!hasStructuredExercises(entry) || !isUnscopedStructuredReplace(suggestion)) return false;
+  // An internal plan-day id only, no workout content.
+  // bearer:disable javascript_lang_logger_leak
   logger.info(
     { workoutId: suggestion.workoutId },
     "[coach] Accessory-only replace refused on a table-backed day; reviewing the day instead",

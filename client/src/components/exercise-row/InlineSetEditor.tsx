@@ -19,6 +19,9 @@ import { cn } from "@/lib/utils";
 
 import { type FieldKey, getFieldLabel, getFields } from "./fieldMeta";
 
+/** A non-empty entry that isn't a valid value for its field. */
+const INVALID_DRAFT = Symbol("invalid-draft");
+
 interface InlineSetEditorProps {
   readonly sets: ExerciseSet[];
   readonly exerciseName: string;
@@ -577,9 +580,6 @@ function getStoredFieldValue(
 }
 
 const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
-
-/** A non-empty entry that isn't a valid value for its field. */
-const INVALID_DRAFT = Symbol("invalid-draft");
 
 // Digits with at most one decimal separator, which may be "." or "," — the
 // iOS decimal keypad types "," in comma-decimal regions (CL7).

@@ -1,6 +1,7 @@
 import { dayDiff } from "../dateUtils";
 import type { EnergyBalanceSummary } from "../energyBalance";
 import type { MealFuelTargets } from "../mealFuelling";
+import { NUTRITION_RANGE_MAX_DAYS } from "../nutritionRange";
 import type { Per100gMacros } from "../nutritionScaling";
 import type { SessionFuellingTarget } from "../sessionFuellingTargets";
 import type { MicroUnit } from "./micros";
@@ -301,16 +302,9 @@ export interface RecipeListItem {
 // Phase 3 (Integration) — relate fuelling to training.
 // ---------------------------------------------------------------------------
 
-/**
- * Most days a /block or /summary-range window may cover, inclusive. Both build
- * one point per day synchronously, and an unbounded span let one request stall
- * or crash the instance (PF1, CODEBASE_ANALYSIS_2026-10-03). Two years: double
- * the longest fixed window a client asks for (the Analytics Fuelling tab's
- * 366-day "All time"). The Timeline's visible window has no fixed length, so
- * the Timeline narrows its request to this many days around today
- * (client/src/pages/timeline/fuellingWindow.ts).
- */
-export const NUTRITION_RANGE_MAX_DAYS = 731;
+// Most days a /block or /summary-range window may cover (PF1). Defined in
+// shared/nutritionRange.ts so the client can import it without this barrel.
+export { NUTRITION_RANGE_MAX_DAYS };
 
 // Calendar bounds for those windows. The span cap alone is not enough: the
 // training-load day loop compares dates as strings, so from a `to` of

@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 
-import cookieParser from 'cookie-parser';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
@@ -175,6 +174,19 @@ describe('strava service state signing', () => {
 });
 
 const MS_PER_DAY = 86_400_000;
+
+/** The request's cookies by name, as cookie-parser would give them. */
+function parseCookieHeader(header: string | undefined): Record<string, string> {
+  return Object.fromEntries(
+    (header ?? '')
+      .split(';')
+      .filter((part) => part.indexOf('=') > 0)
+      .map((part) => {
+        const eq = part.indexOf('=');
+        return [part.slice(0, eq).trim(), decodeURIComponent(part.slice(eq + 1).trim())];
+      }),
+  );
+}
 
 describe('computeSyncAfterEpoch', () => {
   const NOW = new Date(1700000000000);
@@ -1000,10 +1012,13 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
 
     const { registerStravaRoutes } = await import('./strava');
     const app = express();
-    app.use(cookieParser());
     // reqLogger(req) prefers req.log, so the handler's log lines land here.
+    // req.cookies is read from the header directly. The real app mounts
+    // cookie-parser globally (server/index.ts) with csrfProtection on /api/v1
+    // (server/routes.ts); a bare cookie-parser in this test app, with no CSRF
+    // middleware, reads to CodeQL as exactly the setup it warns about.
     app.use((req, _res, next) => {
-      Object.assign(req, { log });
+      Object.assign(req, { log, cookies: parseCookieHeader(req.headers.cookie) });
       next();
     });
     registerStravaRoutes(app);
@@ -1022,8 +1037,20 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
   /** The binding cookie /auth set, as the browser would send it back. */
   function cookiePair(res: request.Response): string {
     const pair = findSetCookie(res, DEV_COOKIE).split(';')[0];
-    expect(pair).toMatch(new RegExp(`^${DEV_COOKIE}=.+`));
+    expect(pair.startsWith(`${DEV_COOKIE}=`)).toBe(true);
+    expect(pair.length).toBeGreaterThan(DEV_COOKIE.length + 1);
     return pair;
+  }
+
+  /**
+   * /auth in one browser: the state it minted and the cookie that browser
+   * holds. The callback is then sent with that cookie by hand, because
+   * supertest's cookie jar withholds a Secure cookie over plain http, which
+   * Chromium and Firefox send on the local machine.
+   */
+  async function startConnect(app: express.Express): Promise<{ state: string; cookie: string }> {
+    const res = await request(app).get('/api/v1/strava/auth');
+    return { state: stateOf(res), cookie: cookiePair(res) };
   }
 
   function stateOf(res: request.Response): string {
@@ -1036,7 +1063,11 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
   }
 
   function expectBindingCookieCleared(res: request.Response) {
-    expect(findSetCookie(res, DEV_COOKIE)).toMatch(new RegExp(`^${DEV_COOKIE}=;.*Expires=Thu, 01 Jan 1970`));
+    const cleared = findSetCookie(res, DEV_COOKIE);
+    expect(cleared.startsWith(`${DEV_COOKIE}=;`)).toBe(true);
+    expect(cleared).toContain('Expires=Thu, 01 Jan 1970');
+    // Same path as the cookie /auth set, or the browser keeps that one.
+    expect(cleared).toContain('Path=/');
   }
 
   function expectNothingLinked() {
@@ -1080,9 +1111,10 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
     const [pair, ...attributes] = findSetCookie(res, DEV_COOKIE).split(/;\s*/);
     // A hash, so the cookie does not carry the user id the state names.
     expect(pair).toBe(`${DEV_COOKIE}=${crypto.createHash('sha256').update(state).digest('base64url')}`);
-    expect(attributes).toEqual(expect.arrayContaining(['Max-Age=600', 'Path=/', 'HttpOnly', 'SameSite=Lax']));
-    // Local dev runs over plain http.
-    expect(attributes).not.toContain('Secure');
+    // Secure even in dev; Chromium and Firefox accept it over local http.
+    expect(attributes).toEqual(
+      expect.arrayContaining(['Max-Age=600', 'Path=/', 'HttpOnly', 'Secure', 'SameSite=Lax']),
+    );
   });
 
   it('uses a Secure __Host- cookie in production', async () => {
@@ -1134,10 +1166,9 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
 
   it('links the account when the browser that called /auth completes the flow, then clears the cookie', async () => {
     const app = await buildApp();
-    const browser = request.agent(app);
-    const state = stateOf(await browser.get('/api/v1/strava/auth'));
+    const { state, cookie } = await startConnect(app);
 
-    const res = await browser.get(callbackUrl(state));
+    const res = await request(app).get(callbackUrl(state)).set('Cookie', cookie);
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/settings?strava=connected');
@@ -1149,17 +1180,18 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
     expectBindingCookieCleared(res);
 
     // The cookie is gone, so the same callback URL cannot complete again.
-    const replay = await browser.get(callbackUrl(state));
+    const replay = await request(app).get(callbackUrl(state));
     expect(replay.headers.location).toBe('/settings?strava=error');
     expect(upsertStravaConnection).toHaveBeenCalledTimes(1);
   });
 
   it('clears the cookie when the athlete cancels on Strava', async () => {
     const app = await buildApp();
-    const browser = request.agent(app);
-    const state = stateOf(await browser.get('/api/v1/strava/auth'));
+    const { state, cookie } = await startConnect(app);
 
-    const res = await browser.get(`/api/v1/strava/callback?error=access_denied&state=${encodeURIComponent(state)}`);
+    const res = await request(app)
+      .get(`/api/v1/strava/callback?error=access_denied&state=${encodeURIComponent(state)}`)
+      .set('Cookie', cookie);
 
     expect(res.headers.location).toBe('/settings?strava=error');
     expectBindingCookieCleared(res);
@@ -1169,9 +1201,9 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
   describe('after the binding check passes', () => {
     /** Runs /auth then the callback in one browser, as a real connect does. */
     async function completeFlow() {
-      const browser = request.agent(await buildApp());
-      const state = stateOf(await browser.get('/api/v1/strava/auth'));
-      return browser.get(callbackUrl(state));
+      const app = await buildApp();
+      const { state, cookie } = await startConnect(app);
+      return request(app).get(callbackUrl(state)).set('Cookie', cookie);
     }
 
     it('refuses a state that was already claimed (replay) before exchanging the code', async () => {
@@ -1180,6 +1212,8 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
       const res = await completeFlow();
 
       expect(res.headers.location).toBe('/settings?strava=error');
+      // The binding check passed: the state reached its single-use claim.
+      expect(claimRuntimeCacheKey).toHaveBeenCalledTimes(1);
       expect(fetchMock).not.toHaveBeenCalled();
       expect(upsertStravaConnection).not.toHaveBeenCalled();
     });
@@ -1190,6 +1224,7 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
       const res = await completeFlow();
 
       expect(res.headers.location).toBe('/settings?strava=error');
+      expect(fetchMock).toHaveBeenCalled();
       expect(upsertStravaConnection).not.toHaveBeenCalled();
       expect(enqueueStravaSync).not.toHaveBeenCalled();
     });
@@ -1206,6 +1241,7 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
       const res = await completeFlow();
 
       expect(res.headers.location).toBe('/settings?strava=error');
+      expect(fetchMock).toHaveBeenCalled();
       expect(upsertStravaConnection).not.toHaveBeenCalled();
     });
 

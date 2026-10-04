@@ -34,7 +34,9 @@ async function legacyParseAllowed(userId: string, aiCoachEnabled: boolean | null
   try {
     return (await checkAiBudget(userId)).allowed;
   } catch (err) {
-    // Don't spend what can't be confirmed; the workout still saves.
+    // Don't spend what can't be confirmed; the workout still saves. The error
+    // and an internal user id only, no workout text.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err, context: "workout-structure", event: "legacy_parse_budget_check_failed", userId }, "AI budget check failed; saving the workout without the legacy parse.");
     return false;
   }
@@ -69,6 +71,8 @@ export async function createWorkout(input: {
           throw new AppError(ErrorCode.VALIDATION_ERROR, "Text/voice/photo workout content must produce structured exercise sets.", 400);
         }
       } else {
+        // A static event and an internal user id only, no workout text.
+        // bearer:disable javascript_lang_logger_leak
         logger.info({ context: "workout-structure", event: "legacy_only_parse_skipped_create", userId: input.userId }, "Legacy parse not allowed (AI consent, budget or kill switch); saving the workout text without rows.");
       }
     }

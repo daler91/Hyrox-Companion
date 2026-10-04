@@ -144,7 +144,7 @@ function browserReportsOffline(): boolean {
 function scheduleQueueRetry(): void {
   if (retryTimer !== null) return;
   const delayMs = Math.min(RETRY_BASE_DELAY_MS * 2 ** failedRuns, RETRY_MAX_DELAY_MS);
-  retryTimer = setTimeout(() => {
+  retryTimer = setTimeout(() => { // DevSkim: ignore DS172411
     retryTimer = null;
     retryPendingWrites();
   }, delayMs);

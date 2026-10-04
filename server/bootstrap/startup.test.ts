@@ -149,8 +149,14 @@ describe("bootstrap startup parity", () => {
  */
 describe("Railway deploy config", () => {
   const readRepoFile = (relative: string) => readFileSync(path.resolve(process.cwd(), relative), "utf8");
-  const tomlValue = (file: string, key: string): string | undefined =>
-    new RegExp(`^${key}\\s*=\\s*(.+)$`, "m").exec(readRepoFile(file))?.[1].trim();
+  const tomlValue = (file: string, key: string): string | undefined => {
+    for (const line of readRepoFile(file).split("\n")) {
+      const eq = line.indexOf("=");
+      const value = eq > 0 && line.slice(0, eq).trimEnd() === key ? line.slice(eq + 1).trim() : "";
+      if (value) return value;
+    }
+    return undefined;
+  };
 
   it("gates the deploy on readiness: the healthcheck path is non-2xx until every route is mounted (D2)", async () => {
     // Railway promotes a deployment, and retires the old one, on the first 2xx
