@@ -92,6 +92,11 @@ function firstRunExercise(workout: UpcomingWorkoutForLoad): PromptExerciseForLoa
  */
 const SYNTHESIZED_RECOVERY_RUN_MINUTES = 30;
 
+// Stamped on every row the governor writes, so a later pass can tell its own
+// downshift apart from the athlete's prescription.
+const RECOVERY_ROW_NOTE = "Load governor downshift: flat, low-intensity aerobic session.";
+const REDUCED_ROW_NOTE = "Load governor: reduced volume.";
+
 /**
  * Replace the day's rows with a single easy aerobic run.
  *
@@ -124,7 +129,7 @@ function buildEasyRunRows(planDayId: string, workout: UpcomingWorkoutForLoad): I
     plannedWeight: null,
     plannedDistance: null,
     plannedTime: null,
-    notes: "Load governor downshift: flat, low-intensity aerobic session.",
+    notes: RECOVERY_ROW_NOTE,
     confidence: 95,
     sortOrder: 0,
   }];
@@ -231,7 +236,7 @@ function buildReducedRows(
       plannedWeight: null,
       plannedDistance: null,
       plannedTime: null,
-      notes: "Load governor: reduced volume.",
+      notes: REDUCED_ROW_NOTE,
       confidence: 95,
       sortOrder: index,
     };
@@ -280,6 +285,34 @@ function buildReducedSuggestion(
   };
 }
 
+// The day is already this governor's recovery run. Its own text ("avoid hills,
+// sprints, track work") reads as a hard run, so every pass re-downshifted it,
+// and rebuilding from the recovery_run row it wrote kept neither a distance
+// nor a time: the 30-minute run became a blank row.
+function isGovernorRecoveryDay(workout: UpcomingWorkoutForLoad): boolean {
+  const rows = workout.exerciseDetails ?? [];
+  if (rows.length > 0) {
+    return rows.every((row) => row.exerciseName === "recovery_run" && row.notes === RECOVERY_ROW_NOTE);
+  }
+  return workout.mainWorkout.trim() === easyRunRecommendation(workout);
+}
+
+// The governor already trimmed this day's sets. reduce/cap keep a fraction of
+// whatever rows are there, so cutting its own output again compounded the cut
+// on every pass (9 → 6 → 4 → 2 sets).
+function isGovernorReducedDay(workout: UpcomingWorkoutForLoad): boolean {
+  return Boolean(workout.exerciseDetails?.some((row) => row.notes === REDUCED_ROW_NOTE));
+}
+
+// A day the governor already downshifted is held, not downshifted again: the
+// first downshift is measured from the athlete's prescription, every later one
+// would be measured from the governor's own output. A reduced day can still
+// escalate to a recovery run; nothing escalates past one.
+// AI14 (CODEBASE_ANALYSIS_2026-10-03)
+function isAlreadyDownshifted(workout: UpcomingWorkoutForLoad, mode: DownshiftMode): boolean {
+  return isGovernorRecoveryDay(workout) || (mode !== "recovery" && isGovernorReducedDay(workout));
+}
+
 function buildSuggestion(
   workout: UpcomingWorkoutForLoad,
   rationale: string,
@@ -287,6 +320,18 @@ function buildSuggestion(
   mode: DownshiftMode,
   priority: WorkoutSuggestion["priority"] = "high",
 ): LoadGovernorSuggestion {
+  if (isAlreadyDownshifted(workout, mode)) {
+    // The suggestion is what the first pass wrote; the caller writes nothing.
+    const recommendation =
+      mode === "recovery" || isGovernorRecoveryDay(workout)
+        ? easyRunRecommendation(workout)
+        : reducedSummary(mode);
+    return {
+      rationaleCode,
+      held: true,
+      suggestion: workoutSuggestion(workout, "mainWorkout", "replace", recommendation, rationale, priority),
+    };
+  }
   return mode === "recovery"
     ? buildRecoverySuggestion(workout, rationale, rationaleCode, priority)
     : buildReducedSuggestion(workout, rationale, rationaleCode, mode, priority);

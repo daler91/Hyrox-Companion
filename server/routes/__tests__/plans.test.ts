@@ -39,7 +39,7 @@ vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredE
 
 // Mock the planService functions
 vi.mock("../../queue", () => ({
-  queue: { send: vi.fn().mockResolvedValue(undefined) },
+  queue: { send: vi.fn().mockResolvedValue(undefined), sendDebounced: vi.fn().mockResolvedValue(null) },
   sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../services/planService", () => ({

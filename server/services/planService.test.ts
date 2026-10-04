@@ -82,6 +82,7 @@ vi.mock("../queue", () => {
   return {
     queue: {
       send: vi.fn().mockResolvedValue(undefined),
+      sendDebounced: vi.fn().mockResolvedValue(null),
     },
     DEFAULT_JOB_OPTIONS: {
       retryLimit: 3,

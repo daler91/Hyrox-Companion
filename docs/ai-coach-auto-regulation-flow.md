@@ -14,7 +14,11 @@ The two rule-based layers run first, in that order: the adaptation skips any day
 
 ## What Triggers A Pass
 
-Every producer goes through `enqueueAutoCoach` / `enqueueAutoCoachInBackground` in `server/services/autoCoachQueue.ts`, which owns the singleton key (`auto-coach:<userId>`) and the 60-second window. Sharing one key is what guarantees an athlete never gets two concurrent passes — and two AI bills — for a single change.
+Every producer goes through `enqueueAutoCoach` / `enqueueAutoCoachInBackground` in `server/services/autoCoachQueue.ts`, which owns the singleton key (`auto-coach:<userId>`) and the 60-second debounce window. Sharing one key is what collapses a burst of changes into one pass — and one AI bill — per athlete.
+
+The enqueue is pg-boss's debounce (`sendDebounced`), not a bare `singletonKey` + `singletonSeconds`: that pair is a throttle, under which a window's job holds its slot while queued, running and completed, so a trigger landing after the job had started was dropped and its change never reviewed. The debounce queues exactly one more pass in the next window instead (AI12, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
+
+Passes from two windows can still run at once on two instances. They never write at once: each pass takes a per-athlete advisory lock inside its write transaction, and there it re-checks every day it is about to write against the snapshot it read (see [Write Path And User Visibility](#write-path-and-user-visibility)).
 
 | Trigger | Fired from |
 | --- | --- |
@@ -35,7 +39,7 @@ It does not multiply passes across a logging session: logging a planned day edit
 ```mermaid
 flowchart TD
     A["User logs a workout, moves a scheduled one,<br/>or edits the sets on one already logged"] --> B["Server writes the workout,<br/>plan-day date change, or set edit"]
-    B --> C["Queue auto-coach job<br/>pg-boss: auto-coach<br/>singleton per user for 60s"]
+    B --> C["Queue auto-coach job<br/>pg-boss: auto-coach<br/>debounced per user, 60s window"]
     C --> D["triggerAutoCoach(userId)<br/>server/services/coachService.ts"]
 
     D --> E{"AI coach enabled?"}
@@ -225,6 +229,8 @@ sequenceDiagram
     Provider-->>Coach: provider suggestions
     Coach->>Coach: filter provider suggestions for governor-modified days
     Coach->>DB: transaction begins
+    Coach->>DB: per-athlete advisory lock, then lock target days FOR UPDATE
+    Coach->>Coach: drop every day (and the whole adaptation) that changed since the snapshot
     alt load-governor suggestion and structured rows exist
         Coach->>DB: replace exercise_sets rows
         Coach->>DB: update plan_days AI metadata
@@ -310,3 +316,7 @@ flowchart TD
 - ACWR yellow now creates a medium-priority, short-window soft downshift for high-intensity sessions instead of only surfacing passive metadata.
 - The visible timeline note keeps the rationale and input audit metadata on `plan_days.aiRationale` and `plan_days.aiInputsUsed`.
 - Users can still manually edit any downshifted workout afterward.
+- A day the governor already downshifted is held on later passes, not downshifted again: the cut is measured once, from the athlete's prescription, never from the governor's own output. A reduced day can still escalate to a recovery run (AI14).
+- Every structured `replace` keeps what it swapped out as the day's "Originally planned" record (the first one only, unless a conversion retitles the day). On a table-backed day an accessory-only `replace` is refused, because the table's rows carry no main/accessory section; the day gets a review note instead, and the manual Apply returns `structured_partial_replace` (AI13).
+- Review notes and non-fatigue edits carry the day's `lastFatigueReduction`, `lastModification` and `replacedPrescription` forward, so the repeat-fatigue guard keeps its record (AI15).
+- The pass writes from a snapshot taken before its model calls, so inside the write transaction it locks the target days and skips any day the athlete (or another pass) changed in the meantime; the adaptation is dropped whole if one of its days or the plan's `engine_state` moved, leaving its logs for the next pass (AI16).

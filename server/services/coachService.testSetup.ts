@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, vi } from "vitest";
 
+import { lockAutoCoachWriteTargets } from "./autoCoachWriteGuard";
 import { dbMockState } from "./coachService.dbMockState";
 
 vi.mock("../storage", () => ({
@@ -38,6 +39,13 @@ vi.mock("../db", () => ({
 }));
 
 vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
+// The write-time lock and staleness check (AI16) has its own SQL-level tests
+// in autoCoachWriteGuard.test.ts; here every snapshot is still current unless
+// a test says otherwise.
+vi.mock("./autoCoachWriteGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./autoCoachWriteGuard")>()),
+  lockAutoCoachWriteTargets: vi.fn(),
+}));
 vi.mock("../gemini/index", () => ({
   generateWorkoutSuggestions: vi.fn(),
   generateReviewNotes: vi.fn().mockResolvedValue([]),
@@ -66,6 +74,7 @@ beforeEach(() => {
   dbMockState.deleteWhere.mockResolvedValue(undefined);
   dbMockState.insertValues.mockResolvedValue(undefined);
   dbMockState.selectWhere.mockResolvedValue([{ maxSortOrder: 1 }]);
+  vi.mocked(lockAutoCoachWriteTargets).mockResolvedValue({ dayIds: new Set(), adaptation: false });
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
 });

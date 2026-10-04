@@ -102,6 +102,11 @@ export interface LoadGovernorSuggestion {
   // (it knows it is downshifting to a recovery run), so the AI-provider path
   // never renames a workout's title.
   focusOverride?: string;
+  // The day already carries this governor's downshift from an earlier pass.
+  // It stays claimed (the model, review notes and the plan adaptation leave it
+  // alone) but nothing is rewritten: re-cutting the governor's own output
+  // compounded the cut on every pass. AI14 (CODEBASE_ANALYSIS_2026-10-03)
+  held?: boolean;
 }
 
 export interface DailyTrainingLoad {

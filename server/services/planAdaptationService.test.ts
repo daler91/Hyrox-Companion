@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TrainingContext } from "../gemini/index";
+import { fingerprintStoredPlanDay } from "./autoCoachWriteGuard";
 import {
   adaptedDayIds,
   applyPlanAdaptation,
@@ -88,6 +89,23 @@ describe("computePlanAdaptation", () => {
     expect(adaptedDayIds(result)).toEqual(new Set(["day-a"]));
   });
 
+  it("records what it read, so the coach's write can tell the plan moved (AI16)", async () => {
+    plans.getActivePlan.mockResolvedValueOnce({
+      id: "plan-1",
+      startDate: "2026-09-14",
+      totalWeeks: 12,
+      engineState: { version: 1, runVdot: null, adaptedLogIds: [], updatedAt: "2026-10-01T00:00:00Z" },
+    });
+
+    const result = await computePlanAdaptation("user-1", context, units, new Set());
+
+    expect(result?.baseline.engineStateUpdatedAt).toBe("2026-10-01T00:00:00Z");
+    const row = planDayRow();
+    expect(result?.baseline.dayFingerprints).toEqual(
+      new Map([["day-a", fingerprintStoredPlanDay(row, row.sets as never)]]),
+    );
+  });
+
   it("leaves days another stage rewrote alone", async () => {
     const result = await computePlanAdaptation("user-1", context, units, new Set(["day-a"]));
     expect(result?.result.days).toEqual([]);
@@ -136,6 +154,7 @@ describe("applyPlanAdaptation", () => {
       engineState: { version: 1, runVdot: 40, adaptedLogIds: ["log-1"], updatedAt: "now" },
       adaptedLogIds: ["log-1"],
     },
+    baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map() },
   };
 
   it("writes each day's note, text and sets, then the plan's engine state", async () => {

@@ -102,6 +102,105 @@ describe("coachService triggerAutoCoach fatigue suppression and review notes", (
     );
   });
 
+  // AI15 (CODEBASE_ANALYSIS_2026-10-03): the suppressed day gets a review note,
+  // and that write used to rebuild aiInputsUsed from the run's inputs — so the
+  // record the guard reads was gone, and the next pass cut the day again.
+  it("keeps the day's fatigue-reduction record when a suppressed repeat gets a review note", async () => {
+    const priorReduction = {
+      kind: "fatigue_volume_reduction" as const,
+      completedWorkoutCount: 12,
+      fatigueFlag: true,
+      rpeTrend: "rising" as const,
+      prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
+    };
+    const priorInputs = {
+      lastModification: priorReduction,
+      lastFatigueReduction: priorReduction,
+      replacedPrescription: { focus: "Strength", mainWorkout: "4x5 Squats" },
+    };
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ aiInputsUsed: priorInputs }),
+    ]);
+    vi.mocked(buildTrainingContext).mockResolvedValue({
+      totalWorkouts: 12,
+      completedWorkouts: 12,
+      plannedWorkouts: 1,
+      missedWorkouts: 0,
+      skippedWorkouts: 0,
+      completionRate: 100,
+      currentStreak: 3,
+      recentWorkouts: [],
+      upcomingWorkouts: [
+        {
+          planDayId: "day-1",
+          date: "2026-01-16",
+          focus: "Strength",
+          mainWorkout: "3x5 Squats",
+          aiInputsUsed: priorInputs,
+        },
+      ],
+      exerciseBreakdown: {},
+      coachingInsights: {
+        rpeTrend: "rising",
+        fatigueFlag: true,
+        undertrainingFlag: false,
+        stationGaps: [],
+        progressionFlags: [],
+      },
+    });
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        recommendation: "Back squat 2x5 lighter",
+        rationale: "Reduce volume because RPE and fatigue remain high.",
+      }),
+    ]);
+    vi.mocked(generateReviewNotes).mockResolvedValue([
+      { workoutId: "day-1", note: "Already reduced for the current fatigue trend." },
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+    const [, reviewWrite] = vi.mocked(storage.plans.updatePlanDay).mock.calls[0];
+    expect(reviewWrite.aiSource).toBe("review");
+    expect(reviewWrite.aiInputsUsed).toEqual(
+      expect.objectContaining({
+        lastFatigueReduction: priorReduction,
+        lastModification: priorReduction,
+        replacedPrescription: { focus: "Strength", mainWorkout: "4x5 Squats" },
+        // The run's own inputs still describe this note.
+        fatigueFlag: true,
+      }),
+    );
+  });
+
+  it("keeps the day's fatigue-reduction record through a non-fatigue edit", async () => {
+    const priorReduction = {
+      kind: "fatigue_volume_reduction" as const,
+      completedWorkoutCount: 12,
+      prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
+    };
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ aiInputsUsed: { lastFatigueReduction: priorReduction } }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        targetField: "accessory",
+        recommendation: "Sled push 4x20m",
+        rationale: "Sled Push has not been trained recently.",
+      }),
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+    const [, write] = vi.mocked(storage.plans.updatePlanDay).mock.calls[0];
+    expect(write.aiInputsUsed).toEqual(
+      expect.objectContaining({
+        lastModification: expect.objectContaining({ kind: "workload_adjustment" }),
+        lastFatigueReduction: priorReduction,
+      }),
+    );
+  });
+
   it("allows another fatigue reduction when new completed workouts change the evidence", async () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext, [
       makeTimelineEntry({

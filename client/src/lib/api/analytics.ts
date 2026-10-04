@@ -24,7 +24,11 @@ export type ApplySuggestionResult =
   | {
       applied: false;
       structured: false;
-      reason: "ai_budget_exceeded" | "ai_disabled" | "structured_parse_failed";
+      reason:
+        | "ai_budget_exceeded"
+        | "ai_disabled"
+        | "structured_parse_failed"
+        | "structured_partial_replace";
       message: string;
     };
 

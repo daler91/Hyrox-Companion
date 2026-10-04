@@ -6,6 +6,7 @@ import { generateReviewNotes, generateWorkoutSuggestions } from "../gemini/index
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import { checkAiBudget } from "./aiUsageService";
+import { lockAutoCoachWriteTargets } from "./autoCoachWriteGuard";
 import { triggerAutoCoach } from "./coachService";
 import { dbMockState } from "./coachService.dbMockState";
 import {
@@ -44,6 +45,7 @@ function adaptation(planDayId: string): PlanAdaptation {
       engineState: { version: 1, runVdot: null, adaptedLogIds: ["log-1"], updatedAt: "now" },
       adaptedLogIds: ["log-1"],
     },
+    baseline: { engineStateUpdatedAt: null, dayFingerprints: new Map([[planDayId, "fp"]]) },
   };
 }
 
@@ -108,6 +110,32 @@ describe("triggerAutoCoach — plan adaptation", () => {
     const result = await triggerAutoCoach("user-1");
 
     expect(generateWorkoutSuggestions).not.toHaveBeenCalled();
+    expect(result.adjusted).toBe(1);
+  });
+
+  // AI16 (CODEBASE_ANALYSIS_2026-10-03): the adaptation was computed before
+  // the model calls; if its plan moved underneath it, it is dropped whole so
+  // its logs are re-adapted from fresh rows rather than applied twice.
+  it("drops the adaptation, and only it, when its plan changed during the pass", async () => {
+    twoPlannedDays();
+    vi.mocked(computePlanAdaptation).mockResolvedValue(adaptation("day-1"));
+    vi.mocked(applyPlanAdaptation).mockResolvedValue(0);
+    vi.mocked(lockAutoCoachWriteTargets).mockResolvedValue({ dayIds: new Set(), adaptation: true });
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({ workoutId: "day-2", recommendation: "Swap to intervals", rationale: "Variety" }),
+    ] as never);
+
+    const result = await triggerAutoCoach("user-1");
+
+    expect(lockAutoCoachWriteTargets).toHaveBeenCalledWith(
+      dbMockState.tx,
+      "user-1",
+      expect.objectContaining({ adaptation: adaptation("day-1") }),
+    );
+    expect(applyPlanAdaptation).toHaveBeenCalledWith(null, "user-1", dbMockState.tx);
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls.map((call) => call[0])).toEqual([
+      "day-2",
+    ]);
     expect(result.adjusted).toBe(1);
   });
 

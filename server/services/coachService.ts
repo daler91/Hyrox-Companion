@@ -31,6 +31,7 @@ import {
   buildSafetyReviewNote,
 } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
+import { lockAutoCoachWriteTargets } from "./autoCoachWriteGuard";
 import { buildCoachNoteInputs } from "./coachNoteInputs";
 import {
   adaptedDayIds,
@@ -41,7 +42,10 @@ import {
 import { retrieveCoachingText } from "./ragRetrieval";
 import {
   applyStructuredPlanDaySuggestionRows,
+  isUnscopedStructuredReplace,
   parseStructuredPlanDaySuggestionRows,
+  structuredReplaceTextUpdates,
+  withReplacedPrescription,
 } from "./structuredPlanDaySuggestion";
 import { resolveTrainingStyle } from "./training_styles";
 import type { TrainingStylePromptContext } from "./training_styles/types";
@@ -75,19 +79,35 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
 }
 
 /**
- * Preserve the "Originally planned" snapshot across coach-note rewrites.
+ * Preserve the day's own coach state across coach-note rewrites.
  * `aiInputsUsed` is rebuilt from scratch on every coach run (and by review
- * notes / manual refreshes), so without this the record captured when a day
- * was converted would be wiped the next time the coach touches that day. Only
- * carries the prior value forward when the fresh inputs don't already set one —
- * a genuine new conversion always wins.
+ * notes / manual refreshes), so without this the next write to a day wiped:
+ *   - the "Originally planned" record captured when the day was converted;
+ *   - lastFatigueReduction / lastModification, which the repeat-fatigue guard
+ *     reads. A suppressed repeat cut gets a review note, so the guard erased
+ *     its own record and the pass after that cut the day again.
+ *     AI15 (CODEBASE_ANALYSIS_2026-10-03)
+ * Each is carried forward only when the fresh inputs don't set one — a genuine
+ * new conversion or modification always wins. The plan adaptation's
+ * buildInputs carries the same state.
  */
-function carryReplacedPrescription(
+function carryPriorCoachState(
   next: CoachNoteInputs,
   prior: CoachNoteInputs | null | undefined,
 ): CoachNoteInputs {
-  if (next.replacedPrescription || !prior?.replacedPrescription) return next;
-  return { ...next, replacedPrescription: prior.replacedPrescription };
+  if (!prior) return next;
+  return {
+    ...next,
+    ...(!next.replacedPrescription && prior.replacedPrescription
+      ? { replacedPrescription: prior.replacedPrescription }
+      : {}),
+    ...(!next.lastModification && prior.lastModification
+      ? { lastModification: prior.lastModification }
+      : {}),
+    ...(!next.lastFatigueReduction && prior.lastFatigueReduction
+      ? { lastFatigueReduction: prior.lastFatigueReduction }
+      : {}),
+  };
 }
 
 interface PreparedSuggestion {
@@ -97,6 +117,8 @@ interface PreparedSuggestion {
   readonly requiresStructuredWrite?: boolean;
   readonly rationaleCode?: string;
   readonly focusOverride?: string;
+  /** A governor day already downshifted: claimed for this pass, never written. */
+  readonly held?: boolean;
 }
 
 interface AppliedSuggestionResult {
@@ -148,6 +170,24 @@ function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
   return Boolean(entry?.exerciseDetails && entry.exerciseDetails.length > 0);
 }
 
+/**
+ * An accessory-only "replace" on a table-backed day is refused: the table
+ * can't be scoped to the accessory rows, so writing it would delete the main
+ * work too. The day falls through to the review-note pass instead.
+ * AI13 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function isRefusedStructuredReplace(
+  suggestion: WorkoutSuggestion,
+  entry: UpcomingWorkout | undefined,
+): boolean {
+  if (!hasStructuredExercises(entry) || !isUnscopedStructuredReplace(suggestion)) return false;
+  logger.info(
+    { workoutId: suggestion.workoutId },
+    "[coach] Accessory-only replace refused on a table-backed day; reviewing the day instead",
+  );
+  return true;
+}
+
 function shouldUseStructuredWrite(
   suggestion: WorkoutSuggestion,
   entry: UpcomingWorkout | undefined,
@@ -197,6 +237,7 @@ function prepareLoadGovernorSuggestion(suggestion: LoadGovernorSuggestion): Prep
     requiresStructuredWrite: Boolean(suggestion.structuredSetRows?.length),
     rationaleCode: suggestion.rationaleCode,
     focusOverride: suggestion.focusOverride,
+    held: suggestion.held,
   };
 }
 
@@ -243,31 +284,26 @@ async function applyStructuredSuggestion(
   // clear accessory/notes — the replace already deleted every prior set row, so
   // nothing they described survives. "append" leaves the prescription intact.
   if (suggestion.action === "replace") {
-    const rawMain = suggestion.recommendation;
-    updates.mainWorkout = normalizeWorkoutTextUnits(rawMain, unitPreferences) ?? rawMain;
-    updates.accessory = null;
-    updates.notes = null;
+    Object.assign(updates, structuredReplaceTextUpdates(suggestion.recommendation, unitPreferences));
 
-    // Only the governor supplies a new title, and we rename — capturing the
-    // original prescription once — only when it actually changes the title.
-    // A repeat coach pass on an already-converted day sees the same title and
-    // skips, so the recovery run is never recorded as the "original".
+    // Only the governor supplies a new title, and we rename only when it
+    // actually changes the title. A repeat coach pass on an already-converted
+    // day sees the same title and skips.
     const newFocus = focusOverride?.trim();
-    if (newFocus && newFocus.toLowerCase() !== entry.focus.trim().toLowerCase()) {
-      updates.focus = newFocus;
-      suggestionInputs = {
-        ...suggestionInputs,
-        replacedPrescription: {
-          focus: entry.focus,
-          mainWorkout: entry.mainWorkout,
-          accessory: entry.accessory ?? null,
-          notes: entry.notes ?? null,
-        },
-      };
-    }
+    const retitled = Boolean(
+      newFocus && newFocus.toLowerCase() !== entry.focus.trim().toLowerCase(),
+    );
+    if (retitled) updates.focus = newFocus;
+    // What the replace swapped out — the athlete's text included — is kept as
+    // "Originally planned": always on a retitling conversion, otherwise only
+    // the first time, so the coach's own earlier version (a recovery run, a
+    // trimmed table) is never recorded as the original. Every structured
+    // replace records it, not just a governor conversion.
+    // AI13 (CODEBASE_ANALYSIS_2026-10-03)
+    suggestionInputs = withReplacedPrescription(suggestionInputs, entry, retitled);
   }
 
-  suggestionInputs = carryReplacedPrescription(suggestionInputs, entry.aiInputsUsed);
+  suggestionInputs = carryPriorCoachState(suggestionInputs, entry.aiInputsUsed);
   updates.aiInputsUsed = suggestionInputs;
 
   await storage.plans.updatePlanDay(suggestion.workoutId, updates, userId, tx);
@@ -309,6 +345,9 @@ async function applySuggestion(
   if (!suggestionWillApply(suggestion, upcomingWorkouts)) {
     return { applied: false };
   }
+  // A held governor day is claimed for the pass but never rewritten.
+  // AI14 (CODEBASE_ANALYSIS_2026-10-03)
+  if (prepared.held) return { applied: false };
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
   const resolvedSource = prepared.aiSourceOverride ?? aiSource;
   if (
@@ -326,7 +365,7 @@ async function applySuggestion(
   // all-or-nothing semantics for the auto-coach apply loop (C2).
   const rawUpdateValue = buildUpdateValue(suggestion, entry);
   const updateValue = normalizeWorkoutTextUnits(rawUpdateValue, unitPreferences) ?? rawUpdateValue;
-  const suggestionInputs = carryReplacedPrescription(
+  const suggestionInputs = carryPriorCoachState(
     withCoachModificationMetadata(
       inputsUsed,
       suggestion,
@@ -368,9 +407,9 @@ async function applyReviewNote(
       aiSource: "review",
       aiRationale: note.slice(0, 400),
       aiNoteUpdatedAt: new Date(),
-      // A review note on a previously-converted day must not erase its
-      // "Originally planned" record.
-      aiInputsUsed: carryReplacedPrescription(inputsUsed, priorInputs),
+      // A review note must not erase the day's "Originally planned" record or
+      // the fatigue-reduction record the repeat guard reads (AI15).
+      aiInputsUsed: carryPriorCoachState(inputsUsed, priorInputs),
     },
     userId,
     tx,
@@ -478,6 +517,21 @@ function deduplicateReviewNotes(
   return Array.from(deduplicatedNotes.values());
 }
 
+/** The snapshots of the upcoming days this pass writes a change or a note to. */
+function collectWriteTargets(
+  preparedSuggestions: PreparedSuggestion[],
+  reviewNotes: ReviewNote[],
+  upcomingWorkouts: UpcomingWorkout[],
+): UpcomingWorkout[] {
+  const ids = new Set([
+    ...preparedSuggestions
+      .filter((prepared) => !prepared.held)
+      .map((prepared) => prepared.suggestion.workoutId),
+    ...reviewNotes.map((note) => note.workoutId),
+  ]);
+  return upcomingWorkouts.filter((workout) => ids.has(workout.id));
+}
+
 async function applyAutoCoachChanges({
   preparedSuggestions,
   upcomingWorkouts,
@@ -490,10 +544,22 @@ async function applyAutoCoachChanges({
   adaptation,
 }: AutoCoachApplyInput): Promise<{ adjusted: number; noted: number }> {
   return await db.transaction(async (tx) => {
+    // Everything below was computed from a snapshot taken before the model
+    // calls. Serialize the athlete's passes, and leave alone every day (and
+    // the whole adaptation) that changed since. AI16 (CODEBASE_ANALYSIS_2026-10-03)
+    const stale = await lockAutoCoachWriteTargets(tx, userId, {
+      days: collectWriteTargets(preparedSuggestions, reviewNotes, upcomingWorkouts),
+      adaptation: adaptation ?? null,
+    });
+    const isCurrent = (workoutId: string) => !stale.dayIds.has(workoutId);
+
     const inputsByWorkoutId = new Map<string, CoachNoteInputs>();
+    const currentSuggestions = preparedSuggestions.filter((prepared) =>
+      isCurrent(prepared.suggestion.workoutId),
+    );
     // Keep duplicate suggestions for the same plan day ordered so structured
     // appends re-read sortOrder after any earlier insert in this transaction.
-    const modResults = await inSequence(preparedSuggestions, async (prepared) => {
+    const modResults = await inSequence(currentSuggestions, async (prepared) => {
       const currentInputs = inputsByWorkoutId.get(prepared.suggestion.workoutId) ?? inputsUsed;
       const result = await applySuggestion(prepared, {
         upcomingWorkouts,
@@ -511,7 +577,7 @@ async function applyAutoCoachChanges({
     });
     const workoutById = new Map(upcomingWorkouts.map((workout) => [workout.id, workout]));
     const noteResults = await Promise.all(
-      reviewNotes.map((note) =>
+      reviewNotes.filter((note) => isCurrent(note.workoutId)).map((note) =>
         applyReviewNote(
           note.workoutId,
           note.note,
@@ -525,7 +591,11 @@ async function applyAutoCoachChanges({
 
     // The engine's days never overlap the ones above: the governor's days are
     // excluded from the adaptation, and the adaptation's from the model's pass.
-    let adjustedCount = await applyPlanAdaptation(adaptation ?? null, userId, tx);
+    let adjustedCount = await applyPlanAdaptation(
+      stale.adaptation ? null : (adaptation ?? null),
+      userId,
+      tx,
+    );
     let notedCount = 0;
     for (const result of modResults) if (result.applied) adjustedCount++;
     for (const result of noteResults) if (result) notedCount++;
@@ -585,7 +655,9 @@ async function prepareDeterministicStages(
 }
 
 function hasDeterministicWork(stages: DeterministicStages): boolean {
-  return stages.loadGovernorPrepared.length > 0 || stages.adaptation != null;
+  return (
+    stages.loadGovernorPrepared.some((prepared) => !prepared.held) || stages.adaptation != null
+  );
 }
 
 /** Apply only the rule-based stages: no model call, no review notes. */
@@ -710,6 +782,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const suggestions = safetyAdjustedSuggestions.filter(
       (suggestion) =>
         !stages.modifiedIds.has(suggestion.workoutId) &&
+        !isRefusedStructuredReplace(suggestion, workoutMap.get(suggestion.workoutId)) &&
         !shouldSuppressRepeatedFatigueReduction(
           suggestion,
           workoutMap.get(suggestion.workoutId),
@@ -916,7 +989,7 @@ export async function regenerateCoachNoteForPlanDay(
       aiNoteUpdatedAt,
       // Don't drop a prior conversion's "Originally planned" record when the
       // athlete manually refreshes the coach note.
-      aiInputsUsed: carryReplacedPrescription(inputsUsed, day.aiInputsUsed),
+      aiInputsUsed: carryPriorCoachState(inputsUsed, day.aiInputsUsed),
     },
     userId,
   );
