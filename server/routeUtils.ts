@@ -49,24 +49,34 @@ function createRateLimitStore(category: string, windowMs: number) {
 // mutations, and therefore all auth / AI-spend / write routes — fails CLOSED,
 // where allowing unbounded requests during a store outage is the bigger risk.
 // The limiter is selected per request by method (W6). Counts stay unified per
-// category because both instances share the same Postgres store key.
+// limiter because both instances share the same Postgres store key.
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function buildLimiter(category: string, maxRequests: number, windowMs: number, failOpen: boolean) {
   const retryAfterSec = Math.ceil(windowMs / 1000);
+  // The bucket names the limiter, not just its category. Keyed by category
+  // alone, every limiter sharing one (workoutSet at 120/min for set-cell
+  // PATCHes and 60/min for adding a set; analytics at 60, 20 and 5) bumped a
+  // single Postgres counter and checked it against its own cap, so ~60 set-cell
+  // PATCHes used up the 60/min "add set" budget. Routes with the same category,
+  // cap and window still share a bucket, as before. Tests could not see it:
+  // each limiter gets its own MemoryStore under NODE_ENV=test.
+  // C5 (CODEBASE_ANALYSIS_2026-10-03)
+  const bucket = `${category}:${maxRequests}:${windowMs}`;
   return rateLimit({
     windowMs,
     max: maxRequests,
     store: createRateLimitStore(category, windowMs),
     passOnStoreError: failOpen,
     validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
-    // Per-user key, namespaced by category so limits are independent per route group.
+    // Per-user key, namespaced by limiter so limits are independent per route group.
     // Explicit user:/ip: prefixes prevent collision between a userId that
-    // happens to equal a client IP (CODEBASE_AUDIT.md §2).
+    // happens to equal a client IP (CODEBASE_AUDIT.md §2). `:user:` stays
+    // directly before the id: account erasure purges a user's buckets by it.
     keyGenerator: (req: Request) => {
       const userId = resolveAuthUserId(req);
-      if (userId) return `${category}:user:${userId}`;
-      if (req.ip) return `${category}:ip:${req.ip}`;
+      if (userId) return `${bucket}:user:${userId}`;
+      if (req.ip) return `${bucket}:ip:${req.ip}`;
       return "";
     },
     // Skip rate-limiting entirely when there is no identifier.

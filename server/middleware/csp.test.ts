@@ -17,6 +17,19 @@ describe("buildCspDirectives", () => {
       expect(directives.workerSrc).toEqual(["'self'", "blob:"]);
     });
 
+    // U6 (CODEBASE_ANALYSIS_2026-10-03): photo previews are URL.createObjectURL
+    // blob: URLs, which 'self' never matches.
+    it("allows blob: images so photo previews render", () => {
+      expect(directives.imgSrc).toEqual([
+        "'self'",
+        "data:",
+        "blob:",
+        "https://img.clerk.com",
+        "https://*.clerk.com",
+        "https://*.strava.com",
+      ]);
+    });
+
     it("uses a per-request nonce for scripts, not unsafe-inline/eval", () => {
       expect(scriptSrc).not.toContain("'unsafe-inline'");
       expect(scriptSrc).not.toContain("'unsafe-eval'");
@@ -49,6 +62,10 @@ describe("buildCspDirectives", () => {
       expect(scriptSrc.some((s) => typeof s === "function")).toBe(false);
       expect(connectSrc).toContain("ws:");
       expect(connectSrc).toContain("wss:");
+    });
+
+    it("allows blob: images in development too (U6)", () => {
+      expect(directives.imgSrc).toContain("blob:");
     });
   });
 });

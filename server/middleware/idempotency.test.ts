@@ -6,7 +6,7 @@ vi.mock("../storage", () => ({
   storage: {
     idempotency: {
       claim: vi.fn(),
-      complete: vi.fn().mockResolvedValue(undefined),
+      complete: vi.fn().mockResolvedValue(true),
       release: vi.fn().mockResolvedValue(undefined),
     },
   },
@@ -28,6 +28,21 @@ type MockStorage = {
 };
 
 const mockStorage = storage as unknown as MockStorage;
+
+const CLAIM_TOKEN = "claim-token-1";
+
+type CompleteCall = [
+  userId: string,
+  key: string,
+  claimToken: string,
+  record: { statusCode: number; responseBody: unknown },
+  ttlSeconds: number,
+];
+
+/** The arguments the middleware passed to its first `complete()` call. */
+function firstCompleteCall(): CompleteCall {
+  return mockStorage.idempotency.complete.mock.calls[0] as CompleteCall;
+}
 
 function makeReq(method: string, headers: Record<string, string> = {}): Request {
   return {
@@ -73,7 +88,7 @@ const flushMicrotasks = () => new Promise((r) => setTimeout(r, 0));
 describe("idempotencyMiddleware", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockStorage.idempotency.complete.mockResolvedValue(undefined);
+    mockStorage.idempotency.complete.mockResolvedValue(true);
     mockStorage.idempotency.release.mockResolvedValue(undefined);
   });
 
@@ -151,7 +166,7 @@ describe("idempotencyMiddleware", () => {
   });
 
   it("persists the response body after the handler runs on a fresh claim", async () => {
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed" });
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
 
     const req = makeReq("POST", { "x-idempotency-key": "new-key" });
     const { res } = makeRes();
@@ -166,9 +181,10 @@ describe("idempotencyMiddleware", () => {
 
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).toHaveBeenCalledOnce();
-    const [userId, key, record] = mockStorage.idempotency.complete.mock.calls[0];
+    const [userId, key, claimToken, record] = firstCompleteCall();
     expect(userId).toBe("user-1");
     expect(key).toBe("new-key");
+    expect(claimToken).toBe(CLAIM_TOKEN);
     expect(record.responseBody).toEqual({ id: "w-2" });
     expect(record.statusCode).toBe(200);
     expect(mockStorage.idempotency.release).not.toHaveBeenCalled();
@@ -179,7 +195,7 @@ describe("idempotencyMiddleware", () => {
     // Buffer.byteLength(undefined) rejections, which would otherwise turn a
     // successful 2xx into a crashed response path and leak the
     // idempotency key so retries re-execute the write (Codex review of #877).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed" });
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
 
     const req = makeReq("POST", { "x-idempotency-key": "empty" });
     const { res } = makeRes();
@@ -192,7 +208,7 @@ describe("idempotencyMiddleware", () => {
 
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).toHaveBeenCalledOnce();
-    const [, , record] = mockStorage.idempotency.complete.mock.calls[0];
+    const [, , , record] = firstCompleteCall();
     expect(record.statusCode).toBe(200);
     expect(record.responseBody).toBeUndefined();
   });
@@ -201,7 +217,7 @@ describe("idempotencyMiddleware", () => {
     // Even for oversized responses we still need to lock the idempotency
     // key so a retry doesn't re-execute the mutation. Only the full
     // payload is discarded — the key is always recorded (Codex P1).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed" });
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
 
     const req = makeReq("POST", { "x-idempotency-key": "huge" });
     const { res } = makeRes();
@@ -215,7 +231,7 @@ describe("idempotencyMiddleware", () => {
 
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).toHaveBeenCalledOnce();
-    const [, , record] = mockStorage.idempotency.complete.mock.calls[0];
+    const [, , , record] = firstCompleteCall();
     expect(record.responseBody).toEqual({ idempotencyReplayed: true });
     expect(record.statusCode).toBe(200);
   });
@@ -223,7 +239,7 @@ describe("idempotencyMiddleware", () => {
   it("releases the claim instead of caching a non-2xx response", async () => {
     // A transient 5xx/404 must not pin the key — releasing the claim lets a
     // retry with the same key re-execute the handler (S10 semantics).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed" });
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
 
     const req = makeReq("POST", { "x-idempotency-key": "will-fail" });
     const { res } = makeRes();
@@ -236,14 +252,15 @@ describe("idempotencyMiddleware", () => {
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).not.toHaveBeenCalled();
     expect(mockStorage.idempotency.release).toHaveBeenCalledOnce();
-    expect(mockStorage.idempotency.release).toHaveBeenCalledWith("user-1", "will-fail");
+    expect(mockStorage.idempotency.release).toHaveBeenCalledWith("user-1", "will-fail", CLAIM_TOKEN);
   });
 
   it("releases the claim when the response finishes without going through res.json", async () => {
     // Backstop: a handler that throws (error middleware sends via res.end), a
     // redirect, or a streamed response never hits the patched res.json. The
-    // finish/close listener must release the claim so it doesn't pin retries.
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed" });
+    // 'finish' listener must release the claim so it doesn't pin retries (a
+    // client disconnect's 'close' no longer does; see the D8 tests).
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
 
     const req = makeReq("POST", { "x-idempotency-key": "streamed" });
     const { res, emit } = makeRes();
@@ -255,13 +272,13 @@ describe("idempotencyMiddleware", () => {
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).not.toHaveBeenCalled();
     expect(mockStorage.idempotency.release).toHaveBeenCalledOnce();
-    expect(mockStorage.idempotency.release).toHaveBeenCalledWith("user-1", "streamed");
+    expect(mockStorage.idempotency.release).toHaveBeenCalledWith("user-1", "streamed", CLAIM_TOKEN);
   });
 
   it("does not double-finalize when res.json runs and finish fires afterward", async () => {
     // The `settled` guard makes the terminal action run exactly once: a 2xx
     // response completes the record, and the trailing finish event is a no-op.
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed" });
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
 
     const req = makeReq("POST", { "x-idempotency-key": "settled-once" });
     const { res, emit } = makeRes();
@@ -275,6 +292,64 @@ describe("idempotencyMiddleware", () => {
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).toHaveBeenCalledOnce();
     expect(mockStorage.idempotency.release).not.toHaveBeenCalled();
+  });
+
+  // D8 (CODEBASE_ANALYSIS_2026-10-03): "close" before "finish" released the
+  // claim while the handler kept running, so the offline queue's replay with
+  // the same key ran POST /api/v1/workouts a second time.
+  it("keeps the claim when the client disconnects while the handler is still running", async () => {
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+
+    const req = makeReq("POST", { "x-idempotency-key": "flaky-network" });
+    const { res, emit } = makeRes();
+    const next: NextFunction = vi.fn();
+
+    await idempotencyMiddleware(req, res, next);
+    emit("close"); // the socket drops mid-handler
+
+    await flushMicrotasks();
+    expect(mockStorage.idempotency.release).not.toHaveBeenCalled();
+    expect(mockStorage.idempotency.complete).not.toHaveBeenCalled();
+  });
+
+  it("caches the result a handler sends after the client disconnected", async () => {
+    // The replay then gets this stored result instead of a second execution.
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+
+    const req = makeReq("POST", { "x-idempotency-key": "flaky-network" });
+    const { res, emit } = makeRes();
+    const next: NextFunction = vi.fn();
+
+    await idempotencyMiddleware(req, res, next);
+    emit("close");
+    res.status(201);
+    res.json({ id: "w-4" });
+
+    await flushMicrotasks();
+    expect(mockStorage.idempotency.complete).toHaveBeenCalledWith(
+      "user-1",
+      "flaky-network",
+      CLAIM_TOKEN,
+      { statusCode: 201, responseBody: { id: "w-4" } },
+      expect.any(Number),
+    );
+    expect(mockStorage.idempotency.release).not.toHaveBeenCalled();
+  });
+
+  it("logs, rather than throws, when the claim lapsed before the response", async () => {
+    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.complete.mockResolvedValue(false);
+
+    const req = makeReq("POST", { "x-idempotency-key": "slow" });
+    const { res } = makeRes();
+    const next: NextFunction = vi.fn();
+
+    await idempotencyMiddleware(req, res, next);
+    res.json({ id: "w-5" });
+
+    await flushMicrotasks();
+    expect(vi.mocked(req.log).warn).toHaveBeenCalledWith(expect.stringContaining("lapsed"));
+    expect(vi.mocked(req.log).error).not.toHaveBeenCalled();
   });
 
   it("falls through to the handler when the claim itself fails", async () => {

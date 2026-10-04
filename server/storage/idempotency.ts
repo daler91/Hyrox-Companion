@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import { idempotencyKeys } from "@shared/schema";
-import { and, eq, lt, lte } from "drizzle-orm";
+import { and, eq, lt, lte, type SQL, sql } from "drizzle-orm";
 
 import { db } from "../db";
 
@@ -14,12 +16,32 @@ export interface IdempotencyRecord {
  * claim from a cached 2xx response.
  */
 const IN_PROGRESS_STATUS = 0;
-const IN_PROGRESS_BODY = { __idempotencyInProgress: true as const };
+
+/**
+ * The in-progress row's body carries the claiming request's token, so
+ * `complete()` and `release()` act only on the claim that request still owns.
+ * Matched on user and key alone, a request whose claim had lapsed and been
+ * taken over could delete or overwrite the new owner's claim.
+ * D8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function inProgressBody(claimToken: string) {
+  return { __idempotencyInProgress: true as const, claimToken };
+}
 
 export type IdempotencyClaim =
-  | { outcome: "claimed" }
+  | { outcome: "claimed"; claimToken: string }
   | { outcome: "in_progress" }
   | { outcome: "completed"; statusCode: number; responseBody: unknown };
+
+/** The row (userId, key) while it is still the in-progress claim `claimToken` made. */
+function ownedClaim(userId: string, key: string, claimToken: string): SQL | undefined {
+  return and(
+    eq(idempotencyKeys.userId, userId),
+    eq(idempotencyKeys.key, key),
+    eq(idempotencyKeys.statusCode, IN_PROGRESS_STATUS),
+    sql`${idempotencyKeys.responseBody}->>'claimToken' = ${claimToken}`,
+  );
+}
 
 /**
  * Storage for cached responses to mutating requests, keyed by
@@ -53,6 +75,7 @@ export class IdempotencyStorage {
     claimTtlSeconds: number,
   ): Promise<IdempotencyClaim> {
     const claimExpiry = new Date(Date.now() + claimTtlSeconds * 1000);
+    const claimToken = randomUUID();
     const claimed = await db
       .insert(idempotencyKeys)
       .values({
@@ -61,7 +84,7 @@ export class IdempotencyStorage {
         method: meta.method,
         path: meta.path,
         statusCode: IN_PROGRESS_STATUS,
-        responseBody: IN_PROGRESS_BODY,
+        responseBody: inProgressBody(claimToken),
         expiresAt: claimExpiry,
       })
       .onConflictDoUpdate({
@@ -70,7 +93,7 @@ export class IdempotencyStorage {
           method: meta.method,
           path: meta.path,
           statusCode: IN_PROGRESS_STATUS,
-          responseBody: IN_PROGRESS_BODY,
+          responseBody: inProgressBody(claimToken),
           createdAt: new Date(),
           expiresAt: claimExpiry,
         },
@@ -81,7 +104,7 @@ export class IdempotencyStorage {
       })
       .returning({ userId: idempotencyKeys.userId });
 
-    if (claimed.length > 0) return { outcome: "claimed" };
+    if (claimed.length > 0) return { outcome: "claimed", claimToken };
 
     const existing = await this.get(userId, key);
     if (!existing || existing.statusCode === IN_PROGRESS_STATUS) {
@@ -93,35 +116,32 @@ export class IdempotencyStorage {
   /**
    * Replace this request's in-progress claim with its final 2xx response and
    * extend the row to the full idempotency TTL so later replays hit the cache.
+   * Returns false when the claim is no longer this request's (it lapsed and
+   * another request took the key over), leaving that request's row alone.
    */
   async complete(
     userId: string,
     key: string,
+    claimToken: string,
     record: { statusCode: number; responseBody: unknown },
     ttlSeconds: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-    await db
+    const updated = await db
       .update(idempotencyKeys)
       .set({ statusCode: record.statusCode, responseBody: record.responseBody, expiresAt })
-      .where(and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, key)));
+      .where(ownedClaim(userId, key, claimToken))
+      .returning({ userId: idempotencyKeys.userId });
+    return updated.length > 0;
   }
 
   /**
-   * Drop an in-progress claim so a failed or aborted request can be retried.
-   * Scoped to the in-progress status so a row that already holds a real
-   * response is never deleted.
+   * Drop this request's in-progress claim so a failed request can be retried.
+   * Fenced to the claim token, so neither a row that already holds a real
+   * response nor another request's newer claim is ever deleted.
    */
-  async release(userId: string, key: string): Promise<void> {
-    await db
-      .delete(idempotencyKeys)
-      .where(
-        and(
-          eq(idempotencyKeys.userId, userId),
-          eq(idempotencyKeys.key, key),
-          eq(idempotencyKeys.statusCode, IN_PROGRESS_STATUS),
-        ),
-      );
+  async release(userId: string, key: string, claimToken: string): Promise<void> {
+    await db.delete(idempotencyKeys).where(ownedClaim(userId, key, claimToken));
   }
 
   async cleanupExpired(): Promise<number> {
