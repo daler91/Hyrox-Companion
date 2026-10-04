@@ -15,7 +15,7 @@ import { flushQueue, getPendingCount, reconcileQueueOwner, releaseQueueOwner } f
 export function useOfflineQueueFlush(userId: string | null | undefined) {
   useEffect(() => {
     reconcileQueueOwner(userId);
-    if (globalThis.navigator?.onLine !== false && getPendingCount() > 0) {
+    if (globalThis.navigator.onLine !== false && getPendingCount() > 0) {
       void flushQueue().catch(() => {
         // Per-mutation failures are handled inside flushQueue; this only
         // guards unexpected errors (e.g. localStorage unavailable).

@@ -538,9 +538,8 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
                   else if (field === "notes") setNotes(next);
                 }}
                 onDraftFieldChange={(field, value) => {
-                  if (field === "mainWorkout" || field === "accessory") {
-                    typedTextRef.current[field] = value;
-                  }
+                  if (field === "mainWorkout") typedTextRef.current.mainWorkout = value;
+                  else if (field === "accessory") typedTextRef.current.accessory = value;
                 }}
                 onParseText={() => {
                   if (!mainWorkout.trim()) {

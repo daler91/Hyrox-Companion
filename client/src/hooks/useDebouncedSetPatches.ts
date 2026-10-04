@@ -29,7 +29,7 @@ interface PendingSetPatch<TPatch> {
  * the last edit (CL18, CODEBASE_ANALYSIS_2026-10-03).
  */
 export function useDebouncedSetPatches<TPatch extends object>(
-  mutate: (args: { setId: string; data: TPatch; ownerId?: string }) => void | Promise<unknown>,
+  mutate: (args: { setId: string; data: TPatch; ownerId?: string }) => unknown,
   debounceMs: number,
   ownerId?: string | null,
 ) {

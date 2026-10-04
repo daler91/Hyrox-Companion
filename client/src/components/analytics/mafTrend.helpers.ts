@@ -49,10 +49,15 @@ function localDateOnly(value: string | Date | null | undefined): string | null {
 function testDate(
   workoutLogId: string | null,
   createdAt: string | Date | null | undefined,
-  workoutDates: MafTestsListResponse["workoutDates"],
+  workoutDates: ReadonlyMap<string, string>,
 ): string | null {
-  const workoutDate = workoutLogId ? workoutDates?.[workoutLogId] : undefined;
+  const workoutDate = workoutLogId ? workoutDates.get(workoutLogId) : undefined;
   return typeof workoutDate === "string" ? workoutDate : localDateOnly(createdAt);
+}
+
+/** The response's workout dates by workout id, read through a Map rather than by indexing the object. */
+function workoutDateIndex(workoutDates: MafTestsListResponse["workoutDates"]): ReadonlyMap<string, string> {
+  return new Map(Object.entries(workoutDates ?? {}));
 }
 
 /** Newest YYYY-MM-DD first; undated last. */
@@ -85,10 +90,11 @@ export function buildComplianceTrendData(
   analysis: readonly MafWorkoutAnalysis[],
   workoutDates?: MafTestsListResponse["workoutDates"],
 ): CompliancePoint[] {
+  const datesById = workoutDateIndex(workoutDates);
   return (
     analysis
       .map((a) => ({
-        date: testDate(a.workoutLogId, a.createdAt, workoutDates),
+        date: testDate(a.workoutLogId, a.createdAt, datesById),
         compliancePct: a.compliancePct,
       }))
       .filter((p): p is CompliancePoint => p.date != null && p.compliancePct != null)
@@ -147,10 +153,11 @@ export function buildTestRows(data: MafTestsListResponse | undefined): MafTestRo
   for (const a of data.analysis) {
     if (a.workoutLogId) analysisByWorkout.set(a.workoutLogId, a);
   }
+  const datesById = workoutDateIndex(data.workoutDates);
   return data.tests
     .map((t) => {
       const workoutLogId = testWorkoutLogId(t);
-      return { t, workoutLogId, date: testDate(workoutLogId, t.createdAt, data.workoutDates) };
+      return { t, workoutLogId, date: testDate(workoutLogId, t.createdAt, datesById) };
     })
     // Same-day tests fall back to the order they were tagged in.
     .sort(

@@ -92,6 +92,16 @@ function composedUnitsFor(
   };
 }
 
+/**
+ * The owner a set write is sent to. The editors only offer set writes once
+ * their sheet has an owner; one that fires without it fails here, rather than
+ * being sent to an `undefined` owner's URL.
+ */
+function requireOwnerId(ownerId: string | null | undefined): string {
+  if (!ownerId) throw new Error("There's no workout to save this set to.");
+  return ownerId;
+}
+
 export function useExerciseSetsForOwner<TSnapshot>({
   ownerId,
   mutationKeyFamily,
@@ -169,8 +179,8 @@ export function useExerciseSetsForOwner<TSnapshot>({
     UpdateSetContext<TSnapshot> | undefined
   >({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: ({ setId, data, ownerId: target = ownerId! }) =>
-      versionTracker.enqueue(setId, () => sendLockedPatch(target, setId, data)),
+    mutationFn: ({ setId, data, ownerId: target }) =>
+      versionTracker.enqueue(setId, () => sendLockedPatch(target ?? requireOwnerId(ownerId), setId, data)),
     onMutate: async ({ setId, data, ownerId: target = ownerId ?? undefined }) => {
       if (!target) return undefined;
       const seq = (setPatchSeqRef.current.get(setId) ?? 0) + 1;
@@ -227,7 +237,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
     // A new row is stamped on both axes, so it names both units (D22).
     mutationFn: (data: AddExerciseSetPayload) =>
-      addSetRequest(ownerId!, {
+      addSetRequest(requireOwnerId(ownerId), {
         ...data,
         weightUnit: unitPreferences.weightUnit,
         distanceUnit: unitPreferences.distanceUnit,
@@ -244,7 +254,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
 
   const deleteSet = useApiMutation({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: (setId: string) => deleteSetRequest(ownerId!, setId).then(() => setId),
+    mutationFn: (setId: string) => deleteSetRequest(requireOwnerId(ownerId), setId).then(() => setId),
     onMutate: async (setId: string) => {
       if (!ownerId) return undefined;
       await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });

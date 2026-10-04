@@ -36,7 +36,13 @@ vi.mock("@/components/ui/responsive-sheet", () => ({
     <div>
       <h1>{title}</h1>
       {/* Stands in for Escape / swipe / overlay: closes without moving focus. */}
-      <button type="button" data-testid="mock-sheet-dismiss" onClick={() => onOpenChange(false)}>
+      <button
+        type="button"
+        data-testid="mock-sheet-dismiss"
+        onClick={() => {
+          onOpenChange(false);
+        }}
+      >
         Dismiss
       </button>
       {children}
