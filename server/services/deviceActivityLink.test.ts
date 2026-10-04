@@ -61,6 +61,7 @@ const LINK_PLAN_DAY = createMockPlanDay({
 
 /** A set as copyPrescribedSetsIntoLog writes it: actuals equal to the prescription. */
 const UNTOUCHED_SET = {
+  exerciseName: "back_squat",
   version: 1,
   reps: 5,
   plannedReps: 5,
@@ -225,15 +226,19 @@ describe("createLogFromPlanDayWithStravaInTx", () => {
   const planDay = createMockPlanDay({ id: "pd-1", scheduledDate: "2026-09-08", focus: "Tempo" });
   const metrics = pickDeviceMetrics(mapStravaActivityToWorkout(RAW, USER, "km"));
 
-  /** Complete the plan day from a recording rated `rpe` on Strava; returns the new log's payload. */
+  /**
+   * Complete the plan day from a recording rated `rpe` on Strava, through the
+   * athlete's own link (the auto link's build is covered in
+   * deviceActivityLink.autoLink.test.ts); returns the new log's payload.
+   */
   async function completeDayWith(rpe: number | null) {
     await createLogFromPlanDayWithStravaInTx(makeTx() as never, {
       userId: USER,
       planDay,
       raw: RAW,
       metrics: { ...metrics, rpe },
-      linkSource: "auto",
-      confidence: 0.9,
+      linkSource: "manual",
+      confidence: null,
     });
     return vi.mocked(createWorkoutInTx).mock.calls[0][1];
   }

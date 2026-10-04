@@ -3,6 +3,7 @@ import type { Request, Response, Router } from "express";
 import { z } from "zod";
 
 import { rateLimiter, validateBody } from "../../routeUtils";
+import { invalidateAnalyticsCachesForUser } from "../../services/analyticsRouteCache";
 import {
   dismissDeviceLinkSuggestion,
   linkStandaloneDeviceLog,
@@ -54,6 +55,9 @@ export function registerWorkoutDeviceLinkRoutes(router: Router): void {
         : { workoutLogId: body.workoutLogId as string };
       const userId = getUserId(req);
       const log = await linkStandaloneDeviceLog({ userId, deviceLogId: req.params.id, target });
+      // D10 (CODEBASE_ANALYSIS_2026-10-03): a link or unlink merges, creates or
+      // deletes logs, so the athlete's cached analytics slices go with it.
+      invalidateAnalyticsCachesForUser(userId);
       await requestSessionStreamForLog(storage, userId, log, "link");
       res.json(log);
     },
@@ -71,6 +75,7 @@ export function registerWorkoutDeviceLinkRoutes(router: Router): void {
         logId: req.params.id,
         distanceUnit: (user?.distanceUnit || "km") as DistanceUnit,
       });
+      invalidateAnalyticsCachesForUser(userId); // D10
       res.json(result);
     },
   );

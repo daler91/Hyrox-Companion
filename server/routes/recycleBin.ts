@@ -9,6 +9,7 @@ import { type Request, type Response, Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { ErrorCode } from "../errors";
 import { asyncHandler, rateLimiter, sendNotFound, validateParams } from "../routeUtils";
+import { invalidateAnalyticsCachesForUser } from "../services/analyticsRouteCache";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { sendPlanOverlap } from "./_helpers/planOverlap";
@@ -29,9 +30,15 @@ const MUTATION_LIMITER = () => rateLimiter("recycleBinMutation", 20);
 
 function sendRestoreOutcome(
   res: Response,
+  userId: string,
   result: RecycleBinRestoreResult | RecycleBinBatchRestoreResult,
 ): Response {
-  if (result.ok) return res.json(result);
+  if (result.ok) {
+    // D10 (CODEBASE_ANALYSIS_2026-10-03): a restore puts workouts back, so the
+    // athlete's cached analytics slices are stale.
+    invalidateAnalyticsCachesForUser(userId);
+    return res.json(result);
+  }
   switch (result.reason) {
     case "not_found":
       return sendNotFound(res, result.message);
@@ -83,7 +90,7 @@ protectedPost(
       }
     }
 
-    return sendRestoreOutcome(res, await storage.recycleBin.restore(userId, item.id));
+    return sendRestoreOutcome(res, userId, await storage.recycleBin.restore(userId, item.id));
   },
 );
 
@@ -93,9 +100,11 @@ protectedPost(
   "/api/v1/recycle-bin/batches/:batchId/restore",
   { limiter: MUTATION_LIMITER(), middleware: [validateParams(recycleBinBatchIdParamsSchema)] },
   async (req: Request<{ batchId: string }>, res: Response) => {
+    const userId = getUserId(req);
     return sendRestoreOutcome(
       res,
-      await storage.recycleBin.restoreBatch(getUserId(req), req.params.batchId),
+      userId,
+      await storage.recycleBin.restoreBatch(userId, req.params.batchId),
     );
   },
 );

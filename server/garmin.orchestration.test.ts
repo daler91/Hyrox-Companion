@@ -7,6 +7,7 @@ import { __testing, registerGarminRoutes } from "./garmin";
 import { logger } from "./logger";
 import { createTestApp } from "./routes/__tests__/testUtils";
 import { clearRateLimitBuckets } from "./routeUtils";
+import { invalidateAnalyticsCachesForUser } from "./services/analyticsRouteCache";
 import { storage } from "./storage";
 
 /**
@@ -17,19 +18,28 @@ import { storage } from "./storage";
  * createRequire at module scope, out of vi.mock's reach.
  */
 
+// Standalone handles on the connection writes the token tests assert on.
+const connectionMocks = vi.hoisted(() => ({
+  getGarminConnection: vi.fn(),
+  setGarminError: vi.fn().mockResolvedValue(undefined),
+  updateGarminTokens: vi.fn().mockResolvedValue(undefined),
+  updateGarminLastSync: vi.fn().mockResolvedValue(undefined),
+  getExistingGarminActivityIds: vi.fn(),
+}));
+
 vi.mock("./storage", () => ({
   storage: {
     users: {
-      getGarminConnection: vi.fn(),
-      setGarminError: vi.fn().mockResolvedValue(undefined),
-      updateGarminTokens: vi.fn().mockResolvedValue(undefined),
-      updateGarminLastSync: vi.fn().mockResolvedValue(undefined),
+      getGarminConnection: connectionMocks.getGarminConnection,
+      setGarminError: connectionMocks.setGarminError,
+      updateGarminTokens: connectionMocks.updateGarminTokens,
+      updateGarminLastSync: connectionMocks.updateGarminLastSync,
       upsertGarminConnection: vi.fn().mockResolvedValue(undefined),
       deleteGarminConnection: vi.fn().mockResolvedValue(undefined),
       getUser: vi.fn(),
     },
     workouts: {
-      getExistingGarminActivityIds: vi.fn(),
+      getExistingGarminActivityIds: connectionMocks.getExistingGarminActivityIds,
       listDeviceRecordingsForDates: vi.fn(),
       createGarminWorkoutLogs: vi.fn(),
     },
@@ -48,6 +58,7 @@ vi.mock("./middleware/idempotency", () => ({
     return Promise.resolve();
   },
 }));
+vi.mock("./services/analyticsRouteCache", () => ({ invalidateAnalyticsCachesForUser: vi.fn() }));
 vi.mock("./sharedRuntimeState", () => ({
   getRuntimeCache: vi.fn().mockResolvedValue(null),
   setRuntimeCache: vi.fn().mockResolvedValue(undefined),
@@ -62,13 +73,18 @@ class FakeGarminConnect {
   static instances: FakeGarminConnect[] = [];
   static loginImpl: () => Promise<unknown> = () => Promise.resolve(undefined);
   static getActivitiesImpl: () => Promise<unknown> = () => Promise.resolve([]);
+  static refreshImpl: () => Promise<void> = () => Promise.resolve();
   static onConstruct: () => void = noop;
   static reset(): void {
     this.instances = [];
     this.loginImpl = () => Promise.resolve(undefined);
     this.getActivitiesImpl = () => Promise.resolve([]);
+    this.refreshImpl = () => Promise.resolve();
     this.onConstruct = noop;
   }
+
+  // The SDK's HttpClient: re-mints OAuth2 from the loaded OAuth1 token.
+  client = { refreshOauth2Token: vi.fn(() => FakeGarminConnect.refreshImpl()) };
 
   login = vi.fn((_email?: string, _password?: string) => FakeGarminConnect.loginImpl());
   loadToken = vi.fn();
@@ -104,6 +120,9 @@ function conn(overrides: Record<string, unknown> = {}) {
     ...overrides,
   } as never;
 }
+
+/** A connection with no cached tokens, so only a login can produce a client. */
+const NO_CACHED_TOKENS = { encryptedOauth1Token: null, encryptedOauth2Token: null, tokenExpiresAt: null };
 
 function activity(id: number) {
   return {
@@ -180,12 +199,25 @@ describe("POST /sync import accounting", () => {
     expect(res.body.imported + res.body.skipped).toBe(res.body.total);
     expect(vi.mocked(storage.workouts.createGarminWorkoutLogs).mock.calls[0][0]).toHaveLength(3);
     expect(storage.users.updateGarminLastSync).toHaveBeenCalledWith("user-1");
+    // D10 (CODEBASE_ANALYSIS_2026-10-03): new logs drop the cached analytics.
+    expect(invalidateAnalyticsCachesForUser).toHaveBeenCalledWith("user-1");
+  });
+
+  it("leaves the cached analytics alone when the sync imported nothing", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn());
+    FakeGarminConnect.getActivitiesImpl = () => Promise.resolve([activity(1)]);
+    connectionMocks.getExistingGarminActivityIds.mockResolvedValue(["1"]);
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.body).toMatchObject({ success: true, imported: 0, skipped: 1 });
+    expect(invalidateAnalyticsCachesForUser).not.toHaveBeenCalled();
   });
 
   it("skips a session the Strava sync already imported and counts it as skipped", async () => {
     // D16 (CODEBASE_ANALYSIS_2026-10-03): the watch auto-uploads to Strava, so
     // with both connected the same run arrives from both syncs.
-    vi.mocked(storage.users.getGarminConnection).mockResolvedValue(conn());
+    connectionMocks.getGarminConnection.mockResolvedValue(conn());
     FakeGarminConnect.getActivitiesImpl = () =>
       Promise.resolve([
         { ...activity(1), startTimeGMT: "2026-07-01 07:00:00" },
@@ -214,7 +246,7 @@ describe("POST /sync import accounting", () => {
   });
 
   it("translates a non-array activities response into 502 GARMIN_API_ERROR and records the error", async () => {
-    vi.mocked(storage.users.getGarminConnection).mockResolvedValue(conn());
+    connectionMocks.getGarminConnection.mockResolvedValue(conn());
     FakeGarminConnect.getActivitiesImpl = () => Promise.resolve({ error: "maintenance" });
 
     const res = await request(app).post("/api/v1/garmin/sync");
@@ -258,14 +290,71 @@ describe("getGarminClient token strategy", () => {
     );
   });
 
-  it("takes the login path when cached tokens are expired", async () => {
-    vi.mocked(storage.users.getGarminConnection).mockResolvedValue(
-      conn({ tokenExpiresAt: new Date(Date.now() - 1000) }),
-    );
+  // D6 (CODEBASE_ANALYSIS_2026-10-03): the OAuth2 token lapses within hours,
+  // the OAuth1 one lasts about a year. An expired OAuth2 used to mean a full
+  // email/password SSO login from the shared server IP on most syncs.
+  const EXPIRED = { tokenExpiresAt: new Date(Date.now() - 1000) };
+
+  it("re-mints an expired OAuth2 token from the cached OAuth1 one without an SSO login", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn(EXPIRED));
 
     const res = await request(app).post("/api/v1/garmin/sync");
 
     expect(res.status).toBe(200);
+    const client = FakeGarminConnect.instances[0];
+    expect(client.loadToken).toHaveBeenCalledWith({ oauth_token: "o1" }, { access_token: "o2" });
+    expect(client.client.refreshOauth2Token).toHaveBeenCalledTimes(1);
+    expect(client.login).not.toHaveBeenCalled();
+    expect(connectionMocks.updateGarminTokens).toHaveBeenCalledWith(
+      "user-1",
+      JSON.stringify({ oauth_token: "o1" }),
+      expect.stringContaining('"access_token":"o2"'),
+      expect.any(Date),
+    );
+  });
+
+  it.each([
+    // The SDK swallows the exchange's 401 and then throws reading the missing token.
+    ["the SDK's swallowed 401", () => new TypeError("Cannot set properties of undefined (setting 'last_update_date')")],
+    ["a 403", () => Object.assign(new Error("Request failed"), { response: { status: 403 } })],
+  ])("falls back to a fresh login when Garmin rejects the OAuth1 token (%s)", async (_label, rejection) => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn(EXPIRED));
+    FakeGarminConnect.refreshImpl = () => Promise.reject(rejection());
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(200);
+    expect(FakeGarminConnect.instances[0].login).toHaveBeenCalledWith(FIXTURE_EMAIL, FIXTURE_PW);
+    expect(connectionMocks.updateGarminTokens).toHaveBeenCalledTimes(1);
+    expect(connectionMocks.setGarminError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a network failure", () => new Error("socket hang up"), /did not respond/],
+    ["a 429", () => Object.assign(new Error("Request failed"), { response: { status: 429 } }), /rate limits/],
+  ])("answers 502 and keeps the connection when the refresh hits %s", async (_label, failure, message) => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn(EXPIRED));
+    FakeGarminConnect.refreshImpl = () => Promise.reject(failure());
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    const body = res.body as { code?: string; error?: string };
+    expect(res.status).toBe(502);
+    expect(body.code).toBe("GARMIN_API_ERROR");
+    expect(body.error).toMatch(message);
+    // No SSO attempt, and no lastError: setGarminError would wipe the credentials.
+    expect(FakeGarminConnect.instances[0].login).not.toHaveBeenCalled();
+    expect(connectionMocks.setGarminError).not.toHaveBeenCalled();
+    expect(connectionMocks.updateGarminLastSync).not.toHaveBeenCalled();
+  });
+
+  it("takes the login path when there are no cached tokens at all", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn(NO_CACHED_TOKENS));
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(200);
+    expect(FakeGarminConnect.instances[0].client.refreshOauth2Token).not.toHaveBeenCalled();
     expect(FakeGarminConnect.instances[0].login).toHaveBeenCalled();
   });
 
@@ -290,7 +379,7 @@ describe("getGarminClient token strategy", () => {
 describe("circuit breaker integration", () => {
   it("trips on a 429 login, records a friendly error, and short-circuits the next sync with 503", async () => {
     vi.mocked(storage.users.getGarminConnection).mockResolvedValue(
-      conn({ tokenExpiresAt: null }), // forces the login path
+      conn(NO_CACHED_TOKENS), // forces the login path
     );
     FakeGarminConnect.loginImpl = () =>
       Promise.reject(new Error("Request failed: 429 Too Many Requests"));
@@ -341,7 +430,7 @@ describe("circuit breaker integration", () => {
   it("answers 503 and keeps the connection when the breaker blocks the sync login", async () => {
     vi.mocked(storage.users.getGarminConnection).mockImplementation(() => {
       tripAfterRouteCheck();
-      return Promise.resolve(conn({ tokenExpiresAt: null })); // forces the login path
+      return Promise.resolve(conn(NO_CACHED_TOKENS)); // forces the login path
     });
 
     const res = await request(app).post("/api/v1/garmin/sync");

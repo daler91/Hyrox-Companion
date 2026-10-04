@@ -35,8 +35,9 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { storage } from "../storage";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
-import { deviceActivitySetRow } from "./deviceActivitySets";
+import { deviceActivitySetRow, exerciseNameForSportType } from "./deviceActivitySets";
 import { mapStravaActivityToWorkout } from "./stravaMapper";
+import { loadUnitPreferences } from "./unitPreferences";
 import { createWorkoutInTx, type WorkoutTx } from "./workoutService";
 
 /**
@@ -219,43 +220,70 @@ export interface CreateFromPlanDayInput {
 }
 
 /**
- * The plan day has no log yet, so the activity becomes its log — built the
- * way a manual confirm builds one (prescription text, copied sets and
- * structure, adherence snapshot, day marked completed) with the recording's
- * metrics on top. RPE comes only from the athlete's own Strava rating, when
- * `metrics` carries one; otherwise it stays NULL, because a watch cannot tell
- * how it felt.
+ * The plan day has no log yet, so the activity becomes its log: the day's
+ * prescription text and the recording's metrics. RPE comes only from the
+ * athlete's own Strava rating, when `metrics` carries one; otherwise it stays
+ * NULL, because a watch cannot tell how it felt.
+ *
+ * What it records as PERFORMED depends on who made the link:
+ *
+ *  - `manual`: the athlete said "this recording was that session", so the log
+ *    is built the way a manual confirm builds one (copied sets and structure,
+ *    adherence snapshot, day marked completed).
+ *  - `auto`: nobody has looked at it, so nothing of the prescription is copied
+ *    in as an actual. D12 (CODEBASE_ANALYSIS_2026-10-03): the copy recorded a
+ *    planned 8 km tempo run as 8 km when the watch measured 6.1, and let a
+ *    "Weight Training" recording complete a strength day with a 110 kg squat
+ *    nobody lifted — false running volume, false PRs, 100% compliance. The
+ *    log carries only what the recording measured: the one set
+ *    deviceActivitySetRow builds for a distance/cardio sport (none for
+ *    "WeightTraining" or "Workout", whose content a watch cannot see), and no
+ *    compliance, since one continuous recording cannot be compared set for
+ *    set with a prescription. Editing the sets re-derives it like any log.
  */
 export async function createLogFromPlanDayWithStravaInTx(
   tx: WorkoutTx,
   input: CreateFromPlanDayInput,
 ): Promise<WorkoutLog> {
   const { planDay, raw, metrics } = input;
-  const activityLabel = stravaActivityLabel(raw);
-  return await createWorkoutInTx(
-    tx,
-    {
-      date: planDay.scheduledDate ?? raw.start_date_local.split("T")[0],
-      focus: planDay.focus,
-      mainWorkout: planDay.mainWorkout,
-      accessory: planDay.accessory ?? null,
-      notes: joinNotes(planDay.notes, activityLabel),
-      planDayId: planDay.id,
-      planId: planDay.planId,
-      source: "strava",
-      stravaActivityId: String(raw.id),
-      ...metrics,
-      deviceLinkSource: input.linkSource,
-      deviceLinkConfidence: input.confidence,
-      deviceActivity: stravaSnapshot(
-        raw,
-        DEVICE_METRIC_COLUMNS.filter((col) => metrics[col] != null),
-      ),
-    },
-    undefined,
-    undefined,
-    input.userId,
-  );
+  const payload = {
+    date: planDay.scheduledDate ?? raw.start_date_local.split("T")[0],
+    focus: planDay.focus,
+    mainWorkout: planDay.mainWorkout,
+    accessory: planDay.accessory ?? null,
+    notes: joinNotes(planDay.notes, stravaActivityLabel(raw)),
+    planDayId: planDay.id,
+    planId: planDay.planId,
+    source: "strava",
+    stravaActivityId: String(raw.id),
+    ...metrics,
+    deviceLinkSource: input.linkSource,
+    deviceLinkConfidence: input.confidence,
+    deviceActivity: stravaSnapshot(
+      raw,
+      Object.entries(metrics).flatMap(([col, value]) => (value == null ? [] : [col])),
+    ),
+  };
+  if (input.linkSource === "manual") {
+    return await createWorkoutInTx(tx, payload, undefined, undefined, input.userId);
+  }
+
+  const [log] = await tx
+    .insert(workoutLogs)
+    .values({
+      ...payload,
+      userId: input.userId,
+      // The text the log was created with, as createWorkoutInTx snapshots it:
+      // hasAthleteEdits reads an edit as a difference from it.
+      prescribedMainWorkout: payload.mainWorkout,
+      prescribedAccessory: payload.accessory,
+      prescribedNotes: payload.notes,
+    })
+    .returning();
+  const recordedSet = deviceActivitySetRow(log, await loadUnitPreferences(input.userId));
+  if (recordedSet) await tx.insert(exerciseSets).values(recordedSet);
+  await syncPlanDayStatusFromWorkouts(planDay.id, input.userId, tx);
+  return log;
 }
 
 export type ManualLinkTarget = { planDayId: string } | { workoutLogId: string };
@@ -365,6 +393,7 @@ export interface LinkCreatedLogContents {
   sets: ReadonlyArray<
     Pick<
       ExerciseSet,
+      | "exerciseName"
       | "version"
       | "reps"
       | "plannedReps"
@@ -384,13 +413,14 @@ export interface LinkCreatedLogContents {
  * Whether the athlete has put anything of their own on a plan-day log the
  * link created (source "strava" + plan day).
  *
- * Such a log starts as a pure derivative: the day's prescription (text,
- * copied sets and structure) with the recording's metrics on top. While it
- * still is one, deleting it loses nothing, because the prescription is still
- * on the plan day and the recording comes back as its own row. But it is the
- * day's working log and as editable as any other, so once the athlete has
- * entered actual sets, an RPE, notes or a block score on it, deleting it
- * destroyed their session with no undo (D11, CODEBASE_ANALYSIS_2026-10-03).
+ * Such a log starts as a pure derivative: the day's prescription text, the
+ * recording's metrics, and the sets the link wrote (setsAsTheLinkWroteThem).
+ * While it still is one, deleting it loses nothing, because the prescription
+ * is still on the plan day and the recording comes back as its own row. But
+ * it is the day's working log and as editable as any other, so once the
+ * athlete has entered actual sets, an RPE, notes or a block score on it,
+ * deleting it destroyed their session with no undo (D11,
+ * CODEBASE_ANALYSIS_2026-10-03).
  *
  * Errs towards "edited": a log kept by mistake costs the athlete one delete,
  * which the recycle bin can undo; a log deleted by mistake costs the session.
@@ -411,18 +441,50 @@ export function hasAthleteEdits(log: WorkoutLog, contents: LinkCreatedLogContent
     !planDay ||
     log.focus !== planDay.focus ||
     log.date !== (planDay.scheduledDate ?? log.date) ||
-    // The copy wrote each prescribed set once, at version 1, with actuals equal
-    // to the prescription, and the adherence snapshot counted them.
-    sets.length !== (log.plannedSetCount ?? 0) ||
-    sets.some(
-      (set) =>
-        set.version > 1 ||
-        set.reps !== set.plannedReps ||
-        set.weight !== set.plannedWeight ||
-        set.distance !== set.plannedDistance ||
-        set.time !== set.plannedTime,
-    ) ||
+    !setsAsTheLinkWroteThem(log, sets) ||
     scoredBlocks > 0
+  );
+}
+
+/**
+ * Whether a link-created log's sets are still exactly what the link wrote, in
+ * either shape it has written them:
+ *
+ *  - the copied prescription (a manual link, and an auto link made before
+ *    D12): each prescribed set once, at version 1, with actuals equal to the
+ *    prescription, counted by the adherence snapshot;
+ *  - an auto link since D12 (CODEBASE_ANALYSIS_2026-10-03): at most the one
+ *    set synthesised from the recording, untouched, and no adherence snapshot.
+ */
+function setsAsTheLinkWroteThem(log: WorkoutLog, sets: LinkCreatedLogContents["sets"]): boolean {
+  const copiedPrescription =
+    sets.length === (log.plannedSetCount ?? 0) &&
+    sets.every(
+      (set) =>
+        set.version === 1 &&
+        set.reps === set.plannedReps &&
+        set.weight === set.plannedWeight &&
+        set.distance === set.plannedDistance &&
+        set.time === set.plannedTime,
+    );
+  if (copiedPrescription) return true;
+  const raw = log.deviceActivity?.raw;
+  const recordedExercise = exerciseNameForSportType(raw?.sport_type || raw?.type || log.focus);
+  return (
+    log.deviceLinkSource === "auto" &&
+    log.plannedSetCount == null &&
+    sets.length === 1 &&
+    sets.every(
+      (set) =>
+        set.version === 1 &&
+        set.exerciseName === recordedExercise &&
+        set.reps == null &&
+        set.weight == null &&
+        set.plannedReps == null &&
+        set.plannedWeight == null &&
+        set.plannedDistance == null &&
+        set.plannedTime == null,
+    )
   );
 }
 
@@ -435,6 +497,7 @@ async function loadLinkCreatedLogContents(
   const planDay = await storage.plans.getPlanDay(planDayId, userId, tx);
   const sets = await tx
     .select({
+      exerciseName: exerciseSets.exerciseName,
       version: exerciseSets.version,
       reps: exerciseSets.reps,
       plannedReps: exerciseSets.plannedReps,

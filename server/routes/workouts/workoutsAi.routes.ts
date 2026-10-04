@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateParams } from "../../routeUtils";
+import { invalidateAnalyticsCachesForUser } from "../../services/analyticsRouteCache";
 import { batchReparseWorkoutsUseCase, reparseWorkoutFromImageUseCase, reparseWorkoutUseCase } from "../../services/parseWorkoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
@@ -24,20 +25,29 @@ export function registerWorkoutAiRoutes(router: Router): void {
   }));
 
   protectedPost(router, "/api/v1/workouts/:id/reparse", { limiter: rateLimiter("reparse", 5), aiConsent: true, aiBudget: true, validation: [validateParams(reparseWorkoutParamsSchema), validateBody(reparseWorkoutRouteSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof reparseWorkoutRouteSchema>>, res: Response) => {
-    const outcome = await reparseWorkoutUseCase({ userId: getUserId(req), workoutId: req.params.id, payload: req.body });
+    const userId = getUserId(req);
+    const outcome = await reparseWorkoutUseCase({ userId, workoutId: req.params.id, payload: req.body });
     if (outcome.status === "not_found") return sendNotFound(res, "Workout not found");
     if (outcome.status === "parse_failed") return res.status(422).json(PARSE_WRITE_THROUGH_ERROR);
+    // D10 (CODEBASE_ANALYSIS_2026-10-03): a reparse rewrites the workout's
+    // sets, so the athlete's cached analytics slices are stale.
+    invalidateAnalyticsCachesForUser(userId);
     res.json(outcome.response);
   });
 
   protectedPost(router, "/api/v1/workouts/:id/reparse-from-image", { limiter: rateLimiter("reparse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
-    const outcome = await reparseWorkoutFromImageUseCase({ userId: getUserId(req), workoutId: req.params.id, image: req.body });
+    const userId = getUserId(req);
+    const outcome = await reparseWorkoutFromImageUseCase({ userId, workoutId: req.params.id, image: req.body });
     if (outcome.status === "not_found") return sendNotFound(res, "Workout not found");
     if (outcome.status === "parse_failed") return res.status(422).json(PARSE_WRITE_THROUGH_ERROR);
+    invalidateAnalyticsCachesForUser(userId); // D10
     res.json(outcome.response);
   });
 
   protectedPost(router, "/api/v1/workouts/batch-reparse", { limiter: rateLimiter("batchReparse", 2), aiConsent: true, aiBudget: true }, async (req: Request, res: Response) => {
-    res.json(await batchReparseWorkoutsUseCase({ userId: getUserId(req) }));
+    const userId = getUserId(req);
+    const result = await batchReparseWorkoutsUseCase({ userId });
+    invalidateAnalyticsCachesForUser(userId); // D10
+    res.json(result);
   });
 }
