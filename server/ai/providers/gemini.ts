@@ -20,12 +20,25 @@ import type {
   TextAiUsage,
 } from "./types";
 
-function usageFromGeminiResponse(response: GenerateContentResponse): TextAiUsage | undefined {
+/**
+ * A Gemini response's token counts as Google bills them, for every Gemini call
+ * that records usage (text, stream and the vision parsers).
+ *
+ * Thinking is reported apart from the answer: `candidatesTokenCount` excludes
+ * `thoughtsTokenCount`, which is billed at the output rate, and built-in tool
+ * results fed back to the model (`toolUsePromptTokenCount`) are billed as
+ * input. ai_usage_logs has no column for either, so both are folded in;
+ * leaving them out let every thinking call undercount against the per-user and
+ * global caps — AI4 (CODEBASE_ANALYSIS_2026-10-03).
+ */
+export function usageFromGeminiResponse(
+  response: Pick<GenerateContentResponse, "usageMetadata">,
+): TextAiUsage | undefined {
   const usage = response.usageMetadata;
   if (!usage) return undefined;
   return {
-    inputTokens: usage.promptTokenCount ?? 0,
-    outputTokens: usage.candidatesTokenCount ?? 0,
+    inputTokens: (usage.promptTokenCount ?? 0) + (usage.toolUsePromptTokenCount ?? 0),
+    outputTokens: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0),
   };
 }
 

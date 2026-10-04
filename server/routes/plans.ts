@@ -530,7 +530,7 @@ protectedPost(
     }
     void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
     try {
-      const result = await reparsePlanDay(parseTarget, unitPreferences);
+      const result = await reparsePlanDay(parseTarget, unitPreferences, userId);
       if (result && Object.keys(referencePatch).length > 0) {
         await storage.plans.updatePlanDay(planDay.id, referencePatch, userId);
       }

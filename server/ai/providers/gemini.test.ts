@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getAiClient } from "../geminiSdk";
-import { collapseStreamedParts, geminiContents, geminiTextProvider } from "./gemini";
+import { collapseStreamedParts, geminiContents, geminiTextProvider, usageFromGeminiResponse } from "./gemini";
 import { makeProviderRequest } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
 
@@ -84,6 +84,42 @@ describe("gemini text provider tools", () => {
     }
 
     expect(chunks.map((chunk) => chunk.text).filter(Boolean)).toEqual(["Answer."]);
+  });
+});
+
+// AI4 (CODEBASE_ANALYSIS_2026-10-03): candidatesTokenCount excludes the
+// model's thinking, which Google bills at the output rate.
+describe("gemini usage", () => {
+  const THINKING_USAGE = { promptTokenCount: 8000, candidatesTokenCount: 2000, thoughtsTokenCount: 10000, toolUsePromptTokenCount: 50 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("counts thinking tokens as output and tool-use prompt tokens as input", () => {
+    expect(usageFromGeminiResponse({ usageMetadata: THINKING_USAGE })).toEqual({ inputTokens: 8050, outputTokens: 12000 });
+    expect(usageFromGeminiResponse({ usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } })).toEqual({ inputTokens: 10, outputTokens: 5 });
+    expect(usageFromGeminiResponse({})).toBeUndefined();
+  });
+
+  it("reports a generated response's thinking tokens in its usage", async () => {
+    const generateContent = vi.fn(() => Promise.resolve({ text: "{}", usageMetadata: THINKING_USAGE }));
+    vi.mocked(getAiClient).mockReturnValue({ models: { generateContent } } as never);
+
+    const response = await geminiTextProvider.generateText(makeProviderRequest({ providerId: "gemini", model: "gemini-pro", reasoningEffort: "high" }));
+
+    expect(response.usage).toEqual({ inputTokens: 8050, outputTokens: 12000 });
+  });
+
+  it("reports a streamed chunk's thinking tokens in its usage", async () => {
+    mockStream([{ candidates: [{ content: { parts: [{ text: "Answer." }] } }], usageMetadata: THINKING_USAGE }]);
+
+    const chunks: TextAiStreamChunk[] = [];
+    for await (const chunk of geminiTextProvider.streamText(makeProviderRequest({ providerId: "gemini", model: "gemini-pro" }))) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.at(-1)?.usage).toEqual({ inputTokens: 8050, outputTokens: 12000 });
   });
 });
 

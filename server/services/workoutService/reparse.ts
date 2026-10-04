@@ -64,6 +64,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
   owner: SetOwner,
   unitPreferences: UnitPreferences,
   context: "workout" | "plan",
+  userId: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
   const existingCount = await db
     .select({ count: sql<number>`cast(count(*) as int)` })
@@ -91,7 +92,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
         logger.warn({ context: "health-metrics", event: "auto_hydration_attempt_counter_failed", lockKey, err }, "Auto hydration attempt telemetry increment failed");
       });
     try {
-      const result = await reparseFromText(target, owner, unitPreferences, context, source);
+      const result = await reparseFromText(target, owner, unitPreferences, userId, context, source);
       const acceptedRowCount = result?.exercises.length ?? 0;
       const rejectedRowCount = result?.rejectedCount ?? 0;
       const fallbackUsed = result?.fallbackUsed ?? false;
@@ -132,10 +133,15 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
 // exerciseSets. Returns null when the combined text is empty or produced
 // zero exercises. The replace semantics match every reparse call site so a
 // repeated Parse press never doubles up rows.
+//
+// userId is required, as on the image path: the provider records usage only
+// for a call that names its user, so without it this spend never reached
+// ai_usage_logs or either budget cap — PF2 (CODEBASE_ANALYSIS_2026-10-03).
 async function reparseFromText(
   target: ReparseTarget,
   owner: SetOwner,
   unitPreferences: UnitPreferences,
+  userId: string,
   context: "workout" | "plan",
   source: CounterSource = "manual",
 ): Promise<ReparseWriteThroughResult | null> {
@@ -144,7 +150,7 @@ async function reparseFromText(
   if (!textToParse.trim()) return null;
 
   const { acceptedRows, rejectedRows, fallbackUsed, structureBlocks } =
-    await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), unitPreferences);
+    await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), unitPreferences, undefined, userId);
   return writeParsedStructure({
     owner,
     context,
@@ -219,8 +225,9 @@ async function writeParsedStructure({
 export function reparseWorkout(
   workout: { id: string; mainWorkout?: string | null; accessory?: string | null },
   unitPreferences: UnitPreferences,
+  userId: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
-  return reparseFromText(workout, { workoutLogId: workout.id }, unitPreferences, "workout", "manual");
+  return reparseFromText(workout, { workoutLogId: workout.id }, unitPreferences, userId, "workout", "manual");
 }
 
 /**
@@ -237,8 +244,9 @@ export function reparseWorkout(
 export function reparsePlanDay(
   planDay: { id: string; mainWorkout?: string | null; accessory?: string | null },
   unitPreferences: UnitPreferences,
+  userId: string,
 ): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
-  return reparseFromText(planDay, { planDayId: planDay.id }, unitPreferences, "plan", "manual");
+  return reparseFromText(planDay, { planDayId: planDay.id }, unitPreferences, userId, "plan", "manual");
 }
 
 export interface ReparseFromImageInput {
@@ -323,6 +331,7 @@ export function reparsePlanDayFromImage(
 export async function processBatchChunk(
   chunk: { id: string; mainWorkout?: string | null; accessory?: string | null }[],
   unitPreferences: UnitPreferences,
+  userId: string,
 ): Promise<{ parsed: number; failed: number }> {
   let parsed = 0;
   let failed = 0;
@@ -332,7 +341,7 @@ export async function processBatchChunk(
   // AI_PARSE_CONCURRENCY in-flight calls regardless of chunk size.
   const limit = pLimit(AI_PARSE_CONCURRENCY);
   const chunkResults = await Promise.allSettled(
-    chunk.map((workout) => limit(() => prepareParsedWorkout(workout, unitPreferences))),
+    chunk.map((workout) => limit(() => prepareParsedWorkout(workout, unitPreferences, userId))),
   );
 
   const successfulParses: { workoutId: string; setRows: InsertExerciseSet[] }[] = [];
@@ -382,7 +391,7 @@ export async function batchReparseWorkouts(
   // while preventing overload of the AI provider and database
   const CONCURRENCY_LIMIT = 5;
   const chunkResults = await inSequence(inChunks(workouts, CONCURRENCY_LIMIT), (chunk) =>
-    processBatchChunk(chunk, unitPreferences),
+    processBatchChunk(chunk, unitPreferences, userId),
   );
 
   return {

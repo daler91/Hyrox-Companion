@@ -663,6 +663,7 @@ describe("plan-day exercise routes", () => {
     expect(reparsePlanDay).toHaveBeenCalledWith(
       expect.objectContaining({ id: "day-1", mainWorkout: "new text", accessory: null }),
       { weightUnit: "lb", distanceUnit: "miles" },
+      "test_user_id",
     );
     expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
       "day-1",

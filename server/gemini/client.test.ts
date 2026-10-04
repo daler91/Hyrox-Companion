@@ -24,7 +24,10 @@ vi.mock("@google/genai", () => ({
   }),
 }));
 
-import { __resetEmbeddingCacheForTests, generateEmbedding, retryWithBackoff, withTimeout } from "./client";
+vi.mock("../services/aiUsageService", () => ({ recordAiUsage: vi.fn(() => Promise.resolve()) }));
+
+import { recordAiUsage } from "../services/aiUsageService";
+import { __resetEmbeddingCacheForTests, generateEmbedding, retryWithBackoff, trackUsageFromResponse, withTimeout } from "./client";
 
 function mockEmbedding(values: number[]) {
   embedContentSpy.mockResolvedValueOnce({ embeddings: [{ values }] });
@@ -105,5 +108,27 @@ describe("retryWithBackoff abort plumbing (S6)", () => {
     );
     await expect(result).rejects.toThrow();
     expect(captured?.aborted).toBe(true);
+  });
+});
+
+// AI4 (CODEBASE_ANALYSIS_2026-10-03): the vision parsers record through this,
+// and gemini-2.5-flash thinks by default.
+describe("trackUsageFromResponse", () => {
+  beforeEach(() => {
+    vi.mocked(recordAiUsage).mockClear();
+  });
+
+  it("records thinking tokens as output, so they are costed against the budget", () => {
+    trackUsageFromResponse("user-1", "gemini-2.5-flash", "parse", {
+      usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 300, thoughtsTokenCount: 900 },
+    } as never);
+
+    expect(recordAiUsage).toHaveBeenCalledWith("user-1", "gemini-2.5-flash", "parse", 1200, 1200);
+  });
+
+  it("records zero tokens when the response carries no usage", () => {
+    trackUsageFromResponse("user-1", "gemini-2.5-flash", "parse", {} as never);
+
+    expect(recordAiUsage).toHaveBeenCalledWith("user-1", "gemini-2.5-flash", "parse", 0, 0);
   });
 });

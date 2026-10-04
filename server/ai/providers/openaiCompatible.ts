@@ -46,6 +46,9 @@ function requireAdapterConfig(options: OpenAiCompatibleAdapterOptions): { apiKey
 function usageFromOpenAiCompatible(value: unknown): TextAiUsage | undefined {
   const usage = (value as { usage?: OpenAiCompatibleUsageShape } | undefined)?.usage;
   if (!usage) return undefined;
+  // Unlike Gemini (AI4, CODEBASE_ANALYSIS_2026-10-03), OpenAI counts reasoning
+  // inside completion_tokens / output_tokens; completion_tokens_details.reasoning_tokens
+  // is a breakdown of it, so adding it would bill the thinking twice.
   return {
     inputTokens: usage.prompt_tokens ?? usage.input_tokens ?? 0,
     outputTokens: usage.completion_tokens ?? usage.output_tokens ?? 0,

@@ -859,6 +859,12 @@ assumes every athlete maxes out their $2, which none will.
   the provider emitted a usage chunk, and a server-side timeout after the
   provider has already billed. Embeddings are billed at a flat 150-token
   estimate.
+- Gemini reports thinking apart from the answer (`thoughtsTokenCount`) and bills
+  it at the output rate, so `usageFromGeminiResponse` folds it into
+  `output_tokens` for every Gemini call, text, stream and vision alike
+  (`ai_usage_logs` has no column of its own for it). OpenAI's
+  `completion_tokens` already include reasoning tokens. Every reparse path
+  passes the athlete's `userId`, without which a call is not recorded at all.
 
 ---
 

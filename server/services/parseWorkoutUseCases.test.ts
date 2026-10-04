@@ -67,7 +67,9 @@ describe("reparseWorkoutUseCase", () => {
     const outcome = await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: { prescribedMainWorkout: "new text" } });
     expect(outcome).toEqual({ status: "ok", response: OK_RESPONSE });
     expect(updateWorkoutLog).toHaveBeenCalledWith("w1", { prescribedMainWorkout: "new text" }, "u1");
-    expect(mockReparse).toHaveBeenCalledWith(expect.objectContaining({ mainWorkout: "new text" }), expect.anything());
+    // The athlete's id, so the parse is recorded against their AI budget — PF2
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    expect(mockReparse).toHaveBeenCalledWith(expect.objectContaining({ mainWorkout: "new text" }), expect.anything(), "u1");
   });
 
   it("does NOT call updateWorkoutLog when no overrides are supplied", async () => {
