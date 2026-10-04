@@ -1,6 +1,6 @@
 import { type MafTestMetrics } from "@shared/maf";
-import { mafTestResults, mafWorkoutAnalysis } from "@shared/schema";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { mafTestResults, mafWorkoutAnalysis, workoutLogs } from "@shared/schema";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db";
 
@@ -182,5 +182,21 @@ export class MafTestStorage {
       .where(eq(mafWorkoutAnalysis.userId, userId))
       .orderBy(desc(mafWorkoutAnalysis.createdAt))
       .limit(limit);
+  }
+
+  /**
+   * The calendar date (YYYY-MM-DD, the athlete's local day) of each tagged
+   * workout, keyed by workout id. Test and analysis rows only carry the moment
+   * the run was TAGGED, so dating the history by `createdAt` stacked a batch of
+   * older runs tagged today on today (CL4 (CODEBASE_ANALYSIS_2026-10-03)).
+   * Scoped to the user; an id with no live workout is simply absent.
+   */
+  async getWorkoutDates(userId: string, workoutLogIds: readonly string[]): Promise<Record<string, string>> {
+    if (workoutLogIds.length === 0) return {};
+    const rows = await db
+      .select({ id: workoutLogs.id, date: workoutLogs.date })
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.id, [...workoutLogIds])));
+    return Object.fromEntries(rows.map((row) => [row.id, row.date]));
   }
 }

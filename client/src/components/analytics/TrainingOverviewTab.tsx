@@ -42,6 +42,9 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
   }
 
   const hasTrainingLoadData = overview?.trainingLoad?.trend.some((point) => point.utss > 0);
+  // `workoutDates` only covers the selected range, so the heatmap needs its
+  // start to tell "no data" from "rest day" (CL6 (CODEBASE_ANALYSIS_2026-10-03)).
+  const rangeStart = new URLSearchParams(dateParams).get("from") ?? undefined;
 
   if (!overview || (overview.weeklySummaries.length === 0 && !hasTrainingLoadData)) {
     return (
@@ -99,7 +102,11 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
         mileageData={mileageData}
         explanation={sections?.rpeDuration}
       />
-      <WorkoutHeatmap workoutDates={overview.workoutDates} explanation={sections?.consistency} />
+      <WorkoutHeatmap
+        workoutDates={overview.workoutDates}
+        rangeStart={rangeStart}
+        explanation={sections?.consistency}
+      />
     </div>
   );
 }

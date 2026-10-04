@@ -650,7 +650,7 @@ MAF test history and compliance trend, for the trend charts and the coach.
 
 - **Auth:** Required
 - **Rate limit:** `mafTest` category, 60/min
-- **Response:** `{ tests, analysis }` — up to 200 rows each
+- **Response:** `{ tests, analysis, workoutDates }` — up to 200 rows each; `workoutDates` maps each tagged workout's id to its date (YYYY-MM-DD), which the charts date a test by instead of when it was tagged
 
 ---
 

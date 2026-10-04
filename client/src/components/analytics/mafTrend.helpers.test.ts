@@ -36,6 +36,25 @@ describe("buildComplianceTrendData", () => {
       { date: "2026-05-01", compliancePct: 90 },
     ]);
   });
+
+  it("dates each point by its workout, not by when it was tagged (CL4)", () => {
+    // Three older runs all tagged on 2026-10-03: each plots on its own run day.
+    const taggedToday = "2026-10-03T09:00:00Z" as unknown as Date;
+    const points = buildComplianceTrendData(
+      [
+        analysis({ workoutLogId: "w-may", compliancePct: 92, createdAt: taggedToday }),
+        analysis({ workoutLogId: "w-jan", compliancePct: 70, createdAt: taggedToday }),
+        analysis({ workoutLogId: "w-mar", compliancePct: 81, createdAt: taggedToday }),
+      ],
+      { "w-jan": "2026-01-10", "w-mar": "2026-03-14", "w-may": "2026-05-09" },
+    );
+
+    expect(points).toEqual([
+      { date: "2026-01-10", compliancePct: 70 },
+      { date: "2026-03-14", compliancePct: 81 },
+      { date: "2026-05-09", compliancePct: 92 },
+    ]);
+  });
 });
 
 describe("isWorkoutTagged", () => {
@@ -77,6 +96,41 @@ describe("buildTestRows", () => {
 
   it("returns an empty list when there is no data", () => {
     expect(buildTestRows(undefined)).toEqual([]);
+  });
+
+  it("dates and orders tests by their workout, not by when they were tagged (CL4)", () => {
+    const data: MafTestsListResponse = {
+      tests: [
+        // Tagged in this order today, newest tag first as the server returns them.
+        test({ id: "t-jan", conditions: { workoutLogId: "w-jan" }, createdAt: "2026-10-03T09:02:00Z" as unknown as Date }),
+        test({ id: "t-may", conditions: { workoutLogId: "w-may" }, createdAt: "2026-10-03T09:01:00Z" as unknown as Date }),
+        test({ id: "t-mar", conditions: { workoutLogId: "w-mar" }, createdAt: "2026-10-03T09:00:00Z" as unknown as Date }),
+      ],
+      analysis: [],
+      workoutDates: { "w-jan": "2026-01-10", "w-mar": "2026-03-14", "w-may": "2026-05-09" },
+    };
+
+    expect(buildTestRows(data).map((r) => [r.id, r.date])).toEqual([
+      ["t-may", "2026-05-09"],
+      ["t-mar", "2026-03-14"],
+      ["t-jan", "2026-01-10"],
+    ]);
+  });
+
+  it("falls back to the LOCAL tag day when the workout date is unknown (CL4)", () => {
+    // 18:00 on Oct 2 in Los Angeles is 01:00Z on Oct 3: the athlete's day is Oct 2.
+    const previousTz = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+    try {
+      const data: MafTestsListResponse = {
+        tests: [test({ id: "t1", conditions: { workoutLogId: "w-deleted" }, createdAt: "2026-10-03T01:00:00Z" as unknown as Date })],
+        analysis: [],
+        workoutDates: {},
+      };
+      expect(buildTestRows(data)[0].date).toBe("2026-10-02");
+    } finally {
+      process.env.TZ = previousTz;
+    }
   });
 
   it("surfaces stored duration / distance / avg HR for pace display", () => {

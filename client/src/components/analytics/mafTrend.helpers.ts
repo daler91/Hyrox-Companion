@@ -2,6 +2,7 @@ import { type MafTestMetrics, metersPerSecond } from "@shared/maf";
 import { paceSecondsPerUnit } from "@shared/unitConversion";
 
 import type { MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "@/lib/api";
+import { toISODateString } from "@/lib/dateUtils";
 
 /** Display metadata for the three compliance classifications the server emits. */
 export const MAF_CLASSIFICATION_META: Record<
@@ -25,14 +26,41 @@ export function classificationMeta(classification: string | null): {
   );
 }
 
-/** `createdAt` arrives as an ISO string over JSON though the row type says Date. */
-function isoDateOnly(value: string | Date | null | undefined): string | null {
+/**
+ * The LOCAL calendar day of a timestamp. `createdAt` arrives as an ISO string
+ * over JSON though the row type says Date.
+ */
+function localDateOnly(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   // ⚡ Bolt Performance Optimization:
   // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
   const time = typeof value === "string" ? Date.parse(value) : value.getTime();
   if (Number.isNaN(time)) return null;
-  return new Date(time).toISOString().slice(0, 10);
+  return toISODateString(new Date(time));
+}
+
+/**
+ * The day a test belongs to: its workout's own date. `createdAt` is only when
+ * the athlete TAGGED the run, so older runs tagged together all landed on the
+ * tag day, and slicing its ISO string took that day in UTC (CL4
+ * (CODEBASE_ANALYSIS_2026-10-03)). The local tag day remains the fallback for a
+ * deleted workout or a cached response from before the server sent dates.
+ */
+function testDate(
+  workoutLogId: string | null,
+  createdAt: string | Date | null | undefined,
+  workoutDates: MafTestsListResponse["workoutDates"],
+): string | null {
+  const workoutDate = workoutLogId ? workoutDates?.[workoutLogId] : undefined;
+  return typeof workoutDate === "string" ? workoutDate : localDateOnly(createdAt);
+}
+
+/** Newest YYYY-MM-DD first; undated last. */
+function compareDateDesc(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a < b ? 1 : -1;
 }
 
 function createdAtTime(value: string | Date | null | undefined): number {
@@ -49,16 +77,20 @@ export interface CompliancePoint {
 }
 
 /**
- * Compliance % over time, oldest → newest, for the trend line chart. Drops rows
- * without a numeric compliancePct (a test logged with no HR data) or a usable
- * timestamp.
+ * Compliance % over time, oldest → newest, for the trend line chart, dated by
+ * each test's workout. Drops rows without a numeric compliancePct (a test
+ * logged with no HR data) or a usable date.
  */
 export function buildComplianceTrendData(
   analysis: readonly MafWorkoutAnalysis[],
+  workoutDates?: MafTestsListResponse["workoutDates"],
 ): CompliancePoint[] {
   return (
     analysis
-      .map((a) => ({ date: isoDateOnly(a.createdAt), compliancePct: a.compliancePct }))
+      .map((a) => ({
+        date: testDate(a.workoutLogId, a.createdAt, workoutDates),
+        compliancePct: a.compliancePct,
+      }))
       .filter((p): p is CompliancePoint => p.date != null && p.compliancePct != null)
       // ⚡ Bolt Performance Optimization:
       // Replaced expensive `new Date()` parsing inside the sort comparator.
@@ -105,9 +137,9 @@ export interface MafTestRow {
 }
 
 /**
- * Pair each test (newest first) with its compliance analysis (matched by
- * workoutLogId) for the history list, surfacing the stored metrics so the UI can
- * show pace, duration, and heart rate alongside the compliance score.
+ * Pair each test (newest workout first) with its compliance analysis (matched
+ * by workoutLogId) for the history list, surfacing the stored metrics so the UI
+ * can show pace, duration, and heart rate alongside the compliance score.
  */
 export function buildTestRows(data: MafTestsListResponse | undefined): MafTestRow[] {
   if (!data) return [];
@@ -115,15 +147,22 @@ export function buildTestRows(data: MafTestsListResponse | undefined): MafTestRo
   for (const a of data.analysis) {
     if (a.workoutLogId) analysisByWorkout.set(a.workoutLogId, a);
   }
-  return [...data.tests]
-    .sort((a, b) => createdAtTime(b.createdAt) - createdAtTime(a.createdAt))
+  return data.tests
     .map((t) => {
       const workoutLogId = testWorkoutLogId(t);
+      return { t, workoutLogId, date: testDate(workoutLogId, t.createdAt, data.workoutDates) };
+    })
+    // Same-day tests fall back to the order they were tagged in.
+    .sort(
+      (a, b) =>
+        compareDateDesc(a.date, b.date) || createdAtTime(b.t.createdAt) - createdAtTime(a.t.createdAt),
+    )
+    .map(({ t, workoutLogId, date }) => {
       const analysis = workoutLogId ? analysisByWorkout.get(workoutLogId) : undefined;
       const metrics: Partial<MafTestMetrics> | null = t.metrics ?? null;
       return {
         id: t.id,
-        date: isoDateOnly(t.createdAt),
+        date,
         compliancePct: analysis?.compliancePct ?? null,
         classification: analysis?.classification ?? null,
         protocolType: t.protocolType,

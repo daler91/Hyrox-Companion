@@ -76,10 +76,14 @@ export function buildTrendData(overview: TrainingOverview | undefined) {
     if (week.avgRpe !== null) {
       rpeData.push({ weekStart: week.weekStart, avgRpe: week.avgRpe });
     }
-    if (week.totalDuration > 0) {
+    // Divide by the workouts that RECORDED a duration, as the stat card does:
+    // `totalDuration` only sums those, so dividing by every workout halved the
+    // plotted average (audit H8; CL5 (CODEBASE_ANALYSIS_2026-10-03)). A week
+    // with none recorded has no basis for an average and is skipped.
+    if (week.workoutsWithDuration > 0) {
       durationData.push({
         weekStart: week.weekStart,
-        avgDuration: week.workoutCount > 0 ? Math.round(week.totalDuration / week.workoutCount) : 0,
+        avgDuration: Math.round(week.totalDuration / week.workoutsWithDuration),
       });
     }
     // Unlike RPE and duration, a zero week is meaningful here: a week with no

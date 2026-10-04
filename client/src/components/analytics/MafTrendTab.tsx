@@ -68,7 +68,7 @@ export function MafTrendTab() {
   const rows = buildTestRows(data);
   if (rows.length === 0) return <EmptyState />;
 
-  const trend = buildComplianceTrendData(data?.analysis ?? []);
+  const trend = buildComplianceTrendData(data?.analysis ?? [], data?.workoutDates);
   const paceTrend = buildPaceTrendData(rows, distanceUnit);
   const paceUnit = distanceUnit === "miles" ? "mi" : "km";
   const latest = rows[0];
