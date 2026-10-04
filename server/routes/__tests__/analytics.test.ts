@@ -234,7 +234,8 @@ describe("Analytics Routes", () => {
         const call = vi.mocked(storageMethod).mock.calls[0];
         expect(call[0]).toBe("test_user_id");
         expect(call[1]).toBe("2020-01-01");
-        // Clamped value should be today's UTC date string — never 2099.
+        // Clamped to today — never 2099. The mocked athlete has no stored
+        // timezone, so their today is the UTC date.
         expect(call[2]).not.toBe("2099-12-31");
         expect(call[2]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         const today = new Date().toISOString().split("T")[0];
@@ -695,5 +696,60 @@ describe("Analytics Routes", () => {
 
       expect(storage.weeklyReviews.setIntent).not.toHaveBeenCalled();
     });
+  });
+});
+
+// C4 (CODEBASE_ANALYSIS_2026-10-03): `to` was clamped to the server's UTC date.
+// The client sends the athlete's local today, so east of UTC every local
+// morning lost today's sessions from PRs, progression and the overview.
+describe("Analytics date clamp uses the athlete's today, not the UTC date (C4)", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    await resetRouteTestState();
+    vi.resetAllMocks();
+    _cacheForTesting.clear();
+    _prCacheForTesting.clear();
+    _workoutLogCacheForTesting.clear();
+    // 22:00 UTC on the 2nd is already 08:00 on the 3rd in Sydney.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-02T22:00:00Z"));
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5, userTimezone: "Australia/Sydney" } as never);
+    app = createTestApp(analyticsRouter);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const slimSetEndpoints = ["/api/v1/personal-records", "/api/v1/exercise-analytics"];
+
+  it.each(slimSetEndpoints)("%s keeps a local-today 'to' that is ahead of UTC", async (endpoint) => {
+    const response = await request(app).get(`${endpoint}?from=2026-09-04&to=2026-10-03`);
+
+    expect(response.status).toBe(200);
+    // Clamped to the UTC date this was 2026-10-02: this morning's session vanished.
+    expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledWith(
+      "test_user_id", "2026-09-04", "2026-10-03", { onlyTraining: true },
+    );
+  });
+
+  it.each(slimSetEndpoints)("%s still clamps a future 'to', to the athlete's today", async (endpoint) => {
+    const response = await request(app).get(`${endpoint}?from=2026-09-04&to=2099-12-31`);
+
+    expect(response.status).toBe(200);
+    expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledWith(
+      "test_user_id", "2026-09-04", "2026-10-03", { onlyTraining: true },
+    );
+  });
+
+  it("ends the training overview's window, and its load model's today, on the athlete's today", async () => {
+    const response = await request(app).get("/api/v1/training-overview?from=2026-07-06&to=2026-10-03");
+
+    expect(response.status).toBe(200);
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
+      "test_user_id", "2026-07-06", "2026-10-03", { onlyTraining: true },
+    );
+    expect(vi.mocked(calculateTrainingOverview).mock.calls[0][3]?.trainingLoadInput?.currentDate).toBe("2026-10-03");
   });
 });

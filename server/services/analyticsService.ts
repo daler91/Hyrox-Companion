@@ -1,3 +1,4 @@
+import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import { pooledRatio, roundOrNull } from "@shared/ratio";
 import type {
   ExerciseLoadTag,
@@ -7,12 +8,14 @@ import type {
   MuscleGroupCoverage,
   OverviewStats,
   PersonalRecord,
+  PersonalRecordValue,
   TrainingOverview,
   WeeklySummary,
   WorkoutLog,
 } from "@shared/schema";
 import {
   EXERCISE_DEFINITIONS,
+  exerciseTracksDistance,
   getExerciseHeatMapMuscles,
   getExerciseMovementPatterns,
   MOVEMENT_PATTERNS,
@@ -146,19 +149,119 @@ export function isTimePrImprovement(
   return TIME_LONGER_IS_BETTER.has(key) ? current > previous : current < previous;
 }
 
-function updateBestTime(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
+/**
+ * How much work a timed set's clock measured, so a time is only ever compared
+ * with a time for the same amount — C1 (CODEBASE_ANALYSIS_2026-10-03). Keeping
+ * the raw minimum per exercise made 250 m of SkiErg in 0:54 a "New PR" over
+ * 1000 m in 4:00, and every runner's shortest-ever run their "best time".
+ *
+ * A set with a distance is sized by it, in metres through its own unit stamp;
+ * one without is sized by its reps (100 wall balls is not 50), and one with
+ * neither stands on its own, so it never beats a time that did state its size
+ * (or, on distance-carrying work, is no record at all: isUnsizedDuration).
+ * Distance wins over reps, as in coachingInsights' exclusive speed/time buckets.
+ */
+export interface TimedEffortSize {
+  readonly meters: number | null;
+  readonly reps: number | null;
+}
+
+/** The best time logged at one size of effort. */
+export interface SizedBestTime extends TimedEffortSize {
+  best: PersonalRecordValue;
+  /** The sessions that logged this size, which picks the headline record. */
+  readonly workoutLogIds: Set<string>;
+}
+
+// Distances this close are one piece: 1 km in metres and 3,280 ft are the same
+// 1 km, and a GPS 5.02 km is the athlete's 5 km.
+const SAME_DISTANCE_TOLERANCE = 0.01;
+
+function timedEffortSize(
+  set: SlimLoggedExerciseSet,
+  longerIsBetter: boolean,
+  preferences: UnitPreferences | undefined,
+): TimedEffortSize {
+  if (set.distance != null && set.distance > 0) {
+    return { meters: storedDistanceToMetersStamped(set.distance, set, preferences ?? {}), reps: null };
+  }
+  // A hold's clock is the whole result: 3 x 60 s and one 60 s are the same hold.
+  const reps = !longerIsBetter && set.reps != null && set.reps > 0 ? set.reps : null;
+  return { meters: null, reps };
+}
+
+// Distance-carrying exercises whose catalogue entry fixes the distance, so a
+// bare clock on them is still a result.
+const FIXED_DISTANCE_EXERCISES: ReadonlySet<string> = new Set(["run_1k"]);
+
+/**
+ * Whether a time logged with neither distance nor reps is only how long the
+ * athlete went: a 20 min easy run is not a PR over a 30 min one, it is a
+ * shorter run (exerciseTracksDistance; coachingInsights skips these too) — C1
+ * (CODEBASE_ANALYSIS_2026-10-03). An unresolved custom label stays timed: the
+ * "custom" entry lists distance among every field, which says nothing about it.
+ */
+function isUnsizedDuration(directionKey: string, size: TimedEffortSize): boolean {
+  if (size.meters != null || size.reps != null) return false;
+  if (directionKey === "custom" || FIXED_DISTANCE_EXERCISES.has(directionKey)) return false;
+  return exerciseTracksDistance(directionKey);
+}
+
+export function isSameEffortSize(a: TimedEffortSize, b: TimedEffortSize): boolean {
+  if (a.meters == null || b.meters == null) {
+    return a.meters == null && b.meters == null && a.reps === b.reps;
+  }
+  return Math.abs(a.meters - b.meters) <= SAME_DISTANCE_TOLERANCE * Math.max(a.meters, b.meters);
+}
+
+function updateBestTime(
+  bestTimes: SizedBestTime[],
+  set: SlimLoggedExerciseSet,
+  preferences?: UnitPreferences,
+): void {
   if (!set.time || set.time <= 0) return;
   const directionKey = timeDirectionKey(set.exerciseName, set.customLabel);
   if (TIME_NOT_A_PR_METRIC.has(directionKey)) return;
 
   const longerIsBetter = TIME_LONGER_IS_BETTER.has(directionKey);
-  const isImprovement =
-    !pr.bestTime ||
-    (longerIsBetter ? set.time > pr.bestTime.value : set.time < pr.bestTime.value);
-
-  if (isImprovement) {
-    pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
+  const size = timedEffortSize(set, longerIsBetter, preferences);
+  if (isUnsizedDuration(directionKey, size)) return;
+  const record = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
+  const sized = bestTimes.find((candidate) => isSameEffortSize(candidate, size));
+  if (!sized) {
+    bestTimes.push({ ...size, best: record, workoutLogIds: new Set([set.workoutLogId]) });
+    return;
   }
+
+  sized.workoutLogIds.add(set.workoutLogId);
+  const isImprovement = longerIsBetter ? set.time > sized.best.value : set.time < sized.best.value;
+  if (isImprovement) sized.best = record;
+}
+
+/**
+ * The one best time a PersonalRecord can carry, which has no room for the size
+ * it was set at. It comes from the size the athlete repeats most (in sessions,
+ * ties to the more recent best), because a best only means something against
+ * other attempts at the same piece. When several sizes are logged, one tried in
+ * a single session is not a record of anything yet; that is also what keeps a
+ * history of all-different GPS run lengths from headlining any of them.
+ */
+function headlineBestTime(bestTimes: readonly SizedBestTime[]): PersonalRecordValue | undefined {
+  if (bestTimes.length === 1) return bestTimes[0].best;
+  let headline: SizedBestTime | undefined;
+  for (const sized of bestTimes) {
+    const sessions = sized.workoutLogIds.size;
+    if (sessions < 2) continue;
+    const headlineSessions = headline?.workoutLogIds.size ?? 0;
+    if (
+      !headline ||
+      sessions > headlineSessions ||
+      (sessions === headlineSessions && sized.best.date > headline.best.date)
+    ) {
+      headline = sized;
+    }
+  }
+  return headline?.best;
 }
 
 type E1RMCandidate = SlimLoggedExerciseSet & { weight: number; reps: number };
@@ -182,36 +285,61 @@ function updateE1RM(pr: PersonalRecord, set: SlimLoggedExerciseSet, preferences?
   }
 }
 
+export interface PersonalRecordTally {
+  records: Record<string, PersonalRecord>;
+  /** Every best time per exercise key, one per size of effort (C1). */
+  bestTimesBySize: Record<string, SizedBestTime[]>;
+}
+
 /**
- * Personal records per exercise. `preferences` (the athlete's current units)
- * makes the comparison stamp-aware: every value is read through its row's unit
- * stamp into the current unit before comparing, and the returned values are in
- * that unit — the one the client labels them with.
+ * Personal records per exercise, plus the per-size best times the single
+ * `bestTime` headline is drawn from (new-PR detection compares those).
+ * `preferences` (the athlete's current units) makes the comparison
+ * stamp-aware: every value is read through its row's unit stamp into the
+ * current unit before comparing, and the returned values are in that unit —
+ * the one the client labels them with.
  */
+export function tallyPersonalRecords(
+  allSets: SlimLoggedExerciseSet[],
+  preferences?: UnitPreferences,
+): PersonalRecordTally {
+  const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
+  const bestTimesBySize = Object.create(null) as Record<string, SizedBestTime[]>;
+
+  for (const set of allSets) {
+    const prKey = getExerciseKey(set);
+    if (!prs[prKey]) {
+      prs[prKey] = { category: set.category, customLabel: set.customLabel };
+      bestTimesBySize[prKey] = [];
+    }
+    const pr = prs[prKey];
+    updateMaxWeight(pr, set, preferences);
+    updateMaxDistance(pr, set, preferences);
+    updateBestTime(bestTimesBySize[prKey], set, preferences);
+    updateE1RM(pr, set, preferences);
+  }
+
+  for (const [prKey, bestTimes] of Object.entries(bestTimesBySize)) {
+    const bestTime = headlineBestTime(bestTimes);
+    if (bestTime) prs[prKey].bestTime = bestTime;
+  }
+
+  return { records: prs, bestTimesBySize };
+}
+
 export function calculatePersonalRecords(
   allSets: SlimLoggedExerciseSet[],
   preferences?: UnitPreferences,
 ): Record<string, PersonalRecord> {
-  const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
-
-  for (const set of allSets) {
-    const prKey = getExerciseKey(set);
-    if (!prs[prKey]) prs[prKey] = { category: set.category, customLabel: set.customLabel };
-    const pr = prs[prKey];
-    updateMaxWeight(pr, set, preferences);
-    updateMaxDistance(pr, set, preferences);
-    updateBestTime(pr, set);
-    updateE1RM(pr, set, preferences);
-  }
-
-  return prs;
+  return tallyPersonalRecords(allSets, preferences).records;
 }
 
 /**
  * Count personal records whose all-time best was achieved within
  * [fromStr, toStr] (inclusive, YYYY-MM-DD). Powers the weekly-summary email's
  * "PRs This Week" stat (W18). Counts per metric (maxWeight / maxDistance /
- * bestTime / estimated1RM), matching findPersonalRecordAchievements' grain.
+ * bestTime / estimated1RM), matching findPersonalRecordAchievements' grain,
+ * except that best time counts only the headline size (C1).
  */
 export function countPersonalRecordsInRange(
   prs: Record<string, PersonalRecord>,
@@ -366,6 +494,29 @@ function zeroFillWeeks(weekMap: Map<string, WeekAccumulator>, period?: { from?: 
   for (const weekStart of mondaysBetween(fromMonday, toMonday)) {
     if (!weekMap.has(weekStart)) weekMap.set(weekStart, emptyWeek());
   }
+}
+
+type Period = { from?: string; to?: string };
+
+/**
+ * The selected window's length in days, both ends inclusive, or null when it
+ * is open-ended ("all time") or empty.
+ */
+function periodLengthDays(period?: Period): number | null {
+  if (!period?.from || !period.to) return null;
+  const days = dayDiff(period.from, period.to) + 1;
+  return days > 0 ? days : null;
+}
+
+/**
+ * The equal-length window immediately before `period`: the one the previous
+ * logs were fetched for (trainingOverviewLoader's computePreviousWindow).
+ */
+function previousPeriodOf(period?: Period): { from: string; to: string } | undefined {
+  const days = periodLengthDays(period);
+  if (days == null || !period?.from) return undefined;
+  const to = addDaysToISODate(period.from, -1);
+  return { from: addDaysToISODate(to, -(days - 1)), to };
 }
 
 /** Every Monday from `fromMonday` to `toMonday` inclusive. */
@@ -665,9 +816,10 @@ export function buildMuscleGroupCoverage(
  * Aggregate the flat weekly summaries into the four card-level stats that
  * the Analytics Overview tab renders. Kept as a pure function so it can be
  * reused for both the current period and the previous-period comparison
- * data without duplicating logic on the client.
+ * data without duplicating logic on the client. `periodDays` is the selected
+ * window's length, which "Avg / Week" is measured over (C6).
  */
-export function computeOverviewStats(weeklySummaries: WeeklySummary[]): OverviewStats {
+export function computeOverviewStats(weeklySummaries: WeeklySummary[], periodDays?: number | null): OverviewStats {
   if (weeklySummaries.length === 0) {
     return {
       totalWorkouts: 0,
@@ -708,9 +860,13 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
       rpeWeightTotal += w.rpeCount;
     }
   }
-  // `weeklySummaries` is now zero-filled across the period, so rest weeks are
-  // in the denominator and this can fall below 1.0 (audit H7).
-  const avgPerWeek = roundOrNull(pooledRatio(totalWorkouts, weeklySummaries.length), 1) ?? 0;
+  // Over the selected period's real length when there is one. Counting the
+  // Monday-weeks it touches made a partial first week and the in-progress
+  // current week whole ones, so a steady 4x/week athlete read 2.8-3.4 on
+  // "Last 30 days" — C6 (CODEBASE_ANALYSIS_2026-10-03). Without a period ("all
+  // time") the zero-filled weeks stand in, rest weeks included (audit H7).
+  const weeks = periodDays != null && periodDays > 0 ? periodDays / 7 : weeklySummaries.length;
+  const avgPerWeek = roundOrNull(pooledRatio(totalWorkouts, weeks), 1) ?? 0;
   // Divide by the workouts that actually CARRY a duration, not by every
   // workout: the numerator only ever summed those (audit H8).
   const avgDuration = Math.round(roundOrNull(pooledRatio(totalDuration, workoutsWithDuration), 0) ?? 0);
@@ -729,10 +885,11 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
 export interface TrainingOverviewOptions {
   /**
    * The window the athlete selected, when there is one. Used to zero-fill the
-   * weekly rollup so leading and trailing rest weeks count toward "Avg / Week"
-   * and appear on the chart, not just the interior ones (audit H7, M10).
+   * weekly rollup so leading and trailing rest weeks appear on the chart, not
+   * just the interior ones (audit H7, M10), and as the length "Avg / Week" is
+   * measured over, for this window and the equal-length one before it (C6).
    */
-  period?: { from?: string; to?: string };
+  period?: Period;
   /**
    * Plan sessions DUE in the window, and the same for the previous window.
    * The denominator for "Avg Adherence" — see the note at its call site and
@@ -774,15 +931,26 @@ export interface TrainingOverviewOptions {
  * of error as emailing them a 100% completion rate (audit H6, H10).
  */
 export function computeAdherencePct(
-  logs: readonly { compliancePct?: number | null }[],
+  logs: readonly { compliancePct?: number | null; planDayId?: string | null }[],
   dueSessionCount: number | undefined,
 ): number | null {
   if (dueSessionCount == null) return null;
-  let complianceSum = 0;
+  // The denominator counts plan DAYS, so the numerator must too: an AM and a
+  // PM log linked to one day added both percentages against one due session.
+  // Each day contributes its best log, and the result is capped at 100 because
+  // the due count also leaves out days a declared absence covers even when
+  // they were completed, which the logs here cannot see — C7
+  // (CODEBASE_ANALYSIS_2026-10-03).
+  const bestByPlanDay = new Map<string, number>();
   for (const log of logs) {
-    if (typeof log.compliancePct === "number") complianceSum += log.compliancePct;
+    if (typeof log.compliancePct !== "number" || !log.planDayId) continue;
+    const best = bestByPlanDay.get(log.planDayId);
+    if (best == null || log.compliancePct > best) bestByPlanDay.set(log.planDayId, log.compliancePct);
   }
-  return roundOrNull(pooledRatio(complianceSum, dueSessionCount), 0);
+  let complianceSum = 0;
+  for (const dayPct of bestByPlanDay.values()) complianceSum += dayPct;
+  const adherencePct = roundOrNull(pooledRatio(complianceSum, dueSessionCount), 0);
+  return adherencePct == null ? null : Math.min(adherencePct, 100);
 }
 
 export function calculateTrainingOverview(
@@ -840,7 +1008,8 @@ export function calculateTrainingOverview(
     ...(distanceUnit ? { distanceUnit } : {}),
     ...(athlete ? { athlete } : {}),
   });
-  const currentStats = computeOverviewStats(weeklySummaries);
+  const periodDays = periodLengthDays(period);
+  const currentStats = computeOverviewStats(weeklySummaries, periodDays);
   const completedDates = new Set(workoutLogs.map((log) => log.date));
   // The athlete's week, not the server's: a UTC-8 athlete's weekly count used
   // to reset on Sunday afternoon (audit H11). `userTimezone` was already in
@@ -853,19 +1022,23 @@ export function calculateTrainingOverview(
   // other four, and the athlete was shown 90% (audit H10).
   //
   // `compliancePct` is only ever written for a plan-linked workout
-  // (persistAdherenceSnapshot takes a planDayId), so the numerator population
-  // was already right; only the denominator was wrong. A due session with no
-  // log contributes 0, which is the point.
+  // (persistAdherenceSnapshot takes a planDayId), and computeAdherencePct
+  // counts it once per plan day (C7). A due session with no log contributes 0,
+  // which is the point.
   currentStats.avgCompliancePct = computeAdherencePct(workoutLogs, dueSessionCount);
 
   // Previous-period stats are optional — the route handler omits them
   // when the user picked "all time" (no lower bound → no meaningful
-  // previous window).
+  // previous window). Built over its own window, zero-filled and measured
+  // exactly like the current one: without a period only its interior rest
+  // weeks were filled, so the two sides of the delta divided by different
+  // rules (C6).
   const previousStats = previousWorkoutLogs
     ? (() => {
       const stats = computeOverviewStats(
-        buildWeeklySummaries(previousWorkoutLogs, undefined, previousExerciseSets, unitPreferences)
+        buildWeeklySummaries(previousWorkoutLogs, previousPeriodOf(period), previousExerciseSets, unitPreferences)
           .summaries,
+        periodDays,
       );
       stats.avgCompliancePct = computeAdherencePct(previousWorkoutLogs, previousDueSessionCount);
       return stats;

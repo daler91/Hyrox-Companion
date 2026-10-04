@@ -85,13 +85,13 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks bestTime PR (lower is better)", () => {
     const sets = [
-      makeSet({ exerciseName: "easy_run", category: "running", time: 30, date: "2026-01-10", workoutLogId: "w1" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 25, date: "2026-01-15", workoutLogId: "w2" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 28, date: "2026-01-20", workoutLogId: "w3" }),
+      makeSet({ exerciseName: "run_1k", category: "running", time: 4.5, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "run_1k", category: "running", time: 4.1, date: "2026-01-15", workoutLogId: "w2" }),
+      makeSet({ exerciseName: "run_1k", category: "running", time: 4.3, date: "2026-01-20", workoutLogId: "w3" }),
     ];
     const prs = calculatePersonalRecords(sets);
-    expect(prs["easy_run"].bestTime).toEqual({
-      value: 25,
+    expect(prs["run_1k"].bestTime).toEqual({
+      value: 4.1,
       date: "2026-01-15",
       workoutLogId: "w2",
     });
@@ -848,7 +848,8 @@ describe("calculateTrainingOverview — athlete-local coverage dates", () => {
 });
 
 describe("computeAdherencePct — adherence over DUE sessions (audit H10)", () => {
-  const logged = (pcts: (number | null)[]) => pcts.map((compliancePct) => ({ compliancePct }));
+  const logged = (pcts: (number | null)[]) =>
+    pcts.map((compliancePct, i) => ({ compliancePct, planDayId: compliancePct == null ? null : `day-${i}` }));
 
   it("does not reward skipping: one 90% session out of five due is 18%, not 90%", () => {
     // The old form divided by the number of sessions LOGGED, so the four the

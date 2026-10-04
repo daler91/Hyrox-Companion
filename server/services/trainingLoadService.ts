@@ -1,6 +1,7 @@
 import { addDaysToISODate as addDays, toIsoDateUtc } from "@shared/dateUtils";
 import {
   type ExerciseLoadTag,
+  type ExerciseName,
   type LoadGovernorAcwrZone,
   normalizeExerciseName,
   type TrainingLoadOverview,
@@ -8,6 +9,7 @@ import {
   type WorkoutLog,
 } from "@shared/schema";
 
+import { ENDURANCE_SPORT_EXERCISES, inferExerciseFromTitle } from "./trainingLoad/bodySystemProfiles";
 import {
   classifyHrZone,
   estimateLthr,
@@ -33,7 +35,7 @@ import {
   type TrainingLoadComputation,
   type TrainingLoadSet,
 } from "./trainingLoad/types";
-import { dateRange, getOrCreateDay, inferWorkoutText, round } from "./trainingLoad/utils";
+import { dateRange, getOrCreateDay, round } from "./trainingLoad/utils";
 
 // Training load orchestrator. Walks the athlete's logs day by day, scores each
 // workout (trainingLoad/stressScores.ts), attributes load to the injury vectors,
@@ -346,25 +348,36 @@ function computeRangeStart(
   return earliestLog;
 }
 
-// Endurance keywords in a workout's own text. Named because two things key off
-// it: whether the duration-based cardio branch runs at all, and — for a workout
-// with no sets to read a tag from — which vector profile its load lands on.
-const ENDURANCE_TEXT_PATTERN = /run|bike|row|ski|walk|hike/i;
+// The impact subset of the endurance sports: repeated foot-strike, which is
+// what the running vector profile's elastic-tendon weighting is calibrated for.
+const FOOT_STRIKE_EXERCISES: ReadonlySet<ExerciseName> = new Set<ExerciseName>(["run", "walking", "hiking"]);
 
-// The impact subset of the above: repeated foot-strike, which is what the
-// running vector profile's elastic-tendon weighting is calibrated for.
-const FOOT_STRIKE_TEXT_PATTERN = /run|walk|hike/i;
+/**
+ * A set of endurance work: cardio by category or distance, or an endurance
+ * sport by name. SkiErg and rowing are `functional` in the catalogue, so a
+ * piece logged with only a time is endurance work only by what it is.
+ */
+function isEnduranceSet(set: TrainingLoadSet): boolean {
+  if (isCardioSet(set)) return true;
+  const named = normalizeExerciseName(set.exerciseName);
+  const exercise = named && named !== "custom" ? named : normalizeExerciseName(set.customLabel ?? "");
+  return exercise != null && ENDURANCE_SPORT_EXERCISES.has(exercise);
+}
 
+/**
+ * Whether the workout's duration also scores as cardio. A workout with sets is
+ * judged on its sets alone. Its text used to be searched as a plain substring
+ * for run/bike/row/ski/walk/hike, so a strength day mentioning "rows",
+ * "crunches" or "tomorrow" — or the catalogue's own "Bent Over Row" label in
+ * the structured summary — took a full duration-based cardio score on top of
+ * its tonnage, about doubling its UTSS — C13 (CODEBASE_ANALYSIS_2026-10-03).
+ * A workout with no sets has nothing else to be scored on.
+ */
 function shouldApplyCardioStress(
-  log: Pick<WorkoutLog, "duration" | "focus" | "mainWorkout" | "accessory" | "notes">,
+  log: Pick<WorkoutLog, "duration">,
   sets: readonly TrainingLoadSet[],
 ): boolean {
-  return Boolean(
-    log.duration &&
-    (sets.length === 0 ||
-      sets.some(isCardioSet) ||
-      ENDURANCE_TEXT_PATTERN.test(inferWorkoutText(log))),
-  );
+  return Boolean(log.duration && (sets.length === 0 || sets.some(isEnduranceSet)));
 }
 
 /**
@@ -377,11 +390,11 @@ function shouldApplyCardioStress(
  * athlete whose running is all imported could never trip the Achilles guard.
  *
  * The exercise is resolved from the athlete's own focus/summary text through
- * the same normaliser the rest of the app uses; failing that, the endurance
- * keyword the cardio branch already matched on picks the category, so "45 min
- * easy run" loads posterior chain and Achilles the way a logged run does. A
- * workout that names nothing recognisable stays near zero, which is honest —
- * there is nothing to attribute it to.
+ * the same normaliser the rest of the app uses; failing that, an endurance
+ * word in it picks the category, so "45 min easy run" loads posterior chain
+ * and Achilles the way a logged run does. A workout that names nothing
+ * recognisable stays near zero, which is honest — there is nothing to
+ * attribute it to.
  */
 function inferredWorkoutTag(
   log: Pick<WorkoutLog, "focus" | "mainWorkout" | "accessory" | "notes">,
@@ -393,11 +406,14 @@ function inferredWorkoutTag(
   }
   // Only foot-strike work inherits the running profile, whose elastic-tendon
   // weight and tendon modifier exist for repeated impact. Rowing, skiing and
-  // cycling are in ENDURANCE_TEXT_PATTERN because they are duration work, but
-  // giving a Zwift ride the same Achilles loading as a run would invent a risk
-  // that is not there. They fall through to conditioning, which stays near zero
-  // — honest, because the text alone does not say what they loaded.
-  const category = FOOT_STRIKE_TEXT_PATTERN.test(inferWorkoutText(log)) ? "running" : "conditioning";
+  // cycling are duration work too, but giving a Zwift ride the same Achilles
+  // loading as a run would invent a risk that is not there. They fall through
+  // to conditioning, which stays near zero — honest, because the text alone
+  // does not say what they loaded. The words are matched whole, in the title
+  // and main text only, through the same matcher the body-system model uses:
+  // as a plain substring of all the text, "brunch" was a run (C13).
+  const sport = inferExerciseFromTitle(log);
+  const category = sport != null && FOOT_STRIKE_EXERCISES.has(sport) ? "running" : "conditioning";
   return inferTag("", category);
 }
 

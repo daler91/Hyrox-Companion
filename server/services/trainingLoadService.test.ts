@@ -722,6 +722,65 @@ describe("injury vectors for workouts with no sets (audit H19)", () => {
   });
 });
 
+// C13 (CODEBASE_ANALYSIS_2026-10-03): /run|bike|row|ski|walk|hike/ was matched
+// as a plain substring of the whole log text, so a strength day mentioning
+// "rows", "crunches" or even "tomorrow" took a full duration-based cardio score
+// on top of its tonnage — and the catalogue's own "Bent Over Row" label, which
+// the structured-log summary writes, is a whole-word "row".
+describe("cardio stress for sessions that carry sets (C13)", () => {
+  const DATE = "2026-05-22";
+  const dayFor = (overrides: Partial<WorkoutLog>, sets: TrainingLoadSet[] = []) =>
+    calculateTrainingLoad([log({ id: "log-1", date: DATE, duration: 60, rpe: 7, ...overrides })], sets, DEFAULT_EXERCISE_LOAD_TAGS, {
+      currentDate: DATE,
+      weightUnit: "kg",
+    }).dailyLoads.find((d) => d.date === DATE);
+  const upperBody = [
+    ...Array.from({ length: 5 }, (_, i) =>
+      set({ workoutLogId: "log-1", exerciseName: "bench_press", category: "strength", setNumber: i + 1, reps: 5, weight: 80 }),
+    ),
+    ...Array.from({ length: 4 }, (_, i) =>
+      set({ workoutLogId: "log-1", exerciseName: "bent_over_row", category: "strength", setNumber: i + 1, reps: 8, weight: 60 }),
+    ),
+  ];
+
+  it.each([
+    ["the structured summary's own label", { mainWorkout: "Bench Press 5x5, Bent Over Row 4x8" }],
+    ["plural rows", { mainWorkout: "Bench 5x5, bent-over rows 4x8" }],
+    ["crunches", { accessory: "Crunches 3x20" }],
+    ["core skills", { accessory: "Core skills" }],
+    ["med ball throws", { accessory: "Med ball throws" }],
+    ["plank walkouts", { accessory: "Plank walkouts" }],
+    ["a note about tomorrow", { notes: "Legs tomorrow" }],
+  ])("scores a strength session on its tonnage alone when its text mentions %s", (_label, text) => {
+    const neutral = dayFor({ focus: "Upper", mainWorkout: "Upper body" }, upperBody);
+    const worded = dayFor({ focus: "Upper", ...text }, upperBody);
+
+    expect(neutral?.cardioStressScore).toBe(0);
+    expect(worded?.cardioStressScore).toBe(0);
+    expect(worded?.utss).toBe(neutral?.utss);
+  });
+
+  it("still duration-loads an erg piece logged with only a time, whatever the text says", () => {
+    // SkiErg and rowing are `functional` in the catalogue, so isCardioSet does
+    // not see a time-only piece. The text used to rescue it; the set's own
+    // exercise does now.
+    const erg = dayFor({ focus: "Conditioning", mainWorkout: "Engine work" }, [
+      set({ workoutLogId: "log-1", exerciseName: "skierg", category: "functional", time: 20 }),
+    ]);
+
+    expect(erg?.cardioStressScore).toBeGreaterThan(0);
+  });
+
+  it("does not give a set-less log the running impact profile for a word that merely contains 'run'", () => {
+    // FOOT_STRIKE_TEXT_PATTERN had the same substring problem for set-less
+    // logs: "brunch" put the session on the Achilles-loading running profile.
+    const brunch = dayFor({ focus: "Brunch club", mainWorkout: "Social session" });
+
+    expect(brunch?.utss).toBeGreaterThan(0);
+    expect(brunch?.vectorLoads.elastic_tendon).toBe(0);
+  });
+});
+
 describe("bodyweightRepLoadKg — unweighted reps scale with the athlete (audit M2)", () => {
   it("leaves the reference athlete exactly where they were", () => {
     // Every governor threshold, ACWR baseline and periodisation reference in
