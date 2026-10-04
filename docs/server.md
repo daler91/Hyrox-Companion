@@ -57,7 +57,7 @@ Middleware is applied in the following order in `server/index.ts`:
 | 3 | `cors()` | CORS with origin allowlist (see below) |
 | 4 | `cspNonceMiddleware` | Per-request CSP nonce generation (production only) |
 | 5 | `helmet()` | Security headers, including the full **Content-Security-Policy** (per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload and referrer policy. |
-| 6 | `Permissions-Policy` | Sets `camera=(), microphone=(self), geolocation=()` |
+| 6 | `permissionsPolicy` | Sets `Permissions-Policy: camera=(self), microphone=(self), geolocation=()` (`server/middleware/permissionsPolicy.ts`): the camera and microphone for the app's own origin only (the nutrition barcode scanner and voice dictation), geolocation off |
 | 7 | `express.json({ limit: "2mb" })` | Body parsing for `/api/v1/coaching-materials` only |
 | 8 | `express.json({ limit: "10mb" })` | Body parsing for image-parse routes only (base64 image payloads; matched via `isImageParsePath`) |
 | 9 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture |
@@ -135,6 +135,7 @@ Route handlers follow a **thin controller** pattern -- they validate input, then
 
 Helmet is configured with the application's full Content-Security-Policy via `buildCspDirectives()` (`server/middleware/csp.ts`), including a per-request nonce in `script-src` (production). Additional settings:
 
+- `img-src` includes `blob:`, so photo previews built with `URL.createObjectURL` render (a `blob:` URL never matches `'self'`)
 - `crossOriginEmbedderPolicy: false`
 - `referrerPolicy: "strict-origin-when-cross-origin"`
 - `x-powered-by` header disabled on the Express app directly
@@ -151,13 +152,13 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 
 `server/routeUtils.ts` exports a `rateLimiter(category, maxRequests, windowMs)` factory. Key properties:
 
-- Per-user keying (falls back to IP for unauthenticated requests), namespaced by category
+- Per-user keying (falls back to IP for unauthenticated requests), namespaced by limiter: the bucket key is `${category}:${maxRequests}:${windowMs}:user:${id}` (or `:ip:`), so two limiters that share a category but not a cap or window keep separate counters
 - Default window: 60 seconds (`DEFAULT_RATE_LIMIT_WINDOW_MS`)
 - Standard `RateLimit-*` headers (RFC 6585)
 - Returns `429` with `Retry-After` header and `RATE_LIMITED` error code
 - Limiter instances are cached per `(category, maxRequests, windowMs)` tuple
 - Uses PostgreSQL-backed `rate_limit_buckets` outside tests so limits are shared across app replicas
-- **Store-error behaviour is split by method** (`passOnStoreError` is chosen per request in `server/routeUtils.ts`): safe methods (`GET`, `HEAD`, `OPTIONS`) fail **open**, so a Postgres blip cannot 500 the entire read surface; everything else — every mutation, and therefore every auth, AI-spend and write route — fails **closed**, where allowing unthrottled requests during a store outage is the bigger risk. An attacker cannot defeat the limiter on a mutating route by inducing store errors. Counts stay unified per category because both limiter instances share the same Postgres key.
+- **Store-error behaviour is split by method** (`passOnStoreError` is chosen per request in `server/routeUtils.ts`): safe methods (`GET`, `HEAD`, `OPTIONS`) fail **open**, so a Postgres blip cannot 500 the entire read surface; everything else — every mutation, and therefore every auth, AI-spend and write route — fails **closed**, where allowing unthrottled requests during a store outage is the bigger risk. An attacker cannot defeat the limiter on a mutating route by inducing store errors. Counts stay unified per limiter because both instances share the same Postgres key.
 - Every authenticated `/api/v1` route carries a limiter, including plain reads such as `GET /api/v1/plans`, `GET /api/v1/plans/:id`, `GET /api/v1/preferences` and the Strava/Garmin status and disconnect routes.
 - The SPA fallback route in `server/static.ts` has its own rate limiter (100 requests per 15 minutes)
 
@@ -202,8 +203,10 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 
 - Applies to mutating methods only (POST/PUT/PATCH/DELETE)
 - Requests without the header pass through untouched
-- Before the handler runs, the `(userId, key)` pair is atomically claimed in the `idempotency_keys` table as an in-progress row with a 60-second TTL, so a crashed or aborted request frees the key quickly. A concurrent duplicate that finds a live claim gets `409` with code `IDEMPOTENT_REQUEST_IN_PROGRESS`
+- Before the handler runs, the `(userId, key)` pair is atomically claimed in the `idempotency_keys` table as an in-progress row with a 60-second TTL and a random claim token, so a crashed request frees the key quickly. A concurrent duplicate that finds a live claim gets `409` with code `IDEMPOTENT_REQUEST_IN_PROGRESS`
 - Only a `2xx` response sent through `res.json` is cached (status code + body, 7-day TTL). Any other outcome, including a response that finishes without `res.json`, releases the claim so the same key can be retried
+- Caching and releasing are fenced to the claim token: they act only on the claim this request still owns, never on a newer claim another request made after this one lapsed
+- A client disconnect releases nothing, because the handler is still running and may yet commit. Its `res.json` still caches the result after the socket is gone, so a replay with the same key gets `409` while the handler runs and the stored response after it; a handler that never answers leaves the claim to lapse after 60 seconds
 - Response bodies over 64 KB are cached as a `{ idempotencyReplayed: true }` sentinel instead of the full payload
 - On repeat requests with the same key, the cached response (status code + body) is returned without re-executing the handler
 - Key length is capped at 255 characters (returns 400 if exceeded)
@@ -216,7 +219,7 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 
 ### Error Sanitization
 
-The global error handler returns generic `"Internal Server Error"` messages for 500-status errors. Error details (`err.details`) are only included in the response for non-500 errors. Only 5xx errors and 429s are reported to Sentry (`shouldReportToSentry()`); every other status is still logged and returned but not sent upstream.
+The global error handler (`server/middleware/errorHandler.ts`) passes on a status and message from two sources only: an `AppError`, whose message is replaced by a generic `"Internal Server Error"` at 500, and the app's own HTTP layer — the client-safe 4xx errors body-parser and csrf-csrf build with http-errors (`expose: true`), such as a malformed-JSON 400, a 413 or `EBADCSRFTOKEN` — plus the router's own 400 for a malformed percent-escape in a route param (a `URIError`), answered with a fixed `Malformed URL` message and never reported to Sentry. Any other error that carries a status came from someone else's API (an AI provider's 400/401/403/429, a Strava 404) and is answered `502 EXTERNAL_API_ERROR` with a generic message, so a provider 429 is never read as the app's rate limit and a rotated key never looks like an expired session; an error with no status is a generic `500 INTERNAL_SERVER_ERROR`. Error details (`err.details`) are only included for 4xx responses. Only 5xx errors and 429s are reported to Sentry (`shouldReportToSentry()`); every other status is still logged and returned but not sent upstream.
 
 The same rule applies to errors that are **stored** and read back later, not just
 those returned inline. `training_plans.generation_error` is surfaced verbatim by
@@ -262,14 +265,17 @@ sequenceDiagram
     
     Client->>Express: API Request
     Express->>Handler: After middleware
-    Handler-->>Express: throw Error(status, message)
+    Handler-->>Express: throw AppError, or next(err)
+    Note over Express: status = the AppError's, the HTTP layer's 4xx,<br/>502 for another service's status, else 500
     alt status >= 500 or status == 429
         Express->>Sentry: captureException(err)
     end
-    alt status < 500
-        Express->>Client: { error: err.message, code, details }
-    else status >= 500
-        Express->>Client: { error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" }
+    alt an AppError, or the HTTP layer's 4xx
+        Express->>Client: { error: err.message, code, details } (message hidden at 500, details below 500 only)
+    else another service's status
+        Express->>Client: 502 { error: generic message, code: "EXTERNAL_API_ERROR" }
+    else no status
+        Express->>Client: 500 { error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" }
     end
 ```
 
@@ -445,7 +451,7 @@ Cron jobs run in-process on **each** app replica; the advisory lock above is wha
 
 `server/sharedRuntimeState.ts` owns short-lived shared cache helpers backed by Postgres:
 
-- `rate_limit_buckets` stores per-category request counters and reset timestamps for `rateLimiter(...)`.
+- `rate_limit_buckets` stores per-limiter (category, cap and window) request counters and reset timestamps for `rateLimiter(...)`.
 - `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, the RAG retrieval cache, and the embedding health probe. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
 - Expired rows are pruned daily by the `sharedRuntimeCleanup` cron job at 04:15 UTC.
 
@@ -467,6 +473,7 @@ In production (`server/static.ts`):
 
 - `/assets/*` is served with `Cache-Control: max-age=1y, immutable` (fingerprinted build artifacts)
 - Other static files are served with `max-age=0` and no index
+- A missing `/assets/*` file is a `404` (with `Cache-Control: no-store`), and an `/api` path no route matched is a JSON `404 NOT_FOUND`. Neither gets the SPA shell: a missing chunk must fail as a chunk error, and the offline queue treats any `2xx` as synced
 - The SPA fallback (`/{*splat}`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags. The named-wildcard form is required by Express 5's path-to-regexp v8 -- a bare `*` throws at route registration
 - The fallback route is rate-limited to 100 requests per 15-minute window
 

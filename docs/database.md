@@ -839,7 +839,7 @@ Short-lived shared runtime cache for safe multi-instance operation, read and wri
 Current use cases:
 - Clerk auth seen-cache (`auth-seen:*`, `server/clerkAuth.ts`)
 - RAG embedding-health probe (`rag-health:embedding`) and RAG retrieval cache (`rag:*`), both in `server/services/ragService.ts`
-- AI circuit-breaker state (`ai-circuit-breaker:state`, `server/ai/circuitBreaker.ts`), restored at startup
+- AI circuit-breaker state, one key per provider and capability (`ai-circuit-breaker:<capability>:<provider>`, e.g. `ai-circuit-breaker:text:anthropic`, `server/ai/circuitBreaker.ts`), restored at startup
 - Planned-session duration/RPE estimates (`planned-session-estimate:*`, `server/services/sessionEstimate/plannedSessionEstimate.ts`)
 - Single-use Strava OAuth state (`strava-oauth-state:*`, `server/strava.ts`), claimed atomically with `claimRuntimeCacheKey()` so a replayed callback is rejected
 - Strava webhook subscription record (`strava:webhook-subscription`, `server/stravaWebhook.ts`) and the shared background-sync cooldown after a 429 (`strava:sync-cooldown`, `server/services/stravaAutoSync.ts`)

@@ -162,10 +162,14 @@ belong to the page (PR3), not to this endpoint.
 so a week is linkable and shareable — `/review?week=2026-08-04`.
 
 **Data.** `api.analytics.getWeeklyReview(week)`, `QUERY_KEYS.weeklyReview(week)`, and the
-`useWeeklyReview` hook. A closed week never changes, so it is cached with
-`staleTime: Infinity` and paging back through the year re-fetches nothing; the in-progress
-week keeps normal staleness. No localStorage snapshot (unlike `useRacePrediction`) — this is
-not an expensive AI payload.
+`useWeeklyReview` hook. The server builds a closed week's review live, so a late log, skip,
+move, delete or annotation still changes it. A closed week is cached with no expiry only
+while the timeline cache vouches nothing changed under it: once a timeline query is
+invalidated by a write or refetched after the review was, the review is stale and the next
+visit re-fetches it. Without a timeline cache to go by it falls back to a minute's staleness.
+Paging back through the year re-fetches nothing while nothing changed; the in-progress week
+keeps normal staleness (CL22, CODEBASE_ANALYSIS_2026-10-03). No localStorage snapshot (unlike
+`useRacePrediction`) — this is not an expensive AI payload.
 
 **The client computes the week twice, and the server wins.** The browser knows only its own
 timezone, so `client/src/lib/weekDates.ts` (`mondayOf`, `lastCompletedWeekStart`, mirroring

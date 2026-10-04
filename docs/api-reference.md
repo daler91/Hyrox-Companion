@@ -4,7 +4,7 @@
 
 ## Overview
 
-fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints require Clerk JWT authentication except the two [health probes](#health-routes), [`GET /api/v1/csrf-token`](#get-apiv1csrf-token), the Strava OAuth callback and webhook (`GET /api/v1/strava/callback`, `GET`/`POST /api/v1/strava/webhook`), the signed-token email unsubscribe link (`GET`/`POST /api/v1/emails/unsubscribe`), and the `x-cron-secret`-gated [cron trigger](#get-apiv1cronemails). Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
+fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints require Clerk JWT authentication except the two [health probes](#health-routes), [`GET /api/v1/csrf-token`](#get-apiv1csrf-token), the Strava OAuth callback and webhook (`GET /api/v1/strava/callback`, `GET`/`POST /api/v1/strava/webhook`), the signed-token email unsubscribe link (`GET`/`POST /api/v1/emails/unsubscribe`), and the `x-cron-secret`-gated [cron trigger](#get-apiv1cronemails). Request bodies are validated with Zod schemas, and rate limiting is applied per user and per limiter (category, cap and window).
 
 **Base URL:** `/api/v1`
 **Content-Type:** `application/json` (requests and responses)
@@ -50,7 +50,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 
 There are two standard error body shapes, both carrying a machine-readable `code`:
 
-- **Global error handler** (`server/index.ts`) — thrown `AppError`s and anything else passed to `next(err)` (including CSRF failures). Handlers that respond directly — `sendNotFound`, the rate limiter, the auth guard — use the same `{ error, code }` pair.
+- **Global error handler** (`server/middleware/errorHandler.ts`) — thrown `AppError`s and anything else passed to `next(err)` (including CSRF failures). Handlers that respond directly — `sendNotFound`, the rate limiter, the auth guard — use the same `{ error, code }` pair. An uncaught error from another service (an AI provider's 400/401/403/429, say) is answered `502 EXTERNAL_API_ERROR` with a generic message, never with that service's own status or text.
 
   ```json
   {
@@ -62,6 +62,7 @@ There are two standard error body shapes, both carrying a machine-readable `code
 
   - `details` is only included on 4xx responses whose error carries it.
   - A 500 always returns `"Internal Server Error"` to prevent leaking internals.
+  - An error from another service is a `502` with `EXTERNAL_API_ERROR` and a generic message; its own status and text are not passed on.
 
 - **Validation middleware** (`validateBody` / `validateQuery` / `validateParams` in `server/routeUtils.ts`) — a failed Zod parse returns `400` with `message` in place of `error` (see [Request Validation](#request-validation)).
 
@@ -126,6 +127,7 @@ RateLimit-Reset: 45
 | 413    | `PAYLOAD_TOO_LARGE`                                                                                     | Body exceeded the route's size limit                                                                                                                              |
 | 429    | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED`                                                                    | Rate limit exceeded (includes `Retry-After` header), or this user's AI spend budget is spent                                                                      |
 | 500    | `INTERNAL_SERVER_ERROR`                                                                                 | Server error                                                                                                                                                      |
+| 502    | `EXTERNAL_API_ERROR`                                                                                    | A service the request depends on (an AI provider, Strava) failed; its own status and message are not passed on                                                    |
 | 503    | `AI_FEATURES_DISABLED`, `AI_GLOBAL_BUDGET_EXCEEDED`, `AI_BUDGET_UNAVAILABLE`                            | AI is switched off for this deployment (`AI_FEATURES_ENABLED=false`), the application-wide AI spend ceiling is reached, or the budget check itself is unavailable |
 
 `AI_GLOBAL_BUDGET_EXCEEDED` is deliberately a 503 rather than the 429 used for a
@@ -137,7 +139,7 @@ not cause and cannot clear by waiting out their own allowance. See
 
 ## Rate Limiting
 
-Rate limits are applied per-user (keyed by Clerk userId, falling back to the client IP when the request carries no Clerk session) and namespaced by category so limits are independent across route groups.
+Rate limits are applied per-user (keyed by Clerk userId, falling back to the client IP when the request carries no Clerk session) and namespaced by limiter — category, cap and window — so limits are independent across route groups. Two limiters that share a category but not a cap or window (`workoutSet` at 120/min for set edits and 60/min for adding a set) keep separate counters; routes with the same category, cap and window share one.
 
 - **Default window:** 60 seconds
 - **Strava routes:** 15-minute window
@@ -175,7 +177,7 @@ Mutating endpoints support the `X-Idempotency-Key` header for safe request repla
 
 - **Header:** `X-Idempotency-Key` (optional, max 255 characters — a longer key gets `400 BAD_REQUEST`)
 - **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE) behind `protectedMutationGuards`, the server atomically claims `(userId, key)` — not scoped to the route — before the handler runs. Only a 2xx JSON response is cached, for 7 days; repeat requests with the same key return it without re-executing the handler. A non-2xx response releases the claim, so a retry re-executes.
-- **Concurrent duplicates:** a request that arrives while the first is still running gets `409 IDEMPOTENT_REQUEST_IN_PROGRESS`. An abandoned claim expires after 60 seconds.
+- **Concurrent duplicates:** a request that arrives while the first is still running gets `409 IDEMPOTENT_REQUEST_IN_PROGRESS`, including after the first request's client disconnected: the handler keeps running, and the replay gets the stored response once it finishes. An abandoned claim expires after 60 seconds.
 - **Large responses:** a 2xx body over 64 KB is cached as the sentinel `{ "idempotencyReplayed": true }` rather than in full.
 - **Use case:** The client's offline queue sends this header when replaying mutations that were queued while offline, preventing duplicate state changes.
 
@@ -1169,6 +1171,8 @@ All analytics endpoints support optional date filtering via query parameters: `?
 | Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` (same file)               |
 | Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `createCoalescedCache()`     |
 
+Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, and Strava and Garmin syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
+
 ### GET /api/v1/personal-records
 
 Calculate personal records across all exercises.
@@ -1565,7 +1569,8 @@ Generate AI coaching suggestions for upcoming planned workouts.
 - **Rate limit:** `suggestions` category, 3/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** `{ suggestions: WorkoutSuggestion[], ragInfo: RagInfo }`
-- **Note:** Returns empty suggestions if no upcoming planned workouts exist.
+- **Note:** Returns empty suggestions if no upcoming planned workouts exist. An empty `suggestions` list otherwise means the coach looked and found nothing to change.
+- **Errors:** a failed model call (provider error, open circuit breaker, timeout, or a reply that isn't the JSON array asked for) is an error, not an empty list: `503 AI_UNAVAILABLE`, `429 AI_QUOTA_EXCEEDED`, `400 AI_INVALID_INPUT` or `502 AI_ERROR`. The one exception is a red-flag safety escalation, which is still returned as the single suggestion.
 
 ### POST /api/v1/timeline/ai-suggestions/apply
 
@@ -1888,7 +1893,7 @@ Incrementally sync Strava activities into workout logs (since `lastSyncedAt` wit
 
 - **Auth:** Required
 - **Rate limit:** `stravaSync` category, 5 per 15 minutes, per user
-- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log built like a manual confirm, or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor.
+- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log that carries the day's prescription text but only what the recording measured (one set built from a distance/cardio recording, none from a "Weight Training" one, no compliance; nothing prescribed is copied in as an actual), or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor.
 - **Response:** `{ success: true, imported: number, enriched: number, completedPlanDays: number, suggested: number, standalone: number, skipped: number, total: number, hasMore: boolean }` — `imported` is the sum of the four landing counts; `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
 - **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure).
 

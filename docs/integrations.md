@@ -853,7 +853,7 @@ The `runStartupMaintenance(storage)` function runs a consolidated sequence of ch
 
 8. **Fail stale plan generations** -- Calls `storage.plans.failStalePlanGenerations()` to mark plans still `pending`/`generating` whose generation started more than an hour ago as `failed` (the `plan-generation` job is not retried, so a worker that crashed mid-job would otherwise leave them loading forever). The `stalePlanGenerations` cron repeats it every 10 minutes. Non-fatal; logged as a warning if it fails.
 
-9. **Restore AI circuit-breaker state** -- `loadPersistedBreakerState()` (`server/ai/circuitBreaker.ts`) reloads the breaker snapshot from `server_runtime_cache`, so a deploy in the middle of a provider outage does not reset it to closed (see [AI and RAG → Circuit Breaker](ai-and-rag.md#circuit-breaker)). Swallows its own errors.
+9. **Restore AI circuit-breaker state** -- `loadPersistedBreakerState()` (`server/ai/circuitBreaker.ts`) reloads each AI breaker's snapshot (one per text provider, plus embeddings and vision) from `server_runtime_cache`, so a deploy in the middle of a provider outage does not reset it to closed (see [AI and RAG → Circuit Breaker](ai-and-rag.md#circuit-breaker)). Swallows its own errors.
 
 10. **Optional key-rotation sweep** -- `maybeReencryptOnBoot()` (`server/services/keyRotation.ts`) re-encrypts stored Strava and Garmin credentials to the active key version. A no-op unless `ENCRYPTION_KEY_V2` is set and `ENCRYPTION_REENCRYPT_ON_BOOT=true`; swallows its own errors.
 

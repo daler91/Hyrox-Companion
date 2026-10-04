@@ -276,7 +276,7 @@ to resolve against real food data.
 ## 5. API surface
 
 All routes are under `/api/v1/nutrition`, require Clerk auth, validate with Zod,
-and are rate-limited per-user per-category (window = 60 s, `server/constants.ts`).
+and are rate-limited per user and per limiter (window = 60 s, `server/constants.ts`).
 The whole tree returns **404** when `NUTRITION_ENABLED !== "true"` (server-side, so
 a forced client flag can't reach it).
 

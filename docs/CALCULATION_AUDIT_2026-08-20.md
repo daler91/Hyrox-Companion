@@ -157,7 +157,7 @@ cutoff in `assistedMigrationService`.
 
 | #   | Before → after                                                                                                                                                                                                                                                        |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H3  | A missing `age` silently substituted HRmax 190 — the Tanaka prediction for a 26-year-old — so a 52-year-old's threshold run scored 69.2% of heart-rate reserve instead of 82.3% and was classified as easy aerobic Z2. `hrReserveRatio` and `hrZoneBoundaries` now WITHHOLD rather than guess: the load model falls through to the RPE the athlete actually gave, and no zone table is drawn. |
+| H3  | A missing `age` silently substituted HRmax 190 — the Tanaka prediction for a 26-year-old — so a 52-year-old's threshold run scored 69.2% of heart-rate reserve instead of 82.3% and was classified as easy aerobic Z2. `hrReserveRatio` and `hrZoneBoundaries` now WITHHOLD rather than guess: the load model falls through to the RPE the athlete actually gave, and no zone table is drawn. `estimateLthr` and `hrTss` withhold too, only since C10 (CODEBASE_ANALYSIS_2026-10-03). |
 | H14 | The estimated energy path could not tell a REST day from a training day whose calories had not synced, so it applied the typical-day multiplier to both: a `very_active` athlete was credited 1613 kcal of "training" on a day they did not train, against 600 for a real synced session — syncing a genuine workout made the app think they had burned 655 kcal LESS. The day's logged-session count now distinguishes them, and both paths define "active" as above daily living. |
 | M2  | Every unweighted rep was worth exactly 20 kg, so a 100 kg and a 55 kg athlete scored identical load; `users.bodyweightKg` never reached the load model. Per-rep tonnage is now proportional to bodyweight.                                                             |
 | M4  | The pace plausibility floor was 1.8 m/s (9:15/km) and the ratio ceiling 1.25 (7:11/km), so a beginner running 9:30/km had every run discarded, never reached the sample minimum, and was pinned to the generic 5:45/km — **more data never fixed it**, because the new runs were filtered out too. The floor is 1.1 m/s and the ceiling widens once the athlete has eight runs on record. |
@@ -295,6 +295,11 @@ cannot be told apart from one whose sets *are* the block's content — so where 
 anywhere, blocks keep winning exactly as before rather than risk double-counting. An existing test
 (`"lets structure-block timing win over a distance set"`) covers precisely that shape and still
 passes; it was not inverted, because it is not certifying a bug.
+
+Where sets ARE linked, each is attributed to its own block, and an untimed block's sets count once
+per round (its `roundCount`), only since C22 (CODEBASE_ANALYSIS_2026-10-03). Before that every linked
+set was dropped once any block carried timing, so a session with a timed warm-up and cool-down around
+an untimed four-round main block was estimated at the warm-up plus the cool-down.
 
 ### M11 — verified, NOT fixed: needs an architecture decision
 

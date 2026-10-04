@@ -95,7 +95,7 @@ class AiBudgetExceededError extends Error {
 ### Base Functions
 
 - `apiRequest(method, url, data?, signal?, extraHeaders?)` -- Low-level fetch wrapper in `queryClient.ts`. Sets `Content-Type: application/json` when a body is present, includes credentials, handles error responses. Automatically attaches the `x-csrf-token` header on mutating requests (POST/PUT/PATCH/DELETE) and retries once with a fresh token on a 403 that may be a CSRF rejection (code `EBADCSRFTOKEN`, or no code at all); a 403 naming another code is not resent.
-- `typedRequest<TResponse>(method, url, data?, options?)` -- Returns parsed JSON typed as `TResponse`. `options` accepts `timeoutMs` (default 15s), `signal`, and `headers`; the timeout is enforced via an `AbortController`.
+- `typedRequest<TResponse>(method, url, data?, options?)` -- Returns parsed JSON typed as `TResponse`. `options` accepts `timeoutMs` (default 15s), `signal`, and `headers`; the timeout is enforced via an `AbortController`. A call whose handler waits on an AI reply (exercise and meal parses, workout/plan-day reparse, nutrition-insight regeneration, the non-streaming chat fallback) passes `AI_REQUEST_OPTIONS` from `constants.ts` instead: 130 s, past the server's 120 s AI budget, so a slow parse is not abandoned while the server finishes and meters it. Strava and Garmin syncs allow 60 s.
 - `rawRequest(method, url, data?, options?)` -- Returns the raw `Response` object (for streaming, file downloads). Same `options` as `typedRequest`.
 
 ### CSRF Token Management
@@ -140,7 +140,7 @@ All hooks are in `client/src/hooks/`.
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useTimelineData` | `useTimelineData.ts` | Fetches plans, timeline entries, and personal records. Manages scroll position and "go to today" navigation. |
+| `useTimelineData` | `useTimelineData.ts` | Fetches plans, timeline entries, and personal records. Manages scroll position and "go to today" navigation. Reports a failed load as `isError` (with `retry`), never as an empty account, so `isNewUser` stays false. A first fetch paused offline counts as loading, and `isError` stays set while a retry runs, with `isRetrying` true. |
 | `useTimelineState` | `useTimelineState.ts` | Orchestrates timeline page state (filters, data, UI state). |
 | `useUnitPreferences` | `useUnitPreferences.ts` | Reads and caches user's weight/distance unit preferences. |
 
@@ -205,7 +205,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useVoiceInput` | `useVoiceInput.ts` | Web Speech API integration. Manages microphone permissions, speech recognition start/stop, transcript accumulation, and error handling. |
+| `useVoiceInput` | `useVoiceInput.ts` | Web Speech API integration. Manages microphone permissions, speech recognition start/stop, transcript accumulation, and error handling. `stopListening` calls the recogniser's `stop()`, which still returns a final result for the audio captured so far; its optional `onStopped` callback runs once that result has been emitted, so a caller that needs the complete text (the log-workout stepper's Continue) waits for it. Words shown but never finalised are committed when the stopped recogniser ends, or after 2 s if it does not, and nothing it sends after that is taken. |
 
 Additional feature hooks not catalogued above include `useWorkoutDetail`, `usePlanDayExercises`, `useExerciseSetsForOwner`, `useMoveTimelineEntry`, `useLogWorkoutDraft`, `usePushNotifications`, and `useUrlQueryState`. `useMissedRecovery.ts` holds the missed-session recovery hooks: `useMissedRecoveryPreview` (uncached — the preview depends on today and the rest of the week, so it is refetched every time the sheet opens), `useApplyMissedRecovery` (invalidates the timeline, training overview, plans, weekly review and the day's cached exercise sets — shortening drops or scales them, and undoing it puts them back; a 404/409 refreshes the timeline and the open preview; an `undoing` variable lets the toast say where an undone move went) and `useSetSessionPriority` (optimistic tier change on the cached timeline entry, rolled back on error). Related hooks are also grouped under the `voice/`, `workout-form/`, and `workout-actions/` subdirectories of `client/src/hooks/`.
 

@@ -77,6 +77,8 @@ Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter`
 
 Every route except `/privacy` and the 404 is wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. The whole `Switch` sits inside one shared `Suspense` boundary whose fallback is a centred `LoadingSpinner`.
 
+Each page is lazy-loaded through `lazyWithReload` (`client/src/lib/lazyWithReload.ts`), a `React.lazy` wrapper for chunks a deploy has removed. A tab still on the previous build asks for an old `/assets/*.js`, the server answers with `index.html`, and React keeps the rejected import, so re-rendering cannot recover. On such a failure the wrapper reloads the page once onto the current build, keeping the spinner up meanwhile. A `sessionStorage` timestamp limits this to one reload a minute, and it never reloads offline or when storage is blocked. Any rejected page import is handled the same way, since React cannot retry a module that threw while loading either. A chunk that still fails reaches the error boundary as a `ChunkLoadError`, and both boundaries' "Try again" reloads the page for it (`isChunkLoadError`) rather than resetting.
+
 The `Landing` page is also lazy-loaded and rendered outside the authenticated layout when the user is not signed in.
 
 ---
@@ -88,7 +90,8 @@ The `Landing` page is also lazy-loaded and rendered outside the authenticated la
 The home page and primary view. Displays a chronological timeline of training plan days and logged workouts. Key features:
 
 - **Onboarding wizard** -- Shown for new users via `OnboardingWizard` dialog.
-- **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile.
+- **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile. The phone overlay is a modal Radix dialog (`TimelineCoachPanels`): it takes focus and keeps it, hides the timeline from assistive tech, closes on Escape and hands focus back to the coach FAB. It is hidden rather than unmounted while a workout sheet is open, so a chat stream survives.
+- **Load failures** -- When the timeline (or, under an empty timeline, the plans list) fails to load, `TimelineContent` shows a `LoadErrorCard` with a retry instead of the first-run welcome, and `useTimelineData` keeps `isNewUser` false so onboarding does not launch. The card stays up, its button reading "Retrying…", while a retry runs or waits for the network. A first fetch paused because the browser is offline counts as loading (the skeleton, under the "You're offline" pill), never as an empty account, and onboarding only launches by itself once the auth user says it is not completed: a failed auth-user query leaves that unknown (`useIsOnboardingCompleted` returns `undefined`). Nutrition's day summary and the Analytics tabs also show a `LoadErrorCard` when their fetch fails, rather than a 0 kcal day or "No workout data yet".
 - **Virtual scrolling** -- Uses `@tanstack/react-virtual` (`useVirtualizer`) to efficiently render large timeline lists.
 - **Timeline filtering** -- Filter by plan and by workout status (completed, planned, missed, skipped; deep-linkable as `?status=`). Collapsible past/future groups with "show more" buttons.
 - **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting. Every start-date picker (this dialog, the onboarding `ScheduleStep` and the AI generator) defaults to the next Monday, or today on a Monday, via `defaultPlanStartDate()` in `lib/planStart.ts`, and a midweek pick explains which week-1 sessions it leaves off the calendar.
@@ -102,7 +105,7 @@ State management is centralized in the `useTimelineState` custom hook, with `Tim
 
 `LogWorkout.tsx` is a thin page wrapper that gates rendering on auth resolution and mounts `LogWorkoutForm` (keyed by user ID so an in-place account switch fully remounts the form and discards the previous user's draft). The form itself lives under `client/src/pages/log-workout/` and is a three-step stepper rendered by `LogWorkoutStepperLayout`:
 
-1. **Capture** (`steps/CaptureStep.tsx`) -- Workout title and date (`WorkoutDateFields`) plus the `WorkoutComposer`: a structured exercise list with a collapsible "Describe / dictate" panel that auto-parses free text or a photo into exercises.
+1. **Capture** (`steps/CaptureStep.tsx`) -- Workout title and date (`WorkoutDateFields`) plus the `WorkoutComposer`: a structured exercise list with a collapsible "Describe / dictate" panel that auto-parses free text or a photo into exercises. "Continue to exercises" stops a running dictation and waits for the recogniser's final result before it parses and changes step, so the parse includes the phrase being spoken and nothing said afterwards is added to the description where it cannot be seen. It also waits when the mic button stopped dictation just before.
 2. **Confirm** (`steps/ConfirmStep.tsx`) -- Review and correct the parsed exercise rows in a `DraftExerciseTable` before saving.
 3. **Reflect** (`steps/ReflectStep.tsx`) -- Capture effort (RPE) and notes for the session.
 
@@ -119,9 +122,11 @@ Displays training data analysis across six base tabs plus two conditional ones �
 - **Coach Insights** (`CoachInsightsTab`) -- AI-surfaced coaching signals: RPE trends, plan phase, weekly volume, station gaps, and fatigue/progression flags. Paints the last stored result instantly and shows a `LastUpdatedNote` (see [stored-first Coach Insights](api-reference.md#get-apiv1coach-insights)).
 - **Race Predictor** (`RacePredictorTab`) -- Predicted HYROX finish time from logged history; also stored-first with instant paint and a manual refresh button.
 - **MAF Trend** (`MafTrendTab`, MAF training style only) -- Pace-at-MAF-ceiling trend across MAF tests over time.
-- **Fuelling** (`FuellingTab`, nutrition flag only) -- The nutrition block view for the selected range: daily intake vs. training load (`IntakeVsTrainingChart`) plus a `FuellingCorrelationCard` comparing session RPE and workout compliance on days the load-adjusted carb target was hit vs. missed. "All time" is capped to the last 365 days.
+- **Fuelling** (`FuellingTab`, nutrition flag only) -- The nutrition block view for the selected range: daily intake vs. training load (`IntakeVsTrainingChart`) plus a `FuellingCorrelationCard` comparing session RPE and workout compliance on days the load-adjusted carb target was hit vs. missed, among days with food logged (an unlogged day is not a miss). "All time" is capped to the last 365 days.
 
 A date range selector (`?range=`; 30 days, 90 days (default), 6 months, 1 year, all time) filters the Overview, Breakdown, PRs & Trends and Fuelling tabs. Session Quality is scoped to a plan instead, and Coach Insights, Race Predictor and MAF Trend do not take the range.
+
+Every tab but Overview and PRs & Trends is its own lazy chunk, loaded when first opened. Session Quality, Coach Insights, Race Predictor and MAF Trend load through `lazyWithReload`, like the routes (see [Routing](#routing)), so a tab chunk a deploy removed reloads the page instead of failing. Breakdown and Fuelling take the date range as a prop, which `lazyWithReload`'s prop-less signature cannot carry yet, so they still use `React.lazy`.
 
 The same grade appears on a completed plan-linked run's detail sheet as the **Did it do its job?** card (`SessionGradeCard`, over `useWorkoutSessionGrade`, which re-reads every 30 s while the run's Strava stream is still pending) and as a chip on each Weekly Review session row. All three share `GradeVerdictBadge` and `lib/sessionGradeFormat.ts`, so a verdict always reads the same. Workout writes invalidate `QUERY_KEYS.sessionGradesPrefix`; saving preferences invalidates grades, weekly reviews and workouts, because a new max HR re-grades everything.
 
@@ -558,7 +563,7 @@ survived both sign-out and account deletion.
 A full-page error screen with:
 
 - Error icon and user-friendly message.
-- "Try again" button (calls `resetError`) and "Refresh Page" button.
+- "Try again" button (calls `resetError`, or reloads the page when the error is a failed code chunk) and "Refresh Page" button.
 - In non-production environments, displays the raw error message in a monospaced block.
 
 ### FeatureErrorBoundaryWrapper (`client/src/components/FeatureErrorBoundaryWrapper.tsx`)
@@ -586,9 +591,9 @@ Vite 8 bundles with Rolldown, and `vite.config.ts` groups vendor code through
 every first paint — including the signed-out Landing page — statically imports the charts chunk.
 `pnpm check:bundle` (`script/bundle-check.ts`) fails CI if that regresses.
 
-Route-level code splitting is achieved via `React.lazy`: every page — `Timeline`, `LogWorkout`,
-`Settings`, `Analytics`, `Nutrition`, `Review`, `Landing`, and `Privacy` — is lazy-loaded in
-`App.tsx`, each producing its own chunk.
+Route-level code splitting is achieved via `React.lazy`, wrapped by `lazyWithReload` (see
+[Routing](#routing)): every page — `Timeline`, `LogWorkout`, `Settings`, `Analytics`, `Nutrition`,
+`Review`, `Landing`, and `Privacy` — is lazy-loaded in `App.tsx`, each producing its own chunk.
 
 Build output goes to `dist/public`.
 

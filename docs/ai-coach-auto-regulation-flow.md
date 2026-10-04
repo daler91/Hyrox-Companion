@@ -312,7 +312,7 @@ flowchart TD
 - The plan adaptation runs after the governor and never touches a day the governor rewrote; its writes use `aiSource: "progression"` with `lastModification.kind: "auto_progression"`, and provider suggestions and review notes skip those days.
 - The AI budget gates only the provider layer: over budget, the governor and the adaptation still apply.
 - Each logged workout is adapted into the plan once (`engine_state.adaptedLogIds`); a plan's own recent history is marked as already reflected when it is generated.
-- The adaptation never raises a load while the governor reports yellow/danger load or the RPE trend flags fatigue, nor inside a taper or race week, and one session moves loads by at most +5% / -10%.
+- The adaptation never raises a load while the governor reports yellow/danger load or the RPE trend flags fatigue, nor inside a taper or race week, and one session moves loads by at most +5% / -10%. A pass that adapts several logs together still raises a load by at most +5%, and each custom lift is matched by its label, never by the shared name "custom".
 - ACWR yellow now creates a medium-priority, short-window soft downshift for high-intensity sessions instead of only surfacing passive metadata.
 - The visible timeline note keeps the rationale and input audit metadata on `plan_days.aiRationale` and `plan_days.aiInputsUsed`.
 - Users can still manually edit any downshifted workout afterward.

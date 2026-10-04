@@ -160,6 +160,7 @@ sequenceDiagram
 **Key details:**
 - `isAutoCoaching` is a boolean flag on the `users` table that the client polls to detect when coaching is complete.
 - The pipeline uses a `try/finally` block to guarantee `isAutoCoaching` is reset to `false` even on failure.
+- A failed model call (provider error, open circuit breaker, timeout, unreadable reply) is not read as "no changes": the rule-based stages (load governor, plan adaptation) and any safety note are still written, no "the plan still fits" review notes are, and the job fails so pg-boss retries it.
 - Suggestions can either `replace` or `append` content to `mainWorkout` or `accessory` fields on plan days.
 - The `aiSource` field on each plan day records whether the AI used RAG chunks (`"rag"`), legacy materials (`"legacy"`), or neither (`null`).
 - Suggestions pass through a safety layer (`aiSafety.ts`) and a repeat-modification guard (`aiModificationGuard.ts`) that suppresses repeated AI fatigue/volume reductions on an unchanged workout. See [AI and RAG](./ai-and-rag.md) for the guard's fingerprinting logic.

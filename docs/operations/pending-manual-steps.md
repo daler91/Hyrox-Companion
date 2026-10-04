@@ -305,14 +305,28 @@ must be run again.
 - **Expect the numbers to move.** Total Workouts and Avg / Week fall, Avg
   Duration rises. That is the point, but it reads as a regression if nobody is
   expecting it — say so before running.
+- **What it leaves alone (D5, `docs/CODEBASE_ANALYSIS_2026-10-03.md`):**
+  anything the athlete owns. It only demotes standalone imports the sync
+  created and nobody adopted — `source` still `strava`/`garmin`, no plan day,
+  no device link — and only those imported before sync-time stamping shipped
+  (2026-09-12; a later import still counting is the athlete's own switch). A
+  manual log a recording was linked to, a plan day's log and an import moved
+  onto a plan day are never touched.
+- **Reversible:** `--apply` writes every id it is about to flip to
+  `counts-as-training-backfill-<timestamp>.json` in the working directory
+  **before** it updates anything, and prints the undo command. Keep that file
+  with the ticket. `--revert <file> --apply` switches exactly those rows back on
+  (only the ones still off). Nothing records an athlete's toggle, so an older
+  import they switched off and back on cannot be told apart — the record is
+  the remedy if one is reported.
 - **Safe to re-run:** yes. It only touches rows with a provider sport to read
   and only those still at the migration's default, so a second run finds
-  nothing. A manual log is never touched, and nothing is ever flipped back
-  **on** — an athlete who already turned a walk into training keeps that.
+  nothing. Nothing is ever flipped back **on** by the backfill itself.
 - **How:**
   ```bash
-  pnpm tsx script/backfill-counts-as-training.ts            # dry run (default)
-  pnpm tsx script/backfill-counts-as-training.ts --apply    # write
+  pnpm tsx script/backfill-counts-as-training.ts                          # dry run (default)
+  pnpm tsx script/backfill-counts-as-training.ts --apply                  # write + record
+  pnpm tsx script/backfill-counts-as-training.ts --revert <file> --apply  # undo a run
   ```
 - **Verify afterwards:**
   ```sql
