@@ -54,14 +54,20 @@ async function captureThroughRealPipeline(error: Error): Promise<Sentry.ErrorEve
 describe("client Sentry init", () => {
   beforeEach(() => {
     sent.length = 0;
+    // Breadcrumbs live on the global isolation scope, which outlives each
+    // client, so start every test from an empty one.
+    Sentry.getIsolationScope().clearBreadcrumbs();
     vi.stubEnv("VITE_SENTRY_DSN", "https://public@o0.ingest.sentry.io/0");
     // The privacy-notice gate (S11): nothing initialises until it is acknowledged.
     recordPrivacyConsent();
     globalThis.history.pushState({}, "", "/nutrition?date=2026-09-19&meal=lunch");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     stopErrorReporting();
+    // stop() closes the client fire-and-forget; wait for that here so a
+    // half-closed client can't leak into the next test.
+    await Sentry.close();
     vi.unstubAllEnvs();
     globalThis.localStorage.clear();
     globalThis.history.replaceState({}, "", "/");
@@ -85,6 +91,9 @@ describe("client Sentry init", () => {
   });
 
   it("keeps the PII scrubbers wired in as the second layer", async () => {
+    // Start first: addBreadcrumb is a no-op until a client exists, and the
+    // breadcrumb must pass through THIS init's beforeBreadcrumb.
+    startErrorReporting();
     Sentry.addBreadcrumb({
       category: "fetch",
       data: { url: "/api/v1/foods?q=oats", request_body: '{"bodyWeightKg":"81.4"}' },
