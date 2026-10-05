@@ -21,9 +21,9 @@ import { storage } from "./storage";
 // Standalone handles on the connection writes the token tests assert on.
 const connectionMocks = vi.hoisted(() => ({
   getGarminConnection: vi.fn(),
-  setGarminError: vi.fn().mockResolvedValue(undefined),
-  updateGarminTokens: vi.fn().mockResolvedValue(undefined),
-  updateGarminLastSync: vi.fn().mockResolvedValue(undefined),
+  setGarminError: vi.fn(() => Promise.resolve()),
+  updateGarminTokens: vi.fn(() => Promise.resolve()),
+  updateGarminLastSync: vi.fn(() => Promise.resolve()),
   getExistingGarminActivityIds: vi.fn(),
 }));
 

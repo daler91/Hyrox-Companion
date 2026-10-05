@@ -122,9 +122,9 @@ describe("adaptPlan — strength", () => {
     const result = adaptPlan(
       input({ upcoming: withVariant, sets: squatSets("l1", "2026-10-13", [8, 8, 8, 8], 82.5) }),
     );
-    const a = result.days.find((day) => day.planDayId === "a");
-    expect(a?.mainWorkout).toContain("A) Front Squat 4x6 @ 90 kg");
-    expect(a?.accessory).toBeUndefined();
+    const dayA = result.days.find((day) => day.planDayId === "a");
+    expect(dayA?.mainWorkout).toContain("A) Front Squat 4x6 @ 90 kg");
+    expect(dayA?.accessory).toBeUndefined();
   });
 
   it("applies each logged workout once", () => {

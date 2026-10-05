@@ -49,7 +49,8 @@ describe("startProviderDeadline", () => {
         }, 8_000);
         deadline.signal.addEventListener("abort", () => {
           clearTimeout(timer);
-          reject(deadline.signal.reason as Error);
+          const reason: unknown = deadline.signal.reason;
+          reject(reason instanceof Error ? reason : new Error(String(reason)));
         });
       });
     const call = retryWithJitter(attempt, { retries: 2, minDelayMs: 1, maxDelayMs: 1 });

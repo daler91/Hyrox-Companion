@@ -486,7 +486,7 @@ function selectUnchangedWorkouts(
   return { workouts, ids };
 }
 
-async function buildReviewNotes({
+function buildReviewNotes({
   trainingContext,
   unchangedWorkouts,
   activePlanGoal,
@@ -496,17 +496,16 @@ async function buildReviewNotes({
   forcedSafetyNote,
   suggestionsFailed,
 }: ReviewNotesInput): Promise<ReviewNote[]> {
-  if (unchangedWorkouts.length === 0) return [];
+  if (unchangedWorkouts.length === 0) return Promise.resolve([]);
   if (forcedSafetyNote) {
-    return unchangedWorkouts.map((workout) => ({
-      workoutId: workout.id,
-      note: forcedSafetyNote,
-    }));
+    return Promise.resolve(
+      unchangedWorkouts.map((workout) => ({ workoutId: workout.id, note: forcedSafetyNote })),
+    );
   }
   // A review note says why the coach left a day alone. When the suggestions
   // call failed nothing was weighed, so no "the plan still fits" note is
   // written; the safety note above needs no model and still goes (AI8).
-  if (suggestionsFailed) return [];
+  if (suggestionsFailed) return Promise.resolve([]);
   return generateReviewNotes(
     trainingContext,
     unchangedWorkouts,

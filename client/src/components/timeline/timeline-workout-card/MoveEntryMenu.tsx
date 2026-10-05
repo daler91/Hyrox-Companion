@@ -110,76 +110,59 @@ export function MoveEntryMenu({
       className="absolute right-2 top-2 z-10 flex items-center gap-0.5 transition-opacity md:opacity-60 md:hover:opacity-100 md:focus-within:opacity-100"
       data-testid={`move-entry-controls-${entry.id}`}
     >
+      <DragHandle
+        entry={entry}
+        isDragging={isDragging}
+        stop={stop}
+        dragListeners={dragListeners}
+        dragAttributes={dragAttributes}
+      />
       <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground touch-none",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isDragging && "cursor-grabbing text-primary",
-                !isDragging && "cursor-grab",
-              )}
-              aria-label={`Drag ${entry.focus || "workout"} to another day`}
-              data-testid={`drag-handle-${entry.id}`}
-              onClick={stop}
-              onMouseDown={stop}
-              {...dragListeners}
-              {...dragAttributes}
+        <DropdownMenu>
+          <MoveMenuTrigger entry={entry} isMoving={isMoving} stop={stop} />
+          <DropdownMenuContent align="end" onClick={stop} onMouseDown={stop}>
+            {entry.date !== todayIso && (
+              <DropdownMenuItem
+                onSelect={() => {
+                  onMove(todayIso);
+                }}
+                data-testid={`move-today-${entry.id}`}
+              >
+                Move to today
+              </DropdownMenuItem>
+            )}
+            {entry.date !== tomorrowIso && (
+              <DropdownMenuItem
+                onSelect={() => {
+                  onMove(tomorrowIso);
+                }}
+                data-testid={`move-tomorrow-${entry.id}`}
+              >
+                Move to tomorrow
+              </DropdownMenuItem>
+            )}
+            {showNextWeek && (
+              <DropdownMenuItem
+                onSelect={() => {
+                  onMove(nextWeekIso);
+                }}
+                data-testid={`move-next-week-${entry.id}`}
+              >
+                Move to next week
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                setMovePickerOpen(true);
+              }}
+              data-testid={`move-pick-date-${entry.id}`}
             >
-              <Move className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Drag to reschedule</p>
-          </TooltipContent>
-        </Tooltip>
+              Pick date…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TooltipProvider>
-      <DropdownMenu>
-        <MoveMenuTrigger entry={entry} isMoving={isMoving} stop={stop} />
-        <DropdownMenuContent align="end" onClick={stop} onMouseDown={stop}>
-          {entry.date !== todayIso && (
-            <DropdownMenuItem
-              onSelect={() => {
-                onMove(todayIso);
-              }}
-              data-testid={`move-today-${entry.id}`}
-            >
-              Move to today
-            </DropdownMenuItem>
-          )}
-          {entry.date !== tomorrowIso && (
-            <DropdownMenuItem
-              onSelect={() => {
-                onMove(tomorrowIso);
-              }}
-              data-testid={`move-tomorrow-${entry.id}`}
-            >
-              Move to tomorrow
-            </DropdownMenuItem>
-          )}
-          {showNextWeek && (
-            <DropdownMenuItem
-              onSelect={() => {
-                onMove(nextWeekIso);
-              }}
-              data-testid={`move-next-week-${entry.id}`}
-            >
-              Move to next week
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              setMovePickerOpen(true);
-            }}
-            data-testid={`move-pick-date-${entry.id}`}
-          >
-            Pick date…
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
       <Dialog open={movePickerOpen} onOpenChange={setMovePickerOpen}>
         <DialogContent
           className="sm:max-w-xs"
@@ -209,37 +192,85 @@ export function MoveEntryMenu({
   );
 }
 
+interface DragHandleProps {
+  readonly entry: TimelineWorkoutCardProps["entry"];
+  readonly isDragging: boolean;
+  readonly stop: (e: React.SyntheticEvent) => void;
+  readonly dragListeners: ReturnType<typeof useDraggable>["listeners"];
+  readonly dragAttributes: ReturnType<typeof useDraggable>["attributes"];
+}
+
+/** The drag handle that picks the card up, with its tooltip. */
+function DragHandle({
+  entry,
+  isDragging,
+  stop,
+  dragListeners,
+  dragAttributes,
+}: Readonly<DragHandleProps>) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground touch-none",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isDragging && "cursor-grabbing text-primary",
+              !isDragging && "cursor-grab",
+            )}
+            aria-label={`Drag ${entry.focus || "workout"} to another day`}
+            data-testid={`drag-handle-${entry.id}`}
+            onClick={stop}
+            onMouseDown={stop}
+            {...dragListeners}
+            {...dragAttributes}
+          >
+            <Move className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Drag to reschedule</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 interface MoveMenuTriggerProps {
   readonly entry: TimelineWorkoutCardProps["entry"];
   readonly isMoving: boolean | undefined;
   readonly stop: (e: React.SyntheticEvent) => void;
 }
 
-/** The overflow menu's calendar button and its tooltip; rendered inside the menu's `DropdownMenu`. */
+/**
+ * The overflow menu's calendar button and its tooltip, rendered inside the
+ * menu's `DropdownMenu`. Its `Tooltip` takes its provider from the
+ * `TooltipProvider` that MoveEntryMenu wraps around that `DropdownMenu`.
+ */
 function MoveMenuTrigger({ entry, isMoving, stop }: Readonly<MoveMenuTriggerProps>) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`Move ${entry.focus || "workout"} to another day`}
-              data-testid={`move-menu-${entry.id}`}
-              disabled={isMoving}
-              onClick={stop}
-              onMouseDown={stop}
-            >
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Move to another day</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Move ${entry.focus || "workout"} to another day`}
+            data-testid={`move-menu-${entry.id}`}
+            disabled={isMoving}
+            onClick={stop}
+            onMouseDown={stop}
+          >
+            <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Move to another day</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

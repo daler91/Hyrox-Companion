@@ -251,7 +251,7 @@ describe("estimatePlannedSession", () => {
   it("counts an untimed block's sets once per round alongside timed blocks", () => {
     // Every linked set used to be dropped once any block was timed, and no round
     // count was ever read: this session was estimated at 15 minutes.
-    const e = estimatePlannedSession({
+    const estimate = estimatePlannedSession({
       structureBlocks: [
         { id: "warm", sectionType: "warmup", formatType: "steady", durationMinutes: 10 },
         { id: "main", sectionType: "main", formatType: "rounds", roundCount: 4 },
@@ -267,13 +267,13 @@ describe("estimatePlannedSession", () => {
       ],
     });
 
-    expect(e.source).toBe("structure_and_sets");
-    expect(e.durationMin).toBe(59); // 10 + 4 x 11 + 5
-    expect(e.rpe).toBe(7); // the main "rounds" block
+    expect(estimate.source).toBe("structure_and_sets");
+    expect(estimate.durationMin).toBe(59); // 10 + 4 x 11 + 5
+    expect(estimate.rpe).toBe(7); // the main "rounds" block
   });
 
   it("multiplies by the round count when no block is timed", () => {
-    const e = estimatePlannedSession({
+    const estimate = estimatePlannedSession({
       structureBlocks: [{ id: "main", sectionType: "main", formatType: "rounds", roundCount: 3 }],
       exerciseSets: [
         { exerciseName: "wall_balls", blockId: "main", plannedReps: 20 },
@@ -282,12 +282,12 @@ describe("estimatePlannedSession", () => {
       ],
     });
 
-    expect(e.source).toBe("sets");
-    expect(e.durationMin).toBe(21); // 3 x (3 + 3) + one unattached 3
+    expect(estimate.source).toBe("sets");
+    expect(estimate.durationMin).toBe(21); // 3 x (3 + 3) + one unattached 3
   });
 
   it("counts an untimed block with no round count once", () => {
-    const e = estimatePlannedSession({
+    const estimate = estimatePlannedSession({
       structureBlocks: [
         { id: "warm", sectionType: "warmup", formatType: "steady", durationMinutes: 10 },
         { id: "main", sectionType: "main", formatType: "steady" },
@@ -295,11 +295,11 @@ describe("estimatePlannedSession", () => {
       exerciseSets: [{ exerciseName: "easy_run", blockId: "main", plannedTime: 30 }],
     });
 
-    expect(e.durationMin).toBe(40);
+    expect(estimate.durationMin).toBe(40);
   });
 
   it("does not multiply rows that already list each round", () => {
-    const e = estimatePlannedSession({
+    const estimate = estimatePlannedSession({
       structureBlocks: [{ id: "main", sectionType: "main", formatType: "rounds", roundCount: 4 }],
       exerciseSets: [1, 2, 3, 4].map((cycleNumber) => ({
         exerciseName: "wall_balls",
@@ -309,7 +309,7 @@ describe("estimatePlannedSession", () => {
       })),
     });
 
-    expect(e.durationMin).toBe(12); // 4 rows x 3 min, not 4 x 4 x 3
+    expect(estimate.durationMin).toBe(12); // 4 rows x 3 min, not 4 x 4 x 3
   });
 
   it("says when the estimate is a clamp rather than a measurement", () => {

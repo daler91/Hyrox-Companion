@@ -464,9 +464,9 @@ function allocateMealCalories(
   const kcal = new Map<MealType, number>();
   let macroKcal = 0;
   for (const [meal, m] of macros) {
-    const k = mealMacroKcal(m);
-    kcal.set(meal, k);
-    macroKcal += k;
+    const mealKcal = mealMacroKcal(m);
+    kcal.set(meal, mealKcal);
+    macroKcal += mealKcal;
   }
   const partialMacros = daily.proteinG == null || daily.carbG == null || daily.fatG == null;
   if (daily.calories == null || !partialMacros) return kcal;

@@ -154,8 +154,8 @@ describe("getFoodWithServings provider deadline", () => {
   });
 
   it("opens the food with what is cached once USDA hangs past the deadline", async () => {
-    const f = food({ source: "usda", sourceId: "fdc-1", micros: null });
-    vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(f);
+    const cachedFood = food({ source: "usda", sourceId: "fdc-1", micros: null });
+    vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(cachedFood);
     vi.mocked(storage.nutrition.getServings).mockResolvedValue([]);
     vi.mocked(fetchUsdaFoodPortions).mockReturnValue(new Promise(() => { /* never settles */ }));
     vi.mocked(fetchUsdaFoodById).mockReturnValue(new Promise(() => { /* never settles */ }));
@@ -164,14 +164,14 @@ describe("getFoodWithServings provider deadline", () => {
     await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
     const result = await pending;
 
-    expect(result).toEqual({ food: f, servings: [] });
+    expect(result).toEqual({ food: cachedFood, servings: [] });
     expect(storage.nutrition.cacheServings).not.toHaveBeenCalled();
     expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
   });
 
   it("shares one deadline across both lookups rather than one each", async () => {
-    const f = food({ source: "usda", sourceId: "fdc-1", micros: null });
-    vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(f);
+    const cachedFood = food({ source: "usda", sourceId: "fdc-1", micros: null });
+    vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(cachedFood);
     vi.mocked(storage.nutrition.getServings).mockResolvedValue([]);
     // Portions answer after 8 s, inside the 9 s deadline; the micro lookup then hangs.
     vi.mocked(fetchUsdaFoodPortions).mockImplementation(
@@ -188,7 +188,7 @@ describe("getFoodWithServings provider deadline", () => {
     await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
     const result = await pending;
 
-    expect(result?.food).toBe(f);
+    expect(result?.food).toBe(cachedFood);
     const [, opts] = vi.mocked(fetchUsdaFoodById).mock.calls[0] ?? [];
     expect(opts?.signal?.aborted).toBe(true);
   });
