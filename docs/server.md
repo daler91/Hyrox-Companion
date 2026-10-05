@@ -477,6 +477,8 @@ In production (`server/static.ts`):
 - The SPA fallback (`/{*splat}`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags. The named-wildcard form is required by Express 5's path-to-regexp v8 -- a bare `*` throws at route registration
 - The fallback route is rate-limited to 100 requests per 15-minute window
 
+In development, `server/vite.ts` serves the client through Vite's middleware and answers an unmatched `/api` path with the same JSON `404 NOT_FOUND` before its own `index.html` fallback, so dev behaves like production for a renamed route (C38, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
+
 ---
 
 See also: [Authentication](authentication.md), [Database -- Storage Layer](database.md#storage-layer), [Architecture -- Request Lifecycle](architecture.md#2-request-lifecycle)

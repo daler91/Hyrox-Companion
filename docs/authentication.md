@@ -226,7 +226,9 @@ Every `/api/v1/*` route is protected by the `isAuthenticated` middleware except 
 Every other route applies `isAuthenticated` explicitly, either directly or, for protected mutations, through `protectedMutationGuards` (`server/routeGuards.ts`):
 
 ```ts
-router.get('/api/v1/auth/user', isAuthenticated, rateLimiter("auth", 20), asyncHandler(async (req, res) => {
+const AUTH_USER_RATE_LIMIT_PER_MIN = 60; // covers the 2 s auto-coach poll (30/min)
+
+router.get('/api/v1/auth/user', isAuthenticated, rateLimiter("auth", AUTH_USER_RATE_LIMIT_PER_MIN), asyncHandler(async (req, res) => {
   const userId = getUserId(req);
   const user = await storage.users.getUser(userId);
   res.json(user);

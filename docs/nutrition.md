@@ -77,7 +77,7 @@ before changing anything in this module.
 | **The food cache is shared and non-per-user.** A USDA food is cached once and reused by everyone. | Avoids N copies of "banana"; keeps the DB small and search fast. | `foods.createdByUserId IS NULL` = shared; visibility predicate `visibleTo(userId)` |
 | **Custom foods are private**; visibility is checked on every food resolution. | No cross-user leakage of a user's own foods/recipes. | `NutritionStorage.getVisibleFoodById` etc. |
 | **Logged history is immutable-by-reference.** A food referenced by a log entry can't be deleted (`onDelete: restrict`). | Historical entries must never lose their nutrition source. | FK constraints on `food_log_entries.foodId`, `recipe_ingredients.foodId` |
-| **External APIs degrade gracefully.** A provider that is down or unkeyed simply drops out of the merge; only when none of Edamam, USDA and Open Food Facts reaches its API does search return cached-only results with `apiDegraded: true`. | The app stays usable offline of third parties. | `foodSearch.ts`; surfaced in `FoodSearch.tsx` |
+| **External APIs degrade gracefully.** A provider that is down or unkeyed simply drops out of the merge; only when none of Edamam, USDA and Open Food Facts reaches its API does search return cached-only results with `apiDegraded: true`. One 9 s deadline (`PROVIDER_DEADLINE_MS`) covers a request's provider calls, retries included, and search's semantic fallback after them: a provider still running at it counts as down, search answers with its keyword results, and food detail opens with what is cached. | The app stays usable offline of third parties, and a hanging provider can't outlast the client's 15 s timeout. | `foodSearch.ts`, `foodDetail.ts`, `startProviderDeadline` in `utils.ts`; surfaced in `FoodSearch.tsx` |
 | **AI endpoints are gated** by consent + per-user 24h budget + the app-wide spend ceiling. | Cost control and the GDPR opt-in consent model. | `aiConsentCheck` + `aiBudgetCheck` middleware; soft-gated routes check consent inline |
 
 ---
@@ -184,7 +184,30 @@ Where fuelling meets the rest of the app.
   attributed first and the clock windows fill in the rest (a back-logged entry's
   tag outranks its synthetic local-noon timestamp); with no start time it falls
   back to the explicit `pre_workout` / `post_workout` meal tags alone. Surfaced
-  in the workout detail sheet via `FuellingAroundSessionPanel`.
+  in the workout detail sheet via `FuellingAroundSessionPanel`. Its window and
+  targets read the workout's date, device start time, duration and RPE and the
+  athlete's bodyweight. The reads built from a workout and the profile are
+  refreshed as one list (`WORKOUT_DERIVED_NUTRITION_QUERY_KEYS` in
+  `client/src/lib/workoutInvalidation.ts`: every session's fuelling, each day's
+  summary, the Timeline fuel chips and the Analytics → Fuelling block, which
+  read the day's workouts and training load). Workout writes that go through
+  `invalidateWorkoutWriteQueries` (the workout form, the ad-hoc log sheet, set
+  edits, offline replay) get the list from there. Writes that invalidate
+  their own keys spread it in: the Timeline's logging of a planned session,
+  workout delete and bulk delete, skipping or reopening a planned day, moving a
+  logged workout, the inline RPE, a Strava or Garmin sync, a device link or
+  unlink, a recycle-bin restore, and a profile save in Settings or onboarding.
+  Seeding a workout from its plan, re-parsing its text or parsing a photo
+  replaces the sets its training load is computed from, so those refresh the
+  day summaries, the chips and the block (not session fuelling, which reads no
+  sets). Writes that only the day summary reads refresh only the day
+  summaries: moving or deleting a planned day, saving its expected duration,
+  RPE or start time (`FuellingPlanPanel`), a missed-session recovery and an
+  applied coach plan proposal, since a day with no log takes its meal targets
+  from the planned session, and a manual log's session time, which sets the
+  day's meal timing (session fuelling windows only by a device start time). A new
+  write path that changes a workout should do the same. A food-log write
+  refreshes session fuelling too.
 - **Per-meal fuel targets** (on `GET /summary`, `DailySummaryResponse.mealTargets`)
   — the headline nutrition×training integration. The day's effective target is
   distributed **across the day's meals** so the athlete sees the fuel required for
@@ -200,7 +223,56 @@ Where fuelling meets the rest of the app.
   the lookups are gated on an effective target existing, so no-target users pay
   nothing. Targets are computed on the fly (no new table) and surfaced per meal in
   `MealSection` (target header + progress bars + rationale, shown even before
-  anything is logged).
+  anything is logged). With a calorie goal and only some macro goals, the
+  calories the set macros don't account for are split across the meals by the
+  same weights, so the meals still add up to the calorie goal.
+  - **Per-meal overrides:** `mergeMealOverride` (applied by
+    `applyMealTargetOverrides`) gives a meal's figures under the athlete's
+    override; a blank field keeps the split's figure. The meal keeps its share
+    of the calorie goal while a macro the day leaves unset is still at 0 g:
+    pinning lunch's protein adds the extra protein's energy rather than
+    rebuilding lunch from its macros alone (2,500 kcal + 150 g protein: lunch
+    goes from 720 to 770 kcal at 50 g protein), and pinning a macro the day
+    leaves unset draws on the share first. Once every macro has a figure the
+    share has no macro left to stand for, so the meal's energy is its macros:
+    lunch pinned to 50 g protein, 80 g carbs and 20 g fat reads 700 kcal, not
+    770. The dropped share is not moved to other meals (overrides never
+    re-reconcile); the day is still judged against its calorie goal.
+  - **Calorie precedence**, first match wins:
+    1. All three macros are pinned, one differs from the split, and the meal no
+       longer keeps a share of the calorie goal (it had none, or every macro the
+       split left at 0 g is now pinned above it): the calories are the macros'
+       energy and a pinned calorie figure is ignored. Rows saved by the old
+       editor, which echoed every shown value, hold a calorie echo beside each
+       macro edit.
+    2. Pinned calories win and are kept as set, beside partly pinned macros,
+       macros that match the split or 0 g echoes, so a calorie edit on a
+       calorie-only day, sent with 0 g macros, is kept.
+    3. A changed macro recomputes the meal's calories; otherwise the split
+       stands.
+
+    A 0 g pin on a macro the split leaves at 0 g counts as the old editor's echo
+    of the split, not a figure, only while the meal holds a share of a calorie
+    goal (its split calories exceed its macros' energy): on 2,500 kcal + 150 g
+    protein, {900 kcal, 50 g protein, 0 g carbs, 0 g fat} keeps its 900 kcal.
+    With no share to keep (for instance no calorie goal, set macros that
+    already reach it, or a slot the calorie split skips, like the fasted
+    `pre_workout` snack) the split's calories are its macros' energy and a 0 g
+    pin is a figure like any other: on a 160 g protein day with no calorie goal
+    the same pin reads 200 kcal, and the dialog locks the calories at 200.
+  - **Meal target dialog:** the merged meal carries the stored `override` and
+    the split it replaced (`suggested`), so `MealTargetDialog` fills in only the
+    pinned fields (less a calorie figure the pinned macros overrule) and runs
+    the same `mergeMealOverride` over what is typed: each placeholder shows
+    what the meal will read with that field blank. When the pinned macros set
+    the calories, the calorie field shows their figure read-only, described by
+    a note (announced with the field) to clear a macro to set calories, and a
+    polite live region announces the lock as the third macro is typed. A save
+    sends what the athlete pinned (a blank field follows the suggestion,
+    clearing a field unpins it, and a locked calorie field pins nothing), not
+    every shown value. A meal-override save applies from local today on, while
+    a reset deletes every version of the meal's override, so it changes past
+    days too; either refreshes every cached day summary.
   - **Session timing:** the workout's local time-of-day selects which meals are the
     pre/recovery meals (`workoutTiming` = `am_pre_breakfast` | `midday` | `evening`):
     morning → a `pre_workout` slot + breakfast recovery; midday → breakfast carb-loads,
@@ -278,7 +350,10 @@ to resolve against real food data.
 All routes are under `/api/v1/nutrition`, require Clerk auth, validate with Zod,
 and are rate-limited per user and per limiter (window = 60 s, `server/constants.ts`).
 The whole tree returns **404** when `NUTRITION_ENABLED !== "true"` (server-side, so
-a forced client flag can't reach it).
+a forced client flag can't reach it). Every `YYYY-MM-DD` date, in a query or a body,
+must be a real calendar day with a four-digit year from 0100 on: `2026-02-30` or
+`0050-01-01` gets a **400** rather than a rolled-forward date or a database 500
+(`isoDate` in `shared/schema/nutrition.ts`, over the shared `isIsoCalendarDate()`; C49).
 
 | Method | Path | Purpose | Rate bucket (max/window) |
 |--------|------|---------|--------------------------|
@@ -348,12 +423,12 @@ foods & recipes) → `NutritionInsightsPanel`.
 | `DailyTotalsHeader` | Running calorie/macro totals + progress vs. targets. |
 | `FoodSearch` | Debounced (2+ char) search with a degraded-API banner; opens `LogFoodDialog`. |
 | `QuickAddBar` | Horizontally scrollable recent/favourite chips for one-tap logging. |
-| `LogFoodDialog` | Create or edit an entry: quantity + unit (named servings) + meal, with a live nutrition preview. |
+| `LogFoodDialog` | Create or edit an entry: quantity + unit (named servings) + meal, with a live nutrition preview. When editing, the "effect on today's goals" swaps the entry's saved serving for the new one. |
 | `MealSection` | One meal's entries with edit/delete. |
 | `BarcodeScanner` | `BarcodeDetector` camera scan (rear camera) + manual fallback. |
 | `CustomFoodDialog` | Create/edit a custom food (per-100g macros + servings). |
 | `RecipeBuilderDialog` | Search & add ingredients; live per-serving preview. |
-| `LogFoodActions` | Single "Log food" button opening a sheet with the capture/create entry points below. |
+| `LogFoodActions` | Single "Log food" button opening a sheet with the capture/create entry points below. Owns the photo and label parses, so a parse still opens its review after the sheet is dismissed; the button shows a spinner meanwhile. |
 | `DescribeMealDialog` | Free-text meal entry → parse → review sheet. |
 | `SnapMealButton` | Photo capture (OS camera / file picker) → vision parse → review sheet. |
 | `ParsedMealReviewSheet` | Adjust/match/remove parsed items before batch logging. |
@@ -372,8 +447,17 @@ and `FuellingTab` (Analytics) consume `useSessionFuelling` and `useBlockView`.
 (`useFavoriteIds`, `usePortionMemory`), and ~22 mutation hooks covering
 log/edit/delete, favourites, repeat-day, barcode, custom foods and servings,
 recipes, parse text/photo/label, batch log, targets and per-meal overrides,
-and insights regeneration — each invalidating the relevant query keys. Entry
-deletes use pending UI. The favourite toggle shows its flip locally in
+and insights regeneration — each invalidating the relevant query keys. A target
+save (here or in onboarding) refreshes every read that carries the target
+(`NUTRITION_TARGET_QUERY_KEYS`: the targets, each day's summary, the Timeline
+fuel chips and the Analytics → Fuelling block). A food-log write (log, edit,
+delete, repeat-day, batch log) refreshes the day, its micros, the fuel chips,
+the Fuelling block and every workout's pre/post intake (`useSessionFuelling`);
+editing a custom food or recipe refreshes every day's summary and micros too,
+since its logged entries read it live. The offline replay refreshes the same
+reads for every day, as it doesn't know which days it touched. The online
+hooks and the replay share one list (`client/src/lib/nutritionInvalidation.ts`).
+Entry deletes use pending UI. The favourite toggle shows its flip locally in
 `FavoriteStarButton` rather than writing the favourites cache: a star can be
 tapped from a meal row, which knows only a food's id and name — not enough to
 synthesise the `Food` that list holds.
@@ -450,7 +534,14 @@ Safety properties:
 
 The insights context builder (`nutritionInsightsService.ts`) compacts 14 days of
 intake, training load, targets, and low micros (<50% RDI) into a short prompt and
-mirrors the existing `coachInsightsService` pattern.
+mirrors the existing `coachInsightsService` pattern. Micros are judged on the
+latest *complete* logged day (`microDate` on the shared summary), never the
+part-eaten local today, and the prompt notes that only foods carrying micro data
+count (Edamam foods carry none): low figures carry `MICRO_COVERAGE_CAVEAT` (a
+low figure may be a data gap), and an all-clear carries `MICRO_ALL_CLEAR_CAVEAT`
+(a micro no counted food reports is never judged, so an all-clear can miss a
+gap). The AI coach's fuelling section (`server/prompts/nutritionContext.ts`)
+names the same day and carries the same low-figure caveat.
 
 ---
 
@@ -577,7 +668,12 @@ The biggest unrealised value is connecting fuelling to the race itself:
   Mifflin–St Jeor BMR × activity multiplier, adjusted for the weight goal, with
   protein and fat anchored to bodyweight (1.8 / 1.0 g/kg by default) and carbs
   filling the remainder. The athlete can tweak it before saving; the onboarding
-  `FuellingStep` suggests the same target.
+  `FuellingStep` suggests the same target, previewed with the goal rate the save
+  uses. A save from either place carries the current version's periodisation
+  forward (`nextPeriodizationSettings` / `carryPeriodizationForward`), re-basing
+  the slope, pre-load rate and cap onto a changed carb baseline. On a re-run with
+  targets on file and an untouched profile, the step's "Replace my daily
+  targets" switch starts off; whatever it shows is what Continue does.
 - **[DONE] Offline logging.** Logging often happens at the gym/kitchen with poor
   signal. `useLogFood` now routes `POST /logs` through the app's offline mutation
   queue (`runWithOfflineFallback`, idempotency-keyed; see

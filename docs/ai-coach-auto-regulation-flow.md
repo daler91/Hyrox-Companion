@@ -225,8 +225,12 @@ sequenceDiagram
     Job->>Coach: triggerAutoCoach(userId)
     Coach->>LG: buildLoadGovernorSuggestions(loadGovernor, upcomingWorkouts)
     LG-->>Coach: deterministic suggestions first
+    opt over budget, or no text provider configured (missing key, AI switched off)
+        Coach->>DB: apply the governor and the adaptation only
+        Coach-->>Job: complete (a retry could not help)
+    end
     Coach->>Provider: generateWorkoutSuggestions(trainingContext, upcomingWorkouts)
-    Provider-->>Coach: provider suggestions
+    Provider-->>Coach: provider suggestions ([] means nothing to change), or a failure
     Coach->>Coach: filter provider suggestions for governor-modified days
     Coach->>DB: transaction begins
     Coach->>DB: per-athlete advisory lock, then lock target days FOR UPDATE
@@ -241,8 +245,15 @@ sequenceDiagram
         Coach->>DB: update plan_days text field
         Coach->>DB: update plan_days AI metadata
     end
-    Coach->>DB: write review notes for unchanged days
+    Coach->>DB: write review notes for unchanged days (none after a failed model call; a safety note still goes)
     Coach->>DB: transaction commits
+    alt the suggestions call failed for any reason other than configuration
+        Coach-->>Job: throw, so pg-boss retries the pass
+    else it failed on the provider's configuration (AiConfigurationError)
+        Coach-->>Job: complete (a retry could not help)
+    else it succeeded, even if the review-note call failed
+        Coach-->>Job: complete
+    end
     DB-->>UI: timeline reload/poll returns updated plan day
     UI-->>UI: show source badge, rationale, and input chips
 ```
@@ -311,6 +322,7 @@ flowchart TD
 - Deterministic governor writes use `aiSource: "load_governor"`.
 - The plan adaptation runs after the governor and never touches a day the governor rewrote; its writes use `aiSource: "progression"` with `lastModification.kind: "auto_progression"`, and provider suggestions and review notes skip those days.
 - The AI budget gates only the provider layer: over budget, the governor and the adaptation still apply.
+- A failed model call is never read as "nothing to change" (AI8, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)). When the suggestions call fails, the pass writes the governor, the adaptation and any safety note, writes no review notes, and fails the job so pg-boss retries it. When only the review-note call fails, the model's changes stand, the unchanged days get no note this pass, and the job completes, since a retry would re-run the suggestions on days they already changed. With no text provider configured for the reasoning model (a missing API key, no reasoning model, or `AI_FEATURES_ENABLED=false`) the model is not called: the rule-based stages apply and the job completes, as over budget. A configuration error the call itself runs into ends the same way, without a retry.
 - Each logged workout is adapted into the plan once (`engine_state.adaptedLogIds`); a plan's own recent history is marked as already reflected when it is generated.
 - The adaptation never raises a load while the governor reports yellow/danger load or the RPE trend flags fatigue, nor inside a taper or race week, and one session moves loads by at most +5% / -10%. A pass that adapts several logs together still raises a load by at most +5%, and each custom lift is matched by its label, never by the shared name "custom".
 - ACWR yellow now creates a medium-priority, short-window soft downshift for high-intensity sessions instead of only surfacing passive metadata.

@@ -463,6 +463,7 @@ The 5-minute stale time prevents redundant API calls when navigating between pag
 | File | Purpose |
 |------|---------|
 | `client/src/lib/queryClient.ts` | QueryClient config, RateLimitError, apiRequest |
+| `client/src/lib/apiError.ts` | `parseApiError`: the status and error code of a failed `apiRequest` (thrown as `${status}: ${body}`). `humanizeApiError`, the offline queue, the workout save, Settings, the plan-proposal 409 and chat 404 checks, the chat failure copy (`chatErrors.ts`), the missed-session recovery 404/409 check, the favourite un-star 404, the plan-day exercise parse (`usePlanDayExercises`) and the exercise-set 409 check (`exerciseSetVersionLock.ts`) all read the status or code through it rather than a private copy (CL34) |
 | `client/src/lib/offlineQueue.ts` | Offline mutation queue |
 | `client/src/lib/api/client.ts` | typedRequest / rawRequest base functions |
 | `client/src/lib/api/*.ts` | Domain-specific API modules |

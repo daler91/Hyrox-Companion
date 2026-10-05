@@ -248,7 +248,7 @@ Unauthenticated, like the few other routes listed in the [Overview](#overview). 
 Returns the current authenticated user's profile. Creates the user in the database if they don't exist yet (first-call sync from Clerk).
 
 - **Auth:** Required
-- **Rate limit:** `auth` category, 20/min
+- **Rate limit:** `auth` category, 60/min — the client polls this route every 2 s (30/min) while the auto-coach runs
 - **Response:** `User` object (id, email, firstName, lastName, profileImageUrl, preferences)
 
 ---
@@ -400,9 +400,13 @@ Update an existing workout log.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
-- **Body:** Partial `UpdateWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks`
+- **Body:** Partial `UpdateWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks` + optional `relinks: StructureSetRelink[]` (only beside `structureBlocks`, never with `exercises`; a non-empty `relinks` otherwise returns `400`)
 - **Validation:** `updateWorkoutRouteSchema`
 - **Response:** Updated `WorkoutLog`
+
+A body with only `structureBlocks` (the workout sheet's block builder) replaces the log's structure blocks and leaves its columns unchanged.
+
+`relinks` (at most 500, each `setId` once) moves the exercise rows that follow the steps a `structureBlocks` save renumbers, in the same transaction, before the blocks are replaced (CL15, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Each is `{ setId, fromBlockId, fromStepNumber, blockId, stepNumber, intervalMinute?, cycleNumber? }`; `blockId` and `stepNumber` both `null` unlink a row whose step was removed, which also clears its interval minute, cycle, step role and group. A relink naming a set that belongs to another workout or plan day fails the whole save with `404` and nothing is written. A relink naming a set that no longer exists (deleted after the client computed it) is skipped and the save goes through. A row no longer on `fromBlockId`/`fromStepNumber` was moved by a newer write and is left alone, so a replay moves nothing twice. `intervalMinute` and `cycleNumber` keep their stored values unless sent. Saves of one workout's blocks are serialized by a row lock on the log.
 
 `planDayId` and `planId` are **not** accepted here; use
 [`PATCH /api/v1/workouts/:id/plan-day`](#patch-apiv1workoutsidplan-day), which
@@ -482,7 +486,7 @@ Merge a standalone Strava import (`:id`) into the plan day or the manually logge
 
 ### DELETE /api/v1/workouts/:id/device-link
 
-Take the linked Strava activity off workout log `:id` and give it back its own row. An enriched manual log keeps everything the athlete typed and loses exactly the columns the link filled; a plan-day log the sync created is deleted and the day's status re-derived.
+Take the linked Strava activity off workout log `:id` and give it back its own row. An enriched manual log keeps everything the athlete typed and loses exactly the columns the link filled. A plan-day log a link created is deleted and the day's status re-derived while it is still what the link built; once the athlete has edited it (sets, structure, RPE, notes, title) it is kept as a manual log, without the set synthesised from the recording. See the D12 unlink note in [integrations](integrations.md).
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
@@ -535,7 +539,7 @@ Combine multiple workout logs into a single new workout, deleting the sources. T
 
 ### GET /api/v1/workouts/unstructured
 
-List workouts that have no parsed exercise sets (candidates for reparsing).
+List workouts that have no parsed exercise sets (candidates for reparsing). A plan-day log a Strava auto link created (`autoLinkedLogStillPrescription()` in `server/storage/workouts.ts`), linked still or since unlinked, is left out whatever its text: its main text is the plan's prescription, not what was done. (One an auto link made before migration `0120` carries no `auto_link_recording_only` marker, so it is left out only while its link stands.)
 
 - **Auth:** Required
 - **Rate limit:** `workoutList` category, 60/min
@@ -553,7 +557,7 @@ Re-parse a single workout's text into structured exercise sets using the configu
 
 ### POST /api/v1/workouts/batch-reparse
 
-Re-parse all unstructured workouts for the current user.
+Re-parse all unstructured workouts for the current user. A plan-day log a Strava auto link created, linked still or since unlinked, is skipped whatever its text, as in `GET /api/v1/workouts/unstructured`, so the prescription is never parsed in as performed sets.
 
 - **Auth:** Required
 - **Rate limit:** `batchReparse` category, 2/min
@@ -571,7 +575,7 @@ List assisted-migration backfill reviews for the current user.
 
 ### POST /api/v1/workouts/migration/backfill
 
-Run an assisted-migration backfill pass for the current user.
+Run an assisted-migration backfill pass for the current user. It parses set-less logs from the last 90 days and set-less upcoming plan days from their main workout and accessory, with whitespace trimmed (the characters JavaScript's `trim()` removes), skipping a log or day with no text left and a plan-day log a Strava auto link created (as in `GET /api/v1/workouts/unstructured`). A pass reads at most 25 logs, most recent first, and 25 plan days, soonest first, and parses the set-less ones among them one at a time (`runAssistedMigrationBackfill()` in `server/services/assistedMigrationService.ts`).
 
 - **Auth:** Required
 - **Rate limit:** `migrationBackfill` category, 2/min
@@ -693,7 +697,7 @@ Create the built-in sample Hyrox training plan. Onboarding passes the goal the a
 - **Auth:** Required
 - **Rate limit:** `planSample` category, 5/min
 - **Body (optional):** `{ goal?: string (max 500), raceDate?: "YYYY-MM-DD" }`
-- **Validation:** `createSamplePlanSchema`
+- **Validation:** `createSamplePlanSchema`. A `raceDate` already past returns `400`: it would make every day of the template post-race recovery, and no route edits a plan's race date afterwards. The schema cannot see the athlete's timezone, so the earliest date it takes is the day before today in UTC (CL9, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). A `raceDate` that is not a real calendar day (`2026-13-45`, `2026-02-30`) also returns `400` ("Race date must be a real calendar date"); each bad date gets one issue. Onboarding's race-date field refuses a typed past date, or one that is not a real day (the browser's date field takes a five-digit year), before it gets here, and the wizard re-checks it against today when Continue is pressed.
 - **Response:** `TrainingPlanWithDays` (unscheduled; follow with [`POST /api/v1/plans/:planId/schedule`](#post-apiv1plansplanidschedule))
 
 ### POST /api/v1/plans/generate
@@ -967,12 +971,14 @@ Delete a single exercise set from a plan day.
 
 ### PATCH /api/v1/plans/days/:dayId/structure
 
-Replace the structure blocks of a plan day.
+Replace the structure blocks of a plan day, moving the rows that follow any renumbered step in the same transaction.
 
 - **Auth:** Required
 - **Rate limit:** `planDaySet` category, 60/min
-- **Body:** `{ structureBlocks: StructureBlock[] }`
-- **Response:** The updated plan day structure (or 404)
+- **Body:** `{ structureBlocks?: StructureBlock[], relinks?: StructureSetRelink[] }` (`relinks` only beside `structureBlocks`; a non-empty `relinks` otherwise returns `400`)
+- **Response:** `{ exerciseSets, structureBlocks }`, the day's rows and blocks as saved (or 404)
+
+`relinks` behave as on [`PATCH /api/v1/workouts/:id`](#patch-apiv1workoutsid), scoped to this day's rows. As there, a non-empty `relinks` without `structureBlocks` returns `400` (`VALIDATION_ERROR`) and nothing is written; it used to fall through to a `[]` default and clear the day's blocks (CL15, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). A body with neither (`{}`, or `relinks: []` alone) still saves `[]` and clears the day's blocks, as older clients expect. Saves of one day's blocks are serialized by a row lock on the plan day. Non-empty `structureBlocks` still require `EMOM_BUILDER_ENABLED` (`403` `EMOM_BUILDER_DISABLED` otherwise).
 
 ### POST /api/v1/plans/days/:dayId/reparse
 
@@ -1171,7 +1177,7 @@ All analytics endpoints support optional date filtering via query parameters: `?
 | Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` (same file)               |
 | Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `createCoalescedCache()`     |
 
-Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, and Strava and Garmin syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
+Every workout write drops the athlete's entries from this process's caches before it answers (`invalidateAnalyticsCachesForUser()`), so the refetch that follows a save reads the write rather than the pre-write cache: create, update, plan-day assignment, delete, bulk delete, combine, seed-from-plan, reparse (single, from an image, batch), the assisted-migration backfill, device link and unlink, recycle-bin restore, set edits, reopening a completed plan day, deleting a plan or a plan day, and Strava and Garmin syncs that wrote anything (D10, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Other app instances keep their own copies until the TTL runs out.
 
 ### GET /api/v1/personal-records
 
@@ -2135,6 +2141,8 @@ gated inline instead — it is skipped unless `users.aiCoachEnabled` is true, an
 the consent flag is part of the result's cache key so opting out immediately
 stops a previously refined value being replayed. The same inline pattern is used
 by nutrition semantic search.
+
+Every nutrition date (`date`, `sourceDate`, `targetDate`, `effectiveFrom`, and the `/block` and `/summary-range` `from`/`to`) must be a real calendar day written `YYYY-MM-DD`, checked by the shared `isIsoCalendarDate()`. An impossible day such as `2026-02-30` returns `400` with one issue; the old check took it and the database answered `500` (C49, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
 
 See [Nutrition & Fuelling](nutrition.md) for request/response shapes, the per-100g scaling model, and AI safety details.
 
