@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api, type PlanProposalView } from "@/lib/api";
+import { api, type PlanProposalView, QUERY_KEYS } from "@/lib/api";
 
 import { usePlanProposal } from "../usePlanProposal";
 
@@ -18,9 +18,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
+const queryClientMocks = vi.hoisted(() => ({ invalidateQueries: vi.fn(() => Promise.resolve()) }));
+
 vi.mock("@/lib/queryClient", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/queryClient")>()),
-  queryClient: { invalidateQueries: vi.fn(() => Promise.resolve()) },
+  queryClient: queryClientMocks,
 }));
 
 const PROPOSAL = {
@@ -73,6 +75,39 @@ describe("usePlanProposal", () => {
     expect(saveMessage).toHaveBeenCalledWith({ role: "assistant", content: lastMessage(addLocalMessage) });
     // Nothing is pending any more; the applied proposal trails the chat instead.
     expect(result.current.proposal?.id).toBe("proposal-1");
+    // The day summary falls back to the planned session the proposal moved.
+    // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+    expect(queryClientMocks.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: QUERY_KEYS.nutritionDayPrefix,
+    });
+  });
+
+  // A conflict is read by parseApiError (CL34, CODEBASE_ANALYSIS_2026-10-03).
+  it.each([
+    [
+      "the server's reason for a conflict",
+      '409: {"applied":false,"reason":"stale","message":"Thu Oct 1 changed since I proposed this."}',
+      "Thu Oct 1 changed since I proposed this.",
+    ],
+    [
+      "the stale-plan line for a conflict with no reason",
+      "409: Conflict",
+      "Your plan changed since I proposed this, so I didn't apply anything. Ask me again and I'll work from the latest plan.",
+    ],
+    ["a retry line for any other failure", "500: boom", "I couldn't apply those changes right now. Please try again."],
+  ])("says %s when an apply fails, without saving it", async (_label, message, said) => {
+    vi.mocked(api.planProposals.apply).mockRejectedValue(new Error(message));
+    const { result, addLocalMessage, saveMessage } = renderProposalHook();
+
+    act(() => {
+      result.current.applyProposal(PROPOSAL);
+    });
+
+    await waitFor(() => {
+      expect(addLocalMessage).toHaveBeenCalled();
+    });
+    expect(lastMessage(addLocalMessage)).toBe(said);
+    expect(saveMessage).not.toHaveBeenCalled();
   });
 
   it("says what an undo put back and what it left", async () => {

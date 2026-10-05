@@ -15,6 +15,7 @@ import { env } from "../../env";
 import { AppError, ErrorCode } from "../../errors";
 import { logger as defaultLogger } from "../../logger";
 import { NUTRITION_INSIGHTS_PROMPT } from "../../prompts";
+import { MICRO_ALL_CLEAR_CAVEAT, MICRO_COVERAGE_CAVEAT } from "../../prompts/nutritionContext";
 import { storage } from "../../storage";
 import { validateAiOutput } from "../../utils/sanitize";
 import { checkAiBudget } from "../aiUsageService";
@@ -66,16 +67,21 @@ function formatHighLoadBlock(highLoadDays: NutritionSummary["highLoadDays"]): st
   ];
 }
 
+// Judged on the latest complete logged day, not the part-eaten (or, at the
+// midnight recompute, empty) local today. C8 (CODEBASE_ANALYSIS_2026-10-03)
 function formatMicroLine(s: NutritionSummary): string {
+  if (s.microDate == null) {
+    return "Micronutrients: no complete day of food logged in this window.";
+  }
   if (s.microStatus === "no_data") {
-    return "Micronutrients: no data available for the foods logged today.";
+    return `Micronutrients: no data for the foods logged on ${s.microDate} (the latest complete logged day).`;
   }
   if (s.microStatus === "low") {
-    return `Micronutrients below 50% of reference intake today: ${s.lowMicros
+    return `Micronutrients below 50% of reference intake on ${s.microDate} (the latest complete logged day): ${s.lowMicros
       .map((m) => `${m.label} ${m.pctRdi}%`)
-      .join(", ")}.`;
+      .join(", ")}. ${MICRO_COVERAGE_CAVEAT}`;
   }
-  return "Micronutrients today: all tracked micros are at or above 50% of reference intake.";
+  return `Micronutrients on ${s.microDate} (the latest complete logged day): all tracked micros are at or above 50% of reference intake. ${MICRO_ALL_CLEAR_CAVEAT}`;
 }
 
 /**

@@ -53,6 +53,9 @@ export async function buildNutritionTrainingContext(
       proteinG: d.protein,
     })),
     lowMicros: summary.lowMicros.map((m) => `${m.label} ${m.pctRdi}%`),
+    // The prompt names this day: micros are judged on the latest complete
+    // logged day, up to 13 days back, not today. C8 (CODEBASE_ANALYSIS_2026-10-03)
+    microDate: summary.microDate ?? undefined,
   };
 }
 

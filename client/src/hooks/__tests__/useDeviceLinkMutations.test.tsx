@@ -31,6 +31,10 @@ vi.mock("@/lib/api", () => ({
     personalRecords: ["/api/v1/personal-records"],
     exerciseAnalytics: ["/api/v1/exercise-analytics"],
     trainingOverview: ["/api/v1/training-overview"],
+    nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
+    nutritionDayPrefix: ["/api/v1/nutrition/summary"],
+    nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
+    nutritionBlockPrefix: ["/api/v1/nutrition/block"],
   },
 }));
 
@@ -48,6 +52,12 @@ const DEVICE_LINK_KEYS = [
   ["/api/v1/personal-records"],
   ["/api/v1/exercise-analytics"],
   ["/api/v1/training-overview"],
+  // The recording's start time and duration feed the fuelling reads (CL19,
+  // CODEBASE_ANALYSIS_2026-10-03).
+  ["/api/v1/nutrition/session-fuelling"],
+  ["/api/v1/nutrition/summary"],
+  ["/api/v1/nutrition/summary-range"],
+  ["/api/v1/nutrition/block"],
 ];
 
 type DeviceLinkMutations = ReturnType<typeof useDeviceLinkMutations>;

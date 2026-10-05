@@ -1,5 +1,3 @@
-import { OAT_BAR_LABEL_SCAN } from "@shared/nutritionTestFixtures";
-import type { ParseLabelResponse } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,21 +10,18 @@ import { captureAuthState, uploadCompressedPhoto } from "@/test/support/imageCap
 import { ScanLabelButton } from "./ScanLabelButton";
 
 vi.mock("@/lib/api", async () =>
-  (await import("@/test/support/imageCaptureMocks")).makeCaptureApiMock({
-    parseLabel: vi.fn(),
-  }),
+  (await import("@/test/support/imageCaptureMocks")).makeCaptureApiMock({}),
 );
 vi.mock("@/lib/image", () => ({ compressImage: vi.fn() }));
 vi.mock("@/hooks/useAuth", async () =>
   (await import("@/test/support/imageCaptureMocks")).makeCaptureAuthMock(),
 );
 
-const toastSpy = vi.hoisted(() => vi.fn());
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: toastSpy }) }));
+const PHOTO = { imageBase64: "ZmFrZS1pbWFnZQ==", mimeType: "image/jpeg" };
 
-function renderButton(onExtracted: (r: ParseLabelResponse) => void) {
+function renderButton(onImage: (image: typeof PHOTO) => void, isParsing = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const ui: ReactNode = <ScanLabelButton onExtracted={onExtracted} />;
+  const ui: ReactNode = <ScanLabelButton onImage={onImage} isParsing={isParsing} />;
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
@@ -38,55 +33,41 @@ describe("ScanLabelButton", () => {
     captureAuthState.aiCoachEnabled = true;
   });
 
-  it("compresses the chosen photo, parses it, and hands the result to onExtracted", async () => {
-    vi.mocked(api.nutrition.parseLabel).mockResolvedValue(OAT_BAR_LABEL_SCAN);
-    const onExtracted = vi.fn();
-    renderButton(onExtracted);
+  it("compresses the chosen photo and hands it on for parsing", async () => {
+    const onImage = vi.fn();
+    renderButton(onImage);
 
     await uploadPhoto();
 
-    await waitFor(() =>
-      expect(api.nutrition.parseLabel).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg"),
-    );
-    await waitFor(() => expect(onExtracted).toHaveBeenCalledWith(OAT_BAR_LABEL_SCAN));
-  });
-
-  it("shows a toast instead of opening the review when no label was found", async () => {
-    vi.mocked(api.nutrition.parseLabel).mockResolvedValue({
-      label: null,
-      suggestion: null,
-      warnings: [],
+    await waitFor(() => {
+      expect(onImage).toHaveBeenCalledWith(PHOTO);
     });
-    const onExtracted = vi.fn();
-    renderButton(onExtracted);
-
-    await uploadPhoto();
-
-    await waitFor(() =>
-      expect(toastSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "No nutrition label found", variant: "destructive" }),
-      ),
-    );
-    expect(onExtracted).not.toHaveBeenCalled();
   });
 
-  it("holds the photo behind the consent dialog and parses it after accepting", async () => {
+  it("holds the photo behind the consent dialog and hands it on after accepting", async () => {
     const user = userEvent.setup();
     captureAuthState.aiCoachEnabled = false;
     vi.mocked(api.preferences.update).mockResolvedValue({} as never);
-    vi.mocked(api.nutrition.parseLabel).mockResolvedValue(OAT_BAR_LABEL_SCAN);
-    const onExtracted = vi.fn();
-    renderButton(onExtracted);
+    const onImage = vi.fn();
+    renderButton(onImage);
 
     await uploadPhoto();
 
     await screen.findByRole("button", { name: "Enable AI Coach" });
-    expect(api.nutrition.parseLabel).not.toHaveBeenCalled();
+    expect(onImage).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Enable AI Coach" }));
 
-    await waitFor(() =>
-      expect(api.nutrition.parseLabel).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg"),
-    );
-    await waitFor(() => expect(onExtracted).toHaveBeenCalledWith(OAT_BAR_LABEL_SCAN));
+    await waitFor(() => {
+      expect(onImage).toHaveBeenCalledWith(PHOTO);
+    });
+  });
+
+  // CL31 (CODEBASE_ANALYSIS_2026-10-03): the parse showed no progress.
+  it("shows the parse in progress and takes no second photo meanwhile", () => {
+    renderButton(vi.fn(), true);
+
+    const button = screen.getByTestId("button-scan-label");
+    expect(button).toHaveTextContent("Reading the label…");
+    expect(button).toBeDisabled();
   });
 });

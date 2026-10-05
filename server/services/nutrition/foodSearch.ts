@@ -10,6 +10,7 @@ import { isRelevantMatch, rankByRelevance } from "./relevance";
 import { maybeSemanticSearch } from "./semanticSearch";
 import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
+import { type ProviderDeadline, startProviderDeadline } from "./utils";
 
 /**
  * Food search orchestration (FR-1.1). Queries the local `foods` cache plus the
@@ -139,12 +140,19 @@ const NO_PROVIDERS: ProviderResults = {
 };
 
 /** Query all three live providers concurrently and cache their hits. */
-async function queryLiveProviders(query: string): Promise<ProviderResults> {
+async function queryLiveProviders(
+  query: string,
+  deadline: ProviderDeadline,
+): Promise<ProviderResults> {
   // Query the live providers concurrently; one failing must not sink the others.
+  // One deadline covers all three, retries included: a provider still running
+  // at it counts as down, so a hanging one degrades the search to cache-only
+  // instead of outlasting the client's timeout. D13 (CODEBASE_ANALYSIS_2026-10-03)
+  const opts = { signal: deadline.signal };
   const [edamamSettled, usdaSettled, offSettled] = await Promise.allSettled([
-    searchEdamamFoods(query),
-    searchUsdaFoods(query),
-    searchOffFoods(query),
+    deadline.within(searchEdamamFoods(query, opts)),
+    deadline.within(searchUsdaFoods(query, opts)),
+    deadline.within(searchOffFoods(query, opts)),
   ]);
 
   // Resolve sequentially (Edamam → USDA → OFF) so the cache writes never race.
@@ -174,13 +182,41 @@ async function queryLiveProviders(query: string): Promise<ProviderResults> {
   return { edamam, usda, off, edamamLive, usdaLive, offLive };
 }
 
+/**
+ * The semantic fallback, under the providers' deadline. It runs after them
+ * (an embedding call plus a vector search) and had no bound of its own, so a
+ * degraded search could still drift toward the client's timeout. Past the
+ * deadline the keyword results stand alone, as on any semantic failure.
+ * D13 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function semanticWithinDeadline(
+  query: string,
+  userId: string,
+  resultCount: number,
+  deadline: ProviderDeadline,
+): Promise<Food[]> {
+  if (deadline.signal.aborted) return [];
+  try {
+    return await deadline.within(maybeSemanticSearch(query, userId, resultCount));
+  } catch {
+    // maybeSemanticSearch never throws, so only the deadline lands here.
+    logger.warn(
+      "[nutrition] semantic search ran past the provider deadline; using keyword results only",
+    );
+    return [];
+  }
+}
+
 export async function searchFoods(query: string, userId: string): Promise<FoodSearchResponse> {
   const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
+  // One deadline for the request's slow calls: the provider fan-out and the
+  // semantic fallback after it. D13 (CODEBASE_ANALYSIS_2026-10-03)
+  const deadline = startProviderDeadline();
 
   const providersSkipped = local.length >= PROVIDER_FANOUT_FLOOR;
   const { edamam, usda, off, edamamLive, usdaLive, offLive } = providersSkipped
     ? NO_PROVIDERS
-    : await queryLiveProviders(query);
+    : await queryLiveProviders(query, deadline);
 
   // Cache-only ⇒ degraded: no live provider reached its API. OFF (keyless) counts,
   // so a working OFF call keeps search live even with no USDA/Edamam credentials.
@@ -205,7 +241,8 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   // Semantic (vector) augmentation — only when the keyword/fuzzy set is thin (off the
   // hot path); flag-, consent-, and budget-gated inside, degrading silently. Appended
   // as a low-priority tier (deduped), so conceptual matches show as "you might mean".
-  const semantic = await maybeSemanticSearch(query, userId, merged.length);
+  const semantic = await semanticWithinDeadline(query, userId, merged.length, deadline);
+  deadline.clear();
   if (semantic.length > 0) merged = mergeFoods([merged, semantic]);
   // Rank by match quality (exact → name-prefix → token match), provider order kept
   // only as a tie-breaker, then cap. Reuses `scoreCache` so items already scored by

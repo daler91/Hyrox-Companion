@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import { queryClient } from "@/lib/queryClient";
 import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
@@ -17,10 +18,12 @@ import { useApiMutation } from "./useApiMutation";
  * A 404 or 409 from the recovery routes: the session is gone, or is no longer
  * a missed session waiting on a decision — logged, moved or let go, perhaps on
  * another device. The card that offered it was out of date, and asking again
- * will not change the answer.
+ * will not change the answer. The status is parseApiError's to read
+ * (CL34, CODEBASE_ANALYSIS_2026-10-03).
  */
 export function isStaleRecoveryError(error: unknown): boolean {
-  return error instanceof Error && (error.message.startsWith("409:") || error.message.startsWith("404:"));
+  const status = parseApiError(error)?.status;
+  return status === 404 || status === 409;
 }
 
 function refreshTimeline(): void {
@@ -90,6 +93,10 @@ export function useApplyMissedRecovery() {
       QUERY_KEYS.plans,
       // Every week's review, whichever one is cached (prefix match).
       ["/api/v1/weekly-review"],
+      // The day summary falls back to a planned session's duration, RPE and
+      // start time, which a fold, shorten or move changes.
+      // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+      QUERY_KEYS.nutritionDayPrefix,
     ],
     successToast: (_data, variables) => ({ title: successTitle(variables) }),
     errorToast: "Couldn't update the session",

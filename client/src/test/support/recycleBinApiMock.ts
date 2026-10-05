@@ -26,6 +26,10 @@ export function mockRecycleBinApiModule() {
       personalRecords: ["/api/v1/personal-records"],
       exerciseAnalytics: ["/api/v1/exercise-analytics"],
       trainingOverview: ["/api/v1/training-overview"],
+      nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
+      nutritionDayPrefix: ["/api/v1/nutrition/summary"],
+      nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
+      nutritionBlockPrefix: ["/api/v1/nutrition/block"],
     },
   };
 }

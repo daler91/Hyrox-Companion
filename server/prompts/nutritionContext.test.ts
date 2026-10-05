@@ -20,6 +20,7 @@ const FULL: NutritionCoachContext = {
     { date: "2026-06-02", utss: 78, calories: 2600, proteinG: 175 },
   ],
   lowMicros: ["Iron 32%", "Vitamin D 18%"],
+  microDate: "2026-06-07",
 };
 
 const NEXT_SESSION: NonNullable<NutritionCoachContext["nextSessionFuelling"]> = {
@@ -47,6 +48,26 @@ describe("buildNutritionSection", () => {
     expect(out).toContain("Iron 32%, Vitamin D 18%");
   });
 
+  // C8 (CODEBASE_ANALYSIS_2026-10-03): micros are judged on the latest complete
+  // logged day, up to 13 days back, but the coach was told they were low "today".
+  it("names the day the micros were judged on and hedges for partial coverage", () => {
+    const out = buildNutritionSection(ctx(FULL));
+    expect(out).toContain(
+      "- Micronutrients under 50% of reference intake on 2026-06-07, the latest complete logged day: " +
+        "Iron 32%, Vitamin D 18%. Only foods with micronutrient data are counted, so a low figure " +
+        "may be a data gap rather than a shortfall.",
+    );
+    expect(out).not.toContain("today");
+  });
+
+  it("still names the basis when the context carries no micro date", () => {
+    const out = buildNutritionSection(ctx({ ...FULL, microDate: undefined }));
+    expect(out).toContain(
+      "- Micronutrients under 50% of reference intake on the latest complete logged day: Iron 32%",
+    );
+    expect(out).not.toContain("today");
+  });
+
   it("never emits an ampersand (repo formatting rule)", () => {
     expect(buildNutritionSection(ctx(FULL))).not.toContain("&");
   });
@@ -68,7 +89,7 @@ describe("buildNutritionSection", () => {
     expect(out).toContain("No food logged in this window yet.");
     expect(out).not.toContain("Daily target");
     expect(out).not.toContain("Highest training-load");
-    expect(out).not.toContain("Micronutrients low");
+    expect(out).not.toContain("Micronutrients");
   });
 
   it("uses the singular 'day' for a single logged day", () => {

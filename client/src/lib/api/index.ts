@@ -154,9 +154,21 @@ export const QUERY_KEYS = {
   nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id] as const,
   nutritionSessionFuelling: (workoutId: string) =>
     ["/api/v1/nutrition/session-fuelling", workoutId] as const,
+  // Prefix for invalidating every workout's pre/post intake and targets. A
+  // food-log write doesn't know which session's window its entry falls in; a
+  // workout write moves the window and targets (the date, start time, duration
+  // and RPE), and a profile save resizes them (the bodyweight). See
+  // FOOD_LOG_MULTI_DAY_QUERY_KEYS and WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+  nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"] as const,
   nutritionPlannedSessionEstimate: (planDayId: string) =>
     ["/api/v1/nutrition/planned-session-estimate", planDayId] as const,
   nutritionBlock: (from: string, to: string) => ["/api/v1/nutrition/block", from, to] as const,
+  // Prefix for invalidating every Analytics -> Fuelling block range: its points
+  // carry each day's intake, carb target, training load and RPE, so a food-log
+  // write, a target save, a workout write and a profile save each refresh it.
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+  nutritionBlockPrefix: ["/api/v1/nutrition/block"] as const,
   nutritionRange: (from: string, to: string) =>
     ["/api/v1/nutrition/summary-range", from, to] as const,
   // Prefix for invalidating every per-day range query regardless of from/to

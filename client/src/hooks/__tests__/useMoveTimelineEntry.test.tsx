@@ -21,6 +21,10 @@ vi.mock("@/lib/api", () => ({
     timeline: ["/api/v1/timeline"],
     workouts: ["/api/v1/workouts"],
     plans: ["/api/v1/plans"],
+    nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
+    nutritionDayPrefix: ["/api/v1/nutrition/summary"],
+    nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
+    nutritionBlockPrefix: ["/api/v1/nutrition/block"],
   },
 }));
 vi.mock("@/hooks/use-toast", async () => (await import("@/test/support/mutationHookMocks")).makeToastMock());

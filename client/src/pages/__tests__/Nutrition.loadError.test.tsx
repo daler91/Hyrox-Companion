@@ -66,19 +66,37 @@ const MEALS = {
   post_workout: [],
 };
 
+/**
+ * The day query with no data, as TanStack reports it after `errorUpdateCount`
+ * failures. A fetch of a query with no data (a first fetch, or a retry after a
+ * failure) resets it to pending, and a paused fetch is pending without being
+ * `isLoading`; only a failure with no fetch running reads as `isError`.
+ */
+function dayWithoutData(errorUpdateCount: number, fetchStatus: "idle" | "fetching" | "paused") {
+  const isError = errorUpdateCount > 0 && fetchStatus === "idle";
+  const isPending = !isError;
+  return {
+    data: undefined,
+    status: isError ? "error" : "pending",
+    isError,
+    isPending,
+    isLoading: isPending && fetchStatus === "fetching",
+    isFetching: fetchStatus === "fetching",
+    isPaused: fetchStatus === "paused",
+    isRefetching: false,
+    errorUpdateCount,
+    fetchStatus,
+    refetch: day.refetch,
+  };
+}
+
 describe("Nutrition day summary load failure (U5)", () => {
   beforeEach(() => {
     day.refetch.mockReset();
   });
 
   it("shows an error with a retry instead of a 0 kcal day when the summary failed", async () => {
-    day.current = {
-      data: undefined,
-      isLoading: false,
-      isError: true,
-      isRefetching: false,
-      refetch: day.refetch,
-    };
+    day.current = dayWithoutData(1, "idle");
     const user = userEvent.setup();
     render(<Nutrition />);
 
@@ -91,6 +109,44 @@ describe("Nutrition day summary load failure (U5)", () => {
     expect(day.refetch).toHaveBeenCalledOnce();
   });
 
+  // A retry of a query with no data resets it to pending, so `isError` and
+  // `isRefetching` both read false while it runs and the 0 kcal day flashed
+  // back in place of the error.
+  it("keeps the error up, marked retrying, while a retry runs", () => {
+    day.current = dayWithoutData(1, "fetching");
+    render(<Nutrition />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load this day's food log");
+    expect(screen.getByTestId("nutrition-day-error-retry")).toBeDisabled();
+    expect(screen.getByTestId("nutrition-day-error-retry")).toHaveTextContent("Retrying…");
+    expect(screen.queryByTestId("nutrition-daily-totals")).not.toBeInTheDocument();
+  });
+
+  // TanStack pauses rather than runs a fetch while the browser is offline: the
+  // query is pending but not `isLoading`, which rendered a 0 kcal day with
+  // every meal empty.
+  it("shows loading, not a 0 kcal day, while the first fetch waits offline", () => {
+    day.current = dayWithoutData(0, "paused");
+    render(<Nutrition />);
+
+    expect(screen.getByText("Loading")).toBeInTheDocument();
+    expect(screen.getByTestId("nutrition-daily-totals-loading")).toBeInTheDocument();
+    expect(screen.queryByTestId("nutrition-daily-totals")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("meal-section-breakfast")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // An ordinary online load, such as switching to an uncached day: the header
+  // keeps its place without showing zeros as the day's totals.
+  it("holds the totals header's place, without zeros, while the summary loads", () => {
+    day.current = dayWithoutData(0, "fetching");
+    render(<Nutrition />);
+
+    expect(screen.getByText("Loading")).toBeInTheDocument();
+    expect(screen.getByTestId("nutrition-daily-totals-loading")).toBeInTheDocument();
+    expect(screen.queryByTestId("nutrition-daily-totals")).not.toBeInTheDocument();
+  });
+
   it("keeps the day's totals and meals when the summary loaded", () => {
     day.current = {
       data: {
@@ -100,13 +156,20 @@ describe("Nutrition day summary load failure (U5)", () => {
         energy: null,
         mealTargets: null,
       },
-      isLoading: false,
+      status: "success",
       isError: false,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      isPaused: false,
       isRefetching: false,
+      errorUpdateCount: 0,
+      fetchStatus: "idle",
       refetch: day.refetch,
     };
     render(<Nutrition />);
 
+    expect(screen.queryByTestId("nutrition-daily-totals-loading")).not.toBeInTheDocument();
     expect(screen.getByTestId("nutrition-daily-totals")).toHaveTextContent("420 kcal");
     expect(screen.getByTestId("meal-section-breakfast")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

@@ -6,6 +6,7 @@ import { useCallback } from "react";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -52,6 +53,21 @@ function moveEntryDate(entries: TimelineEntry[], entryId: string, newDate: strin
   return entries.map((e) => (e.id === entryId ? movedEntry(e, newDate) : e));
 }
 
+/**
+ * The nutrition reads a move changes. Moving a logged workout changes its
+ * session fuelling (the day whose tagged meals it reads) and, on both days,
+ * the meal targets, energy balance and training load. A plan day with no log
+ * changes only the day summaries' meal targets, which fall back to the planned
+ * session; no other fuelling read looks at a plan day.
+ * CL19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function invalidateMovedNutrition(entry: TimelineEntry): Promise<unknown> {
+  const keys: readonly (readonly unknown[])[] = entry.workoutLogId
+    ? WORKOUT_DERIVED_NUTRITION_QUERY_KEYS
+    : [QUERY_KEYS.nutritionDayPrefix];
+  return Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+}
+
 export function useMoveTimelineEntry(selectedPlanId: string | null) {
   const moveMutation = useApiMutation<unknown, Error, MoveVariables, MoveContext>({
     mutationFn: async ({ entry, newDate }: MoveVariables) => {
@@ -68,6 +84,7 @@ export function useMoveTimelineEntry(selectedPlanId: string | null) {
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.workouts, QUERY_KEYS.plans],
     successToast: "Workout moved",
     errorToast: "Couldn't move workout",
+    onSuccess: (_data, { entry }) => invalidateMovedNutrition(entry),
     onMutate: async ({ entry, newDate }) => {
       await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
       const previousTimeline = queryClient.getQueryData<TimelineCache>([

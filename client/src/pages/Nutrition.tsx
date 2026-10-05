@@ -5,8 +5,10 @@ import { type ReactNode, useCallback, useState } from "react";
 
 import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -19,6 +21,7 @@ import {
   useRecentFoods,
   useRepeatDay,
 } from "@/hooks/useNutrition";
+import { queryLoadState } from "@/lib/queryLoadState";
 
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
@@ -53,27 +56,42 @@ function isValidYmd(s: string): boolean {
 
 type NutritionDayQuery = ReturnType<typeof useNutritionDay>;
 
-/** A summary request that failed with nothing cached: no day to show at all. */
-function isDayLoadFailure(day: NutritionDayQuery): boolean {
-  return day.isError && day.data === undefined;
+/**
+ * Holds the totals header's place, one cell per macro in its grid, while the
+ * day summary has not answered: an uncached day switch otherwise collapsed the
+ * header and jumped the food search up and back. U5 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function DailyTotalsPlaceholder() {
+  return (
+    <Card aria-hidden="true" data-testid="nutrition-daily-totals-loading">
+      <CardContent className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
+        {Object.keys(EMPTY_TOTALS).map((key) => (
+          <Skeleton key={key} className="h-[72px]" />
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 /**
- * The day's totals and energy balance, or, when the summary failed to load,
- * an error with a retry. A failed fetch has no summary, which rendered as a
- * 0 kcal day: an athlete could re-log meals that were already recorded.
- * U5 (CODEBASE_ANALYSIS_2026-10-03)
+ * The day's totals and energy balance; a placeholder while the summary has not
+ * answered (the day body shows the spinner); or, when it failed to load, an
+ * error with a retry. A failed fetch, or a first fetch paused offline, has no
+ * summary, which rendered as a 0 kcal day: an athlete could re-log meals that
+ * were already recorded. U5 (CODEBASE_ANALYSIS_2026-10-03)
  */
 function NutritionDayHeader({
   day,
   onSetTargets,
 }: Readonly<{ day: NutritionDayQuery; onSetTargets: () => void }>) {
-  if (isDayLoadFailure(day)) {
+  const { loading, failed, retrying } = queryLoadState(day);
+  if (loading) return <DailyTotalsPlaceholder />;
+  if (failed) {
     return (
       <LoadErrorCard
         title="Couldn't load this day's food log"
         onRetry={() => void day.refetch()}
-        isRetrying={day.isRefetching}
+        isRetrying={retrying}
         testId="nutrition-day-error"
       />
     );
@@ -208,16 +226,18 @@ export default function Nutrition() {
     />
   );
 
+  // A first fetch paused offline is still loading, not an empty day.
+  // U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const dayLoad = queryLoadState(day);
   let dayBody: ReactNode;
-  if (day.isLoading) {
+  if (dayLoad.loading) {
     dayBody = (
       <div className="flex justify-center p-6">
         <LoadingSpinner />
       </div>
     );
-  } else if (isDayLoadFailure(day)) {
+  } else if (dayLoad.failed) {
     // No meals to list: NutritionDayHeader shows the error and its retry.
-    // U5 (CODEBASE_ANALYSIS_2026-10-03)
     dayBody = null;
   } else if (isEmpty && !hasMealTargets) {
     // Nothing logged and no targets to plan around — the classic empty prompt.
@@ -461,9 +481,10 @@ export default function Nutrition() {
         onClose={() => setTargetsOpen(false)}
       />
       <MealTargetDialog
-        date={date}
         state={mealTargetEdit}
-        onClose={() => setMealTargetEdit(null)}
+        onClose={() => {
+          setMealTargetEdit(null);
+        }}
       />
     </PageContainer>
   );

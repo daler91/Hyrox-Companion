@@ -1,63 +1,49 @@
-import type { ParseLabelResponse } from "@shared/schema";
-
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
-import { useToast } from "@/hooks/use-toast";
-import { useParseNutritionLabel } from "@/hooks/useNutrition";
+import type { ParseImageInput } from "@/hooks/useNutrition";
+import { cn } from "@/lib/utils";
 
 import { useAiConsentGate } from "./useAiConsentGate";
 
 /**
  * "Scan label" entry point (label-scan flow): the user photographs a nutrition
  * facts label, Gemini Vision transcribes the printed values verbatim (unlike
- * "Snap a meal", which estimates), and the result is handed up via
- * `onExtracted` to prefill the custom-food form — nothing is saved until the
- * user reviews and confirms there. Reuses ImageCaptureButton (OS camera on
- * mobile, file picker on desktop) and its built-in compression. Consent-gated
- * inline: the photo is held locally until the user has agreed to AI
- * processing, so a first try never dead-ends in an error.
+ * "Snap a meal", which estimates), and the result prefills the custom-food
+ * form — nothing is saved until the user reviews and confirms there. Reuses
+ * ImageCaptureButton (OS camera on mobile, file picker on desktop) and its
+ * built-in compression. Consent-gated inline: the photo is held locally until
+ * the user has agreed to AI processing, so a first try never dead-ends in an
+ * error.
+ *
+ * The parse itself is owned by the caller, which outlives this row (see
+ * SnapMealButton). CL31 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function ScanLabelButton({
-  onExtracted,
+  onImage,
+  isParsing,
   size = "sm",
   className,
 }: {
-  readonly onExtracted: (result: ParseLabelResponse) => void;
+  readonly onImage: (image: ParseImageInput) => void;
+  readonly isParsing: boolean;
   readonly size?: "sm" | "default";
   readonly className?: string;
 }) {
-  const parse = useParseNutritionLabel();
-  const { toast } = useToast();
   const { requireAiConsent, aiConsentDialog } = useAiConsentGate();
 
   return (
     <>
       <ImageCaptureButton
         size={size}
-        className={className}
-        label="Scan label"
+        className={cn(className, isParsing && "animate-pulse")}
+        label={isParsing ? "Reading the label…" : "Scan label"}
         tooltip="Scan a nutrition label — we'll read the printed values for you to review before saving."
-        disabled={parse.isPending}
+        disabled={isParsing}
         data-testid="button-scan-label"
-        onImage={(image) =>
-          requireAiConsent(() =>
-            parse.mutate(
-              { imageBase64: image.base64, mimeType: image.mimeType },
-              {
-                onSuccess: (result) => {
-                  if (result.label === null) {
-                    toast({
-                      title: "No nutrition label found",
-                      description: "Try a closer, well-lit photo of the nutrition facts panel.",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  onExtracted(result);
-                },
-              },
-            ),
-          )
-        }
+        onImage={(image) => {
+          requireAiConsent(() => {
+            onImage({ imageBase64: image.base64, mimeType: image.mimeType });
+          });
+        }}
       />
       {aiConsentDialog}
     </>

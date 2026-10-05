@@ -6,6 +6,7 @@ import { runWithOfflineFallback } from "@/lib/offlineMutationFallback";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { queryClient } from "@/lib/queryClient";
 import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "../useApiMutation";
 import { useUndoDeleteToast } from "../useRecycleBin";
@@ -135,6 +136,11 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
+        // A day with no log takes its meal targets from its still-planned
+        // session, so a skip changes them, and reopening a completed day
+        // deletes its log, with the log's load and calories.
+        // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+        ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ]);
     },
   });
@@ -177,6 +183,9 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
+        // The log takes over the day's meal targets from the planned session
+        // and adds to its training load. CL19 (CODEBASE_ANALYSIS_2026-10-03)
+        ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ]);
       toastPersonalRecordAchievements(toast, data.newPersonalRecords);
     },
@@ -194,6 +203,9 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
       QUERY_KEYS.trainingOverview,
+      // The day loses the workout's load, calories and meal-target anchor.
+      // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+      ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
     ],
     errorToast: "Failed to delete workout",
     ...deleteWorkoutHandlers,
@@ -208,7 +220,9 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
   );
   const deletePlanDayMutation = useApiMutation({
     mutationFn: (dayId: string) => api.plans.deleteDay(dayId),
-    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
+    // A day with no log takes its meal targets from its planned session.
+    // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans, QUERY_KEYS.nutritionDayPrefix],
     errorToast: "Failed to delete workout",
     ...deletePlanDayHandlers,
     onSuccess: (data) => {
@@ -241,6 +255,8 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
       QUERY_KEYS.trainingOverview,
+      // CL19 (CODEBASE_ANALYSIS_2026-10-03), as for a single delete.
+      ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
     ],
     errorToast: "Failed to delete workouts",
     ...bulkDeleteWorkoutHandlers,

@@ -24,7 +24,7 @@ export function buildNutritionSection(trainingContext: TrainingContext): string 
     buildAvgLine(n),
     buildTargetLine(n.target),
     buildHighLoadLine(n.highLoadDays),
-    buildLowMicrosLine(n.lowMicros),
+    buildLowMicrosLine(n),
     buildNextSessionLine(n.nextSessionFuelling),
   ].filter((line): line is string => line != null);
 
@@ -61,9 +61,33 @@ function buildHighLoadLine(highLoadDays: NutritionCtx["highLoadDays"]): string |
   return `- Highest training-load days — ${days}.`;
 }
 
-function buildLowMicrosLine(lowMicros: NutritionCtx["lowMicros"]): string | null {
-  if (lowMicros.length === 0) return null;
-  return `- Micronutrients low today (under 50% reference): ${lowMicros.join(", ")}.`;
+/**
+ * Edamam foods never carry micronutrients and many cached foods have none yet,
+ * so even a full day's figures cover only part of what was eaten. Shared with
+ * the nutrition-insights prompt so the coach and the insights panel hedge alike.
+ */
+export const MICRO_COVERAGE_CAVEAT =
+  "Only foods with micronutrient data are counted, so a low figure may be a data gap rather than a shortfall.";
+
+/**
+ * The hedge for an all-clear, which carried the caveat above and so spoke of
+ * "a low figure" when nothing was low. What partial coverage hides in an
+ * all-clear is a micro no counted food reports: it is never judged at all.
+ * C8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const MICRO_ALL_CLEAR_CAVEAT =
+  "Only foods with micronutrient data are counted and micros they don't report aren't judged, so an all-clear can still miss a gap.";
+
+// Micros are judged on the latest complete logged day (up to 13 days back),
+// never the part-eaten today, yet this line said "low today": name the day,
+// and carry the partial-coverage caveat. C8 (CODEBASE_ANALYSIS_2026-10-03)
+function buildLowMicrosLine(n: NutritionCtx): string | null {
+  if (n.lowMicros.length === 0) return null;
+  const day =
+    n.microDate == null
+      ? "the latest complete logged day"
+      : `${n.microDate}, the latest complete logged day`;
+  return `- Micronutrients under 50% of reference intake on ${day}: ${n.lowMicros.join(", ")}. ${MICRO_COVERAGE_CAVEAT}`;
 }
 
 function buildNextSessionLine(s: NutritionCtx["nextSessionFuelling"]): string | null {

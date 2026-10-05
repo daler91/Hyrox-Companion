@@ -37,6 +37,8 @@ import { useMemo } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
+import { FOOD_LOG_ALL_DAYS_QUERY_KEYS, FOOD_LOG_MULTI_DAY_QUERY_KEYS } from "@/lib/nutritionInvalidation";
 import { type OfflineFallbackResult, runWithOfflineFallback } from "@/lib/offlineMutationFallback";
 import { queryClient } from "@/lib/queryClient";
 
@@ -110,6 +112,19 @@ export function usePortionMemory(enabled = true): (foodId: string) => PortionHin
 
 const NUTRITION_LOG_URL = "/api/v1/nutrition/logs";
 
+/**
+ * Every read a food-log write on `date` changes: that day, its micros and the
+ * multi-day reads (the fuel chips, the Fuelling block and session intake).
+ * CL19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function foodLogQueryKeys(date: string) {
+  return [
+    QUERY_KEYS.nutritionDay(date),
+    QUERY_KEYS.nutritionMicros(date),
+    ...FOOD_LOG_MULTI_DAY_QUERY_KEYS,
+  ] as const;
+}
+
 export function useLogFood(date: string) {
   return useApiMutation<OfflineFallbackResult<FoodLogEntry>, Error, CreateFoodLogInput>({
     // Queue-backed offline fallback: `loggedAt` is part of the input, so a
@@ -138,12 +153,11 @@ export function useLogFood(date: string) {
       // The Micronutrients card on the same page reads its own query; without
       // this it kept showing pre-meal totals for as long as it stayed mounted
       // (C3).
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDay(date) }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionMicros(date) }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRecent }),
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRangePrefix }),
-      ]);
+      await Promise.all(
+        [...foodLogQueryKeys(date), QUERY_KEYS.nutritionRecent].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      );
     },
   });
 }
@@ -151,7 +165,7 @@ export function useLogFood(date: string) {
 export function useUpdateLog(date: string) {
   return useApiMutation<FoodLogEntry, Error, { id: string; data: UpdateFoodLogInput }>({
     mutationFn: ({ id, data }) => api.nutrition.updateLog(id, data),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionMicros(date), QUERY_KEYS.nutritionRangePrefix],
+    invalidateQueries: foodLogQueryKeys(date),
     successToast: "Entry updated",
     errorToast: "Couldn't update that entry",
   });
@@ -160,7 +174,7 @@ export function useUpdateLog(date: string) {
 export function useDeleteLog(date: string) {
   return useApiMutation<{ success: boolean }, Error, string>({
     mutationFn: (id) => api.nutrition.deleteLog(id),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionMicros(date), QUERY_KEYS.nutritionRangePrefix],
+    invalidateQueries: foodLogQueryKeys(date),
     successToast: "Entry removed",
     errorToast: "Couldn't remove that entry",
   });
@@ -175,8 +189,9 @@ export function useToggleFavorite() {
       } catch (error) {
         // DELETE /favorites/:foodId 404s when the row was already gone. From
         // the athlete's point of view, un-starring something that isn't starred
-        // succeeded — don't surface an error for a stale toggle.
-        if (error instanceof Error && error.message.startsWith("404")) {
+        // succeeded — don't surface an error for a stale toggle. The status is
+        // parseApiError's to read (CL34, CODEBASE_ANALYSIS_2026-10-03).
+        if (parseApiError(error)?.status === 404) {
           return { success: true };
         }
         throw error;
@@ -194,12 +209,7 @@ export function useToggleFavorite() {
 export function useRepeatDay(date: string) {
   return useApiMutation<RepeatDayResponse, Error, RepeatDayInput>({
     mutationFn: (input) => api.nutrition.repeatDay(input),
-    invalidateQueries: [
-      QUERY_KEYS.nutritionDay(date),
-      QUERY_KEYS.nutritionMicros(date),
-      QUERY_KEYS.nutritionRecent,
-      QUERY_KEYS.nutritionRangePrefix,
-    ],
+    invalidateQueries: [...foodLogQueryKeys(date), QUERY_KEYS.nutritionRecent],
     successToast: (data) => ({
       title: `Repeated ${data.created} item${data.created === 1 ? "" : "s"}`,
     }),
@@ -267,7 +277,8 @@ export function useCreateCustomFood() {
 export function useUpdateCustomFood() {
   return useApiMutation<Food, Error, { id: string; data: UpdateCustomFoodInput }>({
     mutationFn: ({ id, data }) => api.nutrition.updateCustomFood(id, data),
-    invalidateQueries: [QUERY_KEYS.nutritionCustomFoods],
+    // Its logged entries read it live, on whatever day they fall (CL19).
+    invalidateQueries: [QUERY_KEYS.nutritionCustomFoods, ...FOOD_LOG_ALL_DAYS_QUERY_KEYS],
     successToast: "Custom food updated",
     errorToast: "Couldn't update that food",
   });
@@ -310,7 +321,8 @@ export function useCreateRecipe() {
 export function useUpdateRecipe() {
   return useApiMutation<RecipeWithIngredients, Error, { id: string; data: CreateRecipeInput }>({
     mutationFn: ({ id, data }) => api.nutrition.updateRecipe(id, data),
-    invalidateQueries: [QUERY_KEYS.nutritionRecipes],
+    // Its logged entries read it live, on whatever day they fall (CL19).
+    invalidateQueries: [QUERY_KEYS.nutritionRecipes, ...FOOD_LOG_ALL_DAYS_QUERY_KEYS],
     successToast: "Recipe updated",
     errorToast: "Couldn't update that recipe",
   });
@@ -373,10 +385,16 @@ export function useParseMealText() {
   });
 }
 
+/** A compressed photo, as the vision parse endpoints take it. */
+export interface ParseImageInput {
+  imageBase64: string;
+  mimeType: string;
+}
+
 /** Parse a meal *photo* into suggested items (FR-4.1, photo path). Opens the
  *  review sheet on success, so no success toast; errors map AI codes. */
 export function useParseMealPhoto() {
-  return useApiMutation<ParseMealResponse, Error, { imageBase64: string; mimeType: string }>({
+  return useApiMutation<ParseMealResponse, Error, ParseImageInput>({
     mutationFn: ({ imageBase64, mimeType }) => api.nutrition.parseMealPhoto(imageBase64, mimeType),
     errorToast: "Couldn't read that photo",
   });
@@ -384,7 +402,7 @@ export function useParseMealPhoto() {
 
 /** Transcribe a nutrition-label photo into per-100g macros (label-scan flow). */
 export function useParseNutritionLabel() {
-  return useApiMutation<ParseLabelResponse, Error, { imageBase64: string; mimeType: string }>({
+  return useApiMutation<ParseLabelResponse, Error, ParseImageInput>({
     mutationFn: ({ imageBase64, mimeType }) => api.nutrition.parseLabel(imageBase64, mimeType),
     errorToast: "Couldn't read that label",
   });
@@ -394,12 +412,7 @@ export function useParseNutritionLabel() {
 export function useLogMealBatch(date: string) {
   return useApiMutation<BatchLogResponse, Error, CreateFoodLogBatchInput>({
     mutationFn: (data) => api.nutrition.createLogBatch(data),
-    invalidateQueries: [
-      QUERY_KEYS.nutritionDay(date),
-      QUERY_KEYS.nutritionMicros(date),
-      QUERY_KEYS.nutritionRecent,
-      QUERY_KEYS.nutritionRangePrefix,
-    ],
+    invalidateQueries: [...foodLogQueryKeys(date), QUERY_KEYS.nutritionRecent],
     successToast: (data) => ({
       title: `Logged ${data.created} item${data.created === 1 ? "" : "s"}`,
     }),
@@ -418,30 +431,54 @@ export function useNutritionTargets(enabled = true) {
   });
 }
 
+/**
+ * Every cached read that carries the daily target: the targets themselves, each
+ * day's summary (effectiveTarget, mealTargets), the Timeline fuel chips and the
+ * Analytics -> Fuelling block (each point's carb target). Saving used to
+ * refresh only the first, so the header kept reading "of 2000 kcal" for
+ * minutes after raising it to 2500, and a first-time athlete still saw "Set
+ * targets". CL19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const NUTRITION_TARGET_QUERY_KEYS = [
+  QUERY_KEYS.nutritionTargets,
+  QUERY_KEYS.nutritionDayPrefix,
+  QUERY_KEYS.nutritionRangePrefix,
+  QUERY_KEYS.nutritionBlockPrefix,
+] as const;
+
 export function useSetTarget() {
   return useApiMutation<NutritionTarget, Error, UpsertNutritionTargetInput>({
     mutationFn: (data) => api.nutrition.setTarget(data),
-    invalidateQueries: [QUERY_KEYS.nutritionTargets],
+    invalidateQueries: NUTRITION_TARGET_QUERY_KEYS,
     successToast: "Targets saved",
     errorToast: "Couldn't save targets",
   });
 }
 
+/**
+ * Every day summary, the only read that carries meal targets: a save applies
+ * from the athlete's local today on, and a reset deletes every version of the
+ * meal's override, so it changes past days too. Refreshing just the open day
+ * left the others (today's too, when another date was open) on the old
+ * targets. CL19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const MEAL_TARGET_QUERY_KEYS = [QUERY_KEYS.nutritionDayPrefix] as const;
+
 /** Pin one meal's macro/calorie target (per-meal fuelling override). */
-export function useSetMealTargetOverride(date: string) {
+export function useSetMealTargetOverride() {
   return useApiMutation<MealTarget, Error, UpsertMealTargetInput>({
     mutationFn: (data) => api.nutrition.setMealTargetOverride(data),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date)],
+    invalidateQueries: MEAL_TARGET_QUERY_KEYS,
     successToast: "Meal target saved",
     errorToast: "Couldn't save meal target",
   });
 }
 
 /** Clear one meal's override, reverting it to the suggested split. */
-export function useClearMealTargetOverride(date: string) {
+export function useClearMealTargetOverride() {
   return useApiMutation<{ success: boolean }, Error, MealType>({
     mutationFn: (mealType) => api.nutrition.clearMealTargetOverride(mealType),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date)],
+    invalidateQueries: MEAL_TARGET_QUERY_KEYS,
     successToast: "Reset to suggested",
     errorToast: "Couldn't reset that meal",
   });

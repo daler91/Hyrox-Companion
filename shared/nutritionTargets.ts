@@ -619,3 +619,119 @@ export function defaultPeriodizationConfig(
     referenceBasis: hasRealLoad ? "measured" : "assumed",
   };
 }
+
+/** The periodisation columns a target version stores (see `nutrition_targets`). */
+export interface PeriodizationSettings {
+  periodizationEnabled: boolean;
+  referenceUtss: number | null;
+  carbGramsPerUtss: number | null;
+  recoveryEnabled: boolean;
+  recoveryProteinBumpFrac: number | null;
+  preloadCarbGramsPerUtss: number | null;
+  preloadDaysAhead: number | null;
+  phaseAware: boolean;
+  maxCarbDeltaG: number | null;
+}
+
+/** A saved target version: its carb baseline and periodisation columns. */
+export interface StoredPeriodization extends PeriodizationSettings {
+  carbG: number | null;
+}
+
+/** What the new version should do; the numbers come from the current one. */
+export interface PeriodizationChoice {
+  carbG: number | null;
+  periodize: boolean;
+  recoveryEnabled: boolean;
+  phaseAware: boolean;
+}
+
+/** new ÷ old carb baseline, or null when there is no old one to scale from. */
+function baselineRatio(fromCarbG: number | null | undefined, toCarbG: number): number | null {
+  return fromCarbG != null && fromCarbG > 0 ? toCarbG / fromCarbG : null;
+}
+
+/**
+ * A knob derived from the carb baseline, re-based onto the new one. The
+ * slope, the pre-load rate and the cap all scale with the baseline (see
+ * defaultPeriodizationConfig), and copying them unchanged onto a new baseline
+ * broke the model: cutting 400 g to 150 g kept a 400 g slope, so rest days
+ * fell to 0 g and a UTSS-120 day rose to 430 g (2.9x the new baseline) where a
+ * fresh config gives 75 g and 255 g. Scaling keeps any calibration the old
+ * value carried. CL33 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function rebased(stored: number | null | undefined, ratio: number | null, fallback: number): number {
+  if (stored == null || ratio == null) return fallback;
+  return ratio === 1 ? stored : round1(stored * ratio);
+}
+
+/**
+ * The periodisation columns for a new target version: the athlete's choice,
+ * with the current version's calibration carried forward (re-based onto the
+ * new carb baseline) and the baseline's defaults where there is none. Shared by
+ * the targets dialog and the onboarding fuelling step so both save the same
+ * thing.
+ */
+export function nextPeriodizationSettings(
+  current: StoredPeriodization | null,
+  choice: PeriodizationChoice,
+  recentAvgDailyUtss: number | null,
+): PeriodizationSettings {
+  // Periodisation only makes sense with a carb baseline to scale.
+  const baselineCarbG = choice.periodize ? choice.carbG : null;
+  if (baselineCarbG == null) {
+    return {
+      periodizationEnabled: false,
+      referenceUtss: null,
+      carbGramsPerUtss: null,
+      recoveryEnabled: false,
+      recoveryProteinBumpFrac: null,
+      preloadCarbGramsPerUtss: null,
+      preloadDaysAhead: null,
+      phaseAware: false,
+      maxCarbDeltaG: null,
+    };
+  }
+  const cfg = defaultPeriodizationConfig(baselineCarbG, recentAvgDailyUtss);
+  const ratio = baselineRatio(current?.carbG, baselineCarbG);
+  // The reference and slope are kept only from a version that was periodised.
+  const calibrated = current?.periodizationEnabled === true ? current : null;
+  const adaptive = choice.recoveryEnabled || choice.phaseAware;
+  return {
+    periodizationEnabled: true,
+    referenceUtss: calibrated?.referenceUtss ?? cfg.referenceUtss,
+    carbGramsPerUtss: rebased(calibrated?.carbGramsPerUtss, ratio, cfg.carbGramsPerUtss),
+    recoveryEnabled: choice.recoveryEnabled,
+    recoveryProteinBumpFrac: adaptive
+      ? (current?.recoveryProteinBumpFrac ?? cfg.recoveryProteinBumpFrac)
+      : null,
+    preloadCarbGramsPerUtss: adaptive
+      ? rebased(current?.preloadCarbGramsPerUtss, ratio, cfg.preloadCarbGramsPerUtss)
+      : null,
+    preloadDaysAhead: adaptive ? (current?.preloadDaysAhead ?? cfg.preloadDaysAhead) : null,
+    phaseAware: choice.phaseAware,
+    maxCarbDeltaG: adaptive ? rebased(current?.maxCarbDeltaG, ratio, cfg.maxCarbDeltaG) : null,
+  };
+}
+
+/**
+ * The current version's periodisation as it stands, re-based onto a new carb
+ * baseline: for a save that changes only the macros (the onboarding fuelling
+ * step), which used to post bare macros and so wrote a version with
+ * periodisation, recovery and phase-awareness off. CL20 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function carryPeriodizationForward(
+  current: StoredPeriodization,
+  carbG: number | null,
+): PeriodizationSettings {
+  return nextPeriodizationSettings(
+    current,
+    {
+      carbG,
+      periodize: current.periodizationEnabled,
+      recoveryEnabled: current.recoveryEnabled,
+      phaseAware: current.phaseAware,
+    },
+    null,
+  );
+}

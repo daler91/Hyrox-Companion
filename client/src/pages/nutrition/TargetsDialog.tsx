@@ -1,7 +1,7 @@
 import {
   type BmrSex,
   calculateNutritionTarget,
-  defaultPeriodizationConfig,
+  nextPeriodizationSettings,
 } from "@shared/nutritionTargets";
 import type { NutritionTarget, TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
@@ -93,38 +93,20 @@ function TargetsForm({
 
   const submit = () => {
     if (!valid) return;
-    // Periodisation only makes sense with a carb baseline to scale.
-    const scaling = periodize && parsed.carbG != null;
-    const useAdaptive = scaling && adaptive;
-    const cfg = defaultPeriodizationConfig(parsed.carbG ?? 0, recentAvgDailyUtss);
-    // Preserve an existing calibration where present; otherwise seed from defaults.
-    const referenceUtss =
-      current?.periodizationEnabled && current.referenceUtss != null
-        ? current.referenceUtss
-        : cfg.referenceUtss;
-    const carbGramsPerUtss =
-      current?.periodizationEnabled && current.carbGramsPerUtss != null
-        ? current.carbGramsPerUtss
-        : cfg.carbGramsPerUtss;
-    setTarget.mutate(
+    // An existing calibration is preserved, re-based onto a changed carb
+    // baseline rather than copied (CL33, CODEBASE_ANALYSIS_2026-10-03);
+    // otherwise it is seeded from the defaults.
+    const periodization = nextPeriodizationSettings(
+      current,
       {
-        ...parsed,
-        periodizationEnabled: scaling,
-        referenceUtss: scaling ? referenceUtss : null,
-        carbGramsPerUtss: scaling ? carbGramsPerUtss : null,
-        recoveryEnabled: useAdaptive,
-        recoveryProteinBumpFrac: useAdaptive
-          ? (current?.recoveryProteinBumpFrac ?? cfg.recoveryProteinBumpFrac)
-          : null,
-        preloadCarbGramsPerUtss: useAdaptive
-          ? (current?.preloadCarbGramsPerUtss ?? cfg.preloadCarbGramsPerUtss)
-          : null,
-        preloadDaysAhead: useAdaptive ? (current?.preloadDaysAhead ?? cfg.preloadDaysAhead) : null,
-        phaseAware: useAdaptive,
-        maxCarbDeltaG: useAdaptive ? (current?.maxCarbDeltaG ?? cfg.maxCarbDeltaG) : null,
+        carbG: parsed.carbG ?? null,
+        periodize,
+        recoveryEnabled: adaptive,
+        phaseAware: adaptive,
       },
-      { onSuccess: onClose },
+      recentAvgDailyUtss,
     );
+    setTarget.mutate({ ...parsed, ...periodization }, { onSuccess: onClose });
   };
 
   return (

@@ -27,6 +27,7 @@ function summary(overrides: Partial<NutritionSummary> = {}): NutritionSummary {
       { date: "2026-06-02", utss: 60, calories: 2100, protein: 130 },
     ],
     hasTrainingLoad: true,
+    microDate: "2026-06-07",
     microStatus: "low",
     lowMicros: [{ label: "Iron", pctRdi: 32 }],
     ...overrides,
@@ -77,6 +78,22 @@ describe("buildNutritionTrainingContext", () => {
       calories: 2200,
       proteinG: 140,
     });
+  });
+
+  // C8 (CODEBASE_ANALYSIS_2026-10-03): the prompt must name the day the micros
+  // were judged on, which is no longer today.
+  it("carries the day the micros were judged on", async () => {
+    expect((await buildNutritionTrainingContext("u1"))?.microDate).toBe("2026-06-07");
+  });
+
+  it("omits the micro date when no complete day is logged", async () => {
+    vi.mocked(buildNutritionSummary).mockResolvedValue(
+      summary({ microDate: null, microStatus: "no_data", lowMicros: [] }),
+    );
+    const ctx = await buildNutritionTrainingContext("u1");
+    expect(ctx).toBeDefined();
+    expect(ctx?.microDate).toBeUndefined();
+    expect(ctx?.lowMicros).toEqual([]);
   });
 
   it("degrades gracefully (undefined + warning) when the summary build throws", async () => {

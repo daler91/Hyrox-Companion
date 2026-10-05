@@ -2,6 +2,7 @@ import type { WorkoutLog } from "@shared/schema";
 
 import { api, QUERY_KEYS } from "@/lib/api";
 import { humanizeApiError } from "@/lib/queryClient";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -9,7 +10,8 @@ export type DeviceLinkTarget = { planDayId: string } | { workoutLogId: string };
 
 // A link or unlink moves a recording between rows: the timeline and workout
 // lists change shape, a plan day flips status, and the metrics that feed PRs
-// and analytics move with the recording.
+// and analytics move with the recording. Its start time and duration move too,
+// and the fuelling reads built from them (CL19, CODEBASE_ANALYSIS_2026-10-03).
 const DEVICE_LINK_QUERY_KEYS = [
   QUERY_KEYS.timeline,
   QUERY_KEYS.workouts,
@@ -17,6 +19,7 @@ const DEVICE_LINK_QUERY_KEYS = [
   QUERY_KEYS.personalRecords,
   QUERY_KEYS.exerciseAnalytics,
   QUERY_KEYS.trainingOverview,
+  ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
 ] as const;
 
 /**

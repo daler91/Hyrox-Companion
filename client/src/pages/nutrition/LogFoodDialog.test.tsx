@@ -423,4 +423,63 @@ describe("LogFoodDialog", () => {
     expect(await screen.findByTestId("preview-micro-sodium")).toBeInTheDocument();
     expect(screen.getByTestId("preview-micro-vitaminC")).toBeInTheDocument();
   });
+
+  // CL32 (CODEBASE_ANALYSIS_2026-10-03): editing projected the new serving on
+  // top of day totals that already held the old one.
+  describe("goal impact while editing", () => {
+    const TARGET = {
+      calories: 2000,
+      proteinG: 150,
+      carbG: 200,
+      fatG: 80,
+      carbDeltaG: 0,
+      baseLoadDeltaG: 0,
+      recoveryDeltaG: 0,
+      preloadDeltaG: 0,
+      proteinDeltaG: 0,
+      utss: 0,
+      scaled: false,
+      reasonCodes: [],
+      explanation: "",
+      phase: null,
+    };
+
+    function renderEditWithGoals(entry: FoodLogEntryWithNutrition) {
+      // The day's 600 kcal already include this entry (200 g at 89 kcal/100 g
+      // = 178 kcal).
+      return renderWithClient(
+        <LogFoodDialog
+          state={{ mode: "edit", entry }}
+          date="2026-06-07"
+          onClose={vi.fn()}
+          todayTotals={{ calories: 600, protein: 40, carb: 80, fat: 20, fiber: 6 }}
+          effectiveTarget={TARGET}
+        />,
+      );
+    }
+
+    it("shows no change for an edit that changes nothing", async () => {
+      vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [] });
+      renderEditWithGoals(entryOf(200));
+
+      const calories = await screen.findByTestId("goal-contrib-calories");
+      expect(calories).toHaveTextContent("30%→30%");
+      expect(calories).toHaveTextContent("600 / 2000");
+    });
+
+    it("counts only the difference when the portion grows", async () => {
+      vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [] });
+      const user = userEvent.setup();
+      renderEditWithGoals(entryOf(200));
+
+      const quantity = await screen.findByTestId("input-quantity");
+      await user.clear(quantity);
+      await user.type(quantity, "400");
+
+      // +200 g = +178 kcal on the day, not +356.
+      const calories = screen.getByTestId("goal-contrib-calories");
+      expect(calories).toHaveTextContent("30%→39%");
+      expect(calories).toHaveTextContent("778 / 2000");
+    });
+  });
 });

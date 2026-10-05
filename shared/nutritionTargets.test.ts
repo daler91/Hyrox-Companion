@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   calculateBmr,
   calculateNutritionTarget,
+  carryPeriodizationForward,
   defaultPeriodizationConfig,
   effectiveTarget,
   effectiveTargetWindowed,
+  nextPeriodizationSettings,
   type PeriodizationConfig,
+  type PeriodizationSettings,
+  type StoredPeriodization,
   type TrainingLoadWindow,
 } from "./nutritionTargets";
 
@@ -376,5 +380,110 @@ describe("defaultPeriodizationConfig", () => {
     const c = defaultPeriodizationConfig(300, 3);
     expect(c.referenceUtss).toBe(25);
     expect(c.carbGramsPerUtss).toBe(6); // (300 / 25) × 0.5
+  });
+});
+
+// CL33 / CL20 (CODEBASE_ANALYSIS_2026-10-03): a new carb baseline must re-base
+// the knobs derived from the old one, and a macros-only save must keep the
+// current version's periodisation.
+describe("nextPeriodizationSettings", () => {
+  /** A periodised version saved with the defaults for `carbG` (assumed reference 50). */
+  function storedDefaults(carbG: number): StoredPeriodization {
+    const cfg = defaultPeriodizationConfig(carbG, null);
+    return {
+      carbG,
+      periodizationEnabled: true,
+      referenceUtss: cfg.referenceUtss,
+      carbGramsPerUtss: cfg.carbGramsPerUtss,
+      recoveryEnabled: true,
+      recoveryProteinBumpFrac: cfg.recoveryProteinBumpFrac,
+      preloadCarbGramsPerUtss: cfg.preloadCarbGramsPerUtss,
+      preloadDaysAhead: cfg.preloadDaysAhead,
+      phaseAware: true,
+      maxCarbDeltaG: cfg.maxCarbDeltaG,
+    };
+  }
+
+  function toConfig(p: PeriodizationSettings): PeriodizationConfig {
+    return {
+      enabled: p.periodizationEnabled,
+      referenceUtss: p.referenceUtss ?? 0,
+      carbGramsPerUtss: p.carbGramsPerUtss ?? 0,
+      maxCarbDeltaG: p.maxCarbDeltaG ?? undefined,
+    };
+  }
+
+  const choose = (carbG: number | null) => ({
+    carbG,
+    periodize: true,
+    recoveryEnabled: true,
+    phaseAware: true,
+  });
+
+  it("re-bases the slope, pre-load and cap when the carb baseline is cut", () => {
+    const next = nextPeriodizationSettings(storedDefaults(400), choose(150), null);
+    const base = { calories: null, proteinG: 150, carbG: 150, fatG: 70 };
+
+    // The finding's numbers: copied knobs gave 0 g and 430 g; a fresh config 75 g and 255 g.
+    expect(effectiveTarget(base, 0, toConfig(next)).carbG).toBe(75);
+    expect(effectiveTarget(base, 120, toConfig(next)).carbG).toBe(255);
+    const fresh = defaultPeriodizationConfig(150, null);
+    expect(next).toMatchObject({
+      referenceUtss: 50,
+      carbGramsPerUtss: fresh.carbGramsPerUtss,
+      preloadCarbGramsPerUtss: fresh.preloadCarbGramsPerUtss,
+      maxCarbDeltaG: fresh.maxCarbDeltaG,
+    });
+  });
+
+  it("keeps a measured reference and any custom slope, scaled", () => {
+    const current = { ...storedDefaults(300), referenceUtss: 30, carbGramsPerUtss: 6 };
+    const next = nextPeriodizationSettings(current, choose(150), 80);
+    expect(next.referenceUtss).toBe(30);
+    expect(next.carbGramsPerUtss).toBe(3);
+  });
+
+  it("leaves every knob as saved when the baseline is unchanged", () => {
+    const current = { ...storedDefaults(250), carbGramsPerUtss: 2.37 };
+    const next = nextPeriodizationSettings(current, choose(250), 80);
+    expect(next).toMatchObject({ carbGramsPerUtss: 2.37, maxCarbDeltaG: current.maxCarbDeltaG });
+  });
+
+  it("seeds from the defaults when the current version has no carb baseline", () => {
+    const current: StoredPeriodization = { ...storedDefaults(250), carbG: null };
+    const next = nextPeriodizationSettings(current, choose(200), null);
+    expect(next.maxCarbDeltaG).toBe(defaultPeriodizationConfig(200, null).maxCarbDeltaG);
+  });
+
+  it("turns everything off without a carb baseline to scale", () => {
+    const next = nextPeriodizationSettings(storedDefaults(250), choose(null), null);
+    expect(next).toMatchObject({
+      periodizationEnabled: false,
+      carbGramsPerUtss: null,
+      recoveryEnabled: false,
+      phaseAware: false,
+      maxCarbDeltaG: null,
+    });
+  });
+
+  it("carries a periodised version's flags forward onto new macros", () => {
+    const carried = carryPeriodizationForward(storedDefaults(400), 150);
+    expect(carried).toMatchObject({
+      periodizationEnabled: true,
+      recoveryEnabled: true,
+      phaseAware: true,
+      preloadDaysAhead: 1,
+      maxCarbDeltaG: 112.5,
+    });
+  });
+
+  it("carries a flat version forward as flat", () => {
+    const flat: StoredPeriodization = {
+      ...storedDefaults(250),
+      periodizationEnabled: false,
+      recoveryEnabled: false,
+      phaseAware: false,
+    };
+    expect(carryPeriodizationForward(flat, 200).periodizationEnabled).toBe(false);
   });
 });

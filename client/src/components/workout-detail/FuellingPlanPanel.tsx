@@ -113,7 +113,11 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   const mutation = useApiMutation({
     mutationFn: (updates: ExpectedSessionUpdate) =>
       api.plans.updateDayWithoutPlan(entry.planDayId ?? "", updates as Record<string, unknown>),
-    invalidateQueries: [QUERY_KEYS.timeline],
+    // The day summary's meal targets read a still-planned day's expected
+    // duration, RPE and start time, and its periodised target the next days'
+    // planned load. No other fuelling read looks at a plan day.
+    // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.nutritionDayPrefix],
     errorToast: "Couldn't save your expected session details",
   });
 

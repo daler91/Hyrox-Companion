@@ -41,7 +41,23 @@ export interface MealFuelTarget {
   reasonCodes: string[];
   /** One short coaching line, in the voice of sessionFuellingTargets. */
   rationale: string;
+  /**
+   * The athlete's stored override, field for field (null ⇒ that field follows
+   * the computed split). Present only on an overridden meal, so the meal editor
+   * can show what is pinned and keep it on the next save.
+   */
+  override?: Required<MealFuelOverride>;
+  /**
+   * The computed split this override replaced, on an overridden meal only: what
+   * a field the editor leaves blank falls back to, and what the editor merges
+   * its fields onto (mergeMealOverride) to show what a save will read.
+   * C21 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  suggested?: MealFuelValues;
 }
+
+/** A meal's four target figures, without the coaching context around them. */
+export type MealFuelValues = Pick<MealFuelTarget, "calories" | "carbG" | "proteinG" | "fatG">;
 
 /** The day's effective target (post load-periodisation); any field may be null. */
 export interface MealFuelDailyTarget {
@@ -417,6 +433,52 @@ function buildMealReasonCodes(role: MealRole, isPreMeal: boolean, flags: MealRea
   return candidates.filter(([cond]) => cond).map(([, code]) => code);
 }
 
+interface MealMacros {
+  carbG: number;
+  proteinG: number;
+  fatG: number;
+}
+
+/** The energy in a meal's macros. */
+function mealMacroKcal(m: MealMacros): number {
+  return Math.round(
+    m.proteinG * KCAL_PER_G.protein + m.carbG * KCAL_PER_G.carb + m.fatG * KCAL_PER_G.fat,
+  );
+}
+
+/**
+ * Each meal's calories: the energy in its macros, plus — when the day has a
+ * calorie goal but leaves some macro unset — a weighted share of the calories
+ * the macros don't account for. Building calories from the macros alone let an
+ * unset macro allocate zero: 2,500 kcal with only a 150 g protein goal became
+ * four 150 kcal meals, and a normal lunch read as a 4.7x overshoot. A full
+ * macro set (or set macros that already reach the goal) keeps the macro-only
+ * figure. C21 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function allocateMealCalories(
+  macros: Map<MealType, MealMacros>,
+  daily: MealFuelDailyTarget,
+  eatingMeals: MealType[],
+  flexMeal: MealType,
+): Map<MealType, number> {
+  const kcal = new Map<MealType, number>();
+  let macroKcal = 0;
+  for (const [meal, m] of macros) {
+    const k = mealMacroKcal(m);
+    kcal.set(meal, k);
+    macroKcal += k;
+  }
+  const partialMacros = daily.proteinG == null || daily.carbG == null || daily.fatG == null;
+  if (daily.calories == null || !partialMacros) return kcal;
+  const remainder = daily.calories - macroKcal;
+  if (remainder <= 0) return kcal;
+
+  const share = splitByWeights(remainder, pickWeights(MEAL_SPLIT_WEIGHTS, eatingMeals));
+  for (const meal of eatingMeals) kcal.set(meal, Math.round((kcal.get(meal) ?? 0) + (share.get(meal) ?? 0)));
+  reconcileToDaily(kcal, daily.calories, flexMeal);
+  return kcal;
+}
+
 /**
  * Distribute the day's effective daily target across meal slots. Returns null
  * when no daily target is set (nothing to distribute), mirroring how the daily
@@ -471,14 +533,19 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
   const usedBodyweightFallback =
     daily.proteinG == null && (input.bodyweightKg == null || input.bodyweightKg <= 0);
 
-  const out: MealFuelTargets = {};
+  const macros = new Map<MealType, MealMacros>();
   for (const meal of activeMeals) {
-    const carbG = round1(carbMap.get(meal) ?? 0);
-    const proteinG = round1(proteinMap.get(meal) ?? 0);
-    const fatG = round1(fatMap.get(meal) ?? 0);
-    const calories = Math.round(
-      proteinG * KCAL_PER_G.protein + carbG * KCAL_PER_G.carb + fatG * KCAL_PER_G.fat,
-    );
+    macros.set(meal, {
+      carbG: round1(carbMap.get(meal) ?? 0),
+      proteinG: round1(proteinMap.get(meal) ?? 0),
+      fatG: round1(fatMap.get(meal) ?? 0),
+    });
+  }
+  const kcalMap = allocateMealCalories(macros, daily, eatingMeals, flexMeal);
+
+  const out: MealFuelTargets = {};
+  for (const [meal, { carbG, proteinG, fatG }] of macros) {
+    const calories = Math.round(kcalMap.get(meal) ?? 0);
     const role = roles.get(meal) ?? "standard";
     const isPreMeal = preMeal != null && meal === preMeal;
 
@@ -544,13 +611,111 @@ export interface MealFuelOverride {
 }
 
 /**
+ * Whether a meal keeps its share of the day's unset macros (allocateMealCalories)
+ * under its final macros: the split gave it calories its macros don't account
+ * for, and a macro the split leaves at 0 g (unset for the day) is still at 0 g,
+ * so the share still has a macro to stand for. Once every macro has a figure,
+ * the meal's energy is its macros: 50 g protein, 80 g carbs and 20 g fat is
+ * 700 kcal, and a 770 kcal target beside them could not be met without
+ * overshooting one. C21 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function keepsUnsetMacroShare(split: MealFuelValues, final: MealMacros): boolean {
+  if (split.calories <= mealMacroKcal(split)) return false;
+  return (
+    (split.carbG === 0 && final.carbG === 0) ||
+    (split.proteinG === 0 && final.proteinG === 0) ||
+    (split.fatG === 0 && final.fatG === 0)
+  );
+}
+
+/**
+ * A meal's calories rebuilt from its final macros: their energy, plus what of
+ * the meal's unset-macro share they leave unfilled while the meal keeps it
+ * (keepsUnsetMacroShare). A macro the split had at 0 g draws on the share
+ * first, so pinning it is not counted twice. Rebuilding from the macros alone
+ * dropped the share: on 2,500 kcal + 150 g protein, a 50 g protein lunch went
+ * from 720 kcal to 200. C21 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function overriddenMealCalories(split: MealFuelValues, final: MealMacros): number {
+  const macroKcal = mealMacroKcal(final);
+  if (!keepsUnsetMacroShare(split, final)) return macroKcal;
+  const unaccounted = split.calories - mealMacroKcal(split);
+  const filled = mealMacroKcal({
+    carbG: split.carbG === 0 ? final.carbG : 0,
+    proteinG: split.proteinG === 0 ? final.proteinG : 0,
+    fatG: split.fatG === 0 ? final.fatG : 0,
+  });
+  return macroKcal + Math.max(0, unaccounted - filled);
+}
+
+/** A meal's figures under an override (mergeMealOverride). */
+export interface MergedMealOverride extends MealFuelValues {
+  /**
+   * The pinned macros set the calories and a pinned calorie figure is ignored
+   * (rule 1 of mergeMealOverride), so the meal editor shows the derived figure
+   * in its calorie field, locked, and saves no calorie pin beside the macros.
+   */
+  caloriesFromMacros: boolean;
+}
+
+/**
+ * A meal's figures under an override, from the split it replaces (a null field
+ * keeps the split's figure). The server's applyMealTargetOverrides and the meal
+ * editor's preview both use it, so the editor shows what a save will read. The
+ * editor used to echo every shown value back, so a calorie edit arrived with
+ * the meal's macros beside it (0 g on a calorie-only day) and, counted as macro
+ * overrides, they rebuilt the calories and dropped the athlete's number.
+ * Calorie precedence:
+ *  1. Every macro pinned, one differing from the split, and the meal no longer
+ *     keeping its unset-macro share (keepsUnsetMacroShare): the calories are
+ *     the macros' energy, and a pinned calorie figure is ignored. A figure for
+ *     each macro fixes the meal's energy, as a full daily set does in
+ *     allocateMealCalories; keeping the share would give a target its own
+ *     macros contradict (2,500 kcal + 150 g protein, lunch pinned to 50 g
+ *     protein, 80 g carbs and 20 g fat: 700 kcal, not 770). The share is not
+ *     moved to other meals, as overrides never re-reconcile; the day is still
+ *     judged against its calorie goal. Every row the old editor saved holds a
+ *     calorie echo beside its macros, and letting the echo win also gave a
+ *     target its macros contradict on any later day whose split differs. A
+ *     0 g pin on a macro the split leaves at 0 g is read as that editor's echo
+ *     of the split, not a figure, only while the meal holds a share of a
+ *     calorie goal (the split's calories exceed its macros' energy): on
+ *     2,500 kcal + 150 g protein, {900 kcal, 50 g protein, 0 g carbs, 0 g fat}
+ *     keeps its 900 kcal. With no share to keep (for instance no calorie
+ *     goal, set macros that already reach it, or a slot the calorie split
+ *     skips, like the fasted pre_workout snack) the split's calories are its
+ *     macros' energy and a 0 g pin is a figure like any other: on a 160 g
+ *     protein day with no calorie goal, the same pin reads 200 kcal.
+ *  2. Otherwise pinned calories win, kept as set.
+ *  3. Otherwise a changed macro rebuilds them (overriddenMealCalories); else
+ *     the split stands.
+ * C21 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function mergeMealOverride(split: MealFuelValues, ov: MealFuelOverride): MergedMealOverride {
+  const final: MealMacros = {
+    carbG: round1(ov.carbG ?? split.carbG),
+    proteinG: round1(ov.proteinG ?? split.proteinG),
+    fatG: round1(ov.fatG ?? split.fatG),
+  };
+  const macroEdited =
+    final.carbG !== split.carbG || final.proteinG !== split.proteinG || final.fatG !== split.fatG;
+  const fullMacroSet = ov.carbG != null && ov.proteinG != null && ov.fatG != null;
+  const caloriesFromMacros = macroEdited && fullMacroSet && !keepsUnsetMacroShare(split, final);
+  let calories = split.calories;
+  if (caloriesFromMacros) calories = mealMacroKcal(final);
+  else if (ov.calories != null) calories = Math.round(ov.calories);
+  else if (macroEdited) calories = overriddenMealCalories(split, final);
+  return { ...final, calories, caloriesFromMacros };
+}
+
+/**
  * Apply user per-meal overrides on top of the computed targets. Only meals that
- * are active that day are touched; a null field keeps the computed number.
- * Calories are recomputed from the final macros (matching the engine) whenever a
- * macro is overridden, else an explicit calorie override is honoured. The edited
- * meal is flagged with a `user_override` reason code. We deliberately do NOT
- * re-reconcile — an explicit edit is the athlete's intent, not a cue to silently
- * move macros they didn't touch (so the day's sum may differ, which is expected).
+ * are active that day are touched; a null field keeps the computed number, and
+ * the figures follow mergeMealOverride. The edited meal is flagged with a
+ * `user_override` reason code and carries the stored override and the split it
+ * replaced. We deliberately do NOT re-reconcile — an explicit edit is the
+ * athlete's intent, not a cue to silently move macros they didn't touch (so
+ * the day's sum may differ, which is expected).
  */
 export function applyMealTargetOverrides(
   targets: MealFuelTargets,
@@ -565,13 +730,7 @@ export function applyMealTargetOverrides(
       out[key] = target;
       continue;
     }
-    const carbG = round1(ov.carbG ?? target.carbG);
-    const proteinG = round1(ov.proteinG ?? target.proteinG);
-    const fatG = round1(ov.fatG ?? target.fatG);
-    const macroOverridden = ov.carbG != null || ov.proteinG != null || ov.fatG != null;
-    const calories = macroOverridden
-      ? Math.round(proteinG * KCAL_PER_G.protein + carbG * KCAL_PER_G.carb + fatG * KCAL_PER_G.fat)
-      : Math.round(ov.calories ?? target.calories);
+    const { calories, carbG, proteinG, fatG } = mergeMealOverride(target, ov);
     out[key] = {
       ...target,
       calories,
@@ -580,6 +739,18 @@ export function applyMealTargetOverrides(
       fatG,
       reasonCodes: [...target.reasonCodes, "user_override"],
       rationale: "Custom target you set for this meal.",
+      override: {
+        calories: ov.calories ?? null,
+        carbG: ov.carbG ?? null,
+        proteinG: ov.proteinG ?? null,
+        fatG: ov.fatG ?? null,
+      },
+      suggested: {
+        calories: target.calories,
+        carbG: target.carbG,
+        proteinG: target.proteinG,
+        fatG: target.fatG,
+      },
     };
   }
   return out;

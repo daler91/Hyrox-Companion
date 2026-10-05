@@ -5,7 +5,9 @@ import {
   type NutritionTargetInput,
   type WeightGoalDirection,
 } from "@shared/nutritionTargets";
+import type { NutritionTargetsResponse } from "@shared/schema";
 import { cmToFtIn, convertWeight, ftInToCm } from "@shared/unitConversion";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Input } from "@/components/ui/input";
@@ -18,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { bodyweightInput } from "@/hooks/onboardingProfile";
+import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
 
 /** Modest default rate for a lose/gain goal set during onboarding (kg/week);
  *  refinable later in Settings alongside the rest of the body profile. */
@@ -83,6 +87,38 @@ export function parseFuellingProfile(f: FuellingProfileFields): NutritionTargetI
     activityLevel: f.activityLevel,
     goalDirection: f.weightGoalDirection,
     goalRateKgPerWeek: f.weightGoalDirection === "maintain" ? 0 : DEFAULT_GOAL_RATE_KG_PER_WEEK,
+  };
+}
+
+/**
+ * The profile the step previews and saves: the typed fields, except that an
+ * untouched bodyweight keeps its exact saved kilograms (not the rounded figure
+ * the input shows) and an unchanged lose/gain goal keeps the weekly rate set in
+ * Settings, which this step does not show. The preview used to apply the
+ * onboarding default rate while the save used the Settings one (2,381 kcal
+ * shown, 2,106 kcal stored); both now come from here. CL20
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function resolveFuellingProfile(
+  f: FuellingProfileFields,
+  saved: UserPreferences | undefined,
+): NutritionTargetInput | null {
+  const parsed = parseFuellingProfile(f);
+  if (!parsed) return null;
+  const savedKg = saved?.bodyweightKg;
+  const savedRate = saved?.weightGoalRateKgPerWeek;
+  const keepSavedRate =
+    parsed.goalDirection !== "maintain" &&
+    parsed.goalDirection === saved?.weightGoalDirection &&
+    savedRate != null &&
+    savedRate > 0;
+  return {
+    ...parsed,
+    bodyweightKg:
+      savedKg != null && f.bodyweight === bodyweightInput(savedKg, f.weightUnit)
+        ? savedKg
+        : parsed.bodyweightKg,
+    goalRateKgPerWeek: keepSavedRate ? savedRate : parsed.goalRateKgPerWeek,
   };
 }
 
@@ -212,8 +248,23 @@ export function FuellingStep({
   readonly applyTargets: boolean;
   readonly onApplyTargetsChange: (v: boolean) => void;
 }) {
-  const profile = parseFuellingProfile(fields);
+  // Read from the cache the wizard fills, never fetched here: the saved
+  // profile (for the goal rate the save will use) and whether a daily target
+  // already exists (so the switch says it will be replaced).
+  const { data: savedPreferences } = useQuery<UserPreferences>({
+    queryKey: QUERY_KEYS.preferences,
+    enabled: false,
+  });
+  const { data: savedTargets } = useQuery<NutritionTargetsResponse>({
+    queryKey: QUERY_KEYS.nutritionTargets,
+    enabled: false,
+  });
+  const currentTarget = savedTargets?.current ?? null;
+  const profile = resolveFuellingProfile(fields, savedPreferences);
   const suggested = profile ? calculateNutritionTarget(profile) : null;
+  const applyLabel = currentTarget
+    ? "Replace my daily targets with these"
+    : "Set these as my daily targets";
 
   return (
     <div className="space-y-4">
@@ -305,16 +356,21 @@ export function FuellingStep({
           </p>
           <div className="flex items-center justify-between gap-4">
             <Label htmlFor="fuelling-apply" className="text-sm cursor-pointer">
-              Set these as my daily targets
+              {applyLabel}
             </Label>
             <Switch
               id="fuelling-apply"
               checked={applyTargets}
               onCheckedChange={onApplyTargetsChange}
               data-testid="switch-fuelling-apply"
-              aria-label="Set these as my daily targets"
+              aria-label={applyLabel}
             />
           </div>
+          {currentTarget?.periodizationEnabled && (
+            <p className="text-xs text-muted-foreground" data-testid="fuelling-keeps-periodization">
+              Your training-load carb settings carry over to the new targets.
+            </p>
+          )}
         </div>
       )}
     </div>
