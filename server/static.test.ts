@@ -5,10 +5,18 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { clearRateLimitBuckets } from "./routeUtils";
 import { serveStatic } from "./static";
 
-// A built client in miniature: the shell plus one hashed asset.
-vi.mock("./staticDistPath", async () => {
+// serveStatic serves the `public` directory beside its own module (dist/public
+// in the bundle). Here that module reads as living in the fixture directory, so
+// the production path resolution runs unchanged against a built client in
+// miniature: the shell plus one hashed asset.
+vi.mock("node:url", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:url")>();
   const path = await import("node:path");
-  return { STATIC_DIST_PATH: path.resolve(__dirname, "__fixtures__", "spa-shell") };
+  const fixtureModule = path.resolve(__dirname, "__fixtures__", "spa-shell", "static.ts");
+  const fileURLToPath = (url: string | URL): string =>
+    String(url).endsWith("/server/static.ts") ? fixtureModule : actual.fileURLToPath(url);
+  // Named imports of a built-in can resolve through its default export.
+  return { ...actual, default: { ...actual, fileURLToPath }, fileURLToPath };
 });
 
 const UNMATCHED_API_PATH = "/api/v1/workouts-renamed/abc";
