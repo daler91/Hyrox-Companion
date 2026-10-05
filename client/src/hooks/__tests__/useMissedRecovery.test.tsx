@@ -19,7 +19,7 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 const queryClientMocks = vi.hoisted(() => ({
-  invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  invalidateQueries: vi.fn(() => Promise.resolve()),
   removeQueries: vi.fn(),
 }));
 

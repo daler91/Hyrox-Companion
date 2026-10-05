@@ -33,7 +33,7 @@ vi.mock("@/hooks/use-toast", async () =>
 describe("useSetTarget", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    invalidateQueriesSpy.mockResolvedValue(undefined);
+    invalidateQueriesSpy.mockImplementation(() => Promise.resolve());
   });
 
   it("refreshes every read that carries the daily target", async () => {

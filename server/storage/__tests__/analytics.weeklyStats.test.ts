@@ -70,8 +70,8 @@ describe("AnalyticsStorage.getWeeklyStats", () => {
 
     const daysQuery = selectMock.mock.results[1]?.value as { where: ReturnType<typeof vi.fn> };
     const rendered = new PgDialect().sqlToQuery(daysQuery.where.mock.calls[0][0] as SQL).sql;
-    expect(rendered).toContain(`"training_plans"."retired_on" IS NULL`);
-    expect(rendered).toContain(`"plan_days"."scheduled_date" < "training_plans"."retired_on"`);
+    expect(rendered).toContain('"training_plans"."retired_on" IS NULL');
+    expect(rendered).toContain('"plan_days"."scheduled_date" < "training_plans"."retired_on"');
   });
 
   it("falls back to zero when the week has no logged sessions", async () => {

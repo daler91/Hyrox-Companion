@@ -212,7 +212,9 @@ function unlink() {
 beforeEach(() => {
   vi.clearAllMocks();
   tx = makeTx();
-  dbMocks.transaction.mockImplementation(async (callback: (t: typeof tx) => unknown) => callback(tx));
+  dbMocks.transaction.mockImplementation((callback: (t: typeof tx) => unknown) =>
+    Promise.resolve(callback(tx)),
+  );
 });
 
 describe("unlinking a recording set the athlete only annotated (item 1)", () => {

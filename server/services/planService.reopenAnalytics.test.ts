@@ -20,7 +20,7 @@ const USER_ID = "user-1";
 const { transactionMock } = vi.hoisted(() => ({ transactionMock: vi.fn<typeof db.transaction>() }));
 vi.mock("../db", () => ({ db: { transaction: transactionMock } }));
 vi.mock("../storage", () => ({
-  storage: { plans: {}, users: { getUser: vi.fn().mockResolvedValue(undefined) } },
+  storage: { plans: {}, users: { getUser: vi.fn(() => Promise.resolve()) } },
 }));
 vi.mock("../storage/planSlot", () => ({ planSlotForMove: vi.fn().mockResolvedValue({}) }));
 vi.mock("./planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
@@ -47,8 +47,8 @@ function arrangeTransaction(fromStatus: string): { invalidatedInsideTx: boolean[
   ];
   const tx = {
     select: vi.fn(() => selects.shift()),
-    delete: vi.fn(() => ({ where: () => Promise.resolve(undefined) })),
-    insert: vi.fn(() => ({ values: () => Promise.resolve(undefined) })),
+    delete: vi.fn(() => ({ where: () => Promise.resolve() })),
+    insert: vi.fn(() => ({ values: () => Promise.resolve() })),
     update: vi.fn(() => ({
       set: () => ({ where: () => ({ returning: () => Promise.resolve([createMockPlanDay({ id: DAY_ID })]) }) }),
     })),

@@ -137,28 +137,7 @@ export function MoveEntryMenu({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenu>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Move ${entry.focus || "workout"} to another day`}
-                  data-testid={`move-menu-${entry.id}`}
-                  disabled={isMoving}
-                  onClick={stop}
-                  onMouseDown={stop}
-                >
-                  <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Move to another day</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <MoveMenuTrigger entry={entry} isMoving={isMoving} stop={stop} />
         <DropdownMenuContent align="end" onClick={stop} onMouseDown={stop}>
           {entry.date !== todayIso && (
             <DropdownMenuItem
@@ -227,6 +206,40 @@ export function MoveEntryMenu({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+interface MoveMenuTriggerProps {
+  readonly entry: TimelineWorkoutCardProps["entry"];
+  readonly isMoving: boolean | undefined;
+  readonly stop: (e: React.SyntheticEvent) => void;
+}
+
+/** The overflow menu's calendar button and its tooltip; rendered inside the menu's `DropdownMenu`. */
+function MoveMenuTrigger({ entry, isMoving, stop }: Readonly<MoveMenuTriggerProps>) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`Move ${entry.focus || "workout"} to another day`}
+              data-testid={`move-menu-${entry.id}`}
+              disabled={isMoving}
+              onClick={stop}
+              onMouseDown={stop}
+            >
+              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Move to another day</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

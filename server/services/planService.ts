@@ -718,6 +718,15 @@ function orderSlots(slots: DaySlot[]): {
   return { moved, inserted };
 }
 
+/** The columns a set's copy does not carry over: it gets a fresh id and version, and its new owner. */
+const OWNERSHIP_COLUMNS = ["id", "workoutLogId", "planDayId", "version"] as const;
+
+/** A copy of `row` without `keys`, keeping every other own property in order. */
+function withoutKeys<T extends object, K extends keyof T & string>(row: T, keys: readonly K[]): Omit<T, K> {
+  const dropped = new Set<string>(keys);
+  return Object.fromEntries(Object.entries(row).filter(([key]) => !dropped.has(key))) as Omit<T, K>;
+}
+
 /**
  * Insert `sets` as rows the plan day owns. Carry every column across by
  * spreading the row and overriding only ownership. The previous explicit field
@@ -731,8 +740,8 @@ function orderSlots(slots: DaySlot[]): {
 async function insertOnPlanDay(tx: Tx, dayId: string, sets: ExerciseSet[]): Promise<void> {
   if (sets.length === 0) return;
   await tx.insert(exerciseSets).values(
-    sets.map(({ id: _id, workoutLogId: _workoutLogId, planDayId: _planDayId, version: _version, ...rest }) => ({
-      ...rest,
+    sets.map((set) => ({
+      ...withoutKeys(set, OWNERSHIP_COLUMNS),
       workoutLogId: null,
       planDayId: dayId,
     })),

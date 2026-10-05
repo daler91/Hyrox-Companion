@@ -84,7 +84,7 @@ describe("usePreferencesForm", () => {
     vi.clearAllMocks();
     localStorage.clear();
     harness.updatePreferences.mockResolvedValue({});
-    harness.invalidateQueries.mockResolvedValue(undefined);
+    harness.invalidateQueries.mockResolvedValue();
   });
 
   it("hydrates the draft from server preferences and starts clean", async () => {

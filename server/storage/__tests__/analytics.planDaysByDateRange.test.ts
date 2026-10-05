@@ -44,12 +44,12 @@ describe("AnalyticsStorage.getPlanDaysByDateRange", () => {
     const where = (query.where as ReturnType<typeof vi.fn>).mock.calls[0][0] as SQL;
     const rendered = dialect.sqlToQuery(where).sql;
     // Half-open per day, the rule the adherence counts and the timeline use.
-    expect(rendered).toContain(`"training_plans"."retired_on" IS NULL`);
-    expect(rendered).toContain(`"plan_days"."scheduled_date" < "training_plans"."retired_on"`);
+    expect(rendered).toContain('"training_plans"."retired_on" IS NULL');
+    expect(rendered).toContain('"plan_days"."scheduled_date" < "training_plans"."retired_on"');
     // Still scoped to the athlete and the week.
-    expect(rendered).toContain(`"training_plans"."user_id" = $`);
-    expect(rendered).toContain(`"plan_days"."scheduled_date" >= $`);
-    expect(rendered).toContain(`"plan_days"."scheduled_date" <= $`);
+    expect(rendered).toContain('"training_plans"."user_id" = $');
+    expect(rendered).toContain('"plan_days"."scheduled_date" >= $');
+    expect(rendered).toContain('"plan_days"."scheduled_date" <= $');
   });
 
   it("maps the rows, defaulting a missing status to planned", async () => {

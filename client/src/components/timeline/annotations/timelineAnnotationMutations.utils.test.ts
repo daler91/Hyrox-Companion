@@ -15,7 +15,7 @@ describe("invalidateTimelineAnnotationQueries", () => {
   });
 
   function spyOnInvalidate() {
-    return vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+    return vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
   }
 
   function invalidatedKeys(spy: ReturnType<typeof spyOnInvalidate>) {

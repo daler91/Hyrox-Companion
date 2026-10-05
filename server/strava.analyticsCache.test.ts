@@ -36,7 +36,7 @@ vi.mock("./storage", () => ({
         requiresReauth: false,
       }),
       getUser: vi.fn().mockResolvedValue({ id: "user-1", distanceUnit: "km" }),
-      updateStravaLastSync: vi.fn().mockResolvedValue(undefined),
+      updateStravaLastSync: vi.fn(() => Promise.resolve()),
     },
     workouts: {
       getExistingStravaActivityIds: vi.fn().mockResolvedValue([]),

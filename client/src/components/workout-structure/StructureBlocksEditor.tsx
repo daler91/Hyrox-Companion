@@ -5,6 +5,7 @@ import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from "r
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { type GroupedExercise, groupExerciseSets } from "@/lib/exerciseUtils";
 import { assignmentPatchForStep, isUnassignedGroup } from "@/lib/workoutStructureAssignments";
@@ -213,9 +214,10 @@ export function StructureBlocksEditor({
         link();
         return;
       }
-      void flush().then((saved) => {
+      // flush never rejects; a save that failed resolves false, so the row stays put.
+      flush().then((saved) => {
         if (saved) link();
-      });
+      }, ignoreResult);
     },
     [flush, isIdle],
   );

@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { QUERY_KEYS } from "@/lib/api";
+import { type PlanDayReparseTextPayload, QUERY_KEYS } from "@/lib/api";
 import type { ReparseResponse } from "@/lib/api/constants";
 import { queryClient as appQueryClient } from "@/lib/queryClient";
 import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
@@ -38,6 +38,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
 });
 
 const DAY_ID = "day-1";
+/** No text sent with the parse: it reads the day's own saved text. */
+const NO_PAYLOAD: PlanDayReparseTextPayload | undefined = undefined;
 const preParseRow = makeExerciseSet({ id: "set-before-parse", exerciseName: "back_squat" });
 const parsedRow = makeExerciseSet({ id: "set-after-parse", exerciseName: "deadlift" });
 
@@ -72,10 +74,10 @@ describe("usePlanDayExercises reparse after the sheet closes (CL21)", () => {
     });
 
     act(() => {
-      hook.result.current.reparseFreeText.mutate(undefined);
+      hook.result.current.reparseFreeText.mutate(NO_PAYLOAD);
     });
     await waitFor(() => {
-      expect(mocks.reparseDay).toHaveBeenCalledWith(DAY_ID, undefined);
+      expect(mocks.reparseDay.mock.calls).toContainEqual([DAY_ID, undefined]);
     });
     return hook;
   }

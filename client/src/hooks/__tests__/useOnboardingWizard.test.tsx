@@ -7,9 +7,7 @@ import { api } from "@/lib/api";
 
 const mockToast = vi.fn();
 const invalidateQueries = vi.hoisted(() =>
-  vi
-    .fn<(filters: { queryKey: readonly unknown[] }) => Promise<void>>()
-    .mockResolvedValue(undefined),
+  vi.fn<(filters: { queryKey: readonly unknown[] }) => Promise<void>>().mockResolvedValue(),
 );
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mockToast }) }));
 vi.mock("@/lib/queryClient", () => ({ queryClient: { invalidateQueries } }));
@@ -102,7 +100,7 @@ describe("useOnboardingWizard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // A test that routes it to a real QueryClient must not leak that client.
-    invalidateQueries.mockResolvedValue(undefined);
+    invalidateQueries.mockResolvedValue();
     localStorage.clear();
   });
 

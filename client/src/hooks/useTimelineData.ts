@@ -6,6 +6,7 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { queryLoadState } from "@/lib/queryLoadState";
 import { flattenTimelineCache, type TimelineCache, type TimelinePage } from "@/lib/timelineCache";
 
+import { ignoreResult } from "./chat/chatSessionModel";
 import { usePendingWorkoutEntries } from "./usePendingWorkoutEntries";
 
 export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded = true) {
@@ -89,8 +90,8 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
   const isError = timelineFailed || (timelineEmpty && plansFailed);
   const isRetrying = timelineRetrying || (timelineEmpty && plansRetrying);
   const retry = useCallback(() => {
-    if (timelineFailed) void refetchTimeline();
-    if (plansFailed) void refetchPlans();
+    if (timelineFailed) refetchTimeline().catch(ignoreResult);
+    if (plansFailed) refetchPlans().catch(ignoreResult);
   }, [timelineFailed, plansFailed, refetchTimeline, refetchPlans]);
 
   // New only once both answered, empty: never while either is loading,

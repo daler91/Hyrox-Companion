@@ -90,7 +90,7 @@ function NutritionDayHeader({
     return (
       <LoadErrorCard
         title="Couldn't load this day's food log"
-        onRetry={() => void day.refetch()}
+        onRetry={() => day.refetch()}
         isRetrying={retrying}
         testId="nutrition-day-error"
       />

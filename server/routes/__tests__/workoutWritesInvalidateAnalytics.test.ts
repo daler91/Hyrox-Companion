@@ -69,7 +69,7 @@ vi.mock("../../storage", () => ({
 }));
 vi.mock("../../queue", () => ({
   queue: {
-    send: vi.fn().mockResolvedValue(undefined),
+    send: vi.fn(() => Promise.resolve()),
     sendDebounced: vi.fn().mockResolvedValue(null),
   },
 }));
@@ -206,7 +206,7 @@ describe("workout writes drop the athlete's cached analytics (D10)", () => {
       "a delete that found nothing",
       "delete a workout",
       () => {
-        storageMocks.deleteWorkoutLog.mockResolvedValue(undefined);
+        storageMocks.deleteWorkoutLog.mockImplementation(() => Promise.resolve());
       },
     ],
     [

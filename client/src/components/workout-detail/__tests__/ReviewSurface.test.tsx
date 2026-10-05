@@ -553,7 +553,7 @@ describe("ReviewSurface", () => {
   });
 
   it("saves the block builder after a pause, the blocks and the rows that follow them together (CL15, U3)", async () => {
-    const saveStructure = vi.fn().mockResolvedValue(undefined);
+    const saveStructure = vi.fn(() => Promise.resolve());
     const updateStructure = { mutate: vi.fn() };
     mockUseWorkoutDetail.mockReturnValue(makeDetail({ saveStructure, updateStructure }));
     render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);

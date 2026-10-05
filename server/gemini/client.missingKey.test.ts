@@ -14,7 +14,7 @@ vi.mock("../env", async (importOriginal) => {
 
 vi.mock("../sharedRuntimeState", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../sharedRuntimeState")>()),
-  getRuntimeCache: vi.fn(() => Promise.resolve(undefined)),
+  getRuntimeCache: vi.fn(() => Promise.resolve()),
   setRuntimeCache: vi.fn(() => Promise.resolve()),
 }));
 

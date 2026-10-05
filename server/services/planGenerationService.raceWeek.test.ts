@@ -125,7 +125,7 @@ function mockGeneration(days: Day[]): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.insertValues.mockResolvedValue(undefined);
+  mocks.insertValues.mockImplementation(() => Promise.resolve());
   mocks.tx.insert.mockReturnValue({ values: mocks.insertValues });
   mocks.transaction.mockImplementation(<T>(fn: (tx: unknown) => Promise<T>) => fn(mocks.tx));
   mocks.plans.createTrainingPlan.mockResolvedValue({
@@ -134,7 +134,7 @@ beforeEach(() => {
     totalWeeks: 2,
   });
   mocks.plans.schedulePlan.mockResolvedValue("scheduled");
-  mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
+  mocks.plans.updateGenerationStatus.mockImplementation(() => Promise.resolve());
   mocks.plans.retirePlans.mockResolvedValue([]);
   mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
   mocks.analytics.getWorkoutLogsByDateRange.mockResolvedValue([]);

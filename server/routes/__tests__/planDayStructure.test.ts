@@ -21,10 +21,10 @@ const { replacePlanDayStructure } = vi.hoisted(() => ({ replacePlanDayStructure:
 vi.mock("../../storage", () => ({ storage: { users: { getUser: vi.fn() } } }));
 vi.mock("../../queue", () => ({
   queue: {
-    send: vi.fn().mockResolvedValue(undefined),
+    send: vi.fn(() => Promise.resolve()),
     sendDebounced: vi.fn().mockResolvedValue(null),
   },
-  sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
+  sendJobNoRetry: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../../services/planGenerationService", () => ({ createPendingPlan: vi.fn() }));
 vi.mock("../../services/athleteFactsService", () => ({ moveStatementsToCard: vi.fn() }));

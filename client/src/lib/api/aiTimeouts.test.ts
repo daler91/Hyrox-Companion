@@ -10,7 +10,7 @@ import { strava } from "./user";
 import { workouts } from "./workouts";
 
 vi.mock("./client", () => ({
-  rawRequest: vi.fn(() => Promise.resolve(undefined)),
+  rawRequest: vi.fn(() => Promise.resolve()),
   typedRequest: vi.fn(() => Promise.resolve({})),
 }));
 

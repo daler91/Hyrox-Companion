@@ -49,8 +49,8 @@ describe("useTimelinePageController annotation delete", () => {
   // annotations dialog's, so it needs the same timeline refresh
   // (CL10, CODEBASE_ANALYSIS_2026-10-03).
   it("refreshes the timeline after deleting an annotation from its card", async () => {
-    mocks.deleteAnnotation.mockResolvedValueOnce(undefined);
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+    mocks.deleteAnnotation.mockImplementationOnce(() => Promise.resolve());
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
     const { result } = renderController();
 
     act(() => {

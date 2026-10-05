@@ -21,6 +21,8 @@ vi.mock("../../storage", () => ({
 
 const TODAY = "2026-06-08";
 const YESTERDAY = "2026-06-07";
+/** The athlete has set no nutrition target. */
+const NO_TARGET = undefined;
 
 /** 100 g of a food carrying `iron` mg per 100 g, logged on `logDate`. */
 function ironRow(logDate: string, iron: number, id: string) {
@@ -35,7 +37,7 @@ describe("buildNutritionSummary micronutrients", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(`${TODAY}T09:30:00Z`));
     vi.mocked(storage.users).getUser.mockResolvedValue({ userTimezone: "UTC" } as never);
-    vi.mocked(storage.nutrition).getCurrentTarget.mockResolvedValue(undefined);
+    vi.mocked(storage.nutrition).getCurrentTarget.mockResolvedValue(NO_TARGET);
     vi.mocked(storage.analytics).getWorkoutLogsByDateRange.mockResolvedValue([]);
     vi.mocked(storage.analytics).getAllExerciseSetsWithDates.mockResolvedValue([]);
     vi.mocked(storage.analytics).getExerciseLoadTags.mockResolvedValue([]);

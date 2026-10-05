@@ -32,7 +32,7 @@ const USER_ID = "user-1";
 const { transactionMock } = vi.hoisted(() => ({ transactionMock: vi.fn<typeof db.transaction>() }));
 vi.mock("../db", () => ({ db: { transaction: transactionMock } }));
 vi.mock("../storage", () => ({
-  storage: { plans: {}, users: { getUser: vi.fn().mockResolvedValue(undefined) } },
+  storage: { plans: {}, users: { getUser: vi.fn(() => Promise.resolve()) } },
 }));
 vi.mock("../storage/planSlot", () => ({ planSlotForMove: vi.fn().mockResolvedValue({}) }));
 vi.mock("./planDayMoves", () => ({ recordPlanDayMove: vi.fn() }));
@@ -156,7 +156,7 @@ function arrangeReopen(
     { from: () => ({ where: () => ({ orderBy: () => Promise.resolve(sets) }) }) },
     { from: () => ({ where: () => ({ orderBy: () => Promise.resolve(prescribed) }) }) },
   ];
-  const insertValues = vi.fn().mockResolvedValue(undefined);
+  const insertValues = vi.fn().mockImplementation(() => Promise.resolve());
   const deletes: { table: unknown; where: SQL }[] = [];
   const updates: { table: unknown; patch: Record<string, unknown>; where: SQL }[] = [];
   const tx = {
@@ -164,7 +164,7 @@ function arrangeReopen(
     delete: vi.fn((table: unknown) => ({
       where: (where: SQL) => {
         deletes.push({ table, where });
-        return Promise.resolve(undefined);
+        return Promise.resolve();
       },
     })),
     insert: vi.fn(() => ({ values: insertValues })),
@@ -177,8 +177,8 @@ function arrangeReopen(
       }),
     })),
   };
-  transactionMock.mockImplementation(async (callback) =>
-    callback(tx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0]),
+  transactionMock.mockImplementation((callback) =>
+    Promise.resolve(callback(tx as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0])),
   );
   const insertedRows = () =>
     insertValues.mock.calls[0]?.[0] as Record<string, unknown>[] | undefined;

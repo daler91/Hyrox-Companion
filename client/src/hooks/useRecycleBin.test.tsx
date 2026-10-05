@@ -104,7 +104,7 @@ describe("recycle bin mutation hooks", () => {
       batchId: null,
       warnings: [],
     });
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
     const { result } = renderHook(() => useRestoreRecycleBinItem(), {
       wrapper: wrapperFor(client),
     });

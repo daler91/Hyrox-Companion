@@ -146,7 +146,7 @@ export function analyzeFuellingCorrelation(
     explanation:
       `Compares training days where you reached at least ${Math.round(CARB_HIT_RATIO * 100)}% of ` +
       `your carb target with days you didn't (minimum ${MIN_DAYS_PER_BUCKET} days per group). ` +
-      `Only days with food logged count, so a day you didn't log is not read as a miss. ` +
+      "Only days with food logged count, so a day you didn't log is not read as a miss. " +
       `An association, not causation — guidance only.`,
   };
 }

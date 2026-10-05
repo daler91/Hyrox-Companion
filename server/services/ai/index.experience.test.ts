@@ -18,7 +18,7 @@ import { makeTimelineDays } from "./testFixtures";
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock("../../routeUtils", () => ({ calculateStreak: vi.fn().mockReturnValue(0) }));
 vi.mock("./nutritionContext", () => ({
-  buildNutritionTrainingContext: vi.fn().mockResolvedValue(undefined),
+  buildNutritionTrainingContext: vi.fn(() => Promise.resolve()),
   buildNextSessionFuelling: vi.fn(),
 }));
 vi.mock("../../storage", () => ({

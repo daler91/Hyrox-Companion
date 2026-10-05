@@ -27,9 +27,16 @@ import { PROVIDER_DEADLINE_MS } from "./utils";
 
 const TEST_USDA_KEY = "test-key";
 
-/** Configure (or, with undefined, unconfigure) USDA on the mocked env. */
-function setUsdaKey(value: string | undefined): void {
-  (env as { USDA_API_KEY?: string }).USDA_API_KEY = value;
+type UsdaEnv = { USDA_API_KEY?: string };
+
+/** Configure USDA on the mocked env. */
+function setUsdaKey(value: string): void {
+  (env as UsdaEnv).USDA_API_KEY = value;
+}
+
+/** Unconfigure USDA on the mocked env. */
+function clearUsdaKey(): void {
+  (env as UsdaEnv).USDA_API_KEY = undefined;
 }
 
 const mappedUsda = {
@@ -87,7 +94,7 @@ describe("searchFoods", () => {
   });
 
   it("is not degraded when Edamam reached the API even with no matches (USDA off)", async () => {
-    setUsdaKey(undefined);
+    clearUsdaKey();
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: true });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
@@ -96,7 +103,7 @@ describe("searchFoods", () => {
   });
 
   it("flags degraded when no provider is live (cache-only)", async () => {
-    setUsdaKey(undefined);
+    clearUsdaKey();
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
     const result = await searchFoods("banana", "u1");
@@ -184,7 +191,7 @@ describe("searchFoods", () => {
   });
 
   it("keeps search live (not degraded) when only OFF reaches its API", async () => {
-    setUsdaKey(undefined); // USDA + Edamam unconfigured
+    clearUsdaKey(); // USDA + Edamam unconfigured
     vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: true });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
@@ -193,7 +200,7 @@ describe("searchFoods", () => {
   });
 
   it("flags degraded only when OFF also fails to reach its API", async () => {
-    setUsdaKey(undefined);
+    clearUsdaKey();
     vi.mocked(searchOffFoods).mockRejectedValue(new Error("off down"));
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 

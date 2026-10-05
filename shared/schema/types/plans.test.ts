@@ -85,7 +85,8 @@ describe("createSamplePlanSchema race date", () => {
   });
 
   it("still takes an empty body, as the Timeline sends", () => {
-    expect(createSamplePlanSchema.parse(undefined)).toEqual({});
+    const missingBody = undefined;
+    expect(createSamplePlanSchema.parse(missingBody)).toEqual({});
     expect(createSamplePlanSchema.parse({})).toEqual({});
   });
 });

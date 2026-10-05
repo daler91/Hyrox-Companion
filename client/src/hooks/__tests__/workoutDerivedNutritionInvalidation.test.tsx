@@ -149,7 +149,7 @@ describe("workout writes refresh the nutrition reads built from the workout", ()
   // With no log on the day, its meal targets fall back to the planned session;
   // no session fuelling, chip or block reads a plan day.
   it("moving a planned day marks only the day summaries stale", async () => {
-    apiMocks.updateDayWithoutPlan.mockResolvedValue(undefined);
+    apiMocks.updateDayWithoutPlan.mockImplementation(() => Promise.resolve());
     const entry = {
       id: "plan-pd-1",
       planDayId: "pd-1",

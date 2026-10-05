@@ -336,8 +336,9 @@ describe("StructureBlocksEditor flush handle (CL15)", () => {
     removeFirstStep();
 
     let flushed: boolean | undefined;
+    let flushing: Promise<void> | undefined;
     act(() => {
-      void ref.current?.flush().then((saved) => {
+      flushing = ref.current?.flush().then((saved) => {
         flushed = saved;
       });
     });
@@ -348,6 +349,7 @@ describe("StructureBlocksEditor flush handle (CL15)", () => {
     await settleNext(settle, "resolve");
 
     expect(flushed).toBe(true);
+    await expect(flushing).resolves.toBeUndefined();
   });
 
   it("resolves false, without rejecting, when the save fails", async () => {
@@ -364,14 +366,16 @@ describe("StructureBlocksEditor flush handle (CL15)", () => {
     removeFirstStep();
 
     let flushed: boolean | undefined;
+    let flushing: Promise<void> | undefined;
     act(() => {
-      void ref.current?.flush().then((saved) => {
+      flushing = ref.current?.flush().then((saved) => {
         flushed = saved;
       });
     });
     await settleNext(settle, "reject");
 
     expect(flushed).toBe(false);
+    await expect(flushing).resolves.toBeUndefined();
   });
 
   it("resolves at once when nothing is waiting", async () => {
