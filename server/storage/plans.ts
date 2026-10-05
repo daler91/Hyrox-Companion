@@ -17,7 +17,7 @@ import {
 } from "@shared/schema";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
 
-import { db, type DbExecutor } from "../db";
+import { db, type DbExecutor, type Tx } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
 import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
@@ -45,6 +45,17 @@ function isActedOn(day: PlanDay, loggedDayIds: ReadonlySet<string>): boolean {
 function needsStatusReset(day: PlanDay, dateStr: string, today: string): boolean {
   const dateChanged = dateStr !== day.scheduledDate;
   return dateChanged && (day.status === "missed" || day.status === "skipped") && dateStr >= today;
+}
+
+// The plan's lowest week number (a missing week counts as week 1). A single
+// linear scan: no intermediate array, and no Math.min spread that can exceed
+// the call-stack limit on a very long plan.
+function lowestWeekNumber(days: readonly PlanDay[]): number {
+  let minWeek = Infinity;
+  for (const day of days) {
+    minWeek = Math.min(minWeek, day.weekNumber || 1);
+  }
+  return minWeek;
 }
 
 /** The state a recovery was planned against, re-checked under the row lock. */
@@ -83,13 +94,60 @@ export type PlanDayRecoveryOutcome =
   | { readonly outcome: "conflict" };
 
 /** The ids among `dayIds` that a workout log is linked to. */
-async function getPlanDayIdsWithWorkouts(dayIds: readonly string[]): Promise<Set<string>> {
+async function getPlanDayIdsWithWorkouts(
+  dayIds: readonly string[],
+  executor: DbExecutor = db,
+): Promise<Set<string>> {
   if (dayIds.length === 0) return new Set();
-  const rows = await db
+  const rows = await executor
     .selectDistinct({ planDayId: workoutLogs.planDayId })
     .from(workoutLogs)
     .where(inArray(workoutLogs.planDayId, [...dayIds]));
   return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
+}
+
+/** The athlete's plan days, and each one's prescribed sets, as locked rows. */
+export interface LockedPlanDays {
+  readonly days: PlanDay[];
+  readonly setsByDay: Map<string, ExerciseSet[]>;
+}
+
+/**
+ * The athlete's plan days among `dayIds`, with their prescribed sets, locked
+ * (FOR UPDATE) for the rest of `tx`, so a write worked out from an earlier
+ * read can check them again before it writes. Days by id, then their sets
+ * by id: the order lockAutoCoachWriteTargets takes them in, so the two
+ * never deadlock on each other.
+ */
+async function lockPlanDaysWithSets(
+  dayIds: readonly string[],
+  userId: string,
+  tx: Tx,
+): Promise<LockedPlanDays> {
+  const setsByDay = new Map<string, ExerciseSet[]>();
+  if (dayIds.length === 0) return { days: [], setsByDay };
+  const rows = await tx
+    .select({ day: planDays })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .where(and(inArray(planDays.id, [...dayIds]), eq(trainingPlans.userId, userId)))
+    .orderBy(asc(planDays.id))
+    .for("update", { of: planDays });
+  const days = rows.map((row) => row.day);
+  if (days.length === 0) return { days, setsByDay };
+  const sets = await tx
+    .select()
+    .from(exerciseSets)
+    .where(inArray(exerciseSets.planDayId, days.map((day) => day.id)))
+    .orderBy(asc(exerciseSets.id))
+    .for("update");
+  for (const set of sets) {
+    if (!set.planDayId) continue;
+    const list = setsByDay.get(set.planDayId) ?? [];
+    list.push(set);
+    setsByDay.set(set.planDayId, list);
+  }
+  return { days, setsByDay };
 }
 
 export class PlanStorage {
@@ -153,34 +211,7 @@ export class PlanStorage {
       );
   }
 
-  async getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined> {
-    const [plan] = await db
-      .select()
-      .from(trainingPlans)
-      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
-
-    if (!plan) return undefined;
-
-    const days = await db.select().from(planDays).where(eq(planDays.planId, planId));
-
-    // Case-insensitive day ordering matches the tolerant lookup used in
-    // schedulePlan(), so legacy rows with non-title-case dayName values
-    // (e.g. "monday" from older imports) still sort Mon→Sun instead of
-    // falling back to insertion order.
-    const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-    const dayIndex = (name: string) => dayOrder.indexOf((name ?? "").trim().toLowerCase());
-    days.sort((a, b) => {
-      if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
-      const aIndex = dayIndex(a.dayName);
-      const bIndex = dayIndex(b.dayName);
-      if (aIndex === -1 && bIndex === -1) return 0;
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
-
-    return { ...plan, days };
-  }
+  readonly getTrainingPlan = getTrainingPlan;
 
   async renameTrainingPlan(
     planId: string,
@@ -562,6 +593,10 @@ export class PlanStorage {
     return rows.map((r) => r.day);
   }
 
+  // Uses no instance state, so it is a module function bound here:
+  // storage.plans.lockPlanDaysWithSets() and its mocks still work.
+  readonly lockPlanDaysWithSets = lockPlanDaysWithSets;
+
   /**
    * Deletes one plan day, snapshotting it (with its prescribed sets and the
    * logs that pointed at it) into the recycle bin first. The capture doubles
@@ -600,8 +635,9 @@ export class PlanStorage {
     planId: string,
     startDate: string,
     userId: string,
+    tx?: Tx,
   ): Promise<"scheduled" | "not_found" | "nothing_after_start"> {
-    const plan = await this.getTrainingPlan(planId, userId);
+    const plan = await this.getTrainingPlan(planId, userId, tx);
     if (!plan) return "not_found";
 
     const dayNameToOffset: Record<string, number> = {
@@ -624,20 +660,15 @@ export class PlanStorage {
 
     if (plan.days.length === 0) return "scheduled";
 
-    // ⚡ Perf: Replaced mapped array and Math.min spread with a single O(N) linear scan
-    // to avoid intermediate array allocation and prevent "Maximum call stack size exceeded" errors.
-    let minWeek = Infinity;
-    for (const day of plan.days) {
-      const week = day.weekNumber || 1;
-      if (week < minWeek) {
-        minWeek = week;
-      }
-    }
+    const minWeek = lowestWeekNumber(plan.days);
 
     // Whether a rescheduled day lands in the future is judged on the athlete's
     // calendar, like every other "today" in this class.
-    const today = await this.resolveUserToday(userId);
-    const loggedDayIds = await getPlanDayIdsWithWorkouts(plan.days.map((day) => day.id));
+    const today = await resolveUserToday(userId, tx);
+    const loggedDayIds = await getPlanDayIdsWithWorkouts(
+      plan.days.map((day) => day.id),
+      tx,
+    );
 
     const dateUpdates: { id: string; scheduledDate: string; resetStatus: boolean }[] = [];
     const unscheduleIds: string[] = [];
@@ -681,7 +712,11 @@ export class PlanStorage {
     const planStartDate = weekOneMonday;
     const planEndDate = scheduledDates.at(-1) ?? scheduledDates[0];
 
-    return await db.transaction(async (tx) => {
+    // Inside the caller's transaction when it passes one: plan generation
+    // lays a new plan onto the calendar in the transaction that publishes it,
+    // so a plan that fails to publish is left with nothing dated (D46,
+    // CODEBASE_ANALYSIS_2026-10-03).
+    const writeSchedule = async (writeTx: DbExecutor) => {
       // Secure batch update using idiomatic Drizzle query builder and a CASE statement
       const caseChunks = [];
       caseChunks.push(sql`CASE ${planDays.id} `);
@@ -694,13 +729,13 @@ export class PlanStorage {
       const updateIds = dateUpdates.map((u) => u.id);
 
       // Perform a single batch update
-      await tx
+      await writeTx
         .update(planDays)
         .set({ scheduledDate: caseSql })
         .where(inArray(planDays.id, updateIds));
 
       if (unscheduleIds.length > 0) {
-        await tx
+        await writeTx
           .update(planDays)
           .set({ scheduledDate: null })
           .where(inArray(planDays.id, unscheduleIds));
@@ -708,20 +743,24 @@ export class PlanStorage {
 
       const resetUpdateIds = dateUpdates.filter((u) => u.resetStatus).map((u) => u.id);
       if (resetUpdateIds.length > 0) {
-        await tx
+        await writeTx
           .update(planDays)
           .set({ status: "planned" })
           .where(inArray(planDays.id, resetUpdateIds));
       }
 
       // Update plan-level start/end dates
-      await tx
+      await writeTx
         .update(trainingPlans)
         .set({ startDate: planStartDate, endDate: planEndDate })
         .where(eq(trainingPlans.id, planId));
-
-      return "scheduled" as const;
-    });
+    };
+    if (tx) {
+      await writeSchedule(tx);
+    } else {
+      await db.transaction(writeSchedule);
+    }
+    return "scheduled";
   }
 
   async findMatchingPlanDay(planId: string, date: string): Promise<PlanDay | undefined> {
@@ -772,17 +811,9 @@ export class PlanStorage {
     // Which plan is active "today" is a question about the athlete's calendar:
     // a UTC date makes a plan starting tomorrow go live during tonight, and
     // drops a plan that ends today an evening early.
-    return this.getPlanForDate(userId, await this.resolveUserToday(userId));
+    return this.getPlanForDate(userId, await resolveUserToday(userId));
   }
 
-  /** The athlete's own calendar date, degrading to UTC for an unusable zone. */
-  private async resolveUserToday(userId: string): Promise<string> {
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-      columns: { userTimezone: true },
-    });
-    return getLocalDateStrSafe(new Date(), user?.userTimezone);
-  }
 
   async getPlanForDate(userId: string, date: string): Promise<TrainingPlan | undefined> {
     // Single query with priority-based ordering:
@@ -795,6 +826,12 @@ export class PlanStorage {
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.startDate),
           isNotNull(trainingPlans.endDate),
+          // Only a plan that finished generating. A generation that failed
+          // after laying its days out used to leave a dated plan that started
+          // last and so won every overlap (D46, CODEBASE_ANALYSIS_2026-10-03);
+          // generation now dates a plan only as it publishes it, and this
+          // keeps any such plan already stored out of the answer.
+          eq(trainingPlans.generationStatus, "ready"),
           // A retired plan still answers for the stretch it actually ran, and is
           // invisible from its cutoff onward. Scoped here rather than at each call
           // site because this method is the single choke point every consumer of
@@ -919,4 +956,47 @@ export class PlanStorage {
       .returning({ id: trainingPlans.id });
     return result.length;
   }
+}
+
+async function getTrainingPlan(
+  planId: string,
+  userId: string,
+  tx?: DbExecutor,
+): Promise<TrainingPlanWithDays | undefined> {
+  const executor = tx ?? db;
+  const [plan] = await executor
+    .select()
+    .from(trainingPlans)
+    .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
+
+  if (!plan) return undefined;
+
+  const days = await executor.select().from(planDays).where(eq(planDays.planId, planId));
+
+  // Case-insensitive day ordering matches the tolerant lookup used in
+  // schedulePlan(), so legacy rows with non-title-case dayName values
+  // (e.g. "monday" from older imports) still sort Mon→Sun instead of
+  // falling back to insertion order.
+  const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  const dayIndex = (name: string) => dayOrder.indexOf((name ?? "").trim().toLowerCase());
+  days.sort((a, b) => {
+    if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
+    const aIndex = dayIndex(a.dayName);
+    const bIndex = dayIndex(b.dayName);
+    if (aIndex === -1 && bIndex === -1) return 0;
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
+
+  return { ...plan, days };
+}
+
+/** The athlete's own calendar date, degrading to UTC for an unusable zone. */
+async function resolveUserToday(userId: string, tx?: DbExecutor): Promise<string> {
+  const user = await (tx ?? db).query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { userTimezone: true },
+  });
+  return getLocalDateStrSafe(new Date(), user?.userTimezone);
 }

@@ -39,6 +39,7 @@ vi.mock("../../storage", () => ({
     nutrition: { listPrivateCustomFoodIds: vi.fn() },
     users: {
       markErasureRequested: vi.fn(),
+      clearErasureRequest: vi.fn(),
       listStrandedErasures: vi.fn(),
       deleteUserAndPrivateCustomFoods: vi.fn(),
       getStravaConnection: vi.fn(),
@@ -57,8 +58,12 @@ function callOrder(mock: { mock: { invocationCallOrder: number[] } }): number {
   return order;
 }
 
+/** The stamp a first erasure attempt writes (markErasureRequested's return). */
+const STAMPED_AT = new Date("2026-09-06T11:00:00Z");
+
 beforeEach(() => {
   vi.clearAllMocks();
+  users.markErasureRequested.mockResolvedValue(STAMPED_AT);
   nutrition.listPrivateCustomFoodIds.mockResolvedValue([]);
   users.deleteUserAndPrivateCustomFoods.mockResolvedValue({ deleted: true, deletedFoodIds: [] });
   users.getStravaConnection.mockResolvedValue(undefined);
@@ -120,6 +125,68 @@ describe("eraseAccount", () => {
     // exactly the state the sweep looks for.
     expect(clerkDeleteUser).toHaveBeenCalledWith("user-1");
     expect(users.markErasureRequested).toHaveBeenCalledWith("user-1");
+    expect(users.clearErasureRequest).not.toHaveBeenCalled();
+  });
+
+  // P17 (CODEBASE_ANALYSIS_2026-10-03): the athlete is told "Deletion failed"
+  // and can still sign in, so the sweep must not finish the deletion later.
+  it("withdraws the stamp it wrote when a step before the Clerk delete fails", async () => {
+    vi.mocked(storage.coaching.deleteChunksByUserId).mockRejectedValueOnce(
+      new Error("vector db down"),
+    );
+
+    await expect(eraseAccount("user-1")).rejects.toThrow("vector db down");
+
+    expect(clerkDeleteUser).not.toHaveBeenCalled();
+    expect(users.clearErasureRequest).toHaveBeenCalledWith("user-1", STAMPED_AT);
+  });
+
+  it.each([401, 422, 429])(
+    "withdraws the stamp when Clerk declines the delete with a %i",
+    async (status) => {
+      clerkDeleteUser.mockRejectedValueOnce(Object.assign(new Error("clerk declined"), { status }));
+
+      await expect(eraseAccount("user-1")).rejects.toThrow("clerk declined");
+
+      expect(users.clearErasureRequest).toHaveBeenCalledWith("user-1", STAMPED_AT);
+      expect(rememberUserErased).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { outcome: "a 5xx", error: Object.assign(new Error("clerk unavailable"), { status: 503 }) },
+    { outcome: "no answer", error: new Error("socket hang up") },
+  ])("keeps the stamp when the Clerk delete's outcome is unknown ($outcome)", async ({ error }) => {
+    clerkDeleteUser.mockRejectedValueOnce(error);
+
+    await expect(eraseAccount("user-1")).rejects.toThrow(error.message);
+
+    // The identity may already be gone, so the sweep has to be able to finish.
+    expect(users.clearErasureRequest).not.toHaveBeenCalled();
+  });
+
+  it("leaves a stamp an earlier run wrote, since that run may have got past the Clerk step", async () => {
+    users.markErasureRequested.mockResolvedValueOnce(null);
+    vi.mocked(purgeRagCacheForUser).mockRejectedValueOnce(new Error("db down"));
+
+    await expect(eraseAccount("user-1")).rejects.toThrow("db down");
+
+    expect(users.clearErasureRequest).not.toHaveBeenCalled();
+  });
+
+  it("still reports the original failure when the stamp cannot be withdrawn", async () => {
+    vi.mocked(storage.coaching.deleteChunksByUserId).mockRejectedValueOnce(
+      new Error("vector db down"),
+    );
+    users.clearErasureRequest.mockRejectedValueOnce(new Error("main db down"));
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+
+    await expect(eraseAccount("user-1", log)).rejects.toThrow("vector db down");
+
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1" }),
+      expect.stringContaining("the sweep will finish it"),
+    );
   });
 
   it("reports a failed job purge at error, since nothing will retry it", async () => {
@@ -167,6 +234,18 @@ describe("runStrandedErasureSweep", () => {
 
     await expect(runStrandedErasureSweep(NOW)).resolves.toEqual({ swept: 1, failed: 0 });
     expect(users.deleteUserAndPrivateCustomFoods).toHaveBeenCalledWith("user-1");
+  });
+
+  it("never withdraws a stranded erasure's marker when its retry fails early", async () => {
+    users.listStrandedErasures.mockResolvedValue([stranded("user-1", 30)]);
+    // The account already carries its stamp, so this run wrote none.
+    users.markErasureRequested.mockResolvedValue(null);
+    vi.mocked(storage.coaching.deleteChunksByUserId).mockRejectedValueOnce(
+      new Error("vector db down"),
+    );
+
+    await expect(runStrandedErasureSweep(NOW)).resolves.toEqual({ swept: 0, failed: 1 });
+    expect(users.clearErasureRequest).not.toHaveBeenCalled();
   });
 
   it("keeps erasing the rest when one account fails again, and counts it", async () => {

@@ -640,22 +640,22 @@ function fingerprintLiveDay({ day, sets }: LivePlanDay): string | undefined {
   });
 }
 
+type StaleChange = { planDayId: string; dayLabel: string };
+
+/** The rows a check reads: each day by id, and its prescribed sets. */
+type ChangePlanDays = Awaited<ReturnType<typeof batchReadChangePlanDays>>;
+
 /**
  * Revalidate every change against the live plan. Multi-day rebalances are
  * coherent units, so this apply is ALL-OR-NOTHING: any stale day invalidates
  * the whole proposal rather than applying a nonsense subset.
  */
-async function revalidateProposalChanges(
+function revalidateProposalChanges(
   changes: EnrichedPlanAdjustmentChange[],
-  userId: string,
-): Promise<{
-  liveDays: Map<string, LivePlanDay>;
-  staleChanges: Array<{ planDayId: string; dayLabel: string }>;
-}> {
+  { dayById, setsByDay }: ChangePlanDays,
+): { liveDays: Map<string, LivePlanDay>; staleChanges: StaleChange[] } {
   const liveDays = new Map<string, LivePlanDay>();
-  const staleChanges: Array<{ planDayId: string; dayLabel: string }> = [];
-
-  const { dayById, setsByDay } = await batchReadChangePlanDays(changes, userId);
+  const staleChanges: StaleChange[] = [];
 
   for (const change of changes) {
     const day = dayById.get(change.planDayId);
@@ -802,6 +802,64 @@ export interface ApplyPlanProposalOptions {
   readonly log?: PlanAdjustmentLogger;
 }
 
+/** The failure for a proposal whose days changed since it was made, logged. */
+function staleApplyFailure(
+  staleChanges: StaleChange[],
+  userId: string,
+  proposalId: string,
+  log: PlanAdjustmentLogger,
+): ApplyPlanProposalResult {
+  // internal identifiers and a count only, no message or workout content.
+  // bearer:disable javascript_lang_logger_leak
+  log.info(
+    { userId, proposalId, staleCount: staleChanges.length },
+    "[plan-adjustment] Proposal invalidated by stale days at apply time",
+  );
+  return applyFailure("stale", staleChanges);
+}
+
+interface CommitProposalApplyOptions extends Omit<WriteProposalChangesOptions, "liveDays"> {
+  readonly proposalId: string;
+}
+
+/**
+ * The apply's transaction. The first check ran without a lock, and the
+ * re-parse after it can take seconds, so the days are locked here and checked
+ * again before anything is written: an edit that landed in between
+ * invalidates the proposal instead of being written over, and the undo
+ * records the days as they stand under the lock, not as the first check read
+ * them — D45 (CODEBASE_ANALYSIS_2026-10-03). Returns the days that changed;
+ * empty when the apply was written.
+ */
+async function commitProposalApply({
+  proposalId,
+  changes,
+  userId,
+  ...writeOptions
+}: CommitProposalApplyOptions): Promise<StaleChange[]> {
+  return await db.transaction(async (tx) => {
+    const dayIds = changes.map((change) => change.planDayId);
+    const { days, setsByDay } = await storage.plans.lockPlanDaysWithSets(dayIds, userId, tx);
+    const { liveDays, staleChanges } = revalidateProposalChanges(changes, {
+      dayById: new Map(days.map((day) => [day.id, day])),
+      setsByDay,
+    });
+    if (staleChanges.length > 0) {
+      // resolve() only moves a pending proposal. Nothing back means another
+      // request applied, dismissed or replaced it meanwhile (a second apply
+      // of it, say), which is why the days changed: not_pending, not stale.
+      const invalidated = await storage.planProposals.resolve(proposalId, userId, "invalidated", tx);
+      if (!invalidated) throw new ProposalNoLongerPendingError();
+      return staleChanges;
+    }
+
+    const undoDays = await writeProposalChanges(tx, { changes, liveDays, userId, ...writeOptions });
+    const applied = await storage.planProposals.markApplied(proposalId, userId, { days: undoDays }, tx);
+    if (!applied) throw new ProposalNoLongerPendingError();
+    return [];
+  });
+}
+
 export async function applyPlanAdjustmentProposal(
   userId: string,
   proposalId: string,
@@ -815,17 +873,16 @@ export async function applyPlanAdjustmentProposal(
   // written; the rest are simply never applied.
   const changes = selectChanges(proposal.payload.changes, planDayIds);
   if (!changes) return applyFailure("invalid_selection");
-  const { liveDays, staleChanges } = await revalidateProposalChanges(changes, userId);
+  // Unlocked, so a stale proposal is turned away before it spends an AI
+  // parse; commitProposalApply checks again under the lock.
+  const firstRead = await batchReadChangePlanDays(changes, userId);
+  const { liveDays, staleChanges } = revalidateProposalChanges(changes, firstRead);
 
   if (staleChanges.length > 0) {
-    await storage.planProposals.resolve(proposalId, userId, "invalidated");
-    // internal identifiers and a count only, no message or workout content.
-    // bearer:disable javascript_lang_logger_leak
-    log.info(
-      { userId, proposalId, staleCount: staleChanges.length },
-      "[plan-adjustment] Proposal invalidated by stale days at apply time",
-    );
-    return applyFailure("stale", staleChanges);
+    // Resolved elsewhere since it was read above, as under the lock below.
+    const invalidated = await storage.planProposals.resolve(proposalId, userId, "invalidated");
+    if (!invalidated) return applyFailure("not_pending");
+    return staleApplyFailure(staleChanges, userId, proposalId, log);
   }
 
   const user = await storage.users.getUser(userId);
@@ -852,20 +909,15 @@ export async function applyPlanAdjustmentProposal(
   );
   if (!structuredRowsByDayId) return applyFailure("structured_parse_failed");
 
-  const aiSource = proposal.aiSource;
+  let staleUnderLock: StaleChange[];
   try {
-    await db.transaction(async (tx) => {
-      const undoDays = await writeProposalChanges(tx, {
-        changes,
-        liveDays,
-        structuredRowsByDayId,
-        aiSource,
-        unitPreferences,
-        userId,
-      });
-
-      const applied = await storage.planProposals.markApplied(proposalId, userId, { days: undoDays }, tx);
-      if (!applied) throw new ProposalNoLongerPendingError();
+    staleUnderLock = await commitProposalApply({
+      proposalId,
+      changes,
+      structuredRowsByDayId,
+      aiSource: proposal.aiSource,
+      unitPreferences,
+      userId,
     });
   } catch (err) {
     if (err instanceof ProposalNoLongerPendingError) {
@@ -883,6 +935,7 @@ export async function applyPlanAdjustmentProposal(
     // while the card re-appeared beneath that very message.
     throw err;
   }
+  if (staleUnderLock.length > 0) return staleApplyFailure(staleUnderLock, userId, proposalId, log);
 
   // The chat stream can auto-apply, and the chat paths don't drop the cached
   // context on their own.

@@ -78,10 +78,11 @@ protectedDelete(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter
     }
     // The main-DB FK cascade only covers single-DB mode. In production
     // document_chunks lives on vectorPool (a separate Postgres with no FKs),
-    // and retrieval filters by user_id only — so without this purge the
-    // deleted material's text keeps feeding coach prompts. Best-effort AFTER
-    // the ownership-checked delete confirmed: a vector-DB failure here is
-    // logged and the ragChunkPrune cron sweep picks the orphans up.
+    // so without this purge the deleted material's text stays at rest there.
+    // Retrieval also drops chunks whose material is gone, and an embed job
+    // that was mid-flight purges what it wrote (D38). Best-effort AFTER the
+    // ownership-checked delete confirmed: a vector-DB failure here is logged
+    // and the ragChunkPrune cron sweep picks the orphans up.
     try {
       await storage.coaching.deleteChunksByMaterialId(req.params.id, userId);
     } catch (err) {

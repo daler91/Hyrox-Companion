@@ -16,6 +16,7 @@ import { runStravaAutoSyncScan } from "./services/stravaAutoSync";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
+import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 import { ensureStravaWebhookSubscription } from "./stravaWebhook";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
@@ -39,11 +40,19 @@ let stalePlanGenerationTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Flags older than this are considered orphaned (worker crashed mid-job).
-// 15min gives a comfortable margin above the longest expected auto-coach
-// run and well below user-perceived "stuck" thresholds (W5).
-const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
 const STARTUP_CATCH_UP_DELAY_MS = 30_000;
+/**
+ * How late the hourly email tick may fire and still run. node-cron 4 drops a
+ * tick that fires more than 1 s late, with no catch-up, so an event-loop stall
+ * of 2 s or more across the top of the hour cost every athlete whose notify
+ * hour mapped to it that day's brief, reminder or summary. Ten minutes covers
+ * any stall a live process recovers from, and a late scan still reads the same
+ * local hour everywhere: the scan reads the clock when it runs, and the nearest
+ * local-hour boundary after :00 UTC is 15 minutes away (UTC+5:45, UTC+12:45).
+ * The claim ledgers stop a second send if another replica already ran the
+ * tick. D32 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const EMAIL_TICK_MISSED_TOLERANCE_MS = 10 * 60 * 1000;
 /** How long the athlete's own plan-day moves are kept: past the coach's two-week record, then pruned. */
 const PLAN_DAY_MOVE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -146,7 +155,7 @@ export function startCron(storage: IStorage): void {
         }
       });
     },
-    { timezone: "Etc/UTC" },
+    { timezone: "Etc/UTC", missedExecutionTolerance: EMAIL_TICK_MISSED_TOLERANCE_MS },
   );
 
   // Static schedule copy and static context only.

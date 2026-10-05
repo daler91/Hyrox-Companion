@@ -940,7 +940,51 @@ describe("executePlanGeneration", () => {
 
     await executePlanGeneration("plan-1", baseInput, "user-1");
 
-    expect(mocks.plans.schedulePlan).toHaveBeenCalledWith("plan-1", "2026-01-05", "user-1");
+    expect(mocks.plans.schedulePlan).toHaveBeenCalledWith("plan-1", "2026-01-05", "user-1", mocks.tx);
+  });
+
+  describe("scheduling inside the publish (D46)", () => {
+    function primeOneWeek() {
+      const week = makeGeneratedWeek(1);
+      setupPlanStorage(baseInput, createPlanDaysFromGenerated(week));
+      mockAiChunks(week);
+    }
+
+    it("writes the days, dates them and publishes the plan in one transaction", async () => {
+      primeOneWeek();
+
+      await executePlanGeneration("plan-1", { ...baseInput, supersedePlanIds: ["old-plan"] }, "user-1");
+
+      expect(mocks.transaction).toHaveBeenCalledTimes(1);
+      expect(mocks.plans.createPlanDays).toHaveBeenCalledWith(expect.any(Array), mocks.tx);
+      expect(mocks.plans.schedulePlan).toHaveBeenCalledWith("plan-1", "2026-01-05", "user-1", mocks.tx);
+      expect(mocks.plans.retirePlans).toHaveBeenCalledWith(["old-plan"], "user-1", expect.any(String), mocks.tx);
+      const [createOrder] = mocks.plans.createPlanDays.mock.invocationCallOrder;
+      const [scheduleOrder] = mocks.plans.schedulePlan.mock.invocationCallOrder;
+      const readyOrder = mocks.plans.updateGenerationStatus.mock.invocationCallOrder.at(-1) ?? 0;
+      expect(createOrder).toBeLessThan(scheduleOrder);
+      expect(scheduleOrder).toBeLessThan(readyOrder);
+    });
+
+    it("never dates the plan outside the transaction a failed publish rolls back", async () => {
+      primeOneWeek();
+      mocks.plans.updateEngineState.mockRejectedValueOnce(new Error("connection terminated"));
+
+      await expect(
+        executePlanGeneration("plan-1", { ...baseInput, supersedePlanIds: ["old-plan"] }, "user-1"),
+      ).rejects.toThrow("connection terminated");
+
+      // Every scheduling write went through the transaction that threw, so
+      // none of it commits: the failed plan has nothing on the calendar.
+      expect(mocks.transaction).toHaveBeenCalledTimes(1);
+      expect(mocks.plans.schedulePlan.mock.calls).toEqual([["plan-1", "2026-01-05", "user-1", mocks.tx]]);
+      expect(mocks.plans.updateGenerationStatus).toHaveBeenLastCalledWith(
+        "plan-1",
+        "failed",
+        "Plan generation failed unexpectedly. Please try again.",
+      );
+      expect(mocks.plans.updateGenerationStatus).not.toHaveBeenCalledWith("plan-1", "ready", null, mocks.tx);
+    });
   });
 
   it("includes the race-date prompt line when the end date is the race date", async () => {

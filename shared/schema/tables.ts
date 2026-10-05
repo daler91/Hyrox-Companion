@@ -1432,6 +1432,12 @@ export const planAdjustmentProposals = pgTable(
       sql`status IN ('pending','applied','dismissed','superseded','invalidated','reverted')`,
     ),
     index("idx_plan_proposals_user_status").on(table.userId, table.status),
+    // At most one pending proposal per athlete (D51, CODEBASE_ANALYSIS_2026-10-03).
+    // PlanProposalStorage.create supersedes the pending one before inserting;
+    // this is what holds when two turns create at once.
+    uniqueIndex("uq_plan_adjustment_proposals_user_pending")
+      .on(table.userId)
+      .where(sql`status = 'pending'`),
   ],
 );
 
@@ -1691,7 +1697,13 @@ export const mafProfile = pgTable(
     calculatedAt: timestamp("calculated_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (table) => [index("idx_maf_profile_user_calculated").on(table.userId, table.calculatedAt)],
+  (table) => [
+    index("idx_maf_profile_user_calculated").on(table.userId, table.calculatedAt),
+    // Until 0121 only migration 0036 added this, so push-built production never
+    // had it (D25, CODEBASE_ANALYSIS_2026-10-03). calculateMafHr never yields
+    // a ceiling below 71 for the 16-99 ages the schema accepts.
+    check("maf_profile_final_hr_positive_check", sql`final_hr > 0`),
+  ],
 );
 
 export const mafTestResults = pgTable(
@@ -1735,6 +1747,12 @@ export const mafWorkoutAnalysis = pgTable(
   (table) => [
     index("idx_maf_workout_analysis_user_created").on(table.userId, table.createdAt),
     index("idx_maf_workout_analysis_workout_log_id").on(table.workoutLogId),
+    // From migration 0036, like maf_profile's check above (D25).
+    // computeMafCompliance clamps the percentage to 0-100.
+    check(
+      "maf_workout_analysis_compliance_pct_range_check",
+      sql`compliance_pct IS NULL OR (compliance_pct BETWEEN 0 AND 100)`,
+    ),
   ],
 );
 

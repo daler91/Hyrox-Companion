@@ -1,10 +1,19 @@
-import { foodLogEntries, foods, recipeIngredients, recipes, users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { foodFavorites, foodLogEntries, foods, foodServings, recipeIngredients, recipes, users } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "../../db";
+import { ERASED_CUSTOM_FOOD_NAME } from "../erasedAccountFoods";
 import { storage } from "../index";
 import { resetIntegrationDb, seedCustomFood, seedFoodLogEntry, seedUser } from "./integrationDb";
+
+/** The restore drill's 0081 probe (script/restore-drill.ts): ownerless private custom foods. */
+async function ownerlessPrivateCustomFoods(): Promise<number> {
+  const { rows } = await db.execute<{ n: number }>(
+    sql`SELECT count(*)::int AS n FROM foods WHERE source = 'custom' AND created_by_user_id IS NULL AND NOT is_public`,
+  );
+  return rows.at(0)?.n ?? -1;
+}
 
 /**
  * GDPR account erasure against the REAL schema. deleteUserAndPrivateCustomFoods
@@ -42,39 +51,87 @@ describe("UserStorage.deleteUserAndPrivateCustomFoods (real Postgres)", () => {
     expect(await db.select().from(foodLogEntries).where(eq(foodLogEntries.userId, ALICE))).toHaveLength(0);
   });
 
-  it("keeps a private food another athlete's history references, ownerless, instead of aborting the erasure", async () => {
+  // D53 (CODEBASE_ANALYSIS_2026-10-03): such a food used to survive ownerless
+  // and private with its name intact, tripping the restore drill's 0081 probe.
+  it("hands a private food another athlete logged to them as their own copy, under a neutral name", async () => {
     // Bob logged Alice's food while it was public; Alice later re-privatised it.
     // A bare DELETE would hit the RESTRICT FK from Bob's entry and abort the
     // whole transaction — after the Clerk identity is already gone.
-    const sharedThenPrivate = await seedCustomFood(ALICE, "Once-shared granola");
+    const sharedThenPrivate = await seedCustomFood(ALICE, "Once-shared granola", { brand: "Alice's kitchen" });
     const bobsEntry = await seedFoodLogEntry(BOB, sharedThenPrivate.id, "2026-08-02");
 
     const result = await storage.users.deleteUserAndPrivateCustomFoods(ALICE);
 
-    expect(result.deleted).toBe(true);
-    expect(result.deletedFoodIds).toEqual([]);
-    const [survivor] = await db.select().from(foods).where(eq(foods.id, sharedThenPrivate.id));
-    expect(survivor).toBeDefined();
-    expect(survivor.createdByUserId).toBeNull(); // FK set-null did its job
-    expect(survivor.isPublic).toBe(false); // …and it stays hidden from search (visibleTo)
-    // Bob's history keeps rendering: his entry still joins to the food.
+    expect(result).toEqual({ deleted: true, deletedFoodIds: [sharedThenPrivate.id] });
+    expect(await db.select().from(foods).where(eq(foods.id, sharedThenPrivate.id))).toHaveLength(0);
+    // Bob's history keeps every number, on a food that is now his own.
     const [entry] = await db.select().from(foodLogEntries).where(eq(foodLogEntries.id, bobsEntry.id));
-    expect(entry?.foodId).toBe(sharedThenPrivate.id);
+    expect(entry).toMatchObject({ userId: BOB, quantityG: 100 });
+    const [copy] = await db.select().from(foods).where(eq(foods.id, entry.foodId));
+    expect(copy).toMatchObject({
+      source: "custom",
+      createdByUserId: BOB,
+      isPublic: false,
+      name: ERASED_CUSTOM_FOOD_NAME,
+      brand: null,
+      caloriesPer100g: 100,
+      proteinPer100g: 10,
+      carbPer100g: 10,
+      fatPer100g: 2,
+    });
+    expect(await ownerlessPrivateCustomFoods()).toBe(0);
   });
 
-  it("guards on recipe references the same way as log entries", async () => {
+  it("hands a food over the same way when it sits in another athlete's recipe", async () => {
     const inBobsRecipe = await seedCustomFood(ALICE, "Alice's protein base");
     const bobsRecipeFood = await seedCustomFood(BOB, "Bob's smoothie");
     const [recipe] = await db
       .insert(recipes)
       .values({ userId: BOB, foodId: bobsRecipeFood.id, name: "Bob's smoothie", servings: 2 })
       .returning();
-    await db.insert(recipeIngredients).values({ recipeId: recipe.id, foodId: inBobsRecipe.id, quantityG: 50 });
+    const [ingredient] = await db
+      .insert(recipeIngredients)
+      .values({ recipeId: recipe.id, foodId: inBobsRecipe.id, quantityG: 50 })
+      .returning();
 
     const result = await storage.users.deleteUserAndPrivateCustomFoods(ALICE);
 
-    expect(result.deletedFoodIds).toEqual([]);
-    expect(await db.select().from(foods).where(eq(foods.id, inBobsRecipe.id))).toHaveLength(1);
+    expect(result.deletedFoodIds).toEqual([inBobsRecipe.id]);
+    expect(await db.select().from(foods).where(eq(foods.id, inBobsRecipe.id))).toHaveLength(0);
+    const [line] = await db.select().from(recipeIngredients).where(eq(recipeIngredients.id, ingredient.id));
+    const [copy] = await db.select().from(foods).where(eq(foods.id, line.foodId));
+    expect(copy).toMatchObject({ createdByUserId: BOB, name: ERASED_CUSTOM_FOOD_NAME, isPublic: false });
+    expect(line.quantityG).toBe(50);
+    expect(await ownerlessPrivateCustomFoods()).toBe(0);
+  });
+
+  it("gives each referencing athlete a copy of their own, and moves their portions and favourite onto it", async () => {
+    const CAROL = "erasure-carol";
+    await seedUser(CAROL);
+    const food = await seedCustomFood(ALICE, "Alice's flapjack");
+    await seedFoodLogEntry(BOB, food.id, "2026-08-04");
+    await seedFoodLogEntry(BOB, food.id, "2026-08-05");
+    const carolsEntry = await seedFoodLogEntry(CAROL, food.id, "2026-08-04");
+    await db.insert(foodServings).values({ foodId: food.id, label: "Bob's slice", grams: 60, createdByUserId: BOB });
+    await db.insert(foodFavorites).values({ userId: BOB, foodId: food.id });
+
+    await storage.users.deleteUserAndPrivateCustomFoods(ALICE);
+
+    const bobsFoodIds = new Set(
+      (await db.select().from(foodLogEntries).where(eq(foodLogEntries.userId, BOB))).map((entry) => entry.foodId),
+    );
+    const [carolsNow] = await db.select().from(foodLogEntries).where(eq(foodLogEntries.id, carolsEntry.id));
+    // Both of Bob's entries share one copy; Carol has her own.
+    expect(bobsFoodIds.size).toBe(1);
+    const [bobsCopyId] = bobsFoodIds;
+    expect(carolsNow.foodId).not.toBe(bobsCopyId);
+    const [carolsCopy] = await db.select().from(foods).where(eq(foods.id, carolsNow.foodId));
+    expect(carolsCopy.createdByUserId).toBe(CAROL);
+    const [serving] = await db.select().from(foodServings).where(eq(foodServings.createdByUserId, BOB));
+    expect(serving?.foodId).toBe(bobsCopyId);
+    const [favourite] = await db.select().from(foodFavorites).where(eq(foodFavorites.userId, BOB));
+    expect(favourite?.foodId).toBe(bobsCopyId);
+    expect(await ownerlessPrivateCustomFoods()).toBe(0);
   });
 
   it("leaves PUBLIC custom foods in place (sharing was an explicit opt-in), owner set to null", async () => {
@@ -108,5 +165,45 @@ describe("UserStorage.deleteUserAndPrivateCustomFoods (real Postgres)", () => {
     expect(result).toEqual({ deleted: false, deletedFoodIds: [] });
     expect(await db.select().from(foods).where(eq(foods.id, alicesFood.id))).toHaveLength(1);
     expect(await db.select().from(users)).toHaveLength(2);
+  });
+});
+
+// P17 (CODEBASE_ANALYSIS_2026-10-03): a run that fails before the Clerk step
+// withdraws its own stamp, and only its own.
+describe("UserStorage erasure stamp (real Postgres)", () => {
+  const ATHLETE = "erasure-stamp-athlete";
+
+  beforeEach(async () => {
+    await resetIntegrationDb();
+    await seedUser(ATHLETE);
+  });
+
+  afterAll(async () => {
+    await resetIntegrationDb();
+  });
+
+  async function stampOf(id: string): Promise<Date | null | undefined> {
+    const [row] = await db.select({ at: users.erasureRequestedAt }).from(users).where(eq(users.id, id));
+    return row?.at;
+  }
+
+  it("returns the stamp it wrote, and null when the account already carries one", async () => {
+    const first = new Date("2026-09-06T11:00:00.123Z");
+
+    expect(await storage.users.markErasureRequested(ATHLETE, first)).toEqual(first);
+    expect(await storage.users.markErasureRequested(ATHLETE, new Date("2026-09-06T11:05:00Z"))).toBeNull();
+    expect(await stampOf(ATHLETE)).toEqual(first);
+    expect(await storage.users.markErasureRequested("nobody-here")).toBeNull();
+  });
+
+  it("withdraws only the stamp it is given", async () => {
+    const stamp = new Date("2026-09-06T11:00:00.456Z");
+    await storage.users.markErasureRequested(ATHLETE, stamp);
+
+    await storage.users.clearErasureRequest(ATHLETE, new Date("2026-09-06T10:00:00Z"));
+    expect(await stampOf(ATHLETE)).toEqual(stamp);
+
+    await storage.users.clearErasureRequest(ATHLETE, stamp);
+    expect(await stampOf(ATHLETE)).toBeNull();
   });
 });

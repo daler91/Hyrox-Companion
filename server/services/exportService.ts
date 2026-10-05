@@ -1,5 +1,10 @@
 import type { GarminConnection, StravaConnection, StructureBlockInput } from "@shared/schema";
-import { getStoredDistanceUnit } from "@shared/unitConversion";
+import {
+  getStoredDistanceUnit,
+  storedDistanceToDisplay,
+  storedWeightToDisplay,
+  type UnitPreferences,
+} from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import type { IStorage } from "../storage";
@@ -27,11 +32,39 @@ interface StructureSetLike {
   weight?: number | null;
   distance?: number | null;
   time?: number | null;
+  weightUnit?: string | null;
+  distanceUnit?: string | null;
+}
+
+/**
+ * A set's weight and distance in the units the export labels them with (the
+ * athlete's current preference), each read through the row's own unit stamp.
+ * Printing the raw stored number showed a kg-to-lbs switcher's 140 kg set as
+ * "140 lbs" (D41 (CODEBASE_ANALYSIS_2026-10-03)). An unstamped legacy row
+ * passes through unchanged, as on every other read path.
+ */
+function setValuesInExportUnits(
+  set: Pick<StructureSetLike, "weight" | "distance" | "weightUnit" | "distanceUnit">,
+  preferences: UnitPreferences,
+): { weight: number | null | undefined; distance: number | null | undefined } {
+  const { weight, distance } = set;
+  return {
+    weight: weight == null ? weight : storedWeightToDisplay(weight, set, preferences),
+    distance: distance == null ? distance : storedDistanceToDisplay(distance, set, preferences),
+  };
+}
+
+/** The units every set value in the export is labelled with. */
+function exportUnitPreferences(user: UnitPreferences | null | undefined): {
+  weightUnit: string;
+  distanceUnit: string;
+} {
+  return { weightUnit: user?.weightUnit ?? "kg", distanceUnit: user?.distanceUnit ?? "km" };
 }
 
 function structuredSummary(
   sets: StructureSetLike[] | null | undefined,
-  distanceUnit: string,
+  preferences: UnitPreferences,
 ): string | null {
   if (sets == null || sets.length === 0) return null;
   const byBlock = new Map<string, StructureSetLike[]>();
@@ -59,21 +92,22 @@ function structuredSummary(
     blockSets.sort((a,b)=>(a.stepNumber ?? 0)-(b.stepNumber ?? 0));
     const parts = blockSets.map((s) => {
       const label = s.customLabel || s.exerciseName;
+      const { weight, distance } = setValuesInExportUnits(s, preferences);
       const targetParts: string[] = [];
       if (s.reps == null) {
         // no-op
       } else {
         targetParts.push(`${s.reps} reps`);
       }
-      if (s.weight == null) {
+      if (weight == null) {
         // no-op
       } else {
-        targetParts.push(`${s.weight}`);
+        targetParts.push(`${weight}`);
       }
-      if (s.distance == null) {
+      if (distance == null) {
         // no-op
       } else {
-        targetParts.push(`${s.distance}${getStoredDistanceUnit(distanceUnit)}`);
+        targetParts.push(`${distance}${getStoredDistanceUnit(preferences.distanceUnit)}`);
       }
       if (s.time == null) {
         // no-op
@@ -101,6 +135,8 @@ interface ExerciseSetRow {
   distance?: number | null;
   time?: number | null;
   notes?: string | null;
+  weightUnit?: string | null;
+  distanceUnit?: string | null;
 }
 
 function buildWorkoutLogTitles(timeline: TimelineEntry[]): Record<string, string> {
@@ -225,6 +261,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
   const planDayStructures = await storage.workouts.getWorkoutStructuresByPlanDays(planDays.map((day) => day.id));
 
   const workoutLogTitles = buildWorkoutLogTitles(timeline);
+  const unitPreferences = exportUnitPreferences(user);
 
   const exerciseSetRows = allExerciseSets.map((s: ExerciseSetRow) => ({
     date: s.date,
@@ -234,8 +271,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
     category: s.category,
     setNumber: s.setNumber,
     reps: s.reps,
-    weight: s.weight,
-    distance: s.distance,
+    ...setValuesInExportUnits(s, unitPreferences),
     time: s.time,
     notes: s.notes,
   }));
@@ -247,14 +283,11 @@ export async function generateJSON(userId: string, storage: IStorage) {
     exportFormatVersion: 1 as const,
     exportedAt: new Date().toISOString(),
     profile: user ?? null,
-    // W26 — make the unit context of the exported values explicit. Stored
-    // weight/distance are in the user's preferred units at write time (never
-    // SI; see the unit-storage sentinel in shared/unitConversion.ts), so a
-    // portability consumer needs these to interpret exerciseSets correctly.
-    unitPreferences: {
-      weightUnit: user?.weightUnit ?? "kg",
-      distanceUnit: user?.distanceUnit ?? "km",
-    },
+    // W26 — make the unit context of the exported values explicit (never SI;
+    // see the unit-storage sentinel in shared/unitConversion.ts). `exerciseSets`
+    // is converted into these units through each row's stamp (D41); `timeline`
+    // and `plans` carry the raw stored rows with their own per-row stamps.
+    unitPreferences,
     timeline,
     // Each plan with ALL its days: the timeline above shows only scheduled days
     // inside a plan's lifetime, so a never-scheduled import was missing.
@@ -303,7 +336,7 @@ function escapeCsv(val: string | null | undefined): string {
   return CSV_QUOTABLE_CHARACTERS.test(escaped) ? `"${escaped}"` : escaped;
 }
 
-function generateTimelineCsvRows(timeline: TimelineEntry[], distanceUnit: string): string[] {
+function generateTimelineCsvRows(timeline: TimelineEntry[], preferences: UnitPreferences): string[] {
   const rows: string[] = [];
   for (const entry of timeline) {
     rows.push([
@@ -311,7 +344,7 @@ function generateTimelineCsvRows(timeline: TimelineEntry[], distanceUnit: string
       escapeCsv(entry.type),
       escapeCsv(entry.status),
       escapeCsv(entry.focus),
-      escapeCsv(structuredSummary(entry.exerciseSets, distanceUnit) ?? entry.mainWorkout),
+      escapeCsv(structuredSummary(entry.exerciseSets, preferences) ?? entry.mainWorkout),
       escapeCsv(entry.accessory),
       escapeCsv(entry.notes),
       entry.duration == null ? "" : String(entry.duration),
@@ -321,9 +354,14 @@ function generateTimelineCsvRows(timeline: TimelineEntry[], distanceUnit: string
   return rows;
 }
 
-function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutLogTitles: Record<string, string>): string[] {
+function generateExerciseSetsCsvRows(
+  allExerciseSets: ExerciseSetRow[],
+  workoutLogTitles: Record<string, string>,
+  preferences: UnitPreferences,
+): string[] {
   const rows: string[] = [];
   for (const s of allExerciseSets) {
+    const { weight, distance } = setValuesInExportUnits(s, preferences);
     rows.push([
       escapeCsv(s.date),
       escapeCsv(workoutLogTitles[s.workoutLogId] || ""),
@@ -331,8 +369,8 @@ function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutL
       escapeCsv(s.category),
       String(s.setNumber),
       s.reps == null ? "" : String(s.reps),
-      s.weight == null ? "" : String(s.weight),
-      s.distance == null ? "" : String(s.distance),
+      weight == null ? "" : String(weight),
+      distance == null ? "" : String(distance),
       s.time == null ? "" : String(s.time),
       escapeCsv(s.notes),
     ].join(","));
@@ -347,8 +385,9 @@ export async function generateCSV(userId: string, storage: IStorage): Promise<st
     storage.analytics.getAllExerciseSetsWithDates(userId),
   ]);
 
+  const unitPreferences = exportUnitPreferences(user);
   const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
-  csvRows.push(...generateTimelineCsvRows(timeline, user?.distanceUnit ?? "km"));
+  csvRows.push(...generateTimelineCsvRows(timeline, unitPreferences));
 
   if (allExerciseSets.length > 0) {
     const workoutLogTitles = buildWorkoutLogTitles(timeline);
@@ -356,13 +395,14 @@ export async function generateCSV(userId: string, storage: IStorage): Promise<st
     // export is self-describing. Distance needs the same treatment: it is stored
     // in the athlete's OWN unit, so a miles athlete's feet were exported under a
     // "(m)" header (audit H16). The comment here used to assert metres outright.
-    const weightUnit = user?.weightUnit ?? "kg";
-    const distanceLabel = getStoredDistanceUnit(user?.distanceUnit ?? "km");
+    // Each row's value is converted into these labelled units (D41).
+    const { weightUnit } = unitPreferences;
+    const distanceLabel = getStoredDistanceUnit(unitPreferences.distanceUnit);
     csvRows.push(
       "",
       "--- EXERCISE SETS (Per-Set Data) ---",
       `Date,Workout,Exercise,Category,Set #,Reps,Weight (${weightUnit}),Distance (${distanceLabel}),Time (min),Notes`,
-      ...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles)
+      ...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles, unitPreferences)
     );
   }
 

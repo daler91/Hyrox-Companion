@@ -188,9 +188,10 @@ async function applyPlanDayLink(
   score: number,
 ): Promise<{ log: WorkoutLog; enrichedExisting: boolean } | undefined> {
   return await db.transaction(async (tx) => {
-    // A manual confirm of the same day marks it completed under this same
-    // lock (createWorkoutInTx → plan_days UPDATE), so either it waits for us
-    // or its log is already committed and visible to the lookup below.
+    // A manual confirm of the same day takes this same lock before it writes
+    // anything (createWorkoutInTx, D48), so either it waits for us and then
+    // finds our log, or its log is already committed and visible to the
+    // lookup below.
     await tx
       .select({ id: planDays.id })
       .from(planDays)
@@ -290,6 +291,11 @@ async function applyDecision(
  * deviceActivitySets.ts. Only rows that actually came back from the insert get
  * one, so a race with a concurrent sync cannot double-write sets for the same
  * activity.
+ *
+ * The rows and their sets commit in one transaction. Written apart, a fault
+ * between the two left an import with no set for good: every later sync
+ * dedupes the activity, so nothing wrote the set again, and the session was
+ * missing from every set-derived panel. D47 (CODEBASE_ANALYSIS_2026-10-03)
  */
 async function insertStandaloneRows(
   rows: StandaloneRow[],
@@ -297,14 +303,17 @@ async function insertStandaloneRows(
   preferences: UnitPreferences,
 ): Promise<void> {
   if (rows.length === 0) return;
-  const created = await storage.workouts.createWorkoutLogs(rows);
+  const created = await db.transaction(async (tx) => {
+    const logs = await storage.workouts.createWorkoutLogs(rows, tx);
+    await storage.workouts.createDeviceActivitySets(deviceActivitySetRows(logs, preferences), tx);
+    return logs;
+  });
   const createdIds = new Set(created.map((c) => c.stravaActivityId));
   for (const row of rows) {
     if (!createdIds.has(row.stravaActivityId)) counts.skipped++;
     else if (row.suggestedLinkConfidence != null) counts.suggested++;
     else counts.standalone++;
   }
-  await storage.workouts.createDeviceActivitySets(deviceActivitySetRows(created, preferences));
 }
 
 export interface ReconcileOptions {

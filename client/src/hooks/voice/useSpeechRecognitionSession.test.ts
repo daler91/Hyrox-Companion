@@ -211,3 +211,94 @@ describe("useSpeechRecognitionSession stop (CL30)", () => {
     expect(hook.result.current.isListening).toBe(true);
   });
 });
+
+/** Holds getUserMedia open, as a permission prompt does, until grant() is called. */
+function holdMicProbe() {
+  const track = { stop: vi.fn() };
+  const prompt: { grant?: () => void } = {};
+  const answered = new Promise<{ getTracks: () => (typeof track)[] }>((resolve) => {
+    prompt.grant = () => resolve({ getTracks: () => [track] });
+  });
+  Object.defineProperty(globalThis.navigator, "mediaDevices", {
+    configurable: true,
+    value: { getUserMedia: vi.fn(() => answered) },
+  });
+  return { track, grant: () => prompt.grant?.() };
+}
+
+// P10 (CODEBASE_ANALYSIS_2026-10-03): a start still waiting on the mic probe
+// went live after a stop or an unmount, with nothing on screen showing it.
+describe("useSpeechRecognitionSession start while the mic probe is pending (P10)", () => {
+  beforeEach(() => {
+    onResult.mockReset();
+    FakeRecognition.instances.length = 0;
+    vi.stubGlobal("SpeechRecognition", FakeRecognition);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(globalThis.navigator, "mediaDevices");
+  });
+
+  it("does not open the mic when dictation is stopped before the probe answers", async () => {
+    const probe = holdMicProbe();
+    const hook = renderHook(() => useSpeechRecognitionSession({ onResult }));
+    const starting = hook.result.current.startListening();
+    const onStopped = vi.fn();
+
+    act(() => {
+      hook.result.current.stopListening(onStopped);
+    });
+    probe.grant();
+    await act(async () => {
+      await starting;
+    });
+
+    expect(onStopped).toHaveBeenCalledTimes(1);
+    expect(FakeRecognition.instances).toHaveLength(0);
+    expect(hook.result.current.isListening).toBe(false);
+    expect(probe.track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not open the mic when the component unmounts before the probe answers", async () => {
+    const probe = holdMicProbe();
+    const hook = renderHook(() => useSpeechRecognitionSession({ onResult }));
+    const starting = hook.result.current.startListening();
+
+    hook.unmount();
+    probe.grant();
+    await starting;
+
+    expect(FakeRecognition.instances).toHaveLength(0);
+    expect(probe.track.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the mic once when dictation is started twice before the probe answers", async () => {
+    const probe = holdMicProbe();
+    const hook = renderHook(() => useSpeechRecognitionSession({ onResult }));
+    const first = hook.result.current.startListening();
+    const second = hook.result.current.startListening();
+
+    probe.grant();
+    await act(async () => {
+      await Promise.all([first, second]);
+    });
+
+    expect(FakeRecognition.instances).toHaveLength(1);
+    expect(hook.result.current.isListening).toBe(true);
+  });
+
+  it("still opens the mic once the probe answers when nothing intervened", async () => {
+    const probe = holdMicProbe();
+    const hook = renderHook(() => useSpeechRecognitionSession({ onResult }));
+    const starting = hook.result.current.startListening();
+
+    probe.grant();
+    await act(async () => {
+      await starting;
+    });
+
+    expect(FakeRecognition.instances).toHaveLength(1);
+    expect(hook.result.current.isListening).toBe(true);
+  });
+});

@@ -26,9 +26,15 @@
  *   --report-file <p>  Write per-pass JSON reports (<name>-planDays/ext, <name>-workoutLogs/ext).
  *
  * The script is idempotent — rows that already have sets are skipped — so
- * it can be re-run safely. Rate-limited by the existing Gemini client
- * retry/backoff logic; serial per-row to protect the quota during the
- * initial migration.
+ * it can be re-run safely. Each insert re-checks, with the owning row locked,
+ * that the row still has no sets, so an athlete edit or a second concurrent
+ * run during a long batch cannot duplicate them. Rate-limited by the existing
+ * Gemini client retry/backoff logic; serial per-row to protect the quota
+ * during the initial migration.
+ *
+ * Only athletes who have switched AI processing on are parsed: their free text
+ * goes to Gemini, and this script runs outside the consent-gated routes. A
+ * row whose owner turned AI off mid-run is skipped as `no_ai_consent`.
  */
 
 import { inSequence } from "@shared/inSequence";
@@ -42,9 +48,9 @@ import {
   workoutLogs,
 } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
-import { and, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 
-import { db } from "../server/db";
+import { db, type Tx } from "../server/db";
 import { parseExercisesFromText } from "../server/gemini";
 import { logger } from "../server/logger";
 import {
@@ -54,7 +60,7 @@ import {
 
 const DEFAULT_WEIGHT_UNIT = "kg";
 
-interface Flags {
+export interface Flags {
   dryRun: boolean;
   userId?: string;
   batchSize: number;
@@ -73,10 +79,12 @@ interface PassResult {
   failed: number;
   emptyParse: number;
   alreadyStructured: number;
+  /** Skipped because the owner turned AI processing off during the run (P14). */
+  noConsent: number;
 }
 
 function emptyResult(): PassResult {
-  return { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0, emptyParse: 0, alreadyStructured: 0 };
+  return { scanned: 0, parsed: 0, written: 0, skipped: 0, failed: 0, emptyParse: 0, alreadyStructured: 0, noConsent: 0 };
 }
 
 function parseFlagValue(args: string[], index: number, name: string): string {
@@ -134,14 +142,24 @@ function parseFlags(): Flags {
   }
   return flags;
 }
-type ParseStatus = "success" | "failed_parse" | "empty_parse" | "already_structured";
+type ParseStatus = "success" | "failed_parse" | "empty_parse" | "already_structured" | "owner_deleted" | "no_ai_consent";
 interface BackfillReportRow { ownerType: "planDay" | "workoutLog"; ownerId: string; userId: string | null; status: ParseStatus; reason?: string; }
 type ParsedExercises = Awaited<ReturnType<typeof parseExercisesFromText>>;
 
-async function userWeightUnit(userId: string | null | undefined): Promise<string> {
-  if (!userId) return DEFAULT_WEIGHT_UNIT;
-  const [row] = await db.select({ unit: users.weightUnit }).from(users).where(eq(users.id, userId)).limit(1);
-  return row?.unit || DEFAULT_WEIGHT_UNIT;
+/**
+ * The owner's weight unit, and whether they consent to AI processing right
+ * now. Read per row, just before the Gemini call, so an athlete who turns AI
+ * off during a long run is not parsed after that. P14
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function ownerParseContext(userId: string | null | undefined): Promise<{ unit: string; aiConsent: boolean }> {
+  if (!userId) return { unit: DEFAULT_WEIGHT_UNIT, aiConsent: false };
+  const [row] = await db
+    .select({ unit: users.weightUnit, aiCoachEnabled: users.aiCoachEnabled })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return { unit: row?.unit || DEFAULT_WEIGHT_UNIT, aiConsent: row?.aiCoachEnabled === true };
 }
 
 /**
@@ -166,7 +184,7 @@ function parseUnitsFor(weightUnit: string) {
  * of near-duplicate functions and lets Sonar's cognitive-complexity budget
  * stay comfortably under its ceiling.
  */
-interface BackfillCandidate {
+export interface BackfillCandidate {
   label: string;             // log tag — "planDays" | "workoutLogs"
   ownerId: string;           // planDayId or workoutLogId
   logKey: string;            // "planDayId" | "workoutLogId" for log context
@@ -174,6 +192,10 @@ interface BackfillCandidate {
   mainWorkout: string | null;
   accessory: string | null;
   expand: (exercises: ParsedExercises, preferences: UnitPreferences) => InsertExerciseSet[];
+  /** Locks the owning row FOR UPDATE; false when it no longer exists. */
+  lockOwner: (tx: Tx) => Promise<boolean>;
+  /** Matches the exercise_sets rows that belong to the owner. */
+  ownedSets: SQL;
 }
 
 function ownerTypeForCandidate(cand: BackfillCandidate): BackfillReportRow["ownerType"] {
@@ -197,6 +219,12 @@ function pushReportRow(
     status,
     ...(reason ? { reason } : {}),
   });
+}
+
+function markNoConsent(result: PassResult, reportRows: BackfillReportRow[], cand: BackfillCandidate): void {
+  result.skipped++;
+  result.noConsent++;
+  pushReportRow(reportRows, cand, "no_ai_consent");
 }
 
 function markEmptyParse(result: PassResult, reportRows: BackfillReportRow[], cand: BackfillCandidate, reason: string): void {
@@ -242,6 +270,30 @@ async function handleEmptyParsedExercises(
   }
 }
 
+type InsertOutcome = "written" | "already_structured" | "owner_deleted";
+
+/**
+ * Insert the parsed sets only if the owner still has none. The candidate list
+ * is a snapshot taken before a long serial run of Gemini calls, so by the time
+ * a row's parse comes back the athlete may have logged its sets by hand, or a
+ * second run may have written them. The owning row is locked FOR UPDATE and
+ * re-checked in the insert's transaction: inserting a set takes FOR KEY SHARE
+ * on its owner through the foreign key, which FOR UPDATE blocks, so the
+ * re-check holds until commit. D28 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function insertIfStillUnstructured(
+  cand: BackfillCandidate,
+  setRows: InsertExerciseSet[],
+): Promise<InsertOutcome> {
+  return await db.transaction(async (tx) => {
+    if (!(await cand.lockOwner(tx))) return "owner_deleted";
+    const [existing] = await tx.select({ id: exerciseSets.id }).from(exerciseSets).where(cand.ownedSets).limit(1);
+    if (existing) return "already_structured";
+    await tx.insert(exerciseSets).values(setRows);
+    return "written";
+  });
+}
+
 async function handleParsedExercises(
   cand: BackfillCandidate,
   flags: Flags,
@@ -260,7 +312,12 @@ async function handleParsedExercises(
     pushReportRow(reportRows, cand, "success");
     return;
   }
-  await db.insert(exerciseSets).values(setRows);
+  const outcome = await insertIfStillUnstructured(cand, setRows);
+  if (outcome !== "written") {
+    result.skipped++;
+    pushReportRow(reportRows, cand, outcome, "changed_during_run");
+    return;
+  }
   result.written += setRows.length;
   pushReportRow(reportRows, cand, "success");
   await clearBackfillReview(cand);
@@ -297,7 +354,11 @@ async function processCandidate(
     return;
   }
   try {
-    const unit = await userWeightUnit(cand.userId);
+    const { unit, aiConsent } = await ownerParseContext(cand.userId);
+    if (!aiConsent) {
+      markNoConsent(result, reportRows, cand);
+      return;
+    }
     const exercises = await parseExercisesFromText(text, unit);
     if (exercises.length === 0) {
       await handleEmptyParsedExercises(cand, flags, result, reportRows);
@@ -337,16 +398,32 @@ async function runPass(
   return result;
 }
 
-async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]> {
-  // Filters (exerciseSets empty, optional userId) are applied IN the SQL
-  // query so the batch limit counts only rows that actually need backfilling.
-  // Doing the filtering in JS after `limit()` used to produce empty batches
-  // as soon as the first page of plan_days happened to already have sets,
-  // and the backfill would stop making progress on large datasets.
+async function lockPlanDay(tx: Tx, planDayId: string): Promise<boolean> {
+  const [row] = await tx.select({ id: planDays.id }).from(planDays).where(eq(planDays.id, planDayId)).for("update");
+  return Boolean(row);
+}
+
+async function lockWorkoutLog(tx: Tx, workoutLogId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: workoutLogs.id })
+    .from(workoutLogs)
+    .where(eq(workoutLogs.id, workoutLogId))
+    .for("update");
+  return Boolean(row);
+}
+
+export async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]> {
+  // Filters (exerciseSets empty, AI consent, optional userId) are applied IN
+  // the SQL query so the batch limit counts only rows that actually need
+  // backfilling. Doing the filtering in JS after `limit()` used to produce
+  // empty batches as soon as the first page of plan_days happened to already
+  // have sets, and the backfill would stop making progress on large datasets.
   const whereClauses = [
     isNotNull(planDays.mainWorkout),
     sql`TRIM(${planDays.mainWorkout}) <> ''`,
     isNull(exerciseSets.id),
+    // P14 (CODEBASE_ANALYSIS_2026-10-03): only athletes who consent to AI.
+    eq(users.aiCoachEnabled, true),
   ];
   if (flags.userId) whereClauses.push(eq(trainingPlans.userId, flags.userId));
   if (flags.afterId) whereClauses.push(gt(planDays.id, flags.afterId));
@@ -360,6 +437,7 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     })
     .from(planDays)
     .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+    .innerJoin(users, eq(users.id, trainingPlans.userId))
     .leftJoin(exerciseSets, eq(exerciseSets.planDayId, planDays.id))
     .where(and(...whereClauses))
     .orderBy(planDays.id)
@@ -373,6 +451,8 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     mainWorkout: pd.mainWorkout,
     accessory: pd.accessory,
     expand: (exercises, preferences) => expandExercisesToPlanDaySetRows(exercises, pd.id, preferences),
+    lockOwner: (tx) => lockPlanDay(tx, pd.id),
+    ownedSets: eq(exerciseSets.planDayId, pd.id),
   }));
 }
 
@@ -388,10 +468,12 @@ async function countPlanDayAlreadyStructured(flags: Flags): Promise<number> {
   return Number(row?.count ?? 0);
 }
 
-async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate[]> {
+export async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate[]> {
   const whereClauses = [
     isNotNull(workoutLogs.mainWorkout),
     sql`TRIM(${workoutLogs.mainWorkout}) <> ''`,
+    // P14 (CODEBASE_ANALYSIS_2026-10-03): only athletes who consent to AI.
+    eq(users.aiCoachEnabled, true),
   ];
   if (flags.userId) whereClauses.push(eq(workoutLogs.userId, flags.userId));
   if (flags.since) whereClauses.push(gte(workoutLogs.date, flags.since));
@@ -400,6 +482,7 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
   const rows = await db
     .select({ log: workoutLogs })
     .from(workoutLogs)
+    .innerJoin(users, eq(users.id, workoutLogs.userId))
     .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
     .where(and(...whereClauses, isNull(exerciseSets.id)))
     .orderBy(workoutLogs.id)
@@ -413,6 +496,8 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
     mainWorkout: log.mainWorkout,
     accessory: log.accessory,
     expand: (exercises, preferences) => expandExercisesToSetRows(exercises, log.id, preferences),
+    lockOwner: (tx) => lockWorkoutLog(tx, log.id),
+    ownedSets: eq(exerciseSets.workoutLogId, log.id),
   }));
 }
 
@@ -444,9 +529,14 @@ async function main(): Promise<void> {
   }
 }
 
-try {
-  await main();
-} catch (err) {
-  logger.error({ err }, "[backfill] fatal error");
-  process.exit(1);
+// Importing this module (for tests) must not start a backfill.
+if (process.argv[1]?.endsWith("backfill-structured-exercises.ts")) {
+  try {
+    await main();
+  } catch (err) {
+    // The operator's own fatal error from this one-off script, no request data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err }, "[backfill] fatal error");
+    process.exit(1);
+  }
 }

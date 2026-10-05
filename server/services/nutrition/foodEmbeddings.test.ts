@@ -1,24 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// `query`/`selectWhere`/`selectLimit` are referenced inside the hoisted
-// vi.mock factories below, so they must be created via vi.hoisted to exist
-// before the module graph is evaluated. `selectWhere` resolves the main-DB
-// db.select(...).from(...).where(...) chain used by the prune sweep;
-// `selectLimit` resolves the db.select(...).from(...).limit(...) chain used
-// by the embed backfill's candidate scan.
-const { query, selectWhere, selectLimit } = vi.hoisted(() => ({
-  query: vi.fn(),
-  selectWhere: vi.fn(),
-  selectLimit: vi.fn(),
-}));
+// `query`/`selectWhere`/`selectLimit`/`candidateWhere` are referenced inside
+// the hoisted vi.mock factories below, so they must be created via vi.hoisted
+// to exist before the module graph is evaluated. `selectWhere` resolves the
+// main-DB db.select(...).from(...).where(...) chain used by the prune sweep;
+// `candidateWhere` and `selectLimit` resolve the
+// db.select(...).from(...).leftJoin(...).where(...).limit(...) chain used by
+// the embed backfill's candidate scan.
+const { query, selectWhere, selectLimit, candidateWhere } = vi.hoisted(() => {
+  const limit = vi.fn();
+  return {
+    query: vi.fn(),
+    selectWhere: vi.fn(),
+    selectLimit: limit,
+    candidateWhere: vi.fn(() => ({ limit })),
+  };
+});
 
 // Stub the I/O-heavy imports so the module loads without real DB / AI / vector infra.
 vi.mock("../../db", () => ({
-  db: { select: () => ({ from: () => ({ where: selectWhere, limit: selectLimit }) }) },
+  db: {
+    select: () => ({
+      from: () => ({ where: selectWhere, leftJoin: () => ({ where: candidateWhere }) }),
+    }),
+  },
 }));
 vi.mock("../../vectorDb", () => ({ vectorPool: { query } }));
 vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbeddings: vi.fn() }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { generateEmbeddings } from "../../gemini/client";
 import {
@@ -213,5 +225,21 @@ describe("embedMissingFoods", () => {
     expect(result).toEqual({ embedded: 0 });
     // Only the existing-hashes SELECT ran — no INSERT for an empty row set.
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("scans only foods it may send to the provider: shared rows, or a private custom food whose owner consents (P14)", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([]);
+    candidateWhere.mockClear();
+
+    await embedMissingFoods();
+
+    const [predicate] = candidateWhere.mock.calls.at(0) as unknown as [SQL];
+    const rendered = new PgDialect().sqlToQuery(predicate);
+    expect(rendered.sql).toContain('"foods"."source" <> $1');
+    expect(rendered.sql).toContain('"foods"."is_public" = $2');
+    expect(rendered.sql).toContain('"users"."ai_coach_enabled" = $3');
+    expect(rendered.sql).toContain(" or ");
+    expect(rendered.params).toEqual(["custom", true, true]);
   });
 });

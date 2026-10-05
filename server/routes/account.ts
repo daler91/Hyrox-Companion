@@ -30,7 +30,9 @@ const router = Router();
  * has to be resumable: it deletes the Clerk identity partway through, and
  * from that moment the athlete can no longer authenticate to retry. A run
  * that fails after that point leaves `users.erasure_requested_at` stamped,
- * and the erasure sweep in server/cron.ts finishes it.
+ * and the erasure sweep in server/cron.ts finishes it. One that fails before
+ * it withdraws the stamp, so the "Deletion failed" the athlete sees holds and
+ * the sweep never deletes the account behind their back (P17).
  */
 protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete", 3) }, async (req: ExpressRequest, res: Response) => {
     const { deleted } = await eraseAccount(getUserId(req), req.log);

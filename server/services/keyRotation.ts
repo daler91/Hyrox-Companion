@@ -1,6 +1,6 @@
 import { inSequence } from "@shared/inSequence";
 import { garminConnections, stravaConnections } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, type AnyColumn, eq, isNull, type SQL } from "drizzle-orm";
 
 import { withPgAdvisoryLock } from "../advisoryLock";
 import { currentKeyVersion, reencryptToken } from "../crypto";
@@ -19,11 +19,29 @@ export interface ReencryptSummary {
   /** Rows that could not be re-encrypted (undecryptable ciphertext or a failed
    * UPDATE); logged per row and skipped so the sweep stays resumable. */
   failed: number;
+  /** Rows left alone because their credentials were rewritten (a token
+   * refresh, a cleared or reconnected Garmin login, a disconnect) between the
+   * sweep's read and its UPDATE. The writer encrypted under the active key
+   * itself; a re-run picks up anything still on an old version. */
+  changedDuringSweep: number;
 }
 
 interface TableSweepResult {
   updated: number;
   failed: number;
+  changed: number;
+}
+
+/**
+ * The column still holds exactly the value the sweep read, null included.
+ * Every UPDATE is a compare-and-swap on these, so a credential rewritten after
+ * the snapshot is never overwritten with the re-encrypted snapshot: an
+ * unconditional write could revert a Strava refresh token rotated mid-sweep
+ * (forcing a reconnect) or re-store Garmin credentials cleared after an auth
+ * failure (D42 (CODEBASE_ANALYSIS_2026-10-03)).
+ */
+function unchangedSinceRead(column: AnyColumn, read: string | null): SQL {
+  return read === null ? isNull(column) : eq(column, read);
 }
 
 // Re-encrypt a single nullable column value under the active key. Returns the
@@ -46,6 +64,7 @@ async function reencryptStrava(): Promise<TableSweepResult> {
 
   let updated = 0;
   let failed = 0;
+  let changed = 0;
   // One row at a time, so a boot-time sweep over every stored credential
   // never takes the whole pool.
   await inSequence(rows, async (row) => {
@@ -53,13 +72,24 @@ async function reencryptStrava(): Promise<TableSweepResult> {
       const access = remap(row.accessToken);
       const refresh = remap(row.refreshToken);
       if (!access.changed && !refresh.changed) return;
-      await db
+      const written = await db
         .update(stravaConnections)
         .set({
           accessToken: access.value ?? row.accessToken,
           refreshToken: refresh.value ?? row.refreshToken,
         })
-        .where(eq(stravaConnections.id, row.id));
+        .where(
+          and(
+            eq(stravaConnections.id, row.id),
+            unchangedSinceRead(stravaConnections.accessToken, row.accessToken),
+            unchangedSinceRead(stravaConnections.refreshToken, row.refreshToken),
+          ),
+        )
+        .returning({ id: stravaConnections.id });
+      if (written.length === 0) {
+        changed += 1;
+        return;
+      }
       updated += 1;
     } catch (error) {
       // Per-row isolation: one versioned-but-undecryptable value must not abort
@@ -75,7 +105,7 @@ async function reencryptStrava(): Promise<TableSweepResult> {
       );
     }
   });
-  return { updated, failed };
+  return { updated, failed, changed };
 }
 
 async function reencryptGarmin(): Promise<TableSweepResult> {
@@ -91,6 +121,7 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
 
   let updated = 0;
   let failed = 0;
+  let changed = 0;
   // One row at a time, as in the Strava sweep above.
   await inSequence(rows, async (row) => {
     try {
@@ -99,7 +130,7 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
       const oauth1 = remap(row.encryptedOauth1Token);
       const oauth2 = remap(row.encryptedOauth2Token);
       if (!email.changed && !password.changed && !oauth1.changed && !oauth2.changed) return;
-      await db
+      const written = await db
         .update(garminConnections)
         .set({
           encryptedEmail: email.value,
@@ -107,7 +138,20 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
           encryptedOauth1Token: oauth1.value,
           encryptedOauth2Token: oauth2.value,
         })
-        .where(eq(garminConnections.id, row.id));
+        .where(
+          and(
+            eq(garminConnections.id, row.id),
+            unchangedSinceRead(garminConnections.encryptedEmail, row.encryptedEmail),
+            unchangedSinceRead(garminConnections.encryptedPassword, row.encryptedPassword),
+            unchangedSinceRead(garminConnections.encryptedOauth1Token, row.encryptedOauth1Token),
+            unchangedSinceRead(garminConnections.encryptedOauth2Token, row.encryptedOauth2Token),
+          ),
+        )
+        .returning({ id: garminConnections.id });
+      if (written.length === 0) {
+        changed += 1;
+        return;
+      }
       updated += 1;
     } catch (error) {
       failed += 1;
@@ -120,7 +164,7 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
       );
     }
   });
-  return { updated, failed };
+  return { updated, failed, changed };
 }
 
 /**
@@ -132,6 +176,8 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
  * Tokens also migrate lazily — the storage layer re-encrypts on every write, so
  * a refreshing Strava token picks up the new key naturally. This sweep covers
  * the long-lived rows (e.g. Garmin credentials) that may not be rewritten soon.
+ * The advisory lock only single-flights the sweep; it does not fence those
+ * request-path writers, which is why each row's UPDATE is a compare-and-swap.
  */
 export async function reencryptStoredCredentials(): Promise<ReencryptSummary | null> {
   const result = await withPgAdvisoryLock(
@@ -144,6 +190,7 @@ export async function reencryptStoredCredentials(): Promise<ReencryptSummary | n
         stravaUpdated: strava.updated,
         garminUpdated: garmin.updated,
         failed: strava.failed + garmin.failed,
+        changedDuringSweep: strava.changed + garmin.changed,
       };
     },
   );
@@ -168,8 +215,8 @@ export async function maybeReencryptOnBoot(): Promise<void> {
       // Escalate to warn when rows were skipped so a poisoned credential row
       // is visible in logs instead of hiding inside an info line.
       const log = summary.failed > 0 ? logger.warn.bind(logger) : logger.info.bind(logger);
-      // only the key version and
-      // row counts (stravaUpdated/garminUpdated/failed) are logged; no token
+      // only the key version and row counts
+      // (stravaUpdated/garminUpdated/failed/changedDuringSweep) are logged; no token
       // plaintext ever reaches the logger (reencryptToken keeps it in scope).
       // bearer:disable javascript_lang_logger_leak
       log(

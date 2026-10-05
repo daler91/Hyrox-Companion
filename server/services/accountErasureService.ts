@@ -36,10 +36,66 @@ export const STRANDED_ERASURE_THRESHOLD_MS = 15 * 60 * 1000;
 const SWEEP_BATCH_SIZE = 50;
 
 /**
+ * A run that fails before the Clerk identity is deleted leaves an athlete who
+ * can still sign in and who is told "Deletion failed". Withdraw the stamp this
+ * run wrote, or the sweep would finish that deletion 15-75 minutes later
+ * anyway, and the background jobs would skip the athlete until it did. A stamp
+ * an earlier run wrote is left alone: that run may have got past the Clerk
+ * step. P17 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function withdrawErasureStamp(userId: string, stampedAt: Date | null, log: Logger): Promise<void> {
+  if (!stampedAt) return;
+  try {
+    await storage.users.clearErasureRequest(userId, stampedAt);
+  } catch (err) {
+    // userId is the correlation id logged throughout this erasure and err a
+    // DB error; no secrets.
+    // bearer:disable javascript_lang_logger_leak
+    log.error({ err, userId }, "Could not withdraw the erasure stamp of a failed deletion; the sweep will finish it");
+  }
+}
+
+/**
+ * Whether a Clerk error is Clerk declining the delete (a 4xx), which leaves
+ * the identity in place, rather than an outcome we cannot know (a 5xx, a
+ * timeout, a dropped connection), after which the identity may be gone.
+ */
+function clerkDeclined(status: number | undefined): boolean {
+  return status !== undefined && status >= 400 && status < 500;
+}
+
+/**
+ * Step 2 of eraseAccount: delete the Clerk identity. If this fails the DB row
+ * must stay intact — otherwise ensureUserExists re-creates it on the next
+ * authenticated request, silently "undeleting" the account. A 404 from Clerk
+ * means the identity was already removed (e.g. a previous attempt succeeded
+ * here and failed later), so treat it as success: that is exactly the case
+ * the sweep retries.
+ */
+async function deleteClerkIdentity(userId: string, stampedAt: Date | null, log: Logger): Promise<void> {
+  if (!env.CLERK_SECRET_KEY) return;
+  try {
+    await clerkClient.users.deleteUser(userId);
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status;
+    if (status !== 404) {
+      // Clerk declining leaves the identity, so this run stopped short of
+      // its point of no return; any other failure may not have (P17).
+      if (clerkDeclined(status)) await withdrawErasureStamp(userId, stampedAt, log);
+      throw err;
+    }
+    // userId is the app-wide correlation id logged throughout this erasure.
+    // bearer:disable javascript_lang_logger_leak
+    log.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
+  }
+}
+
+/**
  * Run the full erasure for one user. Returns `deleted: false` only when there
  * was no such user row to delete (a 404 for the route; already-done for the
- * sweep). Throws if any fail-loud step fails, leaving the erasure marker in
- * place for the sweep to retry.
+ * sweep). Throws if any fail-loud step fails. A failure past the Clerk step
+ * leaves the erasure marker in place for the sweep to retry; one before it
+ * withdraws the marker this run wrote (withdrawErasureStamp).
  *
  * Order of operations:
  * 0. Stamp the erasure marker, then capture the user's private custom-food ids
@@ -76,44 +132,35 @@ export async function eraseAccount(
   // Step 0: mark the erasure as started BEFORE anything irreversible, so a
   // crash past step 2 leaves a row the sweep can find and finish. Keeps an
   // existing stamp, so a retry does not reset "stranded since".
-  await storage.users.markErasureRequested(userId);
+  const stampedAt = await storage.users.markErasureRequested(userId);
 
-  // Capture the private custom-food ids while the ownership column still
-  // exists (step 5's cascade set-nulls created_by_user_id, and food_embeddings
-  // has no user column — this list is the only bridge).
-  const privateFoodIds = await storage.nutrition.listPrivateCustomFoodIds(userId);
+  try {
+    // Capture the private custom-food ids while the ownership column still
+    // exists (step 5's cascade set-nulls created_by_user_id, and
+    // food_embeddings has no user column — this list is the only bridge).
+    const privateFoodIds = await storage.nutrition.listPrivateCustomFoodIds(userId);
 
-  // Step 1: purge the user's RAG chunks AND their private foods' embeddings
-  // from the SEPARATE vector DB. Both live on `vectorPool` (a separate
-  // Postgres instance in production), so the main-DB FK cascade in step 5
-  // cannot reach them — without this the user's uploaded coaching-material
-  // text and custom-food-name embeddings are orphaned (GDPR Art. 17).
-  await storage.coaching.deleteChunksByUserId(userId);
-  await deleteFoodEmbeddingsByFoodIds(privateFoodIds);
-  // Step 1b: the RAG retrieval cache holds plaintext excerpts of those chunks
-  // in `server_runtime_cache` on the main DB, keyed by user but not FK-linked,
-  // so neither purge above nor the step-5 cascade reaches it. Fail-loud like
-  // step 1; after the chunk purge, so a retrieval racing it can only re-cache
-  // an empty result. P13 (CODEBASE_ANALYSIS_2026-10-03)
-  await purgeRagCacheForUser(userId);
-
-  // Step 2: delete the Clerk identity. If this fails the DB row must stay
-  // intact — otherwise ensureUserExists re-creates it on the next
-  // authenticated request, silently "undeleting" the account. A 404 from
-  // Clerk means the identity was already removed (e.g. a previous attempt
-  // succeeded here and failed later), so treat it as success: that is exactly
-  // the case the sweep retries.
-  if (env.CLERK_SECRET_KEY) {
-    try {
-      await clerkClient.users.deleteUser(userId);
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status !== 404) throw err;
-      // userId is the app-wide correlation id logged throughout this erasure.
-      // bearer:disable javascript_lang_logger_leak
-      log.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
-    }
+    // Step 1: purge the user's RAG chunks AND their private foods' embeddings
+    // from the SEPARATE vector DB. Both live on `vectorPool` (a separate
+    // Postgres instance in production), so the main-DB FK cascade in step 5
+    // cannot reach them — without this the user's uploaded coaching-material
+    // text and custom-food-name embeddings are orphaned (GDPR Art. 17).
+    await storage.coaching.deleteChunksByUserId(userId);
+    await deleteFoodEmbeddingsByFoodIds(privateFoodIds);
+    // Step 1b: the RAG retrieval cache holds plaintext excerpts of those
+    // chunks in `server_runtime_cache` on the main DB, keyed by user but not
+    // FK-linked, so neither purge above nor the step-5 cascade reaches it.
+    // Fail-loud like step 1; after the chunk purge, so a retrieval racing it
+    // can only re-cache an empty result. P13 (CODEBASE_ANALYSIS_2026-10-03)
+    await purgeRagCacheForUser(userId);
+  } catch (err) {
+    // Nothing irreversible has happened yet (P17).
+    await withdrawErasureStamp(userId, stampedAt, log);
+    throw err;
   }
+
+  // Step 2: delete the Clerk identity (see deleteClerkIdentity).
+  await deleteClerkIdentity(userId, stampedAt, log);
 
   // Step 2b: from here on any session for this id is stale, but Clerk verifies
   // its JWT locally until it expires. Once step 5 deletes the row,

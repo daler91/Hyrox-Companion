@@ -200,6 +200,33 @@ export function autoLinkedLogStillPrescription(): SQL {
   return sql`(${workoutLogs.autoLinkRecordingOnly} OR (${linkStands}))`;
 }
 
+/**
+ * Bulk-insert the synthesised sets a batch of device imports carries (see
+ * services/deviceActivitySets.ts).
+ *
+ * There is no unique constraint to lean on here — `exercise_sets` is keyed by
+ * a generated id and a log may legitimately hold many rows — so "exactly one
+ * synthesised set per log" is the CALLER's invariant, not the column's. The
+ * sync satisfies it by only passing logs its own INSERT just created; the
+ * backfill satisfies it with an anti-join against the same table. Anything
+ * else that calls this has to establish it too, because a second row for one
+ * log doubles that session in every set-derived panel.
+ *
+ * The sync passes its transaction as `executor`, so the logs and their sets
+ * commit together (D47, CODEBASE_ANALYSIS_2026-10-03).
+ */
+async function createDeviceActivitySets(
+  rows: InsertExerciseSet[],
+  executor: DbExecutor = db,
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const inserted = await executor
+    .insert(exerciseSets)
+    .values(rows)
+    .returning({ id: exerciseSets.id });
+  return inserted.length;
+}
+
 export class WorkoutStorage {
   private async loadStepsForBlocks(blockIds: string[]): Promise<Map<string, WorkoutStructureStepRow[]>> {
     if (blockIds.length === 0) return new Map();
@@ -261,9 +288,13 @@ export class WorkoutStorage {
    * Bulk insert for the Strava sync. Rows may carry the server-only device-link
    * columns (the raw-activity snapshot and a suggested match) — those never
    * come from a client, which is why they sit outside InsertWorkoutLog.
+   *
+   * `executor` lets the sync write the rows and their synthesised sets in one
+   * transaction (D47, CODEBASE_ANALYSIS_2026-10-03).
    */
   async createWorkoutLogs(
     logs: (InsertWorkoutLog & { userId: string } & Partial<WorkoutLogDeviceLinkColumns>)[],
+    executor: DbExecutor = db,
   ): Promise<WorkoutLog[]> {
     if (logs.length === 0) return [];
 
@@ -272,7 +303,7 @@ export class WorkoutStorage {
     // Strava syncs cannot create duplicate rows for the same activity
     // (CODEBASE_AUDIT.md §5). Non-Strava inserts are unaffected because the
     // index is partial and does not cover NULL activity IDs.
-    const createdLogs = await db
+    const createdLogs = await executor
       .insert(workoutLogs)
       .values(logs)
       .onConflictDoNothing({
@@ -303,7 +334,7 @@ export class WorkoutStorage {
     if (updateConditions.length > 0) {
       // Bolt Optimization: Consolidate multiple user-specific updates into a single bulk query
       // and use direct JOIN via .from() instead of inArray() subquery to prevent N+1 execution
-      await db
+      await executor
         .update(planDays)
         .set({ status: "completed" })
         .from(trainingPlans)
@@ -1124,23 +1155,9 @@ export class WorkoutStorage {
     return results.map((r) => r.workoutLog);
   }
 
-  /**
-   * Bulk-insert the synthesised sets a batch of device imports carries (see
-   * services/deviceActivitySets.ts).
-   *
-   * There is no unique constraint to lean on here — `exercise_sets` is keyed by
-   * a generated id and a log may legitimately hold many rows — so "exactly one
-   * synthesised set per log" is the CALLER's invariant, not the column's. The
-   * sync satisfies it by only passing logs its own INSERT just created; the
-   * backfill satisfies it with an anti-join against the same table. Anything
-   * else that calls this has to establish it too, because a second row for one
-   * log doubles that session in every set-derived panel.
-   */
-  async createDeviceActivitySets(rows: InsertExerciseSet[]): Promise<number> {
-    if (rows.length === 0) return 0;
-    const inserted = await db.insert(exerciseSets).values(rows).returning({ id: exerciseSets.id });
-    return inserted.length;
-  }
+  // Uses no instance state, so a module function bound here: the
+  // storage.workouts.createDeviceActivitySets() call and its mocks still work.
+  readonly createDeviceActivitySets = createDeviceActivitySets;
 
   async getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]> {
     const results = await db

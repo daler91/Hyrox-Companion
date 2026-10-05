@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
 import { inChunks, inSequence } from "@shared/inSequence";
-import { foods } from "@shared/schema";
-import { inArray } from "drizzle-orm";
+import { foods, users } from "@shared/schema";
+import { eq, inArray, ne, or } from "drizzle-orm";
 
 import { db } from "../../db";
 import { EMBEDDING_DIMENSIONS, generateEmbeddings } from "../../gemini/client";
@@ -140,9 +140,17 @@ export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: 
   );
   const existingHash = new Map(existing.rows.map((row) => [row.food_id, row.text_hash]));
 
+  // A private custom food's name and brand are its owner's data, and this
+  // cron runs for every athlete rather than behind aiConsentCheck, so they
+  // reach the embedding provider only while the owner consents to AI
+  // processing. Provider-cached rows and publicly shared custom foods are
+  // shared reference data. A private custom food with no owner left has
+  // nobody to consent and is skipped too. P14 (CODEBASE_ANALYSIS_2026-10-03)
   const candidates = await db
     .select({ id: foods.id, name: foods.name, brand: foods.brand })
     .from(foods)
+    .leftJoin(users, eq(users.id, foods.createdByUserId))
+    .where(or(ne(foods.source, "custom"), eq(foods.isPublic, true), eq(users.aiCoachEnabled, true)))
     .limit(CANDIDATE_SCAN_LIMIT);
 
   const pending = selectFoodsToEmbed(candidates, existingHash, limit);

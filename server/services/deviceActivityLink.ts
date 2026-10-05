@@ -77,14 +77,27 @@ export function pickDeviceMetrics(row: Partial<WorkoutLog>): DeviceMetrics {
   return out as DeviceMetrics;
 }
 
+/**
+ * The snapshot a link writes: DeviceActivitySnapshot, plus the value it wrote
+ * into each column it filled. Unlink reads a filled column against it to tell
+ * the recording's value from one the athlete has typed over it since
+ * (changedFilledColumns). Snapshots written before have none.
+ * D40 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+type LinkSnapshot = DeviceActivitySnapshot & {
+  filledValues?: Readonly<Record<string, unknown>>;
+};
+
 export function stravaSnapshot(
   raw: StravaActivitySummary,
   filledColumns: readonly string[],
-): DeviceActivitySnapshot {
+  filledValues?: Readonly<Record<string, unknown>>,
+): LinkSnapshot {
   return {
     provider: "strava",
     raw,
     filledColumns: [...filledColumns],
+    ...(filledValues === undefined ? {} : { filledValues: { ...filledValues } }),
     linkedAt: new Date().toISOString(),
   };
 }
@@ -210,7 +223,7 @@ export async function attachStravaActivityToLogInTx(
       stravaActivityId: String(input.raw.id),
       deviceLinkSource: input.linkSource,
       deviceLinkConfidence: input.confidence,
-      deviceActivity: stravaSnapshot(input.raw, filledColumns),
+      deviceActivity: stravaSnapshot(input.raw, filledColumns, fill),
       ...CLEARED_SUGGESTION,
     })
     .where(eq(workoutLogs.id, existing.id))
@@ -268,6 +281,7 @@ export async function createLogFromPlanDayWithStravaInTx(
   input: CreateFromPlanDayInput,
 ): Promise<WorkoutLog> {
   const { planDay, raw, metrics } = input;
+  const filled = Object.fromEntries(Object.entries(metrics).filter(([, value]) => value != null));
   const payload = {
     date: planDay.scheduledDate ?? raw.start_date_local.split("T")[0],
     focus: planDay.focus,
@@ -281,10 +295,7 @@ export async function createLogFromPlanDayWithStravaInTx(
     ...metrics,
     deviceLinkSource: input.linkSource,
     deviceLinkConfidence: input.confidence,
-    deviceActivity: stravaSnapshot(
-      raw,
-      Object.entries(metrics).flatMap(([col, value]) => (value == null ? [] : [col])),
-    ),
+    deviceActivity: stravaSnapshot(raw, Object.keys(filled), filled),
   };
   if (input.linkSource === "manual") {
     return await createWorkoutInTx(tx, payload, undefined, undefined, input.userId);
@@ -309,7 +320,8 @@ export async function createLogFromPlanDayWithStravaInTx(
       autoLinkRecordingOnly: true,
     })
     .returning();
-  const recordedSet = deviceActivitySetRow(log, await loadUnitPreferences(input.userId));
+  // On the transaction's own connection (D49, CODEBASE_ANALYSIS_2026-10-03).
+  const recordedSet = deviceActivitySetRow(log, await loadUnitPreferences(input.userId, tx));
   if (recordedSet) await tx.insert(exerciseSets).values(recordedSet);
   await syncPlanDayStatusFromWorkouts(planDay.id, input.userId, tx);
   return log;
@@ -560,6 +572,61 @@ export interface LinkCreatedLogContents {
 }
 
 /**
+ * What the recording supplied for each column its link filled on `log`: the
+ * value the link recorded writing (stravaSnapshot). Empty for a link made
+ * before links recorded them. Today's mapper output is no stand-in for those:
+ * the mapper has changed since (C9 doubled a run's cadence, M16 rescaled
+ * kilojoule calories), so an untouched older link would read as edited, kept
+ * on unlink with stale numbers beside the released row's. Such a link unwinds
+ * as it always did. D40 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function suppliedDeviceValues(log: WorkoutLog): ReadonlyMap<string, unknown> {
+  const snapshot: LinkSnapshot | null = log.deviceActivity;
+  const recorded = snapshot?.filledValues;
+  if (!snapshot || !recorded) return new Map();
+  const filled = new Set(snapshot.filledColumns);
+  return new Map(
+    Object.entries(recorded).filter(([col, value]) => filled.has(col) && value != null),
+  );
+}
+
+/** An instant from a Date, or from the ISO string a snapshot stores one as. */
+function instantOf(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  return typeof value === "string" ? Date.parse(value) : Number.NaN;
+}
+
+/** Whether a column still holds what the recording supplied, at the precision it is stored in. */
+function holdsSuppliedValue(current: unknown, supplied: unknown): boolean {
+  if (typeof current === "number" && typeof supplied === "number") {
+    return sameStoredReal(current, supplied);
+  }
+  if (current instanceof Date) return instantOf(current) === instantOf(supplied);
+  return current === supplied;
+}
+
+/**
+ * The columns the link filled on `log` that the athlete has changed since:
+ * they no longer hold what the recording supplied (`supplied`,
+ * suppliedDeviceValues). They are the athlete's now. Unlink nulled every
+ * filled column, so an RPE they changed from Strava's 6 to 8 left their log
+ * and went to the released recording's row. A column nothing records the
+ * supplied value of (suppliedDeviceValues) reads as unchanged, as every
+ * column did before.
+ * D40 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function changedFilledColumns(
+  log: WorkoutLog,
+  supplied: ReadonlyMap<string, unknown>,
+): ReadonlySet<string> {
+  const current = new Map(Object.entries(pickDeviceMetrics(log)));
+  const changed = [...supplied]
+    .filter(([col, value]) => !holdsSuppliedValue(current.get(col), value))
+    .map(([col]) => col);
+  return new Set(changed);
+}
+
+/**
  * Whether the athlete has put anything of their own on a plan-day log the
  * link created (isLinkCreatedLog: source "strava" + plan day, or an auto
  * link's log since moved off its day).
@@ -572,8 +639,9 @@ export interface LinkCreatedLogContents {
  * deleting it loses nothing, because the prescription is still on the plan
  * day and the recording comes back as its own row. But it is the day's
  * working log and as editable as any other, so once the athlete has entered
- * actual sets, an RPE, notes, a block score or, on an auto link's log, a
- * structure on it, deleting it destroyed their session with no undo (D11,
+ * actual sets, an RPE (or changed the one the recording filled, D40), notes,
+ * a block score or, on an auto link's log, a structure on it, deleting it
+ * destroyed their session with no undo (D11,
  * CODEBASE_ANALYSIS_2026-10-03). A note on the set an auto link synthesised
  * from the recording is the exception: it is about the recording, and unlink
  * hands it to the recording's own row whichever way the log goes
@@ -591,8 +659,10 @@ export function hasAthleteEdits(log: WorkoutLog, contents: LinkCreatedLogContent
     (log.accessory ?? null) !== (log.prescribedAccessory ?? null) ||
     (log.notes ?? null) !== (log.prescribedNotes ?? null) ||
     // Every metric the recording did not fill started NULL; a value there
-    // (an RPE above all) was typed here.
+    // (an RPE above all) was typed here. One it filled holds what the
+    // recording supplied until the athlete changes it (D40).
     Object.entries(pickDeviceMetrics(log)).some(([col, value]) => !filled.has(col) && value != null) ||
+    changedFilledColumns(log, suppliedDeviceValues(log)).size > 0 ||
     log.timeOfDayMin != null ||
     !log.countsAsTraining ||
     !keepsTheLinksTitleAndDate(log, planDay) ||
@@ -969,6 +1039,12 @@ interface UnwoundLog {
   /** The log unlink keeps; null when it deleted it. */
   log: WorkoutLog | null;
   recordingSetNotes: string | null;
+  /**
+   * The linked log as the release reads the recording off it: with the
+   * recording's own calories and RPE back where the athlete changed them on a
+   * log unlink keeps, which keeps theirs (asTheRecordingFilledIt).
+   */
+  recording: WorkoutLog;
 }
 
 /**
@@ -1021,7 +1097,27 @@ async function deleteLinkCreatedLog(
   return {
     log: null,
     recordingSetNotes: joinNotes(recordingSet?.notes, notesCarriedByManualLink(log, contents.planDay)),
+    recording: log,
   };
+}
+
+/**
+ * `log` with the recording's own value back in each column of `changed` that
+ * releaseStravaActivityInTx carries over from the linked log, calories and
+ * RPE (it rebuilds every other metric from the raw activity). The released
+ * row then gets the recording's value, and the athlete's stays on the log
+ * unlink keeps. D40 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function asTheRecordingFilledIt(
+  log: WorkoutLog,
+  supplied: ReadonlyMap<string, unknown>,
+  changed: ReadonlySet<string>,
+): WorkoutLog {
+  const recorded = (col: "calories" | "rpe", own: number | null): number | null => {
+    const value = supplied.get(col);
+    return changed.has(col) && typeof value === "number" ? value : own;
+  };
+  return { ...log, calories: recorded("calories", log.calories), rpe: recorded("rpe", log.rpe) };
 }
 
 /**
@@ -1042,8 +1138,15 @@ async function keepLinkedLog(
   // D12 (CODEBASE_ANALYSIS_2026-10-03)
   const taken = linkCreated ? await takeRecordingSet(tx, log) : null;
   if (taken) await rederiveAdherence(tx, log, taken.remaining);
+  // Only the columns that still hold what the recording supplied go back to
+  // NULL; one the athlete has changed since is theirs and stays (D40,
+  // CODEBASE_ANALYSIS_2026-10-03).
+  const supplied = suppliedDeviceValues(log);
+  const changed = changedFilledColumns(log, supplied);
   const reset = Object.fromEntries(
-    (log.deviceActivity?.filledColumns ?? []).map((col) => [col, null] as const),
+    (log.deviceActivity?.filledColumns ?? [])
+      .filter((col) => !changed.has(col))
+      .map((col) => [col, null] as const),
   );
   // An edited log the link created is the athlete's from here on: a manual
   // log (on the day, if it is still on one), so the timeline stops presenting
@@ -1074,7 +1177,11 @@ async function keepLinkedLog(
   // The recording is no longer this log's, so neither is its stream. (A log
   // unlink deletes takes the stream row with it, by cascade.)
   await storage.sessionStreams.deleteForLog(log.id, userId, tx);
-  return { log: kept, recordingSetNotes: taken?.notes ?? null };
+  return {
+    log: kept,
+    recordingSetNotes: taken?.notes ?? null,
+    recording: asTheRecordingFilledIt(log, supplied, changed),
+  };
 }
 
 export interface UnlinkResult {
@@ -1089,7 +1196,8 @@ export interface UnlinkResult {
  *
  * Two shapes of linked row exist and they unwind differently:
  *  - the athlete's own log (source "manual") that a link enriched: the
- *    filled metric columns go back to NULL and everything they typed stays;
+ *    filled metric columns go back to NULL and everything they typed stays,
+ *    a value they typed over a filled column included (D40);
  *  - a log the link CREATED (isLinkCreatedLog: source "strava" on a plan
  *    day, or moved off it since and marked autoLinkRecordingOnly): while it
  *    is still what the link built (see hasAthleteEdits) it holds nothing of
@@ -1137,7 +1245,7 @@ export async function unlinkDeviceActivity(input: {
 
     const standalone = await releaseStravaActivityInTx(
       tx,
-      log,
+      unwound.recording,
       userId,
       distanceUnit,
       unwound.recordingSetNotes,

@@ -19,11 +19,30 @@ function resolveSentryRelease(): string | undefined {
 // thrown error doesn't bring a workout/chat payload along for the ride.
 const BREADCRUMB_PAYLOAD_KEYS = ["body", "payload", "request_body", "response_body"] as const;
 
-function stripUrlQuery(url: unknown): unknown {
-  if (typeof url !== "string") return url;
+function withoutQuery(url: string): string {
   const queryStart = url.indexOf("?");
   if (queryStart === -1) return url;
   return `${url.slice(0, queryStart)}?[redacted]`;
+}
+
+function stripUrlQuery(url: unknown): unknown {
+  return typeof url === "string" ? withoutQuery(url) : url;
+}
+
+// Span/breadcrumb attributes that hold a full URL or request target, query
+// string included: OpenTelemetry's http conventions (old and new) plus
+// Sentry's `url`.
+const URL_ATTRIBUTE_KEYS = ["url", "http.url", "url.full", "http.target"] as const;
+// Attributes that ARE the query string (or the fragment). Sentry's outgoing
+// http/fetch breadcrumbs sanitize `url` but carry the raw query separately in
+// `http.query`, so a provider search term survives a url-only scrub (P11).
+const QUERY_ATTRIBUTE_KEYS = ["http.query", "url.query", "http.fragment"] as const;
+
+function scrubUrlAttributes(data: Record<string, unknown>): void {
+  for (const key of QUERY_ATTRIBUTE_KEYS) Reflect.deleteProperty(data, key);
+  for (const key of URL_ATTRIBUTE_KEYS) {
+    if (key in data) Reflect.set(data, key, stripUrlQuery(Reflect.get(data, key)));
+  }
 }
 
 type SentryRequest = NonNullable<Sentry.Event["request"]>;
@@ -35,6 +54,8 @@ function scrubRequest(request: SentryRequest): void {
   delete request.data;
   delete request.query_string;
   delete request.cookies;
+  // The query string also rides on the URL itself (P11).
+  if (typeof request.url === "string") request.url = withoutQuery(request.url);
   const headers = request.headers;
   if (headers) {
     // Scrub the same sensitive headers the pino logger redacts.
@@ -57,7 +78,7 @@ function scrubBreadcrumbs(breadcrumbs: SentryBreadcrumbs): void {
     for (const key of BREADCRUMB_PAYLOAD_KEYS) {
       if (key in data) delete data[key];
     }
-    if ("url" in data) data.url = stripUrlQuery(data.url);
+    scrubUrlAttributes(data);
   }
 }
 
@@ -91,6 +112,30 @@ export function scrubSentryEvent<T extends Sentry.Event>(event: T): T {
   return event;
 }
 
+/**
+ * Pure scrubber used by Sentry's `beforeSendTransaction` hook. `beforeSend`
+ * never sees performance transactions, so the sampled traces kept every query
+ * string: food-search terms (on the request and on the outbound provider
+ * calls) and the Strava OAuth `code`/`state`, whose state embeds the Clerk
+ * userId (P11 (CODEBASE_ANALYSIS_2026-10-03)). Runs the error-event scrubber,
+ * then strips the query from every URL-bearing field a transaction adds: its
+ * name, the root span's attributes, and each child span's attributes and, for
+ * http spans, the description ("GET https://host/path?query").
+ */
+export function scrubSentryTransaction<T extends Sentry.Event>(event: T): T {
+  scrubSentryEvent(event);
+  if (typeof event.transaction === "string") event.transaction = withoutQuery(event.transaction);
+  const traceData = event.contexts?.trace?.data;
+  if (traceData) scrubUrlAttributes(traceData);
+  for (const span of event.spans ?? []) {
+    if (span.data) scrubUrlAttributes(span.data);
+    if (span.description && span.op?.startsWith("http")) {
+      span.description = withoutQuery(span.description);
+    }
+  }
+  return event;
+}
+
 export function configureObservability(deps: { init?: typeof Sentry.init; getClient?: typeof Sentry.getClient } = {}): void {
   const init = deps.init ?? Sentry.init;
   const getClient = deps.getClient ?? Sentry.getClient;
@@ -114,6 +159,7 @@ export function configureObservability(deps: { init?: typeof Sentry.init; getCli
     sendDefaultPii: false,
     tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
     beforeSend: scrubSentryEvent,
+    beforeSendTransaction: scrubSentryTransaction,
   });
 
   const client = getClient();

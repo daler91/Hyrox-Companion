@@ -12,6 +12,8 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { setupErrorReporting, stopErrorReporting } from "@/lib/errorReporting";
+import { __resetErrorReportingConsentSessionForTests } from "@/lib/errorReportingConsent";
+import { __resetPrivacyConsentSessionForTests } from "@/lib/privacyConsent";
 
 import { PRIVACY_BANNER_HEIGHT_VAR, PrivacyConsentBanner } from "./PrivacyConsentBanner";
 
@@ -24,6 +26,24 @@ vi.mock("@sentry/react", async (importOriginal) => {
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
 const ERROR_REPORTING_CONSENT_KEY = "fitai-error-reporting-consent-v1";
+
+/** A browser that refuses localStorage outright (blocked site data, hardened mode). */
+function denyLocalStorage() {
+  const deny = () => {
+    throw new DOMException("Denied", "SecurityError");
+  };
+  vi.stubGlobal("localStorage", {
+    getItem: vi.fn(deny),
+    setItem: vi.fn(deny),
+    removeItem: vi.fn(deny),
+  });
+}
+
+/** The session-only consent answers kept when storage refused them (P8). */
+function resetSessionConsent() {
+  __resetPrivacyConsentSessionForTests();
+  __resetErrorReportingConsentSessionForTests();
+}
 
 type BlockingLayer = "dialog" | "sheet" | "alert";
 
@@ -73,6 +93,7 @@ function BlockingLayerHarness({ layer }: Readonly<{ layer: BlockingLayer }>) {
 describe("PrivacyConsentBanner", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetSessionConsent();
   });
 
   afterEach(() => {
@@ -153,21 +174,19 @@ describe("PrivacyConsentBanner", () => {
     });
   });
 
-  it("treats denied localStorage as acknowledged consent", () => {
-    vi.stubGlobal("localStorage", {
-      getItem: vi.fn(() => {
-        throw new DOMException("Denied", "SecurityError");
-      }),
-      setItem: vi.fn(() => {
-        throw new DOMException("Denied", "SecurityError");
-      }),
-      removeItem: vi.fn(() => {
-        throw new DOMException("Denied", "SecurityError");
-      }),
-    });
+  // P8 (CODEBASE_ANALYSIS_2026-10-03): denied storage used to read as
+  // acknowledged, so the notice never showed. It now asks, and the answer holds
+  // for the rest of the session even though it can't be saved.
+  it("still shows the notice when localStorage is denied, and keeps it dismissed for the session", () => {
+    denyLocalStorage();
+    const first = render(<PrivacyConsentBanner />);
+    expect(screen.getByLabelText("Privacy notice")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByTestId("btn-consent-ack"));
+    expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
+
+    first.unmount();
     render(<PrivacyConsentBanner />);
-
     expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
   });
 
@@ -194,6 +213,7 @@ describe("PrivacyConsentBanner", () => {
 describe("PrivacyConsentBanner with error reporting wired up", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetSessionConsent();
     vi.mocked(initSentry).mockClear();
     vi.stubEnv("VITE_SENTRY_DSN", "https://public@o0.ingest.sentry.io/0");
   });
@@ -201,6 +221,7 @@ describe("PrivacyConsentBanner with error reporting wired up", () => {
   afterEach(() => {
     stopErrorReporting();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("never starts Sentry when analytics are declined on first load", () => {
@@ -214,6 +235,31 @@ describe("PrivacyConsentBanner with error reporting wired up", () => {
   });
 
   it("starts Sentry once the notice is accepted", () => {
+    setupErrorReporting();
+    render(<PrivacyConsentBanner />);
+    expect(initSentry).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("btn-consent-ack"));
+
+    expect(initSentry).toHaveBeenCalledTimes(1);
+  });
+
+  // P8: with storage denied, Sentry used to start at boot with no notice shown
+  // and no way to save an opt-out.
+  it("holds Sentry until the notice is answered when localStorage is denied, and honours a Decline", () => {
+    denyLocalStorage();
+    setupErrorReporting();
+    render(<PrivacyConsentBanner />);
+    expect(initSentry).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("btn-consent-decline"));
+
+    expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
+    expect(initSentry).not.toHaveBeenCalled();
+  });
+
+  it("starts Sentry once the notice is accepted when localStorage is denied", () => {
+    denyLocalStorage();
     setupErrorReporting();
     render(<PrivacyConsentBanner />);
     expect(initSentry).not.toHaveBeenCalled();

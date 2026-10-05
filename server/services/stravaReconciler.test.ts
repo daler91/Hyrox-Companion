@@ -307,6 +307,18 @@ describe("reconcileStravaActivities", () => {
     });
   });
 
+  it("writes a standalone import and its set in one transaction", async () => {
+    // D47 (CODEBASE_ANALYSIS_2026-10-03): written apart, a fault between the
+    // two left the import with no set for good, since later syncs dedupe it.
+    await reconcileStravaActivities(USER, [item(stravaRun())], silentLog);
+
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    const [, logsTx] = vi.mocked(storage.workouts.createWorkoutLogs).mock.calls[0];
+    const [, setsTx] = vi.mocked(storage.workouts.createDeviceActivitySets).mock.calls[0];
+    expect(logsTx).toBeDefined();
+    expect(setsTx).toBe(logsTx);
+  });
+
   it("writes no set for an enriched log — the athlete's own session describes itself", async () => {
     const logged = makeWorkoutLog({ id: "log-1", date: DATE, focus: "Easy Run", duration: 45 });
     vi.mocked(storage.workouts.listDeviceUnlinkedLogsForDates).mockResolvedValue([logged]);

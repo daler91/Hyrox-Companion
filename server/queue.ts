@@ -372,6 +372,92 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
   }
 }
 
+/**
+ * Whether the athlete still consents to AI processing. The routes that enqueue
+ * AI jobs are consent-gated (aiConsentCheck), but a job runs later, and the
+ * athlete may have switched AI off in between. A handler that sends their data
+ * to a provider re-checks at run time and skips, rather than fails, when the
+ * consent is gone. P14 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function userHasAiConsent(userId: string): Promise<boolean> {
+  const user = await storage.users.getUser(userId);
+  return user?.aiCoachEnabled === true;
+}
+
+/** Shown on the plan when consent was withdrawn while its generation was queued. */
+export const PLAN_GENERATION_CONSENT_OFF_MESSAGE =
+  "AI coaching was turned off before this plan was generated. Turn it back on in Settings to generate a plan.";
+
+/** Chunk and embed one coaching material. Exported for unit tests. */
+export async function processEmbedCoachingMaterialJob(job: Job): Promise<void> {
+  const identifiers = getEmbedJobIdentifiers(job);
+  if (!identifiers) {
+    // jobId is a UUID and
+    // dataKeys are field names (not values); no PII or secrets.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
+    return;
+  }
+  const { materialId, userId } = identifiers;
+  // jobId is a UUID and materialId an opaque id; no material content.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ jobId: job.id, materialId }, "[pg-boss] Processing embed-coaching-material job");
+  try {
+    const material = await storage.coaching.getCoachingMaterial(materialId, userId);
+    if (!material) {
+      // jobId is a UUID and materialId an opaque id; no material content.
+      // bearer:disable javascript_lang_logger_leak
+      logger.warn({ jobId: job.id, materialId }, "[pg-boss] Material not found, skipping embed job");
+      return;
+    }
+    if (!(await userHasAiConsent(userId))) {
+      // jobId is a UUID and materialId an opaque id; no material content.
+      // bearer:disable javascript_lang_logger_leak
+      logger.info({ jobId: job.id, materialId }, "[pg-boss] AI processing is off for this athlete, skipping embed job");
+      return;
+    }
+    await runWithTimeout("embed-coaching-material", () => embedCoachingMaterial(material));
+    // jobId is a UUID and materialId an opaque id; no material content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ jobId: job.id, materialId }, "[pg-boss] Completed embed-coaching-material job");
+  } catch (error) {
+    // jobId is a UUID and err the embedding/DB failure; no material content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed embed-coaching-material job");
+    throw error; // Let pg-boss handle the retry
+  }
+}
+
+/** Generate a queued training plan. Exported for unit tests. */
+export async function processPlanGenerationJob(job: Job): Promise<void> {
+  const { planId, userId, input } = job.data as { planId: string; userId: string; input: GeneratePlanInput };
+  // jobId is a UUID and planId/userId opaque ids; the plan input is not logged.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ jobId: job.id, planId, userId }, "[pg-boss] Processing plan-generation job");
+  try {
+    if (!(await userHasAiConsent(userId))) {
+      // Not a job failure, but the plan must still leave `pending`: an
+      // in-flight stub holds the athlete's one generation slot.
+      await storage.plans.updateGenerationStatus(planId, "failed", PLAN_GENERATION_CONSENT_OFF_MESSAGE);
+      // jobId is a UUID and planId an opaque id; no athlete input.
+      // bearer:disable javascript_lang_logger_leak
+      logger.info({ jobId: job.id, planId }, "[pg-boss] AI processing is off for this athlete, skipping plan-generation job");
+      return;
+    }
+    await runWithTimeout("plan-generation", (signal) =>
+      executePlanGeneration(planId, input, userId, signal),
+    );
+    // jobId is a UUID and planId an opaque id; no athlete input.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ jobId: job.id, planId }, "[pg-boss] Completed plan-generation job");
+  } catch (error) {
+    // jobId is a UUID, planId an opaque id and err the generation failure.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err: error, jobId: job.id, planId }, "[pg-boss] Failed plan-generation job");
+    throw error;
+  }
+}
+
 const QUEUE_START_TIMEOUT_MS = 30_000;
 
 export async function startQueue() {
@@ -430,30 +516,7 @@ export async function startQueue() {
 
   // Register worker for embed-coaching-material
   await queue.work("embed-coaching-material", async (jobs: Job[]) => {
-    await runBatch("embed-coaching-material", jobs, async (job) => {
-      const identifiers = getEmbedJobIdentifiers(job);
-      if (!identifiers) {
-        // jobId is a UUID and
-        // dataKeys are field names (not values); no PII or secrets.
-        // bearer:disable javascript_lang_logger_leak
-        logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
-        return;
-      }
-      const { materialId, userId } = identifiers;
-      logger.info({ jobId: job.id, materialId }, "[pg-boss] Processing embed-coaching-material job");
-      try {
-        const material = await storage.coaching.getCoachingMaterial(materialId, userId);
-        if (!material) {
-          logger.warn({ jobId: job.id, materialId }, "[pg-boss] Material not found, skipping embed job");
-          return;
-        }
-        await runWithTimeout("embed-coaching-material", () => embedCoachingMaterial(material));
-        logger.info({ jobId: job.id, materialId }, "[pg-boss] Completed embed-coaching-material job");
-      } catch (error) {
-        logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed embed-coaching-material job");
-        throw error; // Let pg-boss handle the retry
-      }
-    });
+    await runBatch("embed-coaching-material", jobs, processEmbedCoachingMaterialJob);
   });
 
   await registerUserEmailWorker({
@@ -488,19 +551,7 @@ export async function startQueue() {
 
   await queue.createQueue("plan-generation");
   await queue.work("plan-generation", async (jobs: Job[]) => {
-    await runBatch("plan-generation", jobs, async (job) => {
-      const { planId, userId, input } = job.data as { planId: string; userId: string; input: GeneratePlanInput };
-      logger.info({ jobId: job.id, planId, userId }, "[pg-boss] Processing plan-generation job");
-      try {
-        await runWithTimeout("plan-generation", (signal) =>
-          executePlanGeneration(planId, input, userId, signal),
-        );
-        logger.info({ jobId: job.id, planId }, "[pg-boss] Completed plan-generation job");
-      } catch (error) {
-        logger.error({ err: error, jobId: job.id, planId }, "[pg-boss] Failed plan-generation job");
-        throw error;
-      }
-    });
+    await runBatch("plan-generation", jobs, processPlanGenerationJob);
   });
 
   // Midnight analytics recompute; see processRecomputeAnalyticsJob.

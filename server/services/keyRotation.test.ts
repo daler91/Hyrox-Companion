@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
-import { getTableName } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { getTableName, type SQL } from "drizzle-orm";
+import { PgDialect, type PgTable } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -19,9 +19,19 @@ const KEY_V2 = randomBytes(32).toString("hex");
 // that used to abort the remainder of the sweep.
 const CORRUPT_V1 = `v1:${"ab".repeat(12)}:${"cd".repeat(16)}:deadbeef`;
 
+const dialect = new PgDialect();
+
 let stravaRows: Record<string, unknown>[] = [];
 let garminRows: Record<string, unknown>[] = [];
-let updates: { table: unknown; payload: Record<string, unknown> }[] = [];
+interface RecordedUpdate {
+  table: unknown;
+  payload: Record<string, unknown>;
+  where: { sql: string; params: unknown[] };
+}
+let updates: RecordedUpdate[] = [];
+// Row ids whose compare-and-swap UPDATE matches nothing, as when a concurrent
+// writer rewrote the credentials between the sweep's read and its write.
+let rewrittenMidSweep = new Set<string>();
 let withPgAdvisoryLock: ReturnType<typeof vi.fn>;
 let selectSpy: ReturnType<typeof vi.fn>;
 let mockLogger: {
@@ -63,10 +73,16 @@ async function loadKeyRotation(envOverrides: Record<string, unknown> = {}) {
       }))),
       update: vi.fn((table: unknown) => ({
         set: (payload: Record<string, unknown>) => ({
-          where: () => {
-            updates.push({ table, payload });
-            return Promise.resolve();
-          },
+          where: (condition: SQL) => ({
+            returning: () => {
+              const where = dialect.sqlToQuery(condition);
+              // The row id is the first bound parameter of the WHERE.
+              const [id] = where.params;
+              if (rewrittenMidSweep.has(String(id))) return Promise.resolve([]);
+              updates.push({ table, payload, where });
+              return Promise.resolve([{ id }]);
+            },
+          }),
         }),
       })),
     },
@@ -80,6 +96,7 @@ beforeEach(() => {
   stravaRows = [];
   garminRows = [];
   updates = [];
+  rewrittenMidSweep = new Set();
   mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   withPgAdvisoryLock = vi.fn(async (_pool, _opts, run: () => Promise<unknown>) => ({
     acquired: true,
@@ -116,7 +133,7 @@ describe("reencryptStoredCredentials", () => {
 
     const summary = await reencryptStoredCredentials();
 
-    expect(summary).toEqual({ stravaUpdated: 1, garminUpdated: 1, failed: 0 });
+    expect(summary).toEqual({ stravaUpdated: 1, garminUpdated: 1, failed: 0, changedDuringSweep: 0 });
     expect(updates).toHaveLength(2);
     const stravaPayload = updates[0].payload;
     expect(String(stravaPayload.accessToken)).toMatch(/^v2:/);
@@ -139,7 +156,7 @@ describe("reencryptStoredCredentials", () => {
 
     const summary = await reencryptStoredCredentials();
 
-    expect(summary).toEqual({ stravaUpdated: 0, garminUpdated: 0, failed: 0 });
+    expect(summary).toEqual({ stravaUpdated: 0, garminUpdated: 0, failed: 0, changedDuringSweep: 0 });
     expect(updates).toHaveLength(0);
   });
 
@@ -160,7 +177,7 @@ describe("reencryptStoredCredentials", () => {
 
     const summary = await reencryptStoredCredentials();
 
-    expect(summary).toEqual({ stravaUpdated: 0, garminUpdated: 1, failed: 0 });
+    expect(summary).toEqual({ stravaUpdated: 0, garminUpdated: 1, failed: 0, changedDuringSweep: 0 });
     expect(updates).toHaveLength(1);
     const payload = updates[0].payload;
     expect(Object.keys(payload).sort()).toEqual([
@@ -182,7 +199,7 @@ describe("reencryptStoredCredentials", () => {
 
     const summary = await reencryptStoredCredentials();
 
-    expect(summary).toEqual({ stravaUpdated: 0, garminUpdated: 0, failed: 0 });
+    expect(summary).toEqual({ stravaUpdated: 0, garminUpdated: 0, failed: 0, changedDuringSweep: 0 });
     expect(updates).toHaveLength(0);
     expect(mockLogger.warn).not.toHaveBeenCalled();
   });
@@ -209,11 +226,79 @@ describe("reencryptStoredCredentials", () => {
 
     // Pre-fix this was { stravaUpdated: 0, garminUpdated: 0 } with a thrown
     // sweep — the poison row aborted everything after it, garmin included.
-    expect(summary).toEqual({ stravaUpdated: 1, garminUpdated: 1, failed: 1 });
+    expect(summary).toEqual({ stravaUpdated: 1, garminUpdated: 1, failed: 1, changedDuringSweep: 0 });
     expect(updates).toHaveLength(2);
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ table: "strava_connections", id: "bad" }),
       expect.stringContaining("failed re-encryption"),
+    );
+  });
+
+  // D42 (CODEBASE_ANALYSIS_2026-10-03): the sweep writes from a snapshot, and
+  // the advisory lock does not fence the request-path writers, so each UPDATE
+  // must only land while the row still holds the ciphertext that was read.
+  it("makes each UPDATE a compare-and-swap on the exact ciphertext it read", async () => {
+    const acc = await makeV1Cipher("strava-access");
+    const ref = await makeV1Cipher("strava-refresh");
+    const email = await makeV1Cipher("a@example.com");
+    const pw = await makeV1Cipher("pw");
+    const { reencryptStoredCredentials } = await loadKeyRotation();
+    stravaRows = [{ id: "s1", accessToken: acc, refreshToken: ref }];
+    garminRows = [
+      {
+        id: "g1",
+        encryptedEmail: email,
+        encryptedPassword: pw,
+        encryptedOauth1Token: null,
+        encryptedOauth2Token: null,
+      },
+    ];
+
+    await reencryptStoredCredentials();
+
+    expect(updates).toHaveLength(2);
+    const [stravaUpdate, garminUpdate] = updates;
+    expect(stravaUpdate.where.sql).toContain('"strava_connections"."access_token" = $2');
+    expect(stravaUpdate.where.sql).toContain('"strava_connections"."refresh_token" = $3');
+    expect(stravaUpdate.where.params).toEqual(["s1", acc, ref]);
+    expect(garminUpdate.where.sql).toContain('"garmin_connections"."encrypted_email" = $2');
+    expect(garminUpdate.where.sql).toContain('"garmin_connections"."encrypted_password" = $3');
+    // A column read as null must still be null: credentials stored after the
+    // read are not overwritten with the snapshot's null.
+    expect(garminUpdate.where.sql).toContain('"garmin_connections"."encrypted_oauth1_token" is null');
+    expect(garminUpdate.where.sql).toContain('"garmin_connections"."encrypted_oauth2_token" is null');
+    expect(garminUpdate.where.params).toEqual(["g1", email, pw]);
+  });
+
+  it("counts a row rewritten mid-sweep as changed, not updated or failed, and carries on", async () => {
+    const rotated = await makeV1Cipher("strava-access");
+    const other = await makeV1Cipher("other-access");
+    const cleared = await makeV1Cipher("g@example.com");
+    const { maybeReencryptOnBoot } = await loadKeyRotation({ ENCRYPTION_REENCRYPT_ON_BOOT: "true" });
+    stravaRows = [
+      { id: "s-rotated", accessToken: rotated, refreshToken: null },
+      { id: "s-other", accessToken: other, refreshToken: null },
+    ];
+    garminRows = [
+      {
+        id: "g-cleared",
+        encryptedEmail: cleared,
+        encryptedPassword: null,
+        encryptedOauth1Token: null,
+        encryptedOauth2Token: null,
+      },
+    ];
+    rewrittenMidSweep = new Set(["s-rotated", "g-cleared"]);
+
+    await maybeReencryptOnBoot();
+
+    expect(updates.map((update) => update.where.params.at(0))).toEqual(["s-other"]);
+    // A lost compare-and-swap is expected concurrency, not a failure: it is
+    // counted in the summary line, which stays at info.
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ stravaUpdated: 1, garminUpdated: 0, failed: 0, changedDuringSweep: 2 }),
+      "Re-encrypted stored credentials to current key version",
     );
   });
 

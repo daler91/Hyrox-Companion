@@ -82,9 +82,10 @@ export class CoachingStorage {
    * production `document_chunks` lives on `vectorPool`, a SEPARATE Postgres
    * instance with no foreign keys, so the main-DB cascade on
    * `coaching_materials` cannot reach it — without this call the deleted
-   * material's text and embeddings stay at rest and keep feeding RAG retrieval
-   * (which filters by user_id only). Scoped by userId as belt-and-braces so a
-   * caller can never purge another user's chunks via a guessed material id.
+   * material's text and embeddings stay at rest (retrieval drops chunks whose
+   * material is gone, but only this removes them). Scoped by userId as
+   * belt-and-braces so a caller can never purge another user's chunks via a
+   * guessed material id.
    */
   async deleteChunksByMaterialId(materialId: string, userId: string): Promise<void> {
     await vectorPool.query(`DELETE FROM document_chunks WHERE material_id = $1 AND user_id = $2`, [

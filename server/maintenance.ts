@@ -13,6 +13,7 @@ import { logger } from "./logger";
 import { assertCriticalTablesExist, assertSchemaColumnsExist, isBenignIdempotencyError } from "./migrationGuards";
 import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
+import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 import { vectorPool } from "./vectorDb";
 
 export async function ensurePgvectorExtension() {
@@ -333,8 +334,12 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Mark missed days skipped");
   }
+  // Only flags past the cron's stale threshold: a replica booting in a rolling
+  // deploy must not clear another replica's in-flight auto-coach run, or the
+  // client stops polling before the coach's edits land. D52
+  // (CODEBASE_ANALYSIS_2026-10-03)
   try {
-    const reset = await storage.users.resetStaleAutoCoaching();
+    const reset = await storage.users.resetStaleAutoCoaching(STALE_AUTO_COACHING_THRESHOLD_MS);
     if (reset > 0) logger.info({ context: "db", reset }, "Reset stale isAutoCoaching flags on startup");
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Reset stale isAutoCoaching skipped");

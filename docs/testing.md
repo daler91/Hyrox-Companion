@@ -588,6 +588,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 - **Name:** Post-Migration Verification
 - **Triggers:** Manual (`workflow_dispatch`)
 - **Steps:** Applies migrations to Neon database via `pnpm run db:migrate`, then runs `post-migration.integration.test.ts` against the real Neon database to verify schema correctness.
+- **Push-managed production:** dispatch with `ledger: push` and `sql_files` naming the migration files to apply (see `docs/operations/pending-manual-steps.md`). It skips `drizzle-kit migrate`, which fails at 0000 on a database built by `drizzle-kit push`, applies each named file with `psql` in its own transaction, and skips the test's migration-ledger count (D24).
 
 ### 5. Build (`build.yml`)
 

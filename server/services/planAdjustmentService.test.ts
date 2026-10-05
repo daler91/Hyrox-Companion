@@ -41,7 +41,7 @@ vi.mock("../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
     workouts: { getExerciseSetsByPlanDay: vi.fn(), getExerciseSetsByPlanDays: vi.fn() },
-    plans: { getPlanDay: vi.fn(), getPlanDaysByIds: vi.fn(), updatePlanDay: vi.fn() },
+    plans: { getPlanDay: vi.fn(), getPlanDaysByIds: vi.fn(), lockPlanDaysWithSets: vi.fn(), updatePlanDay: vi.fn() },
     timeline: { getUpcomingPlannedDays: vi.fn() },
     planProposals: {
       create: vi.fn(),
@@ -147,6 +147,12 @@ beforeEach(() => {
     hrMedicationDetected: false,
   });
   vi.mocked(getStructuredApplyBlocker).mockResolvedValue(null);
+  // The apply's locked re-read sees what the unlocked check saw, unless a
+  // test says the plan changed in between.
+  vi.mocked(storage.plans.lockPlanDaysWithSets).mockImplementation(async (dayIds, userId) => ({
+    days: await storage.plans.getPlanDaysByIds([...dayIds], userId),
+    setsByDay: await storage.workouts.getExerciseSetsByPlanDays([...dayIds], userId),
+  }));
   vi.mocked(storage.planProposals.create).mockImplementation(async (row) => ({
     id: "prop-1",
     status: "pending",
@@ -494,22 +500,22 @@ describe("applyPlanAdjustmentProposal", () => {
     expect(result).toMatchObject({ applied: false, reason: "not_pending" });
   });
 
-  it("invalidates the proposal when a day's prescription changed since proposing", async () => {
+  const staleDay1 = { reason: "stale", staleChanges: [{ planDayId: "day-1", dayLabel: "Thu Jul 16 — Tempo Run" }] };
+  it.each([
+    ["invalidates the proposal", proposalRow([], { status: "invalidated" }), staleDay1],
+    // Another apply of it won, which is why the day changed: nothing pending is left to invalidate.
+    ["reports not_pending when it was resolved elsewhere first", NO_ROW, { reason: "not_pending" }],
+  ])("%s when a day's prescription changed since proposing", async (_label, resolved, expected) => {
     const day = planDayRow({ mainWorkout: "SOMETHING EDITED MEANWHILE" });
     const change = enrichedChange(planDayRow()); // baseline fingerprint from the ORIGINAL day
     vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
     vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(
-      new Map([["day-1", []]]),
-    );
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([["day-1", []]]));
+    vi.mocked(storage.planProposals.resolve).mockResolvedValueOnce(resolved);
 
     const result = await applyPlanAdjustmentProposal("user-1", "prop-1");
 
-    expect(result).toMatchObject({
-      applied: false,
-      reason: "stale",
-      staleChanges: [{ planDayId: "day-1", dayLabel: "Thu Jul 16 — Tempo Run" }],
-    });
+    expect(result).toMatchObject({ applied: false, ...expected });
     expect(storage.planProposals.resolve).toHaveBeenCalledWith("prop-1", "user-1", "invalidated");
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
   });
@@ -710,6 +716,76 @@ describe("applyPlanAdjustmentProposal", () => {
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
     // Proposal is NOT invalidated — a retry may succeed.
     expect(storage.planProposals.resolve).not.toHaveBeenCalled();
+  });
+
+  describe("a day edited while the re-parse runs (D45)", () => {
+    const rowing = { id: "set-1", exerciseName: "rowing", category: "functional", setNumber: 1, sortOrder: 0 };
+
+    function primeReparse() {
+      const scenario = mockStructuredApplyScenario();
+      vi.mocked(parseStructuredPlanDaySuggestionRows).mockResolvedValue([
+        { planDayId: "day-1", exerciseName: "ski erg", category: "functional", setNumber: 1 },
+      ]);
+      mockUpdatesStick([scenario.day]);
+      vi.mocked(storage.planProposals.markApplied).mockResolvedValue(proposalRow([], { status: "applied" }));
+      return scenario;
+    }
+
+    const stale = { reason: "stale", staleChanges: [{ planDayId: "day-1" }] };
+    const invalidated = { resolved: proposalRow([], { status: "invalidated" }), expected: stale };
+    const winner = planDayRow({ mainWorkout: "Full Hyrox class session" });
+    it.each([
+      ["its text", { day: planDayRow({ notes: "Moved to the evening" }), sets: [rowing], ...invalidated }],
+      ["its exercise table", { day: planDayRow(), sets: [{ ...rowing, setNumber: 2 }], ...invalidated }],
+      // Another apply of it won meanwhile: that write is the change, and it
+      // left nothing pending to invalidate, so this is not_pending, not stale.
+      ["another apply of it", { day: winner, sets: [], resolved: NO_ROW, expected: { reason: "not_pending" } }],
+    ])("checks the day again under the lock, and writes nothing when %s changed", async (_label, edited) => {
+      primeReparse();
+      const setsByDay = new Map([["day-1", edited.sets as never]]);
+      vi.mocked(storage.plans.lockPlanDaysWithSets).mockResolvedValue({ days: [edited.day], setsByDay });
+      vi.mocked(storage.planProposals.resolve).mockResolvedValueOnce(edited.resolved);
+
+      const result = await applyPlanAdjustmentProposal("user-1", "prop-1");
+
+      expect(result).toMatchObject({ applied: false, ...edited.expected });
+      // Locked inside the apply's transaction, after the AI parse, which no
+      // transaction is held across.
+      expect(storage.plans.lockPlanDaysWithSets).toHaveBeenCalledWith(["day-1"], "user-1", dbMockState.tx);
+      const [parseOrder] = vi.mocked(parseStructuredPlanDaySuggestionRows).mock.invocationCallOrder;
+      const [lockOrder] = vi.mocked(storage.plans.lockPlanDaysWithSets).mock.invocationCallOrder;
+      expect(parseOrder).toBeLessThan(lockOrder);
+      expect(storage.planProposals.resolve).toHaveBeenCalledWith("prop-1", "user-1", "invalidated", dbMockState.tx);
+      expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+      expect(applyStructuredPlanDaySuggestionRows).not.toHaveBeenCalled();
+      expect(storage.planProposals.markApplied).not.toHaveBeenCalled();
+      expect(invalidateTrainingContext).not.toHaveBeenCalled();
+    });
+
+    it("records the undo from the locked rows, not from the first read", async () => {
+      const { day } = primeReparse();
+      // The athlete eased the day's RPE meanwhile: not part of the
+      // prescription the proposal was checked against, so the apply goes on.
+      const locked = planDayRow({ expectedRpe: 6 });
+      vi.mocked(storage.plans.lockPlanDaysWithSets).mockResolvedValue({
+        days: [locked],
+        setsByDay: new Map([["day-1", [rowing] as never]]),
+      });
+      mockUpdatesStick([locked]);
+      const change = enrichedChange(day, {
+        structured: true,
+        updatedFields: { mainWorkout: "Full Hyrox class session", expectedRpe: 5 },
+        baseline: { ...enrichedChange(day).baseline, fingerprint: fingerprintFor(day, [rowing]) },
+      });
+      vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
+
+      expect(await applyPlanAdjustmentProposal("user-1", "prop-1")).toEqual({ applied: true, changeCount: 1 });
+
+      const [, , applyUndo] = vi.mocked(storage.planProposals.markApplied).mock.calls[0];
+      // An undo puts back the athlete's 6, not the blank the first read saw.
+      expect(applyUndo.days[0].fields.expectedRpe).toEqual({ before: 6, after: 5 });
+      expect(applyUndo.days[0].sets?.before).toEqual([expect.objectContaining({ id: "set-1" })]);
+    });
   });
 });
 

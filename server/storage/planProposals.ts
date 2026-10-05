@@ -5,9 +5,23 @@ import {
   type PlanProposalApplyUndo,
   type PlanProposalStatus,
 } from "@shared/schema";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
-import { db, type DbExecutor } from "../db";
+import { db, type DbExecutor, type Tx } from "../db";
+
+/**
+ * Serialize one athlete's proposal creates for the rest of the transaction
+ * (D51, CODEBASE_ANALYSIS_2026-10-03). Without it two coach turns at once
+ * both supersede nothing (neither sees the other's uncommitted insert) and
+ * both insert. Under the lock the second create's UPDATE runs after the
+ * first one commits, so it supersedes that proposal and only the last one
+ * stays pending. uq_plan_adjustment_proposals_user_pending backs it in the
+ * database.
+ */
+async function lockProposalCreates(tx: Tx, userId: string): Promise<void> {
+  const lockKey = `plan_proposals:${userId}`;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+}
 
 /**
  * The athlete's proposals applied since `since`, the ones undone since
@@ -100,15 +114,16 @@ async function markProposalReverted(
 /**
  * Conversational plan-adjustment proposals. Invariant: at most one `pending`
  * proposal per user — creating a new one supersedes any pending predecessor
- * in the same transaction, and `resolve` is guarded by `status='pending'` so
- * concurrent apply/dismiss races lose cleanly (rowCount 0) instead of
- * double-writing.
+ * in the same transaction, under a per-user lock, and a partial unique index
+ * enforces it — and `resolve` is guarded by `status='pending'` so concurrent
+ * apply/dismiss races lose cleanly (rowCount 0) instead of double-writing.
  */
 export class PlanProposalStorage {
   async create(
     proposal: Omit<InsertPlanAdjustmentProposal, "id" | "status" | "createdAt" | "resolvedAt">,
   ): Promise<PlanAdjustmentProposal> {
     return await db.transaction(async (tx) => {
+      await lockProposalCreates(tx, proposal.userId);
       await tx
         .update(planAdjustmentProposals)
         .set({ status: "superseded", resolvedAt: new Date() })
@@ -124,6 +139,8 @@ export class PlanProposalStorage {
   }
 
   async getPending(userId: string): Promise<PlanAdjustmentProposal | undefined> {
+    // Newest first, so a database that still holds two pending proposals
+    // (the index not yet pushed) always answers with the same one (D51).
     const [row] = await db
       .select()
       .from(planAdjustmentProposals)
@@ -133,6 +150,7 @@ export class PlanProposalStorage {
           eq(planAdjustmentProposals.status, "pending"),
         ),
       )
+      .orderBy(desc(planAdjustmentProposals.createdAt), desc(planAdjustmentProposals.id))
       .limit(1);
     return row;
   }

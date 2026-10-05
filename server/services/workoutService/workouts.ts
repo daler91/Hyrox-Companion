@@ -4,6 +4,7 @@ import {
   exerciseSets,
   type InsertWorkoutLog,
   type ParsedExercise,
+  type PlanDay,
   planDays,
   type StructureBlockInput,
   type StructureSetRelink,
@@ -14,7 +15,7 @@ import {
   type WorkoutLogDeviceLinkColumns,
   workoutLogs,
 } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
@@ -137,8 +138,13 @@ async function insertClientSuppliedExercises(
 ): Promise<ExerciseSet[]> {
   // The client sends what the athlete typed, in the athlete's own display unit
   // — this path does no conversion of its own and never did. The row builder
-  // records which unit that was (audit L4).
-  const rows = expandExercisesToSetRows(exercises, workoutLogId, await loadUnitPreferences(userId));
+  // records which unit that was (audit L4). Read on the transaction's own
+  // connection (D49, CODEBASE_ANALYSIS_2026-10-03).
+  const rows = expandExercisesToSetRows(
+    exercises,
+    workoutLogId,
+    await loadUnitPreferences(userId, tx),
+  );
   const savedSets = await tx.insert(exerciseSets).values(rows).returning();
 
   const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
@@ -157,6 +163,133 @@ async function insertClientSuppliedExercises(
  */
 export type CreateWorkoutInTxPayload = InsertWorkoutLog & Partial<WorkoutLogDeviceLinkColumns>;
 
+/** A plan day's own text, which a plain "Done" sends back as the new log's. */
+type PlanDayText = Pick<PlanDay, "focus" | "mainWorkout" | "accessory" | "notes">;
+
+/**
+ * Lock the plan day a new log is for, and read its own text.
+ *
+ * It is the lock the Strava reconciler takes before it completes a day
+ * (applyPlanDayLink), and it is taken before anything is written, so a
+ * confirm and a reconcile of one day run one after the other and whichever
+ * runs second finds the first one's log. Inserting first and locking only at
+ * the status update let both write one. D48 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function lockPlanDayForNewLog(
+  tx: WorkoutTx,
+  planDayId: string,
+): Promise<PlanDayText | undefined> {
+  const [day] = await tx
+    .select({
+      focus: planDays.focus,
+      mainWorkout: planDays.mainWorkout,
+      accessory: planDays.accessory,
+      notes: planDays.notes,
+    })
+    .from(planDays)
+    .where(eq(planDays.id, planDayId))
+    .for("update");
+  return day;
+}
+
+/**
+ * The newest log already on a plan day, if any. Several are legal (the
+ * plan-day picker offers days that already have one, labelled "(logged)"), so
+ * the order is the one foldLinkedLogsBackOntoPlanDay reads them in.
+ */
+async function newestLogOnPlanDay(
+  tx: WorkoutTx,
+  planDayId: string,
+  userId: string,
+): Promise<WorkoutLog | undefined> {
+  const [existing] = await tx
+    .select()
+    .from(workoutLogs)
+    .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)))
+    .orderBy(desc(workoutLogs.date), desc(workoutLogs.startedAt), desc(workoutLogs.id))
+    .limit(1);
+  return existing;
+}
+
+/** The fields a plain "Done" sends (useWorkoutActions): the day's own text, and its date. */
+const CONFIRM_FIELDS: ReadonlySet<string> = new Set([
+  "planId",
+  "planDayId",
+  "date",
+  "focus",
+  "mainWorkout",
+  "accessory",
+  "notes",
+]);
+
+/**
+ * Whether a create is a plain "Done" of `day`: the day's own text and nothing
+ * else, no rating, metric or recording.
+ */
+function isPlainConfirm(payload: CreateWorkoutInTxPayload, day: PlanDayText | undefined): boolean {
+  if (!day) return false;
+  const carriesNothingElse = Object.entries(payload).every(
+    ([field, value]) => value == null || CONFIRM_FIELDS.has(field),
+  );
+  return (
+    carriesNothingElse &&
+    payload.focus === day.focus &&
+    payload.mainWorkout === day.mainWorkout &&
+    (payload.accessory ?? null) === (day.accessory ?? null) &&
+    (payload.notes ?? null) === (day.notes ?? null)
+  );
+}
+
+/**
+ * Refuse a create for a plan day that already has a log, unless it is a plain
+ * "Done" of the day (isPlainConfirm), which the caller answers with that log.
+ *
+ * Inserted, a "Done" offered by a stale timeline, or racing a Strava
+ * reconcile, wrote a second log beside the reconcile's with a second copy of
+ * the prescribed sets, counted twice in analytics and PRs. A plain "Done"
+ * says the day is done, and it is. Anything else carries something of its own
+ * (a rating or text, or a recording a manual link brings) that answering with
+ * the existing log would drop, so it is refused and the transaction writes
+ * nothing. D48 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function assertPlainConfirmOfLoggedDay(plainConfirm: boolean): void {
+  if (plainConfirm) return;
+  throw new AppError(
+    ErrorCode.CONFLICT,
+    "This session already has a logged workout. Refresh to see it, or add exercises to log another.",
+    409,
+  );
+}
+
+/**
+ * Take the plan day's lock for a new log, and return the log already on the
+ * day when this create should answer with it instead of inserting.
+ *
+ * Only a create with no exercises or structure of its own looks: it is the
+ * one that copies the day's prescription in whole, so the one that doubled
+ * it beside a log already there. A create carrying the athlete's own
+ * exercises or structure is their account of the session, and is how a day
+ * picked as "(logged)" in the plan-day picker takes a second log, so it
+ * inserts as before. D48 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function existingLogForPlainConfirm(
+  tx: WorkoutTx,
+  enrichedData: CreateWorkoutInTxPayload,
+  exercises: ParsedExercise[] | undefined,
+  structureBlocks: StructureBlockInput[] | undefined,
+  userId: string,
+): Promise<WorkoutLog | undefined> {
+  const { planDayId } = enrichedData;
+  if (!planDayId) return undefined;
+  const day = await lockPlanDayForNewLog(tx, planDayId);
+  if ((exercises?.length ?? 0) > 0 || (structureBlocks?.length ?? 0) > 0) return undefined;
+  const existing = await newestLogOnPlanDay(tx, planDayId, userId);
+  if (!existing) return undefined;
+  assertPlainConfirmOfLoggedDay(isPlainConfirm(enrichedData, day));
+  await markPlanDayCompleted(tx, planDayId, userId);
+  return existing;
+}
+
 // Exported for the device-link paths (deviceActivityLink.ts), which build a
 // plan day's log from a Strava recording exactly the way a manual confirm does.
 export async function createWorkoutInTx(
@@ -166,6 +299,15 @@ export async function createWorkoutInTx(
   structureBlocks: StructureBlockInput[] | undefined,
   userId: string,
 ): Promise<CreateWorkoutResult> {
+  const existing = await existingLogForPlainConfirm(
+    tx,
+    enrichedData,
+    exercises,
+    structureBlocks,
+    userId,
+  );
+  if (existing) return existing;
+
   const [log] = await tx
     .insert(workoutLogs)
     .values({
@@ -193,7 +335,7 @@ export async function createWorkoutInTx(
       enrichedData.planDayId,
       log.id,
       blockIdMap,
-      await loadUnitPreferences(userId),
+      await loadUnitPreferences(userId, tx),
     );
   }
 
@@ -393,7 +535,7 @@ export async function updateWorkout(
         const exerciseSetData = expandExercisesToSetRows(
           exercises,
           log.id,
-          await loadUnitPreferences(userId),
+          await loadUnitPreferences(userId, tx),
         );
         const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
