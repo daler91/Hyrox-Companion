@@ -21,7 +21,7 @@ import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
 import { PLAN_GENERATION_AI_TIMEOUT_MS } from "../constants";
-import { db } from "../db";
+import { db, type Tx } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { sanitizeLabel } from "../gemini/exerciseParser/mapping";
 import { logger } from "../logger";
@@ -980,6 +980,61 @@ async function resolveUserTodayForPlan(userId: string): Promise<string> {
   return getLocalDateStrSafe(new Date(), user?.userTimezone);
 }
 
+interface PublishGeneratedPlanOptions {
+  readonly planId: string;
+  readonly userId: string;
+  /** Absent only for a legacy in-flight queued job. */
+  readonly scheduleStartDate: string | undefined;
+  readonly supersedeIds: readonly string[];
+  readonly calibration: GenerationCalibration;
+}
+
+/**
+ * Lay the new plan onto the calendar, retire the plans the athlete is
+ * switching away from, and publish it, inside the transaction that wrote its
+ * days (see executePlanGeneration).
+ */
+async function scheduleAndPublishPlan(
+  tx: Tx,
+  { planId, userId, scheduleStartDate, supersedeIds, calibration }: PublishGeneratedPlanOptions,
+): Promise<void> {
+  // Every plan now carries a start date (the form requires one), so the plan is
+  // always scheduled onto the calendar. startDate is absent only for a legacy
+  // in-flight queued job, hence the guard.
+  if (scheduleStartDate) {
+    await storage.plans.schedulePlan(planId, scheduleStartDate, userId, tx);
+  }
+  if (scheduleStartDate && supersedeIds.length > 0) {
+    const today = await resolveUserTodayForPlan(userId);
+    const effectiveFrom = scheduleStartDate > today ? scheduleStartDate : today;
+    const retired = await storage.plans.retirePlans(supersedeIds, userId, effectiveFrom, tx);
+    // debug, not info: Bearer's logger-leak rule fires on any structured
+    // (non string-literal) argument to log/info/warn/error/fatal, so a new
+    // structured info line here adds a new alert — this file already carries
+    // six. debug is outside the rule and is the right level for a detail
+    // line anyway; the durable record of what was retired is retired_on
+    // itself, not the log.
+    logger.debug(
+      { planId, requested: supersedeIds.length, retired: retired.length, effectiveFrom },
+      "[planGen] Retired superseded plans",
+    );
+  }
+  // What the plan's paces were written against, so the auto-coach can move
+  // them when the athlete runs faster (workoutEngine/adaptation.ts).
+  await storage.plans.updateEngineState(
+    planId,
+    userId,
+    {
+      version: 1,
+      runVdot: calibration.engine?.paces?.vdot ?? null,
+      adaptedLogIds: [...(calibration.reflectedLogIds ?? [])],
+      updatedAt: new Date().toISOString(),
+    },
+    tx,
+  );
+  await storage.plans.updateGenerationStatus(planId, "ready", null, tx);
+}
+
 export async function executePlanGeneration(
   planId: string,
   input: GeneratePlanInput,
@@ -1022,8 +1077,35 @@ export async function executePlanGeneration(
       : [];
     const days = await generatePlanDays(normalized, userId, unitPreferences, calibration, { absences, card }, signal);
 
-    // Plan days and their structured exercise sets are written inside a single
-    // transaction so a failure in any step rolls the whole insertion back.
+    // The plan's days and their exercise rows, its calendar dates, the
+    // retirement of the plans the athlete is switching away from, and the flip
+    // to `ready` are written in ONE transaction — and only HERE, at the very
+    // end of a successful generation.
+    //
+    // The ordering is load-bearing. A new plan has no start or end date until
+    // schedulePlan runs, and getPlanForDate ignores plans without both.
+    // Retiring the old plan any earlier — in the route, before the job is even
+    // enqueued — means a generation that fails or times out leaves the athlete
+    // with the old plan retired and the new one unusable: no active plan at
+    // all. Doing it from the client after polling for `ready` is no better; a
+    // closed tab silently skips it. Here, any throw lands in the catch below,
+    // which marks this plan `failed`, and the transaction never commits, so
+    // the old plan is untouched and remains exactly what the athlete is
+    // training.
+    //
+    // Scheduling is inside it too (D46, CODEBASE_ANALYSIS_2026-10-03). It used
+    // to commit on its own before the publish, so a publish that failed left a
+    // `failed` plan with dated days. Being the plan that started last, it won
+    // getPlanForDate's overlap and became the athlete's plan, the superseded
+    // plan was never retired, and a retry added a third plan over the same
+    // weeks. Now a failed plan has nothing on the calendar.
+    //
+    // Effective from the later of the new plan's start and today: a start date
+    // in the past must not retroactively unattribute workouts already logged
+    // against the old plan. A start date in the FUTURE is the nice case — the
+    // old plan legitimately stays active until the new one begins, with no
+    // cutover job to run.
+    const supersedeIds = (normalized.supersedePlanIds ?? []).filter((id) => id !== planId);
     const { daysWithExercises, totalSetRows } = await db.transaction(async (tx) => {
       const planDaysPayload = days.map((day) => ({
         planId,
@@ -1063,6 +1145,14 @@ export async function executePlanGeneration(
         await tx.insert(exerciseSets).values(allSetRows);
       }
 
+      await scheduleAndPublishPlan(tx, {
+        planId,
+        userId,
+        scheduleStartDate: normalized.startDate,
+        supersedeIds,
+        calibration,
+      });
+
       return { daysWithExercises: dwe, totalSetRows: allSetRows.length };
     });
 
@@ -1070,66 +1160,6 @@ export async function executePlanGeneration(
       { userId, planId, daysWithExercises, totalSetRows, totalDays: days.length },
       "[planGen] Persisted structured plan-day exercises",
     );
-
-    // Every plan now carries a start date (the form requires one), so the plan is
-    // always scheduled onto the calendar. startDate is absent only for a legacy
-    // in-flight queued job, hence the guard.
-    const scheduleStartDate: string | undefined = normalized.startDate;
-    if (scheduleStartDate) {
-      await storage.plans.schedulePlan(planId, scheduleStartDate, userId);
-    }
-
-    // Retire the plans the athlete is switching away from, and publish this one,
-    // in ONE transaction — and only HERE, at the very end of a successful
-    // generation.
-    //
-    // The ordering is load-bearing. A new plan has no start or end date until
-    // schedulePlan runs just above, and getPlanForDate ignores plans without
-    // both. Retiring the old plan any earlier — in the route, before the job is
-    // even enqueued — means a generation that fails or times out leaves the
-    // athlete with the old plan retired and the new one unusable: no active plan
-    // at all. Doing it from the client after polling for `ready` is no better; a
-    // closed tab silently skips it. Here, any throw lands in the catch below,
-    // which marks this plan `failed`, and the transaction never commits, so the
-    // old plan is untouched and remains exactly what the athlete is training.
-    //
-    // Effective from the later of the new plan's start and today: a start date
-    // in the past must not retroactively unattribute workouts already logged
-    // against the old plan. A start date in the FUTURE is the nice case — the
-    // old plan legitimately stays active until the new one begins, with no
-    // cutover job to run.
-    const supersedeIds = (normalized.supersedePlanIds ?? []).filter((id) => id !== planId);
-    await db.transaction(async (tx) => {
-      if (scheduleStartDate && supersedeIds.length > 0) {
-        const today = await resolveUserTodayForPlan(userId);
-        const effectiveFrom = scheduleStartDate > today ? scheduleStartDate : today;
-        const retired = await storage.plans.retirePlans(supersedeIds, userId, effectiveFrom, tx);
-        // debug, not info: Bearer's logger-leak rule fires on any structured
-        // (non string-literal) argument to log/info/warn/error/fatal, so a new
-        // structured info line here adds a new alert — this file already carries
-        // six. debug is outside the rule and is the right level for a detail
-        // line anyway; the durable record of what was retired is retired_on
-        // itself, not the log.
-        logger.debug(
-          { planId, requested: supersedeIds.length, retired: retired.length, effectiveFrom },
-          "[planGen] Retired superseded plans",
-        );
-      }
-      // What the plan's paces were written against, so the auto-coach can move
-      // them when the athlete runs faster (workoutEngine/adaptation.ts).
-      await storage.plans.updateEngineState(
-        planId,
-        userId,
-        {
-          version: 1,
-          runVdot: calibration.engine?.paces?.vdot ?? null,
-          adaptedLogIds: [...(calibration.reflectedLogIds ?? [])],
-          updatedAt: new Date().toISOString(),
-        },
-        tx,
-      );
-      await storage.plans.updateGenerationStatus(planId, "ready", null, tx);
-    });
 
     logger.info(
       { userId, planId, dayCount: days.length },

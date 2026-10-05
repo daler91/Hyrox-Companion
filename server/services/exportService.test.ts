@@ -121,6 +121,74 @@ describe('exportService - generateCSV', () => {
     expect(csv).toContain('Reps,Weight (lbs),Distance (ft)');
   });
 
+  // D41 (CODEBASE_ANALYSIS_2026-10-03): the columns are labelled with the
+  // athlete's CURRENT units, so each row has to be read through its own L4
+  // stamp. A kg-to-lbs switcher's 140 kg set was exported as "140 lbs".
+  it('converts each set from its stamped unit into the labelled export unit', async () => {
+    const timeline = [{ workoutLogId: 'w-1', date: '2023-10-01', focus: 'Strength' }];
+    const base = {
+      workoutLogId: 'w-1',
+      date: '2023-10-01',
+      exerciseName: 'Squat',
+      customLabel: null,
+      category: 'Lower Body',
+      reps: 5,
+      time: null,
+      notes: null,
+    };
+    const exerciseSets = [
+      // Logged in kg before the switch.
+      { ...base, setNumber: 1, weight: 140, weightUnit: 'kg', distance: 1000, distanceUnit: 'm' },
+      // Logged in lbs after it: already in the export unit.
+      { ...base, setNumber: 2, weight: 225, weightUnit: 'lbs', distance: 3000, distanceUnit: 'ft' },
+      // Pre-L4 legacy row: no stamp, passes through as on every other read path.
+      { ...base, setNumber: 3, weight: 100, weightUnit: null, distance: 500, distanceUnit: null },
+    ];
+    const storage = createMockStorage(timeline, exerciseSets, { weightUnit: 'lbs', distanceUnit: 'miles' });
+    const csv = await generateCSV(mockUserId, storage);
+
+    expect(csv).toContain('Reps,Weight (lbs),Distance (ft)');
+    expect(csv).toContain('2023-10-01,Strength,Squat,Lower Body,1,5,309,3281,,');
+    expect(csv).toContain('2023-10-01,Strength,Squat,Lower Body,2,5,225,3000,,');
+    expect(csv).toContain('2023-10-01,Strength,Squat,Lower Body,3,5,100,500,,');
+    expect(csv).not.toContain(',140,');
+  });
+
+  it('converts stamped sets in the timeline structured summary too (D41)', async () => {
+    const timeline = [
+      {
+        workoutLogId: 'w-1',
+        date: '2023-10-01',
+        type: 'Strength',
+        status: 'completed',
+        focus: 'Legs',
+        exerciseSets: [
+          {
+            exerciseName: 'Squat',
+            blockId: 'b1',
+            stepNumber: 1,
+            reps: 5,
+            weight: 140,
+            weightUnit: 'kg',
+            distance: null,
+          },
+          {
+            exerciseName: 'Run',
+            blockId: 'b2',
+            stepNumber: 1,
+            weight: null,
+            distance: 1000,
+            distanceUnit: 'm',
+          },
+        ],
+      },
+    ];
+    const storage = createMockStorage(timeline, [], { weightUnit: 'lbs', distanceUnit: 'miles' });
+    const csv = await generateCSV(mockUserId, storage);
+
+    expect(csv).toContain('Squat (5 reps · 309) | Run (3281ft)');
+  });
+
   it('should correctly escape quotes, commas, and newlines in text fields', async () => {
     const timeline = [
       {
@@ -396,6 +464,25 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     const result = await generateJSON(mockUserId, createMockStorage());
 
     expect(result.unitPreferences).toEqual({ weightUnit: 'kg', distanceUnit: 'km' });
+  });
+
+  // D41 (CODEBASE_ANALYSIS_2026-10-03): `exerciseSets` sits under the
+  // `unitPreferences` label, so its values are converted through each row's stamp.
+  it('converts exerciseSets into the unitPreferences units through each row\'s stamp', async () => {
+    const user = { id: mockUserId, weightUnit: 'lbs', distanceUnit: 'km' };
+    const base = { workoutLogId: 'w-1', date: '2026-10-01', exerciseName: 'Squat', category: 'Lower Body', reps: 5 };
+    const exerciseSets = [
+      { ...base, setNumber: 1, weight: 140, weightUnit: 'kg', distance: 3281, distanceUnit: 'ft' },
+      { ...base, setNumber: 2, weight: 225, weightUnit: 'lbs', distance: 400, distanceUnit: 'm' },
+      { ...base, setNumber: 3, weight: null, weightUnit: null, distance: null, distanceUnit: null },
+    ];
+    const result = await generateJSON(mockUserId, createMockStorage({ user, exerciseSets }));
+
+    expect(result.exerciseSets.map(({ weight, distance }) => ({ weight, distance }))).toEqual([
+      { weight: 309, distance: 1000 },
+      { weight: 225, distance: 400 },
+      { weight: null, distance: null },
+    ]);
   });
 
   it('strips Strava access and refresh tokens from the export', async () => {

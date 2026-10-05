@@ -13,13 +13,22 @@ to a fresh database in CI.
 box and record the date and who ran it in the same PR. An unticked box is a
 live task, not history.
 
+**Running a migration file whole.** Where a section says its migration file can
+be applied whole, dispatch the **Post-Migration Verification** workflow
+(`.github/workflows/post-migration.yml`) with `ledger: push` and `sql_files`
+set to the file name (several, space-separated, run in order). It applies each
+file with `psql` in its own transaction and then runs the post-migration
+checks. Leave `ledger` at its `migrate` default only for a database built by
+`drizzle-kit migrate`: on production it runs `drizzle-kit migrate` first, which
+fails at 0000 against the pushed schema (D24, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+
 **Verifying.** `pnpm ops:restore-drill` probes the 0081, 0082 and 0091 steps (no
 ownerless private rows, no duplicate target versions, at most one in-flight plan
 generation per user) against whatever database you point it at, so the monthly
 restore drill
 ([backup-restore.md §6](./backup-restore.md#6-restore-drill-cadence--verification))
 re-verifies those for free. It does **not** check the older-migration audit, 0074,
-0093, 0094, 0117 or the C9 backfill — use the verification queries in those
+0093, 0094, 0117, 0121 or the C9 backfill — use the verification queries in those
 sections. Note the reverse hazard too: a restored database is as old as its
 backup, so a step ticked _after_ that backup was taken has been rolled back and
 must be run again.
@@ -92,6 +101,11 @@ must be run again.
 
   `nixpacks.toml` is read by the nixpacks builder itself, not by config-as-code,
   so its install-phase override keeps working only while the builder is nixpacks.
+  That override's `--ignore-scripts` is also what keeps Cypress's ~250 MB
+  binary download out of the build: the build command runs only after the
+  install phase, so a variable or flag set there (the old
+  `CYPRESS_INSTALL_BINARY=0`) came too late (D27). Whatever replaces the
+  install phase must skip install scripts itself.
 
 - **Builder:** Railway's docs say Nixpacks "has been replaced by Railpack". If
   the migrated config (or a later change) moves to Railpack, validate it on a
@@ -198,7 +212,9 @@ must be run again.
   an active exposure.
 - **Safe to re-run:** yes, idempotent. Matches nothing once it has run.
 - **How:** copy the `DELETE` statement out of the migration file and run it via
-  `psql "$DATABASE_URL"`, or dispatch the post-migration workflow.
+  `psql "$DATABASE_URL"`, or apply the file whole with the post-migration
+  workflow (`ledger: push`, `sql_files: 0081_purge_orphaned_private_custom_foods.sql`;
+  see "Running a migration file whole" above).
 - **Verify afterwards:**
   ```sql
   SELECT count(*) FROM foods
@@ -352,7 +368,9 @@ must be run again.
   those moves back to their old days.
 - **Safe to re-run:** yes. It writes only days out of step with the computed
   slot, and a weekday that differs only in case is left alone.
-- **How:** run the whole `UPDATE` from the migration file via `psql "$DATABASE_URL"`.
+- **How:** run the whole `UPDATE` from the migration file via `psql "$DATABASE_URL"`,
+  or apply the file whole with the post-migration workflow (`ledger: push`,
+  `sql_files: 0117_plan_day_slot_repair.sql`).
 - **Verify afterwards:**
   ```sql
   SELECT count(*)
@@ -369,6 +387,51 @@ must be run again.
     AND (d.week_number <> first_week.week_number + greatest(0, (d.scheduled_date - week_one.monday) / 7)
          OR lower(d.day_name) <> lower(to_char(d.scheduled_date, 'FMDay')));
   -- expect 0
+  ```
+
+## [ ] 0121 — one pending plan proposal per athlete, and the MAF CHECKs
+
+- **Migration:** `migrations/0121_pending_proposal_unique_and_constraint_parity.sql`
+- **Shipped:** 2026-10-05 (D51 and D25, `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** the schema half (the partial unique index
+  `uq_plan_adjustment_proposals_user_pending` and the two MAF CHECKs, now in
+  `shared/schema/tables.ts`) reaches production through `drizzle-kit push`, but
+  the `UPDATE` that makes the index creatable is DML, which push never runs. As
+  with 0091, **order matters**: if production holds two pending proposals for
+  one athlete, push fails to create the index until the `UPDATE` has run. Push
+  also fails to add a CHECK if a row breaks it, though the app never writes
+  one (MAF ceilings are 71 bpm or more, compliance is clamped to 0-100).
+- **What it does:** marks every pending plan-adjustment proposal but each
+  athlete's newest `superseded` (the status a new proposal gives its
+  predecessor), creates the unique index, and adds 0036's two CHECKs
+  (`maf_profile.final_hr > 0`, `maf_workout_analysis.compliance_pct` 0-100),
+  which until now existed only on databases built by `drizzle-kit migrate`. It
+  also drops 0041's two `exercise_sets` structure FKs where they exist; push
+  never created them, so on production that is a no-op.
+- **Safe to re-run:** yes. Every statement is idempotent, so the file can be
+  applied whole before or after the push.
+- **How:** check first (the queries below). Then, **before** the
+  `drizzle-kit push` that ships this schema, apply the file whole with the
+  post-migration workflow (`ledger: push`,
+  `sql_files: 0121_pending_proposal_unique_and_constraint_parity.sql`) or
+  `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f migrations/0121_pending_proposal_unique_and_constraint_parity.sql`.
+  If either MAF count below is not 0, stop and look at those rows first: the
+  file runs in one transaction, so a failing CHECK rolls back the `UPDATE` too.
+- **Verify afterwards:**
+  ```sql
+  SELECT count(*) FROM (
+    SELECT 1 FROM plan_adjustment_proposals WHERE status = 'pending'
+    GROUP BY user_id HAVING count(*) > 1
+  ) d; -- expect 0
+  SELECT count(*) FROM maf_profile WHERE NOT (final_hr > 0); -- expect 0
+  SELECT count(*) FROM maf_workout_analysis
+  WHERE compliance_pct IS NOT NULL AND compliance_pct NOT BETWEEN 0 AND 100; -- expect 0
+  SELECT indexname FROM pg_indexes
+  WHERE indexname = 'uq_plan_adjustment_proposals_user_pending'; -- expect 1 row
+  SELECT conname FROM pg_constraint
+  WHERE conname IN ('maf_profile_final_hr_positive_check',
+                    'maf_workout_analysis_compliance_pct_range_check'); -- expect 2 rows
   ```
 
 ## [ ] C9 — double the Strava run cadence stored at its one-leg value (**needs review before running**)

@@ -15,6 +15,7 @@ vi.mock("../storage", () => ({
   storage: {
     coaching: {
       deleteChunksByMaterialId: vi.fn(),
+      getCoachingMaterial: vi.fn(),
       replaceChunks: vi.fn(),
       searchChunksByEmbedding: vi.fn(),
       listPrincipleMaterialIds: vi.fn(),
@@ -140,6 +141,8 @@ describe("embedCoachingMaterial", () => {
     // resetAllMocks (not clearAllMocks) so implementations set by one test
     // cannot leak into the next under shuffled execution order.
     vi.resetAllMocks();
+    // Default: the material still exists once its chunks are written.
+    vi.mocked(storage.coaching.getCoachingMaterial).mockResolvedValue(mockMaterial);
   });
 
   it("should replace existing chunks with new ones", async () => {
@@ -238,6 +241,34 @@ describe("embedCoachingMaterial", () => {
 
     await expect(embedCoachingMaterial(mockMaterial)).rejects.toThrow("API error");
   });
+
+  it("keeps the chunks it wrote while the material still exists (D38)", async () => {
+    vi.mocked(generateEmbeddings).mockResolvedValue([[0.1]]);
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
+
+    await embedCoachingMaterial(mockMaterial);
+
+    expect(storage.coaching.getCoachingMaterial).toHaveBeenCalledWith("mat_1", "user_1");
+    expect(storage.coaching.deleteChunksByMaterialId).not.toHaveBeenCalled();
+  });
+
+  it("purges the chunks it just wrote when the material was deleted mid-embed (D38)", async () => {
+    // The delete route's inline purge ran before replaceChunks committed, so
+    // only this re-check can take the re-inserted chunks back out.
+    vi.mocked(generateEmbeddings).mockResolvedValue([[0.1]]);
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
+    // A reset mock returns nothing: the material is gone.
+    vi.mocked(storage.coaching.getCoachingMaterial).mockReset();
+
+    await embedCoachingMaterial(mockMaterial);
+
+    expect(storage.coaching.deleteChunksByMaterialId).toHaveBeenCalledWith("mat_1", "user_1");
+    const writeOrder = vi.mocked(storage.coaching.replaceChunks).mock.invocationCallOrder[0];
+    const recheckOrder = vi.mocked(storage.coaching.getCoachingMaterial).mock.invocationCallOrder[0];
+    const purgeOrder = vi.mocked(storage.coaching.deleteChunksByMaterialId).mock.invocationCallOrder[0];
+    expect(writeOrder).toBeLessThan(recheckOrder);
+    expect(recheckOrder).toBeLessThan(purgeOrder);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -254,7 +285,10 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue([]);
     vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([]);
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([]);
-    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map());
+    // Default: every material the chunks name still exists.
+    vi.mocked(storage.coaching.getMaterialTitles).mockImplementation((_userId, ids) =>
+      Promise.resolve(new Map(ids.map((id) => [id, `Title of ${id}`]))),
+    );
   });
 
   /** The retrieved text, without sources. */
@@ -376,17 +410,48 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
     vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
       { id: "c1", materialId: "m1", userId: "u1", content: "Short steps on the sled.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
-      { id: "c2", materialId: "m2", userId: "u1", content: "Orphaned chunk.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.3 },
+      { id: "c2", materialId: "m2", userId: "u1", content: "Wall ball pacing.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.3 },
     ]);
-    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map([["m1", "Sled technique"]]));
+    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(
+      new Map([["m1", "Sled technique"], ["m2", "Wall balls"]]),
+    );
 
     const result = await retrieveRelevantChunks("u1", "sources query");
 
     expect(storage.coaching.getMaterialTitles).toHaveBeenCalledWith("u1", ["m1", "m2"]);
     expect(result).toEqual([
       { content: "Short steps on the sled.", source: "Sled technique" },
-      { content: "Orphaned chunk.", source: null },
+      { content: "Wall ball pacing.", source: "Wall balls" },
     ]);
+  });
+
+  it("drops a chunk whose material no longer exists on the main DB (D38)", async () => {
+    // m-deleted's chunks outlived the material on the vector DB; the coach
+    // must not keep quoting a document the athlete deleted.
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m-deleted", userId: "u1", content: "Deleted text.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.1 },
+      { id: "c2", materialId: "m1", userId: "u1", content: "Short steps on the sled.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
+    ]);
+    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map([["m1", "Sled technique"]]));
+
+    const result = await retrieveRelevantChunks("u1", "dangling-chunk query");
+
+    expect(result).toEqual([{ content: "Short steps on the sled.", source: "Sled technique" }]);
+  });
+
+  it("fills the topK budget from the next live chunk when a dangling one is dropped (D38)", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m-deleted", userId: "u1", content: "Deleted text.", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.1 },
+      { id: "c2", materialId: "m1", userId: "u1", content: "first live", chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2 },
+      { id: "c3", materialId: "m1", userId: "u1", content: "second live", chunkIndex: 1, embedding: null, createdAt: new Date(), distance: 0.3 },
+    ]);
+    vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map([["m1", "Sled technique"]]));
+
+    const result = await retrieveRelevantChunks("u1", "dangling-topk query", 2);
+
+    expect(contents(result)).toEqual(["first live", "second live"]);
   });
 
   it("still returns the chunks, uncited, when the titles read fails", async () => {
@@ -397,6 +462,9 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(storage.coaching.getMaterialTitles).mockRejectedValue(new Error("db down"));
 
     expect(await retrieveRelevantChunks("u1", "titles-fail query")).toEqual([{ content: "Short steps on the sled.", source: null }]);
+    // Unchecked against the main DB, so not cached: the next turn checks again.
+    await retrieveRelevantChunks("u1", "titles-fail query");
+    expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledTimes(2);
   });
 
   it("should propagate errors to caller", async () => {

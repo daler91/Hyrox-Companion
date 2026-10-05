@@ -78,10 +78,11 @@ vi.mock("./logger", () => ({
   },
 }));
 
-import { CRON_LOCK_KEYS, runCronJobWithLock, startCron, stopCron } from "./cron";
+import { CRON_LOCK_KEYS, EMAIL_TICK_MISSED_TOLERANCE_MS, runCronJobWithLock, startCron, stopCron } from "./cron";
 import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
+import { getLocalHour } from "./timezone";
 
 // node-cron is mocked with a bare vi.fn(), so `cron.schedule` returns
 // undefined, startCron's "already running" guard never trips, and every call
@@ -198,6 +199,61 @@ describe("email scheduler cron job", () => {
     await expect(emailCallback()).resolves.toBeUndefined();
 
     expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error }, "Email cron job failed");
+  });
+});
+
+// D32 (CODEBASE_ANALYSIS_2026-10-03): node-cron 4 drops a tick that fires more
+// than 1 s late, so an event-loop stall across the top of the hour used to cost
+// that hour's emails for good.
+describe("email tick missed-execution tolerance (D32)", () => {
+  const SLOT = new Date("2026-07-20T09:00:00.000Z");
+
+  afterEach(async () => {
+    await stopCron();
+    vi.useRealTimers();
+  });
+
+  it("schedules the hourly email tick to run late rather than drop it", () => {
+    mocks.cronSchedule.mockClear();
+    startCron({} as never);
+
+    const registration = mocks.cronSchedule.mock.calls.find(([expression]) => expression === "0 * * * *");
+    const [, , options] = registration ?? [];
+    expect(options).toEqual({ timezone: "Etc/UTC", missedExecutionTolerance: EMAIL_TICK_MISSED_TOLERANCE_MS });
+  });
+
+  it("never lets a late scan read the next local hour in any timezone", () => {
+    // The scan reads the clock when it runs, so a tick run late must still land
+    // in the slot's local hour, or athletes in :30/:45 zones lose theirs.
+    const lastLateRun = new Date(SLOT.getTime() + EMAIL_TICK_MISSED_TOLERANCE_MS);
+    const crossed = Intl.supportedValuesOf("timeZone").filter(
+      (tz) => getLocalHour(lastLateRun, tz) !== getLocalHour(SLOT, tz),
+    );
+
+    expect(crossed).toEqual([]);
+  });
+
+  it.each([
+    { tolerance: undefined, runs: 0 },
+    { tolerance: EMAIL_TICK_MISSED_TOLERANCE_MS, runs: 1 },
+  ])("a tick firing 4 s late runs $runs time(s) with tolerance $tolerance", async ({ tolerance, runs }) => {
+    const { default: realCron } = await vi.importActual<typeof import("node-cron")>("node-cron");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(SLOT.getTime() - 1_000));
+    const run = vi.fn();
+    const scheduled = realCron.schedule("0 * * * *", run, {
+      timezone: "Etc/UTC",
+      suppressMissedWarning: true,
+      ...(tolerance === undefined ? {} : { missedExecutionTolerance: tolerance }),
+    });
+
+    // A 3 s event-loop stall: the clock passes the top of the hour before the
+    // heartbeat timer gets to run, which then fires 1 s later still.
+    vi.setSystemTime(new Date(SLOT.getTime() + 3_000));
+    await vi.advanceTimersByTimeAsync(1_000);
+    await scheduled.destroy();
+
+    expect(run).toHaveBeenCalledTimes(runs);
   });
 });
 

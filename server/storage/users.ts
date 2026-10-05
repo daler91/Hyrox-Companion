@@ -7,7 +7,6 @@ import {
   chatMessages,
   type CustomExercise,
   customExercises,
-  foodLogEntries,
   foods,
   type GarminConnection,
   garminConnections,
@@ -18,8 +17,6 @@ import {
   mafProfile,
   planAdjustmentProposals,
   rateLimitBuckets,
-  recipeIngredients,
-  recipes,
   type StravaConnection,
   stravaConnections,
   type UpdateUserPreferences,
@@ -27,12 +24,33 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from "drizzle-orm";
+import { and, type AnyColumn, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
 import { isUniqueViolation } from "../dbErrors";
 import { logger } from "../logger";
+import { deleteUnreferencedFoods, handReferencedFoodsToReferencers } from "./erasedAccountFoods";
+
+/**
+ * Age past which an isAutoCoaching flag is treated as orphaned (its worker
+ * crashed mid-job). 15 min sits comfortably above the longest expected
+ * auto-coach run and well below user-perceived "stuck" thresholds (W5).
+ */
+export const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
+
+/**
+ * The account a row belongs to is not mid-erasure. The background audiences
+ * (email notifications, nutrition push reminders, the MAF baseline reminder,
+ * Strava auto-sync's polling scan and webhook) skip accounts carrying
+ * `erasure_requested_at`: a stranded erasure's athlete has no Clerk identity
+ * left and asked to be forgotten, so they must not keep being emailed, pushed
+ * or synced while the sweep finishes the job.
+ * P17 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function notMidErasure(userId: AnyColumn) {
+  return sql`NOT EXISTS (SELECT 1 FROM ${users} WHERE ${users.id} = ${userId} AND ${users.erasureRequestedAt} IS NOT NULL)`;
+}
 
 /**
  * Insert a chat row under the id its client gave it, once: a retried send
@@ -164,22 +182,22 @@ export class UserStorage {
    *      users may legitimately reference a food that was public when they
    *      logged it and was later re-privatized by its owner — an unguarded
    *      delete would hit the RESTRICT FK and abort the whole deletion AFTER
-   *      the Clerk identity is gone, stranding erasure. Such foods survive as
-   *      ownerless private rows: hidden from all search/resolution (visibleTo
-   *      requires owner / non-custom source / is_public), while the
-   *      referencing users' existing history keeps rendering (entry display
-   *      joins foods directly — owning an entry is the right to see it).
-   *      That retention matches the sharing disclosure: the food was
-   *      published, someone relied on it.
+   *      the Clerk identity is gone, stranding erasure.
+   *   4. Hand each food still referenced that way to the athletes who
+   *      reference it (handReferencedFoodsToReferencers): they get their own
+   *      private copy under a neutral name, their rows move onto it, and the
+   *      original is deleted. Leaving it ownerless kept the erased athlete's
+   *      food name although they had unshared it, and tripped the restore
+   *      drill's 0081 probe. D53 (CODEBASE_ANALYSIS_2026-10-03)
    *
    * PUBLIC custom foods (is_public = true) intentionally survive with owner
    * set-null — sharing was an explicit opt-in, disclosed in the share UI, and
    * visibility rests on is_public rather than the owner column.
    *
-   * Returns the ACTUALLY deleted food ids so the caller can purge their
-   * embeddings from the separate vector DB (food_embeddings has no user
-   * column). Surviving referenced foods keep working; their embeddings are
-   * cache and get re-created by the backfill cron.
+   * Returns the ACTUALLY deleted food ids (handed-over originals included) so
+   * the caller can purge their embeddings from the separate vector DB
+   * (food_embeddings has no user column). The copies are new rows the
+   * backfill cron embeds like any other food.
    */
   async deleteUserAndPrivateCustomFoods(
     id: string,
@@ -199,30 +217,13 @@ export class UserStorage {
 
       if (foodIds.length === 0) return { deleted: true, deletedFoodIds: [] };
 
-      const deletedRows = await tx
-        .delete(foods)
-        .where(
-          and(
-            inArray(foods.id, foodIds),
-            notExists(
-              tx
-                .select({ one: sql`1` })
-                .from(foodLogEntries)
-                .where(eq(foodLogEntries.foodId, foods.id)),
-            ),
-            notExists(
-              tx
-                .select({ one: sql`1` })
-                .from(recipeIngredients)
-                .where(eq(recipeIngredients.foodId, foods.id)),
-            ),
-            notExists(
-              tx.select({ one: sql`1` }).from(recipes).where(eq(recipes.foodId, foods.id)),
-            ),
-          ),
-        )
-        .returning({ id: foods.id });
-      return { deleted: true, deletedFoodIds: deletedRows.map((row) => row.id) };
+      const deletedRows = await deleteUnreferencedFoods(tx, foodIds);
+      const deletedIds = new Set(deletedRows);
+      const handedOver = await handReferencedFoodsToReferencers(
+        tx,
+        foodIds.filter((foodId) => !deletedIds.has(foodId)),
+      );
+      return { deleted: true, deletedFoodIds: [...deletedRows, ...handedOver] };
     });
   }
 
@@ -241,18 +242,9 @@ export class UserStorage {
     return result.rowCount ?? 0;
   }
 
-  /**
-   * Stamp the account as mid-erasure. Called before the first irreversible
-   * step of DELETE /api/v1/account so a run that dies afterwards leaves a
-   * trail the sweep can finish. Keeps an existing stamp rather than refreshing
-   * it, so "stranded since" stays honest across retries.
-   */
-  async markErasureRequested(id: string, now: Date = new Date()): Promise<void> {
-    await db
-      .update(users)
-      .set({ erasureRequestedAt: now })
-      .where(and(eq(users.id, id), isNull(users.erasureRequestedAt)));
-  }
+  readonly markErasureRequested = markErasureRequested;
+
+  readonly clearErasureRequest = clearErasureRequest;
 
   /**
    * Accounts whose erasure was stamped before `before` and never completed —
@@ -433,25 +425,7 @@ export class UserStorage {
       .where(eq(users.id, userId));
   }
 
-  /**
-   * Clears users stuck with isAutoCoaching=true. Called on server startup
-   * (no threshold → wipes all stuck flags) and on an interval at runtime
-   * (threshold → only flags whose updatedAt is older than the threshold,
-   * so legitimate in-flight jobs are left alone — W5).
-   */
-  async resetStaleAutoCoaching(olderThanMs?: number): Promise<number> {
-    const conditions = [eq(users.isAutoCoaching, true)];
-    if (olderThanMs !== undefined) {
-      const cutoff = new Date(Date.now() - olderThanMs);
-      conditions.push(lt(users.updatedAt, cutoff));
-    }
-    const rows = await db
-      .update(users)
-      .set({ isAutoCoaching: false, updatedAt: new Date() })
-      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
-      .returning({ id: users.id });
-    return rows.length;
-  }
+  readonly resetStaleAutoCoaching = resetStaleAutoCoaching;
 
   // Cursor-paginated chat history. Returns the newest `limit` messages
   // older than the (timestamp, id) cursor in chronological order so
@@ -638,10 +612,10 @@ export class UserStorage {
   /**
    * Athletes the automatic-sync polling fallback should sync next: working
    * connections (no reauth tombstone) whose cursor is older than
-   * `staleBefore`. Never-synced connections come first, then the stalest,
-   * capped at `limit` so one tick cannot spend the app's shared Strava read
-   * budget. Ids only — the worker re-reads (and decrypts) the connection
-   * when the job runs.
+   * `staleBefore`, on accounts not mid-erasure. Never-synced connections come
+   * first, then the stalest, capped at `limit` so one tick cannot spend the
+   * app's shared Strava read budget. Ids only — the worker re-reads (and
+   * decrypts) the connection when the job runs.
    */
   async listStravaConnectionsDueForSync(
     staleBefore: Date,
@@ -657,6 +631,7 @@ export class UserStorage {
         and(
           eq(stravaConnections.requiresReauth, false),
           or(isNull(stravaConnections.lastSyncedAt), lt(stravaConnections.lastSyncedAt, staleBefore)),
+          notMidErasure(stravaConnections.userId),
         ),
       )
       .orderBy(sql`${stravaConnections.lastSyncedAt} asc nulls first`)
@@ -667,6 +642,9 @@ export class UserStorage {
    * Webhook `owner_id` → app users. One Strava athlete can be connected to
    * more than one account (strava_athlete_id carries no unique index), so
    * this is a list. Ids and the reauth flag only — no token material.
+   * Accounts mid-erasure are left out: the webhook is the primary auto-sync
+   * producer, and a stranded erasure can still hold a live connection (the
+   * step-3 deauth is best-effort). P17 (CODEBASE_ANALYSIS_2026-10-03)
    */
   async listStravaConnectionUsersByAthleteId(
     stravaAthleteId: string,
@@ -677,7 +655,12 @@ export class UserStorage {
         requiresReauth: stravaConnections.requiresReauth,
       })
       .from(stravaConnections)
-      .where(eq(stravaConnections.stravaAthleteId, stravaAthleteId));
+      .where(
+        and(
+          eq(stravaConnections.stravaAthleteId, stravaAthleteId),
+          notMidErasure(stravaConnections.userId),
+        ),
+      );
   }
 
   // ---------------------------------------------------------------------------
@@ -962,19 +945,27 @@ export class UserStorage {
     return claimed.length > 0;
   }
 
+  // The three audiences below leave out accounts mid-erasure (P17; see
+  // notMidErasure above).
+
   /** Users who opted into at least one nutrition push reminder. */
   async getUsersWithNutritionPushReminders(): Promise<User[]> {
     return await db
       .select()
       .from(users)
-      .where(or(eq(users.pushRefuelReminder, true), eq(users.pushLoggingReminder, true)));
+      .where(
+        and(
+          or(eq(users.pushRefuelReminder, true), eq(users.pushLoggingReminder, true)),
+          isNull(users.erasureRequestedAt),
+        ),
+      );
   }
 
   async getUsersWithEmailNotifications(): Promise<User[]> {
     return await db
       .select()
       .from(users)
-      .where(and(eq(users.emailNotifications, true), isNotNull(users.email)));
+      .where(and(eq(users.emailNotifications, true), isNotNull(users.email), isNull(users.erasureRequestedAt)));
   }
 
   /** Users whose one-time baseline MAF test reminder is due (still on MAF). */
@@ -987,6 +978,7 @@ export class UserStorage {
           eq(users.trainingStyleId, "maf_method"),
           isNotNull(users.mafBaselineTestScheduledAt),
           lte(users.mafBaselineTestScheduledAt, now),
+          isNull(users.erasureRequestedAt),
         ),
       );
   }
@@ -1011,4 +1003,52 @@ export class UserStorage {
       .returning({ id: users.id });
     return claimed.length > 0;
   }
+}
+
+/**
+ * Stamp the account as mid-erasure. Called before the first irreversible
+ * step of DELETE /api/v1/account so a run that dies afterwards leaves a
+ * trail the sweep can finish. Keeps an existing stamp rather than refreshing
+ * it, so "stranded since" stays honest across retries. Returns the stamp
+ * this call wrote, or null when the account already carried one (or there
+ * is no such account).
+ */
+async function markErasureRequested(id: string, now: Date = new Date()): Promise<Date | null> {
+  const stamped = await db
+    .update(users)
+    .set({ erasureRequestedAt: now })
+    .where(and(eq(users.id, id), isNull(users.erasureRequestedAt)))
+    .returning({ id: users.id });
+  return stamped.length > 0 ? now : null;
+}
+
+/**
+ * Withdraw an erasure stamp, for a run that failed before its point of no
+ * return (P17). Only the given stamp is cleared, so a run can only ever
+ * withdraw its own.
+ */
+async function clearErasureRequest(id: string, stampedAt: Date): Promise<void> {
+  await db
+    .update(users)
+    .set({ erasureRequestedAt: null })
+    .where(and(eq(users.id, id), eq(users.erasureRequestedAt, stampedAt)));
+}
+
+/**
+ * Clears isAutoCoaching flags whose updatedAt is older than the threshold,
+ * so legitimate in-flight jobs are left alone (W5). Called on server startup
+ * and every 10 minutes by the cron, both with
+ * STALE_AUTO_COACHING_THRESHOLD_MS. The threshold is required: the boot call
+ * used to pass none and wipe every flag, so a replica booting in a rolling
+ * deploy cleared another replica's in-flight run. D52
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function resetStaleAutoCoaching(olderThanMs: number): Promise<number> {
+  const cutoff = new Date(Date.now() - olderThanMs);
+  const rows = await db
+    .update(users)
+    .set({ isAutoCoaching: false, updatedAt: new Date() })
+    .where(and(eq(users.isAutoCoaching, true), lt(users.updatedAt, cutoff)))
+    .returning({ id: users.id });
+  return rows.length;
 }

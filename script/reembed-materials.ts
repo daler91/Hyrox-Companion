@@ -19,6 +19,10 @@
  *                  first after a vector restore to find out whether a rebuild
  *                  is needed at all.
  *
+ * Only athletes who have switched AI processing on are included: their
+ * material text goes to the embedding provider, and this command runs outside
+ * the consent-gated routes. The run reports how many were left out.
+ *
  * Requires DATABASE_URL, VECTOR_DATABASE_URL (when split), and GEMINI_API_KEY.
  * Re-embedding is idempotent: `embedCoachingMaterial` replaces a material's
  * chunks transactionally, so an interrupted run is safe to repeat and there is
@@ -27,7 +31,8 @@
  * Exits non-zero if any material failed to embed or is still without chunks.
  */
 import { inSequence } from "@shared/inSequence";
-import { coachingMaterials } from "@shared/schema";
+import { coachingMaterials, users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import { env } from "../server/env";
@@ -62,11 +67,25 @@ export function parseFlags(argv: string[]): Flags {
   return flags;
 }
 
-/** Athletes who actually own coaching materials — not every user in the DB. */
-async function targetUserIds(flags: Flags): Promise<string[]> {
-  if (flags.userId) return [flags.userId];
-  const rows = await db.selectDistinct({ userId: coachingMaterials.userId }).from(coachingMaterials);
-  return rows.map((r) => r.userId).sort();
+/**
+ * Athletes who actually own coaching materials — not every user in the DB —
+ * and consent to AI processing, plus how many owners were left out for not
+ * consenting. P14 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function targetUsers(flags: Flags): Promise<{ userIds: string[]; withoutConsent: number }> {
+  const rows = await db
+    .selectDistinct({ userId: coachingMaterials.userId, aiCoachEnabled: users.aiCoachEnabled })
+    .from(coachingMaterials)
+    .innerJoin(users, eq(users.id, coachingMaterials.userId))
+    .where(flags.userId ? eq(coachingMaterials.userId, flags.userId) : undefined);
+  const userIds = rows.filter((r) => r.aiCoachEnabled === true).map((r) => r.userId).sort();
+  return { userIds, withoutConsent: rows.length - userIds.length };
+}
+
+/** Read again just before an athlete's provider calls, since a fleet run takes a while. */
+async function stillConsentsToAi(userId: string): Promise<boolean> {
+  const [row] = await db.select({ aiCoachEnabled: users.aiCoachEnabled }).from(users).where(eq(users.id, userId));
+  return row?.aiCoachEnabled === true;
 }
 
 interface UserOutcome {
@@ -76,6 +95,8 @@ interface UserOutcome {
   errors: string[];
   /** Materials still holding zero chunks after the run — the real success test. */
   unembedded: string[];
+  /** Skipped: the athlete turned AI processing off after the run started (P14). */
+  consentWithdrawn?: boolean;
 }
 
 /**
@@ -108,13 +129,16 @@ async function verifyCoverage(userId: string): Promise<string[]> {
     .map((m) => `${m.id} (${m.title})`);
 }
 
-async function processUser(userId: string, flags: Flags): Promise<UserOutcome> {
+export async function processUser(userId: string, flags: Flags): Promise<UserOutcome> {
   const materials = await storage.coaching.listCoachingMaterials(userId);
   if (flags.dryRun) {
     return { userId, materials: materials.length, embedded: 0, errors: [], unembedded: [] };
   }
   if (flags.verifyOnly) {
     return { userId, materials: materials.length, embedded: 0, errors: [], unembedded: await verifyCoverage(userId) };
+  }
+  if (!(await stillConsentsToAi(userId))) {
+    return { userId, materials: materials.length, embedded: 0, errors: [], unembedded: [], consentWithdrawn: true };
   }
   // Per-user, not per-material: reembedAllMaterials already applies its own
   // concurrency limit internally, and users are walked one at a time so a
@@ -171,7 +195,8 @@ async function prepareVectorSchema(): Promise<boolean> {
 
 function reportUserOutcome(outcome: UserOutcome, flags: Flags): void {
   const parts = [`${outcome.materials} material(s)`];
-  if (isRebuild(flags)) parts.push(`${outcome.embedded} embedded`);
+  if (outcome.consentWithdrawn) parts.push("skipped, AI processing turned off");
+  else if (isRebuild(flags)) parts.push(`${outcome.embedded} embedded`);
   if (outcome.errors.length > 0) parts.push(`${outcome.errors.length} error(s)`);
   if (outcome.unembedded.length > 0) parts.push(`${outcome.unembedded.length} still without chunks`);
   // an internal athlete id and counts only, no athlete-authored content.
@@ -240,10 +265,15 @@ async function collectOutcomes(flags: Flags, mode: string): Promise<UserOutcome[
   try {
     if (isRebuild(flags) && !(await prepareVectorSchema())) return null;
 
-    const userIds = await targetUserIds(flags);
+    const { userIds, withoutConsent } = await targetUsers(flags);
     // an athlete count and the run mode, no identifiers or user data.
     // bearer:disable javascript_lang_logger_leak
     console.log(`${userIds.length} athlete(s) with coaching materials — ${mode}\n`);
+    if (withoutConsent > 0) {
+      // an athlete count only, no identifiers or user data.
+      // bearer:disable javascript_lang_logger_leak
+      process.stdout.write(`${withoutConsent} athlete(s) with AI processing off left out\n\n`);
+    }
 
     return await runFleet(userIds, flags);
   } finally {

@@ -28,6 +28,9 @@ import {
   DEFAULT_JOB_OPTIONS,
   jobDataKeys,
   NO_RETRY_JOB_OPTIONS,
+  PLAN_GENERATION_CONSENT_OFF_MESSAGE,
+  processEmbedCoachingMaterialJob,
+  processPlanGenerationJob,
   processRecomputeAnalyticsJob,
   purgeUserJobs,
   runBatch,
@@ -35,6 +38,8 @@ import {
   withTrace,
 } from "./queue";
 import { runWithRequestContext } from "./requestContext";
+import { executePlanGeneration } from "./services/planGenerationService";
+import { embedCoachingMaterial } from "./services/ragService";
 import { dispatchRecomputeAnalytics } from "./services/recomputeAnalyticsDispatch";
 import { invalidateTrainingContext } from "./services/trainingContextCache";
 import { storage } from "./storage";
@@ -259,5 +264,74 @@ describe("processRecomputeAnalyticsJob (D37)", () => {
 
     expect(dispatchRecomputeAnalytics).not.toHaveBeenCalled();
     expect(releaseRecomputedOn).not.toHaveBeenCalled();
+  });
+});
+
+describe("processEmbedCoachingMaterialJob (P14)", () => {
+  const job = { id: "job-1", data: { materialId: "mat-1", userId: "user-1" } } as unknown as Job;
+  const material = { id: "mat-1", userId: "user-1", title: "Guide", content: "Text", type: "document" };
+  const getUser = vi.fn();
+  const getCoachingMaterial = vi.fn();
+
+  beforeEach(() => {
+    getUser.mockReset().mockResolvedValue({ id: "user-1", aiCoachEnabled: true });
+    getCoachingMaterial.mockReset().mockResolvedValue(material);
+    vi.mocked(embedCoachingMaterial).mockReset();
+    Object.assign(storage, { users: { getUser }, coaching: { getCoachingMaterial } });
+  });
+
+  it("embeds the material while the athlete still consents to AI processing", async () => {
+    await processEmbedCoachingMaterialJob(job);
+
+    expect(getCoachingMaterial).toHaveBeenCalledWith("mat-1", "user-1");
+    expect(embedCoachingMaterial).toHaveBeenCalledWith(material);
+  });
+
+  it("skips, without failing the job, once the athlete has switched AI off", async () => {
+    // Consent was on when the route enqueued the job and is off by run time.
+    getUser.mockResolvedValue({ id: "user-1", aiCoachEnabled: false });
+
+    await expect(processEmbedCoachingMaterialJob(job)).resolves.toBeUndefined();
+
+    expect(embedCoachingMaterial).not.toHaveBeenCalled();
+  });
+
+  it("skips when the material was deleted before the job ran", async () => {
+    getCoachingMaterial.mockReset();
+
+    await processEmbedCoachingMaterialJob(job);
+
+    expect(embedCoachingMaterial).not.toHaveBeenCalled();
+  });
+});
+
+describe("processPlanGenerationJob (P14)", () => {
+  const input = { goal: "hyrox" };
+  const job = { id: "job-2", data: { planId: "plan-1", userId: "user-1", input } } as unknown as Job;
+  const getUser = vi.fn();
+  const updateGenerationStatus = vi.fn();
+
+  beforeEach(() => {
+    getUser.mockReset().mockResolvedValue({ id: "user-1", aiCoachEnabled: true });
+    updateGenerationStatus.mockReset();
+    vi.mocked(executePlanGeneration).mockReset();
+    Object.assign(storage, { users: { getUser }, plans: { updateGenerationStatus } });
+  });
+
+  it("generates the plan while the athlete still consents to AI processing", async () => {
+    await processPlanGenerationJob(job);
+
+    expect(executePlanGeneration).toHaveBeenCalledWith("plan-1", input, "user-1", expect.any(AbortSignal));
+    expect(updateGenerationStatus).not.toHaveBeenCalled();
+  });
+
+  it("fails the plan, not the job, once the athlete has switched AI off", async () => {
+    getUser.mockResolvedValue({ id: "user-1", aiCoachEnabled: false });
+
+    await expect(processPlanGenerationJob(job)).resolves.toBeUndefined();
+
+    expect(executePlanGeneration).not.toHaveBeenCalled();
+    // The pending stub must not keep holding the athlete's generation slot.
+    expect(updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", PLAN_GENERATION_CONSENT_OFF_MESSAGE);
   });
 });

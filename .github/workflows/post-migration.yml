@@ -2,6 +2,23 @@ name: Post-Migration Verification
 
 on:
   workflow_dispatch:
+    # Production is push-managed (D24, CODEBASE_ANALYSIS_2026-10-03): its
+    # schema comes from `drizzle-kit push`, so its migration ledger is empty
+    # and `drizzle-kit migrate` fails there at 0000. Dispatch with `ledger:
+    # push` to apply only the data steps docs/operations/pending-manual-steps.md
+    # names instead. `migrate` is for a database built by `drizzle-kit migrate`.
+    inputs:
+      ledger:
+        description: "How the database's schema is managed: migrate (drizzle-kit migrate ledger) or push (production)"
+        type: choice
+        options:
+          - migrate
+          - push
+        default: migrate
+      sql_files:
+        description: "push only: migration files to apply in order, space-separated (e.g. 0081_purge_orphaned_private_custom_foods.sql)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -35,13 +52,44 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Apply migrations to Neon
+        if: inputs.ledger != 'push'
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           ENCRYPTION_KEY: "01234567890123456789012345678901"
         run: pnpm run db:migrate
 
+      - name: Apply the named migration files (push-managed database)
+        if: inputs.ledger == 'push'
+        # Each file runs whole, in its own transaction, and stops the job on
+        # its first error. Only name a file pending-manual-steps.md says can be
+        # applied whole: a file with schema statements push has already
+        # applied fails on them, and its transaction rolls back. The input
+        # reaches the script through env, and each name must be a file in
+        # migrations/.
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          SQL_FILES: ${{ inputs.sql_files }}
+        run: |
+          read -ra files <<< "$SQL_FILES"
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::ledger is push but sql_files names no migration file"
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            if ! [[ "$file" =~ ^[0-9]{4}_[a-z0-9_]+\.sql$ ]] || [ ! -f "migrations/$file" ]; then
+              echo "::error::not a migration file: $file"
+              exit 1
+            fi
+          done
+          for file in "${files[@]}"; do
+            echo "Applying migrations/$file"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f "migrations/$file"
+          done
+
       - name: Run post-migration tests against Neon
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           ENCRYPTION_KEY: "01234567890123456789012345678901"
+          # push: no ledger rows are expected, so section 8 skips its count.
+          POST_MIGRATION_LEDGER: ${{ inputs.ledger }}
         run: pnpm vitest run --config vitest.integration.config.ts server/routes/tests/post-migration.integration.test.ts

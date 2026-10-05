@@ -19,7 +19,7 @@ import { configureObservability, registerProcessErrorHandlers } from "./bootstra
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
-import { isChatSendPath, isImageParsePath } from "./imageParsePaths";
+import { skipLargeJsonBodyPaths } from "./largeBodyParsers";
 import { logger } from "./logger";
 import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
 import { buildCspDirectives } from "./middleware/csp";
@@ -207,38 +207,20 @@ app.use(
 
 app.use(permissionsPolicy);
 
-// Coaching material routes accept large document content (up to 1.5M chars)
-app.use("/api/v1/coaching-materials", express.json({ limit: "2mb" }));
-
-// Image-parse routes ship the image as a base64 string in the JSON body.
-// The schema caps base64 length at 10MB; this parser matches so oversized
-// payloads are rejected at the body-parser layer with a 413 rather than
-// hitting the global 100kb limit below. Applied to the stateless image
-// parsers + the stateful reparse siblings on workouts and plan days
-// (`.../:id/reparse-from-image`).
-const imageParseJsonParser = express.json({ limit: "10mb" });
-// A coach chat message can carry one photo (CHAT_PHOTO_MAX_BASE64_CHARS,
-// capped again by the request schema), so the two send routes get room for it.
-const chatSendJsonParser = express.json({ limit: "5mb" });
-app.use((req, res, next) => {
-  if (isImageParsePath(req.path)) {
-    imageParseJsonParser(req, res, next);
-    return;
-  }
-  if (isChatSendPath(req.path)) {
-    chatSendJsonParser(req, res, next);
-    return;
-  }
-  next();
-});
-
+// The few routes that take bigger JSON bodies (coaching materials 2mb, chat
+// sends 5mb, image parses 10mb) are skipped here and parsed inside their
+// protected route stack, after auth and the route's rate limiter, so an
+// anonymous client can no longer make the instance buffer multi-MB bodies.
+// D35 (CODEBASE_ANALYSIS_2026-10-03); see server/largeBodyParsers.ts.
 app.use(
-  express.json({
-    limit: "100kb", // 🛡️ Sentinel: Limit request body size to prevent DoS
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
+  skipLargeJsonBodyPaths(
+    express.json({
+      limit: "100kb", // 🛡️ Sentinel: Limit request body size to prevent DoS
+      verify: (req, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  ),
 );
 
 app.use(express.urlencoded({ extended: false, limit: "100kb" })); // 🛡️ Sentinel: Limit urlencoded body size to prevent DoS

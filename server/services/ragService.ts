@@ -179,6 +179,22 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
       })),
     );
 
+    // The material may have been deleted while it was being embedded. The
+    // delete route purges its chunks inline, but a purge that ran before
+    // replaceChunks committed missed these rows, and nothing else removed them
+    // before the nightly prune. So re-check AFTER the write: a delete that
+    // commits later is followed by the route's own purge, which then sees
+    // them. D38 (CODEBASE_ANALYSIS_2026-10-03)
+    const stillExists = await storage.coaching.getCoachingMaterial(material.id, material.userId);
+    if (!stillExists) {
+      await storage.coaching.deleteChunksByMaterialId(material.id, material.userId);
+      clearRagCache(material.userId);
+      // An opaque material id; no material content.
+      // bearer:disable javascript_lang_logger_leak
+      logger.info({ materialId: material.id }, "[rag] Material deleted while embedding; purged its chunks");
+      return;
+    }
+
     // Invalidate cached retrievals for this user so freshly-embedded
     // material is discoverable on the next query.
     clearRagCache(material.userId);
@@ -328,20 +344,21 @@ async function listPinnedPrincipleChunks(userId: string, limit: number) {
 }
 
 /**
- * The titles to cite chunks by. Only labels, so a failed read leaves the
+ * The titles to cite chunks by, keyed by the ids of the athlete's materials
+ * that still exist on the main DB. Null when the read fails, which leaves the
  * excerpts uncited rather than failing the retrieval.
  */
 async function materialTitles(
   userId: string,
   chunks: readonly { materialId: string }[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, string> | null> {
   try {
     return await storage.coaching.getMaterialTitles(userId, [...new Set(chunks.map((c) => c.materialId))]);
   } catch (err) {
     // userId is an opaque uuid and err a DB failure; no material content.
     // bearer:disable javascript_lang_logger_leak
     logger.warn({ err, userId }, "[rag] Failed to read material titles — excerpts go uncited");
-    return new Map();
+    return null;
   }
 }
 
@@ -410,9 +427,20 @@ export async function retrieveRelevantChunks(
     { userId, found: found.length, kept: chunks.length, bestDistance: found[0]?.distance, maxDistance },
     "[rag] Search returned chunks",
   );
-  const selected = [...pinned, ...chunks.filter((c) => !pinnedIds.has(c.id))].slice(0, topK);
-  const titles = await materialTitles(userId, selected);
-  const retrieved = selected.map((c) => ({ content: c.content, source: titles.get(c.materialId) ?? null }));
+  const candidates = [...pinned, ...chunks.filter((c) => !pinnedIds.has(c.id))];
+  const titles = await materialTitles(userId, candidates);
+  // document_chunks can live in a separate database with no FK to
+  // coaching_materials, so a chunk can outlive its material (an embed job
+  // that finished after the delete route's purge, or a purge that failed)
+  // until the nightly prune. The titles read is the main-DB existence check:
+  // a chunk whose material it did not return never reaches the prompt. A
+  // failed read keeps the chunks, uncited, and is not cached, so the next
+  // retrieval checks again. D38 (CODEBASE_ANALYSIS_2026-10-03)
+  const live = titles ? candidates.filter((c) => titles.has(c.materialId)) : candidates;
+  const retrieved = live
+    .slice(0, topK)
+    .map((c) => ({ content: c.content, source: titles?.get(c.materialId) ?? null }));
+  if (!titles) return retrieved;
   setRagCache(key, retrieved);
   if (env.NODE_ENV !== "test") {
     setRuntimeCache(key, { chunks: retrieved }, RAG_CACHE_TTL_MS).catch((err: unknown) => {

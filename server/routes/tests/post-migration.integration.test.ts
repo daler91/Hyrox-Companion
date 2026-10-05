@@ -63,6 +63,9 @@ const EXPECTED_INDEXES = [
   // 0115: the conflict target of the athlete card's re-confirming upsert.
   // Without it every fact the athlete adds fails instead of re-confirming.
   "uq_athlete_facts_user_dedupe",
+  // 0121 (D51): one pending plan proposal per athlete. Without it two coach
+  // turns at once can leave two pending.
+  "uq_plan_adjustment_proposals_user_pending",
 ];
 
 const VECTOR_DB_INDEXES = [
@@ -484,6 +487,14 @@ describe("Post-Migration Verification: Railway + Neon", () => {
     });
 
     it("all migrations are recorded (if journal exists)", async () => {
+      // A push-managed database (production) records no migrations: push
+      // writes no ledger, and a failed boot migrate() leaves an empty table
+      // behind. The workflow's `ledger: push` mode says so (D24,
+      // CODEBASE_ANALYSIS_2026-10-03).
+      if (process.env.POST_MIGRATION_LEDGER === "push") {
+        console.warn("Skipping — push-managed database, no migration ledger expected");
+        return;
+      }
       // Find the journal table in any schema
       const tableResult = await pool.query(
         `SELECT table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '%drizzle%' LIMIT 1`,

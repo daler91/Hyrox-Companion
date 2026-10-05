@@ -35,6 +35,7 @@ import {
 } from "./maintenance";
 import { assertCriticalTablesExist, assertSchemaColumnsExist } from "./migrationGuards";
 import type { IStorage } from "./storage";
+import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 
 /**
  * A vector DB that remembers what has been created, so the same fake proves
@@ -172,6 +173,12 @@ describe("runStartupMaintenance", () => {
     expect(assertSchemaColumnsExist).toHaveBeenCalledWith(pool);
     expect(firstCall(assertCriticalTablesExist)).toBeLessThan(firstCall(assertSchemaColumnsExist));
     expect(firstCall(assertSchemaColumnsExist)).toBeLessThan(firstCall(storage.plans.markMissedPlanDays));
+  });
+
+  it("resets only auto-coach flags past the cron's stale threshold, sparing another replica's live run (D52)", async () => {
+    await runStartupMaintenance(storage as unknown as IStorage);
+
+    expect(storage.users.resetStaleAutoCoaching).toHaveBeenCalledWith(STALE_AUTO_COACHING_THRESHOLD_MS);
   });
 
   it("fails boot on a missing column, so readiness never goes green (D7)", async () => {

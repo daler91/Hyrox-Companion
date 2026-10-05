@@ -1,5 +1,6 @@
 import type { Request, RequestHandler, Response, Router } from "express";
 
+import { largeJsonBodyParser } from "../../largeBodyParsers";
 import { aiBudgetCheck } from "../../middleware/aibudget";
 import { aiConsentCheck } from "../../middleware/aiConsent";
 import { protectedMutationGuards } from "../../routeGuards";
@@ -53,6 +54,11 @@ function buildProtectedStack<Req extends Request>(
   if (options.rateLimit !== false) {
     stack.push(options.limiter);
   }
+
+  // The few large-body routes are parsed here, after auth and the rate
+  // limiter, rather than at app level (D35, CODEBASE_ANALYSIS_2026-10-03).
+  // A no-op on every other path, whose body the app-level parser has read.
+  stack.push(largeJsonBodyParser);
 
   if (options.aiConsent) stack.push(aiConsentCheck);
   if (options.aiBudget) stack.push(aiBudgetCheck);

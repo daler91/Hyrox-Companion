@@ -7,6 +7,7 @@ import {
   configureObservability,
   registerProcessErrorHandlers,
   scrubSentryEvent,
+  scrubSentryTransaction,
 } from "./observability";
 
 vi.mock("../env", () => ({
@@ -104,6 +105,16 @@ describe("scrubSentryEvent", () => {
     expect(result.request?.query_string).toBeUndefined();
     expect(result.request?.cookies).toBeUndefined();
     expect(result.request?.headers).toEqual({ "user-agent": "test" });
+  });
+
+  it("strips the query string from the request URL too (P11)", () => {
+    const event: SentryEvent = {
+      request: { url: "https://app.example.com/api/v1/strava/callback?code=abc&state=user_123" },
+    };
+
+    const result = scrubSentryEvent(event);
+
+    expect(result.request?.url).toBe("https://app.example.com/api/v1/strava/callback?[redacted]");
   });
 
   it("strips sensitive request headers but leaves benign ones", () => {
@@ -206,6 +217,34 @@ describe("scrubSentryEvent", () => {
       expect(result.breadcrumbs?.[1]?.data?.url).toBe("https://api.example.com/v1/workouts");
     });
 
+    it("drops the separate http.query / http.fragment keys from outgoing-request breadcrumbs (P11)", () => {
+      // The shape @sentry/core's outgoing http/fetch breadcrumb really has:
+      // `url` is already sanitized and the query rides in `http.query`.
+      const event: SentryEvent = {
+        breadcrumbs: [
+          {
+            category: "http",
+            type: "http",
+            data: {
+              url: "https://world.openfoodfacts.org/cgi/search.pl",
+              "http.method": "GET",
+              "http.query": "?search_terms=banana&json=1",
+              "http.fragment": "#access_token=abc",
+              status_code: 200,
+            },
+          },
+        ],
+      };
+
+      const result = scrubSentryEvent(event);
+
+      expect(result.breadcrumbs?.[0]?.data).toEqual({
+        url: "https://world.openfoodfacts.org/cgi/search.pl",
+        "http.method": "GET",
+        status_code: 200,
+      });
+    });
+
     it("handles non-string urls in breadcrumbs", () => {
       const event: SentryEvent = {
         breadcrumbs: [
@@ -265,6 +304,112 @@ describe("scrubSentryEvent", () => {
   });
 });
 
+// P11 (CODEBASE_ANALYSIS_2026-10-03): beforeSend never sees performance
+// transactions, so the sampled traces kept food-search terms and the Strava
+// OAuth code/state in every URL-bearing field a transaction carries.
+describe("scrubSentryTransaction", () => {
+  function transactionEvent(): SentryEvent {
+    return {
+      type: "transaction",
+      transaction: "GET /api/v1/strava/callback?code=abc&state=user_123",
+      request: {
+        url: "https://app.example.com/api/v1/foods/search?q=banana",
+        query_string: "q=banana",
+        cookies: "session=xyz",
+        headers: { authorization: "Bearer secret", "user-agent": "test" },
+      },
+      user: { id: "user-123", email: "athlete@example.com" },
+      // The request's isolation-scope breadcrumbs ride on transactions too.
+      breadcrumbs: [
+        {
+          category: "http",
+          type: "http",
+          data: {
+            url: "https://world.openfoodfacts.org/cgi/search.pl",
+            "http.method": "GET",
+            "http.query": "?search_terms=banana&json=1",
+          },
+        },
+      ],
+      contexts: {
+        trace: {
+          trace_id: "t1",
+          span_id: "s1",
+          op: "http.server",
+          data: {
+            "http.url": "https://app.example.com/api/v1/foods/search?q=banana",
+            "http.target": "/api/v1/foods/search?q=banana",
+            "url.full": "https://app.example.com/api/v1/foods/search?q=banana",
+            "url.query": "?q=banana",
+            "http.query": "?q=banana",
+            "http.method": "GET",
+            "http.route": "/api/v1/foods/search",
+          },
+        },
+        request: { body: "test" },
+      },
+      spans: [
+        {
+          span_id: "s2",
+          trace_id: "t1",
+          start_timestamp: 0,
+          op: "http.client",
+          description: "GET https://world.openfoodfacts.org/cgi/search.pl?search_terms=banana",
+          data: {
+            url: "https://world.openfoodfacts.org/cgi/search.pl?search_terms=banana",
+            "http.query": "?search_terms=banana",
+            "http.method": "GET",
+          },
+        },
+        {
+          span_id: "s3",
+          trace_id: "t1",
+          start_timestamp: 0,
+          op: "db",
+          description: "select * from foods where tags ? $1",
+          data: { "db.system": "postgresql" },
+        },
+      ],
+    };
+  }
+
+  it("strips the query from the transaction name, request, breadcrumbs, root span and http child spans", () => {
+    const result = scrubSentryTransaction(transactionEvent());
+
+    expect(result.transaction).toBe("GET /api/v1/strava/callback?[redacted]");
+    expect(result.request).toEqual({
+      url: "https://app.example.com/api/v1/foods/search?[redacted]",
+      headers: { "user-agent": "test" },
+    });
+    expect(result.user).toEqual({ id: "user-123" });
+    expect(result.breadcrumbs?.[0]?.data).toEqual({
+      url: "https://world.openfoodfacts.org/cgi/search.pl",
+      "http.method": "GET",
+    });
+    expect(result.contexts?.request).toBeUndefined();
+    expect(result.contexts?.trace?.data).toEqual({
+      "http.url": "https://app.example.com/api/v1/foods/search?[redacted]",
+      "http.target": "/api/v1/foods/search?[redacted]",
+      "url.full": "https://app.example.com/api/v1/foods/search?[redacted]",
+      "http.method": "GET",
+      "http.route": "/api/v1/foods/search",
+    });
+    const [httpSpan, dbSpan] = result.spans ?? [];
+    expect(httpSpan.description).toBe("GET https://world.openfoodfacts.org/cgi/search.pl?[redacted]");
+    expect(httpSpan.data).toEqual({
+      url: "https://world.openfoodfacts.org/cgi/search.pl?[redacted]",
+      "http.method": "GET",
+    });
+    // A non-http span's "?" is not a query string (here a jsonb operator).
+    expect(dbSpan.description).toBe("select * from foods where tags ? $1");
+  });
+
+  it("returns the event reference and is safe on a bare transaction", () => {
+    const event: SentryEvent = { type: "transaction" };
+    expect(scrubSentryTransaction(event)).toBe(event);
+  });
+});
+
 describe("configureObservability", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -304,6 +449,9 @@ describe("configureObservability", () => {
       environment: "production",
       sendDefaultPii: false,
       tracesSampleRate: 0.1,
+      beforeSend: scrubSentryEvent,
+      // P11: transactions bypass beforeSend and need their own scrubber.
+      beforeSendTransaction: scrubSentryTransaction,
     }));
 
     expect(logger.info).toHaveBeenCalledWith(

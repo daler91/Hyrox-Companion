@@ -45,6 +45,12 @@ export function useSpeechRecognitionSession({
   const stoppedByUserRef = useRef(false);
   const recentEmissionsRef = useRef<TranscriptEmission[]>([]);
   const startRecognitionRef = useRef<() => void>(() => {});
+  // Bumped by every start, stop and unmount. The mic probe can stay pending
+  // for as long as the permission prompt is open, so startListening checks
+  // this after it and drops a start overtaken by any of them, rather than
+  // opening the mic with nothing on screen showing it.
+  // P10 (CODEBASE_ANALYSIS_2026-10-03)
+  const startGenerationRef = useRef(0);
 
   useEffect(() => {
     onResultRef.current = onResult;
@@ -222,6 +228,8 @@ export function useSpeechRecognitionSession({
     retryCountRef.current = 0;
     recentEmissionsRef.current = [];
     clearRetryTimeout();
+    startGenerationRef.current += 1;
+    const generation = startGenerationRef.current;
 
     try {
       await requestMicrophoneProbe();
@@ -232,6 +240,9 @@ export function useSpeechRecognitionSession({
       return;
     }
 
+    // Stopped, restarted or unmounted while the probe was pending. The probe
+    // has already released its stream, so there is nothing else to undo (P10).
+    if (generation !== startGenerationRef.current) return;
     startRecognition();
   }, [startRecognition, clearRetryTimeout, cutOffStop]);
 
@@ -247,6 +258,7 @@ export function useSpeechRecognitionSession({
       // A recogniser waiting out a retry delay has already ended.
       const recognition = retryTimeoutRef.current === null ? recognitionRef.current : null;
       stoppedByUserRef.current = true;
+      startGenerationRef.current += 1;
       clearRetryTimeout();
       retryCountRef.current = 0;
       recognitionRef.current = null;
@@ -267,6 +279,7 @@ export function useSpeechRecognitionSession({
 
   useEffect(() => {
     return () => {
+      startGenerationRef.current += 1;
       clearRetryTimeout();
       clearStopTimeout();
       if (recognitionRef.current) {
