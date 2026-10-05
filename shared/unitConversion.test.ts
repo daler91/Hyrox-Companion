@@ -511,6 +511,37 @@ describe("AI write unit normalization", () => {
       "Deficit -198 lbs",
     );
   });
+
+  // C52 (CODEBASE_ANALYSIS_2026-10-03): a speed's distance converted on its
+  // own ("6 km/h" was stored as "6000 m/h"), and a rest or hold's "2m" was
+  // read as metres ("Rest 7 ft", "Plank hold 3 ft"). Speeds and paces are
+  // left as written; "<n>m" after a rest or hold word is minutes.
+  it.each([
+    ["a km/h speed", IMPERIAL, "Incline walk 6 km/h", "Incline walk 6 km/h"],
+    ["a tight km/h speed", IMPERIAL, "Walk 6km/h, 12% incline", "Walk 6km/h, 12% incline"],
+    ["an m/s speed", IMPERIAL, "Strides at 7 m/s", "Strides at 7 m/s"],
+    ["a km per hour speed", IMPERIAL, "Walk 5 km per hour", "Walk 5 km per hour"],
+    ["a kph speed", IMPERIAL, "Bike 30 kph", "Bike 30 kph"],
+    ["a mph speed", METRIC, "Treadmill 6 mph", "Treadmill 6 mph"],
+    ["a mi/h speed", METRIC, "Walk 3 mi/h", "Walk 3 mi/h"],
+    ["a min/km pace", IMPERIAL, "Easy 5:30 min/km", "Easy 5:30 min/km"],
+    ["a rest", IMPERIAL, "Rest 2m", "Rest 2m"],
+    ["a rest between sets", IMPERIAL, "Rest 2m between sets", "Rest 2m between sets"],
+    ["a rest label and a colon", IMPERIAL, "Rest: 2m", "Rest: 2m"],
+    ["a plank hold", IMPERIAL, "Plank hold 1m", "Plank hold 1m"],
+    ["a plank", IMPERIAL, "Side plank 1m each side", "Side plank 1m each side"],
+    ["a wait", IMPERIAL, "Wait 3m then repeat", "Wait 3m then repeat"],
+    ["a recover", IMPERIAL, "Recover 2m", "Recover 2m"],
+    ["a short trailing rest", IMPERIAL, "4 rounds, 2m rest", "4 rounds, 2m rest"],
+    ["a rest after a distance", IMPERIAL, "Sled push 25m, rest 2m", "Sled push 82 ft, rest 2m"],
+    ["a sprint before a rest", IMPERIAL, "Sprint 50m rest 30s", "Sprint 164 ft rest 30s"],
+    ["a row", IMPERIAL, "Row 1000m", "Row 1000 m"],
+    ["a run", IMPERIAL, "Run 5km", "Run 5000 m"],
+    ["a run in feet", IMPERIAL, "Run 400m", "Run 1312 ft"],
+    ["a run back to metric", METRIC, "Run 3 miles", "Run 4.83 km"],
+  ])("C52: normalizes %s", (_label, preferences, input, expected) => {
+    expect(normalizeWorkoutTextUnits(input, preferences)).toBe(expected);
+  });
 });
 
 describe("getWorkoutDistanceDisplay", () => {

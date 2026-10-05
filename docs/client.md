@@ -528,8 +528,10 @@ within the app.
 ### Cached API data and sign-out
 
 Workbox applies `NetworkFirst` to programmatic `/api/` requests (50 entries,
-5-minute TTL, 10-second network timeout). Two things follow from Cache Storage
-being keyed by URL with **no per-user partition**:
+5-minute TTL). There is deliberately no network timeout: the cache answers only
+when the network fails outright, because a timeout fallback served a slow
+refetch after a save the pre-save response (C53). Two things follow from Cache
+Storage being keyed by URL with **no per-user partition**:
 
 - Identity and bulk-export endpoints (`/api/v1/auth/`, `/api/v1/export`) are
   excluded outright. They are worthless offline and are the two that most

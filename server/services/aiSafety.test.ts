@@ -174,6 +174,76 @@ describe("analyzeChatSafety", () => {
   });
 });
 
+// AI26 (CODEBASE_ANALYSIS_2026-10-03): the patterns matched substrings, so a
+// harmless "faint" tripped the escalation, and common symptom wording missed it.
+describe("red-flag symptom patterns", () => {
+  it.each([
+    "a faint pull in my hamstring",
+    "faint soreness in the quads",
+    "felt a faint twinge in my calf",
+    "the faintest burn on the last rep",
+    "a faint chance I make Saturday's session",
+    "chestnut-flavoured gel, legs were tight",
+    "short break between rounds, out of breath at the end",
+    "the pull was faint by the last round",
+    "the pull was so faint I nearly missed it",
+  ])("does not flag a harmless note: %s", (note) => {
+    expect(analyzeChatSafety(note, []).redFlagDetected).toBe(false);
+    const safety = analyzeSafetySignals(
+      { ...baseTrainingContext, recentWorkouts: [{ date: "2026-05-01", focus: "run", mainWorkout: "easy", status: "done", athleteNote: note }] },
+      [],
+    );
+    expect(safety.redFlagDetected).toBe(false);
+  });
+
+  it.each([
+    "I fainted after the last 1k",
+    "nearly fainted at the end of the tempo run",
+    "felt faint on the rower",
+    "feeling a bit faint after the wall balls",
+    "passed out briefly after the sled",
+    "got really dizzy on the burpees",
+    "dizziness all afternoon",
+    "light-headed when I stood up",
+    "felt lightheaded on the bike",
+    "light headed after the 8k",
+    "trouble breathing on the last lap",
+    "difficulty breathing even at an easy pace",
+    "shortness of breath on the stairs",
+    "short of breath walking home",
+    "chest tightness during the run",
+    "tight chest on the second interval",
+    "tightness in my chest after the sled",
+    "chest pain in the cooldown",
+    "palpitations during the warmup",
+    // Plurals and faint phrasings the unanchored patterns caught.
+    "had chest pains on the last interval",
+    "pains in my chest after the run",
+    "severe headaches after the sessions",
+    "irregular heartbeats during the run",
+    "blood in stools this week",
+    "blood in my urine after the long run",
+    "I thought I was going to faint",
+    "felt like I might faint",
+    "about to faint on the last rep",
+    "I was faint after the 1k",
+    "I'm faint and shaky",
+    "felt pretty faint on the rower",
+    "felt extremely faint",
+    "I was kind of faint after the sled",
+    "she faints often in the heat",
+    "Faint after the sled push",
+    "blacking out on the ski erg",
+  ])("flags a symptom: %s", (note) => {
+    expect(analyzeChatSafety(note, []).redFlagDetected).toBe(true);
+    const safety = analyzeSafetySignals(
+      { ...baseTrainingContext, recentWorkouts: [{ date: "2026-05-01", focus: "run", mainWorkout: "easy", status: "done", athleteNote: note }] },
+      [],
+    );
+    expect(safety.redFlagDetected).toBe(true);
+  });
+});
+
 describe("buildChatSafetyNotice", () => {
   it("returns no notice for a clean conversation", () => {
     expect(buildChatSafetyNotice({ redFlagDetected: false, hrMedicationDetected: false })).toBeNull();

@@ -204,7 +204,8 @@ export interface PeriodizationConfig {
   /** Cap on the positive carb delta (g) so adjustments can't compound absurdly. */
   maxCarbDeltaG?: number;
   /**
-   * Lower bound (kcal) for the load-scaled daily target. Omitted ⇒
+   * Lower bound (kcal) load scaling may not cut the daily target below; a
+   * baseline already under it is kept as set, never raised (C47). Omitted ⇒
    * {@link ABSOLUTE_CALORIE_FLOOR}. Supply the athlete's own per-sex floor where
    * it is known; a stored target row is not enough to derive it.
    */
@@ -475,12 +476,24 @@ export function effectiveTargetWindowed(
   // Bounding the carb delta (rather than raising `calories` on its own) keeps the
   // returned calories and macros reconciled, since carbs are the lever used
   // throughout this function.
+  //
+  // The floor bound is capped at zero: it limits how far load scaling may CUT
+  // the day, and never adds carbs. A baseline already under the floor (a manual
+  // 1,000 kcal target) made it positive, so a zero adjustment reported
+  // `effective_calorie_floor_applied` while leaving 1,000 kcal unchanged, and a
+  // small one was inflated to reach 1,200. Such a day now keeps its own number
+  // and is only held there on a cut. C47 (CODEBASE_ANALYSIS_2026-10-03)
   const zeroCarbBound = -base.carbG;
   const calorieFloorBound =
     base.calories == null
       ? Number.NEGATIVE_INFINITY
-      : ((config.calorieFloor ?? ABSOLUTE_CALORIE_FLOOR) - base.calories - proteinDeltaG * KCAL_PER_G_PROTEIN) /
-        KCAL_PER_G_CARB;
+      : Math.min(
+          0,
+          ((config.calorieFloor ?? ABSOLUTE_CALORIE_FLOOR) -
+            base.calories -
+            proteinDeltaG * KCAL_PER_G_PROTEIN) /
+            KCAL_PER_G_CARB,
+        );
 
   const desiredDelta = Math.min(cap, rawSum);
   const appliedDelta = Math.max(Math.max(zeroCarbBound, calorieFloorBound), desiredDelta);

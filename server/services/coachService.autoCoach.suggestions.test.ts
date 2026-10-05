@@ -248,8 +248,11 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     });
   });
 
-  it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
-    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+  // AI30 (CODEBASE_ANALYSIS_2026-10-03): the card of a table-backed day shows
+  // its rows, so a text write there changed nothing the athlete sees while the
+  // coach note claimed it had. The day is reviewed instead.
+  describe("a table-backed day whose suggestion yields no exercise rows", () => {
+    const deadliftDay = () =>
       makeTimelineEntry({
         exerciseDetails: [
           {
@@ -261,16 +264,64 @@ describe("coachService triggerAutoCoach suggestion application", () => {
             sortOrder: 0,
           },
         ],
-      }),
-    ]);
+      });
+
+    function expectReviewedNotRewritten() {
+      expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+      expect(dbMockState.insertValues).not.toHaveBeenCalled();
+      const writes = vi.mocked(storage.plans.updatePlanDay).mock.calls;
+      expect(writes).toHaveLength(1);
+      expect(writes[0][1]).toEqual(
+        expect.objectContaining({ aiSource: "review", aiRationale: "Deadlifts still fit this week." }),
+      );
+      expect(writes[0][1]).not.toHaveProperty("mainWorkout");
+      expect(writes[0][1].aiRationale).not.toBe("Dropped to 3 sets");
+      // The day goes to the review-note pass as one the coach left alone.
+      expect(vi.mocked(generateReviewNotes).mock.calls[0][1]).toEqual([
+        expect.objectContaining({ id: "day-1" }),
+      ]);
+    }
+
+    it("writes no text and no change note when the parse returns no exercises", async () => {
+      mockBaseAutoCoachDeps(storage, buildTrainingContext, [deadliftDay()]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ recommendation: "Keep this lighter today", rationale: "Dropped to 3 sets" }),
+      ]);
+      vi.mocked(parseExercisesFromText).mockResolvedValue([]);
+      vi.mocked(generateReviewNotes).mockResolvedValueOnce([
+        { workoutId: "day-1", note: "Deadlifts still fit this week." },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+      expectReviewedNotRewritten();
+    });
+
+    it("writes no text and no change note when the parse fails", async () => {
+      mockBaseAutoCoachDeps(storage, buildTrainingContext, [deadliftDay()]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ recommendation: "Keep this lighter today", rationale: "Dropped to 3 sets" }),
+      ]);
+      vi.mocked(parseExercisesFromText).mockRejectedValueOnce(new Error("parser unavailable"));
+      vi.mocked(generateReviewNotes).mockResolvedValueOnce([
+        { workoutId: "day-1", note: "Deadlifts still fit this week." },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+      expectReviewedNotRewritten();
+    });
+  });
+
+  it("still writes a suggestion as text on a day with no exercise table", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext);
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
       makeSuggestion({ recommendation: "Keep this lighter today" }),
     ]);
-    vi.mocked(parseExercisesFromText).mockResolvedValue([]);
     vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-    expect(dbMockState.insertValues).not.toHaveBeenCalled();
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
     expectPlanDayUpdate("day-1", {
       mainWorkout: "Keep this lighter today",
       aiRationale: "Progressive overload",
@@ -350,6 +401,25 @@ describe("coachService triggerAutoCoach suggestion application", () => {
       "user-1",
       expect.anything(),
     );
+  });
+
+  // AI29 (CODEBASE_ANALYSIS_2026-10-03): the race date sets a race-derived
+  // day's text, so the governor's downshift must not be saved over it.
+  it("never downshifts a race-derived day", async () => {
+    const base = loadGovernorTrainingContext();
+    const context: TrainingContext = {
+      ...base,
+      upcomingWorkouts: [{ ...base.upcomingWorkouts[0], raceDerived: true }],
+    };
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [hillRepeatTimelineEntry()]);
+    vi.mocked(buildTrainingContext).mockResolvedValue(context);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+    expect(dbMockState.deleteWhere).not.toHaveBeenCalled();
+    expect(dbMockState.insertValues).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
   });
 
   it("does not rename or re-snapshot when converting an already-converted day", async () => {

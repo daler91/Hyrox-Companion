@@ -29,16 +29,60 @@ const GLOBAL_PROHIBITED_MEDICAL_ACTION_PATTERNS = PROHIBITED_MEDICAL_ACTION_PATT
   (pattern) => new RegExp(pattern.source, "gi"),
 );
 
+// Whole words, and "faint" only as a symptom. These were unanchored, so "a
+// faint pull in my hamstring" blocked auto-coach changes and chat plan edits,
+// while "dizzy", "light-headed", "trouble breathing" and "chest tightness" got
+// no urgent notice at all. Plurals ("chest pains", "severe headaches") and
+// faint after a verb or pronoun ("about to faint", "I was faint", "felt pretty
+// faint") must keep matching, as they did unanchored. AI26
+// (CODEBASE_ANALYSIS_2026-10-03)
 const RED_FLAG_SYMPTOM_PATTERNS = [
-  /chest\s+pain/i,
-  /shortness\s+of\s+breath/i,
-  /faint(?:ed|ing)?/i,
-  /passed\s+out/i,
-  /dizziness|lightheaded/i,
-  /irregular\s+heartbeat|palpitations?/i,
-  /blood\s+in\s+(?:urine|stool)/i,
-  /severe\s+headache/i,
+  /\bchest\s+(?:pains?|tightness|pressure)\b/i,
+  /\b(?:pains?|tightness|pressure)\s+in\s+(?:my|the)\s+chest\b/i,
+  /\btight\s+chest\b/i,
+  /\bchest\s+(?:felt|feels|feeling|was|is|got)\s+tight\b/i,
+  /\bshort(?:ness)?\s+of\s+breath\b/i,
+  /\b(?:trouble|difficulty)\s+breathing\b/i,
+  // faints, fainted, faintness, a faint spell, felt/about to/might faint, I was
+  // faint, felt pretty faint, a terse "faint after the sled"; never "a faint
+  // pull", "faint soreness" or "the pull was faint".
+  /\bfaint(?:s|ed|ing|ness)\b/i,
+  /\bfaint\s+spells?\b/i,
+  /\bfaint\s+(?:after|during|while|when)\b/i,
+  // After a verb, a modal or "I was"; an intensifier between them ("felt
+  // pretty faint") is taken out first (hasRedFlagSymptom).
+  /\b(?:feel|feels|felt|feeling)\s+faint\b/i,
+  /\b(?:go|goes|going|gonna|went)\s+faint\b/i,
+  /\b(?:get|gets|got|getting)\s+faint\b/i,
+  /\b(?:to|might|could|would|will|may|nearly|almost)\s+faint\b/i,
+  /\b(?:i|he|she|we|they)\s+(?:was|were|am|is|are)\s+faint\b/i,
+  /\b(?:i['’]m|im)\s+faint\b/i,
+  /\b(?:passed|passing|passes|pass)\s+out\b/i,
+  /\bblack(?:ed|ing)\s+out\b/i,
+  /\bdizz(?:y|iness)\b/i,
+  /\blight[\s-]?headed(?:ness)?\b/i,
+  /\birregular\s+heart\s?beats?\b|\bpalpitations?\b/i,
+  /\bblood\s+in\s+(?:urine|stools?|my\s+urine|my\s+stools?)\b/i,
+  /\bsevere\s+headaches?\b/i,
 ];
+
+// One intensifier right before "faint", removed so the lead-word patterns
+// above read "felt pretty faint" as "felt faint". They run on text whose
+// whitespace is already single spaces, so each matches one literal space and
+// cannot backtrack over a run of them. Two lists rather than one pattern, to
+// keep each simple enough to read.
+const FAINT_INTENSIFIER_PATTERNS = [
+  / (?:really|very|quite|so|slightly|pretty|extremely|super|rather|somewhat|totally|kinda)(?= faint\b)/gi,
+  / (?:a (?:bit|little|tad)|(?:kind|sort) of)(?= faint\b)/gi,
+];
+
+function hasRedFlagSymptom(text: string): boolean {
+  const plain = FAINT_INTENSIFIER_PATTERNS.reduce(
+    (out, pattern) => out.replaceAll(pattern, ""),
+    text.replaceAll(/\s+/g, " "),
+  );
+  return RED_FLAG_SYMPTOM_PATTERNS.some((pattern) => pattern.test(plain));
+}
 
 const HR_MEDICATION_PATTERNS = [
   /beta\s*-?blocker/i,
@@ -110,7 +154,7 @@ export function analyzeSafetySignals(trainingContext: TrainingContext, upcomingW
   const medicationBlob = `${datedBlob}\n${standing ?? ""}`;
 
   return {
-    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(datedBlob)),
+    redFlagDetected: hasRedFlagSymptom(datedBlob),
     hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(medicationBlob)),
   };
 }
@@ -180,7 +224,7 @@ export function analyzeChatSafety(
   }
   const corpus = `${message}\n${previousUserTurn}`;
   return {
-    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(corpus)),
+    redFlagDetected: hasRedFlagSymptom(corpus),
     hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(corpus)),
   };
 }
@@ -188,8 +232,8 @@ export function analyzeChatSafety(
 /**
  * The fixed notice shown above the chat reply for those signals, or null. It
  * adds to the reply rather than replacing it, so a pattern false positive
- * ("a faint chance") costs a banner, not the answer. The escalation outranks
- * the medication disclaimer, as in buildSafetyReviewNote.
+ * costs a banner, not the answer. The escalation outranks the medication
+ * disclaimer, as in buildSafetyReviewNote.
  */
 export function buildChatSafetyNotice(signals: ChatSafetySignals): ChatSafetyNotice | null {
   if (signals.redFlagDetected) return { level: "urgent", message: ESCALATION_MESSAGE };

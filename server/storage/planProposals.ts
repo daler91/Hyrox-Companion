@@ -1,13 +1,31 @@
 import {
+  type EnrichedPlanAdjustmentChange,
   type InsertPlanAdjustmentProposal,
   type PlanAdjustmentProposal,
   planAdjustmentProposals,
   type PlanProposalApplyUndo,
   type PlanProposalStatus,
+  users,
 } from "@shared/schema";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db, type DbExecutor, type Tx } from "../db";
+import { getLocalDateStrSafe } from "../timezone";
+
+/**
+ * Whether a proposed change is for a day before `today`: the date it moves the
+ * day to, or else `dayDate`, the day's own. Pending proposals expire on it
+ * (getPending, against the day's date when proposed), and an apply turns a
+ * change away on it (against the live day). C33 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function changeLandsBefore(
+  change: Pick<EnrichedPlanAdjustmentChange, "updatedFields">,
+  dayDate: string | null,
+  today: string,
+): boolean {
+  const date = change.updatedFields.scheduledDate ?? dayDate;
+  return date !== null && date < today;
+}
 
 /**
  * Serialize one athlete's proposal creates for the rest of the transaction
@@ -138,12 +156,22 @@ export class PlanProposalStorage {
     });
   }
 
+  /**
+   * The athlete's pending proposal, unless it has expired. Proposals have no
+   * date bounds of their own, so one left pending for days could still be
+   * applied after the earliest day it changes had passed, putting a session
+   * on a date already gone. Once a change's day is before the athlete's
+   * today, the proposal is resolved `invalidated` here — the status a stale
+   * apply leaves — so neither this nor its chat card offers it again. C33
+   * (CODEBASE_ANALYSIS_2026-10-03)
+   */
   async getPending(userId: string): Promise<PlanAdjustmentProposal | undefined> {
     // Newest first, so a database that still holds two pending proposals
     // (the index not yet pushed) always answers with the same one (D51).
     const [row] = await db
-      .select()
+      .select({ proposal: planAdjustmentProposals, userTimezone: users.userTimezone })
       .from(planAdjustmentProposals)
+      .innerJoin(users, eq(users.id, planAdjustmentProposals.userId))
       .where(
         and(
           eq(planAdjustmentProposals.userId, userId),
@@ -152,7 +180,14 @@ export class PlanProposalStorage {
       )
       .orderBy(desc(planAdjustmentProposals.createdAt), desc(planAdjustmentProposals.id))
       .limit(1);
-    return row;
+    if (!row) return undefined;
+    const today = getLocalDateStrSafe(new Date(), row.userTimezone);
+    const { changes } = row.proposal.payload;
+    if (!changes.some((change) => changeLandsBefore(change, change.baseline.scheduledDate, today))) {
+      return row.proposal;
+    }
+    await this.resolve(row.proposal.id, userId, "invalidated");
+    return undefined;
   }
 
   async getById(id: string, userId: string): Promise<PlanAdjustmentProposal | undefined> {

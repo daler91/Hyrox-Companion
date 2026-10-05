@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSamplePlanSchema, updatePlanDayRouteSchema } from "./plans";
+import { planAdjustmentUpdatedFieldsSchema } from "./planProposals";
+import {
+  createSamplePlanSchema,
+  updatePlanDayRouteSchema,
+  updateTrainingPlanRetirementSchema,
+} from "./plans";
 
 // CL9 (CODEBASE_ANALYSIS_2026-10-03): a past race date (a mistyped year) built
 // a template plan whose every day read as post-race recovery, and nothing can
@@ -98,5 +103,40 @@ describe("updatePlanDayRouteSchema", () => {
     const result = updatePlanDayRouteSchema.parse({ weekNumber: -3, dayName: "Funday", focus: "Tempo run" });
 
     expect(result).toEqual({ focus: "Tempo run" });
+  });
+
+  // C50 (CODEBASE_ANALYSIS_2026-10-03): the generated schema took any string,
+  // and the date column refused it with a 500.
+  it.each([
+    ["an impossible day", "2026-02-30", "Must be a real calendar date"],
+    ["free text", "next tuesday", "Must be a valid date in YYYY-MM-DD format"],
+  ])("refuses %s as scheduledDate, naming it once", (_label, scheduledDate, message) => {
+    const result = updatePlanDayRouteSchema.safeParse({ scheduledDate });
+
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([message]);
+    expect(result.error?.issues[0]?.path).toEqual(["scheduledDate"]);
+  });
+
+  it.each(["2028-02-29", null])("takes %j as scheduledDate", (scheduledDate) => {
+    expect(updatePlanDayRouteSchema.parse({ scheduledDate })).toEqual({ scheduledDate });
+  });
+});
+
+// C50: the other plan dates a request writes to a date column.
+describe("plan dates that reach a date column", () => {
+  const retires = (retiredOn: string | null) =>
+    updateTrainingPlanRetirementSchema.safeParse({ retiredOn }).success;
+  const reschedules = (scheduledDate: string) =>
+    planAdjustmentUpdatedFieldsSchema.safeParse({ scheduledDate }).success;
+
+  it("refuses an impossible retirement date and takes a real one or null", () => {
+    expect(retires("2026-04-31")).toBe(false);
+    expect(retires("2026-04-30")).toBe(true);
+    expect(retires(null)).toBe(true);
+  });
+
+  it("refuses an impossible day in a coach proposal's reschedule", () => {
+    expect(reschedules("2026-02-30")).toBe(false);
+    expect(reschedules("2026-03-02")).toBe(true);
   });
 });

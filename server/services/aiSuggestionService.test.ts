@@ -702,3 +702,48 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
     ]);
   });
 });
+
+// AI27 (CODEBASE_ANALYSIS_2026-10-03): the manual path passed `undefined` as the
+// plan goal but still recorded it as present, so the CoachNote showed a "Plan
+// goal" chip on a suggestion made without it.
+describe("generateTimelineAiSuggestions plan goal", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpcomingDay();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ trainingStyleId: null, weightUnit: "kg" });
+    vi.mocked(extractCoachingMaterialsText).mockReset();
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(mockPlanDay({ aiInputsUsed: null }));
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeWorkoutSuggestion({
+        recommendation: "Back squat 3x5 then sled push 4x20m",
+        rationale: "Sled Push has not been trained in 20 days.",
+        priority: "medium",
+      }),
+    ]);
+  });
+
+  function persistedInputs() {
+    const update = vi.mocked(storage.plans.updatePlanDay).mock.calls[0]?.[1];
+    return update?.aiInputsUsed;
+  }
+
+  it("gives the model the active plan's goal and records it as present", async () => {
+    mockAIContext({
+      activePlan: { name: "Spring block", totalWeeks: 12, currentWeek: 3, goal: "Sub-90 Hyrox" },
+    });
+
+    await generateTimelineAiSuggestions("user-1", testLog);
+
+    expect(vi.mocked(generateWorkoutSuggestions).mock.calls[0]?.[2]).toBe("Sub-90 Hyrox");
+    expect(persistedInputs()).toEqual(expect.objectContaining({ planGoalPresent: true }));
+  });
+
+  it("does not claim a plan goal when the plan has none", async () => {
+    mockAIContext({ activePlan: { name: "Spring block", totalWeeks: 12, currentWeek: 3 } });
+
+    await generateTimelineAiSuggestions("user-1", testLog);
+
+    expect(vi.mocked(generateWorkoutSuggestions).mock.calls[0]?.[2]).toBeUndefined();
+    expect(persistedInputs()).toEqual(expect.objectContaining({ planGoalPresent: false }));
+  });
+});

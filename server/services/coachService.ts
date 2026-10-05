@@ -203,12 +203,23 @@ function shouldUseStructuredWrite(
   return hasStructuredExercises(entry) && suggestion.targetField !== "notes";
 }
 
+/**
+ * Parse a suggestion for a table-backed day into exercise rows. A day with no
+ * table (or a notes cue) keeps the text write.
+ *
+ * Null when a table-backed day gets no rows (a failed or empty parse). The day
+ * used to fall back to a mainWorkout text write, but its card shows the rows,
+ * not that text: the coach note said "Dropped to 3 sets" while the athlete saw
+ * the unchanged 5x5. The suggestion is dropped instead, and the day goes to the
+ * review-note pass like any day the coach left alone.
+ * AI30 (CODEBASE_ANALYSIS_2026-10-03)
+ */
 async function prepareSuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
   unitPreferences: UnitPreferences,
   userId: string,
-): Promise<PreparedSuggestion> {
+): Promise<PreparedSuggestion | null> {
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
   if (
     !suggestionWillApply(suggestion, upcomingWorkouts) ||
@@ -217,24 +228,23 @@ async function prepareSuggestion(
     return { suggestion };
   }
 
+  const logFields = { workoutId: suggestion.workoutId, targetField: suggestion.targetField };
   try {
     const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
       suggestion,
       unitPreferences,
       userId,
     );
-    if (structuredSetRows.length === 0) return { suggestion };
-    return {
-      suggestion,
-      structuredSetRows,
-    };
+    if (structuredSetRows.length > 0) return { suggestion, structuredSetRows };
   } catch (err) {
-    logger.warn(
-      { err, workoutId: suggestion.workoutId, targetField: suggestion.targetField },
-      "[coach] Structured suggestion parse failed; falling back to text update",
-    );
-    return { suggestion };
+    // The parser's error, an internal plan-day id and a field name; no workout text.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err, ...logFields }, "[coach] Structured suggestion parse failed");
   }
+  // An internal plan-day id and a field name only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info(logFields, "[coach] No exercise rows for a table-backed day; reviewing it instead");
+  return null;
 }
 
 function prepareLoadGovernorSuggestion(suggestion: LoadGovernorSuggestion): PreparedSuggestion {
@@ -340,7 +350,11 @@ function suggestionWillApply(
   if (!suggestion.workoutId || !suggestion.recommendation || !suggestion.rationale) {
     return false;
   }
-  return upcomingWorkouts.some((w) => w.id === suggestion.workoutId);
+  // A race-derived day (race, shakeout, recovery) carries text the race date
+  // generates, not the stored prescription; an append saved that boilerplate
+  // over the day's own workout. No stage may write one.
+  // AI29 (CODEBASE_ANALYSIS_2026-10-03)
+  return upcomingWorkouts.some((workout) => workout.id === suggestion.workoutId && !workout.raceDerived);
 }
 
 async function applySuggestion(
@@ -452,6 +466,7 @@ function buildUpcomingWorkoutInputs(trainingContext: TrainingContext): UpcomingW
       aiNoteUpdatedAt: w.aiNoteUpdatedAt,
       aiInputsUsed: w.aiInputsUsed,
       priority: w.priority,
+      ...(w.raceDerived ? { raceDerived: true } : {}),
       ...(w.exerciseDetails && w.exerciseDetails.length > 0
         ? { exerciseDetails: w.exerciseDetails }
         : {}),
@@ -471,6 +486,10 @@ function collectModifiedWorkoutIds(
   return modifiedIds;
 }
 
+/**
+ * The days that get a review note. A race-derived day gets none: the timeline
+ * shows the race date's own text there and hides coach notes (AI29).
+ */
 function selectUnchangedWorkouts(
   upcomingWorkouts: UpcomingWorkout[],
   modifiedIds: Set<string>,
@@ -478,7 +497,7 @@ function selectUnchangedWorkouts(
   const workouts: UpcomingWorkout[] = [];
   const ids = new Set<string>();
   for (const workout of upcomingWorkouts) {
-    if (!modifiedIds.has(workout.id)) {
+    if (!modifiedIds.has(workout.id) && !workout.raceDerived) {
       workouts.push(workout);
       ids.add(workout.id);
     }
@@ -662,7 +681,8 @@ async function prepareDeterministicStages(
   const loadGovernorPrepared = trainingContext.coachingInsights?.loadGovernor
     ? buildLoadGovernorSuggestions(
         trainingContext.coachingInsights.loadGovernor,
-        upcomingWorkouts,
+        // The race date sets these days; the governor never downshifts them (AI29).
+        upcomingWorkouts.filter((workout) => !workout.raceDerived),
         trainingContext.currentDate,
       ).map(prepareLoadGovernorSuggestion)
     : [];
@@ -837,9 +857,15 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
           coachSignals,
         ),
     );
-    const preparedSuggestions = await Promise.all(
-      suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, unitPreferences, userId)),
-    );
+    // A dropped suggestion (no rows for a table-backed day, AI30) leaves its
+    // day unchanged, so the review-note pass below covers it.
+    const preparedSuggestions = (
+      await Promise.all(
+        suggestions.map((suggestion) =>
+          prepareSuggestion(suggestion, upcomingWorkouts, unitPreferences, userId),
+        ),
+      )
+    ).filter((prepared) => prepared !== null);
     const allPreparedSuggestions = [...stages.loadGovernorPrepared, ...preparedSuggestions];
 
     // For any upcoming day the coach did NOT modify, request a short review

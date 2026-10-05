@@ -190,6 +190,64 @@ describe("scoreCandidate", () => {
     expect(score).toBeGreaterThanOrEqual(DEFAULT_MATCH_THRESHOLDS.suggest);
   });
 
+  describe("C29 (CODEBASE_ANALYSIS_2026-10-03): a sport the day did not prescribe never auto-links", () => {
+    const simDay = candidate({
+      focus: "Hyrox Sim",
+      mainWorkout: "Full sim: 8 x 1 km run + 50 wall balls, sled push",
+      durationMin: 60,
+      localStartMinutes: 18 * 60,
+    });
+    const atSimTime = { movingTimeSec: 60 * 60, distanceMeters: 0, localStartMinutes: 18 * 60 };
+
+    it.each(["Yoga", "Soccer", "Golf"])(
+      "keeps a %s session that matches duration and time in the suggestion band",
+      (sportType) => {
+        const { score, signals } = scoreCandidate(
+          activity({ ...atSimTime, sportType, name: "Evening class" }),
+          simDay,
+        );
+        // The signals are as strong as they get; only the sport disagrees.
+        expect(signals.duration).toBe(1);
+        expect(signals.timeOfDay).toBe(1);
+        expect(score).toBeLessThan(DEFAULT_MATCH_THRESHOLDS.autoLink);
+        expect(score).toBeGreaterThanOrEqual(DEFAULT_MATCH_THRESHOLDS.suggest);
+        expect(decideMatch(activity({ ...atSimTime, sportType }), [simDay]).outcome).toBe(
+          "suggest",
+        );
+      },
+    );
+
+    it("suggests rather than links a mismatched sport on a known prescription", () => {
+      // A Strava "Workout" is conditioning, which a run day only half fits.
+      const runDay = candidate({
+        mainWorkout: "Easy run, conversational",
+        durationMin: 45,
+        localStartMinutes: 6 * 60 + 30,
+      });
+      const workout = activity({ sportType: "Workout", name: "Session", distanceMeters: 0 });
+      expect(decideMatch(workout, [runDay]).outcome).toBe("suggest");
+    });
+
+    it("still links a sim recorded as a Run, the loosest compatible pairing", () => {
+      const run = activity({ ...atSimTime, sportType: "Run", name: "Evening Run" });
+      expect(decideMatch(run, [simDay])).toMatchObject({
+        outcome: "link",
+        candidate: { id: simDay.id },
+      });
+    });
+
+    it("lets an unclassified sport claim nothing in a batch either", () => {
+      const planned = planDeviceActivityMatches(
+        [activity({ ...atSimTime, sportType: "Yoga", name: "Flow" })],
+        new Map([[DATE, [simDay]]]),
+      );
+      expect(planned[0].decision).toMatchObject({
+        outcome: "suggest",
+        candidate: { id: simDay.id },
+      });
+    });
+  });
+
   it("uses a manually entered log distance when present", () => {
     const log = candidate({
       kind: "workout_log",

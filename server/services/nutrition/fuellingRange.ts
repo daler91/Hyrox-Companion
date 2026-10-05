@@ -52,13 +52,81 @@ export function periodizationConfigFromTarget(t: NutritionTarget): Periodization
 }
 
 /**
+ * How much training context a baseline's effective target reads: none for a
+ * flat target, the day's own load for load-only periodisation, and the full
+ * window (recent load, upcoming plan, phase) once an adaptive knob is on. The
+ * daily summary and the fuelling range both decide by this and build the
+ * window the same way (fetchTrainingLoadWindows), so a day's target is the same
+ * on the Nutrition page and on its Timeline chip; the range used to give every
+ * day the single-day window. C31 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export type TargetLoadNeed = "none" | "day" | "window";
+
+export function targetLoadNeed(target: NutritionTarget): TargetLoadNeed {
+  if (!target.periodizationEnabled) return "none";
+  return (target.recoveryEnabled ?? false) || targetReadsFuture(target) ? "window" : "day";
+}
+
+/** Whether the target's window must carry the upcoming plan (pre-load, phase). */
+export function targetReadsFuture(target: NutritionTarget): boolean {
+  return (target.preloadCarbGramsPerUtss ?? 0) > 0 || (target.phaseAware ?? false);
+}
+
+/**
+ * The window a day's effective target is built from, given its baseline, the
+ * day's own UTSS and, for an adaptive target, the day's full window (fetched
+ * with the upcoming plan when any day in the batch reads it, so it is dropped
+ * here for a target that does not).
+ */
+function targetWindowFor(
+  baseline: NutritionTarget,
+  dayUtss: number,
+  fullWindow: TrainingLoadWindow | undefined,
+): TrainingLoadWindow {
+  const need = targetLoadNeed(baseline);
+  if (need === "none") return singleDayWindow(0);
+  if (need === "day" || !fullWindow) return singleDayWindow(dayUtss);
+  if (targetReadsFuture(baseline)) return fullWindow;
+  return { ...fullWindow, upcoming: [], phase: null, daysUntilRace: null };
+}
+
+/** What a fuelling range has to fetch for its days' targets (see targetLoadNeed). */
+export interface RangeLoadNeeds {
+  /** Some day's target reads only that day's UTSS. */
+  dayUtss: boolean;
+  /** The days whose target reads a full window, ascending. */
+  windowDates: string[];
+  /** Some of those windows read the upcoming plan. */
+  includeFuture: boolean;
+}
+
+export function rangeLoadNeeds(
+  targets: NutritionTarget[],
+  range: { from: string; to: string },
+): RangeLoadNeeds {
+  const resolveBaseline = makeBaselineResolver(targets);
+  const needs: RangeLoadNeeds = { dayUtss: false, windowDates: [], includeFuture: false };
+  for (const date of eachDate(range.from, range.to)) {
+    const baseline = resolveBaseline(date);
+    const need = baseline ? targetLoadNeed(baseline) : "none";
+    if (need === "day") needs.dayUtss = true;
+    if (baseline && need === "window") {
+      needs.windowDates.push(date);
+      needs.includeFuture ||= targetReadsFuture(baseline);
+    }
+  }
+  return needs;
+}
+
+/**
  * Build a day's EffectiveTargetSummary from its baseline target + a training-load
  * window, reusing the shared `effectiveTargetWindowed` calculator. Shared with the
  * daily-summary route's resolver so a day's target is derived identically
- * everywhere. The window carries today's load plus (for the daily view) recent
- * actual load and upcoming planned load; the block/range analytics views pass a
- * `singleDayWindow` so they stay load-correlation views. Pure; carbs/calories/
- * protein flex only when periodisation (and the matching knob) is on.
+ * everywhere. The window carries today's load plus, for an adaptive target,
+ * recent actual load and upcoming planned load (the daily summary and the
+ * fuelling range); the block view passes a `singleDayWindow` so it stays a
+ * load-correlation view. Pure; carbs/calories/protein flex only when
+ * periodisation (and the matching knob) is on.
  */
 export function buildEffectiveTargetSummary(
   baseline: NutritionTarget,
@@ -118,12 +186,12 @@ function meanOfProperty<T>(
 
 /**
  * Roadmap G — decorate block-view points with the day's outcome fields for the
- * fuelling↔performance correlation: the effective carb target (same resolution
- * rules as the range/summary endpoints, fed by the RAW per-day UTSS so all
- * three surfaces derive the identical target — the point's own utss is
- * display-rounded) and the day's mean session RPE / prescription compliance
- * from its workout logs. Pure; fields are null on days with no target or no
- * recorded outcome.
+ * fuelling↔performance correlation: the load-scaled carb target (the baseline
+ * scaled by the day's RAW UTSS — the point's own utss is display-rounded — and
+ * deliberately not the adaptive recovery/pre-load window the daily summary and
+ * fuelling range add, so this stays a load-correlation view) and the day's
+ * mean session RPE / prescription compliance from its workout logs. Pure;
+ * fields are null on days with no target or no recorded outcome.
  */
 export function decorateBlockPointsWithOutcomes(
   points: BlockViewPoint[],
@@ -156,17 +224,19 @@ export function decorateBlockPointsWithOutcomes(
 
 /**
  * Phase 2 (Timeline integration) — per-day fuelling progress for the home-screen
- * chips: each day's intake totals, the load-adjusted effective target (reusing
- * the same `effectiveTarget` calculator + UTSS source the daily summary and block
- * view use), and whether a post-workout meal was logged. Every day in
- * `[from, to]` gets a point (zero totals / null target where there's no data).
- * Pure and DB-free so the windowing + target-resolution rules are unit-testable.
+ * chips: each day's intake totals, its effective target (resolved exactly as
+ * the daily summary resolves it: `dailyLoads` for a load-only target, `windows`
+ * from fetchTrainingLoadWindows for an adaptive one — see rangeLoadNeeds), and
+ * whether a post-workout meal was logged. Every day in `[from, to]` gets a
+ * point (zero totals / null target where there's no data). Pure and DB-free so
+ * the windowing + target-resolution rules are unit-testable.
  */
 export function buildFuellingRange(
   rows: LogEntryWithFood[],
   dailyLoads: ReadonlyArray<DailyUtss>,
   targets: NutritionTarget[],
   range: { from: string; to: string },
+  windows: ReadonlyMap<string, TrainingLoadWindow> = new Map(),
 ): FuellingDayPoint[] {
   const rowsByDate = groupByLogDate(rows);
   const utssByDate = toUtssByDate(dailyLoads);
@@ -180,7 +250,10 @@ export function buildFuellingRange(
       date,
       totals: roundMacros(sumNutrition(dayRows)),
       effectiveTarget: baseline
-        ? buildEffectiveTargetSummary(baseline, singleDayWindow(utssByDate.get(date) ?? 0))
+        ? buildEffectiveTargetSummary(
+            baseline,
+            targetWindowFor(baseline, utssByDate.get(date) ?? 0, windows.get(date)),
+          )
         : null,
       hasPostWorkoutFuel: dayRows.some((r) => r.mealType === "post_workout"),
     });

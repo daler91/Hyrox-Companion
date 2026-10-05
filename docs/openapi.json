@@ -563,13 +563,13 @@
               "type": "object",
               "properties": {
                 "setNumber": {
-                  "type": "number",
+                  "type": "integer",
                   "nullable": true,
                   "minimum": 1,
                   "maximum": 100
                 },
                 "reps": {
-                  "type": "number",
+                  "type": "integer",
                   "nullable": true,
                   "minimum": 1,
                   "maximum": 10000
@@ -593,7 +593,7 @@
                   "maximum": 1440
                 },
                 "plannedReps": {
-                  "type": "number",
+                  "type": "integer",
                   "nullable": true,
                   "minimum": 1,
                   "maximum": 10000
@@ -1036,13 +1036,13 @@
               "type": "object",
               "properties": {
                 "setNumber": {
-                  "type": "number",
+                  "type": "integer",
                   "nullable": true,
                   "minimum": 1,
                   "maximum": 100
                 },
                 "reps": {
-                  "type": "number",
+                  "type": "integer",
                   "nullable": true,
                   "minimum": 1,
                   "maximum": 10000
@@ -1066,7 +1066,7 @@
                   "maximum": 1440
                 },
                 "plannedReps": {
-                  "type": "number",
+                  "type": "integer",
                   "nullable": true,
                   "minimum": 1,
                   "maximum": 10000
@@ -1510,7 +1510,8 @@
         "type": "object",
         "properties": {
           "date": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "focus": {
             "type": "string",
@@ -1654,13 +1655,13 @@
         "type": "object",
         "properties": {
           "setNumber": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 1,
             "maximum": 100
           },
           "reps": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 1,
             "maximum": 10000
@@ -1684,7 +1685,7 @@
             "maximum": 1440
           },
           "plannedReps": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 1,
             "maximum": 10000
@@ -2077,7 +2078,7 @@
             "pattern": "^[^\\s]+$"
           },
           "weeklyGoal": {
-            "type": "number",
+            "type": "integer",
             "minimum": 1,
             "maximum": 14
           },
@@ -2371,7 +2372,8 @@
           },
           "scheduledDate": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "status": {
             "type": "string",
@@ -2491,7 +2493,8 @@
             "type": "object",
             "properties": {
               "date": {
-                "type": "string"
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
               },
               "focus": {
                 "type": "string",
@@ -2634,7 +2637,7 @@
                       "maximum": 50
                     },
                     "reps": {
-                      "type": "number",
+                      "type": "integer",
                       "nullable": true,
                       "minimum": 1,
                       "maximum": 10000
@@ -2658,7 +2661,7 @@
                       "maximum": 1440
                     },
                     "plannedReps": {
-                      "type": "number",
+                      "type": "integer",
                       "nullable": true,
                       "minimum": 0,
                       "maximum": 10000
@@ -2769,13 +2772,13 @@
                         "type": "object",
                         "properties": {
                           "setNumber": {
-                            "type": "number",
+                            "type": "integer",
                             "nullable": true,
                             "minimum": 1,
                             "maximum": 100
                           },
                           "reps": {
-                            "type": "number",
+                            "type": "integer",
                             "nullable": true,
                             "minimum": 1,
                             "maximum": 10000
@@ -2799,7 +2802,7 @@
                             "maximum": 1440
                           },
                           "plannedReps": {
-                            "type": "number",
+                            "type": "integer",
                             "nullable": true,
                             "minimum": 1,
                             "maximum": 10000
@@ -2920,7 +2923,8 @@
             "type": "object",
             "properties": {
               "date": {
-                "type": "string"
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
               },
               "focus": {
                 "type": "string",
@@ -3125,7 +3129,7 @@
                       "maximum": 50
                     },
                     "reps": {
-                      "type": "number",
+                      "type": "integer",
                       "nullable": true,
                       "minimum": 1,
                       "maximum": 10000
@@ -3149,7 +3153,7 @@
                       "maximum": 1440
                     },
                     "plannedReps": {
-                      "type": "number",
+                      "type": "integer",
                       "nullable": true,
                       "minimum": 0,
                       "maximum": 10000
@@ -3260,13 +3264,13 @@
                         "type": "object",
                         "properties": {
                           "setNumber": {
-                            "type": "number",
+                            "type": "integer",
                             "nullable": true,
                             "minimum": 1,
                             "maximum": 100
                           },
                           "reps": {
-                            "type": "number",
+                            "type": "integer",
                             "nullable": true,
                             "minimum": 1,
                             "maximum": 10000
@@ -3290,7 +3294,7 @@
                             "maximum": 1440
                           },
                           "plannedReps": {
-                            "type": "number",
+                            "type": "integer",
                             "nullable": true,
                             "minimum": 1,
                             "maximum": 10000

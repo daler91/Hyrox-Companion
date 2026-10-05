@@ -27,7 +27,7 @@ import { calculatePersonalRecords, countPersonalRecordsInRange } from "./service
 import { getLocalMondayWeekBoundaries } from "./services/weeklyProgress";
 import { buildWeeklyReview } from "./services/weeklyReviewService";
 import type { IStorage } from "./storage";
-import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, getLocalHour } from "./timezone";
+import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, isLocalHourDue } from "./timezone";
 
 // Claim windows for the send ledgers. Both are shorter than their nominal
 // cadence on purpose: the stamp now lands when the claim is taken rather than
@@ -296,19 +296,24 @@ function wantsEmail(user: User, kind: EmailKind): boolean {
  * resolved against the athlete's wall clock. Every email carries its own send
  * hour, falling back to the athlete's default send time (`notifyHour`, default
  * 07:00) when they have not given that one a time of its own — the review
- * reminder falls back to Sunday evening instead (shared/notifyHours.ts). The
- * weekday gates are unchanged: the summary only on their local Monday, the
- * review reminder only on their local Sunday. Pure, so the gating table is
- * unit-testable without the queue.
+ * reminder falls back to Sunday evening instead (shared/notifyHours.ts). An
+ * hour that a spring-forward gap removes from the athlete's day falls due on
+ * the first hour after the gap (`isLocalHourDue`). The weekday gates are
+ * unchanged: the summary only on their local Monday, the review reminder only
+ * on their local Sunday. Pure, so the gating table is unit-testable without
+ * the queue.
  *
  * Throws on an unusable `userTimezone` (Intl rejects the name); the scan
  * catches that per user so one stale zone cannot silence everyone else.
  */
 export function planEmailJobsForUser(user: User, now: Date): EmailJobName[] {
   const tz = user.userTimezone;
-  const localHour = getLocalHour(now, tz);
   const localDayOfWeek = getLocalDayOfWeek(now, tz);
-  const atHourFor = (kind: EmailKind) => localHour === resolveNotifyHour(user, kind);
+  // Not a bare `localHour === notifyHour`: an hour a spring-forward gap skips
+  // never matched, so a Sunday review reminder set inside it was lost for the
+  // week. The skipped hour falls due on the first tick after the gap instead,
+  // still once, and every send keeps its claim (C24).
+  const atHourFor = (kind: EmailKind) => isLocalHourDue(now, tz, resolveNotifyHour(user, kind));
 
   const jobs: EmailJobName[] = [];
   if (localDayOfWeek === 1 && wantsEmail(user, "weeklySummary") && atHourFor("weeklySummary")) {

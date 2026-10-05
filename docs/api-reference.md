@@ -316,7 +316,7 @@ Create a new workout log, optionally with parsed exercises and/or structure bloc
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
 - **Body:** `InsertWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks`
-- **Validation:** `createWorkoutRouteSchema` (`insertWorkoutLogSchema` extended with `exercisesPayloadSchema` + `structureBlocksPayloadSchema`)
+- **Validation:** `createWorkoutRouteSchema` (`insertWorkoutLogSchema` extended with `exercisesPayloadSchema` + `structureBlocksPayloadSchema`). `date` must be a real calendar day; reps, planned reps and set numbers are whole numbers; step numbers and minute indices are unique within a structure block. A value its column would refuse is a `400` naming the field, not a `500` that rolls back the save (C50, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
 - **Server-owned fields:** `source`, `stravaActivityId`, `garminActivityId` and `startedAt` are stripped from the body. They mark a workout as a device import and are written only by the activity sync and the device-link routes, so accepting them from a client would let a manual log present itself as a Strava or Garmin recording. `planId` is likewise always derived: the server resolves plan linkage from `planDayId` (ownership-checked) or from the plan covering the workout's date, and a client-supplied `planId` is discarded.
 - **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job. A text-only write guard (`rejectTextOnlyWriteIfNeeded`) may reject the request when structured exercise data is required.
 - **Response:** Created `WorkoutLog` with expanded `exerciseSets`
@@ -405,6 +405,8 @@ Update an existing workout log.
 - **Response:** Updated `WorkoutLog`
 
 A body with only `structureBlocks` (the workout sheet's block builder) replaces the log's structure blocks and leaves its columns unchanged.
+
+A body with `exercises` replaces every logged set, so, as after a single set edit, a plan-linked log's adherence columns (`compliancePct` and the set counts) are recomputed against its plan day and the auto-coach is re-queued before the response (C32, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
 
 `relinks` (at most 500, each `setId` once) moves the exercise rows that follow the steps a `structureBlocks` save renumbers, in the same transaction, before the blocks are replaced (CL15, `docs/CODEBASE_ANALYSIS_2026-10-03.md`). Each is `{ setId, fromBlockId, fromStepNumber, blockId, stepNumber, intervalMinute?, cycleNumber? }`; `blockId` and `stepNumber` both `null` unlink a row whose step was removed, which also clears its interval minute, cycle, step role and group. A relink naming a set that belongs to another workout or plan day fails the whole save with `404` and nothing is written. A relink naming a set that no longer exists (deleted after the client computed it) is skipped and the save goes through. A row no longer on `fromBlockId`/`fromStepNumber` was moved by a newer write and is left alone, so a replay moves nothing twice. `intervalMinute` and `cycleNumber` keep their stored values unless sent. Saves of one workout's blocks are serialized by a row lock on the log.
 
@@ -547,7 +549,7 @@ List workouts that have no parsed exercise sets (candidates for reparsing). A pl
 
 ### POST /api/v1/workouts/:id/reparse
 
-Re-parse a single workout's text into structured exercise sets using the configured text AI provider. Writes the parsed sets through; responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets.
+Re-parse a single workout's text into structured exercise sets using the configured text AI provider. Writes the parsed sets through; responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets. A successful reparse replaces every logged set, so it then recomputes a plan-linked log's adherence columns and re-queues the auto-coach, as a set edit does (C32); `/reparse-from-image` does the same.
 
 - **Auth:** Required (user must own the workout)
 - **Rate limit:** `reparse` category, 5/min
@@ -687,8 +689,10 @@ Import a training plan from CSV content.
 - **Auth:** Required
 - **Rate limit:** `planImport` category, 5/min
 - **Body:** `{ csvContent: string, fileName?: string, planName?: string }`
+- **Body limit:** 1MB (elevated from default 100kb, so any CSV the schema accepts fits once JSON-encoded)
 - **Validation:** `importPlanRequestSchema` (csvContent max 100,000 chars)
 - **Response:** `TrainingPlanWithDays`
+- **Errors:** `400` `INVALID_CSV` — the CSV's own row problem when the import names one (a Week below 1, an unrecognised Day, a span over 52 weeks, no rows with both a Week and a Day), otherwise a generic "Failed to parse CSV content" message
 
 ### POST /api/v1/plans/sample
 
@@ -752,7 +756,7 @@ Archive a training plan from a date, or restore it.
 
 - **Auth:** Required
 - **Rate limit:** `planUpdate` category, 20/min
-- **Body:** `{ retiredOn: string | null }` — an ISO `YYYY-MM-DD`, or `null` to restore
+- **Body:** `{ retiredOn: string | null }` — an ISO `YYYY-MM-DD` that is a real calendar day, or `null` to restore
 - **Response:** Updated `TrainingPlan`
 - **`404`:** Plan not found (or not the caller's)
 - **`409 PLAN_OVERLAP`:** Returned on a restore that would leave two live plans covering the same days — the state the lifecycle column exists to prevent. The message names the plan in the way.
@@ -769,7 +773,7 @@ Update a plan day. Despite the path, `:planId` is not checked: the day is looked
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
-- **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin, priority)
+- **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin, priority); `scheduledDate` is a real `YYYY-MM-DD` calendar day or `null`
 - **Validation:** `updatePlanDayRouteSchema`
 - **Response:** Updated `PlanDay`
 
@@ -807,7 +811,7 @@ Update only the status, scheduled date and/or skip reason of a plan day.
 
 - **Auth:** Required
 - **Rate limit:** `planDayStatus` category, 20/min
-- **Body:** `{ status?: "planned" | "completed" | "missed" | "skipped", scheduledDate?: string | null, skipReason?: "ill" | "injured" | "schedule" | "low_energy" | null }`
+- **Body:** `{ status?: "planned" | "completed" | "missed" | "skipped", scheduledDate?: string | null, skipReason?: "ill" | "injured" | "schedule" | "low_energy" | null }` (`scheduledDate` a real `YYYY-MM-DD` calendar day)
 - **Response:** Updated `PlanDay`
 - **Notes:** `skipReason` is only meaningful alongside `status: "skipped"` — any
   other status clears it. Omitting the key leaves an existing reason untouched;
@@ -835,8 +839,9 @@ across the missed session's week and the weeks of the days it could move to.
     (`estimated: true`). The sessions around it are sized the same way
   - `fold` / `shorten` — `{ available, unavailableReason, suggestedDate, targets }`,
     one target per day it could move to (today and the next six days, inside the
-    plan, before race day, outside absences). `suggestedDate` is the option's
-    best day: the recommendation's own day for the recommended option, otherwise
+    plan, before the shakeout day that precedes race day, outside absences).
+    `suggestedDate` is the option's best day: the recommendation's own day for
+    the recommended option, otherwise
     the best day without cautions (then without severe ones), where sooner,
     same-week and lighter days rank higher. Each target lists the sessions
     already on that day and the option's `impact`: the day's minutes after the
@@ -1031,7 +1036,7 @@ Create a new annotation.
 
 - **Auth:** Required
 - **Rate limit:** `annotations` category, 20/min
-- **Body:** `{ startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", type: "injury" | "illness" | "travel" | "rest", note?: string }` (`note` max 500 chars)
+- **Body:** `{ startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", type: "injury" | "illness" | "travel" | "rest", note?: string }` (both dates real calendar days; `note` max 500 chars)
 - **Validation:** `insertTimelineAnnotationSchema` (Zod), with a `.refine` that `endDate >= startDate` when both dates are present
 - **Response:** `201 TimelineAnnotation`
 
@@ -1557,14 +1562,16 @@ The last stored "what this means for you" reading for each Overview-tab chart, k
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
-- **Response:** the stored `OverviewAnalysisResult` plus `generatedAt` and a `stale` flag; `{ sections: null }` when nothing has been generated yet
+- **Query:** `range` (optional) — the Analytics page's selected range: a day count from 1 to 366 (the page sends `30`, `90`, `180` or `365`) or `all`. With it, a stored analysis of a different range answers `{ sections: null }`, so a reading never sits beside charts of another range. A result stored before analyses had a range counts as `all`. Without it, the stored result is returned whatever its range. An invalid value is a `400`.
+- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag; `{ sections: null }` when nothing has been generated yet for the range
 
 ### POST /api/v1/overview-analysis
 
-Regenerate the Overview chart analysis and persist it. One AI call produces every chart's reading.
+Regenerate the Overview chart analysis and persist it. One AI call produces every chart's reading. The analysis reads the same range as the Overview charts: the last `range` days ending on the athlete's today (in their timezone), or all time. Only one analysis is stored per athlete, so generating one range replaces the stored one. When the nightly recompute refreshes a stale analysis it keeps that analysis's range, and moves one stored before analyses had a range to 90 days.
 
 - **Auth:** Required
 - **Rate limit:** `suggestions` category, 3/min — plus AI consent and budget checks
+- **Query:** `range` (optional) — as for GET; defaults to `90`, the range the Analytics page opens on
 - **Response:** the fresh `OverviewAnalysisResult` with `stale: false` (it is generated against the current latest workout)
 
 ### POST /api/v1/timeline/ai-suggestions
@@ -1665,7 +1672,7 @@ When a coach-chat message reads as a plan-change request, [`POST /api/v1/chat/st
 
 ### GET /api/v1/plan-proposals/pending
 
-The athlete's currently pending proposal, if any.
+The athlete's currently pending proposal, if any. A pending proposal with a change for a day before the athlete's today (the day it moves a session to, or the session's own day) has expired: it is resolved `invalidated` and not returned.
 
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
@@ -1688,7 +1695,7 @@ Apply the proposed changes to the plan: all of them, or the ones the athlete pic
 - **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately _not_ checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
 - **Body:** optional `{ planDayIds?: string[] }` (1–14 ids). Without it, every change is applied. Only the picked changes are re-checked, re-parsed and written; the others are never applied.
 - **Response:** `{ applied: true, changeCount }`, or `{ applied: false, reason, message }` for a retryable failure (`structured_parse_failed`, `ai_budget_exceeded`, `ai_disabled`), with the proposal left pending.
-- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it)
+- **Errors:** `400` (`invalid_selection` — an empty pick, or a day the proposal doesn't change), `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it, or a picked change is for a day before the athlete's today)
 
 ### POST /api/v1/plan-proposals/:id/undo
 
@@ -1750,7 +1757,7 @@ Update user preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferences` category, 20/min
-- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `userTimezone?` (IANA name), `weeklyGoal?` (1-14), `mealSchedule?: 3 | 4 | 5`, the `email*` toggles, `notifyHour?` (0-23) and the per-email `notifyHour*` overrides (0-23, or `null` to clear), `aiCoachEnabled?`, `coachAutoApplyPlanChanges?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, the profile fields `division` … `weightGoalRateKgPerWeek`, and the `maf*` fields). Also accepts three fields the response does not echo: `pushRefuelReminder?`, `pushLoggingReminder?` and `trainingConstraints?` (max 500 chars; the client only ever sends `null`, the athlete card's "Remove note", and the Settings save leaves it out).
+- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `userTimezone?` (IANA name), `weeklyGoal?` (a whole number, 1-14), `mealSchedule?: 3 | 4 | 5`, the `email*` toggles, `notifyHour?` (0-23) and the per-email `notifyHour*` overrides (0-23, or `null` to clear), `aiCoachEnabled?`, `coachAutoApplyPlanChanges?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, the profile fields `division` … `weightGoalRateKgPerWeek`, and the `maf*` fields). Also accepts three fields the response does not echo: `pushRefuelReminder?`, `pushLoggingReminder?` and `trainingConstraints?` (max 500 chars; the client only ever sends `null`, the athlete card's "Remove note", and the Settings save leaves it out).
 - **Validation:** `updateUserPreferencesSchema`
 - **Timezone validation:** a `userTimezone` the server runtime does not recognise returns `400 { code: "INVALID_TIMEZONE" }`.
 - **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge` plus either `mafCategory`, or the legacy `mafConsistency`/`mafTrend` pair, to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.
@@ -1981,7 +1988,7 @@ Imports the most recent activities from Garmin into `workout_logs`.
   - `429 { code: "GARMIN_SYNC_TOO_SOON" }` — less than 5 minutes since `lastSyncedAt`
   - `401 { code: "GARMIN_RECONNECT_REQUIRED" }` — prior `lastError` is set; user must disconnect + reconnect
   - `503 { code: "GARMIN_CIRCUIT_OPEN" }` — global 429 breaker tripped
-- **Behavior:** Calls `client.getActivities(0, 20)`, dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`.
+- **Behavior:** Calls `client.getActivities(start, 20)` a page at a time until a short page, a page reaching back past the last sync less 7 days (90 days back on a first sync), or 5 pages, whichever comes first; a failed page fails the whole sync. Dedupes against the partial unique index `(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL`, and inserts the new rows via `onConflictDoNothing`, each with its one synthesised exercise set (a distance-and-time set for runs, rides, swims, rows and walks; none for strength or generic sessions) in the same transaction (C26).
 - **Success response:** `{ success: true, imported: number, skipped: number, total: number }` — `imported` is the true insert count; anything caught by the partial index is rolled into `skipped`.
 - **Error responses:** `401 GARMIN_AUTH_FAILED`, `502 GARMIN_API_ERROR` (with `lastError` persisted), `409 GARMIN_BUSY`.
 
@@ -2001,7 +2008,7 @@ Get merged timeline of planned and logged workouts.
 - **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date, newest first
 - **Headers:** `X-Next-Cursor: YYYY-MM-DD` when older entries exist; echo it back as `before` for the next page
 
-The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus the most recent `limit` past entries, so the upcoming schedule is always complete. Pages never split a calendar date.
+The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus the most recent `limit` past entries, so the upcoming schedule is always complete. Pages never split a calendar date. Every entry is paged by its own `date`, which for a logged plan day is the log's date rather than the day's scheduled slot, so a session logged or dragged off its slot appears on exactly one page (C43).
 
 Plan-day entries also carry `priority` (the session's tier, absent on rest days), `recovery` and `missedOn` (what became of a missed session — see [missed-session recovery](#get-apiv1plansdaysdayidrecovery)), `recoverable` (`true` on a missed session the timeline should ask about: undecided, a real session, not a race-week day, before its plan was retired, and missed no more than seven days ago in the athlete's timezone), `recoveryUndoable` (`true` on a folded or shortened session whose move can still be taken back: upcoming, not yet done, and missed recently enough that the card would ask about it again) and `raceDerived` (`true` when the session shown is the race, the shakeout before it or recovery after it, set by the plan's race date). Each is omitted when it doesn't apply. `dayName` is the weekday the entry sits on, read from its `date` — not the plan day's stored `dayName`, which names the slot the session was written for — so a session moved from Tuesday to Thursday reads "Thursday".
 
@@ -2102,7 +2109,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST   | `/foods`                               | Create a custom food (+ servings)                                                                                | `nutritionWrite` (30)                |
 | GET    | `/foods/:id`                           | Food + named servings                                                                                            | `nutritionRead` (60)                 |
 | PATCH  | `/foods/:id`                           | Edit a custom food (`409` when another athlete has logged it and the name or macros change)                      | `nutritionWrite` (30)                |
-| DELETE | `/foods/:id`                           | Delete a custom food (`409` if referenced by a log)                                                              | `nutritionWrite` (30)                |
+| DELETE | `/foods/:id`                           | Delete a custom food (`409` if a log or recipe uses it, or it is a recipe's own food)                            | `nutritionWrite` (30)                |
 | POST   | `/foods/:id/servings`                  | Add a named serving                                                                                              | `nutritionWrite` (30)                |
 | DELETE | `/foods/:id/servings/:servingId`       | Delete a serving                                                                                                 | `nutritionWrite` (30)                |
 | GET    | `/favorites`                           | List favourites (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`)                | `nutritionRead` (60)                 |
@@ -2132,7 +2139,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST   | `/recipes`                             | Create a recipe                                                                                                  | `nutritionWrite` (30)                |
 | GET    | `/recipes/:id`                         | Recipe + ingredients + per-serving macros                                                                        | `nutritionRead` (60)                 |
 | PATCH  | `/recipes/:id`                         | Edit a recipe (`409` when another athlete has logged it)                                                         | `nutritionWrite` (30)                |
-| DELETE | `/recipes/:id`                         | Delete a recipe                                                                                                  | `nutritionWrite` (30)                |
+| DELETE | `/recipes/:id`                         | Delete a recipe (`409` while another of your recipes uses it)                                                    | `nutritionWrite` (30)                |
 
 `/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its
 deterministic and pace-personalized layers must work for every athlete, so it

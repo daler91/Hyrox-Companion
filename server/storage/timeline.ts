@@ -24,7 +24,7 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notExists, notInArray, or, type SQL, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { getLocalDateStrSafe } from "../timezone";
@@ -297,6 +297,12 @@ export interface UpcomingPlannedDay {
   priority: PlanDayPriority | null;
   exerciseSets: ExerciseSet[];
   structureBlocks: TimelineEntry["structureBlocks"];
+  /**
+   * The text shown is set by the plan's race date (race, shakeout, recovery),
+   * not stored on the day, so no writer may save it back. Omitted otherwise.
+   * AI29 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  raceDerived?: boolean;
 }
 
 // Shape one upcoming planned-day row for the AI coach, applying a race-day
@@ -486,6 +492,48 @@ function hydrateTimelineStructureBlocks(
   }
 }
 
+/**
+ * A date a plan day's timeline entries sit on, in SQL. "shown" is its own
+ * entry's: the newest linked log's date, as that log stands in for the day
+ * (buildTimelineEntries), else the scheduled date. "earliest" is the oldest
+ * linked log's, since the day's other logs show as entries of their own (C16).
+ *
+ * Paging bounded and ordered plan days by `scheduled_date` while their entries
+ * are dated by the log, so a completed card whose log sits on another date
+ * than its slot was skipped on every page or shown on two, under one React key
+ * (C43, CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * The workout_logs side is spelled with identifiers, not drizzle columns: the
+ * relational query rewrites every column in its where/orderBy to the plan_days
+ * alias, which would turn `workout_logs.date` into the plan day's.
+ */
+function planDayEntryDate(which: "shown" | "earliest", userId: string): SQL<string> {
+  const log = sql.identifier("linked_log");
+  const logColumn = (name: string) => sql`${log}.${sql.identifier(name)}`;
+  const date = logColumn(workoutLogs.date.name);
+  const picked = which === "shown" ? sql`max(${date})` : sql`min(${date})`;
+  return sql<string>`coalesce(
+    (select ${picked} from ${workoutLogs} as ${log}
+      where ${logColumn(workoutLogs.planDayId.name)} = ${planDays.id}
+        and ${logColumn(workoutLogs.userId.name)} = ${userId}),
+    ${planDays.scheduledDate})`;
+}
+
+/**
+ * The merged entries dated before `before`, each id once. A plan day read for
+ * an older log of its own brings its newer stand-in entry with it, which
+ * belongs to an earlier page (C43); the id check is a backstop so no merge can
+ * hand the client one React key twice.
+ */
+function entriesBefore(entries: TimelineEntry[], before: string | undefined): TimelineEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if ((before !== undefined && entry.date >= before) || seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
+}
+
 export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
@@ -548,13 +596,16 @@ export class TimelineStorage {
     // (CODEBASE_ANALYSIS_2026-10-03). A single plan keeps every day in scope.
     const retiredDayScope = isSinglePlanView ? undefined : planDaysPastRetirement(userPlans);
 
+    // Bounded and ordered by the date each day's entries are shown on, not its
+    // slot (C43): a page takes every day with an entry before `before`, and the
+    // merge drops the entries that are not (loadMergedEntries).
     const days = await db.query.planDays.findMany({
       where: and(
         planScope,
         isNotNull(planDays.scheduledDate),
-        ...(before === undefined ? [] : [lt(planDays.scheduledDate, before)]),
+        ...(before === undefined ? [] : [lt(planDayEntryDate("earliest", userId), before)]),
       ),
-      orderBy: desc(planDays.scheduledDate),
+      orderBy: desc(planDayEntryDate("shown", userId)),
       ...(sqlLimit === undefined ? {} : { limit: sqlLimit }),
     });
 
@@ -722,10 +773,11 @@ export class TimelineStorage {
   /**
    * The un-windowed multi-source merge every timeline read starts from:
    * scheduled plan days, their linked logs and standalone logs, each base
-   * source capped at `sqlOverFetch` rows (newest first) and, when `before` is
-   * given, restricted to dates strictly earlier than it. `sourceTruncated`
-   * reports whether a base source hit its cap, which is the only way a caller
-   * can tell "that was everything" from "the SQL window ended here".
+   * source capped at `sqlOverFetch` rows (newest first, by the date each entry
+   * is shown on) and, when `before` is given, restricted to entries dated
+   * strictly earlier than it. `sourceTruncated` reports whether a base source
+   * hit its cap, which is the only way a caller can tell "that was everything"
+   * from "the SQL window ended here".
    */
   private async loadMergedEntries(
     userId: string,
@@ -771,7 +823,7 @@ export class TimelineStorage {
       this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch, before, retiredDayScope),
     ]);
 
-    const { entries, suppressedPlanDayIds } = this.buildTimelineEntries(
+    const built = this.buildTimelineEntries(
       scheduledDays,
       linkedWorkouts,
       standaloneWorkouts,
@@ -779,6 +831,8 @@ export class TimelineStorage {
       planNameById,
       absences,
     );
+    const entries = entriesBefore(built.entries, before);
+    const { suppressedPlanDayIds } = built;
     const sourceTruncated =
       sqlOverFetch !== undefined &&
       (scheduledDays.length >= sqlOverFetch || standaloneWorkouts.length >= sqlOverFetch);
@@ -841,8 +895,9 @@ export class TimelineStorage {
   /**
    * The distinct calendar dates on which this athlete trained — the date of
    * every log that counts as training (`counts_as_training`) plus every plan day
-   * marked completed (within its plan's lifetime, exactly as getTimeline scopes
-   * them).
+   * marked completed with no log linked to it (within its plan's lifetime,
+   * exactly as getTimeline scopes them). A day with a log is dated by the log,
+   * as its timeline card is (C44).
    *
    * This is the streak input. The weekly email used to hydrate the athlete's
    * ENTIRE timeline (every plan day, every log, every exercise set and
@@ -870,7 +925,22 @@ export class TimelineStorage {
         ? db
             .selectDistinct({ date: planDays.scheduledDate })
             .from(planDays)
-            .where(and(planScope, eq(planDays.status, "completed"), isNotNull(planDays.scheduledDate)))
+            .where(
+              and(
+                planScope,
+                eq(planDays.status, "completed"),
+                isNotNull(planDays.scheduledDate),
+                // A day with a log was done on the log's date, read above.
+                // Its slot added a phantom date that could bridge a streak
+                // gap (C44, CODEBASE_ANALYSIS_2026-10-03).
+                notExists(
+                  db
+                    .select({ one: sql`1` })
+                    .from(workoutLogs)
+                    .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.planDayId, planDays.id))),
+                ),
+              ),
+            )
         : Promise.resolve([] as { date: string | null }[]),
     ]);
 
@@ -942,9 +1012,15 @@ export class TimelineStorage {
       // Same race-day derivation as the timeline, so the coach sees the race day
       // and its light shakeout/recovery context instead of the raw workout.
       const override = deriveRaceDayOverride(r.scheduledDate, raceDateById.get(r.planId));
-      upcoming.push(
-        toUpcomingPlannedDay(r, r.scheduledDate, override, setsByPlanDayId, blocksByPlanDayId),
+      const day = toUpcomingPlannedDay(
+        r,
+        r.scheduledDate,
+        override,
+        setsByPlanDayId,
+        blocksByPlanDayId,
       );
+      // Flagged so the coach never saves the derived text back (AI29).
+      upcoming.push(override ? { ...day, raceDerived: true } : day);
     }
 
     return upcoming;

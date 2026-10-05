@@ -339,6 +339,36 @@ describe("effectiveTargetWindowed (past + future training)", () => {
     expect(r.reasonCodes).toContain("carb_delta_capped");
   });
 
+  // C47 (CODEBASE_ANALYSIS_2026-10-03): the calorie floor only limits a cut. A
+  // manual baseline already under it is the athlete's number: it must not be
+  // reported as floored when nothing moved, nor inflated up to the floor.
+  describe("a baseline already below the calorie floor (C47)", () => {
+    const manual = { calories: 1000, proteinG: 80, carbG: 100, fatG: 30 };
+
+    it("leaves it unchanged, with no floor reason, when the adjustment is zero", () => {
+      const day = effectiveTargetWindowed(manual, emptyWindow(50), loadCfg);
+      expect(day.calories).toBe(1000);
+      expect(day.carbDeltaG).toBe(0);
+      expect(day.reasonCodes).not.toContain("effective_calorie_floor_applied");
+    });
+
+    it("applies a small positive adjustment as computed, not inflated to the floor", () => {
+      const day = effectiveTargetWindowed(manual, emptyWindow(55), loadCfg);
+      expect(day.baseLoadDeltaG).toBe(10); // (55−50)×2, not scaled up to +50 g
+      expect(day.carbDeltaG).toBe(10);
+      expect(day.calories).toBe(1040);
+      expect(day.reasonCodes).not.toContain("effective_calorie_floor_applied");
+    });
+
+    it("holds it at the baseline on a cut, and says the floor did that", () => {
+      const day = effectiveTargetWindowed(manual, emptyWindow(30), loadCfg);
+      expect(day.baseLoadDeltaG).toBe(0); // (30−50)×2 = −40, stopped by the floor
+      expect(day.carbDeltaG).toBe(0);
+      expect(day.calories).toBe(1000);
+      expect(day.reasonCodes).toContain("effective_calorie_floor_applied");
+    });
+  });
+
   it("passes through untouched when periodisation is disabled, even with a rich window", () => {
     const window: TrainingLoadWindow = {
       ...emptyWindow(0),

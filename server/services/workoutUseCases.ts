@@ -12,6 +12,7 @@ import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import { findInconsistentHeartRate } from "./heartRateConsistency";
 import { findPersonalRecordAchievements } from "./personalRecordAchievements";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
+import { refreshDerivedStateAfterLoggedSetChange } from "./workoutService/loggedSetChange";
 
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
@@ -175,6 +176,13 @@ export async function updateWorkoutUseCase(input: {
   }
 
   const updated = await updateWorkout(input.workoutId, updateData, structured, input.userId, structureBlocks);
+  // A PATCH with `exercises` replaces every logged set, so the adherence
+  // snapshot and the coach note are re-derived as for any set edit (C32,
+  // CODEBASE_ANALYSIS_2026-10-03). Before the cache drop, so the next read
+  // sees the new columns.
+  if (updated && Array.isArray(structured)) {
+    await refreshDerivedStateAfterLoggedSetChange(input.workoutId, input.userId);
+  }
   // D10: see createWorkout.
   if (updated) invalidateAnalyticsCachesForUser(input.userId);
   return updated;

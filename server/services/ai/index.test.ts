@@ -320,6 +320,38 @@ describe("buildTrainingContext", () => {
     );
   });
 
+  // AI24 (CODEBASE_ANALYSIS_2026-10-03): the window was Date.now() against the
+  // log date read as UTC midnight, so east of UTC this morning's session came
+  // out a day in the future and was dropped.
+  it("counts this morning's session for an athlete east of UTC", async () => {
+    // 22:00 UTC on the 14th is already 08:00 on the 15th in Sydney.
+    vi.setSystemTime(new Date("2026-06-14T22:00:00Z"));
+    vi.mocked(storage.users.getUser).mockResolvedValue(
+      makeUser({ userTimezone: "Australia/Sydney" }),
+    );
+    recentMock.mockReturnValue([{ date: "2026-06-15" }, { date: "2026-06-14" }] as never);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(decideMock).toHaveBeenCalledWith(
+      expect.objectContaining({ latestWorkouts: expect.objectContaining({ completedLast7d: 2 }) }),
+    );
+  });
+
+  it("bounds the window to seven calendar days, today included", async () => {
+    recentMock.mockReturnValue([
+      { date: "2026-06-15" },
+      { date: "2026-06-09" }, // today - 6 -> included
+      { date: "2026-06-08" }, // today - 7 -> excluded
+    ] as never);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(decideMock).toHaveBeenCalledWith(
+      expect.objectContaining({ latestWorkouts: expect.objectContaining({ completedLast7d: 2 }) }),
+    );
+  });
+
   it("logs a blocked-intensity line in a strict performance phase", async () => {
     decideMock.mockReturnValue(makeDecision({ phase: "performance", intensityPermitted: false }));
 

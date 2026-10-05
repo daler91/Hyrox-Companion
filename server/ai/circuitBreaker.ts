@@ -55,13 +55,13 @@ interface BreakerSnapshot {
 /**
  * If a half-open probe never resolves (e.g. the AI call hangs and the
  * caller never reaches recordSuccess/recordFailure), `probeInFlight`
- * stays true forever and the breaker can't half-open again on the next
- * cooldown window — it stays stuck open until process restart (W15).
+ * stays true forever and, since half-open admits only the probe, every
+ * later call fails fast until process restart (W15, AI18).
  *
  * 10 seconds is far below COOLDOWN_MS so a wedged probe self-heals well
- * before the next cooldown attempt. The deadline is best-effort: if the
- * wrapped call eventually does call record*, the deadlined-out probe is
- * effectively a no-op (state is already "closed" or "open").
+ * before the next cooldown attempt: the next call becomes the probe. The
+ * deadline is best-effort: if the wrapped call eventually does call
+ * record*, its verdict still applies like any other call's.
  */
 const PROBE_TIMEOUT_MS = 10_000;
 
@@ -222,21 +222,33 @@ export class AiCircuitBreaker {
     timer.unref?.();
   }
 
-  /** Called before a request. Throws if the breaker is currently open. */
+  /**
+   * Called before a request. Throws while the breaker is open, and while it is
+   * half-open for every call but the one probe. Half-open used to throw for
+   * nobody, so after each cooldown every caller went through to a provider
+   * that might still be hanging — AI18 (CODEBASE_ANALYSIS_2026-10-03). A probe
+   * slot given back without a verdict (releaseProbe, or the probe deadline)
+   * goes to the next caller, so the breaker cannot stay wedged half-open.
+   */
   assertClosed(): void {
-    if (this.state === "open") {
-      if (Date.now() - this.openedAt >= COOLDOWN_MS && !this.probeInFlight) {
-        this.state = "half-open";
-        this.probeInFlight = true;
-        this.startProbeDeadline();
-        // The breaker name is a fixed internal identifier, no user data.
-        // bearer:disable javascript_lang_logger_leak
-        logger.info({ breaker: this.name }, "[ai] circuit breaker -> half-open (probe)");
-        this.persistAsync();
-        return;
-      }
-      throw new CircuitBreakerOpenError();
-    }
+    if (this.state === "closed") return;
+    const coolingDown = this.state === "open" && Date.now() - this.openedAt < COOLDOWN_MS;
+    if (coolingDown || this.probeInFlight) throw new CircuitBreakerOpenError();
+    this.admitProbe();
+  }
+
+  /** Let this caller through as the single half-open probe. */
+  private admitProbe(): void {
+    const wasOpen = this.state === "open";
+    this.state = "half-open";
+    this.probeInFlight = true;
+    this.startProbeDeadline();
+    // Already half-open: a released slot passing to the next caller, not a transition.
+    if (!wasOpen) return;
+    // The breaker name is a fixed internal identifier, no user data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ breaker: this.name }, "[ai] circuit breaker -> half-open (probe)");
+    this.persistAsync();
   }
 
   /** Called after a successful request. */

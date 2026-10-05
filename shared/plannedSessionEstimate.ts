@@ -18,7 +18,7 @@
  */
 
 import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName } from "./schema/exercises";
-import { storedDistanceToMeters } from "./unitConversion";
+import { storedDistanceToMetersStamped } from "./unitConversion";
 
 /** Block-level timing/intensity fields (a structural subset of StructureBlockInput). */
 export interface PlannedSessionBlock {
@@ -44,9 +44,19 @@ export interface PlannedSessionSet {
   time?: number | null;
   plannedReps?: number | null;
   reps?: number | null;
-  /** Prescribed distance in the user's stored unit (m for km users, ft for miles users). */
+  /**
+   * Prescribed distance in the unit the row was written in: its `distanceUnit`
+   * stamp when it has one, else the athlete's stored unit (m for km users, ft
+   * for miles users).
+   */
   plannedDistance?: number | null;
   distance?: number | null;
+  /**
+   * The row's audit-L4 unit stamp for `distance`/`plannedDistance` ("m" or "ft"),
+   * null on a pre-L4 row. A stamped row is read in its own unit; only an
+   * unstamped one falls back to the athlete's current preference.
+   */
+  distanceUnit?: string | null;
   /** Canonical exercise key (e.g. "recovery_run") or human label; normalized internally. */
   exerciseName?: string | null;
   /**
@@ -66,7 +76,10 @@ export interface PlannedSessionSet {
 export interface PlannedSessionEstimateInput {
   structureBlocks?: readonly PlannedSessionBlock[] | null;
   exerciseSets?: readonly PlannedSessionSet[] | null;
-  /** User distance preference so stored distance → meters. Defaults to "km" (meters). */
+  /**
+   * User distance preference, used to read a set with no unit stamp (stored
+   * distance → meters). Defaults to "km" (meters).
+   */
   distanceUnit?: string | null;
   /**
    * Personalized running-pace multiplier vs the generic defaults: <1 = faster than
@@ -324,7 +337,10 @@ export function estimateSetMinutes(
     const key = set.exerciseName ? normalizeExerciseName(set.exerciseName) : null;
     const secPerM = resolvePace(key, runPaceRatio);
     if (secPerM != null) {
-      const meters = storedDistanceToMeters(rawDistance, distanceUnit);
+      // The row's own stamp wins over the CURRENT preference: after a km-to-miles
+      // switch a stamped 10,000 m run was read as 10,000 ft, shrinking a 55-min
+      // estimate to 17 (C48, CODEBASE_ANALYSIS_2026-10-03).
+      const meters = storedDistanceToMetersStamped(rawDistance, set, { distanceUnit });
       const minutes = (meters * secPerM) / 60;
       return key != null && INTERVAL_LIKE.has(key) ? minutes * INTERVAL_REST_MULTIPLIER : minutes;
     }

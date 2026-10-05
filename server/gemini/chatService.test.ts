@@ -295,4 +295,114 @@ describe("streamChatWithCoachTools", () => {
 
     await expect(collect(toolset())).rejects.toThrow("Failed to get response from AI coach");
   });
+
+  describe("text across rounds (AI21, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    /** The reply as the athlete reads it, and as the route saves it: every text event, joined. */
+    const replyText = (events: CoachStreamEvent[]) =>
+      events.map((event) => (event.type === "text" ? event.text : "")).join("");
+
+    it("starts a later round's text on a new paragraph, in the stream and the saved reply", async () => {
+      rounds(
+        [{ text: "Let me pull up your July sessions." }, { toolCalls: [READ_CALL] }],
+        [{ text: "In July you squatted " }, { text: "100 kg." }],
+      );
+
+      const events = await collect(toolset());
+
+      expect(events).toEqual([
+        { type: "text", text: "Let me pull up your July sessions." },
+        { type: "text", text: "\n\nIn July you squatted " },
+        { type: "text", text: "100 kg." },
+      ]);
+      expect(replyText(events)).toBe("Let me pull up your July sessions.\n\nIn July you squatted 100 kg.");
+      // The model's own turn goes back as it said it, without the break.
+      const second = vi.mocked(streamTextEvents).mock.calls[1][0];
+      expect(second.messages.at(-2)).toEqual(
+        expect.objectContaining({ role: "assistant", content: "Let me pull up your July sessions." }),
+      );
+    });
+
+    it("adds no break when an earlier round said nothing", async () => {
+      rounds([{ toolCalls: [READ_CALL] }], [{ text: "You squatted 100 kg." }]);
+
+      expect(replyText(await collect(toolset()))).toBe("You squatted 100 kg.");
+    });
+
+    it("adds no break where either side already has whitespace", async () => {
+      rounds([{ text: "Checking.\n" }, { toolCalls: [READ_CALL] }], [{ text: "Done." }, { toolCalls: [READ_CALL] }], [
+        { text: " Still 100 kg." },
+      ]);
+
+      expect(replyText(await collect(toolset()))).toBe("Checking.\nDone. Still 100 kg.");
+    });
+
+    it("breaks after the last round that said something, past a silent one", async () => {
+      rounds([{ text: "Checking." }, { toolCalls: [READ_CALL] }], [{ toolCalls: [READ_CALL] }], [{ text: "Done." }]);
+
+      expect(replyText(await collect(toolset()))).toBe("Checking.\n\nDone.");
+    });
+  });
+
+  describe("tool calls per round (AI22, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    const callNumber = (index: number) => ({ ...READ_CALL, id: `call-${index}` });
+    const calls = (count: number) => Array.from({ length: count }, (_unused, index) => callNumber(index));
+    /** The tool results the given provider round was sent, in order. */
+    const toolResults = (round: number) =>
+      vi
+        .mocked(streamTextEvents)
+        .mock.calls.at(round)?.[0]
+        .messages.flatMap((message) => (message.role === "tool" ? [message.content] : [])) ?? [];
+
+    it("runs at most six of one round's calls and answers the rest with an error", async () => {
+      rounds([{ toolCalls: calls(8) }], [{ text: "Here is the comparison." }]);
+      const tools = toolset();
+
+      await collect(tools);
+
+      expect(tools.run).toHaveBeenCalledTimes(6);
+      expect(tools.run).not.toHaveBeenCalledWith(callNumber(6));
+      const results = toolResults(1);
+      // Every call still has its result, so the conversation stays well-formed.
+      expect(results).toHaveLength(8);
+      expect(results.slice(0, 6)).toEqual(Array.from({ length: 6 }, () => '{"sessions":[]}'));
+      for (const result of results.slice(6)) expect(result).toContain("too many lookups");
+    });
+
+    it("runs no more than three calls at once", async () => {
+      rounds([{ toolCalls: calls(6) }], [{ text: "Done." }]);
+      let inFlight = 0;
+      let mostInFlight = 0;
+      const tools = toolset();
+      tools.run.mockImplementation(async () => {
+        inFlight++;
+        mostInFlight = Math.max(mostInFlight, inFlight);
+        await new Promise((resolve) => {
+          setTimeout(resolve, 1);
+        });
+        inFlight--;
+        return "{}";
+      });
+
+      await collect(tools);
+
+      expect(tools.run).toHaveBeenCalledTimes(6);
+      expect(mostInFlight).toBe(3);
+    });
+
+    it("stops adding results once the reply's results reach the budget, across rounds", async () => {
+      // 7,000 characters each: four fit in the 32,000-character budget.
+      rounds([{ toolCalls: calls(5) }], [{ toolCalls: [callNumber(5)] }], [{ text: "Done." }]);
+      const tools = toolset();
+      tools.run.mockResolvedValue(JSON.stringify({ sessions: "x".repeat(6_980) }));
+
+      await collect(tools);
+
+      const firstRound = toolResults(1);
+      expect(firstRound.slice(0, 4).every((result) => result.length > 6_900)).toBe(true);
+      expect(firstRound.at(4)).toContain("already returned as much as fits");
+      // The next round's call ran, but its result would take the reply past the budget.
+      expect(tools.run).toHaveBeenCalledTimes(6);
+      expect(toolResults(2).at(-1)).toContain("already returned as much as fits");
+    });
+  });
 });

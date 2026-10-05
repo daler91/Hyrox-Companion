@@ -164,6 +164,67 @@ describe("circuit breaker", () => {
     });
   });
 
+  // AI18 (CODEBASE_ANALYSIS_2026-10-03): half-open used to throw for nobody,
+  // so after each cooldown every caller went through to a provider that might
+  // still be hanging.
+  describe("half-open admits a single probe (AI18)", () => {
+    function admitProbe(): void {
+      openBreaker();
+      vi.advanceTimersByTime(30_001); // past COOLDOWN_MS
+      breaker.assertClosed();
+    }
+
+    it("fails every other call fast while the probe is in flight", () => {
+      admitProbe();
+
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      expect(isProbeInFlight()).toBe(true);
+    });
+
+    it("lets everyone through once the probe succeeds", () => {
+      admitProbe();
+      breaker.recordSuccess();
+
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+    });
+
+    it("re-opens for a full cooldown when the probe fails", () => {
+      admitProbe();
+      breaker.recordFailure(new Error("503"));
+
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      vi.advanceTimersByTime(29_999);
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      vi.advanceTimersByTime(2);
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+    });
+
+    it("hands a probe that never reports back to the next caller, and only to one", () => {
+      admitProbe();
+      mockSetRuntimeCache.mockClear();
+
+      vi.advanceTimersByTime(__circuitBreakerInternalsForTests.PROBE_TIMEOUT_MS + 1);
+
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(isProbeInFlight()).toBe(true);
+      expect(hasProbeDeadlineTimer()).toBe(true);
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+      // Still the same half-open spell: no new transition to persist.
+      expect(mockSetRuntimeCache).not.toHaveBeenCalled();
+    });
+
+    it("hands a released probe's slot to the next caller, and only to one", () => {
+      admitProbe();
+      breaker.releaseProbe();
+
+      expect(() => { breaker.assertClosed(); }).not.toThrow();
+      expect(() => { breaker.assertClosed(); }).toThrow(CircuitBreakerOpenError);
+    });
+  });
+
   describe("half-open probe deadline (W15)", () => {
     it("starts a deadline timer when transitioning to half-open", () => {
       openBreaker();

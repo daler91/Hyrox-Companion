@@ -341,6 +341,14 @@ export interface OverviewAnalysisResult {
   sections: Partial<Record<OverviewChartKey, string>>;
   ragInfo?: RagInfo;
   generatedAt: string;
+  /**
+   * The Overview range the readings cover: the last N days ending on the
+   * athlete's today, or null for all time. Absent on a result stored before
+   * analyses had a range; that one read the whole history, and is shown on
+   * any range until the nightly refresh replaces it.
+   * AI31 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  rangeDays?: number | null;
 }
 
 // Analytics — Race Predictor (predicted HYROX finish time)

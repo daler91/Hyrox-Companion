@@ -42,6 +42,10 @@ const NON_TRAINING_SPORTS: ReadonlySet<string> = new Set([
   "casualwalking",
   "speedwalking",
   "ebikeride",
+  // Strava's e-MTB. Missing while its road twin and Garmin's e-MTB were here,
+  // so e-MTB rides alone counted toward Total Workouts and the streak — C46
+  // (CODEBASE_ANALYSIS_2026-10-03).
+  "emountainbikeride",
   "ebikefitness",
   "ebikemountain",
   "yoga",

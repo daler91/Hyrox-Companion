@@ -88,8 +88,8 @@ protectedDelete(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter
     } catch (err) {
       reqLogger(req).error({ err, materialId: req.params.id }, "Failed to purge RAG chunks for deleted material; nightly sweep will retry");
     }
-    // Drop cached retrievals so the deleted content stops surfacing
-    // immediately rather than after the cache TTL.
+    // The delete changed the athlete's retrieval version, so no replica serves
+    // a retrieval cached before it (AI34); this frees this replica's entries.
     clearRagCache(userId);
     res.json({ success: true });
   });

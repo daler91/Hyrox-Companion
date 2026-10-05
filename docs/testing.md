@@ -359,9 +359,9 @@ constraint rather than on branch logic.
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `server/storage/__tests__/erasure.integration.test.ts`          | GDPR account erasure (`deleteUserAndPrivateCustomFoods`): cascade, reference-guarded food deletion, public foods |
 | `server/storage/__tests__/exerciseSetOwnership.integration.test.ts` | Exercise-set mutation IDOR guards (workout and plan-day owners), the W18 optimistic lock, the L4 unit re-stamp |
-| `server/storage/__tests__/timelineWindow.integration.test.ts`   | `getTimeline`: three-source merge per athlete, newest-first ordering, limit/offset windowing, set hydration       |
+| `server/storage/__tests__/timelineWindow.integration.test.ts`   | `getTimeline`: three-source merge per athlete, newest-first ordering, limit/offset windowing, set hydration; `getTimelinePage` pages a plan day by the date its entries are shown on, so a card logged off its slot is on exactly one page (C43) |
 | `server/storage/__tests__/nutritionLogging.integration.test.ts` | Food visibility predicate, food-log round trip and ownership, one-version-per-day targets (migration 0091)      |
-| `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct dates of logged workouts that count as training (a synced walk does not) and of completed plan days, parity with the full timeline's completed training |
+| `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct dates of logged workouts that count as training (a synced walk does not) and of completed plan days with no log (a late-logged day counts on its log's date only, C44), parity with the full timeline's completed training |
 | `server/storage/__tests__/recycleBin.integration.test.ts`      | Recycle bin: capture inside the delete transaction, restore with the original ids and re-links (plan day, MAF analysis, plan-day status), all-or-nothing batch restore, device-sync dedupe while binned, per-user isolation |
 
 Run them locally against any Postgres with the `vector` extension:

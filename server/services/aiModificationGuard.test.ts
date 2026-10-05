@@ -395,6 +395,41 @@ describe("classifyCoachModification", () => {
   ])("returns $expected when $name", ({ sugg, signals, expected }) => {
     expect(classifyCoachModification(suggestion(sugg), signals)).toBe(expected);
   });
+
+  // AI25 (CODEBASE_ANALYSIS_2026-10-03): the vocabulary matched substrings, so
+  // during a fatigue episode almost any edit was tagged a fatigue reduction.
+  it.each([
+    ["Recovery is lagging, so lower the weight to 60 kg", "Lowered load"],
+    ["Your RPE is rising; reduce volume this week", "Trim the plan"],
+    ["Fatigue is high: fewer sets today", "Back squat 3x5"],
+    ["Tired legs after the long run", "Drop to 3 sets of 5"],
+    ["Hold it at RPE 6", "Use a lighter sled"],
+    ["Cap at RPE6 while you recover", "Cut the last round"],
+    ["Overreached last block", "Scale back the wall balls"],
+  ])("still tags a genuine fatigue reduction: %s / %s", (rationale, recommendation) => {
+    expect(
+      classifyCoachModification(suggestion({ rationale, recommendation }), FATIGUE_SIGNALS),
+    ).toBe("fatigue_volume_reduction");
+  });
+
+  it.each([
+    // 'rpe' inside "sharpen", 'lower' in "lower body"
+    ["Sharpen your lower body strength", "Add 5x5 front squats"],
+    // 'less' inside "unless"
+    ["Recovery looks fine", "Add a round unless the sled feels heavy"],
+    // 'lower' in "lower-body" and "lower back"
+    ["Recovery run yesterday", "Lower-body day: add a lower back mobility block"],
+    // 'cut' inside "execute"
+    ["Fatigue has cleared", "Execute the full session as written"],
+    // 'tired' inside "retired", 'easy' inside "uneasy"
+    ["Retired the old warm-up; the athlete felt uneasy on it", "Add a tempo block"],
+    // "scale up" and "drop sets" are increases
+    ["Recovery is good", "Scale up the wall balls and finish with drop sets"],
+  ])("does not tag a non-reduction as fatigue: %s / %s", (rationale, recommendation) => {
+    expect(
+      classifyCoachModification(suggestion({ rationale, recommendation }), FATIGUE_SIGNALS),
+    ).toBe("workload_adjustment");
+  });
 });
 
 describe("shouldSuppressRepeatedFatigueReduction", () => {

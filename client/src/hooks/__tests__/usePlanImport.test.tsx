@@ -267,6 +267,25 @@ describe("usePlanImport", () => {
       });
     });
 
+    it("shows the server's row error when an import is refused (C34)", async () => {
+      const body = JSON.stringify({ error: 'Row 3: Week "-40" must be 1 or more.', code: "INVALID_CSV" });
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error(`400: ${body}`));
+      const { result } = runHook();
+      act(() => {
+        result.current.setCsvPreview({ fileName: "plan.csv", content: "c", rows: [] });
+      });
+      act(() => {
+        result.current.confirmImport();
+      });
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: "Failed to import plan",
+          description: 'Row 3: Week "-40" must be 1 or more.',
+          variant: "destructive",
+        });
+      });
+    });
+
     it("calls onPlanImported after a successful import", async () => {
       const onPlanImported = vi.fn();
       const { result } = runHook({ onPlanImported });

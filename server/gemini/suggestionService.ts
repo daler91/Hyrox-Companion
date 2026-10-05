@@ -43,6 +43,8 @@ export interface UpcomingWorkout {
   aiInputsUsed?: CoachNoteInputs | null;
   /** Key, supporting or optional — how much the session matters to the plan. */
   priority?: PlanDayPriority | null;
+  /** Set by the race date (race, shakeout, recovery): shown, never rewritten (AI29). */
+  raceDerived?: boolean;
 }
 
 export type { WorkoutSuggestion };
@@ -274,6 +276,13 @@ function formatPriorAiContext(workout: UpcomingWorkout): string {
 const PRIORITY_TIER_GUIDANCE =
   "Priority tiers: key sessions carry the plan — protect them. When a week has to get lighter, trim optional sessions first, then supporting ones, and only then key ones.";
 
+/**
+ * A day the race date sets (the race, the shakeout before it, recovery after)
+ * is listed so the coach plans around it, but the app shows it from the race
+ * date and never saves a change to it. AI29 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const RACE_DERIVED_LABEL = ", Fixed: set by the race date, never modify";
+
 function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: TrainingContext): string {
   const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
     weightUnit: trainingContext.weightUnit,
@@ -282,10 +291,11 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
   const priorAiContext = formatPriorAiContext(workout);
   const dateLabel = `${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}`;
   const priority = workout.priority ? `, Priority: ${workout.priority}` : "";
+  const tags = `${priority}${workout.raceDerived ? RACE_DERIVED_LABEL : ""}`;
   if (exerciseSummary) {
-    return `ID: ${workout.id}, Date: ${dateLabel}${priority}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
+    return `ID: ${workout.id}, Date: ${dateLabel}${tags}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
   }
-  let line = `ID: ${workout.id}, Date: ${dateLabel}${priority}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
+  let line = `ID: ${workout.id}, Date: ${dateLabel}${tags}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
   if (workout.accessory) line += `, Accessory: ${sanitizeUserInput(workout.accessory)}`;
   if (workout.notes) line += `, Notes: ${sanitizeUserInput(workout.notes)}`;
   line += priorAiContext;

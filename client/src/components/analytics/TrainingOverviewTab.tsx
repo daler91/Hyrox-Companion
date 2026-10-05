@@ -17,10 +17,15 @@ import { WorkoutHeatmap } from "./WorkoutHeatmap";
 
 interface TrainingOverviewTabProps {
   readonly dateParams: string;
+  /**
+   * The page's selected range ("30", "90", ... or "all"), which `dateParams`
+   * was built from: the AI analysis reads the same range as the charts (AI31).
+   */
+  readonly range?: string;
   readonly weeklyGoal?: number;
 }
 
-export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverviewTabProps) {
+export function TrainingOverviewTab({ dateParams, range, weeklyGoal }: TrainingOverviewTabProps) {
   const {
     overview,
     isLoading,
@@ -34,7 +39,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     mileageData,
     annotationBands,
   } = useTrainingOverviewData(dateParams);
-  const analysis = useOverviewAnalysis();
+  const analysis = useOverviewAnalysis(range);
   const sections = analysis.sections;
 
   if (isLoading) {

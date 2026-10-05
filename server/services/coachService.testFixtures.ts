@@ -110,6 +110,7 @@ export function mockBaseAutoCoachDeps(
       aiRationale: entry.aiRationale as string | null | undefined,
       aiNoteUpdatedAt: entry.aiNoteUpdatedAt as string | Date | null | undefined,
       aiInputsUsed: entry.aiInputsUsed as CoachNoteInputs | null | undefined,
+      ...(entry.raceDerived === true ? { raceDerived: true } : {}),
       ...(Array.isArray(entry.exerciseDetails) ? { exerciseDetails: entry.exerciseDetails } : {}),
     }));
   vi.mocked(buildTrainingContext).mockResolvedValue({

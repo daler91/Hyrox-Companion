@@ -181,7 +181,10 @@ async function loadRaceReadiness(
     const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
     const from = addDaysToISODate(today, -READINESS_WINDOW_DAYS);
     const [workoutLogs, loadTags] = await Promise.all([
-      storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
+      // Training sessions only, like the sets above and the Training
+      // Overview's load, so a synced walk cannot move Form here and not there
+      // (C35, CODEBASE_ANALYSIS_2026-10-03).
+      storage.analytics.getWorkoutLogsByDateRange(userId, from, today, { onlyTraining: true }),
       storage.analytics.getExerciseLoadTags(),
     ]);
     const { overview } = calculateTrainingLoad(workoutLogs, sets, loadTags, {

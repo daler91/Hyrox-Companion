@@ -380,6 +380,19 @@ describe("generateRacePrediction — race readiness (Form)", () => {
     expect(result.raceReadiness?.tsb).toBe(0);
   });
 
+  it("reads the same training-only logs as the Training Overview (C35)", async () => {
+    // A synced walk is a real session on the timeline but not training, so it
+    // must not add load here when the Overview's Form leaves it out
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    mockUser({ aiCoachEnabled: false });
+
+    await generateRacePrediction("u1");
+
+    expect(getWorkoutLogs).toHaveBeenCalledWith("u1", expect.any(String), expect.any(String), {
+      onlyTraining: true,
+    });
+  });
+
   it("still includes readiness on the deterministic (AI-off) path", async () => {
     mockUser({ aiCoachEnabled: false });
     getWorkoutLogs.mockResolvedValue(steadyWorkoutLogs(21));

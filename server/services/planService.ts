@@ -116,17 +116,27 @@ const MAX_PLAN_WEEKS = 52;
 interface ParsedCSVRows {
   weekNumbers: number[];
   invalidDayNames: string[];
+  /** Week values below 1, as written ("-40", "0"). */
+  invalidWeeks: string[];
   validRows: { weekNumber: number; dayName: string; row: CSVRow }[];
 }
 
 function collectCSVRows(rows: CSVRow[]): ParsedCSVRows {
   const weekNumbers: number[] = [];
   const invalidDayNames: string[] = [];
+  const invalidWeeks: string[] = [];
   const validRows: ParsedCSVRows["validRows"] = [];
   for (const row of rows) {
     const n = Number.parseInt(row.Week, 10);
     if (!Number.isNaN(n) && n > 0) weekNumbers.push(n);
     if (!row.Week || !row.Day) continue;
+    // Weeks start at 1. A negative week used to be kept, so a stray "-40"
+    // put week 1 forty-one weeks after the chosen start; "0" quietly became
+    // week 1. C34 (CODEBASE_ANALYSIS_2026-10-03)
+    if (n < 1) {
+      invalidWeeks.push(row.Week);
+      continue;
+    }
     const lowered = row.Day.trim().toLowerCase();
     if (!VALID_DAY_NAMES.has(lowered)) {
       invalidDayNames.push(row.Day);
@@ -138,7 +148,40 @@ function collectCSVRows(rows: CSVRow[]): ParsedCSVRows {
       row,
     });
   }
-  return { weekNumbers, invalidDayNames, validRows };
+  return { weekNumbers, invalidDayNames, invalidWeeks, validRows };
+}
+
+/** A distinct few of the offending values, for an error message. */
+function sampleOf(values: readonly string[]): string {
+  return [...new Set(values)].slice(0, 5).join(", ");
+}
+
+/** Throws the first row problem that makes the CSV unimportable. */
+function assertImportableRows({ weekNumbers, invalidDayNames, invalidWeeks, validRows }: ParsedCSVRows): void {
+  if (invalidWeeks.length > 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      `CSV contains ${invalidWeeks.length} row(s) with a Week below 1 (e.g., ${sampleOf(invalidWeeks)}). Weeks start at 1.`,
+      400,
+    );
+  }
+  if (weekNumbers.length === 0) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid week numbers found in CSV", 400);
+  }
+  if (invalidDayNames.length > 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      `CSV contains ${invalidDayNames.length} row(s) with unrecognized Day values (e.g., ${sampleOf(invalidDayNames)}). Use Monday–Sunday.`,
+      400,
+    );
+  }
+  if (validRows.length === 0) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "CSV has no rows with both a Week and a Day — plan must have at least one day.",
+      400,
+    );
+  }
 }
 
 /** Saves a new plan's days, then reads the whole plan back for the response. */
@@ -173,26 +216,9 @@ export async function importPlanFromCSV(
   // Validate everything against the parsed rows BEFORE touching the database.
   // Previously a failed rollback (deleteTrainingPlan) could leave an orphaned
   // empty plan on the user's account.
-  const { weekNumbers, invalidDayNames, validRows } = collectCSVRows(rows);
-
-  if (weekNumbers.length === 0) {
-    throw new AppError(ErrorCode.VALIDATION_ERROR, "No valid week numbers found in CSV", 400);
-  }
-  if (invalidDayNames.length > 0) {
-    const sample = [...new Set(invalidDayNames)].slice(0, 5).join(", ");
-    throw new AppError(
-      ErrorCode.VALIDATION_ERROR,
-      `CSV contains ${invalidDayNames.length} row(s) with unrecognized Day values (e.g., ${sample}). Use Monday–Sunday.`,
-      400,
-    );
-  }
-  if (validRows.length === 0) {
-    throw new AppError(
-      ErrorCode.VALIDATION_ERROR,
-      "CSV has no rows with both a Week and a Day — plan must have at least one day.",
-      400,
-    );
-  }
+  const parsed = collectCSVRows(rows);
+  assertImportableRows(parsed);
+  const { weekNumbers, validRows } = parsed;
 
   // ⚡ Bolt Performance Optimization:
   // Replaced Math.max(...weekNumbers) spread calls with an O(N) linear scan.

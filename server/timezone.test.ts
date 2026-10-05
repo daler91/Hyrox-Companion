@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { addDaysLocal, getDayOfWeekForDateStr, getLocalDateStr, getLocalDayOfWeek, isValidTimezone } from "./timezone";
+import {
+  addDaysLocal,
+  getDayOfWeekForDateStr,
+  getLocalDateStr,
+  getLocalDayOfWeek,
+  isLocalHourDue,
+  isValidTimezone,
+} from "./timezone";
 
 describe("getLocalDayOfWeek", () => {
   it("returns the same day for UTC as Date.getDay()", () => {
@@ -119,5 +126,65 @@ describe("getDayOfWeekForDateStr", () => {
   it("rejects malformed inputs", () => {
     expect(() => getDayOfWeekForDateStr("not-a-date")).toThrow();
     expect(() => getDayOfWeekForDateStr("2026/01/01")).toThrow();
+  });
+});
+
+// C24 (CODEBASE_ANALYSIS_2026-10-03): an hour a spring-forward gap removes
+// never equalled the local hour, so anything scheduled inside it was skipped.
+describe("isLocalHourDue", () => {
+  const HOUR_MS = 60 * 60 * 1000;
+
+  /** How many hourly UTC ticks in [from, to) each local date sees `hour` fall due on. */
+  function dueTicksPerLocalDate(tz: string, hour: number, from: string, to: string): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (let ms = Date.parse(from); ms < Date.parse(to); ms += HOUR_MS) {
+      const tick = new Date(ms);
+      if (isLocalHourDue(tick, tz, hour)) {
+        const date = getLocalDateStr(tick, tz);
+        counts.set(date, (counts.get(date) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }
+
+  it("is due inside the chosen local hour on an ordinary day", () => {
+    // 2026-03-09 07:00Z is 03:00 EDT, the day after the change.
+    expect(isLocalHourDue(new Date("2026-03-09T07:00:00Z"), "America/New_York", 3)).toBe(true);
+    expect(isLocalHourDue(new Date("2026-03-09T07:00:00Z"), "America/New_York", 2)).toBe(false);
+    expect(isLocalHourDue(new Date("2026-03-09T06:00:00Z"), "America/New_York", 2)).toBe(true);
+  });
+
+  it("fires a 02:00 New York choice at 03:00 on the spring-forward Sunday, once", () => {
+    // 01:59 EST is followed by 03:00 EDT at 07:00Z; 02:00 never happens.
+    expect(isLocalHourDue(new Date("2026-03-08T06:00:00Z"), "America/New_York", 2)).toBe(false);
+    expect(isLocalHourDue(new Date("2026-03-08T07:00:00Z"), "America/New_York", 2)).toBe(true);
+    expect(isLocalHourDue(new Date("2026-03-08T08:00:00Z"), "America/New_York", 2)).toBe(false);
+    // The hours either side of the gap are untouched.
+    expect(isLocalHourDue(new Date("2026-03-08T07:00:00Z"), "America/New_York", 1)).toBe(false);
+    expect(isLocalHourDue(new Date("2026-03-08T07:00:00Z"), "America/New_York", 3)).toBe(true);
+  });
+
+  it("fires local midnight at 01:00 where the clocks spring forward at midnight", () => {
+    // Santiago goes from Saturday 23:59 to Sunday 01:00 (04:00Z on 2026-09-06).
+    expect(isLocalHourDue(new Date("2026-09-06T03:00:00Z"), "America/Santiago", 0)).toBe(false);
+    expect(isLocalHourDue(new Date("2026-09-06T04:00:00Z"), "America/Santiago", 0)).toBe(true);
+    expect(getLocalDateStr(new Date("2026-09-06T04:00:00Z"), "America/Santiago")).toBe("2026-09-06");
+    expect(isLocalHourDue(new Date("2026-09-06T05:00:00Z"), "America/Santiago", 0)).toBe(false);
+  });
+
+  it.each([
+    ["America/New_York", 2],
+    ["America/Santiago", 0],
+    ["Asia/Beirut", 0],
+    ["America/Havana", 0],
+    ["Europe/London", 1],
+    ["Asia/Kolkata", 0],
+    ["Australia/Lord_Howe", 2],
+  ])("in %s, hour %i falls due on every local date of the year", (tz, hour) => {
+    const counts = dueTicksPerLocalDate(tz, hour, "2026-01-02T00:00:00Z", "2026-12-30T00:00:00Z");
+    // 362 UTC days span 362 local dates whatever the offset.
+    expect(counts.size).toBe(362);
+    // Twice at most, and only where a fall-back repeats the hour itself.
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(2);
   });
 });

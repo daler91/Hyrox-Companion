@@ -318,7 +318,8 @@ flowchart TD
 - Governor suggestions are prepared before provider suggestions.
 - Governor-modified workouts are excluded from provider modification output.
 - Load-governor edits stay table-first on structured workouts; if a structured governor write cannot be prepared, it does not silently fall back to text.
-- Provider suggestions prefer structured `exercise_sets` writes when rows exist, but can still use the existing text fallback when parsing structured rows is unavailable.
+- Provider suggestions are written as structured `exercise_sets` rows on a day that has them. When a suggestion for such a day yields no rows (the parse fails or returns nothing), it is dropped and the day gets a review note instead, because its card shows the rows, not the text; a coach note there would describe a change the athlete never sees (AI30, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)). A day with no rows, and a notes cue on any day, is still written as text.
+- A day the plan's race date sets (the race, the shakeout before it, recovery after) reaches the coach flagged `raceDerived`. The model sees it, marked as fixed, but no stage writes to it: no governor downshift, no model change and no review note, so its generated text is never saved over the stored day (AI29).
 - Deterministic governor writes use `aiSource: "load_governor"`.
 - The plan adaptation runs after the governor and never touches a day the governor rewrote; its writes use `aiSource: "progression"` with `lastModification.kind: "auto_progression"`, and provider suggestions and review notes skip those days.
 - The AI budget gates only the provider layer: over budget, the governor and the adaptation still apply.

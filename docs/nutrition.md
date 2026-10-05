@@ -161,7 +161,9 @@ Everything the food database doesn't already have.
   manual-entry fallback.
 - **Custom foods** (`POST/PATCH/DELETE /foods`, `GET /foods/custom`, FR-2.2) —
   user-entered per-100g macros + optional named servings, created transactionally.
-  Deleting a food that's referenced by a log returns `409` (history is protected).
+  Deleting a food that's referenced by a log or a recipe returns `409` (history is
+  protected), and so does deleting a recipe's backing food here: the recipe delete
+  decides its fate (C39).
 - **Named servings** (`POST/DELETE /foods/:id/servings`, FR-2.4) — portions like
   "1 cup" → grams. For USDA foods these are **lazily enriched** from the USDA
   food-detail *portions* endpoint on first view and cached (`gramWeight` carries
@@ -171,7 +173,14 @@ Everything the food database doesn't already have.
   the recipe's per-100g macros are **computed from the ingredient list** and
   stored on a hidden backing custom food, so a recipe logs and rolls up through
   the unchanged Phase 1 path. Editing replaces the whole ingredient list; deleting
-  removes the backing food only if no log still references it.
+  removes the backing food only if no log or other recipe still references it, and
+  returns `409` while another of the athlete's recipes uses it as an ingredient
+  (C39). Correcting an ingredient's macros, or editing a recipe used inside another,
+  recomputes the backing food of each of the athlete's recipes that uses it (nested
+  recipes too, each after the recipes it uses), so logging a recipe records what
+  its view shows; the athlete's own past logs of the recipe move with it, as their
+  logs of the food itself do, while a backing food another athlete has logged is
+  left as it was (C40).
 
 ### Phase 3 — Training integration
 
@@ -327,10 +336,17 @@ to resolve against real food data.
     Each adjustment is opt-in via versioned columns on `nutrition_targets`
     (`recovery_enabled`, `preload_carb_grams_per_utss`, `preload_days_ahead`,
     `phase_aware`, `recovery_protein_bump_frac`, `max_carb_delta_g`); a flat or
-    load-only target is byte-for-byte unchanged, and the analytics block/range views
-    stay pure load-correlation (single-day window). The total carb delta is capped
-    so recovery + pre-load + phase can't compound. Surfaced in `DailyTotalsHeader`
-    (carb + protein notes, full breakdown on hover) and toggled in `TargetsDialog`.
+    load-only target is byte-for-byte unchanged, and the analytics block view stays
+    pure load-correlation (single-day window). The Timeline's `/summary-range`
+    resolves each day exactly as `/summary` does — the same window, built by
+    `fetchTrainingLoadWindows` from a load history that starts on a fixed 28-day
+    grid at least the EWMA warmup before the day — so a chip and the Nutrition page
+    show the same target, whatever range was asked for (C31). The total carb delta
+    is capped so recovery + pre-load + phase can't compound. The calorie floor only
+    stops load scaling from cutting a day below it: a baseline already under the
+    floor (a manual 1,000 kcal target) keeps its own number (C47). Surfaced in
+    `DailyTotalsHeader` (carb + protein notes, full breakdown on hover) and toggled
+    in `TargetsDialog`.
 - **Micronutrients** (`GET /micros`, FR-5.1) — the day's totals for a curated set
   of **13 micros** (sodium, potassium, calcium, iron, magnesium, zinc, vitamins C,
   A, D, E, K, B6, B12, folate) against FDA reference daily intakes, shown as

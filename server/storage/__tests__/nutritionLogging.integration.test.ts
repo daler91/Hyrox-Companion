@@ -4,8 +4,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "../../db";
 import { storage } from "../index";
-import { SHARED_FOOD_EDIT_CONFLICT } from "../nutritionFoods";
-import { SHARED_RECIPE_EDIT_CONFLICT } from "../nutritionRecipes";
+import { RECIPE_FOOD_DELETE_CONFLICT, SHARED_FOOD_EDIT_CONFLICT } from "../nutritionFoods";
+import { RECIPE_IN_RECIPE_CONFLICT, SHARED_RECIPE_EDIT_CONFLICT } from "../nutritionRecipes";
 import { resetIntegrationDb, seedCustomFood, seedUser } from "./integrationDb";
 
 /**
@@ -246,6 +246,227 @@ describe("NutritionStorage (real Postgres)", () => {
           ingredients: [{ foodId: banana.id, quantityG: 240 }],
         }),
       ).toMatchObject({ name: "Big smoothie", servings: 2 });
+    });
+  });
+
+  describe("deleting recipes and their backing foods (C39, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    // Both deletes used to hit an ON DELETE RESTRICT foreign key and answer a
+    // generic 500 every time, so the item could never be deleted.
+    async function seedGranola(owner: string) {
+      const oats = await seedCustomFood(owner, "Oats");
+      return storage.nutrition.createRecipe(owner, {
+        name: "Granola",
+        servings: 4,
+        ingredients: [{ foodId: oats.id, quantityG: 200 }],
+      });
+    }
+
+    function seedBowl(owner: string, foodId: string) {
+      return storage.nutrition.createRecipe(owner, {
+        name: "Breakfast bowl",
+        servings: 1,
+        ingredients: [{ foodId, quantityG: 60 }],
+      });
+    }
+
+    it("refuses with a 409 while another of the athlete's recipes uses it, then deletes once it is removed", async () => {
+      const granola = await seedGranola(BOB);
+      const bowl = await seedBowl(BOB, granola.foodId);
+
+      await expect(storage.nutrition.deleteRecipe(BOB, granola.id)).rejects.toMatchObject({
+        status: 409,
+        message: RECIPE_IN_RECIPE_CONFLICT,
+      });
+      expect(await storage.nutrition.getRecipeWithIngredients(BOB, granola.id)).not.toBeNull();
+      expect(await storage.nutrition.getRecipeWithIngredients(BOB, bowl.id)).toMatchObject({
+        ingredients: [expect.objectContaining({ foodId: granola.foodId })],
+      });
+
+      const yoghurt = await seedCustomFood(BOB, "Yoghurt");
+      await storage.nutrition.updateRecipe(BOB, bowl.id, {
+        name: "Breakfast bowl",
+        servings: 1,
+        ingredients: [{ foodId: yoghurt.id, quantityG: 150 }],
+      });
+
+      expect(await storage.nutrition.deleteRecipe(BOB, granola.id)).toBe(true);
+      expect(await db.select().from(foods).where(eq(foods.id, granola.foodId))).toEqual([]);
+    });
+
+    it("deletes the recipe but keeps its food while another athlete's recipe uses it", async () => {
+      const granola = await seedGranola(BOB);
+      // Shared before D18 stopped recipe foods being shared.
+      await db.update(foods).set({ isPublic: true }).where(eq(foods.id, granola.foodId));
+      const alicesBowl = await seedBowl(ALICE, granola.foodId);
+
+      expect(await storage.nutrition.deleteRecipe(BOB, granola.id)).toBe(true);
+
+      expect(await storage.nutrition.getRecipeWithIngredients(BOB, granola.id)).toBeNull();
+      expect(await db.select().from(foods).where(eq(foods.id, granola.foodId))).toHaveLength(1);
+      expect(await storage.nutrition.getRecipeWithIngredients(ALICE, alicesBowl.id)).toMatchObject({
+        ingredients: [expect.objectContaining({ foodId: granola.foodId })],
+      });
+    });
+
+    it("refuses to delete a recipe's backing food as a custom food, and points at the recipe", async () => {
+      const granola = await seedGranola(BOB);
+
+      await expect(storage.nutrition.deleteCustomFood(BOB, granola.foodId)).rejects.toMatchObject({
+        status: 409,
+        message: RECIPE_FOOD_DELETE_CONFLICT,
+      });
+      expect(await storage.nutrition.getRecipeWithIngredients(BOB, granola.id)).not.toBeNull();
+      // The recipe delete is the way out, and it takes the unlogged food with it.
+      expect(await storage.nutrition.deleteRecipe(BOB, granola.id)).toBe(true);
+      expect(await db.select().from(foods).where(eq(foods.id, granola.foodId))).toEqual([]);
+    });
+  });
+
+  describe("recipes follow their ingredients' corrected macros (C40, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    // A recipe logs through its backing food, which was computed once at save;
+    // the recipe views recompute from the ingredients live, so after an
+    // ingredient was corrected the two disagreed until the recipe was re-saved.
+    const OATS = { caloriesPer100g: 100, proteinPer100g: 10, carbPer100g: 60, fatPer100g: 5, fiberPer100g: 10 };
+
+    async function backingFood(foodId: string) {
+      const [row] = await db.select().from(foods).where(eq(foods.id, foodId));
+      return row;
+    }
+
+    it("recomputes the backing food, so logging matches the recipe view", async () => {
+      const oats = await seedCustomFood(BOB, "Oats", OATS);
+      const porridge = await storage.nutrition.createRecipe(BOB, {
+        name: "Porridge",
+        servings: 2,
+        ingredients: [{ foodId: oats.id, quantityG: 200 }],
+      });
+      await storage.nutrition.createLogEntry(BOB, {
+        foodId: porridge.foodId,
+        quantityG: 100,
+        mealType: "breakfast",
+        loggedAt: new Date(`${DAY}T07:30:00Z`),
+        logDate: DAY,
+      });
+
+      await storage.nutrition.updateCustomFood(BOB, oats.id, { ...OATS, name: "Oats", caloriesPer100g: 150 });
+
+      expect(await backingFood(porridge.foodId)).toMatchObject({ caloriesPer100g: 150, carbPer100g: 60 });
+      const view = await storage.nutrition.getRecipeWithIngredients(BOB, porridge.id);
+      expect(view?.perServing.calories).toBe(150); // 200 g × 150 / 100 ÷ 2 servings
+      // The athlete's own log reads the food live, like a log of the oats themselves.
+      const [entry] = await storage.nutrition.listEntriesWithFoodForDate(BOB, DAY);
+      expect(entry.food.caloriesPer100g).toBe(150);
+    });
+
+    it("carries the correction through a recipe used inside another recipe", async () => {
+      const oats = await seedCustomFood(BOB, "Oats", OATS);
+      const milk = await seedCustomFood(BOB, "Milk", { ...OATS, caloriesPer100g: 50 });
+      const porridge = await storage.nutrition.createRecipe(BOB, {
+        name: "Porridge",
+        servings: 1,
+        ingredients: [{ foodId: oats.id, quantityG: 100 }],
+      });
+      const bowl = await storage.nutrition.createRecipe(BOB, {
+        name: "Porridge bowl",
+        servings: 1,
+        ingredients: [
+          { foodId: porridge.foodId, quantityG: 100 },
+          { foodId: milk.id, quantityG: 100 },
+        ],
+      });
+      expect(await backingFood(bowl.foodId)).toMatchObject({ caloriesPer100g: 75 });
+
+      await storage.nutrition.updateCustomFood(BOB, oats.id, { ...OATS, caloriesPer100g: 200 });
+
+      expect(await backingFood(porridge.foodId)).toMatchObject({ caloriesPer100g: 200 });
+      expect(await backingFood(bowl.foodId)).toMatchObject({ caloriesPer100g: 125 }); // (200 + 50) / 2
+    });
+
+    function seedRecipe(name: string, ingredients: { foodId: string; quantityG: number }[]) {
+      return storage.nutrition.createRecipe(BOB, { name, servings: 1, ingredients });
+    }
+
+    it("refreshes a recipe only after every recipe it uses, when it reaches the food two ways", async () => {
+      const oats = await seedCustomFood(BOB, "Oats", OATS);
+      const porridge = await seedRecipe("Porridge", [{ foodId: oats.id, quantityG: 100 }]);
+      const bowl = await seedRecipe("Porridge bowl", [{ foodId: porridge.foodId, quantityG: 100 }]);
+      // Uses the oats directly and, through the bowl, two recipes deep.
+      const brunch = await seedRecipe("Brunch", [
+        { foodId: bowl.foodId, quantityG: 100 },
+        { foodId: oats.id, quantityG: 100 },
+      ]);
+
+      await storage.nutrition.updateCustomFood(BOB, oats.id, { ...OATS, caloriesPer100g: 300 });
+
+      expect(await backingFood(porridge.foodId)).toMatchObject({ caloriesPer100g: 300 });
+      expect(await backingFood(bowl.foodId)).toMatchObject({ caloriesPer100g: 300 });
+      // Was 200: recomputed from the bowl before the bowl itself was refreshed.
+      expect(await backingFood(brunch.foodId)).toMatchObject({ caloriesPer100g: 300 });
+      const view = await storage.nutrition.getRecipeWithIngredients(BOB, brunch.id);
+      expect(view?.perServing.calories).toBe(600); // 200 g at 300 kcal/100 g
+    });
+
+    it("carries a recipe edit through to the recipes that use it", async () => {
+      const oats = await seedCustomFood(BOB, "Oats", OATS);
+      const granola = await seedCustomFood(BOB, "Granola", { ...OATS, caloriesPer100g: 300 });
+      const porridge = await seedRecipe("Porridge", [{ foodId: oats.id, quantityG: 100 }]);
+      const bowl = await seedRecipe("Porridge bowl", [{ foodId: porridge.foodId, quantityG: 100 }]);
+
+      await storage.nutrition.updateRecipe(BOB, porridge.id, {
+        name: "Porridge",
+        servings: 1,
+        ingredients: [{ foodId: granola.id, quantityG: 100 }],
+      });
+
+      expect(await backingFood(porridge.foodId)).toMatchObject({ caloriesPer100g: 300 });
+      expect(await backingFood(bowl.foodId)).toMatchObject({ caloriesPer100g: 300 });
+      const view = await storage.nutrition.getRecipeWithIngredients(BOB, bowl.id);
+      expect(view?.perServing.calories).toBe(300);
+    });
+
+    it("refreshes each recipe in a cycle once, and finishes", async () => {
+      const oats = await seedCustomFood(BOB, "Oats", OATS);
+      const porridge = await seedRecipe("Porridge", [{ foodId: oats.id, quantityG: 100 }]);
+      const bowl = await seedRecipe("Porridge bowl", [{ foodId: porridge.foodId, quantityG: 100 }]);
+      // Only a recipe including itself directly is refused, so this saves.
+      await storage.nutrition.updateRecipe(BOB, porridge.id, {
+        name: "Porridge",
+        servings: 1,
+        ingredients: [
+          { foodId: oats.id, quantityG: 100 },
+          { foodId: bowl.foodId, quantityG: 100 },
+        ],
+      });
+
+      await storage.nutrition.updateCustomFood(BOB, oats.id, { ...OATS, caloriesPer100g: 300 });
+
+      // The porridge was found first: (300 + the bowl's 100) / 2, then the bowl from it.
+      expect(await backingFood(porridge.foodId)).toMatchObject({ caloriesPer100g: 200 });
+      expect(await backingFood(bowl.foodId)).toMatchObject({ caloriesPer100g: 200 });
+    });
+
+    it("leaves a backing food another athlete has logged as it was (D18)", async () => {
+      const oats = await seedCustomFood(BOB, "Oats", OATS);
+      const porridge = await storage.nutrition.createRecipe(BOB, {
+        name: "Porridge",
+        servings: 1,
+        ingredients: [{ foodId: oats.id, quantityG: 100 }],
+      });
+      // Shared before D18 stopped recipe foods being shared.
+      await db.update(foods).set({ isPublic: true }).where(eq(foods.id, porridge.foodId));
+      await storage.nutrition.createLogEntry(ALICE, {
+        foodId: porridge.foodId,
+        quantityG: 100,
+        mealType: "breakfast",
+        loggedAt: new Date(`${DAY}T07:30:00Z`),
+        logDate: DAY,
+      });
+
+      await storage.nutrition.updateCustomFood(BOB, oats.id, { ...OATS, caloriesPer100g: 200 });
+
+      expect(await backingFood(oats.id)).toMatchObject({ caloriesPer100g: 200 });
+      const [alicesEntry] = await storage.nutrition.listEntriesWithFoodForDate(ALICE, DAY);
+      expect(alicesEntry.food.caloriesPer100g).toBe(100);
     });
   });
 

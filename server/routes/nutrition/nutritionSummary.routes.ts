@@ -18,12 +18,23 @@ import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
-import { aiConsentCheck } from "../../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, sendValidationError, validateQuery } from "../../routeUtils";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
-import { fetchDailyTraining, fetchDailyUtss, fetchTrainingLoadWindow } from "../../services/nutrition/dailyLoad";
+import {
+  fetchDailyTraining,
+  fetchDailyUtss,
+  fetchTrainingLoadWindow,
+  fetchTrainingLoadWindows,
+} from "../../services/nutrition/dailyLoad";
 import { resolveDayEnergy } from "../../services/nutrition/energy";
-import { buildEffectiveTargetSummary, buildFuellingRange, decorateBlockPointsWithOutcomes } from "../../services/nutrition/fuellingRange";
+import {
+  buildEffectiveTargetSummary,
+  buildFuellingRange,
+  decorateBlockPointsWithOutcomes,
+  rangeLoadNeeds,
+  targetLoadNeed,
+  targetReadsFuture,
+} from "../../services/nutrition/fuellingRange";
 import { buildDailySummary } from "../../services/nutrition/rollup";
 import {
   computeSessionFuelling,
@@ -58,21 +69,22 @@ async function resolveEffectiveTarget(
 ): Promise<EffectiveTargetSummary | null> {
   const baseline = await storage.nutrition.getCurrentTarget(userId, logDate);
   if (!baseline) return null;
-  if (!baseline.periodizationEnabled) {
+  // The same decision /summary-range makes per day (C31).
+  const need = targetLoadNeed(baseline);
+  if (need === "none") {
     return buildEffectiveTargetSummary(baseline, singleDayWindow(0));
   }
 
-  const needRecovery = baseline.recoveryEnabled ?? false;
-  const includeFuture =
-    (baseline.preloadCarbGramsPerUtss ?? 0) > 0 || (baseline.phaseAware ?? false);
-  if (!needRecovery && !includeFuture) {
+  if (need === "day") {
     // Load-only periodisation: today's UTSS is all that matters.
     const dailyLoads = await fetchDailyUtss(userId, logDate, logDate);
     const dayUtss = dailyLoads.find((d) => d.date === logDate)?.utss ?? 0;
     return buildEffectiveTargetSummary(baseline, singleDayWindow(dayUtss));
   }
 
-  const window = await fetchTrainingLoadWindow(userId, logDate, { includeFuture });
+  const window = await fetchTrainingLoadWindow(userId, logDate, {
+    includeFuture: targetReadsFuture(baseline),
+  });
   return buildEffectiveTargetSummary(baseline, window);
 }
 
@@ -306,9 +318,12 @@ function registerPlannedSessionEstimateRoute(router: Router): void {
   router.get(
     "/api/v1/nutrition/planned-session-estimate/:planDayId",
     isAuthenticated,
-    // 🛡️ Sentinel: Enforce AI consent to prevent sending athlete focus text
-    // and exercises to the AI provider for users who opted out.
-    aiConsentCheck,
+    // Deliberately NOT gated by aiConsentCheck: the deterministic and
+    // pace-personalised estimate is not AI and must reach every athlete. The
+    // optional AI nudge checks consent and the AI budget inline before any
+    // plan-day text leaves the server (refineWithAi). The middleware 403'd
+    // athletes with AI coaching off, so they never got the estimate at all.
+    // C28 (CODEBASE_ANALYSIS_2026-10-03)
     rateLimiter("nutritionRead", 60),
     asyncHandler(handlePlannedSessionEstimate),
   );
@@ -418,10 +433,12 @@ export function registerNutritionSummaryRoutes(router: Router): void {
   );
 
   // Phase 2 (Timeline integration) — per-day fuelling progress (intake totals,
-  // load-adjusted effective target, post-workout-meal flag) for the home-screen
-  // chips. One batched read for the whole visible window (no per-day fan-out):
-  // the day's training load is only computed when a periodised target exists, so
-  // flat-target and no-target users pay nothing extra.
+  // effective target, post-workout-meal flag) for the home-screen chips. Each
+  // day's target resolves exactly as /summary resolves it, adaptive window
+  // included, so the chip and the Nutrition page agree (C31). One batched read
+  // for the whole visible window (no per-day fan-out): training load is only
+  // computed for the days a periodised target needs it, so flat-target and
+  // no-target users pay nothing extra.
   router.get(
     "/api/v1/nutrition/summary-range",
     isAuthenticated,
@@ -434,16 +451,18 @@ export function registerNutritionSummaryRoutes(router: Router): void {
       const { from, to } = range;
 
       const targets = await storage.nutrition.listTargets(userId);
-      const needLoad = targets.some((t) => t.periodizationEnabled);
-      const [rows, dailyLoads] = await Promise.all([
+      const needs = rangeLoadNeeds(targets, { from, to });
+      const [rows, dailyLoads, windows] = await Promise.all([
         storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
-        needLoad ? fetchDailyUtss(userId, from, to) : Promise.resolve<DailyUtss[]>([]),
+        needs.dayUtss ? fetchDailyUtss(userId, from, to) : Promise.resolve<DailyUtss[]>([]),
+        // Reads nothing when no day's target is adaptive.
+        fetchTrainingLoadWindows(userId, needs.windowDates, { includeFuture: needs.includeFuture }),
       ]);
 
       const response: FuellingRangeResponse = {
         from,
         to,
-        days: buildFuellingRange(rows, dailyLoads, targets, { from, to }),
+        days: buildFuellingRange(rows, dailyLoads, targets, { from, to }, windows),
       };
       res.json(response);
     }),

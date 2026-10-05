@@ -5,7 +5,8 @@ import type {
   IOauth1Token,
   IOauth2Token,
 } from "@flow-js/garmin-connect";
-import { type DistanceUnit } from "@shared/unitConversion";
+import type { InsertExerciseSet, WorkoutLog } from "@shared/schema";
+import { type DistanceUnit, type UnitPreferences } from "@shared/unitConversion";
 import type { Request, Response, Router } from "express";
 import { z } from "zod";
 
@@ -28,6 +29,7 @@ type GarminConnect = GarminConnectType;
 
 import { isAuthenticated } from "./clerkAuth";
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
+import { db } from "./db";
 import { env } from "./env";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
@@ -37,7 +39,13 @@ import {
   dropCrossProviderDuplicates,
   recordingTimingFromLog,
 } from "./services/crossProviderDuplicates";
-import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
+import { recordingSetRow } from "./services/deviceActivitySets";
+import {
+  type GarminActivity,
+  garminRecordingMeasurements,
+  mapGarminActivityToWorkout,
+  parseStartInstant,
+} from "./services/garminMapper";
 import { claimRuntimeCacheKey, deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getUserId } from "./types";
@@ -90,10 +98,20 @@ import { getUserId } from "./types";
 //
 // =============================================================================
 
-// How many activities to pull per /sync request. Garmin's getActivities()
-// page size — kept small to limit bytes-on-wire and reduce the chance of a
-// 429 retry storm.
+// How many activities to pull per getActivities() page — kept small to limit
+// bytes-on-wire and reduce the chance of a 429 retry storm.
 const GARMIN_ACTIVITIES_PER_SYNC = 20;
+
+// C26 (CODEBASE_ANALYSIS_2026-10-03): one page used to be the whole sync, so
+// an athlete with more than 20 activities since the last sync never got the
+// rest. A sync now pages back to its cutoff, but never past this many pages
+// (100 activities, five getActivities calls) so one click stays a bounded
+// number of Garmin calls; anything older stays unimported.
+const GARMIN_MAX_SYNC_PAGES = 5;
+// The cutoff, as the Strava sync draws it: the last sync less a week (a
+// watch can upload days late), or 90 days back on a first sync.
+const GARMIN_SYNC_OVERLAP_MS = 7 * 24 * 60 * 60 * 1000;
+const GARMIN_FIRST_SYNC_BACKFILL_MS = 90 * 24 * 60 * 60 * 1000;
 
 // How long the global circuit breaker stays tripped after a 429. Generous
 // because we don't know how widely the ban applies — better to wait too long
@@ -314,11 +332,12 @@ const inFlightUsers = new Set<string>();
 // same athlete in twice — exactly the burst the breaker exists to prevent —
 // so the claim is ALSO taken in server_runtime_cache, where it is atomic
 // across instances. TTL bounds the claim if the process dies mid-call; it is
-// longer than the worst case of the three timed calls (OAuth2 refresh, then a
-// login when Garmin rejects the OAuth1, then activities) so a live operation
-// never loses its lock. Best-effort like the breaker: if the shared store is
-// unreachable the local Set is still authoritative.
-const USER_LOCK_TTL_MS = 3 * GARMIN_CALL_TIMEOUT_MS + 30_000;
+// longer than the worst case of the timed calls (OAuth2 refresh, then a login
+// when Garmin rejects the OAuth1, then up to GARMIN_MAX_SYNC_PAGES activity
+// pages, C26 in CODEBASE_ANALYSIS_2026-10-03) so a live operation never loses
+// its lock. Best-effort like the breaker: if the shared store is unreachable
+// the local Set is still authoritative.
+const USER_LOCK_TTL_MS = (2 + GARMIN_MAX_SYNC_PAGES) * GARMIN_CALL_TIMEOUT_MS + 30_000;
 
 function userLockKey(userId: string): string {
   return `garmin:inflight:${userId}`;
@@ -718,26 +737,73 @@ interface SyncResult {
   total: number;
 }
 
+/** How far back a sync pages (see GARMIN_MAX_SYNC_PAGES). */
+function garminSyncCutoff(lastSyncedAt: Date | null | undefined, now: Date = new Date()): Date {
+  return lastSyncedAt
+    ? new Date(lastSyncedAt.getTime() - GARMIN_SYNC_OVERLAP_MS)
+    : new Date(now.getTime() - GARMIN_FIRST_SYNC_BACKFILL_MS);
+}
+
 /**
- * The Garmin half of one /sync request: fetch the recent activities. Split
- * from the DB half (importGarminActivities) so the route handler can tell a
- * Garmin failure from a database one — D34 (CODEBASE_ANALYSIS_2026-10-03): a
- * single catch around both used to treat a transient statement timeout as a
- * Garmin login failure and wipe the stored credentials (setGarminError).
+ * Whether a page (newest first) already reaches back past the cutoff. A start
+ * that cannot be read counts as reaching it: one more Garmin call is the
+ * expensive mistake, not a page too few.
+ */
+function pageReachesCutoff(page: readonly GarminActivity[], cutoff: Date): boolean {
+  return page.some((activity) => {
+    const startedAt = parseStartInstant(activity);
+    return startedAt == null || startedAt < cutoff;
+  });
+}
+
+/**
+ * The Garmin half of one /sync request: fetch the activities back to
+ * `cutoff`, a page at a time. Split from the DB half (importGarminActivities)
+ * so the route handler can tell a Garmin failure from a database one — D34
+ * (CODEBASE_ANALYSIS_2026-10-03): a single catch around both used to treat a
+ * transient statement timeout as a Garmin login failure and wipe the stored
+ * credentials (setGarminError). A failed page fails the whole fetch, so
+ * lastSyncedAt does not move past activities that were never read.
  */
 async function fetchGarminActivities(
   client: GarminConnect,
   userId: string,
   reqLog: typeof logger,
+  cutoff: Date,
 ): Promise<GarminActivity[]> {
-  reqLog.info({ userId, context: LOG_CTX, limit: GARMIN_ACTIVITIES_PER_SYNC }, "Garmin getActivities");
+  const activities: GarminActivity[] = [];
+  // An upload landing between two page reads shifts the offsets by one, so
+  // the next page can repeat the previous page's last activity.
+  const seen = new Set<string>();
+  for (let page = 0; page < GARMIN_MAX_SYNC_PAGES; page++) {
+    const batch = await fetchGarminActivityPage(client, userId, reqLog, page * GARMIN_ACTIVITIES_PER_SYNC);
+    for (const activity of batch) {
+      if (seen.has(String(activity.activityId))) continue;
+      seen.add(String(activity.activityId));
+      activities.push(activity);
+    }
+    if (batch.length < GARMIN_ACTIVITIES_PER_SYNC || pageReachesCutoff(batch, cutoff)) break;
+  }
+  return activities;
+}
+
+/** One getActivities() page, newest first, starting `start` activities back. */
+async function fetchGarminActivityPage(
+  client: GarminConnect,
+  userId: string,
+  reqLog: typeof logger,
+  start: number,
+): Promise<GarminActivity[]> {
+  // Layer 7 audit line: userId is an opaque Clerk id, the rest are page numbers.
+  // bearer:disable javascript_lang_logger_leak
+  reqLog.info({ userId, context: LOG_CTX, start, limit: GARMIN_ACTIVITIES_PER_SYNC }, "Garmin getActivities");
 
   // The library types getActivities() as Promise<IActivity[]>. GarminActivity
   // is a structurally compatible subset (all our required fields exist on
   // IActivity with compatible types), so the assignment is safe without a
   // cast.
   const rawActivities: GarminActivity[] = await withCircuitBreaker("getActivities", () =>
-    client.getActivities(0, GARMIN_ACTIVITIES_PER_SYNC),
+    client.getActivities(start, GARMIN_ACTIVITIES_PER_SYNC),
   );
 
   if (!Array.isArray(rawActivities)) {
@@ -760,6 +826,7 @@ async function importGarminActivities(
 ): Promise<SyncResult> {
   const user = await storage.users.getUser(userId);
   const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
+  const preferences: UnitPreferences = { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit };
 
   const activityIds = rawActivities.map((a) => String(a.activityId));
   const existingIds = await storage.workouts.getExistingGarminActivityIds(userId, activityIds);
@@ -795,7 +862,7 @@ async function importGarminActivities(
   // count keeps imported+skipped == attempted regardless.
   let inserted = 0;
   if (workoutsToImport.length > 0) {
-    const created = await storage.workouts.createGarminWorkoutLogs(workoutsToImport);
+    const created = await insertGarminLogsWithSets(workoutsToImport, rawActivities, preferences);
     inserted = created.length;
   }
   const dedupedByConflict = workoutsToImport.length - inserted;
@@ -808,6 +875,48 @@ async function importGarminActivities(
     skipped: skipped + dedupedByConflict,
     total: rawActivities.length,
   };
+}
+
+type GarminWorkoutRow = ReturnType<typeof mapGarminActivityToWorkout>;
+
+/**
+ * Insert the new Garmin rows and give each its one synthesised exercise set,
+ * in one transaction, as the Strava sync does for a standalone import (D47).
+ * Without the set a Garmin-only athlete's runs counted on the overview cards
+ * but never reached the set-derived panels: no running slice in the training
+ * mix, no running PRs. C26 (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * Only rows the insert returned get a set, so a row the onConflictDoNothing
+ * backstop swallowed cannot gain a second one. The set is built from the
+ * activity rather than the row (garminRecordingMeasurements), and a sport
+ * the recording cannot describe as a set gets none (deviceActivitySets.ts).
+ */
+async function insertGarminLogsWithSets(
+  rows: GarminWorkoutRow[],
+  activities: readonly GarminActivity[],
+  preferences: UnitPreferences,
+): Promise<WorkoutLog[]> {
+  const activitiesById = new Map(activities.map((activity) => [String(activity.activityId), activity]));
+  return await db.transaction(async (tx) => {
+    const logs = await storage.workouts.createGarminWorkoutLogs(rows, tx);
+    await storage.workouts.createDeviceActivitySets(garminSetRows(logs, activitiesById, preferences), tx);
+    return logs;
+  });
+}
+
+/** The synthesised set for each created Garmin log whose sport describes one. */
+function garminSetRows(
+  logs: readonly WorkoutLog[],
+  activitiesById: ReadonlyMap<string, GarminActivity>,
+  preferences: UnitPreferences,
+): InsertExerciseSet[] {
+  const rows: InsertExerciseSet[] = [];
+  for (const log of logs) {
+    const activity = activitiesById.get(log.garminActivityId ?? "");
+    const row = activity ? recordingSetRow(log.id, garminRecordingMeasurements(activity), preferences) : null;
+    if (row) rows.push(row);
+  }
+  return rows;
 }
 
 function sendCircuitOpen(res: Response, message: string = circuitOpenMessage()): void {
@@ -891,6 +1000,7 @@ async function handleGarminSync(req: Request, res: Response) {
 
   const existing = await storage.users.getGarminConnection(userId);
   if (rejectSyncPreflight(res, existing)) return;
+  const syncCutoff = garminSyncCutoff(existing?.lastSyncedAt);
 
   try {
     await withUserLock(userId, async () => {
@@ -913,7 +1023,7 @@ async function handleGarminSync(req: Request, res: Response) {
 
       let rawActivities: GarminActivity[];
       try {
-        rawActivities = await fetchGarminActivities(client, userId, reqLog);
+        rawActivities = await fetchGarminActivities(client, userId, reqLog, syncCutoff);
       } catch (err) {
         if (err instanceof GarminCircuitOpenError) {
           sendCircuitOpen(res, err.message);
@@ -982,4 +1092,7 @@ export const __testing = {
   MIN_SYNC_INTERVAL_MS,
   TOKEN_EXPIRY_BUFFER_MS,
   GARMIN_ACTIVITIES_PER_SYNC,
+  GARMIN_MAX_SYNC_PAGES,
+  USER_LOCK_TTL_MS,
+  garminSyncCutoff,
 };

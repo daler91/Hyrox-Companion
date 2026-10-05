@@ -1,4 +1,8 @@
-import { planAdjustmentProposals, trainingPlans } from "@shared/schema";
+import {
+  type EnrichedPlanAdjustmentChange,
+  planAdjustmentProposals,
+  trainingPlans,
+} from "@shared/schema";
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -134,6 +138,55 @@ describe("one pending plan proposal per athlete (real Postgres)", () => {
     ]);
     await expect(storage.planProposals.getPending(ALICE)).resolves.toMatchObject({
       id: pending.id,
+    });
+  });
+
+  // C33 (CODEBASE_ANALYSIS_2026-10-03): a pending proposal never expired, so
+  // one applied days later could put a session on a date already gone.
+  describe("a pending proposal whose days have passed", () => {
+    /** A proposal changing one day, dated `date`. */
+    function proposalChanging(planId: string, date: string) {
+      const change: EnrichedPlanAdjustmentChange = {
+        planDayId: "day-1",
+        updatedFields: { expectedRpe: 6 },
+        rationale: "Ease off.",
+        kind: "tune",
+        dayLabel: "Mon — Tempo Run",
+        baseline: {
+          focus: "Tempo Run",
+          mainWorkout: "40min tempo",
+          accessory: null,
+          notes: null,
+          scheduledDate: date,
+          expectedDurationMin: null,
+          expectedRpe: null,
+          status: "planned",
+        },
+        structured: false,
+        hasStructureBlocks: false,
+      };
+      return { ...proposalFor(ALICE, planId, "ease off"), payload: { changes: [change] } };
+    }
+
+    it("is resolved invalidated, and no longer offered as pending", async () => {
+      const planId = await seedPlan(ALICE);
+      const expired = await storage.planProposals.create(proposalChanging(planId, "2020-01-06"));
+
+      await expect(storage.planProposals.getPending(ALICE)).resolves.toBeUndefined();
+
+      const [row] = await proposalsOf(ALICE);
+      expect(row).toMatchObject({ id: expired.id, status: "invalidated" });
+      expect(row.resolvedAt).not.toBeNull();
+    });
+
+    it("stays pending while its days are still ahead", async () => {
+      const planId = await seedPlan(ALICE);
+      const upcoming = await storage.planProposals.create(proposalChanging(planId, "2099-01-05"));
+
+      await expect(storage.planProposals.getPending(ALICE)).resolves.toMatchObject({
+        id: upcoming.id,
+        status: "pending",
+      });
     });
   });
 });

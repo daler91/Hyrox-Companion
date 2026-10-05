@@ -3,7 +3,7 @@ import { planDayPriorityEnum, planDayRecoveryEnum } from "../enums";
 import { type planDayMoves, planDays, trainingPlans } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { PlanDayRecoveryUndo } from "./recovery";
-import { dateStringSchema } from "./requests";
+import { calendarDateSchema, dateStringSchema } from "./requests";
 // Training plan types and schemas
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans)
   .omit({
@@ -60,7 +60,8 @@ function passedEarlierChecks({ issues }: { readonly issues: readonly unknown[] }
  * back-dated retirement is refused rather than honoured.
  */
 export const updateTrainingPlanRetirementSchema = z.object({
-  retiredOn: dateStringSchema.nullable(),
+  // A real day: "2026-02-30" passed the shape check and Postgres refused it (C50).
+  retiredOn: calendarDateSchema.nullable(),
 });
 
 /**
@@ -90,6 +91,10 @@ export const insertPlanDaySchema = createInsertSchema(planDays)
   })
   .extend({
     status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
+    // The generated schema took any string, so "next tuesday" or "2026-02-30"
+    // reached the date column and came back as a 500 (C50,
+    // CODEBASE_ANALYSIS_2026-10-03). Null unschedules the day.
+    scheduledDate: calendarDateSchema.nullable().optional(),
     expectedDurationMin: z.number().int().min(1).max(600).nullable().optional(),
     expectedRpe: z.number().int().min(1).max(10).nullable().optional(),
     // Planned local start time as minutes-from-midnight (0–1439); drives which

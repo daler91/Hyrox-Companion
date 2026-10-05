@@ -15,6 +15,7 @@ import {
   describeBodySystemDivergence,
   hasBodySystemLoadData,
 } from "@shared/bodySystemLoad";
+import { addDaysToISODate } from "@shared/dateUtils";
 import type { OverviewAnalysisResult, OverviewChartKey, TrainingLoadOverview, TrainingOverview, WeeklySummary } from "@shared/schema";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -23,6 +24,7 @@ import { generateJsonText } from "../ai/providers";
 import { env } from "../env";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { formatZodIssues } from "../utils/sanitize";
 import { checkAiBudget } from "./aiUsageService";
 import { assembleTrainingOverview } from "./trainingOverviewLoader";
@@ -35,6 +37,54 @@ export type OverviewAnalysisGenerationOutcome =
 
 const MIN_POINTS = 2;
 const RECENT_WEEKS = 8;
+
+/**
+ * The range an analysis covers: the last N days ending on the athlete's today,
+ * or null for all time. The analysis used to read the whole history, with
+ * "today" taken in UTC, while the charts beside it show the range selected on
+ * the Analytics page, so the RPE card could say 6.4 next to a chart showing
+ * about 7.6. It now reads the same range as the charts.
+ * AI31 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export type OverviewRangeDays = number | null;
+
+/** The range the Analytics page opens on ("Last 90 days"). */
+export const DEFAULT_OVERVIEW_RANGE_DAYS = 90;
+
+/** The longest day count the page offers is a year; longer is "all". */
+const MAX_OVERVIEW_RANGE_DAYS = 366;
+
+/** The page's own `range` value: a day count, or "all" (parsed to null). */
+export const overviewRangeSchema = z.union([
+  z.literal("all").transform(() => null),
+  z.coerce.number().int().min(1).max(MAX_OVERVIEW_RANGE_DAYS),
+]);
+
+/**
+ * Whether a stored analysis covers the range asked for. One stored before
+ * analyses had a range is shown on any range, as it was before, rather than
+ * hiding the athlete's analysis until the nightly refresh replaces it with a
+ * ranged one (storedOverviewRangeDays).
+ */
+export function coversOverviewRange(
+  result: Pick<OverviewAnalysisResult, "rangeDays">,
+  rangeDays: OverviewRangeDays,
+): boolean {
+  return result.rangeDays === undefined || result.rangeDays === rangeDays;
+}
+
+/**
+ * The range's window, as the Analytics page builds it for the charts: N days
+ * ending today inclusive. Today is the athlete's, not UTC's.
+ */
+async function resolveOverviewWindow(
+  userId: string,
+  rangeDays: OverviewRangeDays,
+): Promise<{ from?: string; to: string }> {
+  const user = await storage.users.getUser(userId);
+  const to = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  return rangeDays === null ? { to } : { from: addDaysToISODate(to, 1 - rangeDays), to };
+}
 
 // One human-readable title per chart so the model labels each section correctly.
 const CHART_TITLES: Record<OverviewChartKey, string> = {
@@ -73,6 +123,7 @@ export const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
   "- Load by body system: each session's RPE × minutes (session-RPE load) is split into aerobic, running impact, leg muscle and upper-body pull by what the session contained, and each system is compared ONLY with its own usual week (the mean of the four weeks before this one): ratio <0.8 low, 0.8-1.3 normal, 1.3-1.5 high, >1.5 very high; 'new' is a real week of load after almost none; a six-week high is the heaviest week of the last six for that system. Numbers are not comparable across systems, so never compare one system's number with another's. When `divergence` is present it is the headline — explain what it means for the coming week. When many sessions were estimated (no RPE or duration logged), say the split is approximate and that rating sessions sharpens it.",
   "- UTSS and body-system load are different models on different scales; do not convert between them or read a gap between them as an inconsistency.",
   "- Weekly Workouts vs the weekly goal shows consistency against target; RPE/Duration trends show how hard and how long sessions are trending; the consistency heatmap + streak show training regularity.",
+  "- `range` is the period the athlete selected on the page. The weekly workouts, RPE/duration and consistency numbers cover only that period; the load charts keep their own fixed windows. Never describe a number as covering more than its period.",
   "- Counts named *InWindow (acwrDaysInWindow, loggedDaysInWindow) describe only the chart's own window, NOT how long the athlete has trained. The load window is the last 42 days and ACWR needs 14 logged days before it computes, so acwrDaysInWindow saturates at 42 for anyone past their first six weeks. Never tell the athlete how much history they have, or call them new, from these numbers.",
   "",
   'Respond with STRICT JSON only, shaped exactly as: {"sections": {"<chartKey>": "<reading>"}}. Use ONLY the chart keys present in the input. Do not add commentary outside the JSON.',
@@ -280,25 +331,29 @@ const overviewAnalysisAiSchema = z.object({
 });
 
 /**
- * Build the Overview chart analysis. Gating is the caller's responsibility (the
- * route middleware, or generateOverviewAnalysisIfAllowed for the cron).
+ * Build the Overview chart analysis for one range of the page (AI31). Gating
+ * is the caller's responsibility (the route middleware, or
+ * generateOverviewAnalysisIfAllowed for the cron).
  */
 export async function generateOverviewAnalysis(
   userId: string,
   log: Logger = defaultLogger,
+  rangeDays: OverviewRangeDays = DEFAULT_OVERVIEW_RANGE_DAYS,
 ): Promise<OverviewAnalysisResult> {
   const startedAt = Date.now();
-  const overview = await assembleTrainingOverview(userId);
+  const { from, to } = await resolveOverviewWindow(userId, rangeDays);
+  const overview = await assembleTrainingOverview(userId, from, to);
   const chartFacts = buildOverviewChartFacts(overview);
   const presentKeys = Object.keys(chartFacts) as OverviewChartKey[];
 
   // Nothing meaningful on screen yet (brand-new athlete) — store an empty
   // result rather than spending AI on charts that aren't rendered.
   if (presentKeys.length === 0) {
-    return { sections: {}, generatedAt: new Date().toISOString() };
+    return { sections: {}, generatedAt: new Date().toISOString(), rangeDays };
   }
 
   const promptPayload = {
+    range: rangeDays === null ? "all time" : `the last ${rangeDays} days`,
     charts: Object.fromEntries(
       presentKeys.map((key) => [key, { title: chartFacts[key]!.title, ...chartFacts[key]!.facts }]),
     ),
@@ -353,7 +408,20 @@ export async function generateOverviewAnalysis(
     "[ai] Overview analysis generated",
   );
 
-  return { sections, generatedAt: new Date().toISOString() };
+  return { sections, generatedAt: new Date().toISOString(), rangeDays };
+}
+
+/**
+ * The range of the athlete's stored analysis, so the nightly refresh keeps the
+ * one they chose (AI31). One stored before analyses had a range gets the
+ * page's default: that is the range the athlete most likely opens.
+ */
+async function storedOverviewRangeDays(userId: string): Promise<OverviewRangeDays> {
+  const row = await storage.analyticsResults.get(userId, "overview_analysis");
+  const stored = (row?.payload as Partial<OverviewAnalysisResult> | undefined)?.rangeDays;
+  if (stored === null) return null;
+  const parsed = overviewRangeSchema.safeParse(stored);
+  return parsed.success ? parsed.data : DEFAULT_OVERVIEW_RANGE_DAYS;
 }
 
 /**
@@ -383,5 +451,6 @@ export async function generateOverviewAnalysisIfAllowed(
     log.warn({ err, userId }, "[overview-analysis] AI budget check failed; allowing AI call");
   }
 
-  return { ok: true, result: await generateOverviewAnalysis(userId, log) };
+  const rangeDays = await storedOverviewRangeDays(userId);
+  return { ok: true, result: await generateOverviewAnalysis(userId, log, rangeDays) };
 }

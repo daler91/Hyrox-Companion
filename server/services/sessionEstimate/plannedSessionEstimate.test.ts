@@ -109,6 +109,21 @@ describe("getPlannedSessionEstimate", () => {
     expect(r?.rationale).toBe("much longer");
   });
 
+  it("asks the fast model for no extra reasoning, like every other fast-model call (C36)", async () => {
+    genMock.mockResolvedValue({ text: JSON.stringify({ durationMin: 58, rpe: 3 }) } as never);
+
+    await getPlannedSessionEstimate("pd-1", "u1");
+
+    expect(genMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelRole: "fast",
+        reasoningEffort: "none",
+        feature: "session_estimate",
+        userId: "u1",
+      }),
+    );
+  });
+
   it("uses an in-band AI response as-is", async () => {
     genMock.mockResolvedValue({ text: JSON.stringify({ durationMin: 58, rpe: 3 }) } as never);
     const r = await getPlannedSessionEstimate("pd-1", "u1");

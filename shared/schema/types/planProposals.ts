@@ -1,7 +1,7 @@
 import { planAdjustmentProposals } from "../tables";
 import { z } from "../zod";
 import type { CoachNoteInputs, PlanDay } from "./plans";
-import { dateStringSchema } from "./requests";
+import { calendarDateSchema } from "./requests";
 import type { ExerciseSet } from "./workouts";
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,8 @@ export const planAdjustmentUpdatedFieldsSchema = z
     mainWorkout: z.string().min(1).max(10_000).optional(),
     accessory: z.string().max(10_000).nullable().optional(),
     notes: z.string().max(10_000).nullable().optional(),
-    scheduledDate: dateStringSchema.optional(),
+    // A real day: an impossible one reached the plan-day date column on apply (C50).
+    scheduledDate: calendarDateSchema.optional(),
     expectedDurationMin: z.number().int().min(1).max(600).nullable().optional(),
     expectedRpe: z.number().int().min(1).max(10).nullable().optional(),
   })

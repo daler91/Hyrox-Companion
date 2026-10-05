@@ -27,6 +27,20 @@ const connectionMocks = vi.hoisted(() => ({
   getExistingGarminActivityIds: vi.fn(),
 }));
 
+// The import's insert-plus-sets transaction (C26) runs on a sentinel handle;
+// the rest of ./db (the pool the rate limiter store uses) stays real.
+const txMocks = vi.hoisted(() => {
+  const handle = { garminImportTx: true };
+  return {
+    handle,
+    transaction: vi.fn((work: (tx: unknown) => Promise<unknown>) => work(handle)),
+  };
+});
+vi.mock("./db", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  db: { transaction: txMocks.transaction },
+}));
+
 vi.mock("./storage", () => ({
   storage: {
     users: {
@@ -42,6 +56,7 @@ vi.mock("./storage", () => ({
       getExistingGarminActivityIds: connectionMocks.getExistingGarminActivityIds,
       listDeviceRecordingsForDates: vi.fn(),
       createGarminWorkoutLogs: vi.fn(),
+      createDeviceActivitySets: vi.fn(),
     },
   },
 }));
@@ -72,7 +87,7 @@ const noop = (): void => undefined;
 class FakeGarminConnect {
   static instances: FakeGarminConnect[] = [];
   static loginImpl: () => Promise<unknown> = () => Promise.resolve(undefined);
-  static getActivitiesImpl: () => Promise<unknown> = () => Promise.resolve([]);
+  static getActivitiesImpl: (start: number, limit: number) => Promise<unknown> = () => Promise.resolve([]);
   static refreshImpl: () => Promise<void> = () => Promise.resolve();
   static onConstruct: () => void = noop;
   static reset(): void {
@@ -88,7 +103,7 @@ class FakeGarminConnect {
 
   login = vi.fn((_email?: string, _password?: string) => FakeGarminConnect.loginImpl());
   loadToken = vi.fn();
-  getActivities = vi.fn(() => FakeGarminConnect.getActivitiesImpl());
+  getActivities = vi.fn((start: number, limit: number) => FakeGarminConnect.getActivitiesImpl(start, limit));
   getUserProfile = vi.fn(() => Promise.resolve({ displayName: "Test Athlete" }));
   exportToken = vi.fn(() => ({
     oauth1: { oauth_token: "o1" },
@@ -287,6 +302,133 @@ describe("POST /sync import accounting", () => {
     expect(res.status).toBe(500);
     expect(storage.users.setGarminError).not.toHaveBeenCalled();
     expect(storage.users.updateGarminLastSync).not.toHaveBeenCalled();
+  });
+});
+
+// C26 (CODEBASE_ANALYSIS_2026-10-03): the sync read one page of 20 and wrote no
+// exercise set, so activities past the newest 20 never arrived and a
+// Garmin-only athlete's runs never reached the set-derived Analytics panels.
+describe("POST /sync paging and synthesised sets", () => {
+  const PAGE = __testing.GARMIN_ACTIVITIES_PER_SYNC;
+  const HOUR_MS = 60 * 60 * 1000;
+
+  /** A run that started `hoursAgo` hours before now, as Garmin lists it. */
+  function recentRun(id: number, hoursAgo: number) {
+    const start = new Date(Date.now() - hoursAgo * HOUR_MS).toISOString().replace("T", " ").slice(0, 19);
+    return { ...activity(id), startTimeLocal: start, startTimeGMT: start };
+  }
+
+  /** A history of `total` runs, newest first, one every `spacingHours`, served a page at a time. */
+  function history(total: number, spacingHours: number) {
+    return (start: number, limit: number) =>
+      Promise.resolve(
+        Array.from({ length: Math.max(0, Math.min(limit, total - start)) }, (_value, offset) =>
+          recentRun(start + offset + 1, (start + offset + 1) * spacingHours),
+        ),
+      );
+  }
+
+  function pageStarts(): number[] {
+    return FakeGarminConnect.instances[0].getActivities.mock.calls.map(([start]) => start);
+  }
+
+  beforeEach(() => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn());
+  });
+
+  it("pages back past the newest 20 until Garmin runs out", async () => {
+    FakeGarminConnect.getActivitiesImpl = history(25, 6);
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, imported: 25, skipped: 0, total: 25 });
+    expect(pageStarts()).toEqual([0, PAGE]);
+    expect(vi.mocked(storage.workouts.createGarminWorkoutLogs).mock.calls[0][0]).toHaveLength(25);
+  });
+
+  it("stops at the last sync less a week", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(
+      conn({ lastSyncedAt: new Date(Date.now() - 2 * 24 * HOUR_MS) }),
+    );
+    // Twelve hours apart, the first page already reaches ten days back.
+    FakeGarminConnect.getActivitiesImpl = history(500, 12);
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.body).toMatchObject({ success: true, total: PAGE });
+    expect(pageStarts()).toEqual([0]);
+  });
+
+  it("never reads more than the page cap in one sync", async () => {
+    FakeGarminConnect.getActivitiesImpl = history(1000, 1);
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.body).toMatchObject({ success: true, total: PAGE * __testing.GARMIN_MAX_SYNC_PAGES });
+    expect(pageStarts()).toHaveLength(__testing.GARMIN_MAX_SYNC_PAGES);
+  });
+
+  it("counts an activity that slid onto the next page once", async () => {
+    // A new upload between the two reads pushes run 20 onto page two as well.
+    FakeGarminConnect.getActivitiesImpl = (start) =>
+      Promise.resolve(
+        start === 0
+          ? Array.from({ length: PAGE }, (_value, offset) => recentRun(offset + 1, offset + 1))
+          : [recentRun(PAGE, PAGE), recentRun(PAGE + 1, PAGE + 1)],
+      );
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.body).toMatchObject({ success: true, imported: PAGE + 1, total: PAGE + 1 });
+  });
+
+  it("fails the whole sync when a later page fails, importing nothing", async () => {
+    const firstPage = history(PAGE, 1);
+    FakeGarminConnect.getActivitiesImpl = (start, limit) =>
+      start === 0
+        ? firstPage(start, limit)
+        : Promise.reject(Object.assign(new Error("Request failed"), { response: { status: 500 } }));
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(502);
+    expect(storage.workouts.createGarminWorkoutLogs).not.toHaveBeenCalled();
+    expect(storage.users.updateGarminLastSync).not.toHaveBeenCalled();
+    expect(storage.users.setGarminError).not.toHaveBeenCalled();
+  });
+
+  it("writes each run's set with its log, in one transaction, timed in seconds", async () => {
+    FakeGarminConnect.getActivitiesImpl = () =>
+      Promise.resolve([
+        { ...recentRun(1, 2), movingDuration: 1501 },
+        { ...recentRun(2, 30), activityType: { typeKey: "strength_training" } },
+      ]);
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.body).toMatchObject({ success: true, imported: 2 });
+    expect(txMocks.transaction).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(storage.workouts.createGarminWorkoutLogs).mock.calls[0][1]).toBe(txMocks.handle);
+    const [sets, tx] = vi.mocked(storage.workouts.createDeviceActivitySets).mock.calls[0];
+    expect(tx).toBe(txMocks.handle);
+    // The strength session says nothing a set could hold, so it gets none.
+    expect(sets).toHaveLength(1);
+    expect(sets[0]).toMatchObject({ exerciseName: "run", category: "running", distance: 5000, reps: null });
+    // 1501 s, not the row's rounded 25 minutes.
+    expect(sets[0].time).toBeCloseTo(1501 / 60, 6);
+  });
+
+  it("writes no set for a row the insert-time backstop swallowed", async () => {
+    FakeGarminConnect.getActivitiesImpl = () => Promise.resolve([recentRun(1, 2), recentRun(2, 3)]);
+    vi.mocked(storage.workouts.createGarminWorkoutLogs).mockImplementation((rows: unknown) =>
+      Promise.resolve((rows as unknown[]).slice(0, 1) as never),
+    );
+
+    await request(app).post("/api/v1/garmin/sync");
+
+    const [sets] = vi.mocked(storage.workouts.createDeviceActivitySets).mock.calls[0];
+    expect(sets).toHaveLength(1);
   });
 });
 

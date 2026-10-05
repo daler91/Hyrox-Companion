@@ -34,6 +34,12 @@ const MAX_READ_MIN = 300;
 const NOT_WORK: readonly RegExp[] = [
   // Paces: "5:04/km", "2:05 /500m", "4:30 per km".
   /(?<![\d.:])\d+:\d\d ?(?:\/|per) ?(?:k|km|mi|miles?|\d+ ?m)\b/g,
+  // ...and with the minutes named: "10:30 min/mile", "4:30 mins per km".
+  /(?<![\d.:])\d+:\d\d ?mins? ?(?:\/|per) ?(?:k|km|mi|miles?|\d+ ?m)\b/g,
+  // A clock pace with no "/km": "10:30 pace", "8:00 mile pace", "@ 10:30". Read
+  // as a length, "40 min easy, 10:30 pace" was 51 min (C51, CODEBASE_ANALYSIS_2026-10-03).
+  /(?<![\d.:])\d+:\d\d ?(?:km |mi |mile |k )?pace\b/g,
+  /@ ?\d+:\d\d(?![\d:])/g,
   // "7 min/mile", "6 min per km".
   /(?<![\d.])\d+ ?(?:min|mins|minutes)? ?(?:\/|per) ?(?:k|km|mi|miles?)\b/g,
   // Race-pace references: "5k pace", "10 km race effort".
@@ -47,6 +53,18 @@ const NOT_WORK: readonly RegExp[] = [
   /(?<![\d.])\d[\d.]* ?(?:kg|kgs|lbs?)\b/g,
   /\b(?:week|wk|day|phase|block) ?\d+/g,
 ];
+
+/*
+ * "8 x 400s", "4 x 1200s": the plural of a rep DISTANCE in track slang, not
+ * seconds. Read as seconds, "8 x 400s with 90s rest" was a 65-minute session
+ * (C51, CODEBASE_ANALYSIS_2026-10-03). A whole hundred straight after an "x" is
+ * always a distance ("10 x 30s" stays seconds); a track distance (100-1600) is
+ * one anywhere, unless a rest says it is a time ("rest 200s", "200s recovery").
+ * Rewritten to "400 m", the rep is untimed work like any other distance.
+ */
+const REP_DISTANCE_AFTER_REPEAT = /(?<=(?:\d|\b)x ?)([1-9]\d?00)s\b/g;
+const TRACK_DISTANCE_PLURAL =
+  /(?<![\d.])(?<!\b(?:rest|recover|recovery|off) )((?:[1-9]|1[0-6])00)s\b(?! (?:rest|recover|recovery|off)\b)/g;
 
 /** "45-60", "45 to 60": a range, read as its middle before any unit is. */
 const RANGE = /(?<![\d.])(\d[\d.]*) ?(?:-|to) ?(\d[\d.]*)(?![\d.])/g;
@@ -141,6 +159,7 @@ function normalise(text: string): string {
     .replaceAll(/[”″]/g, '"')
     .replaceAll(/(\d) ?[×*] ?(?=\d)/g, "$1 x ");
   for (const pattern of NOT_WORK) out = out.replaceAll(pattern, " ");
+  out = out.replaceAll(REP_DISTANCE_AFTER_REPEAT, "$1 m").replaceAll(TRACK_DISTANCE_PLURAL, "$1 m");
   return out.replaceAll(RANGE, (_range, low: string, high: string) => String((Number(low) + Number(high)) / 2));
 }
 

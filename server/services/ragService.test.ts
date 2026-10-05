@@ -1,7 +1,15 @@
 import type { CoachingMaterial } from "@shared/schema";
 import { afterEach, beforeEach,describe, expect, it, vi } from "vitest";
 
-import { chunkText, embedCoachingMaterial, EMBEDDING_UNAVAILABLE_MESSAGE, getRagStatus, retrieveRelevantChunks } from "./ragService";
+import {
+  chunkText,
+  clearRagCache,
+  embedCoachingMaterial,
+  EMBEDDING_UNAVAILABLE_MESSAGE,
+  getRagStatus,
+  purgeRagCacheForUser,
+  retrieveRelevantChunks,
+} from "./ragService";
 
 // Mock dependencies
 vi.mock("../gemini/client", () => ({
@@ -21,6 +29,7 @@ vi.mock("../storage", () => ({
       listPrincipleMaterialIds: vi.fn(),
       listChunksForMaterials: vi.fn(),
       getMaterialTitles: vi.fn(),
+      getRetrievalVersion: vi.fn(),
       listCoachingMaterials: vi.fn(),
       getChunkCountsByMaterial: vi.fn(),
       getStoredEmbeddingDimension: vi.fn(),
@@ -30,15 +39,25 @@ vi.mock("../storage", () => ({
 
 vi.mock("../logger", () => ({
   logger: {
+    debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   },
 }));
 
+// The real key hashing, so cache prefixes are what production writes.
+vi.mock("../sharedRuntimeState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../sharedRuntimeState")>()),
+  getRuntimeCache: vi.fn(),
+  setRuntimeCache: vi.fn(),
+  deleteRuntimeCachePrefix: vi.fn(),
+}));
+
 import { env } from "../env";
 import { generateEmbedding, generateEmbeddings } from "../gemini/client";
 import { logger } from "../logger";
+import { deleteRuntimeCachePrefix, getRuntimeCache, hashRuntimeKey, setRuntimeCache } from "../sharedRuntimeState";
 import { storage } from "../storage";
 
 // ---------------------------------------------------------------------------
@@ -289,6 +308,7 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(storage.coaching.getMaterialTitles).mockImplementation((_userId, ids) =>
       Promise.resolve(new Map(ids.map((id) => [id, `Title of ${id}`]))),
     );
+    vi.mocked(storage.coaching.getRetrievalVersion).mockResolvedValue("1:100/2:200");
   });
 
   /** The retrieved text, without sources. */
@@ -471,6 +491,89 @@ describe("retrieveRelevantChunks", () => {
     vi.mocked(generateEmbedding).mockRejectedValue(new Error("API down"));
 
     await expect(retrieveRelevantChunks("u1", "query")).rejects.toThrow("API down");
+  });
+
+  describe("cache (AI34, AI35, CODEBASE_ANALYSIS_2026-10-03)", () => {
+    const sledChunk = (id: string, materialId: string, content: string) => ({
+      id, materialId, userId: "u1", content, chunkIndex: 0, embedding: null, createdAt: new Date(), distance: 0.2,
+    });
+
+    beforeEach(() => {
+      vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+      vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+        sledChunk("c1", "m-old", "Deleted sled notes."),
+        sledChunk("c2", "m1", "Short steps on the sled."),
+      ]);
+    });
+
+    it("serves a repeat lookup from this replica's cache while the athlete's materials are unchanged", async () => {
+      const first = await retrieveRelevantChunks("u1", "repeat query");
+
+      expect(await retrieveRelevantChunks("u1", "repeat query")).toEqual(first);
+      expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledTimes(1);
+      expect(storage.coaching.getRetrievalVersion).toHaveBeenCalledWith("u1");
+    });
+
+    it("retrieves afresh once the materials change, though nothing cleared this replica's cache", async () => {
+      // Cached here, then the material is deleted through another replica:
+      // only the retrieval version tells this one.
+      expect(contents(await retrieveRelevantChunks("u1", "deleted elsewhere query"))).toEqual([
+        "Deleted sled notes.",
+        "Short steps on the sled.",
+      ]);
+      vi.mocked(storage.coaching.getRetrievalVersion).mockResolvedValue("0:0/1:200");
+      vi.mocked(storage.coaching.getMaterialTitles).mockResolvedValue(new Map([["m1", "Sled technique"]]));
+
+      expect(contents(await retrieveRelevantChunks("u1", "deleted elsewhere query"))).toEqual([
+        "Short steps on the sled.",
+      ]);
+      expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledTimes(2);
+    });
+
+    it("retrieves uncached when the version can't be read", async () => {
+      vi.mocked(storage.coaching.getRetrievalVersion).mockRejectedValue(new Error("vector db down"));
+
+      expect(contents(await retrieveRelevantChunks("u1", "no version query"))).toHaveLength(2);
+      await retrieveRelevantChunks("u1", "no version query");
+
+      expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledTimes(2);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "u1" }),
+        expect.stringContaining("retrieval version"),
+      );
+    });
+
+    it("never reads or writes the shared runtime cache, outside tests too", async () => {
+      const originalNodeEnv = env.NODE_ENV;
+      env.NODE_ENV = "production";
+      try {
+        await retrieveRelevantChunks("u1", "shared cache query");
+        await retrieveRelevantChunks("u1", "shared cache query");
+      } finally {
+        env.NODE_ENV = originalNodeEnv;
+      }
+
+      expect(getRuntimeCache).not.toHaveBeenCalled();
+      expect(setRuntimeCache).not.toHaveBeenCalled();
+    });
+
+    it("clears one athlete's cached lookups on this replica", async () => {
+      await retrieveRelevantChunks("u1", "clear query");
+      clearRagCache("u1");
+      await retrieveRelevantChunks("u1", "clear query");
+
+      expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledTimes(2);
+    });
+
+    it("purges an erased athlete's cached lookups, and any shared rows an older deploy wrote (P13)", async () => {
+      await retrieveRelevantChunks("u1", "erased query");
+
+      await purgeRagCacheForUser("u1");
+      await retrieveRelevantChunks("u1", "erased query");
+
+      expect(deleteRuntimeCachePrefix).toHaveBeenCalledWith(`rag:${hashRuntimeKey("u1")}:`);
+      expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledTimes(2);
+    });
   });
 });
 

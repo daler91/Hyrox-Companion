@@ -207,11 +207,12 @@ app.use(
 
 app.use(permissionsPolicy);
 
-// The few routes that take bigger JSON bodies (coaching materials 2mb, chat
-// sends 5mb, image parses 10mb) are skipped here and parsed inside their
-// protected route stack, after auth and the route's rate limiter, so an
-// anonymous client can no longer make the instance buffer multi-MB bodies.
-// D35 (CODEBASE_ANALYSIS_2026-10-03); see server/largeBodyParsers.ts.
+// The few routes that take bigger JSON bodies (plan import 1mb, coaching
+// materials 2mb, chat sends 5mb, image parses 10mb) are skipped here and
+// parsed inside their protected route stack, after auth and the route's rate
+// limiter, so an anonymous client can no longer make the instance buffer
+// multi-MB bodies. D35 and C27 (CODEBASE_ANALYSIS_2026-10-03); see
+// server/largeBodyParsers.ts.
 app.use(
   skipLargeJsonBodyPaths(
     express.json({

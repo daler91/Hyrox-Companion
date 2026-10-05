@@ -79,10 +79,16 @@ export default defineConfig({
               !url.pathname.startsWith("/api/v1/auth/") &&
               !url.pathname.startsWith("/api/v1/export") &&
               request.destination !== "document",
+            // No `networkTimeoutSeconds`: the cache answers only when the
+            // network actually fails (offline, connection refused). With a 10 s
+            // timeout a slow refetch after a save got the pre-save response,
+            // which React Query then held for its stale time, so the
+            // just-logged workout looked missing. A hung request is still
+            // bounded by the API client's own timeout. C53
+            // (CODEBASE_ANALYSIS_2026-10-03)
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",
-              networkTimeoutSeconds: 10,
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 5 * 60,

@@ -26,9 +26,25 @@ vi.mock("@google/genai", () => ({
 
 vi.mock("../services/aiUsageService", () => ({ recordAiUsage: vi.fn(() => Promise.resolve()) }));
 
-import { embeddingBreaker } from "../ai/circuitBreaker";
+// Breaker transitions persist through the shared runtime cache; keep them off
+// the unit lane's dummy database.
+vi.mock("../sharedRuntimeState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../sharedRuntimeState")>()),
+  getRuntimeCache: vi.fn(() => Promise.resolve()),
+  setRuntimeCache: vi.fn(() => Promise.resolve()),
+}));
+
+import { __resetCircuitBreakerForTests, embeddingBreaker } from "../ai/circuitBreaker";
 import { recordAiUsage } from "../services/aiUsageService";
-import { __resetEmbeddingCacheForTests, generateEmbedding, retryWithBackoff, trackUsageFromResponse, withTimeout } from "./client";
+import {
+  __resetEmbeddingCacheForTests,
+  generateEmbedding,
+  generateEmbeddings,
+  retryWithBackoff,
+  trackEmbeddingUsage,
+  trackUsageFromResponse,
+  withTimeout,
+} from "./client";
 
 function mockEmbedding(values: number[]) {
   embedContentSpy.mockResolvedValueOnce({ embeddings: [{ values }] });
@@ -75,6 +91,64 @@ describe("generateEmbedding cache", () => {
 
     expect(refreshed).toEqual([2, 2, 2]);
     expect(embedContentSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+// AI23 (CODEBASE_ANALYSIS_2026-10-03): a chat turn's RAG query is embedded
+// before the reply starts, and it had the 4-retry, 90 s-per-attempt, 120 s
+// policy sized for reasoning calls.
+describe("embedding retry policy", () => {
+  /** A provider call that never answers; only the per-attempt timeout ends it. */
+  const hang = () =>
+    new Promise<never>(() => {
+      /* never settles: only the per-attempt timeout ends it */
+    });
+
+  beforeEach(() => {
+    embedContentSpy.mockReset();
+    __resetEmbeddingCacheForTests();
+    __resetCircuitBreakerForTests();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("gives up on a hung query embedding after 4 s, so the caller can fall back", async () => {
+    embedContentSpy.mockImplementation(hang);
+
+    const outcome = generateEmbedding("what should I eat before a race?").catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    await expect(outcome).resolves.toMatchObject({ message: "AI call timed out after 4000ms (embedding)" });
+    expect(embedContentSpy).toHaveBeenCalledOnce();
+  });
+
+  it("retries a failing query embedding once, then gives up well inside 10 s", async () => {
+    embedContentSpy.mockRejectedValue(new Error("503 Service Unavailable"));
+
+    const outcome = generateEmbedding("sled push tips").catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(outcome).resolves.toMatchObject({ message: "503 Service Unavailable" });
+    expect(embedContentSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the longer default policy for batch embeddings, which have no fallback", async () => {
+    embedContentSpy.mockImplementation(hang);
+    let settled = false;
+
+    const outcome = generateEmbeddings(["chunk one"])
+      .catch((error: unknown) => error)
+      .finally(() => {
+        settled = true;
+      });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(80_000);
+    await expect(outcome).resolves.toMatchObject({ message: "AI call timed out after 90000ms (embedding)" });
   });
 });
 
@@ -130,5 +204,28 @@ describe("trackUsageFromResponse", () => {
     trackUsageFromResponse("user-1", "gemini-2.5-flash", "parse", {} as never);
 
     expect(recordAiUsage).toHaveBeenCalledWith("user-1", "gemini-2.5-flash", "parse", 0, 0);
+  });
+});
+
+// AI28 (CODEBASE_ANALYSIS_2026-10-03): the embedding model is fixed in this
+// module rather than in env, so its pricing is checked here, against the model
+// id embeddings are actually billed under. An unpriced one would bill at the
+// conservative fallback rate.
+describe("trackEmbeddingUsage", () => {
+  it("bills embeddings under a model the pricing table knows", async () => {
+    vi.mocked(recordAiUsage).mockClear();
+    const { resolveModelPricing } =
+      await vi.importActual<typeof import("../services/aiUsageService")>("../services/aiUsageService");
+
+    trackEmbeddingUsage("user-1", 2);
+
+    const [[userId, model, feature, inputTokens, outputTokens]] = vi.mocked(recordAiUsage).mock.calls;
+    expect({ userId, feature, inputTokens, outputTokens }).toEqual({
+      userId: "user-1",
+      feature: "embedding",
+      inputTokens: 300,
+      outputTokens: 0,
+    });
+    expect(resolveModelPricing(model)).toBeDefined();
   });
 });

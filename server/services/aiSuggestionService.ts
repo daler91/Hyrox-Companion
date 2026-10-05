@@ -165,13 +165,28 @@ function resolveTrainingPhaseLabel(
   );
 }
 
+/**
+ * The active plan's goal, as the auto-coach passes it to the model. The manual
+ * path passed `undefined` while still recording the goal as present, so a
+ * suggestion made without it showed a "Plan goal" chip.
+ * AI27 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function resolvePlanGoal(
+  trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"],
+): string | undefined {
+  return trainingContext.activePlan?.goal ?? undefined;
+}
+
+// `planGoal` is the goal the model was actually given, so the CoachNote's
+// "Plan goal" chip never claims one it wasn't.
 function buildTimelineCoachInputs(
   trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"],
   traceMetadata: RecommendationTraceMetadata,
   ragUsed: boolean,
+  planGoal: string | undefined,
 ): CoachNoteInputs {
   return {
-    ...buildCoachNoteInputs(trainingContext, ragUsed, Boolean(trainingContext.activePlan?.goal)),
+    ...buildCoachNoteInputs(trainingContext, ragUsed, Boolean(planGoal)),
     recommendationTrace: traceMetadata,
   };
 }
@@ -354,13 +369,14 @@ export async function generateTimelineAiSuggestions(
   );
 
   const safetySignals = analyzeSafetySignals(aiContext.trainingContext, upcomingWorkouts);
+  const planGoal = resolvePlanGoal(aiContext.trainingContext);
 
   const rawSuggestions = await requestSuggestions(
     () =>
       generateWorkoutSuggestions(
         aiContext.trainingContext,
         upcomingWorkouts,
-        undefined,
+        planGoal,
         coachingMaterials,
         userId,
         stylePromptContext,
@@ -415,6 +431,7 @@ export async function generateTimelineAiSuggestions(
     aiContext.trainingContext,
     traceMetadata,
     Boolean(coachingMaterials),
+    planGoal,
   );
 
   const forcedSafetyMessage = buildSafetyReviewNote(safetySignals);

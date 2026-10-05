@@ -156,6 +156,10 @@ async function refineWithAi(
       systemInstruction: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildPrompt(day, base, exerciseSets, distanceUnit) }],
       modelRole: "fast",
+      // Like every other fast-model call: a small, tightly clamped refinement
+      // does not need the global effort (default "high") meant for planning —
+      // C36 (CODEBASE_ANALYSIS_2026-10-03).
+      reasoningEffort: "none",
       label: "plannedSessionEstimate",
       feature: "session_estimate",
       userId,

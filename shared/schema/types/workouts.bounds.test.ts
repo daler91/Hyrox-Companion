@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addExerciseSetBodySchema,
+  exercisesPayloadSchema,
   insertWorkoutLogSchema,
   MAX_WORKOUT_TEXT_LEN,
   updateWorkoutLogSchema,
@@ -73,5 +75,69 @@ describe("workout log metric bounds (D56)", () => {
       updateWorkoutLogSchema.safeParse({ duration: WORKOUT_METRIC_MAX.durationMinutes + 1 })
         .success,
     ).toBe(false);
+  });
+});
+
+// C50 (CODEBASE_ANALYSIS_2026-10-03): values their columns refuse must fail
+// here, as a 400 naming the field, not in Postgres as a 500 that rolls back
+// the whole save.
+describe("workout request values the database would refuse (C50)", () => {
+  function dateMessages(date: string): string[] {
+    const result = insertWorkoutLogSchema.safeParse({ ...base, date });
+    return (
+      result.error?.issues
+        .filter((issue) => issue.path[0] === "date")
+        .map((issue) => issue.message) ?? []
+    );
+  }
+
+  it.each(["2026-02-30", "2025-02-29", "2026-04-31"])(
+    "names an impossible workout date %s once",
+    (date) => {
+      expect(dateMessages(date)).toEqual(["Must be a real calendar date"]);
+    },
+  );
+
+  it("names a malformed workout date as a format error, not a future one", () => {
+    expect(dateMessages("15/11/2026")).toEqual(["Must be a valid date in YYYY-MM-DD format"]);
+  });
+
+  it("still takes a real past date and refuses a future one", () => {
+    expect(dateMessages("2024-02-29")).toEqual([]);
+    expect(dateMessages("2999-01-01")).toEqual(["Workout date cannot be in the future"]);
+  });
+
+  function exerciseIssuePaths(exercise: Record<string, unknown>): string[] {
+    const result = exercisesPayloadSchema.safeParse([{ exerciseName: "back_squat", ...exercise }]);
+    return result.error?.issues.map((issue) => issue.path.join(".")) ?? [];
+  }
+
+  it.each([
+    ["reps", { reps: 8.5 }, "0.reps"],
+    ["plannedReps", { plannedReps: 8.5 }, "0.plannedReps"],
+    ["a set's reps", { sets: [{ setNumber: 1, reps: 8.5 }] }, "0.sets.0.reps"],
+    ["a set's plannedReps", { sets: [{ setNumber: 1, plannedReps: 8.5 }] }, "0.sets.0.plannedReps"],
+    ["a set's setNumber", { sets: [{ setNumber: 1.5 }] }, "0.sets.0.setNumber"],
+  ])("refuses a fractional %s", (_label, exercise, path) => {
+    expect(exerciseIssuePaths(exercise)).toEqual([path]);
+  });
+
+  it("keeps whole counts and decimal weight, distance and time", () => {
+    expect(
+      exerciseIssuePaths({
+        reps: 8,
+        plannedReps: 10,
+        weight: 62.5,
+        distance: 402.3,
+        time: 1.5,
+        sets: [{ setNumber: 2, reps: 5, weight: 102.5, plannedWeight: 100.5, plannedTime: 0.75 }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("refuses fractional reps on the per-set add route too", () => {
+    const body = { exerciseName: "back_squat", category: "strength", setNumber: 1 };
+    expect(addExerciseSetBodySchema.safeParse({ ...body, reps: 8 }).success).toBe(true);
+    expect(addExerciseSetBodySchema.safeParse({ ...body, reps: 8.5 }).success).toBe(false);
   });
 });

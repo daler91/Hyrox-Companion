@@ -15,7 +15,8 @@
  * so a plan day with no expected duration is judged on type alone rather than
  * dragged down by a signal nobody filled in. Type compatibility is always
  * available and also acts as a hard damper: a strong duration match can never
- * push a bike ride onto a strength day.
+ * push a bike ride onto a strength day. Nor can it auto-link an unclassified
+ * or mismatched sport: those pairs are capped inside the suggestion band.
  */
 
 export type DeviceSportKind =
@@ -279,6 +280,38 @@ const WEIGHTS = { type: 0.4, duration: 0.35, timeOfDay: 0.15, distance: 0.2, nam
 /** Below this type score the total is damped towards zero (see scoreCandidate). */
 const TYPE_DAMPING_FLOOR = 0.2;
 
+/**
+ * The lowest type compatibility with a KNOWN prescription that may auto-link.
+ * 0.55 is a Hyrox sim recorded as a Run, the loosest pairing in the table that
+ * is still plausibly the same session.
+ */
+const MIN_AUTO_LINK_TYPE = 0.55;
+
+/**
+ * Where a pair whose sport is not confirmed is capped: inside the suggestion
+ * band, just under the default auto-link threshold. Duration and time of day
+ * alone carried a yoga class or a soccer match onto a Hyrox day at 0.778,
+ * which auto-completed the day at 100% with its wall balls and sled pushes
+ * credited. Such a pair can still be suggested for a manual link. C29
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const SPORT_UNCONFIRMED_SCORE_CAP = DEFAULT_MATCH_THRESHOLDS.autoLink - 0.01;
+
+/**
+ * Whether the sport itself supports attaching without asking: never for an
+ * unclassified ("other") sport, and for a known prescription only when the
+ * pairing is compatible. An `unknown` prescription keeps its middle score, so
+ * type still never decides that match on its own.
+ */
+function sportConfirmsLink(
+  deviceKind: DeviceSportKind,
+  prescriptionKind: PrescriptionKind,
+  type: number,
+): boolean {
+  if (deviceKind === "other") return false;
+  return prescriptionKind === "unknown" || type >= MIN_AUTO_LINK_TYPE;
+}
+
 function clamp01(x: number): number {
   return Math.min(1, Math.max(0, x));
 }
@@ -416,6 +449,9 @@ export function scoreCandidate(
   let score = weightSum > 0 ? weighted / weightSum : 0;
   // Damp incompatible types regardless of how well the numbers line up.
   if (type < TYPE_DAMPING_FLOOR) score *= type / TYPE_DAMPING_FLOOR;
+  if (!sportConfirmsLink(deviceKind, prescriptionKind, type)) {
+    score = Math.min(score, SPORT_UNCONFIRMED_SCORE_CAP);
+  }
   signals.total = score;
 
   return { candidate, score, signals };

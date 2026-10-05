@@ -8,6 +8,7 @@
 import { customExercises, exerciseLoadTags, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { CoachNoteInputs } from "./plans";
+import { calendarDateSchema } from "./requests";
 
 /**
  * Upper bound for the MINUTES-valued set fields (`time`, `plannedTime`,
@@ -33,16 +34,20 @@ export const SET_NUMBER_MAX = 100;
 // Strava/Garmin activities that straddle midnight in the user's timezone
 // still land, while preventing users from logging genuinely future workouts
 // (which otherwise skew Week-over-Week deltas and completion stats).
-const workoutDateNotFuture = z.string().refine(
+//
+// The day must be a real one first: Date.parse rolls "2026-02-30" into March,
+// so it passed here and Postgres then refused it with a 500 (C50,
+// CODEBASE_ANALYSIS_2026-10-03). The future check runs only on a real day, so
+// a malformed date is named once, as a format error.
+const workoutDateNotFuture = calendarDateSchema.refine(
   (d) => {
     // ⚡ Bolt Performance Optimization:
     // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
     // when calculating dates.
     const target = Date.parse(`${d}T00:00:00Z`);
-    if (Number.isNaN(target)) return false;
     return target <= Date.now() + 24 * 60 * 60 * 1000;
   },
-  { message: "Workout date cannot be in the future" },
+  { message: "Workout date cannot be in the future", when: ({ issues }) => issues.length === 0 },
 );
 
 // W12: cap free-text workout fields. Without a bound, a multi-MB blob passes
@@ -536,8 +541,13 @@ function withPatchBlockStepPresencePairing<T extends Record<string, unknown>>(
 // weight/distance/time stay at .min(0) because 0 is semantically valid for
 // them (bodyweight = 0 kg, etc.). plannedReps stays per-schema: the two
 // schemas bound it differently.
+//
+// Reps, planned reps and set numbers are whole numbers because their columns
+// are integers: Postgres refused 8.5 reps with an error that surfaced as a 500
+// and rolled back the whole workout save (C50, CODEBASE_ANALYSIS_2026-10-03).
+// Weight, distance and time are real columns and stay decimal.
 const setMetricFields = {
-  reps: z.number().min(1).max(10_000).optional().nullable(),
+  reps: z.number().int().min(1).max(10_000).optional().nullable(),
   weight: z.number().min(0).max(2_000).optional().nullable(),
   distance: z.number().min(0).max(1_000_000).optional().nullable(),
   time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
@@ -551,12 +561,12 @@ const plannedSetMetricFields = {
 export const exerciseSetSchema = withBlockStepPairing(
   z
     .object({
-      setNumber: z.number().min(1).max(SET_NUMBER_MAX).optional().nullable(),
+      setNumber: z.number().int().min(1).max(SET_NUMBER_MAX).optional().nullable(),
       ...setMetricFields,
       // Planned (prescribed) values, captured at log creation. Optional so
       // ad-hoc logs without a prescription can simply omit them. plannedReps
       // tightened to match reps for consistency.
-      plannedReps: z.number().min(1).max(10_000).optional().nullable(),
+      plannedReps: z.number().int().min(1).max(10_000).optional().nullable(),
       ...plannedSetMetricFields,
       ...setStructureMetadataFieldsOptional,
       notes: z.string().max(1000).optional().nullable(),
@@ -572,7 +582,7 @@ export const incomingExerciseSchema = withBlockStepPairing(
       category: z.string().max(50).optional().nullable(),
       numSets: z.number().min(1).max(50).optional().nullable(),
       ...setMetricFields,
-      plannedReps: z.number().min(0).max(10_000).optional().nullable(),
+      plannedReps: z.number().int().min(0).max(10_000).optional().nullable(),
       ...plannedSetMetricFields,
       ...setStructureMetadataFieldsOptional,
       confidence: z.number().min(0).max(100).optional().nullable(),
@@ -805,11 +815,40 @@ function validateTimedBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): v
   }
 }
 
+/**
+ * A block's step numbers are unique, and so are its minute indices: the steps
+ * table has a unique index on each, so a duplicate failed the insert with a
+ * 500 and rolled back the whole save (C50, CODEBASE_ANALYSIS_2026-10-03).
+ * EMOM blocks name a duplicate minute index in validateEmomBlock.
+ */
+function validateUniqueSteps(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
+  const stepNumbers = new Set(block.steps.map((step) => step.stepNumber));
+  if (stepNumbers.size !== block.steps.length) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Duplicate stepNumber values are not allowed within a block.",
+      path: ["steps"],
+    });
+  }
+  if (block.formatType === "emom") return;
+  const minuteIndices = block.steps
+    .map((step) => step.minuteIndex)
+    .filter((minute): minute is number => minute != null);
+  if (minuteIndices.length !== new Set(minuteIndices).size) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Duplicate minuteIndex values are not allowed within a block.",
+      path: ["steps"],
+    });
+  }
+}
+
 const structureBlockValidators: StructureBlockValidator[] = [
   validateEmomBlock,
   validateAmrapBlock,
   validateRoundsBlock,
   validateTimedBlock,
+  validateUniqueSteps,
 ];
 
 export const structureBlockSchema = structureBlockBaseSchema.superRefine((block, ctx) => {

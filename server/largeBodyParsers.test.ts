@@ -1,3 +1,4 @@
+import { importPlanRequestSchema } from "@shared/schema";
 import express, { type NextFunction, type Request, type Response } from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,6 +7,7 @@ import { ErrorCode } from "./errors";
 import { needsLargeJsonBody, skipLargeJsonBodyPaths } from "./largeBodyParsers";
 import { globalErrorHandler } from "./middleware/errorHandler";
 import { protectedPatch, protectedPost } from "./routes/_helpers/protectedRouteBuilder";
+import { validateBody } from "./routeUtils";
 
 // A stand-in auth guard: only a request carrying the test header is signed in.
 vi.mock("./routeGuards", () => ({
@@ -36,6 +38,7 @@ describe("needsLargeJsonBody", () => {
     "/api/v1/nutrition/parse/photo",
     "/api/v1/coaching-materials",
     "/api/v1/coaching-materials/m-1",
+    "/api/v1/plans/import",
   ])("is true for %s", (path) => {
     expect(needsLargeJsonBody(path)).toBe(true);
   });
@@ -45,6 +48,8 @@ describe("needsLargeJsonBody", () => {
     "/api/v1/chat/history",
     "/api/v1/coaching-materials-extra",
     "/api/v1/account",
+    "/api/v1/plans",
+    "/api/v1/plans/import/extra",
   ])("is false for %s", (path) => {
     expect(needsLargeJsonBody(path)).toBe(false);
   });
@@ -158,5 +163,73 @@ describe("large JSON bodies are parsed after auth and the rate limiter (D35)", (
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ received: 2 });
     expect(bodySeenByLimiter).toEqual([{ message: "hi" }]);
+  });
+});
+
+// C27 (CODEBASE_ANALYSIS_2026-10-03): plan import accepts 100,000 CSV
+// characters, but its body went through the app-wide 100kb parser, so a
+// schema-valid CSV with CRLF line endings or accented text got a generic 413.
+describe("plan import has room for any CSV its schema accepts (C27)", () => {
+  const CSV_MAX_CHARS = 100_000;
+  const NAME_MAX_CHARS = 255;
+  const importHandler = vi.fn((req: Request, res: Response) =>
+    Promise.resolve(res.json({ received: (req.body as { csvContent: string }).csvContent.length })),
+  );
+  const passThrough = vi.fn((_req: Request, _res: Response, next: NextFunction) => {
+    next();
+  });
+
+  const app = express();
+  app.use(skipLargeJsonBodyPaths(express.json({ limit: "100kb" })));
+  const router = express.Router();
+  protectedPost(
+    router,
+    "/api/v1/plans/import",
+    { limiter: passThrough, middleware: [validateBody(importPlanRequestSchema)] },
+    importHandler,
+  );
+  app.use(router);
+  app.use(globalErrorHandler);
+
+  /** `row` repeated to exactly the schema's character cap. */
+  function csvOf(row: string): string {
+    return row.repeat(Math.ceil(CSV_MAX_CHARS / row.length)).slice(0, CSV_MAX_CHARS);
+  }
+
+  beforeEach(() => {
+    importHandler.mockClear();
+  });
+
+  it.each([
+    { label: "CRLF line endings", row: "1,Monday,Engine,Row 5x500m\r\n", name: "plan.csv" },
+    {
+      label: "accented text",
+      row: "1,Mardi,Endurance,Fractionné 5×500 m à allure été\r\n",
+      name: "séance.csv",
+    },
+    // Every character JSON-escaped to six bytes: the largest body the schema allows.
+    { label: "worst-case JSON escaping", row: "\u0001", name: "\u0001".repeat(NAME_MAX_CHARS) },
+  ])("accepts a full-size CSV with $label", async ({ row, name }) => {
+    const body = { csvContent: csvOf(row), fileName: name, planName: name };
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeGreaterThan(100 * 1024);
+
+    const response = await request(app)
+      .post("/api/v1/plans/import")
+      .set("x-test-user", "u-1")
+      .send(body);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ received: CSV_MAX_CHARS });
+  });
+
+  it("still answers a body far past the schema's cap with the shaped 413", async () => {
+    const response = await request(app)
+      .post("/api/v1/plans/import")
+      .set("x-test-user", "u-1")
+      .send(bodyOf(1.5));
+
+    expect(response.status).toBe(413);
+    expect(response.body).toEqual({ error: expect.any(String), code: ErrorCode.PAYLOAD_TOO_LARGE });
+    expect(importHandler).not.toHaveBeenCalled();
   });
 });

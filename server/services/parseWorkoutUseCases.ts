@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { storage } from "../storage";
 import { incrementStructuredExerciseCounter } from "./structuredExerciseHealth";
 import { batchReparseWorkouts, reparseWorkout, reparseWorkoutFromImage } from "./workoutService";
+import { refreshDerivedStateAfterLoggedSetChange } from "./workoutService/loggedSetChange";
 
 // Orchestration for the AI re-parse routes, extracted from
 // server/routes/workouts/workoutsAi.routes.ts so the route handlers stay thin
@@ -51,6 +52,13 @@ export interface ReparseWorkoutTextPayload {
  * Re-parse a workout's prescribed text into structured exercise sets. Prescribed-
  * text overrides in the payload are persisted only when the parse succeeds, so a
  * failed reparse never mutates the stored prescription.
+ *
+ * A reparse replaces every logged set, so it ends like any other logged-set
+ * edit: the adherence snapshot is recomputed and the coach re-queued, or a
+ * plan-linked log keeps a compliance percentage and a coach note about
+ * exercises it no longer has (C32, CODEBASE_ANALYSIS_2026-10-03). Awaited so
+ * the response the client refetches on already carries the new columns; it
+ * never throws.
  */
 export async function reparseWorkoutUseCase(input: {
   userId: string;
@@ -89,11 +97,15 @@ export async function reparseWorkoutUseCase(input: {
   if (Object.keys(referencePatch).length > 0) {
     await storage.workouts.updateWorkoutLog(workoutId, referencePatch, userId);
   }
+  await refreshDerivedStateAfterLoggedSetChange(workoutId, userId);
   void incrementStructuredExerciseCounter("workout_log", "voice", "parse_text_succeeded").catch(() => undefined);
   return { status: "ok", response: toResponse(result) };
 }
 
-/** Re-parse a workout from an uploaded image into structured exercise sets. */
+/**
+ * Re-parse a workout from an uploaded image into structured exercise sets, then
+ * re-derive what was computed from the old ones, as the text path does (C32).
+ */
 export async function reparseWorkoutFromImageUseCase(input: {
   userId: string;
   workoutId: string;
@@ -119,6 +131,7 @@ export async function reparseWorkoutFromImageUseCase(input: {
     void incrementStructuredExerciseCounter("workout_log", "photo", "parse_photo_failed").catch(() => undefined);
     return { status: "parse_failed" };
   }
+  await refreshDerivedStateAfterLoggedSetChange(workoutId, userId);
   void incrementStructuredExerciseCounter("workout_log", "photo", "parse_photo_succeeded").catch(() => undefined);
   return { status: "ok", response: toResponse(result) };
 }

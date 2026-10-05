@@ -42,6 +42,26 @@ describe("readWrittenMinutes", () => {
     expect(readWrittenMinutes("Week 3: 40 min easy at 70%")).toBe(40);
   });
 
+  // C51 (CODEBASE_ANALYSIS_2026-10-03): "400s" is track slang for 400 m reps,
+  // and a clock pace with no "/km" is still a pace, not a length.
+  it.each([
+    ["8 x 400s with 90s rest", null],
+    ["8x400s with 90s rest", null],
+    ["8×400s, 90s rest", null],
+    ["4 x 1200s @ 10k pace, 2 min jog", null],
+    ["3 x 2000s, 3 min rest", null],
+    ["20 min easy, then 400s and 200s", null],
+    ["40 min easy, 10:30 pace", 40],
+    ["40 min easy at 10:30 mile pace", 40],
+    ["45 min @ 10:30", 45],
+    ["3 x 10 min at 10:30 min/mile, 2 min jog", 32],
+    ["10 x 30s on 30s off, 20 min easy", 30],
+    ["30 min easy, rest 100s", 32],
+    ["30 min easy, 100s recovery", 32],
+  ])("reads %j as %s (rep distances and clock paces)", (text, minutes) => {
+    expect(readWrittenMinutes(text)).toBe(minutes);
+  });
+
   it("reads a timed format's clock whatever is done inside it", () => {
     expect(readWrittenMinutes("AMRAP 20 min: 5 pull-ups, 10 push-ups, 15 air squats")).toBe(20);
     expect(readWrittenMinutes("EMOM 12 min: 10 wall balls")).toBe(12);

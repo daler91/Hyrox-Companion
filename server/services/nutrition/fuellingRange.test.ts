@@ -1,7 +1,8 @@
+import type { TrainingLoadWindow } from "@shared/nutritionTargets";
 import type { BlockViewPoint, MealType, NutritionTarget } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { buildFuellingRange, decorateBlockPointsWithOutcomes } from "./fuellingRange";
+import { buildFuellingRange, decorateBlockPointsWithOutcomes, rangeLoadNeeds } from "./fuellingRange";
 import type { LogEntryWithFood } from "./rollup";
 
 /** A minimal joined entry — only the fields the range builder/rollup read. */
@@ -129,6 +130,76 @@ describe("buildFuellingRange", () => {
     });
     expect(days[0].effectiveTarget).toBeNull(); // before the first target
     expect(days[1].effectiveTarget).not.toBeNull();
+  });
+});
+
+// C31 (CODEBASE_ANALYSIS_2026-10-03): the range used to give every day the
+// single-day window; an adaptive target now reads the window the daily
+// summary reads, and only for the days whose target needs one.
+describe("adaptive targets in the fuelling range (C31)", () => {
+  const adaptive = (effectiveFrom: string, opts: Partial<NutritionTarget> = {}) =>
+    target(effectiveFrom, {
+      periodizationEnabled: true,
+      referenceUtss: 50,
+      carbGramsPerUtss: 1,
+      recoveryEnabled: true,
+      preloadCarbGramsPerUtss: 1,
+      preloadDaysAhead: 1,
+      ...opts,
+    });
+
+  const ONE_DAY = { from: "2026-06-01", to: "2026-06-01" };
+
+  const window = (over: Partial<TrainingLoadWindow> = {}): TrainingLoadWindow => ({
+    dayUtss: 50,
+    recentLoads: [90, 90, 90, 90, 90, 90, 90],
+    acuteEwma: 90,
+    chronicEwma: 80,
+    tsb: -10,
+    upcoming: [{ daysAhead: 1, plannedUtss: 120 }],
+    phase: "build",
+    daysUntilRace: 40,
+    ...over,
+  });
+
+  it("asks for windows only on adaptive days, and for the plan only if one reads it", () => {
+    const loadOnly = { periodizationEnabled: true, referenceUtss: 50, carbGramsPerUtss: 1 };
+    const targets = [
+      target("2026-06-01"), // flat
+      target("2026-06-02", loadOnly),
+      adaptive("2026-06-03", { preloadCarbGramsPerUtss: 0, phaseAware: false }), // recovery only
+    ];
+    expect(rangeLoadNeeds(targets, { from: "2026-06-01", to: "2026-06-04" })).toEqual({
+      dayUtss: true,
+      windowDates: ["2026-06-03", "2026-06-04"],
+      includeFuture: false,
+    });
+    const withPlan = rangeLoadNeeds([target("2026-06-01"), adaptive("2026-06-02")], {
+      from: "2026-06-01",
+      to: "2026-06-02",
+    });
+    expect(withPlan).toEqual({ dayUtss: false, windowDates: ["2026-06-02"], includeFuture: true });
+  });
+
+  it("builds an adaptive day's target from its window, recovery and pre-load included", () => {
+    const windows = new Map([["2026-06-01", window()]]);
+    const [day] = buildFuellingRange([], [], [adaptive("2026-06-01")], ONE_DAY, windows);
+    expect(day.effectiveTarget).toMatchObject({
+      recoveryDeltaG: 20, // (90 − 50) × 1 × 0.5
+      preloadDeltaG: 70, // (120 − 50) × 1 ÷ 1 day ahead
+      phase: "build",
+    });
+  });
+
+  it("drops the upcoming plan from a window whose target does not read it", () => {
+    const recoveryOnly = adaptive("2026-06-01", { preloadCarbGramsPerUtss: 0, phaseAware: false });
+    const windows = new Map([["2026-06-01", window()]]);
+    const [day] = buildFuellingRange([], [], [recoveryOnly], ONE_DAY, windows);
+    expect(day.effectiveTarget).toMatchObject({
+      recoveryDeltaG: 20,
+      preloadDeltaG: 0,
+      phase: null,
+    });
   });
 });
 

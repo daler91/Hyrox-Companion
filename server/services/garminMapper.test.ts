@@ -1,7 +1,7 @@
 import { describe, expect,it } from "vitest";
 
 import type { GarminActivity } from "./garminMapper";
-import { mapGarminActivityToWorkout } from "./garminMapper";
+import { garminRecordingMeasurements, mapGarminActivityToWorkout } from "./garminMapper";
 
 function makeActivity(overrides: Partial<GarminActivity> = {}): GarminActivity {
   return {
@@ -224,5 +224,27 @@ describe("counts as training", () => {
 
   it("counts an activity with no type at all", () => {
     expect(mapGarminActivityToWorkout(makeActivity({ activityType: undefined }), "user-1").countsAsTraining).toBe(true);
+  });
+});
+
+// C26 (CODEBASE_ANALYSIS_2026-10-03): what the import's synthesised set is built from.
+describe("garminRecordingMeasurements", () => {
+  it("keeps the moving clock in seconds, unlike the row's whole minutes", () => {
+    const activity = makeActivity({ movingDuration: 1501 });
+    expect(garminRecordingMeasurements(activity)).toEqual({
+      sportType: "running",
+      movingSeconds: 1501,
+      distanceMeters: 5000,
+    });
+    expect(mapGarminActivityToWorkout(activity, "user-1").duration).toBe(25);
+  });
+
+  it("falls back to the total duration, and reads a missing type or distance as nothing", () => {
+    const activity = makeActivity({ movingDuration: undefined, activityType: undefined, distance: undefined });
+    expect(garminRecordingMeasurements(activity)).toEqual({
+      sportType: "",
+      movingSeconds: 1600,
+      distanceMeters: 0,
+    });
   });
 });
