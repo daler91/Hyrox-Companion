@@ -269,7 +269,7 @@ describe("rateLimiter", () => {
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
-  it("keeps `:user:<id>` at the end of the key, which account erasure purges by", () => {
+  it("keeps `:user:` and the user's id at the end of the key, which account erasure purges by", () => {
     vi.mocked(rateLimit).mockClear();
     rateLimiter("workoutSet", 60, DEFAULT_WINDOW_MS)(req, res as Response, next);
 

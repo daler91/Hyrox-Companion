@@ -42,7 +42,7 @@ describe("serveStatic", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
-    expect(res.text).toContain('<script nonce="test-nonce" type="module"');
+    expect(res.text).toMatch(/<script nonce="test-nonce" type="module"/u);
   });
 
   it("serves a built asset that exists", async () => {

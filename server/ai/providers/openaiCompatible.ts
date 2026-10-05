@@ -112,8 +112,10 @@ function openAiTools(request: ResolvedTextAiRequest) {
  * (unwrapArrayEnvelope) — AI6 (CODEBASE_ANALYSIS_2026-10-03). Naming JSON here
  * also meets the API's rule that a json_object request mention it.
  */
+// `safe`: "<that array>" is a placeholder in a prompt, not HTML (Codacy's XSS
+// rule reads any "<word" in a string as markup).
 const JSON_OBJECT_INSTRUCTION =
-  'Respond with a single JSON object. If the instructions ask for a top-level JSON array, return {"jsonArray": <that array>} instead.';
+  /* safe */ 'Respond with a single JSON object. If the instructions ask for a top-level JSON array, return {"jsonArray": <that array>} instead.';
 
 function systemInstructionFor(request: ResolvedTextAiRequest): string | undefined {
   if (!request.json) return request.systemInstruction;

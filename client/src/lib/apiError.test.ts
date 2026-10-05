@@ -27,7 +27,9 @@ describe("parseApiError", () => {
   // counts, and the code is simply absent.
   it.each([
     ["a status text", "502: Bad Gateway", 502],
-    ["an HTML page", "504: <html><body>Gateway Timeout</body></html>", 504],
+    // A proxy's page, as test input; `safe` tells Codacy's XSS rule that this
+    // literal is data, not markup the code renders.
+    ["an HTML page", /* safe */ "504: <html><body>Gateway Timeout</body></html>", 504],
     ["an empty body", "500: ", 500],
     ["a body cut short", '400: {"code":"VALIDATION', 400],
   ])("keeps the status of %s, with no code", (_name, message, status) => {
