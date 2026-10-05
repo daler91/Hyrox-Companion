@@ -9,7 +9,7 @@
  * cron path uses raw storage.
  */
 import { addDaysToISODate } from "@shared/dateUtils";
-import type { TrainingOverview, WorkoutLog } from "@shared/schema";
+import type { TrainingOverview, User, WorkoutLog } from "@shared/schema";
 
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
@@ -162,6 +162,29 @@ function resolvePreviousSets(
 }
 
 /**
+ * The athlete's settings the overview reads, with the defaults for a user row
+ * that is missing or has them unset. Kept out of assembleTrainingOverview so
+ * its own branching stays about the windows it loads.
+ */
+function overviewAthleteSettings(user: User | undefined) {
+  return {
+    weeklyGoal: user?.weeklyGoal ?? 5,
+    userTimezone: user?.userTimezone,
+    weightUnit: user?.weightUnit ?? "kg",
+    distanceUnit: user?.distanceUnit ?? "km",
+    athlete: {
+      age: user?.age ?? null,
+      gender: user?.gender ?? null,
+      restingHr: user?.restingHr ?? null,
+      // Scales unweighted-rep tonnage with the body being moved (audit M2).
+      bodyweightKg: user?.bodyweightKg ?? null,
+      maxHr: user?.maxHr ?? null,
+      ftp: user?.ftp ?? null,
+    },
+  };
+}
+
+/**
  * Load + compute the full Training Overview for a user over [from, to]
  * (both optional → "all time"), including the trailing 70-day window the
  * training-load model needs and the equal-length previous window for deltas.
@@ -227,7 +250,8 @@ export async function assembleTrainingOverview(
   // has to come from plan_days rather than from the logs themselves (audit
   // H10). With no selected window ("all time") it runs from the athlete's
   // first log to their own today (C37).
-  const athleteToday = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  const settings = overviewAthleteSettings(user);
+  const athleteToday = getLocalDateStrSafe(new Date(), settings.userTimezone);
   const adherenceWindow = resolveAdherenceWindow(from, to, workoutLogs, athleteToday);
   const [dueSessionCount, previousDueSessionCount] = await Promise.all([
     adherenceWindow
@@ -247,24 +271,12 @@ export async function assembleTrainingOverview(
     ...(dueSessionCount != null ? { dueSessionCount } : {}),
     ...(previousDueSessionCount != null ? { previousDueSessionCount } : {}),
     ...(previousExerciseSets ? { previousExerciseSets } : {}),
-    weeklyGoal: user?.weeklyGoal ?? 5,
+    ...settings,
     loadTags,
     trainingLoadInput: {
       workoutLogs: loadWorkoutLogs,
       exerciseSets: loadExerciseSets,
       currentDate: loadCurrentDate,
-    },
-    userTimezone: user?.userTimezone,
-    weightUnit: user?.weightUnit ?? "kg",
-    distanceUnit: user?.distanceUnit ?? "km",
-    athlete: {
-      age: user?.age ?? null,
-      gender: user?.gender ?? null,
-      restingHr: user?.restingHr ?? null,
-      // Scales unweighted-rep tonnage with the body being moved (audit M2).
-      bodyweightKg: user?.bodyweightKg ?? null,
-      maxHr: user?.maxHr ?? null,
-      ftp: user?.ftp ?? null,
     },
   });
 }
