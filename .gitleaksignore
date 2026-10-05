@@ -20,3 +20,8 @@
 aa2c9f9dd01208e4f5b3060fb9975a018dd8ee7b:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:70
 aa2c9f9dd01208e4f5b3060fb9975a018dd8ee7b:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:177
 aa2c9f9dd01208e4f5b3060fb9975a018dd8ee7b:server/__snapshots__/emailTemplates.test.ts.snap:generic-api-key:256
+
+# The privacy-notice localStorage key name in the P8 consent test — a storage
+# key, not a credential. The line now carries an inline `gitleaks:allow`, as
+# the same constant does in client/src/lib/privacyConsent.ts.
+b66d092bd64dce6b047be93d66acf1ec6aea8b1c:client/src/lib/privacyConsent.test.ts:generic-api-key:10

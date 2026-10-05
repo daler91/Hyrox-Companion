@@ -7,7 +7,7 @@ import {
   recordPrivacyConsent,
 } from "./privacyConsent";
 
-const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
+const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1"; // gitleaks:allow — a localStorage key name, not a secret
 
 /** A browser that refuses localStorage outright (blocked site data, hardened mode). */
 function denyLocalStorage(): void {
