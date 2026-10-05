@@ -421,6 +421,30 @@ describe("nutrition routes", () => {
       expect(searchFoods).toHaveBeenCalledWith("banana", "test_user");
     });
 
+    it("strips another author's owner id from search, recent and detail responses (P16)", async () => {
+      const own = { id: "own", createdByUserId: "test_user" };
+      const theirs = { id: "theirs", createdByUserId: "user_other" };
+      const shared = { id: "usda", createdByUserId: null };
+      vi.mocked(searchFoods).mockResolvedValue({ results: [own, theirs, shared], apiDegraded: false });
+      const search = await request(app).get("/api/v1/nutrition/foods/search?q=banana");
+      expect(search.body.results.map((f: { createdByUserId: string | null }) => f.createdByUserId)).toEqual([
+        "test_user",
+        null,
+        null,
+      ]);
+
+      vi.mocked(storage.nutrition.getRecentFoods).mockResolvedValue([theirs, own]);
+      const recent = await request(app).get("/api/v1/nutrition/foods/recent");
+      expect(recent.body.map((f: { createdByUserId: string | null }) => f.createdByUserId)).toEqual([
+        null,
+        "test_user",
+      ]);
+
+      vi.mocked(getFoodWithServings).mockResolvedValue({ food: theirs, servings: [] });
+      const detail = await request(app).get("/api/v1/nutrition/foods/theirs");
+      expect(detail.body.food).toEqual({ id: "theirs", createdByUserId: null });
+    });
+
     it("adds a favorite only for a visible food", async () => {
       vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue({ id: "f1" });
       vi.mocked(storage.nutrition.addFavorite).mockResolvedValue({ id: "fav1" });

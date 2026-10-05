@@ -1,13 +1,26 @@
-import { exerciseSets, type InsertWorkoutLog, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+import { randomUUID } from "node:crypto";
+
+import { exerciseSets, type insertWorkoutLogRouteSchema, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import type { z } from "zod";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
+import { captureWorkoutLogs } from "../storage/recycleBinCapture";
+
+/**
+ * The client-facing create surface: no `planId` and no device provenance.
+ * S9 (CODEBASE_ANALYSIS_2026-10-03): combine validated against the full insert
+ * schema, so a caller could point `planId` at another athlete's plan or stamp
+ * a manual log as a Strava import. `planId` is now derived from the kept,
+ * ownership-checked plan day instead.
+ */
+export type CombineWorkoutPayload = z.infer<typeof insertWorkoutLogRouteSchema>;
 
 export interface CombineWorkoutsInput {
   readonly userId: string;
   /** The merged workout that replaces the sources. */
-  readonly newWorkout: InsertWorkoutLog;
+  readonly newWorkout: CombineWorkoutPayload;
   /** The source workouts to delete once the merged one exists (1..10). */
   readonly deleteWorkoutIds: readonly string[];
   /** Plan days the sources were linked to that should read as skipped afterwards. */
@@ -28,6 +41,10 @@ export interface CombineWorkoutsInput {
  * Refuses (400) to combine a source that is linked to a plan day the caller
  * neither keeps nor skips: silently deleting it would leave that day
  * "completed" with no workout behind it.
+ *
+ * Device-imported sources go through the recycle bin before the delete, so
+ * the bin row carries their activity id and the next Strava/Garmin sync does
+ * not re-import (and double-count) them. D39 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export async function combineWorkouts({
   userId,
@@ -37,7 +54,12 @@ export async function combineWorkouts({
 }: CombineWorkoutsInput): Promise<typeof workoutLogs.$inferSelect> {
   return await db.transaction(async (tx) => {
     const sourceWorkouts = await tx
-      .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })
+      .select({
+        id: workoutLogs.id,
+        planDayId: workoutLogs.planDayId,
+        stravaActivityId: workoutLogs.stravaActivityId,
+        garminActivityId: workoutLogs.garminActivityId,
+      })
       .from(workoutLogs)
       .where(and(inArray(workoutLogs.id, [...deleteWorkoutIds]), eq(workoutLogs.userId, userId)));
     if (sourceWorkouts.length !== deleteWorkoutIds.length) {
@@ -45,9 +67,10 @@ export async function combineWorkouts({
     }
 
     const keptPlanDayId = newWorkout.planDayId ?? null;
+    let keptPlanId: string | null = null;
     if (keptPlanDayId) {
       const owned = await tx
-        .select({ id: planDays.id })
+        .select({ id: planDays.id, planId: planDays.planId })
         .from(planDays)
         .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
         .where(and(eq(planDays.id, keptPlanDayId), eq(trainingPlans.userId, userId)))
@@ -55,6 +78,7 @@ export async function combineWorkouts({
       if (owned.length === 0) {
         throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
       }
+      keptPlanId = owned[0].planId;
     }
 
     const skipIds = (skipPlanDayIds ?? []).filter((id) => id !== keptPlanDayId);
@@ -71,7 +95,7 @@ export async function combineWorkouts({
       }
     }
 
-    const [created] = await tx.insert(workoutLogs).values({ ...newWorkout, userId }).returning();
+    const [created] = await tx.insert(workoutLogs).values({ ...newWorkout, planId: keptPlanId, userId }).returning();
 
     // Re-parent the sources' logged sets onto the merged workout BEFORE the
     // delete below. exercise_sets.workout_log_id cascades on delete, so
@@ -126,6 +150,16 @@ export async function combineWorkouts({
           setNumber: sql.join(numberChunks, sql``),
         })
         .where(inArray(exerciseSets.id, renumbered.map((r) => r.id)));
+    }
+
+    // Captured after the re-parent above, so the bin snapshot holds the
+    // source row (and its activity id) without the sets the merged log now
+    // owns: restoring it cannot collide with them. D39
+    const deviceSourceIds = sourceWorkouts
+      .filter((src) => src.stravaActivityId || src.garminActivityId)
+      .map((src) => src.id);
+    if (deviceSourceIds.length > 0) {
+      await captureWorkoutLogs(tx, userId, deviceSourceIds, { batchId: randomUUID() });
     }
 
     // One `inArray` delete rather than one round trip per source id, so the

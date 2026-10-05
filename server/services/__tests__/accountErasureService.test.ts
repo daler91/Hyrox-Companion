@@ -9,6 +9,7 @@ import {
   runStrandedErasureSweep,
   STRANDED_ERASURE_THRESHOLD_MS,
 } from "../accountErasureService";
+import { purgeRagCacheForUser } from "../ragService";
 
 // ---------------------------------------------------------------------------
 // Account erasure deletes the Clerk identity partway through. Past that point
@@ -30,6 +31,7 @@ vi.mock("../../clerkAuth", () => ({
 vi.mock("../../queue", () => ({ purgeUserJobs: vi.fn().mockResolvedValue(0) }));
 vi.mock("../../strava", () => ({ deauthorizeStravaBestEffort: vi.fn() }));
 vi.mock("../nutrition/foodEmbeddings", () => ({ deleteFoodEmbeddingsByFoodIds: vi.fn() }));
+vi.mock("../ragService", () => ({ purgeRagCacheForUser: vi.fn() }));
 
 vi.mock("../../storage", () => ({
   storage: {
@@ -86,6 +88,18 @@ describe("eraseAccount", () => {
     expect(callOrder(vi.mocked(rememberUserErased))).toBeLessThan(
       callOrder(users.deleteUserAndPrivateCustomFoods),
     );
+  });
+
+  // P13 (CODEBASE_ANALYSIS_2026-10-03): cached retrievals hold plaintext
+  // excerpts of the athlete's coaching materials outside the FK cascade.
+  it("purges the user's RAG retrieval cache after their chunks, before the Clerk delete", async () => {
+    await eraseAccount("user-1");
+
+    expect(purgeRagCacheForUser).toHaveBeenCalledWith("user-1");
+    expect(callOrder(vi.mocked(storage.coaching.deleteChunksByUserId))).toBeLessThan(
+      callOrder(vi.mocked(purgeRagCacheForUser)),
+    );
+    expect(callOrder(vi.mocked(purgeRagCacheForUser))).toBeLessThan(callOrder(clerkDeleteUser));
   });
 
   it("keeps the user row when the tombstone cannot be written", async () => {

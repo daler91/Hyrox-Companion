@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
+import { captureWorkoutLogs } from "../storage/recycleBinCapture";
 import { combineWorkouts } from "./combineWorkouts";
 
 vi.mock("../db", () => ({
   db: { transaction: vi.fn() },
+}));
+vi.mock("../storage/recycleBinCapture", () => ({
+  captureWorkoutLogs: vi.fn(),
 }));
 
 const NEW_WORKOUT = { date: "2026-05-04", focus: "Strength", mainWorkout: "Merged session" };
@@ -60,7 +64,7 @@ describe("combineWorkouts", () => {
     const created = await combineWorkouts({ userId: "user-1", newWorkout: NEW_WORKOUT, deleteWorkoutIds: ["w1", "w2"] });
 
     expect(created.id).toBe("merged");
-    expect(mockTx.values).toHaveBeenCalledWith({ ...NEW_WORKOUT, userId: "user-1" });
+    expect(mockTx.values).toHaveBeenCalledWith({ ...NEW_WORKOUT, planId: null, userId: "user-1" });
     expect(mockTx.delete).toHaveBeenCalledTimes(1);
     expect(mockTx.update).not.toHaveBeenCalled();
   });
@@ -101,7 +105,7 @@ describe("combineWorkouts", () => {
     mockTx.where.mockResolvedValueOnce([{ id: "w1", planDayId: "pd-kept" }]);
     // The ownership check chains .where().limit(): its .where() must return the builder.
     mockTx.where.mockReturnValueOnce(mockTx);
-    mockTx.limit.mockResolvedValueOnce([{ id: "pd-kept" }]);
+    mockTx.limit.mockResolvedValueOnce([{ id: "pd-kept", planId: "plan-own" }]);
     // Set re-parent lookup chains .where().orderBy(): its .where() returns the builder.
     mockTx.where.mockReturnValueOnce(mockTx);
     mockTx.where.mockResolvedValueOnce({ rowCount: 1 });
@@ -113,7 +117,13 @@ describe("combineWorkouts", () => {
     });
 
     expect(created.id).toBe("merged");
-    expect(mockTx.values).toHaveBeenCalledWith({ ...NEW_WORKOUT, planDayId: "pd-kept", userId: "user-1" });
+    // S9: planId comes from the ownership-checked kept day, never the body.
+    expect(mockTx.values).toHaveBeenCalledWith({
+      ...NEW_WORKOUT,
+      planDayId: "pd-kept",
+      planId: "plan-own",
+      userId: "user-1",
+    });
     // Nothing to skip: the kept day is never marked skipped even if listed.
     expect(mockTx.update).not.toHaveBeenCalled();
   });
@@ -176,5 +186,40 @@ describe("combineWorkouts", () => {
     const deleteOrder = mockTx.delete.mock.invocationCallOrder[0];
     const updateOrder = mockTx.update.mock.invocationCallOrder[0];
     expect(deleteOrder).toBeLessThan(updateOrder);
+  });
+
+  it("sends device-imported sources to the recycle bin before deleting them (D39)", async () => {
+    mockTx.where.mockResolvedValueOnce([
+      { id: "w1", planDayId: null, stravaActivityId: "strava-1", garminActivityId: null },
+      { id: "w2", planDayId: null, stravaActivityId: null, garminActivityId: "garmin-2" },
+      { id: "w3", planDayId: null, stravaActivityId: null, garminActivityId: null },
+    ]);
+    mockTx.where.mockReturnValueOnce(mockTx);
+    mockTx.orderBy.mockResolvedValueOnce([{ id: "s1", exerciseName: "Squat" }]);
+    mockTx.where.mockResolvedValueOnce({ rowCount: 1 }); // set re-parent update
+    mockTx.where.mockResolvedValueOnce({ rowCount: 3 }); // source delete
+    vi.mocked(captureWorkoutLogs).mockResolvedValueOnce(new Map([["w1", "rb-1"], ["w2", "rb-2"]]));
+
+    await combineWorkouts({ userId: "user-1", newWorkout: NEW_WORKOUT, deleteWorkoutIds: ["w1", "w2", "w3"] });
+
+    // Only the device imports: their bin rows are what keep the next sync from re-importing them.
+    expect(captureWorkoutLogs).toHaveBeenCalledTimes(1);
+    expect(captureWorkoutLogs).toHaveBeenCalledWith(mockTx, "user-1", ["w1", "w2"], {
+      batchId: expect.any(String),
+    });
+    // Captured after the sets moved (so restoring cannot collide with them), before the delete.
+    const captureOrder = vi.mocked(captureWorkoutLogs).mock.invocationCallOrder[0];
+    expect(mockTx.update.mock.invocationCallOrder[0]).toBeLessThan(captureOrder);
+    expect(captureOrder).toBeLessThan(mockTx.delete.mock.invocationCallOrder[0]);
+  });
+
+  it("does not touch the recycle bin when no source came from a device", async () => {
+    mockTx.where.mockResolvedValueOnce([{ id: "w1", planDayId: null }]);
+    mockTx.where.mockReturnValueOnce(mockTx);
+    mockTx.where.mockResolvedValueOnce({ rowCount: 1 }); // source delete
+
+    await combineWorkouts({ userId: "user-1", newWorkout: NEW_WORKOUT, deleteWorkoutIds: ["w1"] });
+
+    expect(captureWorkoutLogs).not.toHaveBeenCalled();
   });
 });

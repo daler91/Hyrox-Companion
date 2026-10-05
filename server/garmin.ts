@@ -719,15 +719,17 @@ interface SyncResult {
 }
 
 /**
- * Performs the actual fetch + dedupe + insert for one /sync request. Split
- * out from the route handler to keep the handler's cognitive complexity low
- * and the safety preflight logic readable.
+ * The Garmin half of one /sync request: fetch the recent activities. Split
+ * from the DB half (importGarminActivities) so the route handler can tell a
+ * Garmin failure from a database one — D34 (CODEBASE_ANALYSIS_2026-10-03): a
+ * single catch around both used to treat a transient statement timeout as a
+ * Garmin login failure and wipe the stored credentials (setGarminError).
  */
-async function fetchAndImportGarminActivities(
+async function fetchGarminActivities(
   client: GarminConnect,
   userId: string,
   reqLog: typeof logger,
-): Promise<SyncResult> {
+): Promise<GarminActivity[]> {
   reqLog.info({ userId, context: LOG_CTX, limit: GARMIN_ACTIVITIES_PER_SYNC }, "Garmin getActivities");
 
   // The library types getActivities() as Promise<IActivity[]>. GarminActivity
@@ -740,11 +742,22 @@ async function fetchAndImportGarminActivities(
 
   if (!Array.isArray(rawActivities)) {
     // TypeError (not Error) because the failure mode is "wrong shape", not
-    // a Garmin-side failure. translateGarminError still produces a sane
-    // user-facing message because the catch in handleGarminSync runs it.
+    // a Garmin-side failure. handleGarminSync answers it with a 502 and keeps
+    // the stored connection, as for any non-auth Garmin failure.
     throw new TypeError("Garmin returned an unexpected response");
   }
+  return rawActivities;
+}
 
+/**
+ * The DB half of one /sync request: dedupe + insert the fetched activities.
+ * Its failures are database failures and say nothing about the athlete's
+ * Garmin connection.
+ */
+async function importGarminActivities(
+  rawActivities: GarminActivity[],
+  userId: string,
+): Promise<SyncResult> {
   const user = await storage.users.getUser(userId);
   const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
@@ -844,6 +857,32 @@ function rejectSyncPreflight(
   return false;
 }
 
+/**
+ * Answer a failed activity fetch with a 502. Only a genuine auth rejection
+ * (401/403, and not a 429) records lastError, which also wipes the stored
+ * credentials; a timeout, 5xx, 429 or malformed response leaves the
+ * connection usable for the next sync (D34, CODEBASE_ANALYSIS_2026-10-03).
+ */
+async function answerActivityFetchFailure(
+  res: Response,
+  err: unknown,
+  userId: string,
+  reqLog: typeof logger,
+): Promise<void> {
+  if (!looksLike429(err) && looksLikeUnauthorized(err)) {
+    const friendly = translateGarminError(err);
+    await storage.users.setGarminError(userId, friendly);
+    reqLog.error({ err, userId, context: LOG_CTX }, "Garmin rejected the sync; connection needs a reconnect");
+    res.status(502).json({ error: friendly, code: "GARMIN_API_ERROR" });
+    return;
+  }
+  reqLog.error({ err, userId, context: LOG_CTX }, "Garmin activity fetch failed");
+  const message = looksLike429(err)
+    ? translateGarminError(err)
+    : "Garmin did not return your activities. Please try again in a few minutes.";
+  res.status(502).json({ error: message, code: "GARMIN_API_ERROR" });
+}
+
 async function handleGarminSync(req: Request, res: Response) {
   if (rejectIfCircuitOpen(res)) return;
 
@@ -872,20 +911,21 @@ async function handleGarminSync(req: Request, res: Response) {
         return;
       }
 
-      let result: SyncResult;
+      let rawActivities: GarminActivity[];
       try {
-        result = await fetchAndImportGarminActivities(client, userId, reqLog);
+        rawActivities = await fetchGarminActivities(client, userId, reqLog);
       } catch (err) {
         if (err instanceof GarminCircuitOpenError) {
           sendCircuitOpen(res, err.message);
           return;
         }
-        const friendly = translateGarminError(err);
-        await storage.users.setGarminError(userId, friendly);
-        reqLog.error({ err, userId, context: LOG_CTX }, "Garmin sync failed");
-        res.status(502).json({ error: friendly, code: "GARMIN_API_ERROR" });
+        await answerActivityFetchFailure(res, err, userId, reqLog);
         return;
       }
+
+      // Outside the catch above on purpose (D34): a DB error here propagates
+      // to asyncHandler as a 500 and leaves the Garmin connection intact.
+      const result = await importGarminActivities(rawActivities, userId);
 
       await storage.users.updateGarminLastSync(userId);
       // D10 (CODEBASE_ANALYSIS_2026-10-03): new logs change what the analytics
@@ -925,7 +965,8 @@ export const __testing = {
   withCircuitBreaker,
   withTimeout,
   getGarminClient,
-  fetchAndImportGarminActivities,
+  fetchGarminActivities,
+  importGarminActivities,
   translateGarminError,
   rejectSyncPreflight,
   looksLike429,

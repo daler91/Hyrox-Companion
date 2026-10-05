@@ -1,10 +1,11 @@
 import type { CoachingMaterial } from "@shared/schema";
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach,describe, expect, it, vi } from "vitest";
 
-import { chunkText, embedCoachingMaterial, retrieveRelevantChunks } from "./ragService";
+import { chunkText, embedCoachingMaterial, EMBEDDING_UNAVAILABLE_MESSAGE, getRagStatus, retrieveRelevantChunks } from "./ragService";
 
 // Mock dependencies
 vi.mock("../gemini/client", () => ({
+  EMBEDDING_DIMENSIONS: 3072,
   generateEmbedding: vi.fn(),
   generateEmbeddings: vi.fn(),
   trackEmbeddingUsage: vi.fn(),
@@ -19,6 +20,9 @@ vi.mock("../storage", () => ({
       listPrincipleMaterialIds: vi.fn(),
       listChunksForMaterials: vi.fn(),
       getMaterialTitles: vi.fn(),
+      listCoachingMaterials: vi.fn(),
+      getChunkCountsByMaterial: vi.fn(),
+      getStoredEmbeddingDimension: vi.fn(),
     },
   },
 }));
@@ -31,7 +35,9 @@ vi.mock("../logger", () => ({
   },
 }));
 
+import { env } from "../env";
 import { generateEmbedding, generateEmbeddings } from "../gemini/client";
+import { logger } from "../logger";
 import { storage } from "../storage";
 
 // ---------------------------------------------------------------------------
@@ -400,4 +406,45 @@ describe("retrieveRelevantChunks", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// getRagStatus
+// ---------------------------------------------------------------------------
 
+describe("getRagStatus (S6, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  const originalKey = env.GEMINI_API_KEY;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.getChunkCountsByMaterial).mockResolvedValue([]);
+    vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    env.GEMINI_API_KEY = originalKey;
+  });
+
+  it("logs the provider error and returns only a generic message", async () => {
+    env.GEMINI_API_KEY = "test-key";
+    vi.mocked(generateEmbedding).mockRejectedValue(new Error("403 PERMISSION_DENIED: API key project-123 suspended"));
+
+    const status = await getRagStatus("user-1");
+
+    expect(status.embeddingApi).toEqual({ ok: false, error: EMBEDDING_UNAVAILABLE_MESSAGE });
+    expect(JSON.stringify(status)).not.toContain("PERMISSION_DENIED");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      expect.stringContaining("health probe failed"),
+    );
+  });
+
+  it("does not name the missing server key", async () => {
+    env.GEMINI_API_KEY = undefined;
+
+    const status = await getRagStatus("user-1");
+
+    expect(status.hasApiKey).toBe(false);
+    expect(status.embeddingApi).toEqual({ ok: false, error: EMBEDDING_UNAVAILABLE_MESSAGE });
+    expect(JSON.stringify(status)).not.toContain("GEMINI");
+  });
+});

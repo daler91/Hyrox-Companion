@@ -15,17 +15,23 @@ import type { HelmetOptions } from "helmet";
 
 const CLERK_DOMAINS = ["https://*.clerk.accounts.dev", "https://*.fitai.coach", "https://clerk.fitai.coach"];
 
+// Clerk's bot sign-up protection loads Cloudflare Turnstile as a script and an
+// iframe; blocked, the embedded sign-up modal cannot create an account.
+// S8 (CODEBASE_ANALYSIS_2026-10-03)
+const CLOUDFLARE_TURNSTILE = "https://challenges.cloudflare.com";
+
 type CspDirectives = NonNullable<
   Exclude<HelmetOptions["contentSecurityPolicy"], boolean | undefined>["directives"]
 >;
 
 export function buildCspDirectives({ isDev }: { isDev: boolean }): CspDirectives {
   const scriptSrc = isDev
-    ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...CLERK_DOMAINS]
+    ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...CLERK_DOMAINS, CLOUDFLARE_TURNSTILE]
     : [
         "'self'",
         (_req: IncomingMessage, res: ServerResponse) => `'nonce-${(res as Response).locals.cspNonce}'`,
         ...CLERK_DOMAINS,
+        CLOUDFLARE_TURNSTILE,
       ];
 
   return {
@@ -50,7 +56,7 @@ export function buildCspDirectives({ isDev }: { isDev: boolean }): CspDirectives
       "https://*.ingest.us.sentry.io",
       ...(isDev ? ["ws:", "wss:"] : []),
     ],
-    frameSrc: ["'self'", ...CLERK_DOMAINS],
+    frameSrc: ["'self'", ...CLERK_DOMAINS, CLOUDFLARE_TURNSTILE],
     frameAncestors: ["'none'"],
     workerSrc: ["'self'", "blob:"],
     // Defense-in-depth: upgrade any stray http:// subresource to https in

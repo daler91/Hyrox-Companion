@@ -102,6 +102,21 @@ describe("sanitizeMappedFood", () => {
     expect(out?.micros).toEqual({ sodium: 50 });
   });
 
+  it("drops micros beyond the per-unit plausibility ceiling (D44)", () => {
+    const out = sanitizeMappedFood(
+      food({
+        micros: {
+          sodium: 400_000, // mg typed into a gram field — > 100 g per 100 g
+          calcium: 100_000, // exactly 100 g per 100 g — kept
+          vitaminD: 2_000_000, // mcg — > 1 g per 100 g
+          vitaminA: 30_000, // cod-liver-oil territory — kept
+          unknownMicro: 150_000, // no known unit → mg (physical) cap
+        },
+      }),
+    );
+    expect(out?.micros).toEqual({ calcium: 100_000, vitaminA: 30_000 });
+  });
+
   it("nulls the micro map when nothing survives", () => {
     expect(sanitizeMappedFood(food({ micros: { sodium: Number.NaN } }))?.micros).toBeNull();
   });

@@ -125,8 +125,16 @@ export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
  * `recovery`, `missedOn` and `recoveryUndo` are written only by missed-session
  * recovery (`POST /api/v1/plans/days/:dayId/recovery`) and the reschedule path,
  * which move the status with them. `priority` stays writable: it is the athlete's.
+ *
+ * `weekNumber` and `dayName` are the plan's own grid: storage wrote them
+ * verbatim when no `scheduledDate` came with them, so a request could store
+ * week -3 and shift the athlete's other sessions on the next reschedule. No
+ * client sends them; moving a day goes through `scheduledDate`, and zod strips
+ * the omitted keys rather than rejecting them. D55 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export const updatePlanDayRouteSchema = updatePlanDaySchema.omit({
+  weekNumber: true,
+  dayName: true,
   status: true,
   skipReason: true,
   recovery: true,

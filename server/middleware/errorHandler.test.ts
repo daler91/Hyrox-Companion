@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const captureExceptionMock = vi.hoisted(() => vi.fn());
 vi.mock("@sentry/node", () => ({ captureException: captureExceptionMock }));
+const logMock = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
+vi.mock("../logger", () => ({ reqLogger: () => logMock }));
 
 import { AppError, ErrorCode } from "../errors";
 import { globalErrorHandler } from "./errorHandler";
@@ -39,6 +41,8 @@ function appThrowing(err: unknown): express.Express {
 describe("globalErrorHandler", () => {
   beforeEach(() => {
     captureExceptionMock.mockClear();
+    logMock.warn.mockClear();
+    logMock.error.mockClear();
   });
 
   // C3 (CODEBASE_ANALYSIS_2026-10-03): a non-AppError's own status and message
@@ -119,6 +123,11 @@ describe("globalErrorHandler", () => {
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: "Internal Server Error", code: ErrorCode.INTERNAL_ERROR });
+    expect(logMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 500, path: "/boom" }),
+      "Request failed",
+    );
+    expect(logMock.warn).not.toHaveBeenCalled();
   });
 
   it("hands an error after the response has started to Express's default handler", () => {
@@ -188,6 +197,13 @@ describe("globalErrorHandler", () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ code: ErrorCode.BAD_REQUEST });
+      // D36 (CODEBASE_ANALYSIS_2026-10-03): rejected before pino-http, so the
+      // handler's own warn is the only log line.
+      expect(logMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 400, method: "POST", path: "/echo" }),
+        "Request rejected",
+      );
+      expect(logMock.error).not.toHaveBeenCalled();
     });
 
     it("keeps body-parser's 413, with the actionable message", async () => {
@@ -198,6 +214,10 @@ describe("globalErrorHandler", () => {
 
       expect(res.status).toBe(413);
       expect(res.body).toMatchObject({ code: ErrorCode.PAYLOAD_TOO_LARGE });
+      expect(logMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 413, path: "/echo" }),
+        "Request rejected",
+      );
     });
 
     it("keeps csrf-csrf's 403 EBADCSRFTOKEN", async () => {

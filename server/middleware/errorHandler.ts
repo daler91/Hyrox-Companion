@@ -2,6 +2,7 @@ import { captureException } from "@sentry/node";
 import type { NextFunction, Request, Response } from "express";
 
 import { type AppError, ErrorCode, shouldReportToSentry } from "../errors";
+import { reqLogger } from "../logger";
 
 // A loose shape for errors that are not AppErrors, so the error handler can
 // read the ad-hoc status/code properties third-party middleware attaches.
@@ -100,14 +101,36 @@ function describeError(err: AppError | LegacyError): ErrorReply {
  */
 export function globalErrorHandler(
   err: AppError | LegacyError,
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ): void {
   const reply = describeError(err);
 
+  // Body-parser rejections (413, malformed-JSON 400) run before pino-http is
+  // mounted, so they produced no access-log line; log every error that lands
+  // here. reqLogger falls back to the module logger when req.log is unset.
+  // Path only, never the query string: pino JSON-escapes the structured
+  // fields. D36 (CODEBASE_ANALYSIS_2026-10-03)
+  const logFields = {
+    err,
+    status: reply.status,
+    code: reply.code,
+    method: req.method,
+    path: req.path,
+  };
+  if (reply.status >= 500) {
+    // intentional path-only error log, JSON-escaped by pino.
+    // bearer:disable javascript_lang_logger_leak
+    reqLogger(req).error(logFields, "Request failed");
+  } else {
+    // intentional path-only error log, JSON-escaped by pino.
+    // bearer:disable javascript_lang_logger_leak
+    reqLogger(req).warn(logFields, "Request rejected");
+  }
+
   // Only server faults and sustained rate-limiting are Sentry-worthy; see
-  // shouldReportToSentry. Everything is still logged and still returned.
+  // shouldReportToSentry. Everything is logged above and still returned.
   if (shouldReportToSentry(reply.status)) captureException(err);
 
   // A response already under way (an SSE stream that failed mid-reply) can't

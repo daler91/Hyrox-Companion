@@ -241,3 +241,39 @@ describe("workout writes drop the athlete's cached analytics (D10)", () => {
     expect(invalidateAnalyticsCachesForUser).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/v1/workouts/combine body (S9, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    workoutWriteMocks.combineWorkouts.mockResolvedValue({ id: "combined" });
+  });
+
+  it("strips planId and device provenance from the merged workout", async () => {
+    const res = await request(buildApp())
+      .post("/api/v1/workouts/combine")
+      .send({
+        newWorkout: {
+          date: "2026-10-01",
+          focus: "Run",
+          mainWorkout: "10 km",
+          planDayId: "pd-1",
+          planId: "someone-elses-plan",
+          source: "strava",
+          stravaActivityId: "123",
+          garminActivityId: "456",
+          startedAt: "2026-10-01T07:00:00Z",
+        },
+        deleteWorkoutIds: ["w1", "w2"],
+      });
+
+    expect(res.status).toBe(201);
+    const [input] = workoutWriteMocks.combineWorkouts.mock.calls[0] as [{ newWorkout: Record<string, unknown> }];
+    expect(input.newWorkout).toEqual({
+      date: "2026-10-01",
+      focus: "Run",
+      mainWorkout: "10 km",
+      planDayId: "pd-1",
+    });
+  });
+});

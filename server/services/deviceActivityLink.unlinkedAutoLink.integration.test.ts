@@ -1,6 +1,6 @@
 import {
   exerciseSets,
-  insertWorkoutLogSchema,
+  insertWorkoutLogRouteSchema,
   planDays,
   type StravaActivitySummary,
   trainingPlans,
@@ -352,8 +352,8 @@ describe("auto_link_recording_only is the server's: no request writes it", () =>
 
   it("combining workouts cannot set it on the merged log", async () => {
     const source = await seedWorkoutLog(ATHLETE, DAY_DATE, { mainWorkout: "Row 5x500 m" });
-    // POST /api/v1/workouts/combine validates `newWorkout` with insertWorkoutLogSchema.
-    const newWorkout = insertWorkoutLogSchema.parse({
+    // POST /api/v1/workouts/combine validates `newWorkout` with insertWorkoutLogRouteSchema.
+    const newWorkout = insertWorkoutLogRouteSchema.parse({
       date: DAY_DATE,
       focus: "Row",
       mainWorkout: "Row 5x500 m",

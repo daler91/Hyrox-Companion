@@ -5,7 +5,6 @@ import rateLimit, { MemoryStore } from "express-rate-limit";
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "./constants";
 import { env } from "./env";
 import { ErrorCode } from "./errors";
-import { logger } from "./logger";
 import { PostgresRateLimitStore } from "./rateLimitStore";
 import { addDaysLocal, getLocalDateStr } from "./timezone";
 
@@ -213,15 +212,10 @@ export function validateParams<T>(schema: z.ZodType<T>) {
 }
 
 export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction): void => {
-  Promise.resolve(fn(req as Req, res, next)).catch((err) => {
-    const log = req.log ?? logger;
-    // Pass the request fields as structured data (pino JSON-escapes the values,
-    // defeating CRLF log injection) rather than interpolating user-controlled
-    // input into the message; log req.path (route path only, no query string) so
-    // query-string tokens/PII never reach the logs.
-    // intentional path-only error log, JSON-escaped by pino.
-    // bearer:disable javascript_lang_logger_leak
-    log.error({ err, method: req.method, path: req.path }, "Route error");
+  // globalErrorHandler logs every error with its status, so the rejection is
+  // only forwarded here; logging it too wrote each route error twice. D36
+  // (CODEBASE_ANALYSIS_2026-10-03)
+  Promise.resolve(fn(req as Req, res, next)).catch((err: unknown) => {
     next(err);
   });
 };

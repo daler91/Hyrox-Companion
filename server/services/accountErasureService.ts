@@ -23,6 +23,7 @@ import { purgeUserJobs } from "../queue";
 import { storage } from "../storage";
 import { deauthorizeStravaBestEffort } from "../strava";
 import { deleteFoodEmbeddingsByFoodIds } from "./nutrition/foodEmbeddings";
+import { purgeRagCacheForUser } from "./ragService";
 
 /**
  * How long an erasure may be in flight before the sweep treats it as stranded.
@@ -49,6 +50,7 @@ const SWEEP_BATCH_SIZE = 50;
  *    vector-DB outage makes the whole request retriable rather than orphaning
  *    PII. (Embeddings are a derived cache: if a later step fails, the backfill
  *    cron re-embeds still-existing foods, so deleting early is safe.)
+ * 1b. Purge the user's cached RAG retrievals (fail-loud).
  * 2. Delete the Clerk identity (hard fail, since ensureUserExists would
  *    re-provision the DB row on the next request).
  * 2b. Tombstone the id in the auth layer (fail-loud) so a Clerk session token
@@ -88,6 +90,12 @@ export async function eraseAccount(
   // text and custom-food-name embeddings are orphaned (GDPR Art. 17).
   await storage.coaching.deleteChunksByUserId(userId);
   await deleteFoodEmbeddingsByFoodIds(privateFoodIds);
+  // Step 1b: the RAG retrieval cache holds plaintext excerpts of those chunks
+  // in `server_runtime_cache` on the main DB, keyed by user but not FK-linked,
+  // so neither purge above nor the step-5 cascade reaches it. Fail-loud like
+  // step 1; after the chunk purge, so a retrieval racing it can only re-cache
+  // an empty result. P13 (CODEBASE_ANALYSIS_2026-10-03)
+  await purgeRagCacheForUser(userId);
 
   // Step 2: delete the Clerk identity. If this fails the DB row must stay
   // intact — otherwise ensureUserExists re-creates it on the next

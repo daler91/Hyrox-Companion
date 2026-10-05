@@ -24,14 +24,37 @@ export interface BackfillFlags {
   quiet: boolean;
 }
 
-export function parseBackfillFlags(argv: string[]): BackfillFlags {
+/**
+ * Parse the shared backfill flags. Strict on purpose — D29
+ * (CODEBASE_ANALYSIS_2026-10-03): a `--user-id=X` that was silently dropped
+ * turned a one-athlete `--apply` rehearsal into a run over every athlete. So
+ * `--user-id` takes `--user-id X` or `--user-id=X`, a missing value throws,
+ * and so does any flag or argument this parser does not know.
+ *
+ * `extraValueFlags` names script-specific flags that take one value
+ * (`--revert <file>`); they are stepped over here and read by the script.
+ */
+export function parseBackfillFlags(
+  argv: readonly string[],
+  extraValueFlags: readonly string[] = [],
+): BackfillFlags {
   const flags: BackfillFlags = { apply: false, quiet: false };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--apply") flags.apply = true;
-    else if (argv[i] === "--user-id") flags.userId = argv[++i];
-    else if (argv[i] === "--quiet") flags.quiet = true;
+  const pending = [...argv];
+  for (let arg = pending.shift(); arg !== undefined; arg = pending.shift()) {
+    if (arg === "--apply") flags.apply = true;
+    else if (arg === "--quiet") flags.quiet = true;
+    else if (arg === "--user-id") flags.userId = requireValue(arg, pending.shift());
+    else if (arg.startsWith("--user-id=")) {
+      flags.userId = requireValue("--user-id", arg.slice("--user-id=".length));
+    } else if (extraValueFlags.includes(arg)) requireValue(arg, pending.shift());
+    else throw new Error(`Unknown argument: ${arg}`);
   }
   return flags;
+}
+
+function requireValue(flag: string, value: string | undefined): string {
+  if (!value || value.startsWith("--")) throw new Error(`${flag} needs a value`);
+  return value;
 }
 
 /** One line of operator-facing report. */
@@ -46,8 +69,12 @@ export function say(line: string): void {
  * diagnosed, so the stack goes to stderr and the exit code is non-zero — the
  * two things a shell script wrapping this would check.
  */
-export function runBackfill(main: (flags: BackfillFlags) => Promise<void>): void {
-  main(parseBackfillFlags(process.argv.slice(2)))
+export function runBackfill(
+  main: (flags: BackfillFlags) => Promise<void>,
+  extraValueFlags: readonly string[] = [],
+): void {
+  Promise.resolve()
+    .then(() => main(parseBackfillFlags(process.argv.slice(2), extraValueFlags)))
     .then(() => process.exit(0))
     .catch((err: unknown) => {
       process.stderr.write(`Backfill failed: ${err instanceof Error ? err.stack : String(err)}\n`);

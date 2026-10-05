@@ -9,6 +9,15 @@
  * a caret range here used to resolve to whatever the registry served that day,
  * so two runs could patch two different trees.
  *
+ * S7 (CODEBASE_ANALYSIS_2026-10-03): the overlay never downgrades. A pin is
+ * applied only where the bundled copy is older, and a staged package
+ * (pinned or transitive) never replaces a bundled copy at the same or a newer
+ * version. The axios pin tracks the repo's own `^1.20.0` override floor, and
+ * axios's direct dependencies are installed alongside it at the exact
+ * versions pnpm-lock.yaml resolves, which npm then dedupes axios onto. Deeper transitive dependencies (e.g.
+ * form-data's asynckit/mime-types) are still whatever npm resolves that day;
+ * the no-downgrade rule keeps them from replacing anything newer.
+ *
  * Failures are fatal under CI (the job that runs this wants to know) and a
  * warning otherwise (a developer's `pnpm install` must never be blocked by a
  * cosmetic overlay).
@@ -19,14 +28,27 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-const PINNED = {
-  'simple-git': '3.32.3',
-  'serialize-javascript': '7.0.3',
-  'engine.io': '5.2.1',
-  flatted: '3.4.0',
-  ws: '8.17.1',
-  axios: '1.7.4',
-  esbuild: '0.25.12',
+const PINNED = new Map([
+  ['simple-git', '3.32.3'],
+  ['serialize-javascript', '7.0.3'],
+  ['engine.io', '5.2.1'],
+  ['flatted', '3.4.0'],
+  ['ws', '8.17.1'],
+  // Keep in step with the `axios` floor in package.json `pnpm.overrides`.
+  ['axios', '1.20.0'],
+  ['esbuild', '0.25.12'],
+]);
+
+/**
+ * Exact versions for axios's direct dependencies in the staging install,
+ * matching what pnpm-lock.yaml resolves for axios 1.20.0 (and the
+ * follow-redirects / form-data override floors in package.json).
+ */
+const TRANSITIVE_PINS = {
+  'follow-redirects': '1.16.1',
+  'form-data': '4.0.6',
+  'https-proxy-agent': '5.0.1',
+  'proxy-from-env': '2.1.0',
 };
 
 const IS_WINDOWS = process.platform === 'win32';
@@ -42,7 +64,10 @@ const layout = {
   appPath: '',
   appModules: '',
   /** The two pinned packages that live in nested trees inside the app. */
-  nested: { 'engine.io': '', axios: '' },
+  nested: new Map([
+    ['engine.io', ''],
+    ['axios', ''],
+  ]),
   /** The staging install: a fresh temp dir and, once stagePinned() has run, its node_modules. */
   tempDir: '',
   sourceDir: '',
@@ -82,21 +107,58 @@ function locateCypressApp() {
   const appModules = path.join(appPath, 'node_modules');
   layout.appPath = appPath;
   layout.appModules = appModules;
-  layout.nested['engine.io'] = path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
-  layout.nested.axios = path.join(appModules, '@packages', 'server', 'node_modules', 'axios');
+  layout.nested.set('engine.io', path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io'));
+  layout.nested.set('axios', path.join(appModules, '@packages', 'server', 'node_modules', 'axios'));
   return null;
 }
 
 /** Where a pinned package lives inside the Cypress app. */
 function bundledDir(name) {
   // bearer:disable javascript_lang_path_traversal
-  return layout.nested[name] ?? path.join(layout.appModules, name);
+  return layout.nested.get(name) ?? path.join(layout.appModules, name);
+}
+
+/** The `version` from `<dir>/package.json`, or null when absent or unreadable. */
+function readVersion(dir) {
+  // `dir` is always a path built from `layout` (the Cypress cache or the
+  // staging dir) and a PINNED package name; no external input reaches it.
+  // bearer:disable javascript_lang_path_traversal
+  const pkg = path.join(dir, 'package.json');
+  try {
+    const { version } = JSON.parse(fs.readFileSync(pkg, 'utf8'));
+    return typeof version === 'string' ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+/** [major, minor, patch, isRelease] for a semver string, or null when unparsable. */
+function parseSemver(version) {
+  const [release, prerelease] = version.split('+', 1)[0].split(/-(.*)/s);
+  const parts = release.split('.');
+  if (parts.length !== 3 || !parts.every((part) => /^\d+$/.test(part))) return null;
+  return [...parts.map(Number), prerelease ? 0 : 1];
+}
+
+/**
+ * True when `version` is at or above `target`. A prerelease sorts below its
+ * release; an unparsable version is treated as older (so it gets patched).
+ */
+function isAtLeast(version, target) {
+  const have = version ? parseSemver(version) : null;
+  const want = parseSemver(target);
+  if (!have || !want) return false;
+  for (const [index, wanted] of want.entries()) {
+    const had = have.at(index);
+    if (had !== wanted) return had > wanted;
+  }
+  return true;
 }
 
 /** The pinned packages the Cypress app actually bundles. */
-function selectWanted() {
+function selectBundled() {
   return new Set(
-    Object.keys(PINNED).filter((name) => {
+    [...PINNED.keys()].filter((name) => {
       if (name === 'esbuild') {
         return fs.existsSync(path.join(layout.appModules, 'esbuild')) || fs.existsSync(path.join(layout.appModules, '@esbuild'));
       }
@@ -105,14 +167,15 @@ function selectWanted() {
   );
 }
 
-/** Idempotence: a cached binary patched on an earlier run already carries the pins. */
-function alreadyPinned(wanted) {
-  return [...wanted].every((name) => {
-    // bearer:disable javascript_lang_path_traversal
-    const pkg = path.join(bundledDir(name), 'package.json');
-    if (!fs.existsSync(pkg)) return false;
-    return JSON.parse(fs.readFileSync(pkg, 'utf8')).version === PINNED[name];
-  });
+/**
+ * The bundled pinned packages at a version older than the pin. A bundled copy
+ * already at or above the pin is left alone, so this is also what makes a
+ * re-run on a patched cache a no-op.
+ */
+function selectWanted() {
+  return new Set(
+    [...selectBundled()].filter((name) => !isAtLeast(readVersion(bundledDir(name)), PINNED.get(name))),
+  );
 }
 
 /** npm-install the pinned versions into the staging dir; records its node_modules in `layout`. */
@@ -128,8 +191,13 @@ function stagePinned(specs) {
  * Copy one staged package onto the app as a plain directory: no `.bin`, no
  * symlinks, and the destination replaced whole so nothing stale survives
  * underneath. `from` is relative to the staging node_modules, `to` absolute.
+ * Never downgrades: a destination already at or above the staged version is
+ * kept as-is.
  */
 function overlayPackage(from, to) {
+  // bearer:disable javascript_lang_path_traversal
+  const stagedVersion = readVersion(path.join(layout.sourceDir, from));
+  if (stagedVersion && isAtLeast(readVersion(to), stagedVersion)) return;
   fs.rmSync(to, { recursive: true, force: true });
   // bearer:disable javascript_lang_path_traversal
   fs.cpSync(path.join(layout.sourceDir, from), to, {
@@ -157,9 +225,9 @@ function overlayTopLevel() {
 /** engine.io (and the ws it bundles) and axios live in nested trees the top-level overlay does not reach. */
 function overlayNested(wanted) {
   if (wanted.has('engine.io')) {
-    overlayPackage('engine.io', layout.nested['engine.io']);
+    overlayPackage('engine.io', layout.nested.get('engine.io'));
     if (wanted.has('ws')) {
-      overlayPackage('ws', path.join(layout.nested['engine.io'], 'node_modules', 'ws'));
+      overlayPackage('ws', path.join(layout.nested.get('engine.io'), 'node_modules', 'ws'));
     }
   }
   const altEngineIoModules = path.join(layout.appModules, 'engine.io', 'node_modules');
@@ -167,7 +235,7 @@ function overlayNested(wanted) {
     overlayPackage('ws', path.join(altEngineIoModules, 'ws'));
   }
   if (wanted.has('axios')) {
-    overlayPackage('axios', layout.nested.axios);
+    overlayPackage('axios', layout.nested.get('axios'));
   }
 }
 
@@ -176,8 +244,7 @@ function main() {
   if (skipReason) return skip(skipReason);
 
   const wanted = selectWanted();
-  if (wanted.size === 0) return skip('nothing to patch');
-  if (alreadyPinned(wanted)) return skip('already patched');
+  if (wanted.size === 0) return skip('nothing to patch, or bundled versions already at or above the pins');
 
   // The Cypress cache path is worth having in the build log; it is a local
   // directory, not a credential.
@@ -193,8 +260,13 @@ function main() {
   // cache was never actually patched.
   layout.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
   try {
-    const specs = [...wanted].map((name) => `${name}@${PINNED[name]}`);
-    stagePinned(specs);
+    const specs = [...wanted].map((name) => `${name}@${PINNED.get(name)}`);
+    // axios's own dependencies go in at exact versions beside it, so npm
+    // dedupes axios onto them rather than resolving its ranges afresh.
+    const transitiveSpecs = wanted.has('axios')
+      ? Object.entries(TRANSITIVE_PINS).map(([name, version]) => `${name}@${version}`)
+      : [];
+    stagePinned([...specs, ...transitiveSpecs]);
     overlayTopLevel();
     overlayNested(wanted);
     // `specs` are the pinned name@version strings above — static data.

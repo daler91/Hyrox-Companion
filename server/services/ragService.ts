@@ -26,12 +26,21 @@ const EMBEDDING_HEALTH_TTL_MS = 5 * 60_000;
 const EMBEDDING_HEALTH_CACHE_KEY = "rag-health:embedding";
 let cachedEmbeddingHealth: { value: EmbeddingHealth; at: number } | null = null;
 
+// What the athlete sees when the probe fails. The provider's exception text is
+// operator detail they cannot act on, so it goes to the log, not the response.
+// S6 (CODEBASE_ANALYSIS_2026-10-03)
+export const EMBEDDING_UNAVAILABLE_MESSAGE =
+  "Document search is temporarily unavailable. Your materials are saved and will be used again once it is back.";
+
 async function probeEmbeddingHealth(): Promise<EmbeddingHealth> {
   try {
     const probe = await generateEmbedding("test");
     return { ok: true, dimension: probe.length };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    // The probe embeds the literal "test"; `err` is the provider's error.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err }, "[rag] Embedding provider health probe failed");
+    return { ok: false, error: EMBEDDING_UNAVAILABLE_MESSAGE };
   }
 }
 
@@ -266,14 +275,30 @@ export function clearRagCache(userId?: string): void {
     return;
   }
   const prefix = ragCachePrefix(userId);
-  for (const key of ragCache.keys()) {
-    if (key.startsWith(prefix)) ragCache.delete(key);
-  }
+  evictLocalRagEntries(prefix);
   if (env.NODE_ENV !== "test") {
     void deleteRuntimeCachePrefix(prefix).catch((err: unknown) => {
       logger.warn({ err, userId }, "[rag] Failed to clear shared retrieval cache");
     });
   }
+}
+
+function evictLocalRagEntries(prefix: string): void {
+  for (const key of ragCache.keys()) {
+    if (key.startsWith(prefix)) ragCache.delete(key);
+  }
+}
+
+/**
+ * Remove every cached retrieval for one user, local and shared, and wait for
+ * the shared delete — account erasure must know the excerpts of the athlete's
+ * coaching materials are gone, not leave them in `server_runtime_cache` for
+ * the daily expiry sweep. P13 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function purgeRagCacheForUser(userId: string): Promise<void> {
+  const prefix = ragCachePrefix(userId);
+  evictLocalRagEntries(prefix);
+  await deleteRuntimeCachePrefix(prefix);
 }
 
 /**
@@ -438,7 +463,7 @@ export async function getRagStatus(userId: string) {
 
   const embeddingApiStatus: EmbeddingHealth = hasApiKey
     ? await getEmbeddingHealth()
-    : { ok: false };
+    : { ok: false, error: EMBEDDING_UNAVAILABLE_MESSAGE };
 
   return {
     hasApiKey,

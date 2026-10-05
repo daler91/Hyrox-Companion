@@ -102,6 +102,32 @@ describe("vectorDb", () => {
     }));
   });
 
+  // D54 (CODEBASE_ANALYSIS_2026-10-03): single-DB mode on Railway falls back
+  // to the internal, non-SSL DATABASE_URL.
+  it("should not force ssl in production when falling back to a Railway-internal DATABASE_URL", async () => {
+    env.NODE_ENV = "production";
+    env.DATABASE_URL = "postgres://user:pass@postgres.railway.internal:5432/railway";
+
+    await import("./vectorDb");
+
+    expect((MockPool as any).lastConfig).toEqual(expect.objectContaining({
+      connectionString: "postgres://user:pass@postgres.railway.internal:5432/railway",
+      ssl: false,
+    }));
+  });
+
+  it("should still force ssl in production for an external VECTOR_DATABASE_URL", async () => {
+    env.NODE_ENV = "production";
+    env.VECTOR_DATABASE_URL = "postgres://user:pass@ep-vector.neon.tech/db";
+    env.DATABASE_URL = "postgres://user:pass@postgres.railway.internal:5432/railway";
+
+    await import("./vectorDb");
+
+    expect((MockPool as any).lastConfig).toEqual(expect.objectContaining({
+      ssl: { rejectUnauthorized: true },
+    }));
+  });
+
   it("should log error when vectorPool emits error", async () => {
     await import("./vectorDb");
 

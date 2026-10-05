@@ -1,4 +1,10 @@
-import { CALORIES_PER_100G_MAX, MACRO_PER_100G_MAX, SERVING_SIZE_G_MAX } from "@shared/schema";
+import {
+  CALORIES_PER_100G_MAX,
+  MACRO_PER_100G_MAX,
+  MICRO_DISPLAY_DEFS,
+  type MicroUnit,
+  SERVING_SIZE_G_MAX,
+} from "@shared/schema";
 
 import type { MappedFood } from "./types";
 
@@ -39,14 +45,31 @@ function clampServingSizeG(value: number | null | undefined): number | null {
   return value;
 }
 
-/** Drop non-finite / negative micro entries; null when nothing usable remains. */
+/**
+ * Per-100g plausibility ceilings for a micro, by its stored unit. D44
+ * (CODEBASE_ANALYSIS_2026-10-03): a unit slip upstream (mg typed into a gram
+ * field) otherwise caches e.g. 400,000 mg sodium per 100 g and shows as
+ * thousands of percent of the RDI.
+ *  - mg: 100,000 mg = 100 g — a nutrient can't outweigh the food it's in (pure
+ *    ascorbic acid or a salt substitute still fits under it).
+ *  - mcg: 1,000,000 mcg = 1 g — the mcg-scale vitamins (A, D, K, B12, folate)
+ *    peak in the tens of thousands of mcg per 100 g even in liver oils and
+ *    supplements, so a gram is already orders of magnitude of headroom.
+ * A key outside the curated set has no known unit and gets the mg (physical) cap.
+ */
+const MICRO_PER_100G_MAX: Record<MicroUnit, number> = { mg: 100_000, mcg: 1_000_000 };
+const MICRO_UNIT_BY_KEY = new Map(MICRO_DISPLAY_DEFS.map((def) => [def.key, def.unit]));
+
+/** Drop non-finite / negative / implausible micro entries; null when nothing usable remains. */
 function clampMicros(
   micros: Record<string, number> | null | undefined,
 ): Record<string, number> | null {
   if (!micros) return null;
   const out: Record<string, number> = {};
   for (const [key, value] of Object.entries(micros)) {
-    if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = value;
+    const max = MICRO_PER_100G_MAX[MICRO_UNIT_BY_KEY.get(key) ?? "mg"];
+    const clamped = clampMacro(value, max);
+    if (clamped !== null) out[key] = clamped;
   }
   return Object.keys(out).length > 0 ? out : null;
 }

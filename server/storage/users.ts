@@ -16,6 +16,7 @@ import {
   type InsertGarminConnection,
   type InsertStravaConnection,
   mafProfile,
+  planAdjustmentProposals,
   rateLimitBuckets,
   recipeIngredients,
   recipes,
@@ -505,8 +506,17 @@ export class UserStorage {
   readonly getPendingChatFactProposal = getPendingChatFactProposal;
   readonly settleChatFactProposal = settleChatFactProposal;
 
+  // Also blanks each plan proposal's copy of the chat message that triggered
+  // it, or "clear" would leave those messages verbatim. The column is NOT
+  // NULL, so it becomes '' rather than null. P18 (CODEBASE_ANALYSIS_2026-10-03)
   async clearChatHistory(userId: string): Promise<boolean> {
-    await db.delete(chatMessages).where(eq(chatMessages.userId, userId));
+    await db.transaction(async (tx) => {
+      await tx.delete(chatMessages).where(eq(chatMessages.userId, userId));
+      await tx
+        .update(planAdjustmentProposals)
+        .set({ userRequest: "" })
+        .where(eq(planAdjustmentProposals.userId, userId));
+    });
     return true;
   }
 

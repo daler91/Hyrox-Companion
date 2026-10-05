@@ -50,6 +50,24 @@ const workoutDateNotFuture = z.string().refine(
 // coach. Exported so the reparse route applies the same ceiling.
 export const MAX_WORKOUT_TEXT_LEN = 50_000;
 
+/**
+ * D56 (CODEBASE_ANALYSIS_2026-10-03): ceilings for the workout-log metric
+ * columns, which had none — a client bug that sent seconds as minutes stored a
+ * 60-hour session and skewed weekly duration, hrTSS, cardio load and fuelling.
+ * Deliberately generous: Strava/Garmin imports write these columns without
+ * this schema, but a combine (which sums two logs' duration and calories) is
+ * validated by it, so the caps sit well above any real recording. `duration`
+ * is MINUTES (moving time); speeds are m/s; elevation is metres.
+ */
+export const WORKOUT_METRIC_MAX = {
+  durationMinutes: 2_880, // 48 h: a 100-mile ultra, or two long logs combined
+  calories: 50_000,
+  elevationGainMeters: 50_000,
+  speedMetersPerSecond: 200,
+  avgWatts: 3_000,
+  sufferScore: 10_000,
+} as const;
+
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
   .omit({
     id: true,
@@ -110,6 +128,53 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
       .int()
       .min(20, "Max heart rate looks too low")
       .max(250, "Max heart rate looks too high")
+      .optional()
+      .nullable(),
+    // D56 — see WORKOUT_METRIC_MAX.
+    duration: z
+      .number()
+      .int()
+      .min(0, "Duration must be at least 0")
+      .max(WORKOUT_METRIC_MAX.durationMinutes, "Duration is too long (minutes)")
+      .optional()
+      .nullable(),
+    calories: z
+      .number()
+      .int()
+      .min(0, "Calories must be at least 0")
+      .max(WORKOUT_METRIC_MAX.calories, "Calories are too high")
+      .optional()
+      .nullable(),
+    elevationGain: z
+      .number()
+      .min(0, "Elevation gain must be at least 0")
+      .max(WORKOUT_METRIC_MAX.elevationGainMeters, "Elevation gain is too large")
+      .optional()
+      .nullable(),
+    avgSpeed: z
+      .number()
+      .min(0, "Speed must be at least 0")
+      .max(WORKOUT_METRIC_MAX.speedMetersPerSecond, "Speed is too high")
+      .optional()
+      .nullable(),
+    maxSpeed: z
+      .number()
+      .min(0, "Speed must be at least 0")
+      .max(WORKOUT_METRIC_MAX.speedMetersPerSecond, "Speed is too high")
+      .optional()
+      .nullable(),
+    avgWatts: z
+      .number()
+      .int()
+      .min(0, "Power must be at least 0")
+      .max(WORKOUT_METRIC_MAX.avgWatts, "Power is too high")
+      .optional()
+      .nullable(),
+    sufferScore: z
+      .number()
+      .int()
+      .min(0, "Suffer score must be at least 0")
+      .max(WORKOUT_METRIC_MAX.sufferScore, "Suffer score is too high")
       .optional()
       .nullable(),
     // W12 — bound the free-text columns (focus/mainWorkout are NOT NULL;

@@ -4,13 +4,13 @@
 // building and the job-running helpers share this preamble, so they share a file
 // rather than duplicating it.
 import type { Job } from "pg-boss";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("pg-boss", () => ({
   default: class { on() { /* no-op: pg-boss event emitter stub */ } },
   PgBoss: class { on() { /* no-op: pg-boss event emitter stub */ } },
 }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() } }));
 vi.mock("./env", () => ({ env: { DATABASE_URL: "postgres://u:p@h:5432/db" } }));
 vi.mock("./storage", () => ({ storage: {} }));
 vi.mock("./emailScheduler", () => ({ processMissedWorkoutReminder: vi.fn(), processWeeklySummary: vi.fn() }));
@@ -19,6 +19,7 @@ vi.mock("./services/planGenerationService", () => ({ executePlanGeneration: vi.f
 vi.mock("./services/ragService", () => ({ embedCoachingMaterial: vi.fn() }));
 vi.mock("./db", () => ({ pool: { query: vi.fn().mockResolvedValue({ rowCount: 0 }) } }));
 vi.mock("./services/trainingContextCache", () => ({ invalidateTrainingContext: vi.fn() }));
+vi.mock("./services/recomputeAnalyticsDispatch", () => ({ dispatchRecomputeAnalytics: vi.fn() }));
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { pool } from "./db";
@@ -27,13 +28,16 @@ import {
   DEFAULT_JOB_OPTIONS,
   jobDataKeys,
   NO_RETRY_JOB_OPTIONS,
+  processRecomputeAnalyticsJob,
   purgeUserJobs,
   runBatch,
   runWithTimeout,
   withTrace,
 } from "./queue";
 import { runWithRequestContext } from "./requestContext";
+import { dispatchRecomputeAnalytics } from "./services/recomputeAnalyticsDispatch";
 import { invalidateTrainingContext } from "./services/trainingContextCache";
+import { storage } from "./storage";
 
 describe("buildQueueConnectionString (W12)", () => {
   it("appends a PG statement_timeout option matching PGBOSS_STATEMENT_TIMEOUT_MS", () => {
@@ -201,5 +205,59 @@ describe("runBatch", () => {
       "user-1",
       "user-2",
     ]);
+  });
+});
+
+describe("processRecomputeAnalyticsJob (D37)", () => {
+  const job = {
+    id: "job-1",
+    data: { userId: "user-1", feature: "coach_insights", localDate: "2026-10-03" },
+  } as unknown as Job;
+  const markRecomputedOn = vi.fn();
+  const releaseRecomputedOn = vi.fn();
+
+  beforeEach(() => {
+    markRecomputedOn.mockReset().mockResolvedValue(true);
+    releaseRecomputedOn.mockReset();
+    vi.mocked(dispatchRecomputeAnalytics).mockReset();
+    Object.assign(storage, {
+      users: { getUser: vi.fn().mockResolvedValue({ id: "user-1" }) },
+      analyticsResults: { markRecomputedOn, releaseRecomputedOn },
+    });
+  });
+
+  it("keeps the once-per-day claim when the recompute succeeds", async () => {
+    vi.mocked(dispatchRecomputeAnalytics).mockResolvedValue();
+
+    await processRecomputeAnalyticsJob(job);
+
+    expect(markRecomputedOn).toHaveBeenCalledWith("user-1", "coach_insights", "2026-10-03");
+    expect(releaseRecomputedOn).not.toHaveBeenCalled();
+  });
+
+  it("releases the claim and rethrows on failure so a pg-boss retry can run", async () => {
+    const failure = new Error("Gemini 503");
+    vi.mocked(dispatchRecomputeAnalytics).mockRejectedValue(failure);
+
+    await expect(processRecomputeAnalyticsJob(job)).rejects.toBe(failure);
+
+    expect(releaseRecomputedOn).toHaveBeenCalledWith("user-1", "coach_insights", "2026-10-03");
+  });
+
+  it("still rethrows the original error when releasing the claim fails", async () => {
+    const failure = new Error("Gemini 503");
+    vi.mocked(dispatchRecomputeAnalytics).mockRejectedValue(failure);
+    releaseRecomputedOn.mockRejectedValue(new Error("db down"));
+
+    await expect(processRecomputeAnalyticsJob(job)).rejects.toBe(failure);
+  });
+
+  it("does not dispatch or release when another delivery already holds the claim", async () => {
+    markRecomputedOn.mockResolvedValue(false);
+
+    await processRecomputeAnalyticsJob(job);
+
+    expect(dispatchRecomputeAnalytics).not.toHaveBeenCalled();
+    expect(releaseRecomputedOn).not.toHaveBeenCalled();
   });
 });

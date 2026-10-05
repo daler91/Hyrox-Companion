@@ -5,6 +5,23 @@ import { storage } from "../../storage";
 import { resolveEdamamBarcode } from "./edamamClient";
 import { resolveBarcode } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
+import type { MappedFood } from "./types";
+
+/**
+ * OFF's resolver throws once its retries are exhausted (outage, 429). D43
+ * (CODEBASE_ANALYSIS_2026-10-03): treat that as "not recognized" so the route
+ * returns its 404 → add-a-custom-food path instead of a 500.
+ */
+async function resolveOffBarcodeSafely(code: string): Promise<MappedFood | null> {
+  try {
+    return await resolveBarcode(code);
+  } catch (err) {
+    // `code` is a product barcode (public GTIN), not user data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err, code }, "[nutrition] Open Food Facts barcode lookup failed");
+    return null;
+  }
+}
 
 /**
  * Resolve a barcode to a Food (FR-2.1). Order: local cache → Edamam (curated
@@ -28,7 +45,7 @@ export async function lookupBarcode(code: string): Promise<Food | null> {
 
   // Edamam first (curated branded UPC data); fall back to OFF only when it has
   // nothing (unknown barcode or unavailable).
-  const mapped = (await resolveEdamamBarcode(code)) ?? (await resolveBarcode(code));
+  const mapped = (await resolveEdamamBarcode(code)) ?? (await resolveOffBarcodeSafely(code));
   if (!mapped) {
     logger.info({ code }, "[nutrition] barcode not recognized by Edamam or Open Food Facts");
     return null;

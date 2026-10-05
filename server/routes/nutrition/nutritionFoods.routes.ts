@@ -3,6 +3,7 @@ import {
   barcodeLookupSchema,
   type CreateCustomFoodInput,
   createCustomFoodSchema,
+  type Food,
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type ServingInput,
@@ -24,6 +25,18 @@ import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/prot
 import { FOOD_NOT_FOUND } from "./shared";
 
 const FOOD_BY_ID_PATH = "/api/v1/nutrition/foods/:id";
+
+/**
+ * Null a food's owner id unless the requester is the owner. A public custom or
+ * recipe-backing food is visible to every searcher, and its internal Clerk user
+ * id would let anyone link all of that author's shared foods. The client never
+ * reads `foods.createdByUserId`, so the owner keeps theirs and everyone else
+ * sees null. P16 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function redactFoodOwner<T extends Food>(food: T, userId: string): T {
+  if (food.createdByUserId == null || food.createdByUserId === userId) return food;
+  return { ...food, createdByUserId: null };
+}
 
 // Foods: search / recent / custom lists, barcode lookup, custom-food CRUD and
 // named servings (FR-1.1, FR-1.4, FR-2.1, FR-2.2, FR-2.4).
@@ -48,7 +61,9 @@ export function registerNutritionFoodRoutes(router: Router): void {
       if (typeof q !== "string") {
         throw new AppError(ErrorCode.BAD_REQUEST, "q must be a single string", 400);
       }
-      res.json(await searchFoods(q, getUserId(req)));
+      const userId = getUserId(req);
+      const result = await searchFoods(q, userId);
+      res.json({ ...result, results: result.results.map((food) => redactFoodOwner(food, userId)) });
     }),
   );
 
@@ -58,7 +73,9 @@ export function registerNutritionFoodRoutes(router: Router): void {
     isAuthenticated,
     rateLimiter("nutritionRead", 60),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await storage.nutrition.getRecentFoods(getUserId(req)));
+      const userId = getUserId(req);
+      const recent = await storage.nutrition.getRecentFoods(userId);
+      res.json(recent.map((food) => redactFoodOwner(food, userId)));
     }),
   );
 
@@ -105,12 +122,13 @@ export function registerNutritionFoodRoutes(router: Router): void {
     isAuthenticated,
     rateLimiter("nutritionRead", 60),
     asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
-      const result = await getFoodWithServings(getUserId(req), req.params.id);
+      const userId = getUserId(req);
+      const result = await getFoodWithServings(userId, req.params.id);
       if (!result) {
         sendNotFound(res, FOOD_NOT_FOUND);
         return;
       }
-      res.json(result);
+      res.json({ ...result, food: redactFoodOwner(result.food, userId) });
     }),
   );
 

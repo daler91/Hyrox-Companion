@@ -54,19 +54,16 @@ export function RagStatusCard() {
   } else if (ragStatus) {
     content = (
       <>
-        {!ragStatus.hasApiKey && (
-          <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
-            <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            GEMINI_API_KEY is not configured. Embeddings cannot be generated.
-          </div>
-        )}
-
-        {ragStatus.embeddingApi && !ragStatus.embeddingApi.ok && ragStatus.hasApiKey && (
+        {/* The server sends an athlete-facing message here, never the provider's
+            error or the name of a missing server key. S6 (CODEBASE_ANALYSIS_2026-10-03) */}
+        {(!ragStatus.hasApiKey || ragStatus.embeddingApi?.ok === false) && (
           <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
             <XCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
             <div>
-              <p className="font-medium">Embedding API error</p>
-              <p className="text-xs mt-0.5 break-all">{ragStatus.embeddingApi.error}</p>
+              <p className="font-medium">Document search unavailable</p>
+              <p className="text-xs mt-0.5">
+                {ragStatus.embeddingApi?.error ?? "Please try again later."}
+              </p>
             </div>
           </div>
         )}

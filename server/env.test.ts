@@ -35,3 +35,19 @@ describe("env topology settings", () => {
     expect(env.APP_INSTANCE_COUNT).toBe(2);
   });
 });
+
+describe("env LOG_LEVEL", () => {
+  it("defaults LOG_LEVEL to info", () => {
+    expect(parseEnv(baseEnv).LOG_LEVEL).toBe("info");
+  });
+
+  it("accepts pino level names", () => {
+    expect(parseEnv({ ...baseEnv, LOG_LEVEL: "warn" }).LOG_LEVEL).toBe("warn");
+  });
+
+  it("rejects an unknown level with a message naming the variable", () => {
+    expect(() => parseEnv({ ...baseEnv, LOG_LEVEL: "warning" })).toThrow(
+      /LOG_LEVEL must be one of/,
+    );
+  });
+});

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSamplePlanSchema } from "./plans";
+import { createSamplePlanSchema, updatePlanDayRouteSchema } from "./plans";
 
 // CL9 (CODEBASE_ANALYSIS_2026-10-03): a past race date (a mistyped year) built
 // a template plan whose every day read as post-race recovery, and nothing can
@@ -88,5 +88,15 @@ describe("createSamplePlanSchema race date", () => {
     const missingBody = undefined;
     expect(createSamplePlanSchema.parse(missingBody)).toEqual({});
     expect(createSamplePlanSchema.parse({})).toEqual({});
+  });
+});
+
+// D55 (CODEBASE_ANALYSIS_2026-10-03): the athlete-facing plan-day PATCH must
+// not carry the plan's week/day grid, which storage wrote verbatim.
+describe("updatePlanDayRouteSchema", () => {
+  it("strips weekNumber and dayName while keeping the athlete's fields", () => {
+    const result = updatePlanDayRouteSchema.parse({ weekNumber: -3, dayName: "Funday", focus: "Tempo run" });
+
+    expect(result).toEqual({ focus: "Tempo run" });
   });
 });
