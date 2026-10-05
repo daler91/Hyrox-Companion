@@ -28,16 +28,16 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-const PINNED = {
-  'simple-git': '3.32.3',
-  'serialize-javascript': '7.0.3',
-  'engine.io': '5.2.1',
-  flatted: '3.4.0',
-  ws: '8.17.1',
+const PINNED = new Map([
+  ['simple-git', '3.32.3'],
+  ['serialize-javascript', '7.0.3'],
+  ['engine.io', '5.2.1'],
+  ['flatted', '3.4.0'],
+  ['ws', '8.17.1'],
   // Keep in step with the `axios` floor in package.json `pnpm.overrides`.
-  axios: '1.20.0',
-  esbuild: '0.25.12',
-};
+  ['axios', '1.20.0'],
+  ['esbuild', '0.25.12'],
+]);
 
 /**
  * Exact versions for axios's direct dependencies in the staging install,
@@ -64,7 +64,10 @@ const layout = {
   appPath: '',
   appModules: '',
   /** The two pinned packages that live in nested trees inside the app. */
-  nested: { 'engine.io': '', axios: '' },
+  nested: new Map([
+    ['engine.io', ''],
+    ['axios', ''],
+  ]),
   /** The staging install: a fresh temp dir and, once stagePinned() has run, its node_modules. */
   tempDir: '',
   sourceDir: '',
@@ -104,15 +107,15 @@ function locateCypressApp() {
   const appModules = path.join(appPath, 'node_modules');
   layout.appPath = appPath;
   layout.appModules = appModules;
-  layout.nested['engine.io'] = path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
-  layout.nested.axios = path.join(appModules, '@packages', 'server', 'node_modules', 'axios');
+  layout.nested.set('engine.io', path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io'));
+  layout.nested.set('axios', path.join(appModules, '@packages', 'server', 'node_modules', 'axios'));
   return null;
 }
 
 /** Where a pinned package lives inside the Cypress app. */
 function bundledDir(name) {
   // bearer:disable javascript_lang_path_traversal
-  return layout.nested[name] ?? path.join(layout.appModules, name);
+  return layout.nested.get(name) ?? path.join(layout.appModules, name);
 }
 
 /** The `version` from `<dir>/package.json`, or null when absent or unreadable. */
@@ -129,9 +132,10 @@ function readVersion(dir) {
 
 /** [major, minor, patch, isRelease] for a semver string, or null when unparsable. */
 function parseSemver(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?/.exec(version);
-  if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3]), match[4] ? 0 : 1];
+  const [release, prerelease] = version.split('+', 1)[0].split(/-(.*)/s);
+  const parts = release.split('.');
+  if (parts.length !== 3 || !parts.every((part) => /^\d+$/.test(part))) return null;
+  return [...parts.map(Number), prerelease ? 0 : 1];
 }
 
 /**
@@ -142,8 +146,9 @@ function isAtLeast(version, target) {
   const have = version ? parseSemver(version) : null;
   const want = parseSemver(target);
   if (!have || !want) return false;
-  for (let i = 0; i < want.length; i++) {
-    if (have[i] !== want[i]) return have[i] > want[i];
+  for (const [index, wanted] of want.entries()) {
+    const had = have.at(index);
+    if (had !== wanted) return had > wanted;
   }
   return true;
 }
@@ -155,13 +160,13 @@ function isAtLeast(version, target) {
  */
 function selectWanted() {
   return new Set(
-    Object.keys(PINNED).filter((name) => {
+    [...PINNED.keys()].filter((name) => {
       if (name === 'esbuild') {
         const present = fs.existsSync(path.join(layout.appModules, 'esbuild')) || fs.existsSync(path.join(layout.appModules, '@esbuild'));
-        return present && !isAtLeast(readVersion(bundledDir(name)), PINNED[name]);
+        return present && !isAtLeast(readVersion(bundledDir(name)), PINNED.get(name));
       }
       if (!fs.existsSync(bundledDir(name))) return false;
-      return !isAtLeast(readVersion(bundledDir(name)), PINNED[name]);
+      return !isAtLeast(readVersion(bundledDir(name)), PINNED.get(name));
     }),
   );
 }
@@ -216,9 +221,9 @@ function overlayTopLevel() {
 /** engine.io (and the ws it bundles) and axios live in nested trees the top-level overlay does not reach. */
 function overlayNested(wanted) {
   if (wanted.has('engine.io')) {
-    overlayPackage('engine.io', layout.nested['engine.io']);
+    overlayPackage('engine.io', layout.nested.get('engine.io'));
     if (wanted.has('ws')) {
-      overlayPackage('ws', path.join(layout.nested['engine.io'], 'node_modules', 'ws'));
+      overlayPackage('ws', path.join(layout.nested.get('engine.io'), 'node_modules', 'ws'));
     }
   }
   const altEngineIoModules = path.join(layout.appModules, 'engine.io', 'node_modules');
@@ -226,7 +231,7 @@ function overlayNested(wanted) {
     overlayPackage('ws', path.join(altEngineIoModules, 'ws'));
   }
   if (wanted.has('axios')) {
-    overlayPackage('axios', layout.nested.axios);
+    overlayPackage('axios', layout.nested.get('axios'));
   }
 }
 
@@ -251,7 +256,7 @@ function main() {
   // cache was never actually patched.
   layout.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
   try {
-    const specs = [...wanted].map((name) => `${name}@${PINNED[name]}`);
+    const specs = [...wanted].map((name) => `${name}@${PINNED.get(name)}`);
     stagePinned(specs);
     overlayTopLevel();
     overlayNested(wanted);
