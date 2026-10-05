@@ -16,7 +16,9 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const PARSED: ParseWorkoutStructureResponse = {
-  exercises: [{ exerciseName: "back_squat", category: "strength", sets: [{ setNumber: 1, reps: 10 }] }],
+  exercises: [
+    { exerciseName: "back_squat", category: "strength", sets: [{ setNumber: 1, reps: 10 }] },
+  ],
   structureBlocks: [],
   warnings: [],
 };

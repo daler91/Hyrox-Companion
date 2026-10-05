@@ -39,13 +39,19 @@ describe("embeddings with no GEMINI_API_KEY", () => {
     const chunks = ["chunk 1", "chunk 2", "chunk 3", "chunk 4", "chunk 5"];
     await expect(generateEmbeddings(chunks)).rejects.toBeInstanceOf(AiConfigurationError);
 
-    expect(() => { textBreakerFor("anthropic").assertClosed(); }).not.toThrow();
-    expect(() => { embeddingBreaker.assertClosed(); }).not.toThrow();
+    expect(() => {
+      textBreakerFor("anthropic").assertClosed();
+    }).not.toThrow();
+    expect(() => {
+      embeddingBreaker.assertClosed();
+    }).not.toThrow();
   });
 
   it("keeps saying what is wrong rather than reporting a provider outage", async () => {
     for (let i = 0; i < 6; i++) {
-      const error: unknown = await generateEmbedding(`chunk ${String(i)}`).catch((caught: unknown) => caught);
+      const error: unknown = await generateEmbedding(`chunk ${String(i)}`).catch(
+        (caught: unknown) => caught,
+      );
       expect(error).toBeInstanceOf(AiConfigurationError);
       expect(error).not.toBeInstanceOf(CircuitBreakerOpenError);
     }

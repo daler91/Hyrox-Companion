@@ -15,7 +15,13 @@ import { globalErrorHandler } from "./errorHandler";
 /** What @google/genai throws for a non-2xx: an `ApiError` carrying the HTTP status and Google's raw JSON. */
 function providerError(status: number): Error {
   const err = new Error(
-    JSON.stringify({ error: { code: status, message: "Resource has been exhausted (e.g. check quota).", status: "RESOURCE_EXHAUSTED" } }),
+    JSON.stringify({
+      error: {
+        code: status,
+        message: "Resource has been exhausted (e.g. check quota).",
+        status: "RESOURCE_EXHAUSTED",
+      },
+    }),
   );
   err.name = "ApiError";
   return Object.assign(err, { status });
@@ -38,16 +44,19 @@ describe("globalErrorHandler", () => {
   // C3 (CODEBASE_ANALYSIS_2026-10-03): a non-AppError's own status and message
   // were passed on, so a provider 429 read as the app's rate limit and a
   // rotated key's 401 looked like an expired session.
-  it.each([400, 401, 403, 404, 429, 503])("turns an uncaught provider %i into a generic 502", async (status) => {
-    const res = await request(appThrowing(providerError(status))).post("/boom");
+  it.each([400, 401, 403, 404, 429, 503])(
+    "turns an uncaught provider %i into a generic 502",
+    async (status) => {
+      const res = await request(appThrowing(providerError(status))).post("/boom");
 
-    expect(res.status).toBe(502);
-    expect(res.body).toEqual({
-      error: "A service we depend on failed. Please try again.",
-      code: ErrorCode.EXTERNAL_API_ERROR,
-    });
-    expect(JSON.stringify(res.body)).not.toContain("RESOURCE_EXHAUSTED");
-  });
+      expect(res.status).toBe(502);
+      expect(res.body).toEqual({
+        error: "A service we depend on failed. Please try again.",
+        code: ErrorCode.EXTERNAL_API_ERROR,
+      });
+      expect(JSON.stringify(res.body)).not.toContain("RESOURCE_EXHAUSTED");
+    },
+  );
 
   it("reports an upstream failure to Sentry", async () => {
     const err = providerError(400);
@@ -65,16 +74,24 @@ describe("globalErrorHandler", () => {
   });
 
   it("hides an untyped error, and its foreign code, behind a generic 500", async () => {
-    const pgError = Object.assign(new Error('duplicate key value violates unique constraint "users_pkey"'), { code: "23505" });
+    const pgError = Object.assign(
+      new Error('duplicate key value violates unique constraint "users_pkey"'),
+      { code: "23505" },
+    );
     const res = await request(appThrowing(pgError)).post("/boom");
 
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: "Internal Server Error", code: ErrorCode.INTERNAL_SERVER_ERROR });
+    expect(res.body).toEqual({
+      error: "Internal Server Error",
+      code: ErrorCode.INTERNAL_SERVER_ERROR,
+    });
   });
 
   it("passes an AppError's status, code, message and details through", async () => {
     const details = { issues: [{ path: "date", message: "Required" }] };
-    const res = await request(appThrowing(new AppError(ErrorCode.NOT_FOUND, "Workout not found", 404, details))).post("/boom");
+    const res = await request(
+      appThrowing(new AppError(ErrorCode.NOT_FOUND, "Workout not found", 404, details)),
+    ).post("/boom");
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Workout not found", code: ErrorCode.NOT_FOUND, details });
@@ -82,8 +99,12 @@ describe("globalErrorHandler", () => {
   });
 
   it("keeps an AppError's own 429 and 503", async () => {
-    const quota = await request(appThrowing(new AppError(ErrorCode.AI_BUDGET_EXCEEDED, "Daily AI limit reached", 429))).post("/boom");
-    const off = await request(appThrowing(new AppError(ErrorCode.AI_FEATURES_DISABLED, "AI is off", 503))).post("/boom");
+    const quota = await request(
+      appThrowing(new AppError(ErrorCode.AI_BUDGET_EXCEEDED, "Daily AI limit reached", 429)),
+    ).post("/boom");
+    const off = await request(
+      appThrowing(new AppError(ErrorCode.AI_FEATURES_DISABLED, "AI is off", 503)),
+    ).post("/boom");
 
     expect(quota.status).toBe(429);
     expect(quota.body).toMatchObject({ code: ErrorCode.AI_BUDGET_EXCEEDED });
@@ -92,7 +113,9 @@ describe("globalErrorHandler", () => {
   });
 
   it("hides an AppError's message at 500", async () => {
-    const res = await request(appThrowing(new AppError(ErrorCode.INTERNAL_ERROR, "pool exhausted on db-3", 500))).post("/boom");
+    const res = await request(
+      appThrowing(new AppError(ErrorCode.INTERNAL_ERROR, "pool exhausted on db-3", 500)),
+    ).post("/boom");
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: "Internal Server Error", code: ErrorCode.INTERNAL_ERROR });
@@ -116,11 +139,18 @@ describe("globalErrorHandler", () => {
 
   describe("the app's own HTTP layer", () => {
     it("treats one of its own 5xx as an internal fault, not an upstream one", async () => {
-      const err = Object.assign(new Error("stream encoding should not be set"), { status: 500, statusCode: 500, expose: false });
+      const err = Object.assign(new Error("stream encoding should not be set"), {
+        status: 500,
+        statusCode: 500,
+        expose: false,
+      });
       const res = await request(appThrowing(err)).post("/boom");
 
       expect(res.status).toBe(500);
-      expect(res.body).toEqual({ error: "Internal Server Error", code: ErrorCode.INTERNAL_SERVER_ERROR });
+      expect(res.body).toEqual({
+        error: "Internal Server Error",
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+      });
     });
 
     function bodyParserApp(): express.Express {
@@ -151,7 +181,10 @@ describe("globalErrorHandler", () => {
     });
 
     it("keeps body-parser's 400 for malformed JSON", async () => {
-      const res = await request(bodyParserApp()).post("/echo").set("Content-Type", "application/json").send("{bad json");
+      const res = await request(bodyParserApp())
+        .post("/echo")
+        .set("Content-Type", "application/json")
+        .send("{bad json");
 
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ code: ErrorCode.BAD_REQUEST });

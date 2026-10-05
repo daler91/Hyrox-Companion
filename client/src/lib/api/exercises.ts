@@ -44,7 +44,12 @@ function aiParseOptions(options?: ParseRequestOptions) {
 
 export const exercises = {
   parse: (text: string, options?: ParseRequestOptions) =>
-    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises", { text }, aiParseOptions(options)),
+    typedRequest<ParsedExercise[]>(
+      "POST",
+      "/api/v1/parse-exercises",
+      { text },
+      aiParseOptions(options),
+    ),
 
   parseStructured: (text: string, options?: ParseRequestOptions) =>
     typedRequest<ParseWorkoutStructureResponse>(

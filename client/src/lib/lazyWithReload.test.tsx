@@ -121,7 +121,10 @@ describe("isChunkLoadError", () => {
   it.each([
     ["the wrapper's own error", new ChunkLoadError(STALE_CHUNK_ERROR)],
     ["Chromium", STALE_CHUNK_ERROR],
-    ["Firefox", new TypeError("error loading dynamically imported module: https://app.example/assets/a.js")],
+    [
+      "Firefox",
+      new TypeError("error loading dynamically imported module: https://app.example/assets/a.js"),
+    ],
     ["Safari", new TypeError("Importing a module script failed.")],
     ["Vite's CSS preload", new Error("Unable to preload CSS for /assets/Analytics-0ld.css")],
   ])("recognises %s", (_name, error) => {
@@ -129,7 +132,9 @@ describe("isChunkLoadError", () => {
   });
 
   it("leaves ordinary render errors to the boundary's reset", () => {
-    expect(isChunkLoadError(new TypeError("Cannot read properties of undefined (reading 'map')"))).toBe(false);
+    expect(
+      isChunkLoadError(new TypeError("Cannot read properties of undefined (reading 'map')")),
+    ).toBe(false);
     expect(isChunkLoadError("Failed to fetch dynamically imported module")).toBe(false);
   });
 });

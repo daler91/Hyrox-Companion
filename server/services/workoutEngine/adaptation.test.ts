@@ -380,9 +380,9 @@ describe("adaptPlan — custom lifts (D14)", () => {
   });
 
   it("never adapts a custom set with no label to tell it apart", () => {
-    expect(adaptPlan(input({ upcoming: [customDay()], sets: stoneSets([5, 5, 4], null) })).days).toEqual(
-      [],
-    );
+    expect(
+      adaptPlan(input({ upcoming: [customDay()], sets: stoneSets([5, 5, 4], null) })).days,
+    ).toEqual([]);
   });
 });
 

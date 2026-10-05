@@ -95,7 +95,9 @@ function compareMetric(
  * someone who logs food on half their training days the comparison mostly
  * measured logged against unlogged days (C20 (CODEBASE_ANALYSIS_2026-10-03)).
  */
-function isEligibleDay(d: FuellingCorrelationDay): d is FuellingCorrelationDay & { carbTargetG: number } {
+function isEligibleDay(
+  d: FuellingCorrelationDay,
+): d is FuellingCorrelationDay & { carbTargetG: number } {
   return (
     d.calories > 0 &&
     d.carbTargetG != null &&

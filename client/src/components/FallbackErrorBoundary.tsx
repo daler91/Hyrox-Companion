@@ -38,11 +38,7 @@ export function FallbackErrorBoundary({ error, resetError }: Readonly<FallbackEr
               <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
               Try again
             </Button>
-            <Button
-              onClick={reloadPage}
-              variant="outline"
-              data-testid="button-refresh"
-            >
+            <Button onClick={reloadPage} variant="outline" data-testid="button-refresh">
               <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
               Refresh page
             </Button>

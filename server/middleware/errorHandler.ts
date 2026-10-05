@@ -122,7 +122,8 @@ export function globalErrorHandler(
   // 2mb for coaching materials). Rewrite to something actionable.
   if (reply.status === 413) {
     res.status(413).json({
-      error: "Request body too large for this endpoint — try a smaller payload or split the upload.",
+      error:
+        "Request body too large for this endpoint — try a smaller payload or split the upload.",
       code: ErrorCode.PAYLOAD_TOO_LARGE,
     });
     return;

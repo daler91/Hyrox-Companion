@@ -24,7 +24,10 @@ function renderCompletion(authUserQueryFn: () => Promise<unknown>) {
     },
   });
   return renderHook(
-    () => ({ onboardingCompleted: useIsOnboardingCompleted(), isAuthUserLoaded: useIsAuthUserLoaded() }),
+    () => ({
+      onboardingCompleted: useIsOnboardingCompleted(),
+      isAuthUserLoaded: useIsAuthUserLoaded(),
+    }),
     {
       wrapper: ({ children }: Readonly<{ children: React.ReactNode }>) => (
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -57,7 +60,9 @@ describe("useIsOnboardingCompleted", () => {
   });
 
   it.each([true, false])("reads %s from a loaded auth user", async (onboardingCompleted) => {
-    const { result } = renderCompletion(() => Promise.resolve({ id: "user-1", onboardingCompleted }));
+    const { result } = renderCompletion(() =>
+      Promise.resolve({ id: "user-1", onboardingCompleted }),
+    );
 
     await waitFor(() => {
       expect(result.current.onboardingCompleted).toBe(onboardingCompleted);

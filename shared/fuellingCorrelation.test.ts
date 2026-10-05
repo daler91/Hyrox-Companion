@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { analyzeFuellingCorrelation, type FuellingCorrelationDay } from "./fuellingCorrelation";
 
 function day(over: Partial<FuellingCorrelationDay> = {}): FuellingCorrelationDay {
-  return { calories: 2000, carbG: 300, carbTargetG: 300, avgRpe: null, compliancePct: null, ...over };
+  return {
+    calories: 2000,
+    carbG: 300,
+    carbTargetG: 300,
+    avgRpe: null,
+    compliancePct: null,
+    ...over,
+  };
 }
 
 // 3 hit + 3 miss days (vs a 300g target; hit = ≥270g) with RPE + compliance.

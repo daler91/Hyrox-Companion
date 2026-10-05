@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
     generateJsonText: vi.fn(),
     insertValues,
     tx,
-    transaction: vi.fn(<T,>(fn: (tx: unknown) => Promise<T>) => fn(tx)),
+    transaction: vi.fn(<T>(fn: (tx: unknown) => Promise<T>) => fn(tx)),
     plans: {
       createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
@@ -127,8 +127,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.insertValues.mockResolvedValue(undefined);
   mocks.tx.insert.mockReturnValue({ values: mocks.insertValues });
-  mocks.transaction.mockImplementation(<T,>(fn: (tx: unknown) => Promise<T>) => fn(mocks.tx));
-  mocks.plans.createTrainingPlan.mockResolvedValue({ id: "plan-1", name: "AI Plan", totalWeeks: 2 });
+  mocks.transaction.mockImplementation(<T>(fn: (tx: unknown) => Promise<T>) => fn(mocks.tx));
+  mocks.plans.createTrainingPlan.mockResolvedValue({
+    id: "plan-1",
+    name: "AI Plan",
+    totalWeeks: 2,
+  });
   mocks.plans.schedulePlan.mockResolvedValue("scheduled");
   mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
   mocks.plans.retirePlans.mockResolvedValue([]);

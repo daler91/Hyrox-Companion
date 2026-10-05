@@ -24,7 +24,12 @@ describe("AnalyticsStorage.getPlanDaysByDateRange (real Postgres)", () => {
       .from(trainingPlans)
       .where(eq(trainingPlans.userId, ATHLETE));
     if (plans.length > 0) {
-      await db.delete(planDays).where(inArray(planDays.planId, plans.map((plan) => plan.id)));
+      await db.delete(planDays).where(
+        inArray(
+          planDays.planId,
+          plans.map((plan) => plan.id),
+        ),
+      );
       await db.delete(trainingPlans).where(eq(trainingPlans.userId, ATHLETE));
     }
     await db.delete(users).where(eq(users.id, ATHLETE));
@@ -47,17 +52,61 @@ describe("AnalyticsStorage.getPlanDaysByDateRange (real Postgres)", () => {
       .returning();
     const [live] = await db
       .insert(trainingPlans)
-      .values({ userId: ATHLETE, name: "New block", totalWeeks: 4, startDate: "2026-06-11", endDate: "2026-07-05" })
+      .values({
+        userId: ATHLETE,
+        name: "New block",
+        totalWeeks: 4,
+        startDate: "2026-06-11",
+        endDate: "2026-07-05",
+      })
       .returning();
     const day = { weekNumber: 4, focus: "Run", mainWorkout: "Easy" };
     await db.insert(planDays).values([
-      { ...day, planId: retired.id, dayName: "Monday", scheduledDate: "2026-06-08", status: "completed" },
-      { ...day, planId: retired.id, dayName: "Wednesday", scheduledDate: "2026-06-10", status: "missed" },
+      {
+        ...day,
+        planId: retired.id,
+        dayName: "Monday",
+        scheduledDate: "2026-06-08",
+        status: "completed",
+      },
+      {
+        ...day,
+        planId: retired.id,
+        dayName: "Wednesday",
+        scheduledDate: "2026-06-10",
+        status: "missed",
+      },
       // From the cutoff on: left `planned` by design, outside the plan's lifetime.
-      { ...day, planId: retired.id, dayName: "Thursday", scheduledDate: "2026-06-11", status: "planned" },
-      { ...day, planId: retired.id, dayName: "Saturday", scheduledDate: "2026-06-13", status: "planned" },
-      { ...day, planId: live.id, weekNumber: 1, dayName: "Thursday", scheduledDate: "2026-06-11", status: "completed" },
-      { ...day, planId: live.id, weekNumber: 1, dayName: "Saturday", scheduledDate: "2026-06-13", status: "planned" },
+      {
+        ...day,
+        planId: retired.id,
+        dayName: "Thursday",
+        scheduledDate: "2026-06-11",
+        status: "planned",
+      },
+      {
+        ...day,
+        planId: retired.id,
+        dayName: "Saturday",
+        scheduledDate: "2026-06-13",
+        status: "planned",
+      },
+      {
+        ...day,
+        planId: live.id,
+        weekNumber: 1,
+        dayName: "Thursday",
+        scheduledDate: "2026-06-11",
+        status: "completed",
+      },
+      {
+        ...day,
+        planId: live.id,
+        weekNumber: 1,
+        dayName: "Saturday",
+        scheduledDate: "2026-06-13",
+        status: "planned",
+      },
     ]);
   });
 
@@ -66,10 +115,16 @@ describe("AnalyticsStorage.getPlanDaysByDateRange (real Postgres)", () => {
   });
 
   it("returns the retired plan's days before its cutoff and none after", async () => {
-    const days = await storage.analytics.getPlanDaysByDateRange(ATHLETE, "2026-06-08", "2026-06-14");
+    const days = await storage.analytics.getPlanDaysByDateRange(
+      ATHLETE,
+      "2026-06-08",
+      "2026-06-14",
+    );
 
     expect(
-      days.map((d) => `${d.planName ?? ""} ${d.date} ${d.status}`).sort((a, b) => a.localeCompare(b)),
+      days
+        .map((d) => `${d.planName ?? ""} ${d.date} ${d.status}`)
+        .sort((a, b) => a.localeCompare(b)),
     ).toEqual([
       "New block 2026-06-11 completed",
       "New block 2026-06-13 planned",

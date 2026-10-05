@@ -166,7 +166,10 @@ describe("idempotencyMiddleware", () => {
   });
 
   it("persists the response body after the handler runs on a fresh claim", async () => {
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "new-key" });
     const { res } = makeRes();
@@ -195,7 +198,10 @@ describe("idempotencyMiddleware", () => {
     // Buffer.byteLength(undefined) rejections, which would otherwise turn a
     // successful 2xx into a crashed response path and leak the
     // idempotency key so retries re-execute the write (Codex review of #877).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "empty" });
     const { res } = makeRes();
@@ -217,7 +223,10 @@ describe("idempotencyMiddleware", () => {
     // Even for oversized responses we still need to lock the idempotency
     // key so a retry doesn't re-execute the mutation. Only the full
     // payload is discarded — the key is always recorded (Codex P1).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "huge" });
     const { res } = makeRes();
@@ -239,7 +248,10 @@ describe("idempotencyMiddleware", () => {
   it("releases the claim instead of caching a non-2xx response", async () => {
     // A transient 5xx/404 must not pin the key — releasing the claim lets a
     // retry with the same key re-execute the handler (S10 semantics).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "will-fail" });
     const { res } = makeRes();
@@ -252,7 +264,11 @@ describe("idempotencyMiddleware", () => {
     await flushMicrotasks();
     expect(mockStorage.idempotency.complete).not.toHaveBeenCalled();
     expect(mockStorage.idempotency.release).toHaveBeenCalledOnce();
-    expect(mockStorage.idempotency.release).toHaveBeenCalledWith("user-1", "will-fail", CLAIM_TOKEN);
+    expect(mockStorage.idempotency.release).toHaveBeenCalledWith(
+      "user-1",
+      "will-fail",
+      CLAIM_TOKEN,
+    );
   });
 
   it("releases the claim when the response finishes without going through res.json", async () => {
@@ -260,7 +276,10 @@ describe("idempotencyMiddleware", () => {
     // redirect, or a streamed response never hits the patched res.json. The
     // 'finish' listener must release the claim so it doesn't pin retries (a
     // client disconnect's 'close' no longer does; see the D8 tests).
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "streamed" });
     const { res, emit } = makeRes();
@@ -278,7 +297,10 @@ describe("idempotencyMiddleware", () => {
   it("does not double-finalize when res.json runs and finish fires afterward", async () => {
     // The `settled` guard makes the terminal action run exactly once: a 2xx
     // response completes the record, and the trailing finish event is a no-op.
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "settled-once" });
     const { res, emit } = makeRes();
@@ -298,7 +320,10 @@ describe("idempotencyMiddleware", () => {
   // claim while the handler kept running, so the offline queue's replay with
   // the same key ran POST /api/v1/workouts a second time.
   it("keeps the claim when the client disconnects while the handler is still running", async () => {
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "flaky-network" });
     const { res, emit } = makeRes();
@@ -314,7 +339,10 @@ describe("idempotencyMiddleware", () => {
 
   it("caches the result a handler sends after the client disconnected", async () => {
     // The replay then gets this stored result instead of a second execution.
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
 
     const req = makeReq("POST", { "x-idempotency-key": "flaky-network" });
     const { res, emit } = makeRes();
@@ -337,7 +365,10 @@ describe("idempotencyMiddleware", () => {
   });
 
   it("logs, rather than throws, when the claim lapsed before the response", async () => {
-    mockStorage.idempotency.claim.mockResolvedValue({ outcome: "claimed", claimToken: CLAIM_TOKEN });
+    mockStorage.idempotency.claim.mockResolvedValue({
+      outcome: "claimed",
+      claimToken: CLAIM_TOKEN,
+    });
     mockStorage.idempotency.complete.mockResolvedValue(false);
 
     const req = makeReq("POST", { "x-idempotency-key": "slow" });

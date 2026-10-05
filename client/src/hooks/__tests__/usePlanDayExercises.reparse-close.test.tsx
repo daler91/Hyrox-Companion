@@ -13,7 +13,8 @@ import { usePlanDayExercises } from "../usePlanDayExercises";
 
 const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
-  getDayExercises: vi.fn<(dayId: string) => Promise<{ exerciseSets: ExerciseSet[]; structureBlocks: [] }>>(),
+  getDayExercises:
+    vi.fn<(dayId: string) => Promise<{ exerciseSets: ExerciseSet[]; structureBlocks: [] }>>(),
   reparseDay: vi.fn<(dayId: string) => Promise<ReparseResponse>>(),
 }));
 
@@ -27,7 +28,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     api: {
       ...actual.api,
-      plans: { ...actual.api.plans, getDayExercises: mocks.getDayExercises, reparseDay: mocks.reparseDay },
+      plans: {
+        ...actual.api.plans,
+        getDayExercises: mocks.getDayExercises,
+        reparseDay: mocks.reparseDay,
+      },
     },
   };
 });
@@ -44,7 +49,10 @@ describe("usePlanDayExercises reparse after the sheet closes (CL21)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     appQueryClient.clear();
-    mocks.getDayExercises.mockResolvedValueOnce({ exerciseSets: [preParseRow], structureBlocks: [] });
+    mocks.getDayExercises.mockResolvedValueOnce({
+      exerciseSets: [preParseRow],
+      structureBlocks: [],
+    });
     mocks.getDayExercises.mockResolvedValue({ exerciseSets: [parsedRow], structureBlocks: [] });
   });
 
@@ -83,7 +91,9 @@ describe("usePlanDayExercises reparse after the sheet closes (CL21)", () => {
     });
 
     await waitFor(() => {
-      expect(appQueryClient.getQueryState(QUERY_KEYS.planDayExercises(DAY_ID))?.isInvalidated).toBe(true);
+      expect(appQueryClient.getQueryState(QUERY_KEYS.planDayExercises(DAY_ID))?.isInvalidated).toBe(
+        true,
+      );
     });
 
     // Reopening inside the staleTime must show the parsed rows, not the
@@ -121,7 +131,9 @@ describe("usePlanDayExercises reparse after the sheet closes (CL21)", () => {
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(appQueryClient.getQueryState(QUERY_KEYS.planDayExercises(DAY_ID))?.isInvalidated).toBe(true);
+      expect(appQueryClient.getQueryState(QUERY_KEYS.planDayExercises(DAY_ID))?.isInvalidated).toBe(
+        true,
+      );
     });
   });
 });

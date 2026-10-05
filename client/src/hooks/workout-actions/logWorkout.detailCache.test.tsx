@@ -51,7 +51,15 @@ const emomBlock: StructureBlockInput = {
   sectionType: "main",
   formatType: "emom",
   durationMinutes: 10,
-  steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "wall_balls", targets: { targetReps: 12 } }],
+  steps: [
+    {
+      stepNumber: 1,
+      minuteIndex: 1,
+      stepType: "work",
+      exerciseName: "wall_balls",
+      targets: { targetReps: 12 },
+    },
+  ],
 };
 
 const loggedWorkout = {
@@ -83,11 +91,18 @@ describe("logWorkoutMutation primes the workout-detail cache (CL24)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: APP_STALE_TIME_MS }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false, staleTime: APP_STALE_TIME_MS },
+        mutations: { retry: false },
+      },
     });
     // POST /workouts answers without the detail read's structure fields.
     mocks.createWorkout.mockResolvedValue(loggedWorkout);
-    mocks.getWorkout.mockResolvedValue({ ...loggedWorkout, structureBlocks: [emomBlock], suggestedRpe: 7 });
+    mocks.getWorkout.mockResolvedValue({
+      ...loggedWorkout,
+      structureBlocks: [emomBlock],
+      suggestedRpe: 7,
+    });
   });
 
   it("refetches the full detail when the review sheet mounts after Log as planned", async () => {
@@ -99,12 +114,16 @@ describe("logWorkoutMutation primes the workout-detail cache (CL24)", () => {
 
     // The review sheet mounts on the primed entry (as useWorkoutDetail reads it).
     const detail = renderHook(
-      () => useQuery({ queryKey: QUERY_KEYS.workout("w-1"), queryFn: () => mocks.getWorkout("w-1") }),
+      () =>
+        useQuery({ queryKey: QUERY_KEYS.workout("w-1"), queryFn: () => mocks.getWorkout("w-1") }),
       { wrapper },
     );
 
     await waitFor(() => {
-      expect(detail.result.current.data).toMatchObject({ structureBlocks: [emomBlock], suggestedRpe: 7 });
+      expect(detail.result.current.data).toMatchObject({
+        structureBlocks: [emomBlock],
+        suggestedRpe: 7,
+      });
     });
     expect(mocks.getWorkout).toHaveBeenCalledWith("w-1");
   });
@@ -116,6 +135,9 @@ describe("logWorkoutMutation primes the workout-detail cache (CL24)", () => {
       await result.current.logWorkoutMutation.mutateAsync(logAsPlanned);
     });
 
-    expect(queryClient.getQueryData(QUERY_KEYS.workout("w-1"))).toMatchObject({ id: "w-1", exerciseSets: [] });
+    expect(queryClient.getQueryData(QUERY_KEYS.workout("w-1"))).toMatchObject({
+      id: "w-1",
+      exerciseSets: [],
+    });
   });
 });

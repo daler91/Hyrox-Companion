@@ -71,19 +71,22 @@ export function useSpeechRecognitionSession({
     setInterimTranscript(text);
   }, []);
 
-  const processFinalTranscript = useCallback((finalTranscript: string) => {
-    showInterim("");
-    const result = dedupeFinalTranscript(
-      finalTranscript,
-      recentEmissionsRef.current,
-      Date.now(),
-      VOICE_DEDUP_WINDOW_MS,
-    );
-    recentEmissionsRef.current = [...result.emissions];
-    if (result.textToEmit) {
-      onResultRef.current?.(result.textToEmit);
-    }
-  }, [showInterim]);
+  const processFinalTranscript = useCallback(
+    (finalTranscript: string) => {
+      showInterim("");
+      const result = dedupeFinalTranscript(
+        finalTranscript,
+        recentEmissionsRef.current,
+        Date.now(),
+        VOICE_DEDUP_WINDOW_MS,
+      );
+      recentEmissionsRef.current = [...result.emissions];
+      if (result.textToEmit) {
+        onResultRef.current?.(result.textToEmit);
+      }
+    },
+    [showInterim],
+  );
 
   // Ends the stop phase once the stopped recogniser has ended or been cut off.
   // Nothing it sends afterwards is taken, words it showed but never finalised
@@ -239,25 +242,28 @@ export function useSpeechRecognitionSession({
   // "Continue to exercises" can wait for the complete text. A recogniser that
   // has not ended after STOP_RESULT_TIMEOUT_MS is cut off and the words on
   // screen are committed (CL30, CODEBASE_ANALYSIS_2026-10-03).
-  const stopListening = useCallback((onStopped?: () => void) => {
-    // A recogniser waiting out a retry delay has already ended.
-    const recognition = retryTimeoutRef.current === null ? recognitionRef.current : null;
-    stoppedByUserRef.current = true;
-    clearRetryTimeout();
-    retryCountRef.current = 0;
-    recognitionRef.current = null;
-    setIsListening(false);
-    if (recognition) {
-      stoppingRef.current = recognition;
-      stopTimeoutRef.current = setTimeout(cutOffStop, STOP_RESULT_TIMEOUT_MS);
-      recognition.stop();
-    } else if (!stoppingRef.current) {
-      showInterim("");
-    }
-    if (!onStopped) return;
-    if (stoppingRef.current) stopWaitersRef.current.push(onStopped);
-    else onStopped();
-  }, [clearRetryTimeout, cutOffStop, showInterim]);
+  const stopListening = useCallback(
+    (onStopped?: () => void) => {
+      // A recogniser waiting out a retry delay has already ended.
+      const recognition = retryTimeoutRef.current === null ? recognitionRef.current : null;
+      stoppedByUserRef.current = true;
+      clearRetryTimeout();
+      retryCountRef.current = 0;
+      recognitionRef.current = null;
+      setIsListening(false);
+      if (recognition) {
+        stoppingRef.current = recognition;
+        stopTimeoutRef.current = setTimeout(cutOffStop, STOP_RESULT_TIMEOUT_MS);
+        recognition.stop();
+      } else if (!stoppingRef.current) {
+        showInterim("");
+      }
+      if (!onStopped) return;
+      if (stoppingRef.current) stopWaitersRef.current.push(onStopped);
+      else onStopped();
+    },
+    [clearRetryTimeout, cutOffStop, showInterim],
+  );
 
   useEffect(() => {
     return () => {

@@ -115,8 +115,8 @@ export function FuellingCorrelationCard({
               />
             )}
             <p className="text-[11px] text-muted-foreground">
-              {result.eligibleDays} training days with food logged compared (carb target hit =
-              ≥{result.carbHitPct}% of that day&apos;s target). Association, not causation.
+              {result.eligibleDays} training days with food logged compared (carb target hit = ≥
+              {result.carbHitPct}% of that day&apos;s target). Association, not causation.
             </p>
           </div>
         ) : (

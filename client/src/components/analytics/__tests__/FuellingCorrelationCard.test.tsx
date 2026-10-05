@@ -55,7 +55,15 @@ describe("FuellingCorrelationCard", () => {
   it("leaves days with no food logged out of the comparison (C20)", () => {
     // Unlogged training days read 0 g of carbs; they used to count as misses.
     const unlogged = [7, 8, 9].map((d) =>
-      point({ date: `2026-06-0${d}`, calories: 0, carb: 0, protein: 0, fat: 0, fiber: 0, avgRpe: 9 }),
+      point({
+        date: `2026-06-0${d}`,
+        calories: 0,
+        carb: 0,
+        protein: 0,
+        fat: 0,
+        fiber: 0,
+        avgRpe: 9,
+      }),
     );
     render(<FuellingCorrelationCard points={[...POINTS, ...unlogged]} />);
 

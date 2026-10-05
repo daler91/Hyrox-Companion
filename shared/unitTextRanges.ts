@@ -15,7 +15,14 @@ export function isDigit(char: string | undefined): boolean {
 }
 
 export function isWhitespace(char: string | undefined): boolean {
-  return char === " " || char === "\t" || char === "\n" || char === "\r" || char === "\f" || char === "\v";
+  return (
+    char === " " ||
+    char === "\t" ||
+    char === "\n" ||
+    char === "\r" ||
+    char === "\f" ||
+    char === "\v"
+  );
 }
 
 export function isWordChar(char: string | undefined): boolean {
@@ -86,7 +93,9 @@ type RangeLowBound = NumberToken & { readonly start: number };
  * "Superset x 3" with a "- 20kg" bullet on the next line (C23, CODEBASE_ANALYSIS_2026-10-03).
  */
 function isInlineSpace(char: string): boolean {
-  return char === " " || char === "\t" || char === "\u00a0" || char === "\u2009" || char === "\u202f";
+  return (
+    char === " " || char === "\t" || char === "\u00a0" || char === "\u2009" || char === "\u202f"
+  );
 }
 
 function skipInlineSpaceBackward(text: string, end: number): number {
@@ -99,14 +108,23 @@ function skipInlineSpaceBackward(text: string, end: number): number {
 function isBulletDash(text: string, index: number): boolean {
   const lineStart = skipInlineSpaceBackward(text, index);
   const lineBreak = text.charAt(lineStart - 1);
-  return (lineStart === 0 || lineBreak === "\n" || lineBreak === "\r") && isInlineSpace(text.charAt(index + 1));
+  return (
+    (lineStart === 0 || lineBreak === "\n" || lineBreak === "\r") &&
+    isInlineSpace(text.charAt(index + 1))
+  );
 }
 
 /** Where the dash, or the spaced "to", that ends at `separatorEnd` starts; null if neither does. */
-function findRangeSeparatorStart(lowerText: string, separatorEnd: number, numberStart: number): number | null {
+function findRangeSeparatorStart(
+  lowerText: string,
+  separatorEnd: number,
+  numberStart: number,
+): number | null {
   if (RANGE_SEPARATORS.has(lowerText.charAt(separatorEnd - 1))) return separatorEnd - 1;
   const spaced = separatorEnd < numberStart && isInlineSpace(lowerText.charAt(separatorEnd - 3));
-  return spaced && lowerText.slice(separatorEnd - 2, separatorEnd) === "to" ? separatorEnd - 2 : null;
+  return spaced && lowerText.slice(separatorEnd - 2, separatorEnd) === "to"
+    ? separatorEnd - 2
+    : null;
 }
 
 /**
@@ -267,7 +285,8 @@ export function findRangeLowBound(
   // reads 80 and a partial match like ".5-90kg" is declined.
   if (low?.end !== lowEnd) return null;
   // A tight dash ("80-90kg") is a range as it stands; a spaced pair has to pass the guard.
-  if (lowEnd + 1 !== numberStart && !isSpacedRangeLowBound(text, lowStart, low.value, high)) return null;
+  if (lowEnd + 1 !== numberStart && !isSpacedRangeLowBound(text, lowStart, low.value, high))
+    return null;
   return { value: low.value, start: lowStart, end: lowEnd };
 }
 
@@ -278,7 +297,12 @@ export function findRangeLowBound(
  * and "Dips 3 x 10 -10kg" are sets x reps then an assisted load, which
  * converts as the negative it is (C23, CODEBASE_ANALYSIS_2026-10-03).
  */
-export function isAmbiguousNegativeLoad(text: string, lowerText: string, numberStart: number, value: number): boolean {
+export function isAmbiguousNegativeLoad(
+  text: string,
+  lowerText: string,
+  numberStart: number,
+  value: number,
+): boolean {
   return value < 0 && findRangeLowBound(text, lowerText, numberStart + 1, -value) !== null;
 }
 

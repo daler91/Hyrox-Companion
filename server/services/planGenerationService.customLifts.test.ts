@@ -67,13 +67,23 @@ describe("the overload warning and custom lifts (D14)", () => {
   // The label is model-written free text that can echo the athlete's injuries,
   // so the warning keeps only that the lift was custom.
   it("logs a custom lift as the bare 'custom', never its label", () => {
-    const days = [customDay(1, "Knee-friendly Yoke Carry", 100), customDay(2, "Knee-friendly Yoke Carry", 150)];
+    const days = [
+      customDay(1, "Knee-friendly Yoke Carry", 100),
+      customDay(2, "Knee-friendly Yoke Carry", 150),
+    ];
     const violations = findProgressiveOverloadViolations(days);
     expect(violations[0]?.exerciseName).toBe("custom:Knee-friendly Yoke Carry");
 
     const logged = overloadViolationLogEntries([
       ...violations,
-      { exerciseName: "back_squat", fromWeek: 1, toWeek: 2, fromWeight: 100, toWeight: 140, increasePct: 40 },
+      {
+        exerciseName: "back_squat",
+        fromWeek: 1,
+        toWeek: 2,
+        fromWeight: 100,
+        toWeight: 140,
+        increasePct: 40,
+      },
     ]);
 
     expect(logged).toEqual([

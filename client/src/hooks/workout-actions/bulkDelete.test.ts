@@ -4,7 +4,14 @@ import { describe, expect, it } from "vitest";
 import { buildBulkDeleteWorkoutTargets } from "./bulkDelete";
 
 function makeEntry(overrides: Partial<TimelineEntry>): TimelineEntry {
-  return { id: "1", date: "2026-01-01", status: "planned", planDayId: null, workoutLogId: null, ...overrides } as TimelineEntry;
+  return {
+    id: "1",
+    date: "2026-01-01",
+    status: "planned",
+    planDayId: null,
+    workoutLogId: null,
+    ...overrides,
+  } as TimelineEntry;
 }
 
 describe("buildBulkDeleteWorkoutTargets", () => {
@@ -14,7 +21,12 @@ describe("buildBulkDeleteWorkoutTargets", () => {
   // single delete, and the server re-syncs the plan day to planned or missed.
   // CL23 (CODEBASE_ANALYSIS_2026-10-03)
   it("deletes the log of a completed planned session, not its plan day", () => {
-    const completedPlanned = makeEntry({ id: "pd-1", status: "completed", planDayId: "pd-1", workoutLogId: "wl-1" });
+    const completedPlanned = makeEntry({
+      id: "pd-1",
+      status: "completed",
+      planDayId: "pd-1",
+      workoutLogId: "wl-1",
+    });
 
     expect(buildBulkDeleteWorkoutTargets([completedPlanned])).toEqual({
       workoutLogIds: ["wl-1"],
@@ -36,9 +48,16 @@ describe("buildBulkDeleteWorkoutTargets", () => {
   it("splits a mixed selection and sends each id once", () => {
     const unplanned = makeEntry({ id: "wl-1", status: "completed", workoutLogId: "wl-1" });
     const planned = makeEntry({ id: "pd-1", status: "planned", planDayId: "pd-1" });
-    const completedPlanned = makeEntry({ id: "pd-2", status: "completed", planDayId: "pd-2", workoutLogId: "wl-2" });
+    const completedPlanned = makeEntry({
+      id: "pd-2",
+      status: "completed",
+      planDayId: "pd-2",
+      workoutLogId: "wl-2",
+    });
 
-    expect(buildBulkDeleteWorkoutTargets([unplanned, planned, completedPlanned, unplanned])).toEqual({
+    expect(
+      buildBulkDeleteWorkoutTargets([unplanned, planned, completedPlanned, unplanned]),
+    ).toEqual({
       workoutLogIds: ["wl-1", "wl-2"],
       planDayIds: ["pd-1"],
     });

@@ -13,7 +13,11 @@ type LayoutProps = ComponentProps<typeof LogWorkoutStepperLayout>;
 // The steps are stubbed down to the controls this spec drives; the voice
 // session, the form state and the stepper's Continue logic are real.
 vi.mock("../steps/CaptureStep", () => ({
-  CaptureStep: (props: { toggleListening: () => void; onContinue: () => void; isListening: boolean }) => (
+  CaptureStep: (props: {
+    toggleListening: () => void;
+    onContinue: () => void;
+    isListening: boolean;
+  }) => (
     <div data-testid="capture-step">
       <button type="button" onClick={props.toggleListening}>
         {props.isListening ? "Stop dictation" : "Dictate"}
@@ -53,7 +57,9 @@ class FakeRecognition {
 
   /** One result event carrying these results; a no-op once the session detached it. */
   hear(...heard: Heard[]) {
-    const results = heard.map((h) => Object.assign([{ transcript: h.transcript }], { isFinal: h.isFinal }));
+    const results = heard.map((h) =>
+      Object.assign([{ transcript: h.transcript }], { isFinal: h.isFinal }),
+    );
     act(() => {
       this.onresult?.({ resultIndex: 0, results } as unknown as SpeechRecognitionEvent);
     });

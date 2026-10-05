@@ -11,7 +11,9 @@ const resetError = vi.fn();
 const originalLocation = globalThis.location;
 
 const chunkError = new ChunkLoadError(
-  new TypeError("Failed to fetch dynamically imported module: https://app.example/assets/Analytics-0ld.js"),
+  new TypeError(
+    "Failed to fetch dynamically imported module: https://app.example/assets/Analytics-0ld.js",
+  ),
 );
 const renderError = new TypeError("Cannot read properties of undefined (reading 'map')");
 
@@ -29,7 +31,9 @@ describe("error boundary Try again (CL3)", () => {
   });
 
   it("reloads the page for a failed route chunk in a feature boundary", () => {
-    render(<FeatureErrorBoundary error={chunkError} resetError={resetError} featureName="Analytics" />);
+    render(
+      <FeatureErrorBoundary error={chunkError} resetError={resetError} featureName="Analytics" />,
+    );
     expect(screen.getByText("Tap Try again to reload the page.")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("button-feature-retry"));
     expect(reload).toHaveBeenCalledTimes(1);
@@ -37,7 +41,9 @@ describe("error boundary Try again (CL3)", () => {
   });
 
   it("resets a feature boundary for an ordinary render error", () => {
-    render(<FeatureErrorBoundary error={renderError} resetError={resetError} featureName="Analytics" />);
+    render(
+      <FeatureErrorBoundary error={renderError} resetError={resetError} featureName="Analytics" />,
+    );
     expect(screen.getByText("Tap Try again to reload this section.")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("button-feature-retry"));
     expect(resetError).toHaveBeenCalledTimes(1);

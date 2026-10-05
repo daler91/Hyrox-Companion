@@ -29,7 +29,9 @@ class FakeRecognition {
 
   /** One result event carrying these results; a no-op once the session detached it. */
   hear(...heard: Heard[]) {
-    const results = heard.map((h) => Object.assign([{ transcript: h.transcript }], { isFinal: h.isFinal }));
+    const results = heard.map((h) =>
+      Object.assign([{ transcript: h.transcript }], { isFinal: h.isFinal }),
+    );
     act(() => {
       this.onresult?.({ resultIndex: 0, results } as unknown as SpeechRecognitionEvent);
     });
