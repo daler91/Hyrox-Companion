@@ -1,4 +1,3 @@
-import type { Virtualizer } from "@tanstack/react-virtual";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
@@ -41,10 +40,10 @@ function renderContent(overrides: Partial<Props> = {}) {
     showAllFuture: false,
     futureGroups: [],
     allVisibleGroups: [],
-    rowVirtualizer: { getVirtualItems: () => [], getTotalSize: () => 0 } as unknown as Virtualizer<
-      HTMLDivElement,
-      Element
-    >,
+    rowVirtualizer: {
+      getVirtualItems: () => [],
+      getTotalSize: () => 0,
+    } as unknown as Props["rowVirtualizer"],
     todayRef: { current: null },
     handleMarkComplete: vi.fn(),
     onCardClick: vi.fn(),

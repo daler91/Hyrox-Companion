@@ -62,6 +62,11 @@ function renderPanels(options: RenderOptions = {}) {
   };
 }
 
+/** Whether keyboard focus is somewhere inside `container`. */
+function holdsFocus(container: Element): boolean {
+  return container.contains(document.activeElement);
+}
+
 describe("TimelineCoachPanels mobile overlay (U4)", () => {
   it("is announced as a modal dialog named for the coach", () => {
     renderPanels();
@@ -76,9 +81,7 @@ describe("TimelineCoachPanels mobile overlay (U4)", () => {
     renderPanels();
 
     await waitFor(() => {
-      expect(screen.getByRole("dialog", { name: "AI Coach" })).toContainElement(
-        document.activeElement as HTMLElement,
-      );
+      expect(holdsFocus(screen.getByRole("dialog", { name: "AI Coach" }))).toBe(true);
     });
   });
 
@@ -87,12 +90,12 @@ describe("TimelineCoachPanels mobile overlay (U4)", () => {
     renderPanels();
     const dialog = screen.getByRole("dialog", { name: "AI Coach" });
     await waitFor(() => {
-      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      expect(holdsFocus(dialog)).toBe(true);
     });
 
     for (let i = 0; i < 4; i += 1) {
       await user.tab();
-      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      expect(holdsFocus(dialog)).toBe(true);
     }
   });
 
@@ -106,9 +109,7 @@ describe("TimelineCoachPanels mobile overlay (U4)", () => {
     const user = userEvent.setup();
     const { onCoachClose } = renderPanels();
     await waitFor(() => {
-      expect(screen.getByRole("dialog", { name: "AI Coach" })).toContainElement(
-        document.activeElement as HTMLElement,
-      );
+      expect(holdsFocus(screen.getByRole("dialog", { name: "AI Coach" }))).toBe(true);
     });
 
     await user.keyboard("{Escape}");
@@ -121,9 +122,7 @@ describe("TimelineCoachPanels mobile overlay (U4)", () => {
     try {
       const { rerenderWith, returnFocusRef } = renderPanels();
       await waitFor(() => {
-        expect(screen.getByRole("dialog", { name: "AI Coach" })).toContainElement(
-          document.activeElement as HTMLElement,
-        );
+        expect(holdsFocus(screen.getByRole("dialog", { name: "AI Coach" }))).toBe(true);
       });
 
       rerenderWith({ coachOpen: false });

@@ -13,7 +13,7 @@ const { passThrough, transformIndexHtml } = vi.hoisted(() => ({
   passThrough: (_req: unknown, _res: unknown, next: () => void) => {
     next();
   },
-  transformIndexHtml: (_url: string, html: string) => Promise.resolve(html),
+  transformIndexHtml: (_url: string, template: string) => Promise.resolve(template),
 }));
 
 vi.mock("vite", () => ({
