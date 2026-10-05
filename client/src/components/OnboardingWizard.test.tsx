@@ -2,7 +2,8 @@ import { nextPlanStartDate } from "@shared/dateUtils";
 import type { QueryClient } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { format } from "date-fns";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Ref } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
@@ -45,26 +46,41 @@ vi.mock("@/components/onboarding/UnitsStep", () => ({
     </div>
   ),
 }));
-vi.mock("@/components/onboarding/GoalStep", () => ({
+// The real raceDateError stays: the wizard checks the race date with the
+// step's own rule on Continue (CL9).
+vi.mock("@/components/onboarding/GoalStep", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/onboarding/GoalStep")>()),
   GoalStep: ({
     selectedGoal,
     onGoalChange,
     trainingStyleId,
     onRaceDateChange,
+    minRaceDate,
+    raceDateInputRef,
   }: {
     selectedGoal: string;
     onGoalChange: (goal: string) => void;
     trainingStyleId: string;
     onRaceDateChange?: (value: string) => void;
+    minRaceDate?: string;
+    raceDateInputRef?: Ref<HTMLInputElement>;
   }) => (
     <div data-testid="goal-step">
       <div data-testid="text-selected-goal">{selectedGoal}</div>
       <div data-testid="text-training-style">{trainingStyleId}</div>
+      <div data-testid="text-min-race-date">{minRaceDate}</div>
+      <input aria-label="Race date" ref={raceDateInputRef} readOnly />
       <button type="button" onClick={() => onGoalChange("endurance")}>
         Choose endurance
       </button>
       <button type="button" onClick={() => onRaceDateChange?.("2026-11-15")}>
         Set race date
+      </button>
+      <button type="button" onClick={() => onRaceDateChange?.("2025-11-15")}>
+        Set past race date
+      </button>
+      <button type="button" onClick={() => onRaceDateChange?.("2026-10-04")}>
+        Set race today
       </button>
     </div>
   ),
@@ -144,6 +160,14 @@ describe("OnboardingWizard Error Handling", () => {
 
   beforeEach(() => {
     queryClient = resetOnboardingWizardMocks(mockToast);
+    // Today is 4 October 2026 here: Continue checks the race date against
+    // today (CL9), so 2026-11-15 must stay ahead whenever the suite runs.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 4, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const renderComponent = () => renderOnboardingWizard(queryClient, mockOnComplete);
@@ -247,6 +271,65 @@ describe("OnboardingWizard Error Handling", () => {
 
     expect(await screen.findByTestId("text-generate-race-date")).toHaveTextContent("2026-11-15");
     expect(screen.getByTestId("text-generate-goal")).toHaveTextContent("racing on 2026-11-15");
+  });
+
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03): a typed past race date (a mistyped
+  // year) made every day of a template plan post-race recovery.
+  it("holds the Goal step while the race date has passed", async () => {
+    renderComponent();
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+
+    fireEvent.click(screen.getByText("Set past race date"));
+    fireEvent.click(screen.getByText("Continue"));
+    await waitFor(() => {
+      expect(screen.getByTestId("goal-step")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Meet Your AI Coach")).not.toBeInTheDocument();
+    // Focus lands on what holds the step.
+    expect(screen.getByLabelText("Race date")).toHaveFocus();
+
+    fireEvent.click(screen.getByText("Set race date"));
+    fireEvent.click(screen.getByText("Continue"));
+    expect(await screen.findByText("Meet Your AI Coach")).toBeInTheDocument();
+  });
+
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03): a race typed for today just before
+  // midnight is past once Continue is pressed after it.
+  it("checks the race date against today as it is when Continue is pressed", async () => {
+    renderComponent();
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    expect(screen.getByTestId("text-min-race-date")).toHaveTextContent("2026-10-04");
+
+    fireEvent.click(screen.getByText("Set race today"));
+    vi.setSystemTime(new Date(2026, 9, 5, 0, 1));
+    fireEvent.click(screen.getByText("Continue"));
+
+    // The step is told the new today, so it names the date as past.
+    await waitFor(() => {
+      expect(screen.getByTestId("text-min-race-date")).toHaveTextContent("2026-10-05");
+    });
+    expect(screen.getByLabelText("Race date")).toHaveFocus();
+    expect(screen.queryByText("Meet Your AI Coach")).not.toBeInTheDocument();
+  });
+
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03): the wizard stays mounted while hidden,
+  // so the today it read on mount went stale overnight.
+  it("tells the Goal step today's date as of reaching it", async () => {
+    vi.setSystemTime(new Date(2026, 9, 4, 23, 59));
+    renderComponent();
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+
+    vi.setSystemTime(new Date(2026, 9, 5, 0, 1));
+    fireEvent.click(screen.getByText("Continue"));
+
+    expect(await screen.findByTestId("text-min-race-date")).toHaveTextContent("2026-10-05");
   });
 
   // Template users' goal used to be thrown away (audit M3).

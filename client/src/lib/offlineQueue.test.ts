@@ -189,8 +189,13 @@ describe("offlineQueue", () => {
     globalThis.removeEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
   });
 
-  it("counts a definitive rejection toward the retry limit", async () => {
-    vi.mocked(apiRequest).mockRejectedValueOnce(new Error('400: {"error":"Invalid body","code":"VALIDATION_ERROR"}'));
+  // A body that is not JSON (a proxy's page, a bare status text) is still the
+  // server's verdict (CL34, CODEBASE_ANALYSIS_2026-10-03).
+  it.each([
+    ["a validation error", new Error('400: {"error":"Invalid body","code":"VALIDATION_ERROR"}')],
+    ["a body that is not JSON", new Error("413: Payload Too Large")],
+  ])("counts a definitive rejection, %s, toward the retry limit", async (_label, error) => {
+    vi.mocked(apiRequest).mockRejectedValueOnce(error);
 
     enqueueMutation("POST", "/api/v1/workouts", { title: "Queued" }, { id: "retry-id" });
     const result = await flushQueue();

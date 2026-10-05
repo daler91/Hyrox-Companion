@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSessionGrades } from "@/hooks/useSessionGrades";
 import { QUERY_KEYS } from "@/lib/api";
+import { queryLoadState } from "@/lib/queryLoadState";
 import { getPurposeLabel } from "@/lib/sessionGradeFormat";
 import { cn } from "@/lib/utils";
 import { formatDayLabel } from "@/lib/weekDates";
@@ -141,16 +142,21 @@ function EmptyState({ children }: Readonly<{ children: React.ReactNode }>) {
  */
 export function SessionGradesTab() {
   const [planChoice, setPlanChoice] = useState(ACTIVE_PLAN);
-  const { data, isLoading, isError } = useSessionGrades(planChoice === ACTIVE_PLAN ? undefined : planChoice);
+  const query = useSessionGrades(planChoice === ACTIVE_PLAN ? undefined : planChoice);
+  const { data } = query;
 
   let body: React.ReactNode;
-  if (isLoading) {
+  // A first fetch paused offline is still loading: it is not `isLoading`, and
+  // fell through to "Couldn't load" before anything had failed. Once grades
+  // have loaded they stay up through a failed refresh.
+  // U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (queryLoadState(query).loading) {
     body = (
       <div className="flex justify-center py-12" data-testid="session-grades-loading">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading session grades" />
       </div>
     );
-  } else if (isError || !data) {
+  } else if (!data) {
     body = <EmptyState>Couldn&apos;t load session grades. Try again in a moment.</EmptyState>;
   } else if (!data.plan) {
     body = <EmptyState>Start a training plan and each easy and threshold run will be graded against what it was for.</EmptyState>;

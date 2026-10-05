@@ -15,8 +15,23 @@ vi.mock("@/components/analytics/TrainingOverviewTab", () => ({
 }));
 // What a tab chunk a deploy removed does: its dynamic import rejects.
 vi.mock("@/components/analytics/CoachInsightsTab", () => {
-  throw new TypeError("Failed to fetch dynamically imported module: /assets/CoachInsightsTab-0ld.js");
+  throw new TypeError(
+    "Failed to fetch dynamically imported module: /assets/CoachInsightsTab-0ld.js",
+  );
 });
+// The range-scoped tabs take `dateParams`, which kept them on bare React.lazy
+// while lazyWithReload was typed for prop-less pages.
+vi.mock("@/components/analytics/CategoryBreakdownTab", () => {
+  throw new TypeError(
+    "Failed to fetch dynamically imported module: /assets/CategoryBreakdownTab-0ld.js",
+  );
+});
+vi.mock("@/components/analytics/FuellingTab", () => {
+  throw new TypeError("Failed to fetch dynamically imported module: /assets/FuellingTab-0ld.js");
+});
+vi.mock("@/lib/featureFlags", () => ({
+  featureFlags: { emomBuilderEnabled: false, nutritionEnabled: true },
+}));
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
@@ -64,11 +79,15 @@ describe("Analytics lazy tabs", () => {
     Object.defineProperty(globalThis, "location", { configurable: true, value: originalLocation });
   });
 
-  it("reloads the page when a tab's chunk is gone", async () => {
+  it.each([
+    ["Coach Insights", "tab-coach-insights"],
+    ["Breakdown", "tab-breakdown"],
+    ["Fuelling", "tab-fuelling"],
+  ])("reloads the page when the %s tab's chunk is gone", async (_name, tabTestId) => {
     const user = userEvent.setup();
     renderAnalytics();
 
-    await user.click(screen.getByTestId("tab-coach-insights"));
+    await user.click(screen.getByTestId(tabTestId));
 
     await waitFor(() => {
       expect(reload).toHaveBeenCalledTimes(1);

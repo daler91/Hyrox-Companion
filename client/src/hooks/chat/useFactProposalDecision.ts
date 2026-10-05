@@ -3,6 +3,7 @@ import { type RefObject, useCallback } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import type { Message } from "@/lib/chatMessage";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
 
@@ -11,9 +12,9 @@ import { FEEDBACK_RETRY_MS } from "./useMessageFeedback";
 
 export type FactProposalDecision = "save" | "dismiss";
 
-/** apiRequest throws `${status}: ${body}`. */
+/** A 404 from apiRequest, as parseApiError reads it (CL34, CODEBASE_ANALYSIS_2026-10-03). */
 function isNotFound(error: unknown): boolean {
-  return error instanceof Error && error.message.startsWith("404");
+  return parseApiError(error)?.status === 404;
 }
 
 /**

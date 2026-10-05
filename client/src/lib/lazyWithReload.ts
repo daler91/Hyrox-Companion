@@ -1,15 +1,16 @@
-import { type ComponentType, lazy, type LazyExoticComponent } from "react";
+import { lazy, type LazyExoticComponent } from "react";
 
 import { setStorageItem, tryGetStorageItem } from "@/lib/safeStorage";
 
 /**
  * Recovery for a route chunk that no longer exists. After a deploy, a tab
  * still running the previous build asks for `/assets/<old-hash>.js`; the
- * server answers with index.html and the import rejects. React caches a
- * rejected lazy import, so the error boundary's "Try again" re-threw the same
- * error until the athlete reloaded by hand. First-session tabs, hard reloads
- * and mixed-replica rollouts all hit it, because the service worker covers
- * none of them. CL3 (CODEBASE_ANALYSIS_2026-10-03)
+ * server answers 404 (C38) and the import rejects with "Failed to fetch
+ * dynamically imported module", which CHUNK_ERROR_MESSAGE matches. React
+ * caches a rejected lazy import, so the error boundary's "Try again"
+ * re-threw the same error until the athlete reloaded by hand. First-session
+ * tabs, hard reloads and mixed-replica rollouts all hit it, because the
+ * service worker covers none of them. CL3 (CODEBASE_ANALYSIS_2026-10-03)
  */
 
 const CHUNK_RELOAD_AT_KEY = "fitai-chunk-reload-at";
@@ -70,16 +71,25 @@ function waitForReload(): Promise<never> {
 }
 
 /**
+ * The component type `React.lazy` accepts, read from its own signature so the
+ * bound is React's (`ComponentType<any>`) without an explicit `any`.
+ */
+type LazyComponent = Awaited<ReturnType<Parameters<typeof lazy>[0]>>["default"];
+
+/**
  * `React.lazy` for a route: a chunk that fails to load reloads the page once
  * to pick up the current build; if that is not possible, it rejects with a
  * ChunkLoadError so the error boundary's "Try again" can reload instead.
  * Any rejected import is treated this way, not only a missing chunk: React
  * cannot retry a page whose module threw while loading either, and the
  * window bounds that case to one reload before the boundary shows it.
+ * Generic over the component, as `React.lazy` is, so it keeps the props: a
+ * lazy tab that takes them (the Analytics range-scoped tabs) goes through it
+ * too. CL3 (CODEBASE_ANALYSIS_2026-10-03)
  */
-export function lazyWithReload(
-  load: () => Promise<{ default: ComponentType }>,
-): LazyExoticComponent<ComponentType> {
+export function lazyWithReload<T extends LazyComponent>(
+  load: () => Promise<{ default: T }>,
+): LazyExoticComponent<T> {
   return lazy(() =>
     load().catch((error: unknown) => {
       if (reloadOnceForStaleChunk()) return waitForReload();

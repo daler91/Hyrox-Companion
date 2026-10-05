@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { api, QUERY_KEYS } from "@/lib/api";
+import { api, type ChatHistoryMessage, QUERY_KEYS } from "@/lib/api";
 
 export function useSaveMessageMutation() {
   const queryClient = useQueryClient();
@@ -26,6 +26,10 @@ export function useClearHistoryMutation(onSuccessCallback?: () => void) {
   return useMutation({
     mutationFn: () => api.chat.clearHistory(),
     onSuccess: () => {
+      // The server deleted every thread, so empty each cached one before the
+      // refetch: hydration reads the cache, and the old history it still held
+      // put every cleared message back. CL17 (CODEBASE_ANALYSIS_2026-10-03)
+      queryClient.setQueriesData<ChatHistoryMessage[]>({ queryKey: QUERY_KEYS.chatHistory }, []);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.chatHistory }).catch(() => {});
       if (onSuccessCallback) {
         onSuccessCallback();

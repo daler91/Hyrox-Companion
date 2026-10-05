@@ -1,10 +1,11 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CategoryBreakdownTab } from "../CategoryBreakdownTab";
+import { CoachInsightsTab } from "../CoachInsightsTab";
 import { ExerciseProgressionTab } from "../ExerciseProgressionTab";
 import { FuellingTab } from "../FuellingTab";
 import { MafTrendTab } from "../MafTrendTab";
@@ -18,7 +19,9 @@ const api = vi.hoisted(() => ({
   listMafTests: vi.fn(),
   getBlock: vi.fn(),
   listAnnotations: vi.fn(),
+  getStoredCoachInsights: vi.fn(),
 }));
+const auth = vi.hoisted(() => ({ user: null as { id: string } | null }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -35,11 +38,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
       mafTests: { ...actual.api.mafTests, list: api.listMafTests },
       nutrition: { ...actual.api.nutrition, getBlock: api.getBlock },
       timelineAnnotations: { ...actual.api.timelineAnnotations, list: api.listAnnotations },
+      chat: { ...actual.api.chat, getStoredCoachInsights: api.getStoredCoachInsights },
     },
   };
 });
 
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: null }) }));
+vi.mock("@/hooks/useAuth", () => ({ useAuth: () => auth }));
 
 vi.mock("../training-overview/useOverviewAnalysis", () => ({
   useOverviewAnalysis: () => ({
@@ -118,6 +122,11 @@ describe("analytics tabs on a failed fetch (U5)", () => {
     api.listMafTests.mockRejectedValue(SERVER_ERROR);
     api.getBlock.mockRejectedValue(SERVER_ERROR);
     api.listAnnotations.mockResolvedValue([]);
+    auth.user = null;
+  });
+
+  afterEach(() => {
+    onlineManager.setOnline(true);
   });
 
   it.each(TABS)("shows an error with a retry, not the empty state, for $name", async (tab) => {
@@ -132,6 +141,66 @@ describe("analytics tabs on a failed fetch (U5)", () => {
     await waitFor(() => {
       expect(tab.fetcher.mock.calls.length).toBeGreaterThan(callsBefore);
     });
+  });
+
+  // A retry of a query with no data resets it to pending, so `isError` and
+  // `isRefetching` both read false while it runs: the card vanished for a
+  // spinner, or for the empty state, and its "Retrying…" never showed.
+  it.each(TABS)("keeps the error up, marked retrying, while a retry of $name runs", async (tab) => {
+    const user = userEvent.setup();
+    renderTab(tab.render());
+    const retry = await screen.findByTestId(`${tab.testId}-retry`);
+
+    tab.fetcher.mockReturnValue(
+      new Promise(() => {
+        // never settles
+      }),
+    );
+    await user.click(retry);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${tab.testId}-retry`)).toBeDisabled();
+    });
+    expect(screen.getByTestId(`${tab.testId}-retry`)).toHaveTextContent("Retrying…");
+    expect(screen.queryByText(tab.emptyText)).not.toBeInTheDocument();
+  });
+
+  // TanStack pauses rather than runs a fetch while the browser is offline: the
+  // query is pending but not `isLoading`, and not `isError` either, so every
+  // tab fell through to its "nothing logged yet" state.
+  it.each(TABS)(
+    "shows loading, not the empty state, while the first $name fetch waits offline",
+    async (tab) => {
+      onlineManager.setOnline(false);
+      renderTab(tab.render());
+
+      expect(await screen.findByRole("status")).toHaveTextContent("Loading");
+      expect(screen.queryByText(tab.emptyText)).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(tab.fetcher).not.toHaveBeenCalled();
+
+      act(() => {
+        onlineManager.setOnline(true);
+      });
+      expect(await screen.findByTestId(tab.testId)).toBeInTheDocument();
+    },
+  );
+
+  it("shows loading, not the Generate prompt, while the first coach insights fetch waits offline", async () => {
+    auth.user = { id: "user-1" };
+    api.getStoredCoachInsights.mockResolvedValue({ insights: "Keep building your aerobic base." });
+    onlineManager.setOnline(false);
+    renderTab(<CoachInsightsTab />);
+
+    expect(await screen.findByText(/Reviewing your workouts/)).toBeInTheDocument();
+    expect(screen.queryByText(/Generate a personalized analysis/)).not.toBeInTheDocument();
+
+    act(() => {
+      onlineManager.setOnline(true);
+    });
+    expect(await screen.findByTestId("text-coach-insights-content")).toHaveTextContent(
+      "Keep building your aerobic base.",
+    );
   });
 
   it("still shows the progression error when only the exercise analytics fetch failed", async () => {

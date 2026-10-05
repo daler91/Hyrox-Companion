@@ -71,6 +71,8 @@ describe("useFactProposalDecision", () => {
     const shown = toast.mock.calls.at(-1)?.[0];
     expect(shown).toMatchObject({ title: "Couldn't save that fact", variant: "destructive" });
     expect(shown?.description).toContain("holds up to 20");
+    // Only a 404 is tried again.
+    expect(api.chat.decideFactProposal).toHaveBeenCalledTimes(1);
   });
 
   it("turns an offer down, trying once more while the reply is still being saved", async () => {

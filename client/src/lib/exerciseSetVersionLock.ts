@@ -19,6 +19,8 @@
  * behind the failed one is rejected without being sent: a stale edit must roll
  * back and show the other device's row, never retry over it.
  */
+import { parseApiError } from "@/lib/apiError";
+
 export interface SetVersionTracker {
   /** Record the cached row's version before an edit. Never lowers a known version. */
   seed(setId: string, version: unknown): void;
@@ -41,12 +43,14 @@ export class SetConflictError extends Error {
   }
 }
 
-// apiRequest throws non-ok responses as `${status}: ${body}`.
-const CONFLICT_MESSAGE_PREFIX = "409:";
-
+/**
+ * A queued PATCH dropped after a conflict, or the server's 409. apiRequest
+ * throws non-ok responses as `${status}: ${body}`, which parseApiError reads
+ * (CL34, CODEBASE_ANALYSIS_2026-10-03).
+ */
 export function isSetConflictError(error: unknown): boolean {
   if (error instanceof SetConflictError) return true;
-  return error instanceof Error && error.message.startsWith(CONFLICT_MESSAGE_PREFIX);
+  return parseApiError(error)?.status === 409;
 }
 
 function asVersion(value: unknown): number | undefined {

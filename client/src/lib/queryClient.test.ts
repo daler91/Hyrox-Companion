@@ -218,4 +218,13 @@ describe("humanizeApiError", () => {
     expect(humanizeApiError(new Error("You're offline"))).toBe("You're offline");
     expect(humanizeApiError("weird")).toBe("Something went wrong. Please try again.");
   });
+
+  // The status is parseApiError's to read (CL34, CODEBASE_ANALYSIS_2026-10-03):
+  // only apiRequest's three-digit `NNN:` prefix is a status.
+  it("reads a status only from apiRequest's prefix", () => {
+    expect(humanizeApiError(new Error('400:{"error":"Title is required"}'))).toBe("Title is required");
+    expect(humanizeApiError(new Error("Failed to fetch CSRF token: 500"))).toBe("Failed to fetch CSRF token: 500");
+    expect(humanizeApiError(new Error('5000: {"error":"x"}'))).toBe('5000: {"error":"x"}');
+    expect(humanizeApiError(new Error("500"))).toBe("500");
+  });
 });

@@ -3,9 +3,9 @@ import type {
   SessionGradesResponse,
   SessionGradeWeek,
 } from "@shared/schema";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
 
@@ -151,16 +151,67 @@ const LOADED: SessionGradesResponse = {
 function renderTab() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(QUERY_KEYS.plans, []);
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <SessionGradesTab />
     </QueryClientProvider>,
   );
+  return { ...view, queryClient };
 }
 
 describe("SessionGradesTab", () => {
   beforeEach(() => {
     mocks.getSessionGrades.mockReset();
+  });
+
+  afterEach(() => {
+    onlineManager.setOnline(true);
+  });
+
+  // U5 (CODEBASE_ANALYSIS_2026-10-03): TanStack pauses rather than runs a
+  // fetch while the browser is offline, so a first fetch is pending but not
+  // `isLoading`, and the tab said it couldn't load before anything had failed.
+  it("shows loading, not an error, while the first fetch waits offline", async () => {
+    mocks.getSessionGrades.mockResolvedValue(LOADED);
+    onlineManager.setOnline(false);
+    renderTab();
+
+    expect(await screen.findByTestId("session-grades-loading")).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn't load session grades/)).not.toBeInTheDocument();
+    expect(mocks.getSessionGrades).not.toHaveBeenCalled();
+
+    act(() => {
+      onlineManager.setOnline(true);
+    });
+    expect(await screen.findByTestId("text-session-grades-easy-rate")).toHaveTextContent("75%");
+  });
+
+  it("says it couldn't load a failed fetch", async () => {
+    mocks.getSessionGrades.mockRejectedValue(new Error("500: Internal Server Error"));
+    renderTab();
+
+    expect(await screen.findByTestId("session-grades-empty")).toHaveTextContent(
+      /Couldn't load session grades/,
+    );
+  });
+
+  it("keeps loaded grades up through a failed refresh", async () => {
+    mocks.getSessionGrades.mockResolvedValueOnce(LOADED);
+    const { queryClient } = renderTab();
+    await screen.findByTestId("text-session-grades-easy-rate");
+
+    mocks.getSessionGrades.mockRejectedValueOnce(new Error("500: Internal Server Error"));
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: QUERY_KEYS.sessionGrades(undefined) });
+      // TanStack notifies observers on a timer, so let the re-render land.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+    });
+    expect(queryClient.getQueryState(QUERY_KEYS.sessionGrades(undefined))?.status).toBe("error");
+
+    expect(screen.getByTestId("text-session-grades-easy-rate")).toHaveTextContent("75%");
+    expect(screen.queryByText(/Couldn't load session grades/)).not.toBeInTheDocument();
   });
 
   it("shows the plan's rates, the weekly chart, the block table and the recent runs", async () => {

@@ -1,6 +1,7 @@
 import { inSequence } from "@shared/inSequence";
 import { z } from "zod";
 
+import { parseApiError } from "./apiError";
 import { apiRequest } from "./queryClient";
 
 export interface PendingMutation {
@@ -341,47 +342,26 @@ const RETRYABLE_REJECTION_CODES = new Set(["IDEMPOTENT_REQUEST_IN_PROGRESS", "EB
  * no response at all, a 401 from a session that lapsed while offline, a 408,
  * a 429 or a 5xx says nothing about the write, and counting them dropped
  * queued workouts on a flaky connection. MAX_AGE_MS still bounds those.
+ * The status and code are read by parseApiError, the shared reading of
+ * apiRequest's message (CL34, CODEBASE_ANALYSIS_2026-10-03).
  */
 function isDefinitiveRejection(error: unknown): boolean {
-  const status = responseStatus(error);
-  if (status === null || status < 400 || status >= 500 || status === 401 || status === 408 || status === 429) {
+  const rejection = parseApiError(error);
+  if (!rejection) return false;
+  const { status, code } = rejection;
+  if (status < 400 || status >= 500 || status === 401 || status === 408 || status === 429) {
     return false;
   }
-  const { message } = error as Error;
-  return !RETRYABLE_REJECTION_CODES.has(rejectionCode(message.slice(message.indexOf(":") + 1)));
-}
-
-/**
- * The HTTP status of a failed replay, or null when there was no response.
- * apiRequest throws `${status}: ${body}` for a non-ok response. A TypeError, a
- * timeout, RateLimitError or a failed CSRF token fetch has no such prefix.
- * String ops, not a regex, as in humanizeApiError.
- */
-function responseStatus(error: unknown): number | null {
-  if (!(error instanceof Error)) return null;
-  const { message } = error;
-  const colonIdx = message.indexOf(":");
-  const head = colonIdx >= 0 ? message.slice(0, colonIdx) : "";
-  if (head.length !== 3 || ![...head].every((c) => c >= "0" && c <= "9")) return null;
-  return Number(head);
+  return code === null || !RETRYABLE_REJECTION_CODES.has(code);
 }
 
 /** The entry after a failed replay: which failure budget it spends, if any. */
 function afterFailedReplay(mutation: PendingMutation, error: unknown): PendingMutation {
   if (isDefinitiveRejection(error)) return { ...mutation, retryCount: (mutation.retryCount ?? 0) + 1 };
-  if (responseStatus(error) === 500) {
+  if (parseApiError(error)?.status === 500) {
     return { ...mutation, serverErrorCount: (mutation.serverErrorCount ?? 0) + 1 };
   }
   return mutation;
-}
-
-function rejectionCode(body: string): string {
-  try {
-    const parsed = JSON.parse(body) as { code?: unknown } | null;
-    return typeof parsed?.code === "string" ? parsed.code : "";
-  } catch {
-    return "";
-  }
 }
 
 let flushInFlight: Promise<{ synced: number; failed: number; dropped: number }> | null = null;

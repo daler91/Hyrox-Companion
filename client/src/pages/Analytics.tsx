@@ -16,7 +16,7 @@ import {
   Trophy,
   UtensilsCrossed,
 } from "lucide-react";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { Link } from "wouter";
 
 import { ProgressTab } from "@/components/analytics/ProgressTab";
@@ -53,10 +53,8 @@ import { lazyWithReload } from "@/lib/lazyWithReload";
 // actually clicks that tab instead of bundling into every Analytics visit.
 // lazyWithReload rather than React.lazy, as for the routes in App.tsx: a tab
 // chunk a deploy removed reloads the page onto the current build instead of
-// failing until a manual reload (CL3, CODEBASE_ANALYSIS_2026-10-03). The two
-// range-scoped tabs stay on React.lazy until lazyWithReload is generic over
-// props: it is typed for prop-less pages, so it cannot carry `dateParams`.
-const CategoryBreakdownTab = lazy(() =>
+// failing until a manual reload (CL3, CODEBASE_ANALYSIS_2026-10-03).
+const CategoryBreakdownTab = lazyWithReload(() =>
   import("@/components/analytics/CategoryBreakdownTab").then((m) => ({
     default: m.CategoryBreakdownTab,
   })),
@@ -79,7 +77,7 @@ const RacePredictorTab = lazyWithReload(() =>
 const MafTrendTab = lazyWithReload(() =>
   import("@/components/analytics/MafTrendTab").then((m) => ({ default: m.MafTrendTab })),
 );
-const FuellingTab = lazy(() =>
+const FuellingTab = lazyWithReload(() =>
   import("@/components/analytics/FuellingTab").then((m) => ({ default: m.FuellingTab })),
 );
 

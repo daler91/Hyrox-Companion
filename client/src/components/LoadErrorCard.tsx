@@ -10,8 +10,9 @@ interface LoadErrorCardProps {
   /**
    * A retry is in flight (or waiting for the network). Not `isRefetching`:
    * a retry of a query with no data resets it to pending, so that is false
-   * whenever this card shows. `useTimelineData` derives it from the failure
-   * count and `fetchStatus` instead. U5 (CODEBASE_ANALYSIS_2026-10-03)
+   * whenever this card shows. Use `queryLoadState(query).retrying`
+   * (`@/lib/queryLoadState`), which reads the failure count and
+   * `fetchStatus` instead. U5 (CODEBASE_ANALYSIS_2026-10-03)
    */
   readonly isRetrying?: boolean;
   /** `${testId}` on the card, `${testId}-retry` on its button. */

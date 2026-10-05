@@ -5,6 +5,7 @@ import {
   computePlanWeeks,
   dayDiff,
   describeWeekdaySpan,
+  isIsoCalendarDate,
   MAX_PLAN_WEEKS,
   MIN_PLAN_WEEKS,
   nextPlanStartDate,
@@ -130,6 +131,68 @@ describe("toIsoDateUtc / parseIsoDate", () => {
     expect(parsed.toISOString()).toBe("2024-02-29T00:00:00.000Z");
     expect(toIsoDateUtc(parsed)).toBe("2024-02-29");
   });
+});
+
+// CL9, C49 (CODEBASE_ANALYSIS_2026-10-03): the one calendar-date check the
+// onboarding race date, the sample-plan schema, the weekly review and the
+// nutrition routes' dates share.
+describe("isIsoCalendarDate", () => {
+  it.each(["2026-10-04", "2026-01-01", "2026-12-31", "0100-01-01", "0999-01-01", "9999-12-31"])(
+    "takes the real day %s",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(true);
+    },
+  );
+
+  it.each([
+    ["2024-02-29", true],
+    ["2000-02-29", true],
+    ["2026-02-29", false],
+    ["1900-02-29", false],
+  ])("knows the leap day %s is %s", (value, real) => {
+    expect(isIsoCalendarDate(value)).toBe(real);
+  });
+
+  // UTC date math rolls each of these forward into a later, real day.
+  it.each(["2026-13-01", "2026-00-10", "2026-02-30", "2026-04-31", "2026-11-00", "2026-13-45"])(
+    "refuses the impossible day %s",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  // A browser date field takes a five-digit year.
+  it.each(["20266-11-15", "-2026-01-01", "+2026-01-01"])(
+    "refuses %s, whose year is not four digits",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  // Four digits, but Date.UTC reads a year below 100 as 19xx, so the round
+  // trip prints another year.
+  it.each(["0000-01-01", "0050-01-01", "0099-12-31"])(
+    "refuses %s, which Date.UTC reads as a 19xx date",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  it.each(["2026-1-5", "15/11/2026", "2026-01-05T00:00:00Z", " 2026-01-05", "2026-01-05 ", "2026-01-05-01"])(
+    "refuses %j, which is not written YYYY-MM-DD",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  // toISOString throws a RangeError for an invalid Date.
+  it.each(["", "aaaa", "last-week", "2026-aa-01", "300000-01-01"])(
+    "is false, not a throw, for %j",
+    (value) => {
+      expect(() => isIsoCalendarDate(value)).not.toThrow();
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
 });
 
 // 2026-09-21 is a Monday.

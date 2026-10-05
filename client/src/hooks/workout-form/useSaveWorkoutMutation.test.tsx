@@ -218,6 +218,28 @@ describe("useSaveWorkoutMutation", () => {
     expect(mocks.enqueueMutation).not.toHaveBeenCalled();
   });
 
+  // The server's own answer arrives as apiRequest's `${status}: ${body}`,
+  // read by parseApiError (CL34, CODEBASE_ANALYSIS_2026-10-03).
+  it("names the structured-row rule when the server refuses the save for it", async () => {
+    mocks.createWorkout.mockRejectedValueOnce(
+      new Error('400: {"error":"Add at least one exercise set","code":"STRUCTURED_ROWS_REQUIRED"}'),
+    );
+    const { result } = renderMutation();
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(workoutPayload)).rejects.toThrow("400:");
+    });
+
+    await waitFor(() => {
+      expect(mocks.toast).toHaveBeenCalledWith({
+        title: "Workout needs structured rows",
+        description: "Tap Parse or add at least one exercise set before saving.",
+        variant: "destructive",
+      });
+    });
+    expect(mocks.enqueueMutation).not.toHaveBeenCalled();
+  });
+
   it("does not queue structured-row validation failures", async () => {
     mocks.createWorkout.mockRejectedValueOnce({ response: { data: { code: "STRUCTURED_ROWS_REQUIRED" } } });
     const { result } = renderMutation();

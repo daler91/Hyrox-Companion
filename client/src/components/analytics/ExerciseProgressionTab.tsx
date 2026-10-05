@@ -19,6 +19,7 @@ import {
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api } from "@/lib/api";
 import { getExerciseLabel } from "@/lib/exerciseUtils";
+import { queryLoadState } from "@/lib/queryLoadState";
 
 interface RawPREntry {
   category: string;
@@ -45,7 +46,10 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: rawPRs, isLoading: prsLoading } = prsQuery;
+  const { data: rawPRs } = prsQuery;
+  // A first fetch paused offline is still loading, not an empty history.
+  // U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const prsLoadState = queryLoadState(prsQuery);
 
   const availableExercises = useMemo(() => {
     if (!rawPRs) return [];
@@ -56,9 +60,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     }));
   }, [rawPRs]);
 
-  const analyticsQuery = useQuery<
-    Record<string, ExerciseAnalyticDay[]>
-  >({
+  const analyticsQuery = useQuery<Record<string, ExerciseAnalyticDay[]>>({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
     queryFn: () =>
       api.analytics.getExerciseAnalytics(dateParams) as Promise<
@@ -67,20 +69,24 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     // ⚡ Perf: see note above on personal-records query.
     staleTime: 5 * 60 * 1000,
   });
-  const { data: allAnalytics, isLoading: analyticsLoading } = analyticsQuery;
+  const { data: allAnalytics } = analyticsQuery;
+  const analyticsLoadState = queryLoadState(analyticsQuery);
 
   // A failed fetch is not "appear here once you've logged a few structured
   // workouts". Either query failing with nothing cached leaves the tab with
   // nothing true to show. U5 (CODEBASE_ANALYSIS_2026-10-03)
-  const failedQueries = [prsQuery, analyticsQuery].filter((query) => query.isError && !query.data);
+  const failedQueries = [
+    { query: prsQuery, state: prsLoadState },
+    { query: analyticsQuery, state: analyticsLoadState },
+  ].filter(({ state }) => state.failed);
   if (failedQueries.length > 0) {
     return (
       <LoadErrorCard
         title="Couldn't load your exercise progression"
         onRetry={() => {
-          for (const query of failedQueries) void query.refetch();
+          for (const { query } of failedQueries) void query.refetch();
         }}
-        isRetrying={failedQueries.some((query) => query.isRefetching)}
+        isRetrying={failedQueries.some(({ state }) => state.retrying)}
         testId="exercise-progression-error"
       />
     );
@@ -124,7 +130,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
         <ExerciseProgressionCharts
           selectedExercise={selectedExercise}
           allAnalytics={allAnalytics}
-          analyticsLoading={analyticsLoading}
+          analyticsLoading={analyticsLoadState.loading}
           weightLabel={weightLabel}
           dLabel={dLabel}
         />
@@ -143,7 +149,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {prsLoading ? (
+        {prsLoadState.loading ? (
           <div className="flex items-center justify-center py-8">
             <LoadingSpinner iconClassName="h-6 w-6" />
           </div>

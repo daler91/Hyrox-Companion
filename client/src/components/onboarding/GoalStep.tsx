@@ -1,3 +1,4 @@
+import { isIsoCalendarDate } from "@shared/dateUtils";
 import {
   Activity,
   Check,
@@ -7,6 +8,7 @@ import {
   TrendingDown,
   Zap,
 } from "lucide-react";
+import type { Ref } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { getTodayString } from "@/lib/dateUtils";
 
 import { ONBOARDING_GOALS, type OnboardingGoalId } from "./onboardingGoals";
 
@@ -41,13 +44,85 @@ interface GoalStepProps {
   readonly onMafCategoryChange: (value: string) => void;
   readonly mafHrDataAvailable: boolean;
   readonly onMafHrDataAvailableChange: (value: boolean) => void;
-  /** "YYYY-MM-DD", or "" when the athlete has no race booked. */
+  /** As typed: "YYYY-MM-DD", or "" when the athlete has no race booked. */
   readonly raceDate?: string;
+  /** What was typed; whether it can be used is raceDateError's call (CL9). */
   readonly onRaceDateChange?: (value: string) => void;
   /** Earliest race date offered (today). */
   readonly minRaceDate?: string;
+  /** The race-date input, so the wizard can focus it when it holds the step. */
+  readonly raceDateInputRef?: Ref<HTMLInputElement>;
   /** Why the MAF answers can't be saved yet, shown under each field. */
   readonly mafErrors?: { readonly age?: string; readonly category?: string };
+}
+
+const NOT_A_REAL_DATE = "That isn't a real date. Check the year, or leave it blank.";
+const DATE_HAS_PASSED = "That date has passed. Pick today or later, or leave it blank.";
+
+interface RaceDateFieldProps {
+  readonly raceDate: string;
+  readonly onRaceDateChange: (value: string) => void;
+  readonly minRaceDate: string;
+  readonly inputRef?: Ref<HTMLInputElement>;
+}
+
+/**
+ * Why a typed race date ("YYYY-MM-DD", "" for none) can't be used, or null
+ * when it can: it is blank, or a real day no earlier than `today`. The native
+ * `min` only limits the picker: a typed date before it still arrives, and a
+ * past race (a mistyped year) made every day of a template plan post-race
+ * recovery. A browser date field also takes a five-digit year ("20266-11-15"),
+ * which sorts after any four-digit today; the server's format check then
+ * refused it at Start Training with a generic toast. The step shows this and
+ * the wizard checks it again on Continue, so both apply the same rule.
+ * CL9 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function raceDateError(raceDate: string, today: string): string | null {
+  if (raceDate === "") return null;
+  if (!isIsoCalendarDate(raceDate)) return NOT_A_REAL_DATE;
+  return raceDate < today ? DATE_HAS_PASSED : null;
+}
+
+/**
+ * The optional race date, as typed. One that can't be used is named here, and
+ * the wizard holds the Goal step until it is corrected or cleared.
+ * CL9 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function RaceDateField({ raceDate, onRaceDateChange, minRaceDate, inputRef }: RaceDateFieldProps) {
+  const error = raceDateError(raceDate, minRaceDate);
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="onboarding-race-date">
+        Race date <span className="font-normal text-muted-foreground">(optional)</span>
+      </Label>
+      <p id="onboarding-race-date-hint" className="text-xs text-muted-foreground">
+        Booked a HYROX race? Your plan and coach will build toward it.
+      </p>
+      <Input
+        ref={inputRef}
+        id="onboarding-race-date"
+        type="date"
+        min={minRaceDate}
+        className="w-auto"
+        value={raceDate}
+        onChange={(e) => {
+          onRaceDateChange(e.target.value);
+        }}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={
+          error
+            ? "onboarding-race-date-hint onboarding-race-date-error"
+            : "onboarding-race-date-hint"
+        }
+        data-testid="input-onboarding-race-date"
+      />
+      {error && (
+        <p id="onboarding-race-date-error" role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function GoalStep(props: Readonly<GoalStepProps>) {
@@ -106,24 +181,12 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
       {/* HYROX athletes train toward a race, so ask for it here; it anchors an
           AI plan's length and is kept on a template plan (onboarding audit M3). */}
       {props.onRaceDateChange && (
-        <div className="space-y-2">
-          <Label htmlFor="onboarding-race-date">
-            Race date <span className="font-normal text-muted-foreground">(optional)</span>
-          </Label>
-          <p id="onboarding-race-date-hint" className="text-xs text-muted-foreground">
-            Booked a HYROX race? Your plan and coach will build toward it.
-          </p>
-          <Input
-            id="onboarding-race-date"
-            type="date"
-            min={props.minRaceDate}
-            className="w-auto"
-            value={props.raceDate ?? ""}
-            onChange={(e) => props.onRaceDateChange?.(e.target.value)}
-            aria-describedby="onboarding-race-date-hint"
-            data-testid="input-onboarding-race-date"
-          />
-        </div>
+        <RaceDateField
+          raceDate={props.raceDate ?? ""}
+          onRaceDateChange={props.onRaceDateChange}
+          minRaceDate={props.minRaceDate ?? getTodayString()}
+          inputRef={props.raceDateInputRef}
+        />
       )}
       {trainingStyleId === "maf_method" && (
         <div className="space-y-3 rounded-md border p-3">

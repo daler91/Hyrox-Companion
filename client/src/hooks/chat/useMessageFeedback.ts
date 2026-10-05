@@ -3,6 +3,7 @@ import { type RefObject, useCallback } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import type { Message } from "@/lib/chatMessage";
 import { humanizeApiError } from "@/lib/queryClient";
 
@@ -11,9 +12,9 @@ import type { SetMessages } from "./chatSessionModel";
 /** How long to wait before rating a reply again that the server had not saved yet. */
 export const FEEDBACK_RETRY_MS = 1_000;
 
-/** apiRequest throws `${status}: ${body}`. */
+/** A 404 from apiRequest, as parseApiError reads it (CL34, CODEBASE_ANALYSIS_2026-10-03). */
 function isNotFound(error: unknown): boolean {
-  return error instanceof Error && error.message.startsWith("404");
+  return parseApiError(error)?.status === 404;
 }
 
 /**

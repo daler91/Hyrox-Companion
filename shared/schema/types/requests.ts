@@ -41,9 +41,15 @@ export type InsertChatMessage = typeof chatMessages.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Request Validation Schemas
+/**
+ * A `YYYY-MM-DD` string, by shape only (a real day is isIsoCalendarDate's
+ * call). The anchored regex alone bounds the length: a separate `max(10)` gave
+ * a longer value, such as a browser date field's five-digit year, a second
+ * issue beside the format one. date-schema-single-issue
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
 export const dateStringSchema = z
   .string()
-  .max(10)
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
 
 /**

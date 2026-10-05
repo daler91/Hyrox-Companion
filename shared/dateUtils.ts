@@ -94,6 +94,25 @@ export function parseIsoDate(date: string): Date {
   return new Date(toUtcEpoch(date));
 }
 
+/**
+ * Whether `value` is a real calendar day written `YYYY-MM-DD`: it survives a
+ * round trip through UTC midnight unchanged. A shape check alone takes
+ * "2026-02-30", which UTC date math rolls forward into March; the round trip
+ * also refuses a year that is not four digits ("20266-11-15") and the years
+ * 0000 to 0099, which `Date.UTC` maps to 1900 to 1999 ("0050-01-01" reads as
+ * 1950). A value that is no date at all is false rather than the RangeError
+ * `toISOString` throws for it.
+ *
+ * Shared by the onboarding race date, the sample-plan schema, the weekly
+ * review's `?week=` and the nutrition routes' dates (`isoDate` in
+ * shared/schema/nutrition.ts), which each had their own check.
+ * CL9, C49 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function isIsoCalendarDate(value: string): boolean {
+  const epoch = toUtcEpoch(value);
+  return !Number.isNaN(epoch) && toIsoDateUtc(new Date(epoch)) === value;
+}
+
 /** Add `days` whole days to a `YYYY-MM-DD` string, returning `YYYY-MM-DD` (UTC math). */
 export function addDaysToISODate(date: string, days: number): string {
   const next = new Date(toUtcEpoch(date) + days * MS_PER_DAY);
