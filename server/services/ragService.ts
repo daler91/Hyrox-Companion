@@ -37,6 +37,8 @@ async function probeEmbeddingHealth(): Promise<EmbeddingHealth> {
     const probe = await generateEmbedding("test");
     return { ok: true, dimension: probe.length };
   } catch (err) {
+    // The probe embeds the literal "test"; `err` is the provider's error.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err }, "[rag] Embedding provider health probe failed");
     return { ok: false, error: EMBEDDING_UNAVAILABLE_MESSAGE };
   }

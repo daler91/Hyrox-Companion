@@ -120,6 +120,9 @@ function bundledDir(name) {
 
 /** The `version` from `<dir>/package.json`, or null when absent or unreadable. */
 function readVersion(dir) {
+  // `dir` is always a path built from `layout` (the Cypress cache or the
+  // staging dir) and a PINNED package name; no external input reaches it.
+  // bearer:disable javascript_lang_path_traversal
   const pkg = path.join(dir, 'package.json');
   if (!fs.existsSync(pkg)) return null;
   try {

@@ -42,4 +42,11 @@ describe("parseBackfillFlags", () => {
       quiet: false,
     });
   });
+
+  it("throws when a script's own value flag has no value", () => {
+    expect(() => parseBackfillFlags(["--revert", "--apply"], ["--revert"])).toThrow(
+      "--revert needs a value",
+    );
+    expect(() => parseBackfillFlags(["--revert"], ["--revert"])).toThrow("--revert needs a value");
+  });
 });

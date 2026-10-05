@@ -47,7 +47,7 @@ export function parseBackfillFlags(
     else if (arg === "--user-id") flags.userId = requireValue(arg, args.next().value);
     else if (arg.startsWith("--user-id=")) {
       flags.userId = requireValue("--user-id", arg.slice("--user-id=".length));
-    } else if (extraValueFlags.includes(arg)) args.next();
+    } else if (extraValueFlags.includes(arg)) requireValue(arg, args.next().value);
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return flags;

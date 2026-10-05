@@ -16,6 +16,8 @@ async function resolveOffBarcodeSafely(code: string): Promise<MappedFood | null>
   try {
     return await resolveBarcode(code);
   } catch (err) {
+    // `code` is a product barcode (public GTIN), not user data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err, code }, "[nutrition] Open Food Facts barcode lookup failed");
     return null;
   }

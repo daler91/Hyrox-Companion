@@ -82,7 +82,7 @@ describe("lookupBarcode", () => {
   });
 
   it("degrades to null (no throw) when the Open Food Facts lookup fails (D43)", async () => {
-    vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
+    vi.mocked(storage.nutrition.getFoodBySourceId).mockReset(); // nothing cached
     vi.mocked(resolveEdamamBarcode).mockResolvedValue(null);
     vi.mocked(resolveBarcode).mockRejectedValue(new Error("OFF lookup failed with HTTP 429"));
 

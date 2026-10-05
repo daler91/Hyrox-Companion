@@ -322,6 +322,8 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
   }
   const user = await storage.users.getUser(userId);
   if (!user) {
+    // jobId is a UUID and userId an opaque internal id, no PII
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping recompute-analytics job");
     return;
   }
@@ -330,9 +332,13 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
   // stored row was deleted between scan enqueue and now.
   const claimed = await storage.analyticsResults.markRecomputedOn(userId, feature, localDate);
   if (!claimed) {
+    // jobId is a UUID, no PII
+    // bearer:disable javascript_lang_logger_leak
     logger.info({ jobId: job.id }, "[pg-boss] recompute-analytics already claimed/absent, skipping");
     return;
   }
+  // jobId is a UUID and feature an enum value, no PII
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
   try {
     // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
@@ -343,8 +349,12 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
     await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
       dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
     );
+    // jobId is a UUID and feature an enum value, no PII
+    // bearer:disable javascript_lang_logger_leak
     logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
   } catch (error) {
+    // jobId is a UUID, no PII
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed recompute-analytics job");
     // Release today's claim so pg-boss's retry can take it again; otherwise
     // every retry exits at the claim above and a transient AI/DB failure
@@ -354,6 +364,8 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
     try {
       await storage.analyticsResults.releaseRecomputedOn(userId, feature, localDate);
     } catch (releaseError) {
+      // jobId is a UUID, no PII
+      // bearer:disable javascript_lang_logger_leak
       logger.error({ err: releaseError, jobId: job.id }, "[pg-boss] Failed to release recompute-analytics claim");
     }
     throw error;

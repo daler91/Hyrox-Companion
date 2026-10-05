@@ -136,6 +136,8 @@ try {
     logger.info({ table: target.table, ...res, dryRun: flags.dryRun }, "[decode-entities] table processed");
   });
 
+  // `summary` holds per-table row counts only, never row contents.
+  // bearer:disable javascript_lang_logger_leak
   logger.info(
     { summary, dryRun: flags.dryRun },
     flags.dryRun
