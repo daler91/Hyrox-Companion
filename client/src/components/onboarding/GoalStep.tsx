@@ -57,7 +57,7 @@ interface GoalStepProps {
 }
 
 const NOT_A_REAL_DATE = "That isn't a real date. Check the year, or leave it blank.";
-const DATE_HAS_PASSED = "That date has passed. Pick today or later, or leave it blank.";
+const RACE_DATE_IN_PAST = "That date has passed. Pick today or later, or leave it blank.";
 
 interface RaceDateFieldProps {
   readonly raceDate: string;
@@ -80,7 +80,7 @@ interface RaceDateFieldProps {
 export function raceDateError(raceDate: string, today: string): string | null {
   if (raceDate === "") return null;
   if (!isIsoCalendarDate(raceDate)) return NOT_A_REAL_DATE;
-  return raceDate < today ? DATE_HAS_PASSED : null;
+  return raceDate < today ? RACE_DATE_IN_PAST : null;
 }
 
 /**
