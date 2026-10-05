@@ -83,9 +83,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     return (
       <LoadErrorCard
         title="Couldn't load your exercise progression"
-        onRetry={() => {
-          for (const { query } of failedQueries) void query.refetch();
-        }}
+        onRetry={() => Promise.all(failedQueries.map(({ query }) => query.refetch()))}
         isRetrying={failedQueries.some(({ state }) => state.retrying)}
         testId="exercise-progression-error"
       />

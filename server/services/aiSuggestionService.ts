@@ -299,6 +299,8 @@ async function requestSuggestions(
     return await call();
   } catch (error) {
     if (!redFlagDetected) rethrowCoachCallFailure(error);
+    // The provider's error only, through the shared serializer; no user data.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ err: error }, "[suggestions] Model call failed; surfacing the safety escalation alone");
     return [];
   }

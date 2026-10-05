@@ -75,6 +75,8 @@ export const workoutSuggestionSchema = z.object({
 function coachCallFailure(error: unknown, label: string): AppError | AiConfigurationError {
   // Already classified: an unreadable reply, logged where it was read.
   if (error instanceof AppError) return error;
+  // The label is one of this file's two fixed call names, no user data.
+  // bearer:disable javascript_lang_logger_leak
   logger.error({ err: error }, `[gemini] ${label} error:`);
   // No key, no model for the role, AI switched off: every retry fails the same
   // way. Passed on as it is, so the auto-coach can tell it from an outage and
@@ -111,10 +113,14 @@ function parseReplyArray(text: string, label: string): unknown[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
+    // A fixed call name and the reply's length; the reply itself is never logged.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err: parseErr, responseLength: text.length }, `[gemini] ${label} JSON.parse failed.`);
     throw unreadableReply();
   }
   if (!Array.isArray(raw)) {
+    // A fixed call name and the reply's length; the reply itself is never logged.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ responseLength: text.length }, `[gemini] ${label} reply is not a JSON array.`);
     throw unreadableReply();
   }

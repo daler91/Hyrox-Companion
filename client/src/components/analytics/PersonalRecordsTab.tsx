@@ -103,7 +103,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
     return (
       <LoadErrorCard
         title="Couldn't load your personal records"
-        onRetry={() => void refetch()}
+        onRetry={() => refetch()}
         isRetrying={retrying}
         testId="personal-records-error"
       />

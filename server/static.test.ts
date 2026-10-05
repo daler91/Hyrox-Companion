@@ -1,14 +1,16 @@
-import path from "node:path";
-
 import express from "express";
 import request from "supertest";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "./routeUtils";
 import { serveStatic } from "./static";
 
-/** A built client in miniature: the shell plus one hashed asset. */
-const FIXTURE_DIST = path.resolve(__dirname, "__fixtures__", "spa-shell");
+// A built client in miniature: the shell plus one hashed asset.
+vi.mock("./staticDistPath", async () => {
+  const path = await import("node:path");
+  return { STATIC_DIST_PATH: path.resolve(__dirname, "__fixtures__", "spa-shell") };
+});
+
 const UNMATCHED_API_PATH = "/api/v1/workouts-renamed/abc";
 
 describe("serveStatic", () => {
@@ -24,7 +26,7 @@ describe("serveStatic", () => {
     app.get("/api/v1/workouts", (_req, res) => {
       res.json([]);
     });
-    serveStatic(app, FIXTURE_DIST);
+    serveStatic(app);
   });
 
   it("serves the SPA shell, with the nonce, for a client-side route", async () => {

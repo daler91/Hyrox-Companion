@@ -74,7 +74,7 @@ export function MafTrendTab() {
     return (
       <LoadErrorCard
         title="Couldn't load your MAF tests"
-        onRetry={() => void refetch()}
+        onRetry={() => refetch()}
         isRetrying={retrying}
         testId="maf-trend-error"
       />

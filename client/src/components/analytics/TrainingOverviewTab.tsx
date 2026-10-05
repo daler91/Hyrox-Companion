@@ -50,7 +50,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     return (
       <LoadErrorCard
         title="Couldn't load your training overview"
-        onRetry={() => void retry()}
+        onRetry={() => retry()}
         isRetrying={isRetrying}
         testId="training-overview-error"
       />

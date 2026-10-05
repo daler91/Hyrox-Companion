@@ -79,10 +79,12 @@ describe("OnboardingWizard fuelling step", () => {
 
   /** Answer GET /nutrition/targets with `current`; everything else succeeds. */
   const serveCurrentTarget = (current: Record<string, unknown> | null) => {
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(async (method, url) =>
-      method === "GET" && url === "/api/v1/nutrition/targets"
-        ? new Response(JSON.stringify({ current, history: current ? [current] : [] }))
-        : new Response(JSON.stringify({ success: true })),
+    vi.mocked(queryClientLib.apiRequest).mockImplementation((method, url) =>
+      Promise.resolve(
+        method === "GET" && url === "/api/v1/nutrition/targets"
+          ? new Response(JSON.stringify({ current, history: current ? [current] : [] }))
+          : new Response(JSON.stringify({ success: true })),
+      ),
     );
   };
 
@@ -330,10 +332,11 @@ describe("OnboardingWizard fuelling step", () => {
   });
 
   it("does not replace targets it could not load over an unchanged profile", async () => {
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(async (method, url) => {
-      if (method === "GET" && url === "/api/v1/nutrition/targets") throw new Error("500: down");
-      return new Response(JSON.stringify({ success: true }));
-    });
+    vi.mocked(queryClientLib.apiRequest).mockImplementation((method, url) =>
+      method === "GET" && url === "/api/v1/nutrition/targets"
+        ? Promise.reject(new Error("500: down"))
+        : Promise.resolve(new Response(JSON.stringify({ success: true }))),
+    );
     queryClient.setQueryData(QUERY_KEYS.preferences, SAVED_PROFILE);
     renderComponent();
     await walkToFuellingStep();

@@ -910,14 +910,17 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // with what needs no model, as when the pre-check finds it (AI8).
     if (suggestionsFailed && !(failures[0] instanceof AiConfigurationError)) {
       // The model weighed nothing and wrote nothing, so a retry is safe: fail
-      // the job for pg-boss to retry the model's pass (AI8).
+      // the job for pg-boss to retry the model's pass (AI8). Logs two counts.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn({ adjusted, noted }, "[coach] The suggestions call failed; wrote what needs no model, retrying");
       throw failures[0];
     }
     // A failed review-note call: the model's changes are already written. A
     // retry would re-run the suggestions on days they changed and could append
     // a second cue, so the days the model left alone go without a note this
-    // pass and the job completes (AI8). The suggestion service logged the error.
+    // pass and the job completes (AI8). The suggestion service logged the
+    // error; this logs two counts.
+    // bearer:disable javascript_lang_logger_leak
     if (reviewNoteFailures.length > 0) logger.warn({ adjusted, noted }, "[coach] The review-note call failed; kept the model's changes, no review notes");
     return { adjusted };
   } catch (error) {

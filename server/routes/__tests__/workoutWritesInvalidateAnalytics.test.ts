@@ -162,7 +162,8 @@ function buildApp(): express.Express {
 }
 
 function send(app: express.Express, write: WriteCase) {
-  const call = request(app)[write.method](write.path);
+  const call =
+    write.method === "post" ? request(app).post(write.path) : request(app).delete(write.path);
   return write.body ? call.send(write.body) : call;
 }
 

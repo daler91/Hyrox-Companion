@@ -202,13 +202,13 @@ describe("SessionGradesTab", () => {
 
     mocks.getSessionGrades.mockRejectedValueOnce(new Error("500: Internal Server Error"));
     await act(async () => {
-      await queryClient.refetchQueries({ queryKey: QUERY_KEYS.sessionGrades(undefined) });
+      await queryClient.refetchQueries({ queryKey: QUERY_KEYS.sessionGrades() });
       // TanStack notifies observers on a timer, so let the re-render land.
       await new Promise((resolve) => {
         setTimeout(resolve, 10);
       });
     });
-    expect(queryClient.getQueryState(QUERY_KEYS.sessionGrades(undefined))?.status).toBe("error");
+    expect(queryClient.getQueryState(QUERY_KEYS.sessionGrades())?.status).toBe("error");
 
     expect(screen.getByTestId("text-session-grades-easy-rate")).toHaveTextContent("75%");
     expect(screen.queryByText(/Couldn't load session grades/)).not.toBeInTheDocument();

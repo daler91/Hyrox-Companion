@@ -256,7 +256,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     return (
       <LoadErrorCard
         title="Couldn't load your training mix"
-        onRetry={() => void refetch()}
+        onRetry={() => refetch()}
         isRetrying={retrying}
         testId="category-breakdown-error"
       />

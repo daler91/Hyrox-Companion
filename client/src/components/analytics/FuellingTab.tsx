@@ -42,7 +42,7 @@ export function FuellingTab({ dateParams }: { readonly dateParams: string }) {
     return (
       <LoadErrorCard
         title="Couldn't load your fuelling data"
-        onRetry={() => void refetch()}
+        onRetry={() => refetch()}
         isRetrying={retrying}
         testId="fuelling-tab-error"
       />
