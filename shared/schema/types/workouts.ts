@@ -825,7 +825,7 @@ function validateUniqueSteps(block: StructureBlockDraft, ctx: z.RefinementCtx): 
   const stepNumbers = new Set(block.steps.map((step) => step.stepNumber));
   if (stepNumbers.size !== block.steps.length) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: "Duplicate stepNumber values are not allowed within a block.",
       path: ["steps"],
     });
@@ -836,7 +836,7 @@ function validateUniqueSteps(block: StructureBlockDraft, ctx: z.RefinementCtx): 
     .filter((minute): minute is number => minute != null);
   if (minuteIndices.length !== new Set(minuteIndices).size) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: "Duplicate minuteIndex values are not allowed within a block.",
       path: ["steps"],
     });

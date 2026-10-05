@@ -281,7 +281,8 @@ function getRagCache(key: string): RetrievedChunk[] | undefined {
 }
 
 function ragCacheKey(userId: string, version: string, query: string, topK: number): string {
-  return `${ragCachePrefix(userId)}${hashRuntimeKey(`${version}::${topK}::${query}`)}`;
+  const queryKey = `${version}::${topK}::${query}`;
+  return `${ragCachePrefix(userId)}${hashRuntimeKey(queryKey)}`;
 }
 
 function ragCachePrefix(userId: string): string {

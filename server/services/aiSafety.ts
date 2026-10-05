@@ -49,8 +49,14 @@ const RED_FLAG_SYMPTOM_PATTERNS = [
   /\bfaint(?:s|ed|ing|ness)\b/i,
   /\bfaint\s+spells?\b/i,
   /\bfaint\s+(?:after|during|while|when)\b/i,
-  /\b(?:feel|feels|felt|feeling|go|goes|going|gonna|went|get|gets|got|getting|to|might|could|would|will|may|nearly|almost|(?:i|he|she|we|they)\s+(?:was|were|am|is|are)|i['’]m|im)\s+faint\b/i,
-  /\b(?:feel|feels|felt|feeling|go|goes|going|went|get|gets|got|getting|(?:i|he|she|we|they)\s+(?:was|were|am|is|are)|i['’]m|im)\s+(?:a\s+bit|a\s+little|a\s+tad|kind\s+of|kinda|sort\s+of|really|very|quite|so|slightly|pretty|extremely|super|rather|somewhat|totally)\s+faint\b/i,
+  // After a verb, a modal or "I was"; an intensifier between them ("felt
+  // pretty faint") is taken out first (hasRedFlagSymptom).
+  /\b(?:feel|feels|felt|feeling)\s+faint\b/i,
+  /\b(?:go|goes|going|gonna|went)\s+faint\b/i,
+  /\b(?:get|gets|got|getting)\s+faint\b/i,
+  /\b(?:to|might|could|would|will|may|nearly|almost)\s+faint\b/i,
+  /\b(?:i|he|she|we|they)\s+(?:was|were|am|is|are)\s+faint\b/i,
+  /\b(?:i['’]m|im)\s+faint\b/i,
   /\b(?:passed|passing|passes|pass)\s+out\b/i,
   /\bblack(?:ed|ing)\s+out\b/i,
   /\bdizz(?:y|iness)\b/i,
@@ -59,6 +65,19 @@ const RED_FLAG_SYMPTOM_PATTERNS = [
   /\bblood\s+in\s+(?:urine|stools?|my\s+urine|my\s+stools?)\b/i,
   /\bsevere\s+headaches?\b/i,
 ];
+
+// One intensifier right before "faint", removed so the lead-word patterns
+// above read "felt pretty faint" as "felt faint". Two lists rather than one
+// pattern, to keep each simple enough to read.
+const FAINT_INTENSIFIER_PATTERNS = [
+  /\s+(?:really|very|quite|so|slightly|pretty|extremely|super|rather|somewhat|totally|kinda)(?=\s+faint\b)/gi,
+  /\s+(?:a\s+(?:bit|little|tad)|(?:kind|sort)\s+of)(?=\s+faint\b)/gi,
+];
+
+function hasRedFlagSymptom(text: string): boolean {
+  const plain = FAINT_INTENSIFIER_PATTERNS.reduce((out, pattern) => out.replace(pattern, ""), text);
+  return RED_FLAG_SYMPTOM_PATTERNS.some((pattern) => pattern.test(plain));
+}
 
 const HR_MEDICATION_PATTERNS = [
   /beta\s*-?blocker/i,
@@ -130,7 +149,7 @@ export function analyzeSafetySignals(trainingContext: TrainingContext, upcomingW
   const medicationBlob = `${datedBlob}\n${standing ?? ""}`;
 
   return {
-    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(datedBlob)),
+    redFlagDetected: hasRedFlagSymptom(datedBlob),
     hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(medicationBlob)),
   };
 }
@@ -200,7 +219,7 @@ export function analyzeChatSafety(
   }
   const corpus = `${message}\n${previousUserTurn}`;
   return {
-    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(corpus)),
+    redFlagDetected: hasRedFlagSymptom(corpus),
     hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(corpus)),
   };
 }

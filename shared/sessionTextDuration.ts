@@ -32,8 +32,10 @@ const MAX_READ_MIN = 300;
 
 /** Numbers that are not amounts of work: paces, targets, loads, labels. */
 const NOT_WORK: readonly RegExp[] = [
-  // Paces: "5:04/km", "2:05 /500m", "4:30 per km", "10:30 min/mile".
-  /(?<![\d.:])\d+:\d\d ?(?:min |mins |min|mins)?(?:\/|per) ?(?:k|km|mi|miles?|\d+ ?m)\b/g,
+  // Paces: "5:04/km", "2:05 /500m", "4:30 per km".
+  /(?<![\d.:])\d+:\d\d ?(?:\/|per) ?(?:k|km|mi|miles?|\d+ ?m)\b/g,
+  // ...and with the minutes named: "10:30 min/mile", "4:30 mins per km".
+  /(?<![\d.:])\d+:\d\d ?mins? ?(?:\/|per) ?(?:k|km|mi|miles?|\d+ ?m)\b/g,
   // A clock pace with no "/km": "10:30 pace", "8:00 mile pace", "@ 10:30". Read
   // as a length, "40 min easy, 10:30 pace" was 51 min (C51, CODEBASE_ANALYSIS_2026-10-03).
   /(?<![\d.:])\d+:\d\d ?(?:km |mi |mile |k )?pace\b/g,

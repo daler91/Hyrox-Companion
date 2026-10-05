@@ -186,6 +186,7 @@ describe("red-flag symptom patterns", () => {
     "chestnut-flavoured gel, legs were tight",
     "short break between rounds, out of breath at the end",
     "the pull was faint by the last round",
+    "the pull was so faint I nearly missed it",
   ])("does not flag a harmless note: %s", (note) => {
     expect(analyzeChatSafety(note, []).redFlagDetected).toBe(false);
     const safety = analyzeSafetySignals(
@@ -229,6 +230,7 @@ describe("red-flag symptom patterns", () => {
     "I'm faint and shaky",
     "felt pretty faint on the rower",
     "felt extremely faint",
+    "I was kind of faint after the sled",
     "she faints often in the heat",
     "Faint after the sled push",
     "blacking out on the ski erg",
