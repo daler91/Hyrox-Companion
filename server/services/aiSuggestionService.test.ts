@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AiConfigurationError } from "../ai/errors";
 import { AppError, ErrorCode } from "../errors";
 import { generateWorkoutSuggestions, parseExercisesFromText } from "../gemini/index";
 import { storage } from "../storage";
@@ -583,14 +584,34 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
   // manual request answered 200 "your workouts look well-balanced".
   it("fails the request when the model call fails, rather than answering with no suggestions", async () => {
     mockUpcomingDay();
-    const outage = new AppError(ErrorCode.AI_UNAVAILABLE, "AI service temporarily unavailable.", 503);
+    const outage = new AppError(
+      ErrorCode.AI_UNAVAILABLE,
+      "AI service temporarily unavailable.",
+      503,
+    );
     vi.mocked(generateWorkoutSuggestions).mockRejectedValue(outage);
 
     await expect(generateTimelineAiSuggestions("user-1", testLog)).rejects.toBe(outage);
   });
 
+  it("answers a call this deployment cannot make with the AI kill switch's 503, not a 500", async () => {
+    // The suggestion service passes an AiConfigurationError through
+    // unclassified so the auto-coach can complete instead of retrying.
+    mockUpcomingDay();
+    vi.mocked(generateWorkoutSuggestions).mockRejectedValue(
+      new AiConfigurationError("GEMINI_API_KEY is required for AI features"),
+    );
+
+    await expect(generateTimelineAiSuggestions("user-1", testLog)).rejects.toMatchObject({
+      code: ErrorCode.AI_FEATURES_DISABLED,
+      status: 503,
+    });
+  });
+
   it("still surfaces a red-flag safety escalation when the model call fails", async () => {
-    vi.mocked(generateWorkoutSuggestions).mockRejectedValue(new Error("AI provider temporarily unavailable"));
+    vi.mocked(generateWorkoutSuggestions).mockRejectedValue(
+      new Error("AI provider temporarily unavailable"),
+    );
 
     const result = await generateTimelineAiSuggestions("user-1", testLog);
 

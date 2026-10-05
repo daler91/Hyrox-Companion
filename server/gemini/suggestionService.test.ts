@@ -1,5 +1,6 @@
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
+import { AiConfigurationError } from "../ai/errors";
 import { generateJsonText } from "../ai/providers";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
@@ -8,6 +9,7 @@ import {
   generateWorkoutSuggestions,
   parseAndValidateReviewNotes,
   parseAndValidateSuggestions,
+  rethrowCoachCallFailure,
 } from "./suggestionService";
 import type { TrainingContext } from "./types";
 
@@ -237,9 +239,35 @@ describe("suggestionService - failed coach calls", () => {
     await expect(call()).resolves.toEqual([]);
   });
 
+  it.each(calls)("%s: a call this deployment cannot make rejects with the configuration error itself", async (_label, call) => {
+    // Wrapped as a classified AppError, a missing reasoning model read as an
+    // outage and the auto-coach retried it three times to the same end.
+    const missingModel = new AiConfigurationError('AI text model is not configured for provider "anthropic".');
+    vi.mocked(generateJsonText).mockRejectedValue(missingModel);
+
+    await expect(call()).rejects.toBe(missingModel);
+  });
+
   it("makes no call when there is nothing upcoming", async () => {
     await expect(generateWorkoutSuggestions(context, [])).resolves.toEqual([]);
     await expect(generateReviewNotes(context, [])).resolves.toEqual([]);
     expect(generateJsonText).not.toHaveBeenCalled();
+  });
+});
+
+describe("rethrowCoachCallFailure", () => {
+  it("reports a configuration error as the AI kill switch's 503", () => {
+    const missingKey = new AiConfigurationError("GEMINI_API_KEY is required for AI features");
+
+    expect(() => rethrowCoachCallFailure(missingKey)).toThrow(AppError);
+    expect(() => rethrowCoachCallFailure(missingKey)).toThrow(
+      expect.objectContaining({ code: ErrorCode.AI_FEATURES_DISABLED, status: 503 }),
+    );
+  });
+
+  it("rethrows any other failure unchanged", () => {
+    const outage = new AppError(ErrorCode.AI_UNAVAILABLE, "AI service temporarily unavailable.", 503);
+
+    expect(() => rethrowCoachCallFailure(outage)).toThrow(outage);
   });
 });

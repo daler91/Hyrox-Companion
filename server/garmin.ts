@@ -75,7 +75,7 @@ import { getUserId } from "./types";
 //   from python-garminconnect is "wait 60 seconds" — we wait much longer
 //   because we don't know how widely the ban will propagate.
 //
-// Layer 6 — No automatic re-login on stale tokens
+// Layer 6 — Re-mint before re-login
 //   The OAuth1 token lasts ~1 year; the OAuth2 token the API takes is
 //   short-lived. An expired OAuth2 is re-minted from the stored OAuth1 (no
 //   SSO); only an OAuth1 Garmin rejects falls back to an email/password login

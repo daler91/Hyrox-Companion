@@ -3,7 +3,10 @@ import { inSequence } from "@shared/inSequence";
 import { type CoachNoteInputs, type InsertExerciseSet, type UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
+import { AiConfigurationError } from "../ai/errors";
+import { isTextAiProviderConfigured } from "../ai/providers";
 import { db, type DbExecutor } from "../db";
+import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
 import {
   generateReviewNotes,
@@ -12,6 +15,7 @@ import {
   type UpcomingWorkout,
   type WorkoutSuggestion,
 } from "../gemini/index";
+import { rethrowCoachCallFailure } from "../gemini/suggestionService";
 import { logger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
@@ -516,8 +520,8 @@ async function buildReviewNotes({
 /**
  * One of the model's calls, its failure held in `failures` rather than thrown,
  * so the pass still writes what needs no model — the load governor, the plan
- * adaptation, a safety note — before it fails the job for pg-boss to retry.
- * The suggestion service no longer turns a failure into `[]`, which read as
+ * adaptation, a safety note — before it decides whether to fail the job. The
+ * suggestion service no longer turns a failure into `[]`, which read as
  * "nothing to change" and wrote "the plan still fits" notes during an outage.
  * AI8 (CODEBASE_ANALYSIS_2026-10-03)
  */
@@ -716,8 +720,10 @@ async function applyDeterministicStagesOnly(
  * Auto-coach: fires after a workout is completed.
  * Reads the user's active plan goal + recent performance, then applies AI-suggested
  * adjustments directly to upcoming plan_days. Throws on failure so the
- * auto-coach job is retried — including a failed model call, after the
- * rule-based stages are written (AI8).
+ * auto-coach job is retried — including a failed suggestions call, after the
+ * rule-based stages are written. A failed review-note call alone, or a text
+ * provider that is not configured (found before the call or by it), completes
+ * the job instead (AI8).
  */
 export async function triggerAutoCoach(userId: string): Promise<{ adjusted: number }> {
   try {
@@ -760,6 +766,16 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     if (!budget.allowed) {
       logger.info("[coach] AI budget exceeded — applying rule-based stages only");
+      return await applyDeterministicStagesOnly(stages, deterministicContext);
+    }
+
+    // A missing API key, no model for the reasoning role both of the model's
+    // calls run on, or AI_FEATURES_ENABLED=false fails every call the same way
+    // (AiConfigurationError), so a pg-boss retry cannot help: apply the
+    // rule-based stages and complete, as over budget, instead of failing and
+    // retrying to the same end. AI8 (CODEBASE_ANALYSIS_2026-10-03)
+    if (env.AI_FEATURES_ENABLED === "false" || !isTextAiProviderConfigured("reasoning")) {
+      logger.warn("[coach] No text AI provider is configured — applying rule-based stages only");
       return await applyDeterministicStagesOnly(stages, deterministicContext);
     }
 
@@ -850,6 +866,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
     const suggestionsFailed = failures.length > 0;
+    const reviewNoteFailures: unknown[] = [];
     const rawReviewNotes = await attemptModelCall(
       () =>
         buildReviewNotes({
@@ -862,7 +879,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
           forcedSafetyNote,
           suggestionsFailed,
         }),
-      failures,
+      reviewNoteFailures,
     );
     // Drop any review note whose workoutId isn't actually an unchanged day:
     // AI providers occasionally hallucinate IDs, and a review-note write against
@@ -889,11 +906,19 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     if (adjusted > 0 || noted > 0) {
       logger.info({ userId, adjusted, noted }, "[coach] Auto-coach applied adjustments and notes");
     }
-    if (failures.length > 0) {
-      // Fail the job so pg-boss retries the model's pass (AI8).
-      logger.warn({ adjusted, noted }, "[coach] A model call failed; wrote what needs no model, retrying");
+    // A configuration error fails every retry the same way: the job completes
+    // with what needs no model, as when the pre-check finds it (AI8).
+    if (suggestionsFailed && !(failures[0] instanceof AiConfigurationError)) {
+      // The model weighed nothing and wrote nothing, so a retry is safe: fail
+      // the job for pg-boss to retry the model's pass (AI8).
+      logger.warn({ adjusted, noted }, "[coach] The suggestions call failed; wrote what needs no model, retrying");
       throw failures[0];
     }
+    // A failed review-note call: the model's changes are already written. A
+    // retry would re-run the suggestions on days they changed and could append
+    // a second cue, so the days the model left alone go without a note this
+    // pass and the job completes (AI8). The suggestion service logged the error.
+    if (reviewNoteFailures.length > 0) logger.warn({ adjusted, noted }, "[coach] The review-note call failed; kept the model's changes, no review notes");
     return { adjusted };
   } catch (error) {
     logger.error({ err: error, userId }, "[coach] Auto-coach error:");
@@ -1005,6 +1030,8 @@ export async function regenerateCoachNoteForPlanDay(
   const safetySignals = analyzeSafetySignals(trainingContext, [workoutInput]);
   const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
 
+  // A configuration error comes out of the call unclassified, and leaves as
+  // the 503 a request reports (AI8, CODEBASE_ANALYSIS_2026-10-03).
   const notes = forcedSafetyNote
     ? [{ workoutId: day.id, note: forcedSafetyNote }]
     : await generateReviewNotes(
@@ -1014,7 +1041,7 @@ export async function regenerateCoachNoteForPlanDay(
         coachingContext.text,
         userId,
         stylePromptContext,
-      );
+      ).catch(rethrowCoachCallFailure);
   const note = notes.find((n) => n.workoutId === day.id);
   if (!note?.note) {
     throw new AppError(

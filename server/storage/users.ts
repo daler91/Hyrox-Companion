@@ -227,10 +227,11 @@ export class UserStorage {
 
   /**
    * Purge the user's rate-limit buckets on account deletion (S6). Their keys
-   * are `${category}:user:${id}` (server/routeUtils.ts) and are NOT FK-linked
-   * to `users`, so the deletion cascade can't reach them. `split_part` matches
-   * the id after `:user:` exactly — avoiding LIKE-wildcard pitfalls when a
-   * Clerk userId contains `_`.
+   * are `${category}:${maxRequests}:${windowMs}:user:${id}`
+   * (server/routeUtils.ts; C5, CODEBASE_ANALYSIS_2026-10-03) and are NOT
+   * FK-linked to `users`, so the deletion cascade can't reach them.
+   * `split_part` matches the id after `:user:` exactly — avoiding
+   * LIKE-wildcard pitfalls when a Clerk userId contains `_`.
    */
   async purgeRateLimitBucketsForUser(id: string): Promise<number> {
     const result = await db

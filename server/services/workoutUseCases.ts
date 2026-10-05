@@ -1,4 +1,4 @@
-import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type updateWorkoutLogSchema } from "@shared/schema";
+import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureSetRelink, type updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { isTextAiProviderConfigured } from "../ai/providers";
@@ -20,6 +20,12 @@ type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
 type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
   structureBlocks?: StructureBlockInput[];
+  /**
+   * The rows a structureBlocks save moves with its renumbered steps. They stay
+   * in `updateData`, and updateWorkout splits them off before the columns are
+   * written (CL15, CODEBASE_ANALYSIS_2026-10-03).
+   */
+  relinks?: StructureSetRelink[];
 };
 
 /**

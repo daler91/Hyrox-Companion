@@ -9,6 +9,7 @@ import { createLogger,createServer as createViteServer } from "vite";
 
 import viteConfig from "../vite.config";
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
+import { sendNotFound } from "./routeUtils";
 
 const viteLogger = createLogger();
 
@@ -35,6 +36,13 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
+  // Same JSON 404 as serveStatic (server/static.ts): an unmatched /api path
+  // must not get the SPA shell with a 200, which the offline queue reads as
+  // synced. Without it, dev behaved unlike production for a renamed route.
+  // C38 (CODEBASE_ANALYSIS_2026-10-03)
+  app.use("/api", (_req, res) => {
+    sendNotFound(res, "API route not found");
+  });
 
   const viteFallbackLimiter = rateLimit({
     windowMs: RATE_LIMIT_WINDOW_15M_MS,

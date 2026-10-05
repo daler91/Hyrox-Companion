@@ -3,6 +3,7 @@ import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 import { z } from "zod";
 
+import { AiConfigurationError } from "../ai/errors";
 import { generateJsonText } from "../ai/providers";
 import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { logger } from "../logger";
@@ -67,15 +68,34 @@ export const workoutSuggestionSchema = z.object({
  * answer "nothing to change", so during an outage the auto-coach wrote "the
  * plan still fits" notes it never evaluated, the job completed with no retry,
  * and a manual request got a 200 with nothing in it. A failed call now throws
- * an AppError; `[]` only ever means the model looked and found nothing.
- * AI8 (CODEBASE_ANALYSIS_2026-10-03)
+ * an AppError, or the AiConfigurationError itself when this deployment cannot
+ * make the call at all; `[]` only ever means the model looked and found
+ * nothing. AI8 (CODEBASE_ANALYSIS_2026-10-03)
  */
-function coachCallFailure(error: unknown, label: string): AppError {
+function coachCallFailure(error: unknown, label: string): AppError | AiConfigurationError {
   // Already classified: an unreadable reply, logged where it was read.
   if (error instanceof AppError) return error;
   logger.error({ err: error }, `[gemini] ${label} error:`);
+  // No key, no model for the role, AI switched off: every retry fails the same
+  // way. Passed on as it is, so the auto-coach can tell it from an outage and
+  // complete instead of retrying; a request reports it through
+  // rethrowCoachCallFailure.
+  if (error instanceof AiConfigurationError) return error;
   const classified = classifyAiError(error);
   return new AppError(classified.code, classified.message, classified.status);
+}
+
+/**
+ * Rethrow a coach call's failure for a request handler to report. An
+ * AiConfigurationError becomes the 503 the AI kill switch answers with
+ * (aiBudgetCheck), not an unclassified 500; anything else is already an
+ * AppError and goes as it is. AI8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function rethrowCoachCallFailure(error: unknown): never {
+  if (error instanceof AiConfigurationError) {
+    throw new AppError(ErrorCode.AI_FEATURES_DISABLED, "AI features are temporarily disabled.", 503);
+  }
+  throw error;
 }
 
 function unreadableReply(): AppError {

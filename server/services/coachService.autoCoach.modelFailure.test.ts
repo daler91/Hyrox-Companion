@@ -1,7 +1,10 @@
 import "./coachService.testSetup";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AiConfigurationError } from "../ai/errors";
+import { isTextAiProviderConfigured } from "../ai/providers";
+import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
 import { generateReviewNotes, generateWorkoutSuggestions } from "../gemini/index";
 import { storage } from "../storage";
@@ -29,6 +32,7 @@ vi.mock("./aiUsageService", () => ({
 }));
 
 const OUTAGE = new AppError(ErrorCode.AI_UNAVAILABLE, "AI service temporarily unavailable.", 503);
+const ORIGINAL_AI_FEATURES_ENABLED = env.AI_FEATURES_ENABLED;
 
 function adaptation(planDayId: string): PlanAdaptation {
   return {
@@ -88,14 +92,16 @@ describe("triggerAutoCoach — a failed model call", () => {
     expect(vi.mocked(storage.users).updateIsAutoCoaching.mock.lastCall).toEqual(["user-1", false]);
   });
 
-  it("keeps the model's applied changes when only the review-note call fails, and fails the job", async () => {
+  it("keeps the model's applied changes and completes the job when only the review-note call fails", async () => {
+    // A retry would re-run the suggestions on days they already changed and
+    // could append a second cue, so the job completes without the notes.
     threePlannedDays();
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
       makeSuggestion({ workoutId: "day-2", recommendation: "5km tempo", rationale: "Variety" }),
     ] as never);
     vi.mocked(generateReviewNotes).mockRejectedValueOnce(OUTAGE);
 
-    await expect(triggerAutoCoach("user-1")).rejects.toBe(OUTAGE);
+    await expect(triggerAutoCoach("user-1")).resolves.toEqual({ adjusted: 2 });
 
     expect(vi.mocked(storage.plans).updatePlanDay.mock.calls.map((call) => call[0])).toEqual([
       "day-2",
@@ -130,5 +136,72 @@ describe("triggerAutoCoach — a failed model call", () => {
       ["day-2", "Still fits."],
       ["day-3", "Still fits."],
     ]);
+  });
+});
+
+/**
+ * AI8 (CODEBASE_ANALYSIS_2026-10-03): a missing provider key, a missing
+ * reasoning model or AI switched off fails every call the same way
+ * (AiConfigurationError), so failing the job only bought three identical
+ * retries. The pass applies the rule-based stages and completes, as it does
+ * over budget.
+ */
+describe("triggerAutoCoach — no text AI provider to call", () => {
+  afterEach(() => {
+    env.AI_FEATURES_ENABLED = ORIGINAL_AI_FEATURES_ENABLED;
+  });
+
+  it.each<[string, () => void]>([
+    [
+      "no provider key or reasoning model is configured",
+      () => {
+        vi.mocked(isTextAiProviderConfigured).mockReturnValueOnce(false);
+      },
+    ],
+    [
+      "AI is switched off",
+      () => {
+        env.AI_FEATURES_ENABLED = "false";
+      },
+    ],
+  ])("applies the rule-based stages and completes the job when %s", async (_label, arrange) => {
+    threePlannedDays();
+    arrange();
+
+    await expect(triggerAutoCoach("user-1")).resolves.toEqual({ adjusted: 1 });
+
+    expect(applyPlanAdaptation).toHaveBeenCalledWith(adaptation("day-1"), "user-1", dbMockState.tx);
+    expect(generateWorkoutSuggestions).not.toHaveBeenCalled();
+    expect(generateReviewNotes).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.users).updateIsAutoCoaching.mock.lastCall).toEqual(["user-1", false]);
+  });
+
+  it("asks about the reasoning model, the one both of the model's calls run on", async () => {
+    // A check of the fast model alone let a provider configured only for it
+    // through, and every call then failed.
+    threePlannedDays();
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+
+    await triggerAutoCoach("user-1");
+
+    expect(isTextAiProviderConfigured).toHaveBeenCalledWith("reasoning");
+  });
+
+  it("completes without a retry when the call itself finds the configuration missing", async () => {
+    // The suggestion service passes the configuration error through unwrapped,
+    // so it is told apart from an outage, which is retried.
+    threePlannedDays();
+    const missingModel = new AiConfigurationError(
+      'AI text model is not configured for provider "anthropic".',
+    );
+    vi.mocked(generateWorkoutSuggestions).mockRejectedValue(missingModel);
+
+    await expect(triggerAutoCoach("user-1")).resolves.toEqual({ adjusted: 1 });
+
+    expect(applyPlanAdaptation).toHaveBeenCalledWith(adaptation("day-1"), "user-1", dbMockState.tx);
+    // Nothing was weighed, so nothing is explained.
+    expect(generateReviewNotes).not.toHaveBeenCalled();
+    expect(reviewNoteWrites()).toEqual([]);
+    expect(vi.mocked(storage.users).updateIsAutoCoaching.mock.lastCall).toEqual(["user-1", false]);
   });
 });

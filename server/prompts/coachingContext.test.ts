@@ -76,6 +76,28 @@ describe("buildOverallStats — let-go sessions", () => {
   });
 });
 
+// AI11 (CODEBASE_ANALYSIS_2026-10-03): the total counts the plan ahead, so it
+// must not read as the athlete's training history.
+describe("buildOverallStats — a new athlete with a long plan", () => {
+  const newAthlete = {
+    totalWorkouts: 73,
+    completedWorkouts: 1,
+    plannedWorkouts: 72,
+    missedWorkouts: 0,
+    skippedWorkouts: 0,
+    completionRate: 100,
+    currentStreak: 1,
+  } as TrainingContext;
+
+  it("does not present the scheduled plan as workouts tracked", () => {
+    const out = buildOverallStats(newAthlete);
+
+    expect(out).not.toContain("Total workouts tracked");
+    expect(out).toContain("- Sessions on the timeline, done or scheduled (includes the plan ahead): 73");
+    expect(out).toContain("- Completed: 1\n- Planned (upcoming): 72");
+  });
+});
+
 // The coach was reading dates straight from the workout data with no "today"
 // anchor, so it called the current day's session "tomorrow". These cover the
 // date anchoring that keeps it aligned with the athlete's local calendar.

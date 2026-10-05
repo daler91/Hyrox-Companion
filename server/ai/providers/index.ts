@@ -12,6 +12,7 @@ import { geminiTextProvider } from "./gemini";
 import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
 import type {
   ResolvedTextAiRequest,
+  TextAiModelRole,
   TextAiProvider,
   TextAiRequest,
   TextAiResponse,
@@ -74,8 +75,9 @@ export function __resetTextAiProviderForTests(): void {
   textAiProvider = null;
 }
 
-export function isTextAiProviderConfigured(): boolean {
-  return configuredTextProviderHasApiKey();
+/** Whether a text call in `role` (default "fast", the parsers' role) can be made. */
+export function isTextAiProviderConfigured(role: TextAiModelRole = "fast"): boolean {
+  return configuredTextProviderHasApiKey(role);
 }
 
 function resolveRequest(request: TextAiRequest): ResolvedTextAiRequest {

@@ -183,7 +183,8 @@ export async function eraseAccount(
   }
 
   // Step 6: best-effort purge of the user's rate-limit buckets (S6). Their
-  // keys are `${category}:user:${userId}` and are NOT FK-linked to `users`, so
+  // keys are `${category}:${maxRequests}:${windowMs}:user:${userId}` (C5,
+  // CODEBASE_ANALYSIS_2026-10-03) and are NOT FK-linked to `users`, so
   // the cascade in step 5 leaves them behind until their TTL lapses.
   // Non-fatal — stale buckets only affect that user's now-deleted identity.
   try {

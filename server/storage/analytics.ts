@@ -264,6 +264,9 @@ export class AnalyticsStorage {
    * fuel anchors before the workout is logged. User-scoped in SQL via the
    * parent plan (like getMissedWorkoutsForDate); `status = 'planned'`
    * excludes completed/missed/skipped days (a completed day already has a log).
+   * A retired plan's days from its cutoff on stay `planned` for good, so the
+   * lifetime guard keeps them from fuelling a session the athlete no longer
+   * has (AI17, CODEBASE_ANALYSIS_2026-10-03).
    */
   async getPlannedDaysForDate(userId: string, date: string): Promise<{ focus: string; expectedDurationMin: number | null; expectedRpe: number | null; plannedTimeOfDayMin: number | null }[]> {
     // Same join-scoping as getMissedWorkoutsForDate: this one is hit on every
@@ -283,6 +286,7 @@ export class AnalyticsStorage {
           eq(trainingPlans.userId, userId),
           eq(planDays.scheduledDate, date),
           eq(planDays.status, "planned"),
+          planDayWithinPlanLifetime(),
         ),
       );
     return days.map((d) => ({
@@ -401,6 +405,12 @@ export class AnalyticsStorage {
    * reports the most recently COMPLETED week, which the excused split below
    * relies on: with every day of the week in the past, "held out of missed by a
    * declared absence" collapses to annotation coverage, no today needed).
+   *
+   * Every plan-day count applies the plan-lifetime guard, like the weekly
+   * review's getPlanDaysByDateRange: a retired plan's days from its cutoff on
+   * stay `planned` for good, and after a mid-week switch the email counted
+   * them as still to do beside the new plan's sessions.
+   * AI17 (CODEBASE_ANALYSIS_2026-10-03)
    */
   async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; planCompletedCount: number; plannedCount: number; missedCount: number; skippedCount: number; excusedCount: number; letGoCount: number; totalDuration: number }> {
     const [logs] = await db
@@ -431,7 +441,8 @@ export class AnalyticsStorage {
         and(
           eq(trainingPlans.userId, userId),
           sql`${planDays.scheduledDate} >= ${weekStart}`,
-          sql`${planDays.scheduledDate} <= ${weekEnd}`
+          sql`${planDays.scheduledDate} <= ${weekEnd}`,
+          planDayWithinPlanLifetime(),
         )
       )
       .groupBy(planDays.status);
@@ -458,6 +469,7 @@ export class AnalyticsStorage {
           sql`${planDays.scheduledDate} <= ${weekEnd}`,
           inArray(planDays.status, ["planned", "missed"]),
           absenceDeclaredForPlanDay(db, userId),
+          planDayWithinPlanLifetime(),
         ),
       )
       .groupBy(planDays.status);
@@ -476,6 +488,7 @@ export class AnalyticsStorage {
           sql`${planDays.scheduledDate} <= ${weekEnd}`,
           planDayLetGo(),
           not(absenceDeclaredForPlanDay(db, userId)),
+          planDayWithinPlanLifetime(),
         ),
       );
 

@@ -146,6 +146,16 @@ describe("isWeekParamValid", () => {
     expect(isWeekParamValid(undefined)).toBe(false);
     expect(isWeekParamValid(20260615)).toBe(false);
   });
+
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03): the shared calendar check takes the
+  // same dates the regex-and-components copy here did, and never throws.
+  it("rejects a year that is not four digits, and an empty param, without throwing", () => {
+    expect(isWeekParamValid("20266-06-15")).toBe(false);
+    // Date.UTC reads a year below 100 as 19xx.
+    expect(isWeekParamValid("0050-06-15")).toBe(false);
+    expect(isWeekParamValid("")).toBe(false);
+    expect(isWeekParamValid("2026-06-15T00:00:00Z")).toBe(false);
+  });
 });
 
 describe("listPersonalRecordsInRange", () => {

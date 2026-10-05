@@ -10,6 +10,7 @@ import {
   type UpcomingWorkout,
   type WorkoutSuggestion,
 } from "../gemini/index";
+import { rethrowCoachCallFailure } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
@@ -283,9 +284,11 @@ async function buildNoUpcomingWorkoutsMessage(userId: string, timezone: string):
 /**
  * The model's suggestions. A failed call throws, so the athlete is told the
  * coach couldn't look rather than "your upcoming workouts look well-balanced"
- * (it used to come back as an empty 200). The exception is a red-flag safety
- * escalation: it replaces every suggestion anyway, so it still reaches the
- * athlete through an outage. AI8 (CODEBASE_ANALYSIS_2026-10-03)
+ * (it used to come back as an empty 200); a call this deployment cannot make
+ * (AiConfigurationError) gets the AI kill switch's 503 rather than a 500. The
+ * exception is a red-flag safety escalation: it replaces every suggestion
+ * anyway, so it still reaches the athlete through an outage.
+ * AI8 (CODEBASE_ANALYSIS_2026-10-03)
  */
 async function requestSuggestions(
   call: () => Promise<WorkoutSuggestion[]>,
@@ -295,7 +298,7 @@ async function requestSuggestions(
   try {
     return await call();
   } catch (error) {
-    if (!redFlagDetected) throw error;
+    if (!redFlagDetected) rethrowCoachCallFailure(error);
     log.warn({ err: error }, "[suggestions] Model call failed; surfacing the safety escalation alone");
     return [];
   }
