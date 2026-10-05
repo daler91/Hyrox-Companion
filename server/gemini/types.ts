@@ -192,6 +192,8 @@ export interface TrainingContext {
     aiInputsUsed?: CoachNoteInputs | null;
     /** Key, supporting or optional — how much the session matters to the plan. */
     priority?: PlanDayPriority | null;
+    /** Set by the race date (race, shakeout, recovery): shown, never rewritten (AI29). */
+    raceDerived?: boolean;
   }>;
   exerciseBreakdown: Record<string, number>;
   structuredExerciseStats?: Record<

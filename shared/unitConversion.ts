@@ -703,6 +703,41 @@ const MINUTE_SHORTHAND_CONTEXT = [
   "zone",
 ] as const;
 
+/*
+ * Holds and rests take a time, never a distance, so "<n>m" AFTER one of these
+ * words is minutes: "Rest 2m", "Plank hold 1m", "Rest: 2m". Before C52
+ * (CODEBASE_ANALYSIS_2026-10-03) an imperial athlete's plan read "Rest 7 ft"
+ * and "Plank hold 3 ft". Only the word BEFORE the number counts: "50m rest 30s"
+ * is a sprint, so a trailing "rest" reads as minutes only for a short value
+ * ("2m rest").
+ */
+const REST_SHORTHAND_CONTEXT = [
+  "break",
+  "hang",
+  "hold",
+  "plank",
+  "recover",
+  "rest",
+  "sit",
+  "wait",
+] as const;
+const MAX_TRAILING_REST_MIN = 5;
+
+/** What a speed's distance is per: "km/h", "m/s", "km per hour". */
+const SPEED_TIME_UNITS = [
+  "h",
+  "hr",
+  "hrs",
+  "hour",
+  "min",
+  "mins",
+  "minute",
+  "s",
+  "sec",
+  "secs",
+  "second",
+] as const;
+
 interface TextUnitMatch {
   readonly type: "weight" | "distance";
   readonly rawUnit: string;
@@ -749,6 +784,19 @@ function isMinuteContext(word: string | null): boolean {
   return word != null && MINUTE_SHORTHAND_CONTEXT.includes(word as typeof MINUTE_SHORTHAND_CONTEXT[number]);
 }
 
+function isRestContext(word: string | null): boolean {
+  return (
+    word != null && REST_SHORTHAND_CONTEXT.includes(word as (typeof REST_SHORTHAND_CONTEXT)[number])
+  );
+}
+
+/** The word before `numberStart`, read past a label's colon ("Rest: 2m"). */
+function readPreviousLabel(lowerText: string, numberStart: number): string | null {
+  let index = numberStart;
+  while (index > 0 && isWhitespace(lowerText.charAt(index - 1))) index -= 1;
+  return readPreviousWord(lowerText, lowerText.charAt(index - 1) === ":" ? index - 1 : numberStart);
+}
+
 function isLikelyMinuteShorthand(
   value: number,
   sourceUnit: ParsedDistanceUnit,
@@ -757,7 +805,33 @@ function isLikelyMinuteShorthand(
   unitEnd: number,
 ): boolean {
   if (sourceUnit !== "m" || value > 60) return false;
-  return isMinuteContext(readNextWord(lowerText, unitEnd)) || isMinuteContext(readPreviousWord(lowerText, numberStart));
+  const nextWord = readNextWord(lowerText, unitEnd);
+  const previousWord = readPreviousWord(lowerText, numberStart);
+  if (isMinuteContext(nextWord) || isMinuteContext(previousWord)) return true;
+  if (isRestContext(readPreviousLabel(lowerText, numberStart))) return true;
+  return nextWord === "rest" && value <= MAX_TRAILING_REST_MIN;
+}
+
+/** Where a speed's time unit starts after its distance unit ("/h", " per hour"), or null. */
+function speedDenominatorStart(lowerText: string, unitEnd: number): number | null {
+  const afterUnit = skipWhitespace(lowerText, unitEnd);
+  if (lowerText.charAt(afterUnit) === "/") return afterUnit + 1;
+  const perEnd = afterUnit + "per".length;
+  return lowerText.startsWith("per", afterUnit) && !isWordChar(lowerText.charAt(perEnd))
+    ? perEnd
+    : null;
+}
+
+/**
+ * Whether the distance unit ending at `unitEnd` is the top of a speed: "6 km/h",
+ * "7 m/s", "10 km per hour". A speed is left as written, like a pace: converting
+ * its distance alone stored "6000 m/h" for "6 km/h" (C52, CODEBASE_ANALYSIS_2026-10-03).
+ */
+function isSpeedUnit(lowerText: string, unitEnd: number): boolean {
+  const timeStart = speedDenominatorStart(lowerText, unitEnd);
+  if (timeStart === null) return false;
+  const word = readNextWord(lowerText, timeStart);
+  return word != null && SPEED_TIME_UNITS.includes(word as (typeof SPEED_TIME_UNITS)[number]);
 }
 
 function getWeightTextReplacement(
@@ -785,7 +859,7 @@ function getDistanceTextReplacement(
   const sourceUnit = standardizeParsedDistanceUnit(unitMatch.rawUnit);
   if (!sourceUnit) return null;
   const previousChar = numberStart > 0 ? text[numberStart - 1] ?? "" : "";
-  if (isPaceOrRatioUnit(previousChar)) return null;
+  if (isPaceOrRatioUnit(previousChar) || isSpeedUnit(lowerText, unitMatch.end)) return null;
   if (isLikelyMinuteShorthand(numberToken.value, sourceUnit, lowerText, numberStart, unitMatch.end)) {
     return null;
   }

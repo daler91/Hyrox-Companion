@@ -18,6 +18,7 @@ import {
   createServing,
   deleteCustomFood,
   deleteServing,
+  RECIPE_FOOD_DELETE_CONFLICT,
   SHARED_FOOD_EDIT_CONFLICT,
   updateCustomFood,
 } from "../nutritionFoods";
@@ -54,6 +55,7 @@ describe("deleteCustomFood", () => {
 
   it("throws a 409 CONFLICT and does not delete when the food is referenced by a log entry", async () => {
     selectWhereChain([{ id: "food-1" }]); // food lookup: found
+    selectWhereChain([]); // not a recipe's backing food
     selectWhereChain([{ logs: 1 }]); // log-entry count
     selectWhereChain([{ ings: 0 }]); // recipe-ingredient count
 
@@ -67,6 +69,7 @@ describe("deleteCustomFood", () => {
 
   it("throws a 409 CONFLICT when the food is referenced by a recipe ingredient", async () => {
     selectWhereChain([{ id: "food-1" }]);
+    selectWhereChain([]);
     selectWhereChain([{ logs: 0 }]);
     selectWhereChain([{ ings: 1 }]);
 
@@ -77,8 +80,25 @@ describe("deleteCustomFood", () => {
     expect(deleteMock).not.toHaveBeenCalled();
   });
 
+  // C39 (CODEBASE_ANALYSIS_2026-10-03): recipes.food_id is ON DELETE RESTRICT,
+  // so deleting a recipe's backing food here was a generic 500 every time.
+  it("throws a 409 pointing at the recipe when the food backs a recipe", async () => {
+    selectWhereChain([{ id: "food-1" }]); // food lookup: found
+    selectWhereChain([{ id: "recipe-1" }]); // the recipe it backs
+
+    await expect(deleteCustomFood("u1", "food-1")).rejects.toMatchObject({
+      code: ErrorCode.CONFLICT,
+      status: 409,
+      message: RECIPE_FOOD_DELETE_CONFLICT,
+    });
+    // Decided before the reference counts are even read.
+    expect(selectMock).toHaveBeenCalledTimes(2);
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
   it("deletes and returns true when the food is unreferenced", async () => {
     selectWhereChain([{ id: "food-1" }]);
+    selectWhereChain([]);
     selectWhereChain([{ logs: 0 }]);
     selectWhereChain([{ ings: 0 }]);
     const where = vi.fn().mockResolvedValue(undefined);
@@ -120,6 +140,9 @@ describe("updateCustomFood", () => {
   const tx = { select: vi.fn(), update: vi.fn() };
   const updateSet = vi.fn();
 
+  /** The athlete's recipes that use the food, read after a macro change (C40). */
+  const dependentsWhere = vi.fn();
+
   /** `current` is the locked row (null = not the user's custom food);
    *  `otherLogs` / `otherRecipes` are the other-user reference probes. */
   function mockTx({
@@ -127,6 +150,7 @@ describe("updateCustomFood", () => {
     otherLogs = [],
     otherRecipes = [],
   }: { current?: Food | null; otherLogs?: unknown[]; otherRecipes?: unknown[] } = {}) {
+    dependentsWhere.mockResolvedValue([]);
     tx.select
       // the row lock
       .mockReturnValueOnce({ from: () => ({ where: () => ({ for: vi.fn().mockResolvedValue(current ? [current] : []) }) }) })
@@ -135,7 +159,9 @@ describe("updateCustomFood", () => {
       // another user's recipe ingredient
       .mockReturnValueOnce({
         from: () => ({ innerJoin: () => ({ where: () => ({ limit: vi.fn().mockResolvedValue(otherRecipes) }) }) }),
-      });
+      })
+      // after the write: the athlete's recipes that use the food (none here)
+      .mockReturnValueOnce({ from: () => ({ innerJoin: () => ({ where: dependentsWhere }) }) });
     updateSet.mockReturnValue({ where: () => ({ returning: vi.fn().mockResolvedValue([{ ...STORED, updated: true }]) }) });
     tx.update.mockReturnValue({ set: updateSet });
     transactionMock.mockImplementation((cb: (handle: typeof tx) => Promise<unknown>) => cb(tx));
@@ -179,8 +205,10 @@ describe("updateCustomFood", () => {
 
     expect(result).toMatchObject({ updated: true });
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ servingSizeG: 120, isPublic: false }));
-    // Only the row lock ran: no change to logged history, so no reference check.
+    // Only the row lock ran: no change to logged history, so no reference
+    // check, and no macro change, so no recipe refresh either.
     expect(tx.select).toHaveBeenCalledTimes(1);
+    expect(dependentsWhere).not.toHaveBeenCalled();
   });
 
   it("treats a value equal at float4 precision as unchanged", async () => {
@@ -198,6 +226,9 @@ describe("updateCustomFood", () => {
       updated: true,
     });
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ caloriesPer100g: 95 }));
+    // C40: a macro change looks for the athlete's recipes built on the food,
+    // so their backing foods can be recomputed in the same transaction.
+    expect(dependentsWhere).toHaveBeenCalledTimes(1);
   });
 });
 

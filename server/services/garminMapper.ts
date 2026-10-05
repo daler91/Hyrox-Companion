@@ -54,7 +54,7 @@ function extractDate(startTimeLocal: string): string {
  * unambiguous instant. Fall back to startTimeLocal parsed in the runtime's
  * local zone, then null. Nullable rows fall back to pre/post_workout meal tags.
  */
-function parseStartInstant(activity: GarminActivity): Date | null {
+export function parseStartInstant(activity: GarminActivity): Date | null {
   const gmt = activity.startTimeGMT;
   if (gmt) {
     const d = new Date(`${gmt.replace(" ", "T")}Z`);
@@ -171,5 +171,24 @@ export function mapGarminActivityToWorkout(
     avgCadence: activity.averageRunningCadenceInStepsPerMinute ?? null,
     avgWatts: typeof activity.avgPower === "number" ? Math.round(activity.avgPower) : null,
     sufferScore: null, // Garmin doesn't expose Strava's "suffer score".
+  };
+}
+
+/**
+ * What the recording measured, for the one exercise set a Garmin import
+ * carries (`recordingSetRow` in deviceActivitySets.ts): the sport key, the
+ * moving clock in SECONDS (the row's `duration` is rounded to whole minutes,
+ * which would move a 10 km PR by up to 30 s) and the distance in metres.
+ * C26 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function garminRecordingMeasurements(activity: GarminActivity): {
+  sportType: string;
+  movingSeconds: number;
+  distanceMeters: number;
+} {
+  return {
+    sportType: activity.activityType?.typeKey ?? "",
+    movingSeconds: activity.movingDuration ?? activity.duration ?? 0,
+    distanceMeters: activity.distance ?? 0,
   };
 }

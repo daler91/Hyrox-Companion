@@ -87,6 +87,36 @@ const SPORT_TYPE_EXERCISE: Readonly<Record<string, ExerciseName>> = {
   hike: "hiking",
   elliptical: "elliptical",
   stairstepper: "stair_climber",
+  // Garmin's `activityType.typeKey` spellings of the same sports. A Garmin
+  // import's set is built from the activity itself (`recordingSetRow`), and
+  // without these keys a Garmin-only athlete still had no running slice and
+  // no running PRs. None of them is a Strava `sport_type` lowercased, so no
+  // stored Strava set changes. C26 (CODEBASE_ANALYSIS_2026-10-03)
+  running: "run",
+  trail_running: "run",
+  track_running: "run",
+  street_running: "run",
+  treadmill_running: "treadmill_run",
+  indoor_running: "treadmill_run",
+  virtual_run: "treadmill_run",
+  cycling: "cycling",
+  road_biking: "cycling",
+  mountain_biking: "cycling",
+  gravel_cycling: "cycling",
+  indoor_cycling: "cycling",
+  virtual_ride: "cycling",
+  cyclocross: "cycling",
+  e_bike_fitness: "cycling",
+  e_bike_mountain: "cycling",
+  hand_cycling: "cycling",
+  lap_swimming: "swimming",
+  open_water_swimming: "swimming",
+  walking: "walking",
+  casual_walking: "walking",
+  speed_walking: "walking",
+  hiking: "hiking",
+  indoor_rowing: "rowing",
+  stair_climbing: "stair_climber",
 };
 
 export function exerciseNameForSportType(sportType: string | null | undefined): ExerciseName | null {
@@ -95,7 +125,7 @@ export function exerciseNameForSportType(sportType: string | null | undefined): 
 }
 
 /** The moving time and distance a log's recording measured. */
-interface ActivityMeasurements {
+export interface ActivityMeasurements {
   sportType: string;
   movingSeconds: number;
   distanceMeters: number;
@@ -151,7 +181,20 @@ export function deviceActivitySetRow(
 ): InsertExerciseSet | null {
   const measurements = measurementsFor(log);
   if (!measurements) return null;
+  return recordingSetRow(log.id, measurements, preferences);
+}
 
+/**
+ * The set row for a recording's measurements on the log `workoutLogId`, or
+ * null when they describe no set. `deviceActivitySetRow` reads them off a
+ * Strava log; the Garmin sync passes the activity's own (C26), which carry
+ * the clock in seconds where the row's `duration` holds whole minutes.
+ */
+export function recordingSetRow(
+  workoutLogId: string,
+  measurements: ActivityMeasurements,
+  preferences: UnitPreferences,
+): InsertExerciseSet | null {
   const exerciseName = exerciseNameForSportType(measurements.sportType);
   if (!exerciseName) return null;
   // A recording with no elapsed movement describes no effort. Guard rather than
@@ -163,7 +206,7 @@ export function deviceActivitySetRow(
 
   const stamp = stampForPreferences(preferences);
   return {
-    workoutLogId: log.id,
+    workoutLogId,
     planDayId: null,
     exerciseName,
     customLabel: null,

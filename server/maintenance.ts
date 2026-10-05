@@ -180,9 +180,11 @@ export async function ensureVectorSchema() {
     // so a plain `hnsw (embedding vector_cosine_ops)` fails with "column cannot
     // have more than 2000 dimensions for hnsw index". Casting to `halfvec` raises
     // the HNSW ceiling to 4000 dims. Storage stays full-precision `vector(N)`;
-    // only the index + ORDER BY use half precision, which is negligible for
-    // approximate cosine ranking. The matching ORDER BY cast lives in
-    // CoachingStorage.searchChunksByEmbedding(). Requires pgvector >= 0.7.0.
+    // only the index uses half precision, which is negligible for approximate
+    // cosine ranking. CoachingStorage.searchChunksByEmbedding() no longer
+    // orders by the matching cast: it searches one athlete's chunks exactly,
+    // since this index is shared by every athlete (AI33). Requires pgvector
+    // >= 0.7.0.
     const hnswIdx = await client.query(`
       SELECT 1 FROM pg_indexes WHERE indexname = 'idx_document_chunks_embedding_hnsw'
     `);

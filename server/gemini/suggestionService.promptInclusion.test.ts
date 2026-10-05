@@ -384,6 +384,20 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(prompt).not.toContain("FINGERPRINT_PLAN_NOTES");
   });
 
+  // AI29 (CODEBASE_ANALYSIS_2026-10-03): the shakeout is shown for context,
+  // and the model is told the race date sets it.
+  it("marks a race-derived day as fixed and leaves ordinary days unmarked", () => {
+    const prompt = buildSuggestionsPrompt(createMockTrainingContext(), [
+      createMockUpcomingWorkout({ id: "shakeout-day", focus: "Shakeout", raceDerived: true }),
+      createMockUpcomingWorkout({ id: "ordinary-day" }),
+    ]);
+    const lineFor = (id: string) => prompt.split("\n").find((line) => line.startsWith(`ID: ${id},`));
+
+    expect(lineFor("shakeout-day")).toContain("Fixed: set by the race date, never modify");
+    expect(lineFor("ordinary-day")).toBeDefined();
+    expect(lineFor("ordinary-day")).not.toContain("Fixed:");
+  });
+
   it("formats table-backed prompt distances with the user's distance preference", () => {
     const prompt = buildSuggestionsPrompt(
       createMockTrainingContext({ weightUnit: "lbs", distanceUnit: "miles" }),

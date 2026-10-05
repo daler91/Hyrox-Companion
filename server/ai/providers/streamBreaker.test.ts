@@ -13,11 +13,19 @@ import {
 // invisible to it in both directions. These tests pin the participation.
 // ---------------------------------------------------------------------------
 
-const { streamChunks } = vi.hoisted(() => ({ streamChunks: vi.fn() }));
+const { streamChunks, setRuntimeCache } = vi.hoisted(() => ({
+  streamChunks: vi.fn(),
+  setRuntimeCache: vi.fn(() => Promise.resolve()),
+}));
 
-vi.mock("../sharedRuntimeState", () => ({
-  getRuntimeCache: vi.fn().mockResolvedValue(undefined),
-  setRuntimeCache: vi.fn().mockResolvedValue(undefined),
+// The breaker persists its transitions through server/sharedRuntimeState. This
+// mock used to name "../sharedRuntimeState" — a file that does not exist from
+// here — so it replaced nothing and every transition quietly tried, and
+// failed, to write to the unit lane's dummy DATABASE_URL — AI20
+// (CODEBASE_ANALYSIS_2026-10-03).
+vi.mock("../../sharedRuntimeState", () => ({
+  getRuntimeCache: vi.fn(() => Promise.resolve()),
+  setRuntimeCache,
 }));
 
 vi.mock("./config", () => ({
@@ -78,6 +86,12 @@ describe("streamText participates in the AI circuit breaker", () => {
     const result = await drain();
 
     expect(result).toMatchObject({ error: expect.any(CircuitBreakerOpenError) });
+    // Through the mock above, not a database.
+    expect(setRuntimeCache).toHaveBeenCalledWith(
+      "ai-circuit-breaker:text:gemini",
+      expect.objectContaining({ state: "open" }),
+      expect.any(Number),
+    );
   });
 
   it("fast-fails without touching the provider once the breaker is open", async () => {
@@ -114,6 +128,51 @@ describe("streamText participates in the AI circuit breaker", () => {
 
     respondWith(["healthy"]);
     await expect(drain()).resolves.toEqual({ text: "healthy" });
+  });
+});
+
+// AI18 (CODEBASE_ANALYSIS_2026-10-03): half-open let every stream through, not
+// just the one probe.
+describe("a half-open breaker and streams", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetCircuitBreakerForTests();
+    __resetTextAiProviderForTests();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("fails a second stream fast, without touching the provider, while the probe streams", async () => {
+    failWith(new Error("503 upstream unavailable"));
+    for (let i = 0; i < 5; i++) await drain();
+    vi.advanceTimersByTime(30_000); // COOLDOWN_MS: the next call is the probe.
+
+    let finishProbe: ((value: unknown) => void) | undefined;
+    const probeHeld = new Promise((resolve) => {
+      finishProbe = resolve;
+    });
+    streamChunks.mockImplementationOnce(async function* () {
+      yield { text: "probe ", model: "test-model" };
+      await probeHeld;
+      yield { text: "done", model: "test-model" };
+    });
+    const probe = streamText({ label: "unit", messages: [] } as never);
+    await expect(probe.next()).resolves.toEqual({ value: "probe ", done: false });
+    respondWith(["let through"]);
+    streamChunks.mockClear();
+
+    await expect(drain()).resolves.toMatchObject({ error: expect.any(CircuitBreakerOpenError) });
+    expect(streamChunks).not.toHaveBeenCalled();
+
+    // The probe's success closes the breaker for everyone.
+    finishProbe?.(null);
+    const rest: string[] = [];
+    for await (const text of probe) rest.push(text);
+    expect(rest).toEqual(["done"]);
+    await expect(drain()).resolves.toEqual({ text: "let through" });
   });
 });
 

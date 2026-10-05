@@ -1,5 +1,6 @@
 import { addDaysToISODate, planWeekOneMonday } from "@shared/dateUtils";
 import { inSequence } from "@shared/inSequence";
+import { isRestLikePlanDay } from "@shared/planDayKind";
 import {
   type ExerciseSet,
   exerciseSets,
@@ -56,6 +57,32 @@ function lowestWeekNumber(days: readonly PlanDay[]): number {
     minWeek = Math.min(minWeek, day.weekNumber || 1);
   }
   return minWeek;
+}
+
+/**
+ * The days a reschedule re-dates (or takes off the calendar) that still carry
+ * a fold or shorten's undo. That undo puts the session back on the absolute
+ * date it was missed on, with its missed status, and the undo window runs
+ * from that date: after the plan moves, the date belongs to the old schedule
+ * (possibly before the new start), and moved by the plan's shift instead it
+ * would bring back a "missed" session on a day that has not happened yet. A
+ * re-dated day starts afresh, as needsStatusReset already treats it, so the
+ * undo is dropped — C42 (CODEBASE_ANALYSIS_2026-10-03). A day that keeps its
+ * date keeps its undo.
+ */
+function staleRecoveryUndoIds(
+  days: readonly PlanDay[],
+  nextDates: ReadonlyMap<string, string | null>,
+): string[] {
+  return days
+    .filter((day) => day.recoveryUndo != null && nextDates.get(day.id) !== day.scheduledDate)
+    .map((day) => day.id);
+}
+
+/** Drops the fold/shorten undo on `dayIds` (see staleRecoveryUndoIds). */
+async function clearRecoveryUndo(executor: DbExecutor, dayIds: readonly string[]): Promise<void> {
+  if (dayIds.length === 0) return;
+  await executor.update(planDays).set({ recoveryUndo: null }).where(inArray(planDays.id, [...dayIds]));
 }
 
 /** The state a recovery was planned against, re-checked under the row lock. */
@@ -357,45 +384,7 @@ export class PlanStorage {
     return await executor.insert(planDays).values(days).returning();
   }
 
-  /**
-   * Returns how many plan_days the plan schedules per week, on average. Used
-   * to sanity-check a user's weeklyGoal against their plan density (S4) —
-   * a 2-day plan + goal of 7 will show 0% completion unless the user logs
-   * extra ad-hoc workouts, so the UI surfaces a gentle warning.
-   *
-   * The average is returned as a REAL number, not rounded up. It used to be
-   * `Math.ceil`, which suppressed the very warning this exists to raise: a plan
-   * of 10 days over 4 weeks schedules 2.5 per week, reported 3, so a goal of 3
-   * compared 3 > 3 and stayed silent — while the athlete sat at 2.5/3 and
-   * watched their completion rate cap out at 83% with no explanation (audit
-   * L13). Rounding up is only ever safe for a floor, and this value is a
-   * ceiling on what the plan can deliver.
-   *
-   * Two decimal places, because the raw quotient is a float: 10/3 stored as
-   * 3.3333333333333335 would make an exactly-matched goal read as exceeding
-   * the plan on representation alone.
-   */
-  async getPlanWeeklyDensity(planId: string): Promise<number | undefined> {
-    // Start FROM training_plans + LEFT JOIN plan_days so a plan with zero
-    // days still returns a row (count = 0, density = 0) instead of the
-    // "plan not found" shape. Codex flagged this: a user who deletes every
-    // plan_day on an active plan would otherwise look like "no active plan"
-    // and the weeklyGoalExceedsPlan hint would silently go false.
-    const [row] = await db
-      .select({
-        planDayCount: sql<number>`cast(count(${planDays.id}) as int)`,
-        totalWeeks: trainingPlans.totalWeeks,
-      })
-      .from(trainingPlans)
-      .leftJoin(planDays, eq(planDays.planId, trainingPlans.id))
-      .where(eq(trainingPlans.id, planId))
-      .groupBy(trainingPlans.totalWeeks);
-
-    // totalWeeks is nullable on the schema; bail if the plan never had one set.
-    const totalWeeks = row?.totalWeeks ?? 0;
-    if (totalWeeks <= 0) return undefined;
-    return Math.round((row.planDayCount / totalWeeks) * 100) / 100;
-  }
+  readonly getPlanWeeklyDensity = getPlanWeeklyDensity;
 
   /** Class-method wrapper for the standalone syncPlanDayStatusFromWorkouts (S6). */
   syncPlanDayStatusFromWorkouts(planDayId: string, userId: string, tx?: DbExecutor): Promise<void> {
@@ -699,6 +688,12 @@ export class PlanStorage {
     // start: refuse rather than leave the plan with nothing on the calendar.
     if (dateUpdates.length === 0) return "nothing_after_start";
 
+    const nextDates = new Map<string, string | null>([
+      ...dateUpdates.map(({ id, scheduledDate }): [string, string] => [id, scheduledDate]),
+      ...unscheduleIds.map((id): [string, null] => [id, null]),
+    ]);
+    const undoClearIds = staleRecoveryUndoIds(plan.days, nextDates);
+
     // Derive the plan-level end date from the scheduled days
     const scheduledDates = dateUpdates.map((u) => u.scheduledDate);
     // ⚡ Bolt Performance Optimization:
@@ -748,6 +743,8 @@ export class PlanStorage {
           .set({ status: "planned" })
           .where(inArray(planDays.id, resetUpdateIds));
       }
+
+      await clearRecoveryUndo(writeTx, undoClearIds);
 
       // Update plan-level start/end dates
       await writeTx
@@ -956,6 +953,58 @@ export class PlanStorage {
       .returning({ id: trainingPlans.id });
     return result.length;
   }
+}
+
+/**
+ * Returns how many sessions the plan schedules per week, on average. Used
+ * to sanity-check a user's weeklyGoal against their plan density (S4) —
+ * a 2-day plan + goal of 7 will show 0% completion unless the user logs
+ * extra ad-hoc workouts, so the UI surfaces a gentle warning.
+ *
+ * Rest days are not sessions. AI-generated plans write a row for every day
+ * of the week, rest days included, so counting rows reported 7 a week for
+ * every such plan and the hint never fired for a normal goal. A day counts
+ * unless isRestLikePlanDay (the test the session brief uses) reads it as
+ * rest. C41 (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * The average is returned as a REAL number, not rounded up. It used to be
+ * `Math.ceil`, which suppressed the very warning this exists to raise: a plan
+ * of 10 days over 4 weeks schedules 2.5 per week, reported 3, so a goal of 3
+ * compared 3 > 3 and stayed silent — while the athlete sat at 2.5/3 and
+ * watched their completion rate cap out at 83% with no explanation (audit
+ * L13). Rounding up is only ever safe for a floor, and this value is a
+ * ceiling on what the plan can deliver.
+ *
+ * Two decimal places, because the raw quotient is a float: 10/3 stored as
+ * 3.3333333333333335 would make an exactly-matched goal read as exceeding
+ * the plan on representation alone.
+ */
+async function getPlanWeeklyDensity(planId: string): Promise<number | undefined> {
+  // Start FROM training_plans + LEFT JOIN plan_days so a plan with zero
+  // days still returns a row (count = 0, density = 0) instead of the
+  // "plan not found" shape. Codex flagged this: a user who deletes every
+  // plan_day on an active plan would otherwise look like "no active plan"
+  // and the weeklyGoalExceedsPlan hint would silently go false. Grouped by
+  // wording, so a plan's identical rest rows come back as one counted row.
+  const rows = await db
+    .select({
+      focus: planDays.focus,
+      mainWorkout: planDays.mainWorkout,
+      dayCount: sql<number>`cast(count(${planDays.id}) as int)`,
+      totalWeeks: trainingPlans.totalWeeks,
+    })
+    .from(trainingPlans)
+    .leftJoin(planDays, eq(planDays.planId, trainingPlans.id))
+    .where(eq(trainingPlans.id, planId))
+    .groupBy(trainingPlans.totalWeeks, planDays.focus, planDays.mainWorkout);
+
+  // totalWeeks is nullable on the schema; bail if the plan never had one set.
+  const totalWeeks = rows.at(0)?.totalWeeks ?? 0;
+  if (totalWeeks <= 0) return undefined;
+  const sessionCount = rows
+    .filter((row) => !isRestLikePlanDay(row.focus ?? "", row.mainWorkout ?? ""))
+    .reduce((sum, row) => sum + row.dayCount, 0);
+  return Math.round((sessionCount / totalWeeks) * 100) / 100;
 }
 
 async function getTrainingPlan(

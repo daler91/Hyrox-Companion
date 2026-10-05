@@ -173,6 +173,24 @@ describe("TimelineStorage race-day derivation", () => {
     expect(raceEntry.type).toBe("logged");
     expect(raceEntry.focus).toBe("Race effort"); // the athlete's logged workout, not "Race Day"
   });
+
+  // AI29 (CODEBASE_ANALYSIS_2026-10-03): the coach's upcoming-day view flags
+  // the days whose text the race date generates, so it never saves it back.
+  it("flags race-derived days in the coach's upcoming-day view", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-normal", "2026-07-09", { focus: "Easy Run" }),
+      planDay("d-shakeout", "2026-07-10", { focus: "Intervals" }),
+      planDay("d-race", RACE, { focus: "Upper Strength" }),
+    ] as never);
+
+    const days = await storage.getUpcomingPlannedDays("user-1", 7);
+    const byId = (id: string) => days.find((day) => day.planDayId === id)!;
+
+    expect(byId("d-shakeout")).toMatchObject({ focus: "Shakeout", raceDerived: true });
+    expect(byId("d-race")).toMatchObject({ focus: "Race Day", raceDerived: true });
+    expect(byId("d-normal").focus).toBe("Easy Run");
+    expect(byId("d-normal")).not.toHaveProperty("raceDerived");
+  });
 });
 
 /** A workout-log row as the mocked select chains resolve it (standalone by default). */
@@ -327,6 +345,22 @@ describe("TimelineStorage logs linked to a plan day", () => {
     // plan day there and must not be read a second time.
     await storage.getTimeline("user-1", "plan-old");
     expect(spy.mock.lastCall?.[4]).toBeUndefined();
+  });
+
+  it("keeps a cursor page to entries dated before the cursor, each id once (C43)", async () => {
+    // A plan day read for its older log brings its newer stand-in entry with
+    // it, which an earlier page already showed (CODEBASE_ANALYSIS_2026-10-03).
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([planDay("d-1", "2026-06-02")] as never);
+    linkedRows = [
+      logRow("newer", { planId: "plan-1", planDayId: "d-1", date: "2026-06-09" }),
+      logRow("older", { planId: "plan-1", planDayId: "d-1", date: "2026-06-01" }),
+    ];
+    // The same log reached through both reads must still be one card.
+    standaloneRows = [logRow("older", { planId: "plan-1", planDayId: "d-1", date: "2026-06-01" })];
+
+    const page = await storage.getTimelinePage("user-1", { limit: 10, before: "2026-06-05" });
+
+    expect(page.entries.map((entry) => entry.id)).toEqual(["log-older"]);
   });
 });
 

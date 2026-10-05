@@ -15,7 +15,12 @@ vi.mock("../env", () => ({ env: { AI_GLOBAL_DAILY_LIMIT_CENTS: undefined } }));
 import { env } from "../env";
 import { logger } from "../logger";
 import { storage } from "../storage";
-import { __resetGlobalBudgetCacheForTests, checkAiBudget, estimateCostCents } from "./aiUsageService";
+import {
+  __resetGlobalBudgetCacheForTests,
+  checkAiBudget,
+  estimateCostCents,
+  resolveModelPricing,
+} from "./aiUsageService";
 
 const M = 1_000_000;
 
@@ -54,18 +59,27 @@ describe("estimateCostCents", () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 
-  it("prices every env-default model without hitting the fallback", () => {
-    // The Gemini defaults from server/env.ts:93-95 plus EMBEDDING_MODEL
-    // (server/gemini/client.ts) — hardcoded rather than importing server/env,
-    // whose zod validation requires real environment variables. If a default
-    // changes, add its pricing to MODEL_PRICING and update this list.
-    const envDefaultModels = [
-      "gemini-2.5-flash-lite",
-      "gemini-3.1-pro-preview",
-      "gemini-2.5-flash",
-      "gemini-embedding-001",
-    ];
-    for (const model of envDefaultModels) {
+  it("prices every env-default model without hitting the fallback", async () => {
+    // Read from server/env.ts itself, so a new or changed default from an
+    // unpriced family fails here instead of billing athletes at
+    // DEFAULT_PRICING — AI28 (CODEBASE_ANALYSIS_2026-10-03). Only the two
+    // required variables are passed, so every *_MODEL comes out as its
+    // default. The embedding model is not an env default; client.test.ts
+    // checks its pricing.
+    const { parseEnv } = await vi.importActual<typeof import("../env")>("../env");
+    const defaults = parseEnv({
+      DATABASE_URL: process.env.DATABASE_URL,
+      ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    });
+    const envDefaultModels = Object.entries(defaults)
+      .filter(([name, value]) => name.endsWith("_MODEL") && typeof value === "string")
+      .map(([name, value]) => ({ name, model: String(value) }));
+
+    expect(envDefaultModels.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(["GEMINI_MODEL", "GEMINI_SUGGESTIONS_MODEL", "GEMINI_VISION_MODEL"]),
+    );
+    for (const { name, model } of envDefaultModels) {
+      expect(resolveModelPricing(model), `${name}=${model} has no MODEL_PRICING entry`).toBeDefined();
       estimateCostCents(model, M, M);
     }
     expect(logger.warn).not.toHaveBeenCalled();

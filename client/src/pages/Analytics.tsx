@@ -285,7 +285,11 @@ export default function Analytics() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <TrainingOverviewTab dateParams={dateParams} weeklyGoal={preferences?.weeklyGoal} />
+          <TrainingOverviewTab
+            dateParams={dateParams}
+            range={dateRange}
+            weeklyGoal={preferences?.weeklyGoal}
+          />
         </TabsContent>
 
         <TabsContent value="breakdown" className="space-y-6">

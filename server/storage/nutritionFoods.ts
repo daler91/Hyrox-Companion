@@ -34,6 +34,7 @@ import {
 import { db, type DbExecutor } from "../db";
 import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
+import { computeRecipeFood } from "../services/nutrition/recipe";
 import { expandQuery } from "../services/nutrition/relevance";
 import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
@@ -300,6 +301,11 @@ function sameStoredReal(a: number | null, b: number | null): boolean {
 function rewritesLoggedHistory(current: Food, patch: UpdateCustomFoodInput): boolean {
   if (patch.name !== undefined && patch.name !== current.name) return true;
   if (patch.brand !== undefined && (patch.brand || null) !== (current.brand || null)) return true;
+  return changesMacros(current, patch);
+}
+
+/** Whether the patch changes a per-100g macro: what a recipe's totals are built from. */
+function changesMacros(current: Food, patch: UpdateCustomFoodInput): boolean {
   return loggedMacroPairs(current, patch).some(
     ([patched, stored]) => patched !== undefined && !sameStoredReal(patched, stored),
   );
@@ -361,7 +367,8 @@ export function assertLoggedHistoryKept(
  * off, since the other athletes' entries still point at the row. The row is
  * locked FOR UPDATE first: a new log entry takes FOR KEY SHARE on it through
  * the foreign key, so nobody can start referencing it between the check and
- * the write.
+ * the write. A macro change also refreshes the athlete's recipes that use the
+ * food (C40, refreshRecipesAfterMacroEdit).
  */
 export async function updateCustomFood(
   userId: string,
@@ -400,15 +407,164 @@ export async function updateCustomFood(
       })
       .where(ownCustomFood)
       .returning();
+    if (row) await refreshRecipesAfterMacroEdit(tx, userId, current, patch);
     return row;
   });
 }
 
+type RecipeRef = { id: string; foodId: string; servings: number };
+
+/**
+ * Recompute one recipe's backing food from its ingredients as they are now.
+ * Skipped for a backing food someone else has logged or put in a recipe
+ * (shared before D18): their history must not move with this athlete's edit.
+ */
+async function refreshBackingFood(
+  tx: DbExecutor,
+  userId: string,
+  recipe: RecipeRef,
+): Promise<void> {
+  const [current] = await tx.select().from(foods).where(eq(foods.id, recipe.foodId)).for("update");
+  if (!current) return;
+  const ingredients = await tx
+    .select({ food: foods, quantityG: recipeIngredients.quantityG })
+    .from(recipeIngredients)
+    .innerJoin(foods, eq(recipeIngredients.foodId, foods.id))
+    .where(eq(recipeIngredients.recipeId, recipe.id));
+  const computed = computeRecipeFood(ingredients, recipe.servings);
+  const macros = {
+    caloriesPer100g: computed.caloriesPer100g,
+    proteinPer100g: computed.proteinPer100g,
+    carbPer100g: computed.carbPer100g,
+    fatPer100g: computed.fatPer100g,
+    fiberPer100g: computed.fiberPer100g,
+  };
+  if (!changesMacros(current, macros)) return;
+  if (await isReferencedByOtherUsers(tx, current.id, userId)) return;
+  await tx
+    .update(foods)
+    .set({ ...macros, micros: computed.micros, updatedAt: new Date() })
+    .where(eq(foods.id, current.id));
+}
+
+/**
+ * The athlete's recipes that use `foodId`, directly or through other recipes,
+ * keyed by backing food in the order found, plus `usedBy`: for each food
+ * reached (`foodId` included), the backing foods of the recipes it is in.
+ * `foodId` itself is never reached, even when a recipe cycle leads back to it.
+ */
+async function collectDependentRecipes(tx: DbExecutor, userId: string, foodId: string) {
+  const reached = new Map<string, RecipeRef>();
+  const usedBy = new Map<string, Set<string>>();
+  let frontier = [foodId];
+  while (frontier.length > 0) {
+    const uses = await tx
+      .select({
+        ingredientFoodId: recipeIngredients.foodId,
+        id: recipes.id,
+        foodId: recipes.foodId,
+        servings: recipes.servings,
+      })
+      .from(recipes)
+      .innerJoin(recipeIngredients, eq(recipeIngredients.recipeId, recipes.id))
+      .where(and(inArray(recipeIngredients.foodId, frontier), eq(recipes.userId, userId)));
+    frontier = [];
+    for (const { ingredientFoodId, ...recipe } of uses) {
+      const users = usedBy.get(ingredientFoodId) ?? new Set<string>();
+      usedBy.set(ingredientFoodId, users.add(recipe.foodId));
+      if (recipe.foodId === foodId || reached.has(recipe.foodId)) continue;
+      reached.set(recipe.foodId, recipe);
+      frontier.push(recipe.foodId);
+    }
+  }
+  return { reached, usedBy };
+}
+
+/**
+ * `reached` in dependency order (Kahn's algorithm): each recipe after every
+ * reached recipe it uses. In a cycle no member is ever ready, so the earliest
+ * found is taken anyway; every recipe still appears exactly once.
+ */
+function refreshOrder(
+  reached: Map<string, RecipeRef>,
+  usedBy: Map<string, Set<string>>,
+): RecipeRef[] {
+  const waitingOn = new Map<string, number>([...reached.keys()].map((id) => [id, 0]));
+  for (const [ingredient, users] of usedBy) {
+    // Nothing waits on the edited food itself: it is already up to date.
+    if (reached.has(ingredient)) adjustWaiting(waitingOn, users, 1);
+  }
+  const order: RecipeRef[] = [];
+  for (let next = nextReady(waitingOn); next !== undefined; next = nextReady(waitingOn)) {
+    waitingOn.delete(next);
+    const recipe = reached.get(next);
+    if (recipe) order.push(recipe);
+    adjustWaiting(waitingOn, usedBy.get(next) ?? [], -1);
+  }
+  return order;
+}
+
+/** Add `delta` to how many recipes each of `users` still waits on, for those not yet ordered. */
+function adjustWaiting(
+  waitingOn: Map<string, number>,
+  users: Iterable<string>,
+  delta: number,
+): void {
+  for (const user of users) {
+    const waiting = waitingOn.get(user);
+    if (waiting !== undefined) waitingOn.set(user, waiting + delta);
+  }
+}
+
+/** The first recipe left with nothing to wait on; failing that (a cycle), the first left. */
+function nextReady(waitingOn: Map<string, number>): string | undefined {
+  for (const [id, waiting] of waitingOn) {
+    if (waiting === 0) return id;
+  }
+  return waitingOn.keys().next().value;
+}
+
+/**
+ * C40 (CODEBASE_ANALYSIS_2026-10-03): a recipe logs through a backing food
+ * whose macros were computed from its ingredients when it was saved, while
+ * the recipe views recompute from the ingredients live. After the athlete
+ * corrected an ingredient, the recipe showed the new total but logged the old
+ * one until it was saved again. So an edit to a food's macros (a custom food,
+ * or a recipe's backing food through the recipe edit) recomputes the backing
+ * food of each of the athlete's recipes that uses it, directly or through
+ * other recipes, inside the edit's transaction. They are recomputed in
+ * dependency order, so a recipe that reaches the food two ways is not
+ * computed from a recipe that has yet to be refreshed.
+ *
+ * Food logs join `foods` live, so the athlete's own past logs of such a recipe
+ * move with it, exactly as their logs of the edited food itself already do
+ * (the accepted M11 behaviour). Other athletes' logs never move: see
+ * refreshBackingFood.
+ */
+export async function refreshRecipesAfterMacroEdit(
+  tx: DbExecutor,
+  userId: string,
+  current: Food,
+  next: UpdateCustomFoodInput,
+): Promise<void> {
+  if (!changesMacros(current, next)) return;
+  const { reached, usedBy } = await collectDependentRecipes(tx, userId, current.id);
+  // In order, and inside one transaction: each refresh reads the ones before it.
+  for (const recipe of refreshOrder(reached, usedBy)) {
+    await refreshBackingFood(tx, userId, recipe);
+  }
+}
+
+
+export const RECIPE_FOOD_DELETE_CONFLICT = "This food is a recipe. Delete the recipe instead.";
 
 /**
  * Delete a user's custom food. Returns false if it isn't the user's custom food
  * (→ 404). Throws a 409 `AppError` if it's referenced by a log entry or a recipe
- * (the FK is restrict; deleting would fail anyway — history is preserved).
+ * (the FK is restrict; deleting would fail anyway — history is preserved), or
+ * if it is a recipe's backing food: `recipes.food_id` is restrict too, so that
+ * delete used to fail as a generic 500 every time. The recipe delete decides
+ * the backing food's fate. C39 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export async function deleteCustomFood(userId: string, id: string): Promise<boolean> {
   const [food] = await db
@@ -416,6 +572,11 @@ export async function deleteCustomFood(userId: string, id: string): Promise<bool
     .from(foods)
     .where(and(eq(foods.id, id), eq(foods.createdByUserId, userId), eq(foods.source, "custom")));
   if (!food) return false;
+
+  const backedRecipes = await db.select({ id: recipes.id }).from(recipes).where(eq(recipes.foodId, id));
+  if (backedRecipes.length > 0) {
+    throw new AppError(ErrorCode.CONFLICT, RECIPE_FOOD_DELETE_CONFLICT, 409);
+  }
 
   const [{ logs }] = await db
     .select({ logs: count() })

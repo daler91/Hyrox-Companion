@@ -12,6 +12,7 @@ import { addDaysToISODate } from "@shared/dateUtils";
 import type { TrainingOverview, WorkoutLog } from "@shared/schema";
 
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { calculateTrainingOverview, type DistanceSet, type ExerciseSetWithDate } from "./analyticsService";
 
 /** Today's date (UTC) as YYYY-MM-DD. */
@@ -66,18 +67,25 @@ export function computePreviousWindow(from?: string, to?: string): PreviousWindo
 
 /**
  * The window to count due plan sessions over. Uses the selected range when
- * there is one; otherwise the span of the athlete's own logs, so "all time"
- * still gets a real denominator instead of none.
+ * there is one; otherwise from the athlete's first log to their own today, so
+ * "all time" still gets a real denominator instead of none.
+ *
+ * The open end used to stop at the last log, so an athlete who stopped logging
+ * while the plan ran on never had the sessions they then missed counted, and
+ * read 100% "All time" while the 90-day view showed the drop (C37,
+ * CODEBASE_ANALYSIS_2026-10-03). A log dated past today still pulls the end
+ * out to it, so its own plan day stays in the count.
  */
-function resolveAdherenceWindow(
+export function resolveAdherenceWindow(
   from: string | undefined,
   to: string | undefined,
   workoutLogs: readonly { date: string }[],
+  athleteToday: string,
 ): { from: string; to: string } | null {
   if (from && to) return { from, to };
   if (workoutLogs.length === 0) return null;
   let earliest = workoutLogs[0].date;
-  let latest = workoutLogs[0].date;
+  let latest = athleteToday;
   for (const log of workoutLogs) {
     if (log.date < earliest) earliest = log.date;
     if (log.date > latest) latest = log.date;
@@ -217,9 +225,10 @@ export async function assembleTrainingOverview(
 
   // "Avg Adherence" divides by the sessions the athlete was DUE, so the count
   // has to come from plan_days rather than from the logs themselves (audit
-  // H10). With no selected window ("all time") the athlete's own logged span
-  // is used, mirroring how the weekly rollup zero-fills.
-  const adherenceWindow = resolveAdherenceWindow(from, to, workoutLogs);
+  // H10). With no selected window ("all time") it runs from the athlete's
+  // first log to their own today (C37).
+  const athleteToday = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  const adherenceWindow = resolveAdherenceWindow(from, to, workoutLogs, athleteToday);
   const [dueSessionCount, previousDueSessionCount] = await Promise.all([
     adherenceWindow
       ? storage.analytics.getDueSessionCount(userId, adherenceWindow.from, adherenceWindow.to, loadCurrentDate)

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { storage } from "../storage";
 import { batchReparseWorkoutsUseCase, reparseWorkoutFromImageUseCase, reparseWorkoutUseCase } from "./parseWorkoutUseCases";
 import { batchReparseWorkouts, reparseWorkout, reparseWorkoutFromImage } from "./workoutService";
+import { refreshDerivedStateAfterLoggedSetChange } from "./workoutService/loggedSetChange";
 
 vi.mock("../storage", () => ({
   storage: {
@@ -18,6 +19,7 @@ vi.mock("./workoutService", () => ({
   reparseWorkoutFromImage: vi.fn(),
   batchReparseWorkouts: vi.fn(),
 }));
+vi.mock("./workoutService/loggedSetChange", () => ({ refreshDerivedStateAfterLoggedSetChange: vi.fn() }));
 
 const getWorkoutLog = vi.mocked(storage.workouts.getWorkoutLog);
 const updateWorkoutLog = vi.mocked(storage.workouts.updateWorkoutLog);
@@ -26,6 +28,7 @@ const getCustomExercises = vi.mocked(storage.users.getCustomExercises);
 const mockReparse = vi.mocked(reparseWorkout);
 const mockReparseImage = vi.mocked(reparseWorkoutFromImage);
 const mockBatch = vi.mocked(batchReparseWorkouts);
+const mockRefresh = vi.mocked(refreshDerivedStateAfterLoggedSetChange);
 
 const WORKOUT = { id: "w1", mainWorkout: "5x5 squat", accessory: null, prescribedMainWorkout: null, prescribedAccessory: null };
 const PARSE_OK = { exercises: [{ name: "squat" }], setCount: 5, saved: true, rejectedCount: 0, rejectionReasons: [], fallbackUsed: false };
@@ -72,6 +75,19 @@ describe("reparseWorkoutUseCase", () => {
     expect(mockReparse).toHaveBeenCalledWith(expect.objectContaining({ mainWorkout: "new text" }), expect.anything(), "u1");
   });
 
+  it("re-derives adherence and the coach note from the new sets, and only on success (C32)", async () => {
+    // Every set is replaced, so a plan-linked log would otherwise keep its old
+    // compliance_pct and a note about exercises it no longer has.
+    getWorkoutLog.mockResolvedValue(WORKOUT);
+    mockReparse.mockResolvedValueOnce(null);
+    await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: {} });
+    expect(mockRefresh).not.toHaveBeenCalled();
+
+    mockReparse.mockResolvedValueOnce(PARSE_OK);
+    await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: {} });
+    expect(mockRefresh).toHaveBeenCalledWith("w1", "u1");
+  });
+
   it("does NOT call updateWorkoutLog when no overrides are supplied", async () => {
     getWorkoutLog.mockResolvedValue(WORKOUT);
     mockReparse.mockResolvedValue(PARSE_OK);
@@ -91,11 +107,12 @@ describe("reparseWorkoutFromImageUseCase", () => {
     expect(mockReparseImage).not.toHaveBeenCalled();
   });
 
-  it("returns the response on success", async () => {
+  it("returns the response on success, after re-deriving from the new sets (C32)", async () => {
     getWorkoutLog.mockResolvedValue(WORKOUT);
     mockReparseImage.mockResolvedValue(PARSE_OK);
     const outcome = await reparseWorkoutFromImageUseCase({ userId: "u1", workoutId: "w1", image });
     expect(outcome).toEqual({ status: "ok", response: OK_RESPONSE });
+    expect(mockRefresh).toHaveBeenCalledWith("w1", "u1");
   });
 
   it("returns parse_failed when the image parse yields no rows", async () => {
@@ -103,6 +120,7 @@ describe("reparseWorkoutFromImageUseCase", () => {
     mockReparseImage.mockResolvedValue(null);
     const outcome = await reparseWorkoutFromImageUseCase({ userId: "u1", workoutId: "w1", image });
     expect(outcome.status).toBe("parse_failed");
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 });
 

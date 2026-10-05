@@ -19,6 +19,7 @@ import {
   deviceActivitySetRows,
   exerciseNameForSportType,
   listBackfillAthletes,
+  recordingSetRow,
 } from "./deviceActivitySets";
 import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
 
@@ -272,6 +273,56 @@ describe("deviceActivitySetRow output is pinned (isUncorrectedRecordingSet rebui
     const session = importedLog(raw({ type: sport, sport_type: sport, distance: 0, moving_time: 3600 }));
     expect(deviceActivitySetRow(session, KM)).toBeNull();
     expect(deviceActivitySetRow(session, MILES)).toBeNull();
+  });
+});
+
+// C26 (CODEBASE_ANALYSIS_2026-10-03): Garmin imports get the same set.
+describe("Garmin recordings", () => {
+  it("maps Garmin's type keys onto the same catalogue exercises", () => {
+    expect(exerciseNameForSportType("running")).toBe("run");
+    expect(exerciseNameForSportType("trail_running")).toBe("run");
+    expect(exerciseNameForSportType("treadmill_running")).toBe("treadmill_run");
+    expect(exerciseNameForSportType("road_biking")).toBe("cycling");
+    expect(exerciseNameForSportType("indoor_cycling")).toBe("cycling");
+    expect(exerciseNameForSportType("lap_swimming")).toBe("swimming");
+    expect(exerciseNameForSportType("indoor_rowing")).toBe("rowing");
+    expect(exerciseNameForSportType("walking")).toBe("walking");
+  });
+
+  it("still refuses the Garmin sports a recording cannot describe", () => {
+    for (const sport of ["strength_training", "indoor_cardio", "hiit", "yoga", "pilates"]) {
+      expect(exerciseNameForSportType(sport)).toBeNull();
+    }
+  });
+
+  it("builds the set from the measurements it is given, seconds and all", () => {
+    const row = recordingSetRow(
+      "log-garmin",
+      { sportType: "running", movingSeconds: 1501, distanceMeters: 5000 },
+      KM,
+    );
+    expect(row).toMatchObject({
+      workoutLogId: "log-garmin",
+      exerciseName: "run",
+      category: "running",
+      distance: 5000,
+      distanceUnit: "m",
+      reps: null,
+      weight: null,
+    });
+    expect(row?.time).toBeCloseTo(1501 / 60, 6);
+    expect(recordingSetRow("log-garmin", { sportType: "running", movingSeconds: 0, distanceMeters: 0 }, KM)).toBeNull();
+  });
+
+  it("returns the same row as deviceActivitySetRow for a Strava log", () => {
+    const viaLog = deviceActivitySetRow(importedLog(), KM);
+    const viaMeasurements = recordingSetRow(
+      "log-strava",
+      { sportType: "Run", movingSeconds: 3133, distanceMeters: 10050 },
+      KM,
+    );
+    expect(viaLog).not.toBeNull();
+    expect(viaMeasurements).toEqual(viaLog);
   });
 });
 

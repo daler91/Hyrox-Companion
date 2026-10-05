@@ -127,6 +127,78 @@ describe("TimelineStorage.getTimeline (real Postgres)", () => {
     expect(everything.nextCursor).toBeNull();
   });
 
+  describe("pages a plan day by the date its entries are shown on (C43)", () => {
+    // CODEBASE_ANALYSIS_2026-10-03: pages bounded plan days by their slot while
+    // a completed card is dated by its log, so a card whose log sits on another
+    // date than its slot was shown on two pages or on none.
+    async function everyPage(limit: number) {
+      const pages = [await storage.timeline.getTimelinePage(ALICE, { limit })];
+      let cursor = pages[0].nextCursor;
+      while (cursor !== null) {
+        const page = await storage.timeline.getTimelinePage(ALICE, { limit, before: cursor });
+        pages.push(page);
+        cursor = page.nextCursor;
+      }
+      return pages.map((page) => page.entries);
+    }
+
+    function expectEachEntryOnce(pages: { id: string }[][], total: number) {
+      const ids = pages.flat().map((entry) => entry.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toHaveLength(total);
+    }
+
+    it("shows a session logged after its slot once, on its log's page", async () => {
+      // Wednesday's session done on Saturday: a page cut below Saturday used
+      // to read Wednesday's day again and repeat the card.
+      await seedWorkoutLog(ALICE, "2026-05-09", { planDayId: wednesdayPlanDayId, planId });
+
+      const pages = await everyPage(2);
+
+      expect(pages.map((page) => page.map((entry) => entry.date))).toEqual([
+        ["2026-05-09", "2026-05-08"],
+        ["2026-05-07", "2026-05-05"],
+        ["2026-05-04", "2026-05-01"],
+      ]);
+      expectEachEntryOnce(pages, 6);
+    });
+
+    it("shows a session logged before its slot, on its log's page", async () => {
+      // Friday's session dragged back to the 2nd: no page below Friday's slot
+      // read its day, so the card was on none.
+      const friday = (await storage.timeline.getTimeline(ALICE)).find(
+        (entry) => entry.date === "2026-05-08",
+      );
+      const moved = await seedWorkoutLog(ALICE, "2026-05-02", { planDayId: friday!.planDayId, planId });
+
+      const pages = await everyPage(2);
+
+      expect(pages.map((page) => page.map((entry) => entry.date))).toEqual([
+        ["2026-05-07", "2026-05-06"],
+        ["2026-05-05", "2026-05-04"],
+        ["2026-05-02", "2026-05-01"],
+      ]);
+      expect(pages[2][0]).toMatchObject({ workoutLogId: moved.id, planDayId: friday!.planDayId });
+      expectEachEntryOnce(pages, 6);
+    });
+
+    it("shows a day's older second log on its own page (C16)", async () => {
+      const older = await seedWorkoutLog(ALICE, "2026-05-02", { planDayId: wednesdayPlanDayId, planId });
+      await seedWorkoutLog(ALICE, "2026-05-06", { planDayId: wednesdayPlanDayId, planId });
+
+      const pages = await everyPage(2);
+
+      expect(pages.map((page) => page.map((entry) => entry.date))).toEqual([
+        ["2026-05-08", "2026-05-07"],
+        ["2026-05-06", "2026-05-05"],
+        ["2026-05-04", "2026-05-02"],
+        ["2026-05-01"],
+      ]);
+      expect(pages[2][1]).toMatchObject({ workoutLogId: older.id });
+      expectEachEntryOnce(pages, 7);
+    });
+  });
+
   it("shows every log linked to one plan day, the newest in the day's own slot (C16)", async () => {
     // A morning run logged against Wednesday, then an evening session the
     // athlete also picked Wednesday for, "(logged)" as it already was.

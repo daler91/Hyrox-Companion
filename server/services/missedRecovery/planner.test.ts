@@ -77,13 +77,29 @@ describe("candidateDates", () => {
     ]);
   });
 
-  it("skips declared absences, and stops at the plan's end and before race day", () => {
+  it("skips declared absences, and stops at the plan's end and before the race's shakeout day", () => {
     expect(
       candidateDates(
         input({ absences: [{ startDate: "2026-09-25", endDate: "2026-09-26" }], lastDate: "2026-09-29" }),
       ),
     ).toEqual(["2026-09-24", "2026-09-27", "2026-09-28", "2026-09-29"]);
-    expect(candidateDates(input({ raceDate: "2026-09-27" }))).toEqual(["2026-09-24", "2026-09-25", "2026-09-26"]);
+    expect(candidateDates(input({ raceDate: "2026-09-28" }))).toEqual(["2026-09-24", "2026-09-25", "2026-09-26"]);
+  });
+
+  // C30 (CODEBASE_ANALYSIS_2026-10-03): the day before the race shows as
+  // "Shakeout" and hides its stored session, so a session folded onto it
+  // disappeared from the timeline and the coach's context.
+  it("never offers the shakeout day before the race", () => {
+    expect(candidateDates(input({ raceDate: "2026-09-27" }))).toEqual(["2026-09-24", "2026-09-25"]);
+    // Race day tomorrow: today is the shakeout, so nothing is left to move to.
+    expect(candidateDates(input({ raceDate: "2026-09-25" }))).toEqual([]);
+  });
+
+  it("offers nothing to fold onto once race week's derived days have begun", () => {
+    const preview = planMissedSessionRecovery(input({ raceDate: "2026-09-25" }));
+
+    expect(preview.fold.available).toBe(false);
+    expect(preview.fold.targets).toEqual([]);
   });
 });
 
@@ -249,11 +265,13 @@ describe("planMissedSessionRecovery", () => {
 
   it("warns about hard work in the days before race day", () => {
     const preview = planMissedSessionRecovery(input({ raceDate: "2026-09-27" }));
-    expect(noteCodes(preview, "fold", "2026-09-26")).toContain("race_close");
-    expect(target(preview, "fold", "2026-09-26").impact.notes.find((n) => n.code === "race_close")?.message).toBe(
-      "It's the day before race day — keep the legs fresh.",
+    expect(noteCodes(preview, "fold", "2026-09-25")).toContain("race_close");
+    expect(target(preview, "fold", "2026-09-25").impact.notes.find((note) => note.code === "race_close")?.message).toBe(
+      "It's 2 days before race day — keep the legs fresh.",
     );
     expect(noteCodes(preview, "fold", "2026-09-24")).toContain("race_close");
+    // The shakeout day itself is never a target (C30).
+    expect(preview.fold.targets.map(({ date }) => date)).not.toContain("2026-09-26");
   });
 
   it("shows both weeks when a session moves into the next one, and flags a jump", () => {

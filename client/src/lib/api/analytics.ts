@@ -80,17 +80,24 @@ export const analytics = {
 
   // Fetch the LAST stored Overview chart analysis (no AI spend) so each chart's
   // explanation paints instantly on open. Returns `{ sections: null }` when the
-  // athlete has never generated it.
-  getOverviewAnalysis: () =>
-    typedRequest<OverviewAnalysisResponse>("GET", "/api/v1/overview-analysis"),
+  // athlete has never generated it for this `range` (the Analytics page's own
+  // "30" / "90" / ... / "all" value, so it reads what the charts read; AI31).
+  getOverviewAnalysis: (range: string) =>
+    typedRequest<OverviewAnalysisResponse>(
+      "GET",
+      `/api/v1/overview-analysis?range=${encodeURIComponent(range)}`,
+    ),
 
-  // Regenerate (and persist) the per-chart analysis. Builds the training
-  // overview and uses a reasoning AI model server-side; matches the
+  // Regenerate (and persist) the per-chart analysis for `range`. Builds the
+  // training overview and uses a reasoning AI model server-side; matches the
   // race-prediction / suggestions budget so it doesn't time out.
-  regenerateOverviewAnalysis: () =>
-    typedRequest<OverviewAnalysisResponse>("POST", "/api/v1/overview-analysis", {}, {
-      timeoutMs: 90_000,
-    }),
+  regenerateOverviewAnalysis: (range: string) =>
+    typedRequest<OverviewAnalysisResponse>(
+      "POST",
+      `/api/v1/overview-analysis?range=${encodeURIComponent(range)}`,
+      {},
+      { timeoutMs: 90_000 },
+    ),
 
   // Without `refresh`, returns the stored prediction instantly (no AI spend).
   // With `refresh: true` (manual refresh button), forces a fresh regeneration.

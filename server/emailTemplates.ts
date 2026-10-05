@@ -485,6 +485,9 @@ export function buildWeeklySummaryEmail(
 
   const subject = `Your Week in Review: ${data.completedCount} workout${pluralSuffix(data.completedCount)} completed`;
 
+  // Beside the streak when there is one, else in the week's own grid: inside
+  // the streak block alone, an athlete who set PRs midweek but rested on
+  // Sunday (streak 0) got no PR card at all. C25 (CODEBASE_ANALYSIS_2026-10-03)
   const prsSection =
     data.prsThisWeek > 0
       ? `
@@ -519,7 +522,7 @@ export function buildWeeklySummaryEmail(
       <div class="stat-card">
         <div class="stat-value">${durationStr}</div>
         <div class="stat-label">Total Time</div>
-      </div>
+      </div>${data.currentStreak > 0 ? "" : prsSection}
     </div>
 ${hasPlan ? `
     <div class="section-title">Completion</div>

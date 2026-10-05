@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, type CreateSamplePlanInput, createSamplePlanSchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, calendarDateSchema, type CreateSamplePlanInput, createSamplePlanSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -159,6 +159,12 @@ protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport
       const fullPlan = await importPlanFromCSV(csvContent, userId, { fileName, planName });
       res.json(fullPlan);
     } catch (error: unknown) {
+      // The service's row checks (a Week below 1, an unrecognised Day, a span
+      // past 52 weeks) say exactly what to fix, so the athlete sees them;
+      // anything else keeps the generic message. C34 (CODEBASE_ANALYSIS_2026-10-03)
+      if (error instanceof AppError && error.code === ErrorCode.VALIDATION_ERROR) {
+        return res.status(400).json({ error: error.message, code: ErrorCode.INVALID_CSV });
+      }
       reqLogger(req).error({ err: error }, "Failed to import plan from CSV");
       return res.status(400).json({ error: "Failed to parse CSV content. Please ensure it follows the expected template format.", code: "INVALID_CSV" });
     }
@@ -363,7 +369,9 @@ protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("
 
 const patchDayStatusSchema = z.object({
   status: z.enum(workoutStatusEnum).optional(),
-  scheduledDate: dateStringSchema.nullable().optional(),
+  // A real day, not just its shape: "2026-02-30" reached the date column and
+  // came back as a 500 (C50, CODEBASE_ANALYSIS_2026-10-03).
+  scheduledDate: calendarDateSchema.nullable().optional(),
   // Optional, and only meaningful alongside `status: "skipped"` — any other
   // status clears it in updatePlanDayStatus.
   skipReason: z.enum(planDaySkipReasonEnum).nullable().optional(),

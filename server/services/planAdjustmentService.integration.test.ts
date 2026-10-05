@@ -6,7 +6,7 @@ import {
   trainingPlans,
 } from "@shared/schema";
 import { asc, eq } from "drizzle-orm";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -41,9 +41,18 @@ describe("plan proposal apply during an edit (real Postgres)", () => {
   const ALICE = "apply-lock-alice";
 
   beforeEach(async () => {
+    // The seeded day is Tue 4 Aug 2026, and an apply turns away any change
+    // for a day before the athlete's today (C33), so the clock stands just
+    // before it.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-03T09:00:00Z"));
     await resetIntegrationDb();
     await seedUser(ALICE);
     vi.mocked(parseStructuredPlanDaySuggestionRows).mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   afterAll(async () => {

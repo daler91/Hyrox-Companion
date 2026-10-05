@@ -847,7 +847,7 @@ Short-lived shared runtime cache for safe multi-instance operation, read and wri
 
 Current use cases:
 - Clerk auth seen-cache (`auth-seen:*`, `server/clerkAuth.ts`)
-- RAG embedding-health probe (`rag-health:embedding`) and RAG retrieval cache (`rag:*`), both in `server/services/ragService.ts`
+- RAG embedding-health probe (`rag-health:embedding`, `server/services/ragService.ts`). The RAG retrieval cache is process-local and no longer writes `rag:*` rows; account erasure still deletes any an older deploy left
 - AI circuit-breaker state, one key per provider and capability (`ai-circuit-breaker:<capability>:<provider>`, e.g. `ai-circuit-breaker:text:anthropic`, `server/ai/circuitBreaker.ts`), restored at startup
 - Planned-session duration/RPE estimates (`planned-session-estimate:*`, `server/services/sessionEstimate/plannedSessionEstimate.ts`)
 - Single-use Strava OAuth state (`strava-oauth-state:*`, `server/strava.ts`), claimed atomically with `claimRuntimeCacheKey()` so a replayed callback is rejected
@@ -1246,8 +1246,9 @@ embedding: vector("embedding", { dimensions: 3072 }),
 > `hnsw (embedding vector_cosine_ops)` fails with _"column cannot have more than
 > 2000 dimensions for hnsw index"_. The index is therefore built on the embedding
 > cast to **`halfvec`** (half precision), which raises the HNSW ceiling to 4000
-> dims. Storage stays full-precision `vector(3072)`; only the index and the
-> ORDER BY use half precision (negligible for approximate cosine ranking).
+> dims. Storage stays full-precision `vector(3072)`; only the indexes and the
+> semantic food search's ORDER BY use half precision (negligible for
+> approximate cosine ranking).
 > Requires **pgvector >= 0.7.0** (Neon/Supabase ship this).
 
 ### Separate Vector Database Pool (`server/vectorDb.ts`)
@@ -1275,15 +1276,20 @@ export const vectorPool = new Pool({
 The `CoachingStorage.searchChunksByEmbedding()` method performs cosine distance similarity search using pgvector's `<=>` operator:
 
 ```sql
-SELECT ... FROM document_chunks
+SELECT ..., embedding <=> $2::vector(3072) AS distance FROM document_chunks
 WHERE user_id = $1 AND embedding IS NOT NULL
-ORDER BY embedding::halfvec(3072) <=> $2::halfvec(3072)
+ORDER BY distance
 LIMIT $3
 ```
 
-The `::halfvec(3072)` cast in the ORDER BY mirrors the half-precision HNSW index
-expression so the planner can use the index (the cast expressions must match
-exactly). See **Embedding Dimensions** above for why `halfvec` is used.
+The search is exact over one athlete's chunks, on purpose. It used to order by
+the `::halfvec(3072)` cast so the planner could use the HNSW index, but that
+index is shared by every athlete and returns at most `hnsw.ef_search` (default
+40) of the nearest chunks overall before `user_id` is filtered, so an athlete
+could get fewer than `topK` of their own, or none. The full-precision distance
+matches no index, so the planner reads the athlete's chunks by
+`idx_document_chunks_user_id` and sorts them. Its cost grows with that
+athlete's own chunk count only, and it works on any pgvector version.
 
 ### Schema Bootstrapping
 
@@ -1631,7 +1637,7 @@ for (const ex of exercises) {
 
 **document_chunks** (3 indexes):
 - Single-column: `material_id`, `user_id`
-- `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding::halfvec(3072) halfvec_cosine_ops` for fast approximate cosine similarity search. Built on the `halfvec` (half-precision) cast because 3072-dim embeddings exceed pgvector's 2000-dim HNSW limit for native `vector`. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
+- `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding::halfvec(3072) halfvec_cosine_ops` for fast approximate cosine similarity search. The per-athlete chunk search no longer uses it (see [Vector Similarity Search](#vector-similarity-search)). Built on the `halfvec` (half-precision) cast because 3072-dim embeddings exceed pgvector's 2000-dim HNSW limit for native `vector`. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
 
 **coaching_materials** (1 index):
 - Single-column: `user_id`

@@ -25,7 +25,7 @@ import {
   type RecomputeAnalyticsJobData,
 } from "../queue";
 import type { IStorage } from "../storage";
-import { getLocalDateStr, getLocalHour } from "../timezone";
+import { getLocalDateStr, isLocalHourDue } from "../timezone";
 import { computeStale, type HistoryAnchor } from "./analyticsStaleness";
 
 /**
@@ -119,10 +119,13 @@ export async function runAnalyticsRecomputeScan(
 
   // Narrow to users actually at local midnight before touching
   // analytics_results at all — most engaged users land in a different hourly
-  // tick, so there's no reason to fetch their rows on this pass.
+  // tick, so there's no reason to fetch their rows on this pass. Where the
+  // clocks spring forward AT midnight (Santiago, Beirut, Havana) hour 0 does
+  // not exist that day, so it falls due at 01:00 instead of being skipped
+  // (C24, CODEBASE_ANALYSIS_2026-10-03).
   const eligibleUserIds = userIds.filter((userId) => {
     const user = usersMap.get(userId);
-    return user != null && getLocalHour(now, user.userTimezone) === 0;
+    return user != null && isLocalHourDue(now, user.userTimezone, 0);
   });
   usersChecked = eligibleUserIds.length;
 

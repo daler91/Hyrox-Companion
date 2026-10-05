@@ -13,6 +13,7 @@ import {
   streamChatWithCoach,
 } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
+import { regenerateAndStoreOverviewAnalysis } from "../../services/analyticsPersistence";
 import { retrieveRelevantChunks } from "../../services/ragService";
 import { __resetSseRegistryForTests, drainSseStreams } from "../../sseRegistry";
 import { storage } from "../../storage";
@@ -124,6 +125,13 @@ vi.mock("../../services/trainingContextCache", () => ({
 
 vi.mock("../../services/ragService", () => ({
   retrieveRelevantChunks: vi.fn(),
+}));
+
+// The Overview-analysis POST's generation path has its own service tests; here
+// only the range it is asked for is checked (AI31).
+vi.mock("../../services/analyticsPersistence", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/analyticsPersistence")>()),
+  regenerateAndStoreOverviewAnalysis: vi.fn(),
 }));
 
 // Mock prompts
@@ -300,6 +308,84 @@ describe("GET /api/v1/overview-analysis", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.stale).toBe(true);
+  });
+
+  // AI31 (CODEBASE_ANALYSIS_2026-10-03): a reading of one range must not sit
+  // beside the charts of another.
+  describe("with the page's range", () => {
+    beforeEach(() => {
+      mockWorkoutsMatchingStoredAnchor();
+    });
+
+    it("returns the stored analysis when it covers that range", async () => {
+      mockStoredAnalyticsResult("overview_analysis", { sections: { rpeDuration: "RPE 7.6." }, rangeDays: 90 });
+
+      const response = await request(app).get("/api/v1/overview-analysis?range=90");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ sections: { rpeDuration: "RPE 7.6." }, rangeDays: 90 });
+    });
+
+    it("answers { sections: null } for an analysis of another range", async () => {
+      mockStoredAnalyticsResult("overview_analysis", { sections: { rpeDuration: "RPE 7.6." }, rangeDays: 90 });
+
+      const response = await request(app).get("/api/v1/overview-analysis?range=30");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ sections: null });
+    });
+
+    it("keeps showing an analysis stored before ranges existed until it is refreshed", async () => {
+      mockStoredAnalyticsResult("overview_analysis", { sections: { rpeDuration: "RPE 6.4." } });
+
+      for (const range of ["all", "90"]) {
+        expect((await request(app).get(`/api/v1/overview-analysis?range=${range}`)).body.sections).toEqual({
+          rpeDuration: "RPE 6.4.",
+        });
+      }
+    });
+
+    it("rejects a range the page never sends", async () => {
+      const response = await request(app).get("/api/v1/overview-analysis?range=ninety");
+
+      expect(response.status).toBe(400);
+      expect(storage.analyticsResults.get).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("POST /api/v1/overview-analysis", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    app = await freshAiApp();
+    vi.mocked(regenerateAndStoreOverviewAnalysis).mockResolvedValue({
+      sections: {},
+      generatedAt: STORED_GENERATED_AT,
+      rangeDays: 30,
+    });
+  });
+
+  // AI31 (CODEBASE_ANALYSIS_2026-10-03)
+  it("generates the analysis for the page's range", async () => {
+    const response = await request(app).post("/api/v1/overview-analysis?range=30").send({});
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ rangeDays: 30, stale: false });
+    expect(regenerateAndStoreOverviewAnalysis).toHaveBeenCalledWith("test_user_id", expect.anything(), 30);
+  });
+
+  it("reads 'all' as all time", async () => {
+    await request(app).post("/api/v1/overview-analysis?range=all").send({});
+
+    expect(regenerateAndStoreOverviewAnalysis).toHaveBeenCalledWith("test_user_id", expect.anything(), null);
+  });
+
+  it("rejects an invalid range before any AI work", async () => {
+    const response = await request(app).post("/api/v1/overview-analysis?range=0").send({});
+
+    expect(response.status).toBe(400);
+    expect(regenerateAndStoreOverviewAnalysis).not.toHaveBeenCalled();
   });
 });
 

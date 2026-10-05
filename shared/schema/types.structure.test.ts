@@ -134,6 +134,53 @@ describe('structureBlockSchema EMOM semantics', () => {
   });
 });
 
+// C50 (CODEBASE_ANALYSIS_2026-10-03): the steps table is unique on
+// (block, step number) and (block, minute index), so a duplicate failed the
+// insert as a 500 and rolled back the whole save.
+describe('structureBlockSchema unique steps', () => {
+  function roundsBlock(steps: unknown[]) {
+    return { sectionType: 'main', formatType: 'rounds', roundCount: 3, steps };
+  }
+
+  function stepIssues(block: unknown): string[] {
+    return structureBlockSchema.safeParse(block).error?.issues.map((issue) => issue.message) ?? [];
+  }
+
+  it('accepts distinct step numbers and minute indices', () => {
+    expect(stepIssues(roundsBlock([
+      { stepNumber: 1, minuteIndex: 1, stepType: 'work', exerciseName: 'Row' },
+      { stepNumber: 2, minuteIndex: 2, stepType: 'work', exerciseName: 'Wall Balls' },
+      { stepNumber: 3, stepType: 'rest' },
+      { stepNumber: 4, stepType: 'rest' },
+    ]))).toEqual([]);
+  });
+
+  it('rejects a duplicate step number', () => {
+    expect(stepIssues(roundsBlock([
+      { stepNumber: 1, stepType: 'work', exerciseName: 'Row' },
+      { stepNumber: 1, stepType: 'work', exerciseName: 'Wall Balls' },
+    ]))).toEqual(['Duplicate stepNumber values are not allowed within a block.']);
+  });
+
+  it('rejects a duplicate step number in an EMOM block too', () => {
+    expect(stepIssues(emomBlock([
+      { stepNumber: 2, minuteIndex: 1, stepType: 'work', exerciseName: 'Row' },
+      { stepNumber: 2, minuteIndex: 2, stepType: 'rest' },
+    ]))).toEqual(['Duplicate stepNumber values are not allowed within a block.']);
+  });
+
+  it('rejects a duplicate minute index outside EMOM, naming it once inside EMOM', () => {
+    expect(stepIssues(roundsBlock([
+      { stepNumber: 1, minuteIndex: 2, stepType: 'work', exerciseName: 'Row' },
+      { stepNumber: 2, minuteIndex: 2, stepType: 'work', exerciseName: 'Wall Balls' },
+    ]))).toEqual(['Duplicate minuteIndex values are not allowed within a block.']);
+    expect(stepIssues(emomBlock([
+      { stepNumber: 1, minuteIndex: 1, stepType: 'work', exerciseName: 'Row' },
+      { stepNumber: 2, minuteIndex: 1, stepType: 'rest' },
+    ]))).toEqual(['Duplicate minuteIndex values are not allowed in EMOM patterns.']);
+  });
+});
+
 describe('lintWorkoutStructure block links', () => {
   it('accepts complex work steps when a matching exercise row link exists', () => {
     const lint = lintWorkoutStructure(

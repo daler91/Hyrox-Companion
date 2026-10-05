@@ -235,6 +235,16 @@ describe("email generation", () => {
       expect(html).toContain("Day Streak");
       expect(html).not.toContain("New PRs");
     });
+
+    it("shows the week's PRs even when the streak ended on a Sunday rest day", () => {
+      // C25 (CODEBASE_ANALYSIS_2026-10-03): the PR card lived inside the streak
+      // block, so a streak of 0 hid PRs set midweek.
+      const email = buildWeeklySummaryEmail(baseUser, { ...baseData, currentStreak: 0, prsThisWeek: 2 });
+      const shows = (text: string) => email.html.includes(text);
+      expect(shows("Day Streak")).toBe(false);
+      expect(shows("New PRs")).toBe(true);
+      expect(shows("🏆 2")).toBe(true);
+    });
   });
 
   describe("buildWeeklyReviewReminderEmail", () => {

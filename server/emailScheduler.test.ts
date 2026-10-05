@@ -378,6 +378,29 @@ describe('planEmailJobsForUser (notify hour gate)', () => {
     expect(planEmailJobsForUser(early, new Date('2026-07-20T09:00:00Z'))).toEqual([]);
   });
 
+  it('sends an email whose hour the spring-forward gap skips at the first hour after it, once', () => {
+    // C24 (CODEBASE_ANALYSIS_2026-10-03): New York jumps from 01:59 EST to
+    // 03:00 EDT on Sunday 2026-03-08 (07:00 UTC), so 02:00 never happens. The
+    // Sunday-only review reminder set for 02:00 was lost for the whole week.
+    const ny = user({
+      userTimezone: 'America/New_York',
+      emailWeeklyReviewReminder: true,
+      notifyHourWeeklyReviewReminder: 2,
+      emailMissedReminder: false,
+      emailWeeklySummary: false,
+    });
+    expect(planEmailJobsForUser(ny, new Date('2026-03-08T06:00:00Z'))).toEqual([]);
+    expect(planEmailJobsForUser(ny, new Date('2026-03-08T07:00:00Z'))).toEqual([
+      'send-weekly-review-reminder',
+    ]);
+    expect(planEmailJobsForUser(ny, new Date('2026-03-08T08:00:00Z'))).toEqual([]);
+    // A week later 02:00 exists again and is the only tick.
+    expect(planEmailJobsForUser(ny, new Date('2026-03-15T06:00:00Z'))).toEqual([
+      'send-weekly-review-reminder',
+    ]);
+    expect(planEmailJobsForUser(ny, new Date('2026-03-15T07:00:00Z'))).toEqual([]);
+  });
+
   it('leaves an email on the default send time when it has no hour of its own', () => {
     // A default hour of 9 moves every email that has not been given its own.
     const moved = user({ notifyHour: 9, emailTodaySession: true, notifyHourTodaySession: 19 });

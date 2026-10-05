@@ -195,8 +195,9 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
       return;
     }
 
-    // Invalidate cached retrievals for this user so freshly-embedded
-    // material is discoverable on the next query.
+    // The new chunks already changed the athlete's retrieval version, so no
+    // replica serves a retrieval cached before them (AI34); this frees this
+    // replica's stale entries early.
     clearRagCache(material.userId);
 
     logger.info(
@@ -224,10 +225,20 @@ const TOP_K = 6; // Number of chunks to retrieve
  */
 const MAX_PINNED_PRINCIPLE_CHUNKS = 3;
 
-// Short-TTL cache for RAG retrieval results. Collapses bursts where the
-// context-building pipeline issues identical lookups for the same user/query
-// (e.g. rapid chat messages or bulk workout creation). Invalidated per-user
-// whenever new coaching material is embedded.
+// Short-TTL cache for RAG retrieval results. Collapses repeats of the same
+// lookup for the same user/query (a regenerated reply, back-to-back auto-coach
+// runs) and saves the embedding call and the four reads behind it.
+//
+// Process-local, and keyed on the athlete's retrieval version
+// (storage.coaching.getRetrievalVersion), which every material create, edit,
+// delete and re-embed changes, on whichever replica it happened: an entry can
+// only be served while the data it was read from is unchanged, so a deleted
+// material can't keep surfacing from another replica's cache (AI34).
+//
+// It used to be shared through `server_runtime_cache` as well, which wrote a
+// row of coaching excerpts to the main DB on every RAG turn for a near-zero
+// hit rate, and those rows stayed until the daily expiry sweep (AI35).
+// AI34, AI35 (CODEBASE_ANALYSIS_2026-10-03)
 const RAG_CACHE_TTL_MS = 120_000;
 const MAX_RAG_CACHE_ENTRIES = 2_000;
 
@@ -269,34 +280,25 @@ function getRagCache(key: string): RetrievedChunk[] | undefined {
   return entry.chunks;
 }
 
-function ragCacheKey(userId: string, query: string, topK: number): string {
-  // v2: entries carry each chunk's source, so a string-only entry cached
-  // before it is never read back.
-  const queryKey = `v2::${topK}::${query}`;
-  return `${ragCachePrefix(userId)}${hashRuntimeKey(queryKey)}`;
+function ragCacheKey(userId: string, version: string, query: string, topK: number): string {
+  return `${ragCachePrefix(userId)}${hashRuntimeKey(`${version}::${topK}::${query}`)}`;
 }
 
 function ragCachePrefix(userId: string): string {
   return `rag:${hashRuntimeKey(userId)}:`;
 }
 
+/**
+ * Drop this replica's cached retrievals, for one user or all. Not needed for
+ * correctness (the retrieval version is, AI34): it frees entries no lookup
+ * can match any more.
+ */
 export function clearRagCache(userId?: string): void {
   if (!userId) {
     ragCache.clear();
-    if (env.NODE_ENV !== "test") {
-      void deleteRuntimeCachePrefix("rag:").catch((err: unknown) => {
-        logger.warn({ err }, "[rag] Failed to clear shared retrieval cache");
-      });
-    }
     return;
   }
-  const prefix = ragCachePrefix(userId);
-  evictLocalRagEntries(prefix);
-  if (env.NODE_ENV !== "test") {
-    void deleteRuntimeCachePrefix(prefix).catch((err: unknown) => {
-      logger.warn({ err, userId }, "[rag] Failed to clear shared retrieval cache");
-    });
-  }
+  evictLocalRagEntries(ragCachePrefix(userId));
 }
 
 function evictLocalRagEntries(prefix: string): void {
@@ -306,15 +308,32 @@ function evictLocalRagEntries(prefix: string): void {
 }
 
 /**
- * Remove every cached retrieval for one user, local and shared, and wait for
- * the shared delete — account erasure must know the excerpts of the athlete's
- * coaching materials are gone, not leave them in `server_runtime_cache` for
- * the daily expiry sweep. P13 (CODEBASE_ANALYSIS_2026-10-03)
+ * Remove every cached retrieval for one user, and wait for the shared
+ * delete: account erasure must know the excerpts of the athlete's coaching
+ * materials are gone. Retrieval no longer writes `server_runtime_cache`
+ * (AI35), but rows a deploy before that wrote stay until the daily expiry
+ * sweep, so erasure still deletes them. P13 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export async function purgeRagCacheForUser(userId: string): Promise<void> {
   const prefix = ragCachePrefix(userId);
   evictLocalRagEntries(prefix);
   await deleteRuntimeCachePrefix(prefix);
+}
+
+/**
+ * The athlete's retrieval version, or null when it can't be read: the lookup
+ * then runs uncached rather than risk serving an entry the version would have
+ * ruled out.
+ */
+async function retrievalVersion(userId: string): Promise<string | null> {
+  try {
+    return await storage.coaching.getRetrievalVersion(userId);
+  } catch (err) {
+    // userId is an opaque uuid and err a DB failure; no material content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err, userId }, "[rag] Failed to read the retrieval version — retrieving uncached");
+    return null;
+  }
 }
 
 /**
@@ -367,24 +386,14 @@ export async function retrieveRelevantChunks(
   query: string,
   topK: number = TOP_K,
 ): Promise<RetrievedChunk[]> {
-  const key = ragCacheKey(userId, query, topK);
-  const cached = getRagCache(key);
+  // Read before anything the retrieval reads, so an entry is never older
+  // than the version it is filed under.
+  const version = await retrievalVersion(userId);
+  const key = version === null ? null : ragCacheKey(userId, version, query, topK);
+  const cached = key === null ? undefined : getRagCache(key);
   if (cached) {
     logger.debug({ userId, topK, cacheHit: true }, "[rag] Returning cached chunks");
     return cached;
-  }
-
-  if (env.NODE_ENV !== "test") {
-    try {
-      const shared = await getRuntimeCache<{ chunks: RetrievedChunk[] }>(key);
-      if (shared) {
-        setRagCache(key, shared.chunks);
-        logger.debug({ userId, topK, cacheHit: true, shared: true }, "[rag] Returning cached chunks");
-        return shared.chunks;
-      }
-    } catch (err) {
-      logger.warn({ err, userId, topK }, "[rag] Failed to read shared retrieval cache");
-    }
   }
 
   // Pin the athlete's stated principles ahead of the semantic search.
@@ -440,13 +449,7 @@ export async function retrieveRelevantChunks(
   const retrieved = live
     .slice(0, topK)
     .map((c) => ({ content: c.content, source: titles?.get(c.materialId) ?? null }));
-  if (!titles) return retrieved;
-  setRagCache(key, retrieved);
-  if (env.NODE_ENV !== "test") {
-    setRuntimeCache(key, { chunks: retrieved }, RAG_CACHE_TTL_MS).catch((err: unknown) => {
-      logger.warn({ err, userId, topK }, "[rag] Failed to write shared retrieval cache");
-    });
-  }
+  if (titles && key !== null) setRagCache(key, retrieved);
   return retrieved;
 }
 

@@ -944,3 +944,29 @@ describe("updatePlanDayRecordingMove", () => {
     expect(recordPlanDayMoveMock).not.toHaveBeenCalled();
   });
 });
+
+// C34 (CODEBASE_ANALYSIS_2026-10-03): "-40" used to be kept, putting week 1
+// forty-one weeks after the chosen start, and "0" quietly became week 1.
+describe("importPlanFromCSV week numbers below 1", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    { label: "a negative week", week: "-40" },
+    { label: "week zero", week: "0" },
+  ])("rejects $label with a row error before touching the database", async ({ week }) => {
+    vi.mocked(csvParse.parse).mockReturnValue([
+      { Week: "1", Day: "Monday", Focus: "F", "Main Workout": "W" },
+      { Week: week, Day: "Tuesday", Focus: "F", "Main Workout": "W" },
+    ]);
+
+    await expect(importPlanFromCSV("x", "u1")).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      status: 400,
+      message: `CSV contains 1 row(s) with a Week below 1 (e.g., ${week}). Weeks start at 1.`,
+    });
+    expect(storage.plans.createTrainingPlan).not.toHaveBeenCalled();
+    expect(storage.plans.createPlanDays).not.toHaveBeenCalled();
+  });
+});

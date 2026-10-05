@@ -1,4 +1,5 @@
 import { planDays, trainingPlans } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "../../db";
@@ -89,6 +90,29 @@ describe("TimelineStorage.getCompletedWorkoutDates (real Postgres)", () => {
     );
     const slim = await storage.timeline.getCompletedWorkoutDates(ALICE);
     expect([...slim].sort()).toEqual([...fromTimeline].sort());
+  });
+
+  it("dates a completed plan day by its log alone, as the timeline does (C44)", async () => {
+    // Friday's session done on Sunday: Friday was a gap in the streak and must
+    // stay one, whereas counting the slot too made it a phantom training day
+    // (CODEBASE_ANALYSIS_2026-10-03). 05-08 holds only a walk otherwise.
+    const [live] = await db.select().from(trainingPlans).where(eq(trainingPlans.name, "Live block"));
+    const [friday] = await db
+      .insert(planDays)
+      .values({ planId: live.id, weekNumber: 1, dayName: "Friday", focus: "Sled", mainWorkout: "Push", scheduledDate: "2026-05-08", status: "completed" })
+      .returning();
+    await seedWorkoutLog(ALICE, "2026-05-10", { planDayId: friday.id, planId: live.id });
+
+    const dates = await storage.timeline.getCompletedWorkoutDates(ALICE);
+    expect([...dates].sort()).toEqual(["2026-04-29", "2026-05-01", "2026-05-04", "2026-05-09", "2026-05-10"]);
+
+    const timeline = await storage.timeline.getTimeline(ALICE);
+    const fromTimeline = new Set(
+      timeline
+        .filter((entry) => entry.status === "completed" && entry.countsAsTraining !== false)
+        .map((entry) => entry.date),
+    );
+    expect([...dates].sort()).toEqual([...fromTimeline].sort());
   });
 
   it("is empty for an athlete with no plans and no logs", async () => {

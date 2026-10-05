@@ -1,4 +1,5 @@
 ﻿import { CHAT_MESSAGE_MAX_LENGTH, CHAT_PHOTO_MAX_BASE64_CHARS } from "../../chat";
+import { isIsoCalendarDate } from "../../dateUtils";
 import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
 import { chatFeedbackEnum } from "../enums";
 import { chatMessages } from "../tables";
@@ -51,6 +52,19 @@ export type ChatMessage = typeof chatMessages.$inferSelect;
 export const dateStringSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
+
+/**
+ * A real calendar day as `YYYY-MM-DD`, for a value written to a Postgres `date`
+ * column. The shape check alone takes "2026-02-30", which Postgres refuses with
+ * an error no handler maps to a 4xx, so the request returned 500 and rolled
+ * back the whole save instead of naming the field (C50,
+ * CODEBASE_ANALYSIS_2026-10-03). The calendar check runs only on a well-formed
+ * value, so a bad date is still named once (date-schema-single-issue).
+ */
+export const calendarDateSchema = dateStringSchema.refine(isIsoCalendarDate, {
+  message: "Must be a real calendar date",
+  when: ({ issues }) => issues.length === 0,
+});
 
 /**
  * Body for `POST /api/v1/weekly-review/intent`. `week` is any date inside the

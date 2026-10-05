@@ -207,6 +207,36 @@ describe("runAnalyticsRecomputeScan", () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
+  it("recomputes at 01:00 on the day a midnight spring-forward removes local midnight", async () => {
+    // C24 (CODEBASE_ANALYSIS_2026-10-03): Santiago jumps from Saturday 23:59 to
+    // Sunday 01:00 (04:00 UTC on 2026-09-06), so hour 0 never matched that day.
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "America/Santiago" } },
+      latestWorkoutDate: { u1: "2026-09-05" },
+      rows: {
+        u1: { coach_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-09-01" } },
+      },
+    });
+
+    expect(await runAnalyticsRecomputeScan(storage, new Date("2026-09-06T04:00:00Z"))).toEqual({
+      usersChecked: 1,
+      enqueued: 1,
+    });
+    expect(sendMock.mock.calls[0][1]).toEqual({
+      userId: "u1",
+      feature: "coach_insights",
+      localDate: "2026-09-06",
+    });
+
+    // The next tick (02:00 local) is an ordinary hour again.
+    sendMock.mockClear();
+    expect(await runAnalyticsRecomputeScan(storage, new Date("2026-09-06T05:00:00Z"))).toEqual({
+      usersChecked: 0,
+      enqueued: 0,
+    });
+  });
+
   it("skips features already recomputed today (once-per-day guard)", async () => {
     const storage = makeStorage({
       engagedUserIds: ["u1"],

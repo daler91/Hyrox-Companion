@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@shared/schema";
+import pLimit from "p-limit";
 
 import {
   generateText,
@@ -165,6 +166,30 @@ export async function* streamChatWithCoach(
 const MAX_TOOL_ROUNDS = 3;
 
 /**
+ * How many of one round's tool calls run, and how many at once. A "compare
+ * every month" question used to fan out to dozens of reads in parallel; the
+ * calls past the cap are answered with an error instead, so every call still
+ * has its result. AI22 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const MAX_TOOL_CALLS_PER_ROUND = 6;
+const TOOL_CALL_CONCURRENCY = 3;
+
+/**
+ * The most tool-result text one reply carries. Every later round re-sends the
+ * results before it, at the athlete's cost, so a result that would take the
+ * reply past this is replaced by an error. One result is at most 8,000
+ * characters (services/chatTools). AI22 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const MAX_TOOL_RESULT_CHARS = 32_000;
+
+const TOO_MANY_CALLS = JSON.stringify({
+  error: "Not run: too many lookups in one go. Make fewer, narrower lookups, or answer from the results you have.",
+});
+const OVER_RESULT_BUDGET = JSON.stringify({
+  error: "Not included: this reply's lookups already returned as much as fits. Answer from the results you have.",
+});
+
+/**
  * The tools a streamed reply may call, and how to run them. A call to the
  * `handoff` tool ends the reply instead: the caller takes over (the route
  * turns a plan-change call into a proposal).
@@ -184,34 +209,74 @@ interface ToolRound {
   providerParts?: unknown[];
 }
 
-/** The calling turn and its results, as the next round's extra messages. */
-async function toolRoundMessages(turn: ToolRound, toolset: CoachToolset): Promise<TextAiConversationMessage[]> {
-  const results = await Promise.all(
-    turn.calls.map(async (call) => ({
-      role: "tool" as const,
-      toolCallId: call.id,
-      name: call.name,
-      content: await toolset.run(call),
-    })),
+/** How much tool-result text the reply's earlier rounds already carry. */
+function toolResultChars(messages: readonly TextAiConversationMessage[]): number {
+  return messages.reduce((total, message) => (message.role === "tool" ? total + message.content.length : total), 0);
+}
+
+/**
+ * The calling turn and its results, as the next round's extra messages: the
+ * first {@link MAX_TOOL_CALLS_PER_ROUND} calls run, a few at a time, and
+ * results go in, in call order, while the reply's result budget lasts (AI22).
+ */
+async function toolRoundMessages(
+  turn: ToolRound,
+  toolset: CoachToolset,
+  earlierResultChars: number,
+): Promise<TextAiConversationMessage[]> {
+  const limit = pLimit(TOOL_CALL_CONCURRENCY);
+  const outputs = await Promise.all(
+    turn.calls.map((call, index) =>
+      index < MAX_TOOL_CALLS_PER_ROUND ? limit(() => toolset.run(call)) : Promise.resolve(TOO_MANY_CALLS),
+    ),
   );
+  let resultChars = earlierResultChars;
+  const results = turn.calls.map((call, index) => {
+    let content = outputs.at(index) ?? TOO_MANY_CALLS;
+    resultChars += content.length;
+    if (resultChars > MAX_TOOL_RESULT_CHARS) {
+      resultChars += OVER_RESULT_BUDGET.length - content.length;
+      content = OVER_RESULT_BUDGET;
+    }
+    return { role: "tool" as const, toolCallId: call.id, name: call.name, content };
+  });
   return [{ role: "assistant", content: turn.text, toolCalls: turn.calls, providerParts: turn.providerParts }, ...results];
 }
 
 /**
+ * What goes between the reply so far and a later round's first text: a
+ * paragraph break, unless either side is empty or already breaks there.
+ * Without it a preamble and the answer ran together ("…July sessions.In July
+ * you squatted…"), on screen and in the saved reply. AI21
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function roundSeparator(replySoFar: string, next: string): string {
+  if (!replySoFar || !next) return "";
+  const alreadyBreaks = replySoFar.trimEnd() !== replySoFar || next.trimStart() !== next;
+  return alreadyBreaks ? "" : "\n\n";
+}
+
+/**
  * One round of a reply with tools: its text as it streams, then what it said
- * and called. Undefined when the request was cancelled.
+ * and called. Undefined when the request was cancelled. `replySoFar` is the
+ * earlier rounds' text (only its end is read): the round's first text starts
+ * a new paragraph after it (AI21). The separator is streamed, so the saved
+ * reply, which is what was streamed, has it too; `turn.text` keeps only what
+ * the model said.
  */
 async function* streamToolRound(
   request: TextAiRequest,
   validateChunk: (text: string) => void,
+  replySoFar: string,
 ): AsyncGenerator<CoachStreamEvent, ToolRound | undefined> {
   const turn: ToolRound = { text: "", calls: [] };
   for await (const event of streamTextEvents(request)) {
     if (request.signal?.aborted) return undefined;
     if (event.text) {
-      validateChunk(event.text);
+      const text = (turn.text ? "" : roundSeparator(replySoFar, event.text)) + event.text;
+      validateChunk(text);
       turn.text += event.text;
-      yield { type: "text", text: event.text };
+      yield { type: "text", text };
     }
     if (event.toolCalls) turn.calls.push(...event.toolCalls);
     if (event.providerParts) turn.providerParts = event.providerParts;
@@ -232,12 +297,14 @@ interface ToolRoundsContext {
 /**
  * Round `round` of a reply with tools, then the next while the model keeps
  * calling read tools. Recursive rather than a loop: each round needs the one
- * before it answered, so they can only run one after another.
+ * before it answered, so they can only run one after another. `replySoFar`
+ * is the last text an earlier round said ("" before any).
  */
 async function* streamToolRounds(
   context: ToolRoundsContext,
   messages: TextAiConversationMessage[],
   round: number,
+  replySoFar: string,
 ): AsyncGenerator<CoachStreamEvent> {
   const { request, toolset, userId, signal, validateChunk } = context;
   const turn = yield* streamToolRound(
@@ -252,6 +319,7 @@ async function* streamToolRounds(
       signal,
     },
     validateChunk,
+    replySoFar,
   );
   if (!turn || turn.calls.length === 0 || round === MAX_TOOL_ROUNDS) return;
   const handoff = turn.calls.find((call) => call.name === toolset.handoff);
@@ -259,7 +327,8 @@ async function* streamToolRounds(
     yield { type: "handoff", call: handoff };
     return;
   }
-  yield* streamToolRounds(context, [...messages, ...(await toolRoundMessages(turn, toolset))], round + 1);
+  const results = await toolRoundMessages(turn, toolset, toolResultChars(messages));
+  yield* streamToolRounds(context, [...messages, ...results], round + 1, turn.text || replySoFar);
 }
 
 /**
@@ -280,7 +349,7 @@ export async function* streamChatWithCoachTools(
   try {
     const request = buildCoachRequest({ userMessage, conversationHistory, trainingContext, coachingMaterials, retrievedChunks, options });
     const context = { request, toolset, userId, signal, validateChunk: createStreamingOutputValidator() };
-    yield* streamToolRounds(context, request.messages, 0);
+    yield* streamToolRounds(context, request.messages, 0, "");
   } catch (error) {
     const classified = classifyAiError(error);
     logger.error("AI provider streaming request with tools failed");

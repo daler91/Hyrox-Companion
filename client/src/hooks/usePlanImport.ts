@@ -44,8 +44,14 @@ export function usePlanImport({
       onPlanImported?.(plan.id);
       toast({ title: "Plan imported! Now set a start date." });
     },
-    onError: () => {
-      toast({ title: "Failed to import plan", variant: "destructive" });
+    // The server names the row to fix (a Week below 1, an unrecognised Day);
+    // without the description the athlete saw only the title (C34).
+    onError: (error) => {
+      toast({
+        title: "Failed to import plan",
+        description: humanizeApiError(error),
+        variant: "destructive",
+      });
     },
   });
 

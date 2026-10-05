@@ -22,6 +22,8 @@ import type {
   RecoveryWeekImpact,
 } from "@shared/schema";
 
+import { deriveRaceDayOverride } from "../../storage/raceDayView";
+
 /**
  * The missed-session recovery planner: given a missed session and the
  * sessions around it, what folding it into another day, shortening it, or
@@ -250,14 +252,19 @@ function toDaySession(session: PlannerSession): RecoveryDaySession {
   };
 }
 
-/** Today and the next days, inside the plan, clear of absences and of race day. */
+/** Today and the next days, inside the plan, clear of absences and of race week's derived days. */
 export function candidateDates(input: PlannerInput): string[] {
   const dates: string[] = [];
   for (let offset = 0; offset < RECOVERY_WINDOW_DAYS; offset++) {
     const date = addDaysToISODate(input.today, offset);
     if (input.lastDate !== null && date > input.lastDate) break;
-    // Training never moves onto race day or past it.
-    if (input.raceDate !== null && date >= input.raceDate) break;
+    // Training never moves onto a day the race shapes: the shakeout the day
+    // before, race day, or the recovery after it. Those days show their
+    // derived session and hide the stored one, so a session folded onto the
+    // shakeout day vanished from the timeline and the coach's context — C30
+    // (CODEBASE_ANALYSIS_2026-10-03). Every day from the shakeout on is
+    // derived, so the first one ends the search.
+    if (deriveRaceDayOverride(date, input.raceDate) !== null) break;
     if (isDateExcused(date, input.absences)) continue;
     dates.push(date);
   }
@@ -315,14 +322,10 @@ function longDayNote(label: string, onDay: readonly PlannerSession[], move: Move
 
 function raceCloseNote(input: PlannerInput, date: string, move: Move): RecoveryNote | null {
   if (input.raceDate === null || !isHard(input.missed.priority, move.rpe)) return null;
+  // Two days out at the closest: the shakeout day is never a candidate (C30).
   const daysToRace = dayDiff(date, input.raceDate);
   if (daysToRace <= 0 || daysToRace > RACE_TAPER_DAYS) return null;
-  return warning(
-    "race_close",
-    daysToRace === 1
-      ? "It's the day before race day — keep the legs fresh."
-      : `It's ${daysToRace} days before race day — keep the legs fresh.`,
-  );
+  return warning("race_close", `It's ${daysToRace} days before race day — keep the legs fresh.`);
 }
 
 /** A week other than the missed one that the move makes noticeably heavier. */

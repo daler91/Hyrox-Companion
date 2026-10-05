@@ -28,7 +28,11 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { computeRecipeFood } from "../services/nutrition/recipe";
 import { roundMacros, scaleNutrition } from "../services/nutrition/rollup";
-import { assertLoggedHistoryKept, getVisibleFoodsByIds } from "./nutritionFoods";
+import {
+  assertLoggedHistoryKept,
+  getVisibleFoodsByIds,
+  refreshRecipesAfterMacroEdit,
+} from "./nutritionFoods";
 
 
 // --- recipes (FR-2.3) -----------------------------------------------------
@@ -159,6 +163,9 @@ export async function updateRecipe(
       .update(recipes)
       .set({ name: input.name, servings: input.servings, updatedAt: new Date() })
       .where(eq(recipes.id, id));
+    // C40 (CODEBASE_ANALYSIS_2026-10-03): the athlete's recipes that use this
+    // one log through backing foods computed from its old macros.
+    if (current) await refreshRecipesAfterMacroEdit(tx, userId, current, backing);
   });
 
   const [updated] = await db.select().from(recipes).where(eq(recipes.id, id));
@@ -166,9 +173,21 @@ export async function updateRecipe(
 }
 
 
+export const RECIPE_IN_RECIPE_CONFLICT =
+  "This recipe is an ingredient in another of your recipes, so it can't be deleted. " +
+  "Remove it from that recipe first.";
+
 /**
  * Delete a recipe + its ingredients. The backing food is deleted only if no log
- * entry references it (otherwise it's kept so logged history survives).
+ * entry or other recipe references it (otherwise it's kept so logged history
+ * and the other recipe survive).
+ *
+ * C39 (CODEBASE_ANALYSIS_2026-10-03): a recipe used as an ingredient of another
+ * recipe hit the ingredient's ON DELETE RESTRICT, rolled back and answered a
+ * generic 500 every time. One of the athlete's own recipes using it is now a
+ * 409 they can act on; another athlete's (a backing food shared before D18)
+ * keeps the food, the way a log entry does. The food row is locked first, so
+ * no new ingredient can start referencing it between the check and the delete.
  */
 export async function deleteRecipe(userId: string, id: string): Promise<boolean> {
   const [recipe] = await db
@@ -178,12 +197,21 @@ export async function deleteRecipe(userId: string, id: string): Promise<boolean>
   if (!recipe) return false;
 
   await db.transaction(async (tx) => {
+    await tx.select({ id: foods.id }).from(foods).where(eq(foods.id, recipe.foodId)).for("update");
+    const usedIn = await tx
+      .select({ ownerId: recipes.userId })
+      .from(recipeIngredients)
+      .innerJoin(recipes, eq(recipes.id, recipeIngredients.recipeId))
+      .where(eq(recipeIngredients.foodId, recipe.foodId));
+    if (usedIn.some((use) => use.ownerId === userId)) {
+      throw new AppError(ErrorCode.CONFLICT, RECIPE_IN_RECIPE_CONFLICT, 409);
+    }
     await tx.delete(recipes).where(eq(recipes.id, id)); // cascades recipe_ingredients
     const [{ refs }] = await tx
       .select({ refs: count() })
       .from(foodLogEntries)
       .where(eq(foodLogEntries.foodId, recipe.foodId));
-    if (refs === 0) {
+    if (refs === 0 && usedIn.length === 0) {
       await tx.delete(foods).where(eq(foods.id, recipe.foodId));
     }
   });

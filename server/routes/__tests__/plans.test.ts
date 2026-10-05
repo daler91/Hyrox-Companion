@@ -3,10 +3,11 @@ import express from "express";
 import request from "supertest";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
+import { AppError, ErrorCode } from "../../errors";
 import { clearRateLimitBuckets } from "../../routeUtils";
 import { moveStatementsToCard } from "../../services/athleteFactsService";
 import { createPendingPlan } from "../../services/planGenerationService";
-import { createSamplePlan } from "../../services/planService";
+import { createSamplePlan, importPlanFromCSV } from "../../services/planService";
 import { storage } from "../../storage";
 import plansRouter from "../plans";
 import { createTestApp } from "./testUtils";
@@ -113,6 +114,42 @@ describe("POST /api/plans/import Rate Limiting", () => {
     // Next request should succeed again
     const successfulResponse = await request(app).post("/api/v1/plans/import").send(payload);
     expect(successfulResponse.status).toBe(200);
+  });
+});
+
+// C34 (CODEBASE_ANALYSIS_2026-10-03): every import failure used to come back
+// as "Failed to parse CSV content", hiding the row the athlete had to fix.
+describe("POST /api/v1/plans/import errors", () => {
+  let app: express.Express;
+  const payload = { csvContent: "Week,Day\n-40,Monday", fileName: "plan.csv" };
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("passes the service's own row error through", async () => {
+    const rowError = "CSV contains 1 row(s) with a Week below 1 (e.g., -40). Weeks start at 1.";
+    vi.mocked(importPlanFromCSV).mockRejectedValueOnce(new AppError(ErrorCode.VALIDATION_ERROR, rowError, 400));
+
+    const response = await request(app).post("/api/v1/plans/import").send(payload);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: rowError, code: "INVALID_CSV" });
+  });
+
+  it("keeps an unexpected failure generic", async () => {
+    vi.mocked(importPlanFromCSV).mockRejectedValueOnce(new Error("connection terminated unexpectedly"));
+
+    const response = await request(app).post("/api/v1/plans/import").send(payload);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "Failed to parse CSV content. Please ensure it follows the expected template format.",
+      code: "INVALID_CSV",
+    });
   });
 });
 

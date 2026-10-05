@@ -24,13 +24,22 @@ const imageParseJsonParser = express.json({ limit: "10mb" });
 const chatSendJsonParser = express.json({ limit: "5mb" });
 // Coaching material routes accept large document content (up to 1.5M chars).
 const coachingMaterialsJsonParser = express.json({ limit: "2mb" });
+// Plan import takes up to 100,000 CSV characters (importPlanRequestSchema).
+// JSON-escaped, one character can take up to six bytes (a control character
+// becomes \u0000), and CRLF line endings or accented text alone push a
+// schema-valid CSV past the app-wide 100kb, which answered it with a generic 413.
+// 1mb holds the worst case plus the two 255-character name fields, and sits
+// above the client's own 200 KB file cap. C27 (CODEBASE_ANALYSIS_2026-10-03)
+const planImportJsonParser = express.json({ limit: "1mb" });
 
 const COACHING_MATERIALS_PATH_RE = /^\/api\/v1\/coaching-materials(?:\/|$)/u;
+const PLAN_IMPORT_PATH_RE = /^\/api\/v1\/plans\/import\/?$/u;
 
 function largeJsonParserFor(path: string): RequestHandler | null {
   if (isImageParsePath(path)) return imageParseJsonParser;
   if (isChatSendPath(path)) return chatSendJsonParser;
   if (COACHING_MATERIALS_PATH_RE.test(path)) return coachingMaterialsJsonParser;
+  if (PLAN_IMPORT_PATH_RE.test(path)) return planImportJsonParser;
   return null;
 }
 

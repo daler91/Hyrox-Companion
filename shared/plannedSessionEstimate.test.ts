@@ -173,6 +173,38 @@ describe("estimatePlannedSession", () => {
     expect(e.durationMin).toBeLessThanOrEqual(58);
   });
 
+  // C48 (CODEBASE_ANALYSIS_2026-10-03): the row's unit stamp, not the current
+  // preference, says what unit a stored distance is in.
+  it("reads a metre-stamped run in metres after the athlete switches to miles", () => {
+    const run = { exerciseName: "easy_run", plannedDistance: 10000 };
+    const beforeSwitch = estimatePlannedSession({
+      exerciseSets: [{ ...run, distanceUnit: "m" }],
+      distanceUnit: "km",
+    });
+    const afterSwitch = estimatePlannedSession({
+      exerciseSets: [{ ...run, distanceUnit: "m" }],
+      distanceUnit: "miles",
+    });
+    expect(beforeSwitch.durationMin).toBe(55); // 10,000 m × 0.33 s/m
+    expect(afterSwitch.durationMin).toBe(55); // not 17 (10,000 ft)
+  });
+
+  it("reads a feet-stamped run in feet after the athlete switches to km", () => {
+    const estimate = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "easy_run", plannedDistance: 32808, distanceUnit: "ft" }],
+      distanceUnit: "km",
+    });
+    expect(estimate.durationMin).toBe(55); // ≈ 10,000 m, not 32.8 km
+  });
+
+  it("falls back to the current preference for an unstamped (pre-L4) row", () => {
+    const legacy = { exerciseName: "easy_run", plannedDistance: 10000, distanceUnit: null };
+    const minutesFor = (distanceUnit: string) =>
+      estimatePlannedSession({ exerciseSets: [legacy], distanceUnit }).durationMin;
+    expect(minutesFor("km")).toBe(55);
+    expect(minutesFor("miles")).toBe(17);
+  });
+
   it("keeps short carries/sleds on the per-set floor instead of pacing them", () => {
     const e = estimatePlannedSession({
       exerciseSets: [{ exerciseName: "farmers_carry", plannedDistance: 100 }],

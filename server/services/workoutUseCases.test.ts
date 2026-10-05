@@ -6,6 +6,7 @@ import { storage } from "../storage";
 import { checkAiBudget } from "./aiUsageService";
 import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
+import { refreshDerivedStateAfterLoggedSetChange } from "./workoutService/loggedSetChange";
 import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "./workoutUseCases";
 
 vi.mock("../ai/providers", () => ({ isTextAiProviderConfigured: () => true }));
@@ -23,6 +24,7 @@ vi.mock("./workoutService", () => ({
   updateWorkout: vi.fn(),
   assignWorkoutPlanDay: vi.fn(),
 }));
+vi.mock("./workoutService/loggedSetChange", () => ({ refreshDerivedStateAfterLoggedSetChange: vi.fn() }));
 
 const USER_ID = "user-1";
 const TEXT_ONLY = { date: "2026-10-01", focus: "Strength", mainWorkout: "5x5 back squat @ 100kg" };
@@ -90,5 +92,29 @@ describe("workout use cases drop the athlete's cached analytics", () => {
     vi.mocked(write).mockResolvedValueOnce(null);
     await run();
     expect(invalidateAnalyticsCachesForUser).not.toHaveBeenCalled();
+  });
+});
+
+// C32 (CODEBASE_ANALYSIS_2026-10-03): a PATCH carrying `exercises` replaces
+// every logged set, so it re-derives adherence and re-queues the coach like a
+// single set edit does; a column-only PATCH leaves the sets, and both, alone.
+describe("updateWorkoutUseCase re-derives what the replaced sets fed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(updateWorkout).mockResolvedValue({ id: "w1" } as never);
+  });
+
+  it("after a PATCH that replaces the sets", async () => {
+    await updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { exercises: PARSED } });
+
+    expect(refreshDerivedStateAfterLoggedSetChange).toHaveBeenCalledWith("w1", USER_ID);
+  });
+
+  it("not after a column-only PATCH, nor one that found no workout", async () => {
+    await updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { notes: "felt good" } });
+    vi.mocked(updateWorkout).mockResolvedValueOnce(null);
+    await updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { exercises: PARSED } });
+
+    expect(refreshDerivedStateAfterLoggedSetChange).not.toHaveBeenCalled();
   });
 });

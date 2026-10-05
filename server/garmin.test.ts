@@ -70,6 +70,29 @@ describe("garmin safety layers", () => {
       expect(__testing.GARMIN_ACTIVITIES_PER_SYNC).toBeLessThanOrEqual(30);
     });
 
+    it("bounds how many pages one sync may read", () => {
+      // C26 (CODEBASE_ANALYSIS_2026-10-03): a sync pages back to its cutoff,
+      // but one click must stay a small, fixed number of Garmin calls.
+      expect(__testing.GARMIN_MAX_SYNC_PAGES).toBeGreaterThan(1);
+      expect(__testing.GARMIN_MAX_SYNC_PAGES).toBeLessThanOrEqual(5);
+    });
+
+    it("holds the shared user lock longer than the slowest sync", () => {
+      // Refresh, login, then every activity page, each at its full timeout:
+      // a live sync must not outlast its cross-instance claim (C26).
+      const slowestSyncMs = (2 + __testing.GARMIN_MAX_SYNC_PAGES) * __testing.GARMIN_CALL_TIMEOUT_MS;
+      expect(__testing.USER_LOCK_TTL_MS).toBeGreaterThan(slowestSyncMs);
+    });
+
+    it("pages back to the last sync less a week, or 90 days on a first sync", () => {
+      const now = new Date("2026-10-05T12:00:00Z");
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      expect(__testing.garminSyncCutoff(new Date("2026-10-01T12:00:00Z"), now)).toEqual(
+        new Date("2026-09-24T12:00:00Z"),
+      );
+      expect(__testing.garminSyncCutoff(null, now)).toEqual(new Date(now.getTime() - 90 * DAY_MS));
+    });
+
     it("leaves a wide buffer before token expiry", () => {
       expect(__testing.TOKEN_EXPIRY_BUFFER_MS).toBeGreaterThanOrEqual(60 * 1000);
     });

@@ -104,6 +104,38 @@ export function getLocalHour(instant: Date, tz: string): number {
   return hour;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Whether `hour` (0-23, athlete-local) falls due on the hourly UTC tick at
+ * `instant`: the tick inside that local hour, or, when a spring-forward gap
+ * skipped the hour on today's local date, the first tick after the gap.
+ *
+ * A bare `getLocalHour(...) === hour` never matches an hour that does not
+ * exist, so a 02:00 choice in New York is silently dropped on the March
+ * Sunday, and a midnight job in Santiago, Beirut or Havana (which jump from
+ * 23:59 to 01:00) misses that day. The gap shows up as the previous tick's
+ * local hour being two or more behind this one's. C24
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * Still at most one tick per local date for a skipped hour, since only the
+ * tick straight after the gap sees it. An hour the gap took from the PREVIOUS
+ * date (a jump from 23:00 into the new day) is not carried over, so nothing
+ * lands on the next day, where a weekday gate would read it differently.
+ * Hourly ticks are assumed, as the email and analytics crons run them.
+ */
+export function isLocalHourDue(instant: Date, tz: string, hour: number): boolean {
+  const localHour = getLocalHour(instant, tz);
+  if (localHour === hour) return true;
+  if (hour >= localHour) return false;
+  const previousHour = getLocalHour(new Date(instant.getTime() - HOUR_MS), tz);
+  const gap = (localHour - previousHour + 24) % 24;
+  if (gap < 2) return false;
+  // A gap that wrapped through midnight skipped every earlier hour of today;
+  // otherwise only the hours after the previous tick's.
+  return previousHour > localHour || hour > previousHour;
+}
+
 /**
  * Parse a YYYY-MM-DD calendar string to the UTC-midnight instant that stands
  * for it. Date-only space has no timezone, so UTC midnight is just the anchor

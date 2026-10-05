@@ -62,6 +62,26 @@ describe("aiBudgetCheck", () => {
     });
   });
 
+  // AI19 (CODEBASE_ANALYSIS_2026-10-03): the app-wide ceiling is an operator
+  // condition, not this athlete's quota, so it is a 503 with its own code.
+  it("returns 503 when the app-wide ceiling is reached", async () => {
+    vi.mocked(checkAiBudget).mockResolvedValue({
+      allowed: false,
+      warning: false,
+      currentCostCents: 10,
+      limitCents: DAILY_LIMIT_CENTS,
+      deniedBy: "global",
+    });
+
+    const response = await request(createBudgetApp()).post("/probe");
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      error: "AI features are temporarily unavailable due to high demand. Please try again later.",
+      code: "AI_GLOBAL_BUDGET_EXCEEDED",
+    });
+  });
+
   it("allows requests and sets warning headers near the limit", async () => {
     vi.mocked(checkAiBudget).mockResolvedValue({
       allowed: true,

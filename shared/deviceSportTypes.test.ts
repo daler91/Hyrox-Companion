@@ -16,6 +16,17 @@ describe("countsAsTraining", () => {
     expect(countsAsTraining("Golf")).toBe(false);
   });
 
+  it("excludes every e-bike sport from both providers", () => {
+    // C46 (CODEBASE_ANALYSIS_2026-10-03): Strava's e-MTB counted while its road
+    // e-bike and Garmin's e-MTB did not.
+    for (const sport of ["EBikeRide", "EMountainBikeRide", "e_bike_fitness", "e_bike_mountain"]) {
+      expect(countsAsTraining(sport), sport).toBe(false);
+    }
+    // The non-assisted rides still count.
+    expect(countsAsTraining("MountainBikeRide")).toBe(true);
+    expect(countsAsTraining("mountain_biking")).toBe(true);
+  });
+
   it("keeps the sports that are", () => {
     for (const sport of [
       "Run",

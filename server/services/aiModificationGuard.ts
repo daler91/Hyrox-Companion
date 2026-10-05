@@ -33,39 +33,43 @@ type WorkoutPrescriptionInput = Pick<
 type ExerciseDetail = NonNullable<UpcomingWorkout["exerciseDetails"]>[number];
 type WorkoutTextField = "mainWorkout" | "accessory" | "notes";
 
-const FATIGUE_TERMS = [
-  "fatigue",
-  "rpe",
-  "recovery",
-  "recover",
-  "overworked",
-  "overreached",
-  "overtraining",
-  "soreness",
-  "tired",
+// Whole words only. These were substrings, so 'rpe' matched "sharpen", 'less'
+// matched "unless", 'cut' matched "execute", 'tired' matched "retired" and
+// 'lower' matched "lower body": during a fatigue episode almost any edit was
+// tagged a fatigue reduction, and a later real change to the same day was then
+// suppressed as a repeat. AI25 (CODEBASE_ANALYSIS_2026-10-03)
+const FATIGUE_PATTERNS: readonly RegExp[] = [
+  /\bfatigu(?:e|ed|es|ing)\b/,
+  // "RPE 6" and "RPE6" both count; "sharpen" does not.
+  /\brpes?(?![a-z])/,
+  /\brecover(?:y|ies|ed|ing|s)?\b/,
+  /\bover-?(?:worked|reached|reaching|training|trained)\b/,
+  /\bsoreness\b/,
+  /\btired(?:ness)?\b/,
 ];
 
-const REDUCTION_TERMS = [
-  "reduce",
-  "reduced",
-  "reducing",
-  "lower",
-  "lighter",
-  "scale",
-  "scaled",
-  "deload",
-  "shorter",
-  "fewer",
-  "less",
-  "easier",
-  "easy",
-  "decrease",
-  "cut",
+const REDUCTION_PATTERNS: readonly RegExp[] = [
+  /\breduc(?:e|ed|es|ing|tion)\b/,
+  /\blower(?:ed|ing|s)\b/,
+  // "lower the weight", never "lower body" or "lower back".
+  /\blower\b(?![\s-]*(?:body|back|half|limbs?|legs?|abs|chain)\b)/,
+  /\blighter\b/,
+  // "scale back", "scaled version"; "scale up" is the opposite.
+  /\bscal(?:e|ed|es|ing)\b(?!\s+up\b)/,
+  /\bdeload(?:s|ed|ing)?\b/,
+  /\bshorter\b/,
+  /\bfewer\b/,
+  /\bless\b/,
+  /\beas(?:y|ier)\b/,
+  /\bdecreas(?:e|ed|es|ing)\b/,
+  /\bcut(?:s|ting)?\b/,
+  // "drop to 3 sets", "drop the weight"; "drop sets" are an intensifier.
+  /\bdrop(?:s|ped|ping)?\s+(?:to|down|the|from)\b/,
 ];
 
-function textIncludesAny(text: string, terms: readonly string[]): boolean {
+function textMatchesAny(text: string, patterns: readonly RegExp[]): boolean {
   const lower = text.toLowerCase();
-  return terms.some((term) => lower.includes(term));
+  return patterns.some((pattern) => lower.search(pattern) !== -1);
 }
 
 function hasActiveFatigueSignal(signals: CoachModificationSignals): boolean {
@@ -197,8 +201,8 @@ export function classifyCoachModification(
   const text = buildSuggestionText(suggestion);
   if (
     hasActiveFatigueSignal(signals) &&
-    textIncludesAny(text, FATIGUE_TERMS) &&
-    textIncludesAny(text, REDUCTION_TERMS)
+    textMatchesAny(text, FATIGUE_PATTERNS) &&
+    textMatchesAny(text, REDUCTION_PATTERNS)
   ) {
     return "fatigue_volume_reduction";
   }

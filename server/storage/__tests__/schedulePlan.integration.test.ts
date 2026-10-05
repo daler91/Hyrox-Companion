@@ -1,5 +1,5 @@
 import { PLAN_WEEKDAYS } from "@shared/dateUtils";
-import { planDays, trainingPlans } from "@shared/schema";
+import { type PlanDayRecoveryUndo, planDays, trainingPlans } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -152,5 +152,73 @@ describe("PlanStorage.schedulePlan (real Postgres)", () => {
     const timeline = await storage.timeline.getTimeline(USER);
     expect(timeline.filter((e) => e.planId === plan.id && e.status === "missed")).toEqual([]);
     expect(timeline.filter((e) => e.planId === plan.id && e.date < today)).toEqual([]);
+  });
+
+  // C42 (CODEBASE_ANALYSIS_2026-10-03): the fold's undo kept the absolute date
+  // the session was missed on, so after the plan moved, undoing the fold put
+  // the session back on a date from the old schedule.
+  describe("a folded session's undo", () => {
+    const undo: PlanDayRecoveryUndo = {
+      scheduledDate: "2026-09-22",
+      status: "missed",
+      recovery: null,
+      missedOn: null,
+      deletedSets: [],
+      scaledSets: [],
+      previous: null,
+    };
+
+    /** Week 1 laid out from MONDAY, with Tuesday's session missed and folded onto Thursday. */
+    async function seedFoldedPlan() {
+      const { plan, day } = await seedPlan([
+        { week: 1, day: "Monday" },
+        { week: 1, day: "Thursday" },
+        { week: 2, day: "Monday" },
+      ]);
+      await storage.plans.schedulePlan(plan.id, MONDAY, USER);
+      const folded = day(1, "Thursday");
+      await db
+        .update(planDays)
+        .set({ recovery: "folded", missedOn: undo.scheduledDate, recoveryUndo: undo })
+        .where(eq(planDays.id, folded.id));
+      return { plan, folded };
+    }
+
+    async function readDay(id: string) {
+      const [row] = await db.select().from(planDays).where(eq(planDays.id, id));
+      return row;
+    }
+
+    it("is dropped when the reschedule moves the day", async () => {
+      const { plan, folded } = await seedFoldedPlan();
+
+      await storage.plans.schedulePlan(plan.id, "2026-09-28", USER);
+
+      const row = await readDay(folded.id);
+      expect(row.scheduledDate).toBe("2026-10-01");
+      expect(row.recoveryUndo).toBeNull();
+      // The record of the miss itself stays.
+      expect(row).toMatchObject({ recovery: "folded", missedOn: "2026-09-22" });
+    });
+
+    it("is dropped when the reschedule takes the day off the calendar", async () => {
+      const { plan, folded } = await seedFoldedPlan();
+
+      await storage.plans.schedulePlan(plan.id, "2026-09-25", USER);
+
+      const row = await readDay(folded.id);
+      expect(row.scheduledDate).toBeNull();
+      expect(row.recoveryUndo).toBeNull();
+    });
+
+    it("is kept when the day keeps its date", async () => {
+      const { plan, folded } = await seedFoldedPlan();
+
+      await storage.plans.schedulePlan(plan.id, MONDAY, USER);
+
+      const row = await readDay(folded.id);
+      expect(row.scheduledDate).toBe("2026-09-24");
+      expect(row.recoveryUndo).toEqual(undo);
+    });
   });
 });

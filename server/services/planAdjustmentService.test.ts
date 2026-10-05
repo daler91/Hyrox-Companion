@@ -1,5 +1,5 @@
 import type { EnrichedPlanAdjustmentChange, PlanAdjustmentProposal, PlanProposalDayUndo } from "@shared/schema";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generatePlanAdjustment } from "../gemini/planAdjustmentService";
 import { storage } from "../storage";
@@ -13,7 +13,6 @@ import { getStructuredApplyBlocker } from "./aiSuggestionService";
 import {
   applyPlanAdjustmentProposal,
   createPlanAdjustmentProposal,
-  derivePlanAdjustmentChangeKind,
   undoPlanAdjustmentProposal,
 } from "./planAdjustmentService";
 import { setsFingerprint } from "./planProposalUndo";
@@ -160,26 +159,6 @@ beforeEach(() => {
     resolvedAt: null,
     ...row,
   }) as PlanAdjustmentProposal);
-});
-
-describe("derivePlanAdjustmentChangeKind", () => {
-  it("classifies prescription rewrites as workout_update", () => {
-    expect(derivePlanAdjustmentChangeKind({ mainWorkout: "Hyrox class" })).toBe("workout_update");
-  });
-
-  it("classifies rest-like rewrites as rest_conversion", () => {
-    expect(
-      derivePlanAdjustmentChangeKind({ focus: "Rest", mainWorkout: "Complete rest or light walk" }),
-    ).toBe("rest_conversion");
-  });
-
-  it("classifies date-only moves as reschedule", () => {
-    expect(derivePlanAdjustmentChangeKind({ scheduledDate: "2026-07-18" })).toBe("reschedule");
-  });
-
-  it("classifies notes/expected-only edits as tune", () => {
-    expect(derivePlanAdjustmentChangeKind({ notes: "Keep it easy", expectedRpe: 5 })).toBe("tune");
-  });
 });
 
 describe("createPlanAdjustmentProposal", () => {
@@ -483,6 +462,17 @@ function mockUpdatesStick(days: ReturnType<typeof planDayRow>[]) {
 }
 
 describe("applyPlanAdjustmentProposal", () => {
+  // The fixtures' days fall on Thu 16 and Sat 18 Jul 2026, and an apply turns
+  // away any change for a day before the athlete's today (C33), so the clock
+  // stands just before them.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-07-15T09:00:00Z") });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns undefined for an unknown proposal", async () => {
     vi.mocked(storage.planProposals).getById.mockResolvedValue(NO_ROW);
 
@@ -518,6 +508,49 @@ describe("applyPlanAdjustmentProposal", () => {
     expect(result).toMatchObject({ applied: false, ...expected });
     expect(storage.planProposals.resolve).toHaveBeenCalledWith("prop-1", "user-1", "invalidated");
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+  });
+
+  // C33 (CODEBASE_ANALYSIS_2026-10-03): proposals never expired, so one
+  // applied days later could put a session on a date already gone. The rule
+  // itself is covered in planProposalRevalidation.test.ts.
+  describe("a change for a day that has already passed (C33)", () => {
+    const passedDay1 = { applied: false, reason: "stale", staleChanges: [{ planDayId: "day-1" }] };
+    const invalidated = proposalRow([], { status: "invalidated" });
+
+    it("invalidates the proposal and writes nothing", async () => {
+      vi.setSystemTime(new Date("2026-07-17T09:00:00Z"));
+      mockUnstructuredApplyScenario();
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+      vi.mocked(storage.planProposals.resolve).mockResolvedValueOnce(invalidated);
+
+      expect(await applyPlanAdjustmentProposal("user-1", "prop-1")).toMatchObject(passedDay1);
+      expect(storage.planProposals.resolve).toHaveBeenCalledWith("prop-1", "user-1", "invalidated");
+      expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    });
+
+    it("judges 'passed' on the athlete's own calendar", async () => {
+      // 03:00 UTC on Fri 17 Jul is still Thursday evening in Los Angeles.
+      vi.setSystemTime(new Date("2026-07-17T03:00:00Z"));
+      const day = mockUnstructuredApplyScenario();
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Los_Angeles" } as never);
+      mockUpdatesStick([day]);
+      vi.mocked(storage.planProposals.markApplied).mockResolvedValue(proposalRow([], { status: "applied" }));
+
+      expect(await applyPlanAdjustmentProposal("user-1", "prop-1")).toEqual({ applied: true, changeCount: 1 });
+    });
+
+    it("checks the date again under the lock", async () => {
+      const day = mockUnstructuredApplyScenario();
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+      // Moved onto a past date between the first read and the lock.
+      const moved = { ...day, scheduledDate: "2026-07-14" };
+      vi.mocked(storage.plans.lockPlanDaysWithSets).mockResolvedValueOnce({ days: [moved], setsByDay: new Map() });
+      vi.mocked(storage.planProposals.resolve).mockResolvedValueOnce(invalidated);
+
+      expect(await applyPlanAdjustmentProposal("user-1", "prop-1")).toMatchObject(passedDay1);
+      expect(storage.planProposals.resolve).toHaveBeenCalledWith("prop-1", "user-1", "invalidated", dbMockState.tx);
+      expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    });
   });
 
   it("applies all changes transactionally and resolves the proposal", async () => {
@@ -930,40 +963,5 @@ describe("undoPlanAdjustmentProposal", () => {
     const result = await undoPlanAdjustmentProposal("user-1", "prop-1");
 
     expect(result).toMatchObject({ undone: false, reason: "not_applied" });
-  });
-});
-
-describe("derivePlanAdjustmentChangeKind — rest must be exact (audit H18)", () => {
-  it("does not treat 'Active rest + mobility' as a rest conversion", () => {
-    // rest_conversion is the one change kind that DELETES a table-backed day's
-    // exercise rows. The focus test was /\brest\b/i, so this label matched and
-    // the day's entire mobility prescription was silently dropped.
-    expect(derivePlanAdjustmentChangeKind({ focus: "Active rest + mobility" })).toBe(
-      "workout_update",
-    );
-    expect(derivePlanAdjustmentChangeKind({ focus: "Active Recovery / rest-ish" })).toBe(
-      "workout_update",
-    );
-  });
-
-  it("still recognises a genuine rest day", () => {
-    for (const focus of ["Rest", "rest day", "  Complete Rest  ", "Full rest", "Day off", "Rest."]) {
-      expect(derivePlanAdjustmentChangeKind({ focus })).toBe("rest_conversion");
-    }
-  });
-
-  it("recognises a rest day declared through mainWorkout", () => {
-    expect(derivePlanAdjustmentChangeKind({ mainWorkout: "Complete rest" })).toBe(
-      "rest_conversion",
-    );
-    // ...but not one that merely mentions rest in a prescription.
-    expect(
-      derivePlanAdjustmentChangeKind({ mainWorkout: "3 rounds, 90s rest between sets" }),
-    ).toBe("workout_update");
-  });
-
-  it("leaves non-prescription changes alone", () => {
-    expect(derivePlanAdjustmentChangeKind({ scheduledDate: "2026-06-15" })).toBe("reschedule");
-    expect(derivePlanAdjustmentChangeKind({})).toBe("tune");
   });
 });

@@ -24,6 +24,7 @@ import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import type { UpcomingPlannedDay } from "../storage/timeline";
+import { getLocalDateStrSafe } from "../timezone";
 import type { AIContext } from "./aiContextService";
 import { extractCoachingMaterialsText } from "./aiContextService";
 import {
@@ -34,6 +35,7 @@ import {
 } from "./aiModificationGuard";
 import { analyzeSafetySignals, buildSafetyReviewNote } from "./aiSafety";
 import { getStructuredApplyBlocker } from "./aiSuggestionService";
+import { type LivePlanDay, revalidateProposalChanges, type StaleChange } from "./planProposalRevalidation";
 import { captureDayUndo, type DayRestore, isUndoable, planDayRestore, type SetsWrite } from "./planProposalUndo";
 import { loadRecentPlanChanges } from "./recentPlanChanges";
 import {
@@ -628,48 +630,7 @@ function buildUpdatePlanDayPayload(
   return updates;
 }
 
-type LivePlanDay = { day: PlanDay; sets: ExerciseSet[] };
 type StructuredRows = Awaited<ReturnType<typeof parseStructuredPlanDaySuggestionRows>>;
-
-function fingerprintLiveDay({ day, sets }: LivePlanDay): string | undefined {
-  return buildWorkoutPrescriptionFingerprint({
-    mainWorkout: day.mainWorkout,
-    accessory: day.accessory ?? undefined,
-    notes: day.notes ?? undefined,
-    exerciseDetails: sets.map(mapExerciseSetToPromptDetail),
-  });
-}
-
-type StaleChange = { planDayId: string; dayLabel: string };
-
-/** The rows a check reads: each day by id, and its prescribed sets. */
-type ChangePlanDays = Awaited<ReturnType<typeof batchReadChangePlanDays>>;
-
-/**
- * Revalidate every change against the live plan. Multi-day rebalances are
- * coherent units, so this apply is ALL-OR-NOTHING: any stale day invalidates
- * the whole proposal rather than applying a nonsense subset.
- */
-function revalidateProposalChanges(
-  changes: EnrichedPlanAdjustmentChange[],
-  { dayById, setsByDay }: ChangePlanDays,
-): { liveDays: Map<string, LivePlanDay>; staleChanges: StaleChange[] } {
-  const liveDays = new Map<string, LivePlanDay>();
-  const staleChanges: StaleChange[] = [];
-
-  for (const change of changes) {
-    const day = dayById.get(change.planDayId);
-    const sets = setsByDay.get(change.planDayId) ?? [];
-    const live: LivePlanDay | null =
-      day?.status === "planned" ? { day, sets } : null;
-    if (!live || fingerprintLiveDay(live) !== change.baseline.fingerprint) {
-      staleChanges.push({ planDayId: change.planDayId, dayLabel: change.dayLabel });
-      continue;
-    }
-    liveDays.set(change.planDayId, live);
-  }
-  return { liveDays, staleChanges };
-}
 
 /**
  * Re-parse the table-backed prescriptions this proposal rewrites. Returns null
@@ -820,6 +781,8 @@ function staleApplyFailure(
 
 interface CommitProposalApplyOptions extends Omit<WriteProposalChangesOptions, "liveDays"> {
   readonly proposalId: string;
+  /** The athlete's calendar date: no change may leave a day before it (C33). */
+  readonly today: string;
 }
 
 /**
@@ -835,15 +798,14 @@ async function commitProposalApply({
   proposalId,
   changes,
   userId,
+  today,
   ...writeOptions
 }: CommitProposalApplyOptions): Promise<StaleChange[]> {
   return await db.transaction(async (tx) => {
     const dayIds = changes.map((change) => change.planDayId);
     const { days, setsByDay } = await storage.plans.lockPlanDaysWithSets(dayIds, userId, tx);
-    const { liveDays, staleChanges } = revalidateProposalChanges(changes, {
-      dayById: new Map(days.map((day) => [day.id, day])),
-      setsByDay,
-    });
+    const dayById = new Map(days.map((day) => [day.id, day]));
+    const { liveDays, staleChanges } = revalidateProposalChanges(changes, { dayById, setsByDay }, today);
     if (staleChanges.length > 0) {
       // resolve() only moves a pending proposal. Nothing back means another
       // request applied, dismissed or replaced it meanwhile (a second apply
@@ -873,10 +835,14 @@ export async function applyPlanAdjustmentProposal(
   // written; the rest are simply never applied.
   const changes = selectChanges(proposal.payload.changes, planDayIds);
   if (!changes) return applyFailure("invalid_selection");
+  // "Today" is the athlete's own calendar date, as everywhere a plan day
+  // reads as missed or upcoming.
+  const user = await storage.users.getUser(userId);
+  const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   // Unlocked, so a stale proposal is turned away before it spends an AI
   // parse; commitProposalApply checks again under the lock.
   const firstRead = await batchReadChangePlanDays(changes, userId);
-  const { liveDays, staleChanges } = revalidateProposalChanges(changes, firstRead);
+  const { liveDays, staleChanges } = revalidateProposalChanges(changes, firstRead, today);
 
   if (staleChanges.length > 0) {
     // Resolved elsewhere since it was read above, as under the lock below.
@@ -885,7 +851,6 @@ export async function applyPlanAdjustmentProposal(
     return staleApplyFailure(staleChanges, userId, proposalId, log);
   }
 
-  const user = await storage.users.getUser(userId);
   const unitPreferences: UnitPreferences = {
     weightUnit: user?.weightUnit || "kg",
     distanceUnit: user?.distanceUnit || "km",
@@ -918,6 +883,7 @@ export async function applyPlanAdjustmentProposal(
       aiSource: proposal.aiSource,
       unitPreferences,
       userId,
+      today,
     });
   } catch (err) {
     if (err instanceof ProposalNoLongerPendingError) {

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { storage } from "../../storage";
 import { calculateTrainingLoad } from "../trainingLoadService";
-import { fetchTrainingLoadWindow } from "./dailyLoad";
+import { fetchTrainingLoadWindow, fetchTrainingLoadWindows } from "./dailyLoad";
 
 vi.mock("../../storage", () => ({
   storage: {
@@ -58,7 +58,19 @@ describe("fetchTrainingLoadWindow", () => {
     // fetch must cover the warmup even though recentLoads only reads 7 days.
     // Fetching 7 handed the effective target a 28-day baseline built from one
     // week: 26.1 against a true 107.2 for a tapering athlete (audit H21).
-    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("u1", "2026-04-27", DATE);
+    // It starts on the 28-day grid boundary at or before the 56-day warmup
+    // (2026-04-27), so the same day reads the same history in any range (C31).
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
+      "u1",
+      "2026-04-20",
+      DATE,
+    );
+    expect(calculateTrainingLoad).toHaveBeenCalledWith(
+      [],
+      [],
+      [],
+      expect.objectContaining({ currentDate: DATE, historyFrom: "2026-04-20" }),
+    );
     // No future fetches when includeFuture is false.
     expect(storage.timeline.getUpcomingPlannedDays).not.toHaveBeenCalled();
     expect(w.upcoming).toEqual([]);
@@ -92,5 +104,94 @@ describe("fetchTrainingLoadWindow", () => {
     // ~7 weeks into an 8-week plan ⇒ race week; race is 10 days out.
     expect(w.phase).toBe("race_week");
     expect(w.daysUntilRace).toBe(10);
+  });
+});
+
+// C31 (CODEBASE_ANALYSIS_2026-10-03): the daily summary and the fuelling range
+// both build windows here, and a day's window must not depend on the range
+// that asked for it. Each day's history starts on a fixed 28-day grid, at
+// least the 56-day warmup back, and one engine pass serves a whole boundary.
+describe("fetchTrainingLoadWindows", () => {
+  const LOGS = [
+    { id: "w-apr", date: "2026-04-30" },
+    { id: "w-jun", date: "2026-06-19" },
+    { id: "w-jul", date: "2026-07-29" },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" } as never);
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue(LOGS as never);
+    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+      { workoutLogId: "w-apr", date: "2026-04-30" },
+      { workoutLogId: "w-jul", date: "2026-07-29" },
+    ] as never);
+    const scoreAsOf = (...args: unknown[]) => {
+      const { currentDate } = args[3] as { currentDate: string };
+      return { dailyLoads: [load(currentDate, currentDate === "2026-07-30" ? 70 : 40)] };
+    };
+    vi.mocked(calculateTrainingLoad).mockImplementation(scoreAsOf as never);
+  });
+
+  it("reads the span once and scores each grid boundary's days from that boundary", async () => {
+    const dates = ["2026-07-30", "2026-06-20", "2026-06-22"];
+    const windows = await fetchTrainingLoadWindows("u1", dates, { includeFuture: false });
+
+    // One read, from the first day's history start to the last day.
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledTimes(1);
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
+      "u1",
+      "2026-04-20",
+      "2026-07-30",
+    );
+    // June 20 and 22 share the 2026-04-20 boundary; July 30's is 2026-05-18.
+    expect(calculateTrainingLoad).toHaveBeenCalledTimes(2);
+    expect(calculateTrainingLoad).toHaveBeenNthCalledWith(
+      1,
+      [LOGS[0], LOGS[1]],
+      [{ workoutLogId: "w-apr", date: "2026-04-30" }],
+      [],
+      expect.objectContaining({ currentDate: "2026-06-22", historyFrom: "2026-04-20" }),
+    );
+    // The April log predates July 30's history start, so it is not fed in.
+    expect(calculateTrainingLoad).toHaveBeenNthCalledWith(
+      2,
+      [LOGS[1], LOGS[2]],
+      [{ workoutLogId: "w-jul", date: "2026-07-29" }],
+      [],
+      expect.objectContaining({ currentDate: "2026-07-30", historyFrom: "2026-05-18" }),
+    );
+    expect([...windows.keys()]).toEqual(["2026-06-20", "2026-06-22", "2026-07-30"]);
+    expect(windows.get("2026-07-30")?.dayUtss).toBe(70);
+  });
+
+  it("feeds a day the same history whether it is asked for alone or within a range", async () => {
+    await fetchTrainingLoadWindows("u1", ["2026-06-22"], { includeFuture: false });
+    const alone = vi.mocked(calculateTrainingLoad).mock.calls[0];
+    vi.mocked(calculateTrainingLoad).mockClear();
+
+    // A wider range: June 1 starts an earlier boundary (2026-03-23), and the
+    // read now starts there too, but June 22 is still scored from its own.
+    await fetchTrainingLoadWindows("u1", ["2026-06-01", "2026-06-22"], { includeFuture: false });
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenLastCalledWith(
+      "u1",
+      "2026-03-23",
+      "2026-06-22",
+    );
+    const inRange = vi
+      .mocked(calculateTrainingLoad)
+      .mock.calls.find(([, , , opts]) => opts?.currentDate === "2026-06-22");
+
+    expect(alone?.[3]).toMatchObject({ currentDate: "2026-06-22", historyFrom: "2026-04-20" });
+    expect(inRange?.[3]).toMatchObject({ currentDate: "2026-06-22", historyFrom: "2026-04-20" });
+    expect(inRange?.[0]).toEqual(alone?.[0]);
+    expect(inRange?.[1]).toEqual(alone?.[1]);
+  });
+
+  it("reads nothing when no day needs a window", async () => {
+    const none = await fetchTrainingLoadWindows("u1", [], { includeFuture: true });
+    expect(none).toEqual(new Map());
+    expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    expect(storage.timeline.getUpcomingPlannedDays).not.toHaveBeenCalled();
   });
 });

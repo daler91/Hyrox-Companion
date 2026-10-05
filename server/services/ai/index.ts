@@ -161,6 +161,25 @@ function mapTestTrendDirection(
   return trendDirectionMap[trend];
 }
 
+/**
+ * Sessions completed in the athlete's last seven calendar days, today
+ * included: the decision engine's S5 low-recent-load input.
+ *
+ * It measured `Date.now()` against the log date read as UTC midnight, with an
+ * eight-day inclusive bound. For an athlete east of UTC a session logged this
+ * morning came out a day in the future and was dropped, which could put a
+ * beginner into reset_repair straight after training. Both ends are now the
+ * athlete's calendar dates, compared as YYYY-MM-DD strings like the other
+ * windows here. AI24 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function countCompletedInLastSevenDays(
+  recentWorkouts: TrainingContext["recentWorkouts"],
+  today: string,
+): number {
+  const windowStart = addDays(today, -6);
+  return recentWorkouts.filter((w) => w.date >= windowStart && w.date <= today).length;
+}
+
 /** By sessions done (countCompletedThrough), never by planned ones (AI11). */
 function classifyExperienceLevel(sessionsDone: number): ExperienceLevel {
   if (sessionsDone < 20) return "beginner";
@@ -356,6 +375,8 @@ function mapUpcomingWorkout(
     aiNoteUpdatedAt: d.aiNoteUpdatedAt,
     aiInputsUsed: d.aiInputsUsed,
     priority: d.priority,
+    // The coach must never write a race-derived day back (AI29).
+    ...(d.raceDerived ? { raceDerived: true } : {}),
     ...((d.exerciseSets?.length ?? 0) > 0
       ? {
           // Upcoming plan-day sets carry their prescription in planned*
@@ -570,12 +591,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     distanceUnit,
     athlete,
   }).overview;
-  const completedLast7d = recentWorkouts.filter((w) => {
-    // ⚡ Bolt Performance Optimization:
-    // Avoid intermediate Date object allocation by using Date.parse() for YYYY-MM-DD date strings
-    const days = Math.floor((Date.now() - Date.parse(w.date)) / (1000 * 60 * 60 * 24));
-    return days >= 0 && days <= 7;
-  }).length;
+  const completedLast7d = countCompletedInLastSevenDays(recentWorkouts, today);
   const sessionsDone = countCompletedThrough(timeline, today);
   const experienceLevel = classifyExperienceLevel(sessionsDone);
 

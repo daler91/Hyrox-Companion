@@ -452,7 +452,7 @@ Cron jobs run in-process on **each** app replica; the advisory lock above is wha
 `server/sharedRuntimeState.ts` owns short-lived shared cache helpers backed by Postgres:
 
 - `rate_limit_buckets` stores per-limiter (category, cap and window) request counters and reset timestamps for `rateLimiter(...)`.
-- `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, the RAG retrieval cache, and the embedding health probe. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
+- `server_runtime_cache` stores short-lived, TTL-bound entries for the Clerk auth seen-cache, single-use Strava OAuth state claims, the Strava background-sync 429 cooldown, the Strava webhook subscription state, the Garmin 429 breaker and per-user in-flight lock, the AI circuit-breaker state, planned-session estimates, and the embedding health probe. The RAG retrieval cache is process-local, keyed on each athlete's retrieval version so a replica never serves a stale entry. The Gemini embedding-vector cache is deliberately process-local (`server/gemini/client.ts`) and is not stored here.
 - Expired rows are pruned daily by the `sharedRuntimeCleanup` cron job at 04:15 UTC.
 
 ### Route Utilities

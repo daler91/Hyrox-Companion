@@ -19,7 +19,9 @@ export const updateUserPreferencesSchema = z.object({
   weightUnit: z.enum(["kg", "lbs"]).optional(),
   distanceUnit: z.enum(["km", "miles"]).optional(),
   userTimezone: ianaTimezoneSchema.optional(),
-  weeklyGoal: z.number().min(1).max(14).optional(),
+  // A whole number of sessions: the column is an integer, and Postgres refused
+  // 4.5 with a 500 (C50, CODEBASE_ANALYSIS_2026-10-03).
+  weeklyGoal: z.number().int().min(1).max(14).optional(),
   // Meal-pattern preset: how many eating meals/day the per-meal fuel targets are
   // split across. 3 = breakfast/lunch/dinner, 4 = +snack, 5 = +afternoon snack.
   mealSchedule: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),

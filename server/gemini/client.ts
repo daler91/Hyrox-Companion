@@ -4,7 +4,7 @@ import { inChunks, inSequence } from "@shared/inSequence";
 import { embeddingBreaker } from "../ai/circuitBreaker";
 import { getAiClient } from "../ai/geminiSdk";
 import { usageFromGeminiResponse } from "../ai/providers/gemini";
-import { retryWithBackoff } from "../ai/retry";
+import { type RetryOptions, retryWithBackoff } from "../ai/retry";
 import { env } from "../env";
 import { recordAiUsage } from "../services/aiUsageService";
 import { hashRuntimeKey } from "../sharedRuntimeState";
@@ -78,10 +78,35 @@ export function __resetEmbeddingCacheForTests(): void {
 }
 
 /**
- * Generate an embedding vector for a text string using Gemini's embedding model.
- * Returns a 3072-dimensional float array.
+ * Retry policy for an embedding someone is waiting on: a chat turn's RAG query
+ * (embedded before the reply's SSE headers go out), the RAG health probe and
+ * semantic food search, each of which has a fallback. They had the default
+ * policy, sized for slow reasoning calls (4 retries, 90 s per attempt, 120 s in
+ * all), so a degraded embedding endpoint held a chat turn for half a minute to
+ * two minutes before it fell back to the legacy materials. An embedding
+ * normally answers in well under a second: one quick retry of a 429/5xx, 4 s
+ * per attempt and 6 s in all — AI23 (CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * Its failures still count against embeddingBreaker, which only Gemini
+ * embeddings share (AI2): the query and the background jobs call the same
+ * endpoint, so a run of failures in either says the same thing about it, and
+ * once the breaker opens a chat turn goes straight to its fallback.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+const QUERY_EMBEDDING_RETRY: RetryOptions = {
+  maxRetries: 1,
+  baseDelayMs: 500,
+  callTimeoutMs: 4_000,
+  budgetMs: 6_000,
+};
+
+/**
+ * Batches (the coaching-material embed job, re-embedding every material, the
+ * food-embedding cron) keep the default policy: they have no fallback, so
+ * riding out a slow endpoint beats failing the batch.
+ */
+const BATCH_EMBEDDING_RETRY: RetryOptions = {};
+
+async function embed(text: string, retry: RetryOptions): Promise<number[]> {
   const key = cacheKey(text);
   const cached = readEmbeddingCache(key);
   if (cached) return cached;
@@ -97,6 +122,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     // Its own breaker: an embedding incident must not cut off the text
     // provider — AI2 (CODEBASE_ANALYSIS_2026-10-03).
     embeddingBreaker,
+    retry,
   );
   const values = response.embeddings?.[0]?.values;
   if (!values || values.length === 0) {
@@ -107,7 +133,18 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generate embeddings for multiple texts in batch.
+ * Embed one text for a caller that is waiting on it (a chat turn's RAG query,
+ * the RAG health probe, semantic food search), under the short query-time
+ * retry policy above. Background work goes through generateEmbeddings.
+ * Returns a 3072-dimensional float array.
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  return await embed(text, QUERY_EMBEDDING_RETRY);
+}
+
+/**
+ * Generate embeddings for multiple texts in batch, under the default
+ * (background) retry policy.
  */
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   // Process in parallel batches of 5 to avoid rate limits
@@ -117,7 +154,7 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     if (index > 0) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    return await Promise.all(batch.map(generateEmbedding));
+    return await Promise.all(batch.map((text) => embed(text, BATCH_EMBEDDING_RETRY)));
   });
   return batches.flat();
 }

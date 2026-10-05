@@ -365,6 +365,11 @@ describe("getPlanWeeklyDensity", () => {
     vi.mocked(db.select).mockReturnValue({ from: fromMock });
   }
 
+  /** The grouped rows for `dayCount` training days with one wording. */
+  function sessionRows(dayCount: number, totalWeeks: number | null) {
+    return [{ focus: "Engine", mainWorkout: "5 x 1km row", dayCount, totalWeeks }];
+  }
+
   beforeEach(() => {
     storage = new PlanStorage();
     vi.clearAllMocks();
@@ -372,7 +377,7 @@ describe("getPlanWeeklyDensity", () => {
 
   it("reports the true average, not the rounded-up one", async () => {
     // 10 scheduled days across 4 weeks is 2.5 per week. Math.ceil reported 3.
-    mockDensityChain([{ planDayCount: 10, totalWeeks: 4 }]);
+    mockDensityChain(sessionRows(10, 4));
 
     expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(2.5);
   });
@@ -381,7 +386,7 @@ describe("getPlanWeeklyDensity", () => {
     // The hint is `weeklyGoal > planWeeklyDensity`. At the old ceil'd 3, a goal
     // of 3 compared 3 > 3 and stayed quiet, so the athlete never learned why
     // their completion rate capped at 2.5/3 = 83%.
-    mockDensityChain([{ planDayCount: 10, totalWeeks: 4 }]);
+    mockDensityChain(sessionRows(10, 4));
     const density = await storage.getPlanWeeklyDensity("plan-1");
 
     expect(Math.ceil(10 / 4)).toBe(3);
@@ -392,7 +397,7 @@ describe("getPlanWeeklyDensity", () => {
   it("still stays quiet when the plan really does cover the goal", async () => {
     // 20 days over 4 weeks is 5 per week; a goal of 5 is met exactly and must
     // not warn. Returning a real number must not turn the hint into a nag.
-    mockDensityChain([{ planDayCount: 20, totalWeeks: 4 }]);
+    mockDensityChain(sessionRows(20, 4));
 
     expect(5 > (await storage.getPlanWeeklyDensity("plan-1"))!).toBe(false);
   });
@@ -400,7 +405,7 @@ describe("getPlanWeeklyDensity", () => {
   it("does not let float representation decide the comparison", async () => {
     // 10/3 is 3.3333333333333335 in IEEE-754. Rounding to 2 dp keeps an
     // exactly-matched goal from reading as exceeding the plan on the last bit.
-    mockDensityChain([{ planDayCount: 9, totalWeeks: 3 }]);
+    mockDensityChain(sessionRows(9, 3));
 
     expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(3);
     expect(3 > (await storage.getPlanWeeklyDensity("plan-1"))!).toBe(false);
@@ -409,14 +414,38 @@ describe("getPlanWeeklyDensity", () => {
   it("returns a zero density for a plan whose days were all deleted", async () => {
     // The LEFT JOIN exists so this is 0, not "plan not found" — a goal of any
     // size then exceeds it, which is the honest answer.
-    mockDensityChain([{ planDayCount: 0, totalWeeks: 8 }]);
+    mockDensityChain([{ focus: null, mainWorkout: null, dayCount: 0, totalWeeks: 8 }]);
 
     expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(0);
   });
 
   it("returns undefined when the plan never had totalWeeks set", async () => {
-    mockDensityChain([{ planDayCount: 12, totalWeeks: null }]);
+    mockDensityChain(sessionRows(12, null));
 
     expect(await storage.getPlanWeeklyDensity("plan-1")).toBeUndefined();
+  });
+
+  // C41 (CODEBASE_ANALYSIS_2026-10-03): an AI plan writes all seven days, rest
+  // included, so counting rows reported 7 a week and a goal of 5 never warned.
+  it("counts training days only, not the rest days an AI plan writes", async () => {
+    // 4 weeks of 4 sessions and 3 rest days, worded the ways a plan writes rest.
+    mockDensityChain([
+      ...sessionRows(16, 4),
+      { focus: "Rest", mainWorkout: "Complete rest or light walk", dayCount: 8, totalWeeks: 4 },
+      { focus: "Active Recovery", mainWorkout: "20 min walk and mobility", dayCount: 4, totalWeeks: 4 },
+    ]);
+    const density = await storage.getPlanWeeklyDensity("plan-1");
+
+    expect(density).toBe(4);
+    expect(5 > density!).toBe(true); // the goal-exceeds-plan hint now fires
+  });
+
+  it("keeps sessions whose wording only mentions recovery or rest", async () => {
+    mockDensityChain([
+      { focus: "Recovery run", mainWorkout: "30 min easy", dayCount: 4, totalWeeks: 4 },
+      { focus: "Strength", mainWorkout: "Rest-pause sets", dayCount: 4, totalWeeks: 4 },
+    ]);
+
+    expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(2);
   });
 });

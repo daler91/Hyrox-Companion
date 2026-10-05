@@ -16,7 +16,7 @@ import { storage } from "../storage";
 import type { HistoryAnchor } from "./analyticsStaleness";
 import { type CoachInsightsResult, generateCoachInsights } from "./coachInsightsService";
 import { generateNutritionInsights, type NutritionInsightsResult } from "./nutrition/nutritionInsightsService";
-import { generateOverviewAnalysis } from "./overviewAnalysisService";
+import { DEFAULT_OVERVIEW_RANGE_DAYS, generateOverviewAnalysis, type OverviewRangeDays } from "./overviewAnalysisService";
 import { generateRacePrediction } from "./racePrediction/racePredictionService";
 
 // Re-exported so route handlers can import the staleness check alongside the
@@ -200,9 +200,11 @@ export function regenerateAndStoreCoachInsights(
 export function regenerateAndStoreOverviewAnalysis(
   userId: string,
   log: Logger = defaultLogger,
+  // The Overview range the analysis reads (AI31, CODEBASE_ANALYSIS_2026-10-03).
+  rangeDays: OverviewRangeDays = DEFAULT_OVERVIEW_RANGE_DAYS,
   recomputedOn?: string,
 ): Promise<OverviewAnalysisResult> {
-  return regenerateAndStore(userId, "overview_analysis", getWorkoutAnchor, () => generateOverviewAnalysis(userId, log), recomputedOn);
+  return regenerateAndStore(userId, "overview_analysis", getWorkoutAnchor, () => generateOverviewAnalysis(userId, log, rangeDays), recomputedOn);
 }
 
 /** Generate nutrition insights and persist them. Gating is the caller's (route middleware). */

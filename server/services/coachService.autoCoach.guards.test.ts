@@ -99,6 +99,48 @@ describe("coachService triggerAutoCoach guards", () => {
     ]);
   });
 
+  // AI29 (CODEBASE_ANALYSIS_2026-10-03): a shakeout carries the race date's
+  // generated text, not the stored prescription. An append saved that text
+  // plus the cue over the day's own workout.
+  it("shows the model a race-derived day but never writes to it", async () => {
+    const shakeoutText =
+      "Pre-race shakeout: 10-15 min easy jog, light mobility, and 3-4 short strides. Keep it very light.";
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({ planDayId: "day-1" }),
+      makeTimelineEntry({
+        planDayId: "shakeout-day",
+        date: "2026-01-17",
+        focus: "Shakeout",
+        mainWorkout: shakeoutText,
+        raceDerived: true,
+      }),
+    ]);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({
+        workoutId: "shakeout-day",
+        action: "append",
+        recommendation: "Add 4x20s strides",
+        rationale: "Sharpen up for race day",
+      }),
+    ]);
+    vi.mocked(generateReviewNotes).mockResolvedValueOnce([
+      { workoutId: "day-1", note: "On track." },
+      { workoutId: "shakeout-day", note: "Keep it light." },
+    ]);
+    vi.mocked(storage.plans).updatePlanDay.mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+    const [, promptDays] = vi.mocked(generateWorkoutSuggestions).mock.calls[0];
+    expect(promptDays).toContainEqual(
+      expect.objectContaining({ id: "shakeout-day", mainWorkout: shakeoutText, raceDerived: true }),
+    );
+    // No review note for it either: the timeline hides coach notes there.
+    expect(vi.mocked(generateReviewNotes).mock.calls[0][1].map((day) => day.id)).toEqual(["day-1"]);
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls.map((call) => call[0])).toEqual([
+      "day-1",
+    ]);
+  });
+
   it("skips suggestions with missing workoutId or recommendation", async () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext, [
       makeTimelineEntry({ focus: "Running", mainWorkout: "5km" }),

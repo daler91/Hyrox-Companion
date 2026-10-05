@@ -17,7 +17,7 @@ import {
 } from "@shared/schema";
 import { normalizeExerciseName } from "@shared/schema/exercises";
 import { restampSetPatch, type UnitPreferences } from "@shared/unitConversion";
-import { and, asc, desc, eq, gt, gte, inArray,isNotNull, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray,isNotNull, isNull, lt, not, or, type SQL, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -34,6 +34,7 @@ import {
   queryExerciseSetsWithDates,
   structureTargetsFromExerciseSet,
 } from "./shared";
+import { bestPriorWeightsKg, countPrSets, setsInKg } from "./workoutsPrCount";
 
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
 type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
@@ -100,38 +101,6 @@ function mapStructureBlockRows(
   }));
 }
 
-// Count distinct exercises in a logged workout that BEAT the user's previous
-// best weight for that exercise. "Conservative PR" — we only credit exercises
-// that include a weighted set; running/time/distance PRs are not counted here.
-// Extracted as a pure function so the storage method stays within Sonar's
-// cognitive-complexity ceiling.
-//
-// `maxByExercise` must be the athlete's best EXCLUDING this workout. It used to
-// include it, and the test was `>=`, so the comparison could not tell a new
-// best from a tie: the set was measured against a maximum it was itself inside,
-// and repeating last week's 120 kg was reported as a fresh PR (audit M12).
-// `analyticsService.updateMaxWeight` has always used a strict `>`; these two PR
-// paths disagreed.
-export function countPrSets(
-  workoutSets: Array<{ exerciseName: string; weight: number | null }>,
-  maxByExercise: Map<string, number | null>,
-): number {
-  const counted = new Set<string>();
-  let prs = 0;
-  for (const s of workoutSets) {
-    if (s.weight == null || counted.has(s.exerciseName)) continue;
-    const previousBest = maxByExercise.get(s.exerciseName);
-    // No prior best means this is the athlete's first weighted attempt at the
-    // movement, which is a baseline rather than a record — unchanged from the
-    // previous behaviour, where the `max != null` guard did the same job.
-    if (previousBest != null && s.weight > previousBest) {
-      prs++;
-      counted.add(s.exerciseName);
-    }
-  }
-  return prs;
-}
-
 /**
  * Update payload accepted by updateExerciseSetNormalized. `version` is
  * explicitly excluded because storage manages it (always bumps by one on
@@ -149,7 +118,6 @@ type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutL
    */
   readonly unitPreferences?: UnitPreferences;
 };
-
 
 function uniqueActivityIds(...rowSets: Array<Array<{ activityId: string | null }>>): string[] {
   const ids = new Set<string>();
@@ -225,6 +193,84 @@ async function createDeviceActivitySets(
     .values(rows)
     .returning({ id: exerciseSets.id });
   return inserted.length;
+}
+
+/**
+ * Garmin-specific bulk insert. Mirrors createWorkoutLogs but targets the
+ * (user_id, garmin_activity_id) partial unique index so concurrent Garmin
+ * syncs can't double-import the same activity. Routes still pre-dedupe via
+ * getExistingGarminActivityIds; this is the concurrent-safety backstop.
+ *
+ * The sync passes its transaction as `executor`, so the logs and their
+ * synthesised sets commit together (C26, CODEBASE_ANALYSIS_2026-10-03).
+ */
+async function createGarminWorkoutLogs(
+  logs: (InsertWorkoutLog & { userId: string })[],
+  executor: DbExecutor = db,
+): Promise<WorkoutLog[]> {
+  if (logs.length === 0) return [];
+
+  const createdLogs = await executor
+    .insert(workoutLogs)
+    .values(logs)
+    .onConflictDoNothing({
+      target: [workoutLogs.userId, workoutLogs.garminActivityId],
+      where: sql`${workoutLogs.garminActivityId} IS NOT NULL`,
+    })
+    .returning();
+
+  return createdLogs;
+}
+
+/**
+ * The baseline is the athlete's best from workouts logged BEFORE this one: an
+ * earlier date, or the same date and a lower id, so of two same-day sessions
+ * exactly one counts the other. It excludes this workout itself (audit M12).
+ * It used to be every other workout, so a March PR read 0 once a heavier
+ * June lift existed, and raw weights were compared across kg and lbs stamps.
+ * Both sides are now read in kg through each row's own stamp (C45,
+ * CODEBASE_ANALYSIS_2026-10-03).
+ */
+async function fetchPrSetCount(log: Pick<WorkoutLog, "id" | "date">, userId: string): Promise<number> {
+  const [thisWorkoutSets, [unitPreferences]] = await Promise.all([
+    db
+      .select({
+        exerciseName: exerciseSets.exerciseName,
+        weight: exerciseSets.weight,
+        weightUnit: exerciseSets.weightUnit,
+      })
+      .from(exerciseSets)
+      .where(eq(exerciseSets.workoutLogId, log.id)),
+    db.select({ weightUnit: users.weightUnit }).from(users).where(eq(users.id, userId)).limit(1),
+  ]);
+
+  const exerciseNames = [...new Set(thisWorkoutSets.map((set) => set.exerciseName))];
+  if (exerciseNames.length === 0) return 0;
+
+  // Grouped by stamp as well: converting to kg keeps order, so each group's
+  // max is still its heaviest set once converted.
+  const priorMaxes = await db
+    .select({
+      exerciseName: exerciseSets.exerciseName,
+      weightUnit: exerciseSets.weightUnit,
+      maxWeight: sql<number | null>`max(${exerciseSets.weight})`,
+    })
+    .from(exerciseSets)
+    .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
+    .where(
+      and(
+        eq(workoutLogs.userId, userId),
+        inArray(exerciseSets.exerciseName, exerciseNames),
+        or(
+          lt(workoutLogs.date, log.date),
+          and(eq(workoutLogs.date, log.date), lt(workoutLogs.id, log.id)),
+        ),
+      ),
+    )
+    .groupBy(exerciseSets.exerciseName, exerciseSets.weightUnit);
+
+  const preferences = unitPreferences ?? {};
+  return countPrSets(setsInKg(thisWorkoutSets, preferences), bestPriorWeightsKg(priorMaxes, preferences));
 }
 
 export class WorkoutStorage {
@@ -584,26 +630,9 @@ export class WorkoutStorage {
     return uniqueActivityIds(live, binned);
   }
 
-  /**
-   * Garmin-specific bulk insert. Mirrors createWorkoutLogs but targets the
-   * (user_id, garmin_activity_id) partial unique index so concurrent Garmin
-   * syncs can't double-import the same activity. Routes still pre-dedupe via
-   * getExistingGarminActivityIds; this is the concurrent-safety backstop.
-   */
-  async createGarminWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
-    if (logs.length === 0) return [];
-
-    const createdLogs = await db
-      .insert(workoutLogs)
-      .values(logs)
-      .onConflictDoNothing({
-        target: [workoutLogs.userId, workoutLogs.garminActivityId],
-        where: sql`${workoutLogs.garminActivityId} IS NOT NULL`,
-      })
-      .returning();
-
-    return createdLogs;
-  }
+  // Uses no instance state, so a module function bound here: the
+  // storage.workouts.createGarminWorkoutLogs() call and its mocks still work.
+  readonly createGarminWorkoutLogs = createGarminWorkoutLogs;
 
   /** Garmin twin of {@link getExistingStravaActivityIds}, bin-aware for the same reason. */
   async getExistingGarminActivityIds(userId: string, garminActivityIds: string[]): Promise<string[]> {
@@ -703,7 +732,6 @@ export class WorkoutStorage {
 
     return rows.map((r) => ({ ...r.set, date: r.date, timeOfDayMin: r.timeOfDayMin }));
   }
-
 
   async addExerciseSetNormalized(
     context: MutationOwnerContext,
@@ -885,7 +913,6 @@ export class WorkoutStorage {
     return row?.set;
   }
 
-
   // The set-level CRUD routes (workouts and plan days alike) write through
   // these three; the owner decides which container the IDOR check targets.
   async mutateExerciseSetUpdate(owner: SetRouteOwner, setId: string, updates: NormalizedSetUpdateInput, userId: string): Promise<ExerciseSet | undefined> {
@@ -982,39 +1009,6 @@ export class WorkoutStorage {
     return prev ? { date: prev.date, focus: prev.focus } : null;
   }
 
-  private async fetchPrSetCount(workoutLogId: string, userId: string): Promise<number> {
-    const thisWorkoutSets = await db
-      .select({
-        exerciseName: exerciseSets.exerciseName,
-        weight: exerciseSets.weight,
-      })
-      .from(exerciseSets)
-      .where(eq(exerciseSets.workoutLogId, workoutLogId));
-
-    const exerciseNames = [...new Set(thisWorkoutSets.map((s) => s.exerciseName))];
-    if (exerciseNames.length === 0) return 0;
-
-    const userMaxes = await db
-      .select({
-        exerciseName: exerciseSets.exerciseName,
-        maxWeight: sql<number | null>`max(${exerciseSets.weight})`,
-      })
-      .from(exerciseSets)
-      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-      .where(
-        and(
-          eq(workoutLogs.userId, userId),
-          inArray(exerciseSets.exerciseName, exerciseNames),
-          // Exclude the workout being scored from its own baseline (audit M12).
-          ne(exerciseSets.workoutLogId, workoutLogId),
-        ),
-      )
-      .groupBy(exerciseSets.exerciseName);
-    const maxByExercise = new Map(userMaxes.map((m) => [m.exerciseName, m.maxWeight]));
-
-    return countPrSets(thisWorkoutSets, maxByExercise);
-  }
-
   /**
    * Average RPE across the 4-week block LEADING UP TO this workout.
    *
@@ -1064,7 +1058,7 @@ export class WorkoutStorage {
 
     const [lastSameFocus, prSetCount, blockAvgRpe] = await Promise.all([
       this.fetchLastSameFocus(log.date, log.focus, userId),
-      this.fetchPrSetCount(workoutLogId, userId),
+      fetchPrSetCount(log, userId),
       this.fetchBlockAvgRpe(log.date, userId),
     ]);
 

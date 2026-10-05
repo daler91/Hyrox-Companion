@@ -205,7 +205,10 @@ export function buildGenerationPrompt(
     `This is one chunk of a larger plan. Return ONLY ${formatWeekRange(range)} and use weekNumber values ${range.startWeek} through ${range.endWeek}.`,
     ``,
     `ATHLETE PROFILE:`,
-    `- Goal: ${input.goal}`,
+    // The goal and focus areas are typed by the athlete, so they are escaped
+    // like every other athlete-authored line in a prompt (the card and the
+    // absence notes below already were). AI32 (CODEBASE_ANALYSIS_2026-10-03)
+    `- Goal: ${sanitizeUserInput(input.goal)}`,
     `- Experience Level: ${input.experienceLevel}`,
     `- Training Days Per Week: ${input.daysPerWeek}`,
     `- Total Weeks: ${input.totalWeeks}`,
@@ -220,7 +223,9 @@ export function buildGenerationPrompt(
   }
 
   if (input.focusAreas && input.focusAreas.length > 0) {
-    lines.push(`- Focus Areas: ${input.focusAreas.join(", ")} (prioritize these in programming)`);
+    lines.push(
+      `- Focus Areas: ${input.focusAreas.map((area) => sanitizeUserInput(area)).join(", ")} (prioritize these in programming)`,
+    );
   }
 
   if (input.restDays && input.restDays.length > 0) {

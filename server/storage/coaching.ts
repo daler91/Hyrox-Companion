@@ -6,7 +6,7 @@ import {
   type InsertCoachingMaterial,
   type InsertDocumentChunk,
 } from "@shared/schema";
-import { and,eq, inArray } from "drizzle-orm";
+import { and,eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { EMBEDDING_DIMENSIONS } from "../gemini/client";
@@ -26,6 +26,35 @@ async function getMaterialTitles(userId: string, materialIds: string[]): Promise
     .from(coachingMaterials)
     .where(and(eq(coachingMaterials.userId, userId), inArray(coachingMaterials.id, materialIds)));
   return new Map(rows.map((row) => [row.id, row.title]));
+}
+
+/**
+ * A fingerprint of everything a retrieval for this athlete reads: their
+ * materials on the main DB (the count, and the sum of their update times) and
+ * their chunks on the vector DB (the same, by creation time). Creating,
+ * editing or deleting a material, and every re-embed, which replaces the
+ * chunks, changes it, on whichever replica it happened. The RAG cache keys on
+ * it, so no replica serves a retrieval of data that has since changed.
+ * AI34 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function getRetrievalVersion(userId: string): Promise<string> {
+  const [[materials], chunks] = await Promise.all([
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        stamps: sql<string>`coalesce(sum(extract(epoch from ${coachingMaterials.updatedAt})), 0)::text`,
+      })
+      .from(coachingMaterials)
+      .where(eq(coachingMaterials.userId, userId)),
+    vectorPool.query<{ count: number; stamps: string }>(
+      `SELECT count(*)::int AS count, coalesce(sum(extract(epoch from created_at)), 0)::text AS stamps
+       FROM document_chunks
+       WHERE user_id = $1`,
+      [userId],
+    ),
+  ]);
+  const [chunkRow] = chunks.rows;
+  return `${materials?.count ?? 0}:${materials?.stamps ?? "0"}/${chunkRow?.count ?? 0}:${chunkRow?.stamps ?? "0"}`;
 }
 
 export class CoachingStorage {
@@ -195,6 +224,8 @@ export class CoachingStorage {
   // its mocks still work.
   readonly getMaterialTitles = getMaterialTitles;
 
+  readonly getRetrievalVersion = getRetrievalVersion;
+
   /**
    * Chunks belonging to `materialIds`, oldest chunk first, capped.
    *
@@ -218,25 +249,33 @@ export class CoachingStorage {
     return result.rows;
   }
 
-  /** Nearest first, each with its cosine distance to the query (0 = same direction, 2 = opposite). */
+  /**
+   * The athlete's `topK` nearest chunks, nearest first, each with its cosine
+   * distance to the query (0 = same direction, 2 = opposite).
+   *
+   * An exact search over this athlete's own chunks. Ordering by the
+   * `halfvec` cast let the planner walk the HNSW index, which is shared by
+   * every athlete and returns at most `hnsw.ef_search` (default 40) of the
+   * nearest chunks overall before `user_id` is filtered, so an athlete could
+   * get fewer than `topK` of their own, or none. The full-precision distance
+   * below matches no index, so the planner reads the athlete's chunks by
+   * `idx_document_chunks_user_id` and sorts them: always `topK` when they have
+   * that many, on any pgvector version, at a cost that grows with their own
+   * corpus only. AI33 (CODEBASE_ANALYSIS_2026-10-03)
+   */
   async searchChunksByEmbedding(
     userId: string,
     queryEmbedding: number[],
     topK: number,
   ): Promise<ScoredDocumentChunk[]> {
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
-    // Order by cosine distance using the `halfvec` cast so the planner can use
-    // the half-precision HNSW index (idx_document_chunks_embedding_hnsw). The
-    // cast expression must match the index expression exactly. See the index
-    // creation in server/maintenance.ts for why halfvec is required (3072 dims
-    // exceeds pgvector's 2000-dim limit for native `vector` HNSW indexes).
     // EMBEDDING_DIMENSIONS is a trusted numeric constant, safe to interpolate.
     const result = await vectorPool.query<ScoredDocumentChunk>(
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt",
-              embedding::halfvec(${EMBEDDING_DIMENSIONS}) <=> $2::halfvec(${EMBEDDING_DIMENSIONS}) AS distance
+              embedding <=> $2::vector(${EMBEDDING_DIMENSIONS}) AS distance
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
-       ORDER BY embedding::halfvec(${EMBEDDING_DIMENSIONS}) <=> $2::halfvec(${EMBEDDING_DIMENSIONS})
+       ORDER BY distance
        LIMIT $3`,
       [userId, embeddingStr, topK],
     );
