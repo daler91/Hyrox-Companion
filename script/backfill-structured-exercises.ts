@@ -534,6 +534,8 @@ if (process.argv[1]?.endsWith("backfill-structured-exercises.ts")) {
   try {
     await main();
   } catch (err) {
+    // The operator's own fatal error from this one-off script, no request data.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err }, "[backfill] fatal error");
     process.exit(1);
   }
