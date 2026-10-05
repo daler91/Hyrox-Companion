@@ -177,7 +177,7 @@ function countCompletedInLastSevenDays(
   today: string,
 ): number {
   const windowStart = addDays(today, -6);
-  return recentWorkouts.filter((w) => w.date >= windowStart && w.date <= today).length;
+  return recentWorkouts.filter((workout) => workout.date >= windowStart && workout.date <= today).length;
 }
 
 /** By sessions done (countCompletedThrough), never by planned ones (AI11). */

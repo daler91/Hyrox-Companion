@@ -54,10 +54,9 @@ const request: TextAiRequest = {
 
 /** Read a stream to its end, returning the error it threw, if any. */
 async function drain(): Promise<unknown> {
+  const chunks: string[] = [];
   try {
-    for await (const _text of streamText(request)) {
-      // Only the side effects matter here.
-    }
+    for await (const chunk of streamText(request)) chunks.push(chunk);
   } catch (error) {
     return error;
   }

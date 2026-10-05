@@ -376,7 +376,9 @@ describe("streamChatWithCoachTools", () => {
       tools.run.mockImplementation(async () => {
         inFlight++;
         mostInFlight = Math.max(mostInFlight, inFlight);
-        await new Promise((resolve) => setTimeout(resolve, 1));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 1);
+        });
         inFlight--;
         return "{}";
       });
