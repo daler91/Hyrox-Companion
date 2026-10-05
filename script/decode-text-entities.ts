@@ -18,11 +18,18 @@
  *   workout_logs:  focus, main_workout, accessory, notes
  *   exercise_sets: exercise_name, custom_label, category
  *
- * Usage:
- *   pnpm tsx script/decode-text-entities.ts            # live run
- *   pnpm tsx script/decode-text-entities.ts --dry-run  # report counts, no writes
+ * DRY RUN BY DEFAULT. Without `--apply` it writes nothing and only reports
+ * how many rows in each table still hold an entity.
  *
- * Idempotent: rows with no entities to decode are untouched. Safe to re-run.
+ * Usage:
+ *   pnpm db:decode-entities              # dry run: report counts, no writes
+ *   pnpm db:decode-entities -- --apply   # write
+ *
+ * NOT idempotent — run `--apply` once. Every pass decodes one level, so a
+ * second pass would turn text an athlete typed as a literal `&lt;b&gt;` into
+ * `<b>`. D30 (CODEBASE_ANALYSIS_2026-10-03): this used to write unless
+ * `--dry-run` was passed, so a run "to see the counts" did the table-wide
+ * UPDATEs; `--dry-run` is still accepted and is now the default.
  */
 
 import { inSequence } from "@shared/inSequence";
@@ -58,7 +65,12 @@ interface Flags {
 }
 
 function parseFlags(argv: readonly string[]): Flags {
-  return { dryRun: argv.includes("--dry-run") };
+  const unknown = argv.find((arg) => arg !== "--apply" && arg !== "--dry-run");
+  if (unknown !== undefined) throw new Error(`Unknown argument: ${unknown}`);
+  if (argv.includes("--apply") && argv.includes("--dry-run")) {
+    throw new Error("Pass either --apply or --dry-run, not both");
+  }
+  return { dryRun: !argv.includes("--apply") };
 }
 
 // Build a REPLACE chain: REPLACE(REPLACE(col, '&#39;', ''''), '&quot;', '"') ...
@@ -74,9 +86,9 @@ function buildDecodeExpr(column: string) {
 // True when any entity appears in any of the columns. Used both as a WHERE
 // filter (only touch rows that need it) and to compute dry-run counts.
 function buildNeedsDecodeCondition(columns: readonly string[]) {
-  const patterns = ENTITY_REPLACEMENTS.map(([e]) => `%${e}%`);
+  const patterns = ENTITY_REPLACEMENTS.map(([entity]) => `%${entity}%`);
   const perColumn = columns.map((col) => {
-    const likes = patterns.map((p) => sql`"${sql.raw(col)}" LIKE ${p}`);
+    const likes = patterns.map((pattern) => sql`"${sql.raw(col)}" LIKE ${pattern}`);
     return sql.join(likes, sql` OR `);
   });
   return sql.join(perColumn, sql` OR `);
@@ -124,7 +136,12 @@ try {
     logger.info({ table: target.table, ...res, dryRun: flags.dryRun }, "[decode-entities] table processed");
   });
 
-  logger.info({ summary, dryRun: flags.dryRun }, "[decode-entities] done");
+  logger.info(
+    { summary, dryRun: flags.dryRun },
+    flags.dryRun
+      ? "[decode-entities] dry run done (re-run with --apply to write)"
+      : "[decode-entities] done",
+  );
   process.exit(0);
 } catch (err) {
   logger.error({ err }, "[decode-entities] fatal");

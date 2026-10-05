@@ -42,6 +42,12 @@ describe("buildCspDirectives", () => {
       expect(nonceFns[0]({} as Request, res)).toBe("'nonce-abc123'");
     });
 
+    // S8 (CODEBASE_ANALYSIS_2026-10-03): Clerk bot protection runs Turnstile.
+    it("allows Cloudflare Turnstile scripts and frames for Clerk bot protection", () => {
+      expect(scriptSrc).toContain("https://challenges.cloudflare.com");
+      expect(directives.frameSrc).toContain("https://challenges.cloudflare.com");
+    });
+
     it("allows Clerk/Strava/Sentry on connect-src, no websockets", () => {
       expect(connectSrc).toContain("https://*.clerk.accounts.dev");
       expect(connectSrc).toContain("https://www.strava.com");
@@ -62,6 +68,11 @@ describe("buildCspDirectives", () => {
       expect(scriptSrc.some((s) => typeof s === "function")).toBe(false);
       expect(connectSrc).toContain("ws:");
       expect(connectSrc).toContain("wss:");
+    });
+
+    it("allows Cloudflare Turnstile in development too (S8)", () => {
+      expect(scriptSrc).toContain("https://challenges.cloudflare.com");
+      expect(directives.frameSrc).toContain("https://challenges.cloudflare.com");
     });
 
     it("allows blob: images in development too (U6)", () => {

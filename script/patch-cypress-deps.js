@@ -9,6 +9,15 @@
  * a caret range here used to resolve to whatever the registry served that day,
  * so two runs could patch two different trees.
  *
+ * S7 (CODEBASE_ANALYSIS_2026-10-03): the overlay never downgrades. A pin is
+ * applied only where the bundled copy is older, and a staged package
+ * (pinned or transitive) never replaces a bundled copy at the same or a newer
+ * version. The axios pin tracks the repo's own `^1.20.0` override floor, and
+ * axios's direct dependencies are pinned through npm `overrides` to the
+ * versions pnpm-lock.yaml resolves. Deeper transitive dependencies (e.g.
+ * form-data's asynckit/mime-types) are still whatever npm resolves that day;
+ * the no-downgrade rule keeps them from replacing anything newer.
+ *
  * Failures are fatal under CI (the job that runs this wants to know) and a
  * warning otherwise (a developer's `pnpm install` must never be blocked by a
  * cosmetic overlay).
@@ -25,8 +34,21 @@ const PINNED = {
   'engine.io': '5.2.1',
   flatted: '3.4.0',
   ws: '8.17.1',
-  axios: '1.7.4',
+  // Keep in step with the `axios` floor in package.json `pnpm.overrides`.
+  axios: '1.20.0',
   esbuild: '0.25.12',
+};
+
+/**
+ * Exact versions for axios's direct dependencies in the staging install,
+ * matching what pnpm-lock.yaml resolves for axios 1.20.0 (and the
+ * follow-redirects / form-data override floors in package.json).
+ */
+const TRANSITIVE_PINS = {
+  'follow-redirects': '1.16.1',
+  'form-data': '4.0.6',
+  'https-proxy-agent': '5.0.1',
+  'proxy-from-env': '2.1.0',
 };
 
 const IS_WINDOWS = process.platform === 'win32';
@@ -93,31 +115,63 @@ function bundledDir(name) {
   return layout.nested[name] ?? path.join(layout.appModules, name);
 }
 
-/** The pinned packages the Cypress app actually bundles. */
+/** The `version` from `<dir>/package.json`, or null when absent or unreadable. */
+function readVersion(dir) {
+  const pkg = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkg)) return null;
+  try {
+    const { version } = JSON.parse(fs.readFileSync(pkg, 'utf8'));
+    return typeof version === 'string' ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+/** [major, minor, patch, isRelease] for a semver string, or null when unparsable. */
+function parseSemver(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?/.exec(version);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3]), match[4] ? 0 : 1];
+}
+
+/**
+ * True when `version` is at or above `target`. A prerelease sorts below its
+ * release; an unparsable version is treated as older (so it gets patched).
+ */
+function isAtLeast(version, target) {
+  const have = version ? parseSemver(version) : null;
+  const want = parseSemver(target);
+  if (!have || !want) return false;
+  for (let i = 0; i < want.length; i++) {
+    if (have[i] !== want[i]) return have[i] > want[i];
+  }
+  return true;
+}
+
+/**
+ * The pinned packages the Cypress app actually bundles at a version older
+ * than the pin. A bundled copy already at or above the pin is left alone, so
+ * this is also what makes a re-run on a patched cache a no-op.
+ */
 function selectWanted() {
   return new Set(
     Object.keys(PINNED).filter((name) => {
       if (name === 'esbuild') {
-        return fs.existsSync(path.join(layout.appModules, 'esbuild')) || fs.existsSync(path.join(layout.appModules, '@esbuild'));
+        const present = fs.existsSync(path.join(layout.appModules, 'esbuild')) || fs.existsSync(path.join(layout.appModules, '@esbuild'));
+        return present && !isAtLeast(readVersion(bundledDir(name)), PINNED[name]);
       }
-      return fs.existsSync(bundledDir(name));
+      if (!fs.existsSync(bundledDir(name))) return false;
+      return !isAtLeast(readVersion(bundledDir(name)), PINNED[name]);
     }),
   );
 }
 
-/** Idempotence: a cached binary patched on an earlier run already carries the pins. */
-function alreadyPinned(wanted) {
-  return [...wanted].every((name) => {
-    // bearer:disable javascript_lang_path_traversal
-    const pkg = path.join(bundledDir(name), 'package.json');
-    if (!fs.existsSync(pkg)) return false;
-    return JSON.parse(fs.readFileSync(pkg, 'utf8')).version === PINNED[name];
-  });
-}
-
 /** npm-install the pinned versions into the staging dir; records its node_modules in `layout`. */
 function stagePinned(specs) {
-  fs.writeFileSync(path.join(layout.tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
+  fs.writeFileSync(
+    path.join(layout.tempDir, 'package.json'),
+    JSON.stringify({ name: 'temp', private: true, overrides: TRANSITIVE_PINS }),
+  );
   execFileSync(IS_WINDOWS ? 'npm.cmd' : 'npm', [
     'install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock', '--save-exact', ...specs,
   ], { cwd: layout.tempDir, stdio: 'inherit' });
@@ -128,8 +182,13 @@ function stagePinned(specs) {
  * Copy one staged package onto the app as a plain directory: no `.bin`, no
  * symlinks, and the destination replaced whole so nothing stale survives
  * underneath. `from` is relative to the staging node_modules, `to` absolute.
+ * Never downgrades: a destination already at or above the staged version is
+ * kept as-is.
  */
 function overlayPackage(from, to) {
+  // bearer:disable javascript_lang_path_traversal
+  const stagedVersion = readVersion(path.join(layout.sourceDir, from));
+  if (stagedVersion && isAtLeast(readVersion(to), stagedVersion)) return;
   fs.rmSync(to, { recursive: true, force: true });
   // bearer:disable javascript_lang_path_traversal
   fs.cpSync(path.join(layout.sourceDir, from), to, {
@@ -176,8 +235,7 @@ function main() {
   if (skipReason) return skip(skipReason);
 
   const wanted = selectWanted();
-  if (wanted.size === 0) return skip('nothing to patch');
-  if (alreadyPinned(wanted)) return skip('already patched');
+  if (wanted.size === 0) return skip('nothing to patch, or bundled versions already at or above the pins');
 
   // The Cypress cache path is worth having in the build log; it is a local
   // directory, not a credential.

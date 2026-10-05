@@ -66,4 +66,22 @@ describe("sseRegistry", () => {
     expect(remaining).toBe(1);
     expect(good.signal.aborted).toBe(true);
   });
+
+  // D31 (CODEBASE_ANALYSIS_2026-10-03): a stream whose request was mid-handler
+  // when shutdown began must not hold httpServer.close() open.
+  it("aborts a stream that registers after the drain has started", async () => {
+    await drainSseStreams(50);
+
+    const late = new AbortController();
+    registerSseStream(late);
+
+    expect(late.signal.aborted).toBe(true);
+  });
+
+  it("leaves new streams running when no shutdown is under way", () => {
+    const controller = new AbortController();
+    registerSseStream(controller);
+
+    expect(controller.signal.aborted).toBe(false);
+  });
 });

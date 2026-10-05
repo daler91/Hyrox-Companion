@@ -200,4 +200,33 @@ describe("chat messages and their proposals (real Postgres)", () => {
     const [reply] = await storage.users.getChatMessages(ALICE);
     expect(reply?.factProposal).toEqual({ ...offer, status: "saved" });
   });
+
+  // P18 (CODEBASE_ANALYSIS_2026-10-03): "Clear chat history" must not leave
+  // the triggering message verbatim on the athlete's plan proposals.
+  it("blanks the athlete's proposal requests when their chat history is cleared, and nobody else's", async () => {
+    const proposalFor = async (userId: string) => {
+      const [plan] = await db
+        .insert(trainingPlans)
+        .values({ userId, name: "Block", totalWeeks: 8, startDate: "2026-08-03", endDate: "2026-09-27" })
+        .returning();
+      return storage.planProposals.create({
+        userId,
+        planId: plan.id,
+        summaryMessage: "Moved your long run to Saturday.",
+        userRequest: "move my long run, my knee hurts",
+        payload: { changes: [] },
+      });
+    };
+    const alices = await proposalFor(ALICE);
+    const bobs = await proposalFor(BOB);
+    await storage.users.saveChatMessage({ userId: ALICE, role: "user", content: "move my long run, my knee hurts" });
+
+    await storage.users.clearChatHistory(ALICE);
+
+    expect(await storage.users.getChatMessages(ALICE)).toEqual([]);
+    const requestOf = async (id: string) =>
+      (await db.select().from(planAdjustmentProposals).where(eq(planAdjustmentProposals.id, id)))[0]?.userRequest;
+    expect(await requestOf(alices.id)).toBe("");
+    expect(await requestOf(bobs.id)).toBe("move my long run, my knee hurts");
+  });
 });

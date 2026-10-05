@@ -245,4 +245,6 @@ async function main(flags: BackfillFlags): Promise<void> {
   await demote(flags);
 }
 
-if (process.argv[1]?.endsWith("backfill-counts-as-training.ts")) runBackfill(main);
+if (process.argv[1]?.endsWith("backfill-counts-as-training.ts")) {
+  runBackfill(main, ["--revert"]);
+}

@@ -6,6 +6,7 @@ import { evictUserFromSeenCache } from "../../clerkAuth";
 import { purgeUserJobs } from "../../queue";
 import { clearRateLimitBuckets } from "../../routeUtils";
 import { deleteFoodEmbeddingsByFoodIds } from "../../services/nutrition/foodEmbeddings";
+import { purgeRagCacheForUser } from "../../services/ragService";
 import { storage } from "../../storage";
 import accountRouter from "../account";
 import { createTestApp } from "./testUtils";
@@ -50,6 +51,10 @@ vi.mock("../../services/nutrition/foodEmbeddings", () => ({
   deleteFoodEmbeddingsByFoodIds: vi.fn(),
 }));
 
+vi.mock("../../services/ragService", () => ({
+  purgeRagCacheForUser: vi.fn(),
+}));
+
 vi.mock("../../storage", () => ({
   storage: {
     coaching: { deleteChunksByUserId: vi.fn() },
@@ -84,6 +89,7 @@ describe("DELETE /api/v1/account", () => {
     vi.mocked(storage.nutrition.listPrivateCustomFoodIds).mockResolvedValue(PRIVATE_FOOD_IDS);
     vi.mocked(storage.coaching.deleteChunksByUserId).mockResolvedValue(undefined);
     vi.mocked(deleteFoodEmbeddingsByFoodIds).mockResolvedValue(undefined);
+    vi.mocked(purgeRagCacheForUser).mockReturnValue(Promise.resolve());
     clerkDeleteUser.mockResolvedValue(undefined);
     vi.mocked(storage.users.getStravaConnection).mockResolvedValue(undefined);
     vi.mocked(storage.users.getGarminConnection).mockResolvedValue(undefined);
@@ -114,12 +120,15 @@ describe("DELETE /api/v1/account", () => {
     const captureOrder = firstCallOrder(vi.mocked(storage.nutrition.listPrivateCustomFoodIds));
     const chunksOrder = firstCallOrder(vi.mocked(storage.coaching.deleteChunksByUserId));
     const embeddingsOrder = firstCallOrder(vi.mocked(deleteFoodEmbeddingsByFoodIds));
+    const ragCacheOrder = firstCallOrder(vi.mocked(purgeRagCacheForUser));
     const clerkOrder = firstCallOrder(clerkDeleteUser);
     const deleteOrder = firstCallOrder(vi.mocked(storage.users.deleteUserAndPrivateCustomFoods));
     const evictOrder = firstCallOrder(vi.mocked(evictUserFromSeenCache));
     expect(captureOrder).toBeLessThan(chunksOrder);
     expect(chunksOrder).toBeLessThan(clerkOrder);
     expect(embeddingsOrder).toBeLessThan(clerkOrder);
+    expect(chunksOrder).toBeLessThan(ragCacheOrder);
+    expect(ragCacheOrder).toBeLessThan(clerkOrder);
     expect(clerkOrder).toBeLessThan(deleteOrder);
     expect(deleteOrder).toBeLessThan(evictOrder);
   });

@@ -394,7 +394,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | `pnpm db:generate`                   | Generate a new Drizzle migration after schema changes                             |
 | `pnpm db:migrate`                    | Run pending Drizzle migrations                                                    |
 | `pnpm db:check`                      | Validate migration/schema consistency                                             |
-| `pnpm db:decode-entities`            | Decode stored HTML entities in workout text                                       |
+| `pnpm db:decode-entities`            | Report stored HTML entities in workout text (dry run; `-- --apply` decodes, once) |
 | `pnpm coach:influence`               | Run the AI coach influence harness                                                |
 | `pnpm docs:openapi`                  | Regenerate `docs/openapi.json`                                                    |
 | `pnpm bench:timeline`                | Run the timeline benchmark                                                        |

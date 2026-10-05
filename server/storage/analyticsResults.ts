@@ -120,4 +120,30 @@ export class AnalyticsResultsStorage {
       );
     return (result.rowCount ?? 0) > 0;
   }
+
+  readonly releaseRecomputedOn = releaseRecomputedOn;
+}
+
+/**
+ * Give back a claim taken by markRecomputedOn after the recompute failed, so
+ * a pg-boss retry can claim the slot again instead of skipping at the claim
+ * and leaving the analysis stale until the next local midnight. Only clears
+ * a claim for `localDate`; a successful run's persist has already stamped
+ * the row, and is never undone here. D37 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function releaseRecomputedOn(
+  userId: string,
+  feature: AnalyticsFeature,
+  localDate: string,
+): Promise<void> {
+  await db
+    .update(analyticsResults)
+    .set({ recomputedOn: null })
+    .where(
+      and(
+        eq(analyticsResults.userId, userId),
+        eq(analyticsResults.feature, feature),
+        eq(analyticsResults.recomputedOn, localDate),
+      ),
+    );
 }

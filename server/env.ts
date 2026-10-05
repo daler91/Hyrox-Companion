@@ -107,7 +107,13 @@ const envSchema = z
     ALLOWED_ORIGINS: z.string().optional(),
     ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
     APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
-    LOG_LEVEL: z.string().default("info"),
+    // Enum-validated so a typo (e.g. "warning") fails here with a message naming
+    // the variable, not later inside pino (D33 (CODEBASE_ANALYSIS_2026-10-03)).
+    LOG_LEVEL: z
+      .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"], {
+        error: "LOG_LEVEL must be one of: fatal, error, warn, info, debug, trace, silent",
+      })
+      .default("info"),
     // Controls Express "trust proxy" setting. Hardcoding this to 1 is risky in
     // deployments where the number of trusted hops changes, because req.ip then
     // derives from forwarded headers that could be attacker-controlled

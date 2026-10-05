@@ -23,42 +23,49 @@ export const SENSITIVE_REQUEST_HEADERS = [
   "x-internal-analytics-secret",
 ] as const;
 
+// Redact credentials that can appear in either headers or request bodies.
+// Body fields are common in OAuth/integration callbacks and account flows;
+// leaving them unredacted leaks tokens into log aggregators and Sentry
+// breadcrumbs. `*` covers nested objects (e.g. req.body.strava.accessToken).
+// Exported so the path syntax can be exercised against a test logger.
+export const LOG_REDACT_PATHS = [
+  ...SENSITIVE_REQUEST_HEADERS.map((header) => `req.headers.${header}`),
+  // pino-http's default res serializer logs res.getHeaders(), which carries
+  // the __Host-fitai.x-csrf Set-Cookie value on GET /api/v1/csrf-token.
+  // statusCode and the other headers stay (P12 (CODEBASE_ANALYSIS_2026-10-03)).
+  'res.headers["set-cookie"]',
+  'req.body.password',
+  'req.body.newPassword',
+  'req.body.currentPassword',
+  'req.body.accessToken',
+  'req.body.refreshToken',
+  'req.body.token',
+  'req.body.apiKey',
+  'req.body.clientSecret',
+  // Workout-photo base64 can carry PII (faces, gym signage). pino-http doesn't
+  // serialize req.body today, but redact it declaratively as a safety net (S5).
+  'req.body.imageBase64',
+  'req.body.*.password',
+  'req.body.*.accessToken',
+  'req.body.*.refreshToken',
+  // 🛡️ Sentinel: Redact Web Push cryptographic secrets (p256dh, auth) to prevent them
+  // from leaking into logs if a request body is logged (e.g., during errors).
+  'req.body.keys.p256dh',
+  'req.body.keys.auth',
+  'req.body.*.p256dh',
+  'req.body.*.auth',
+  // AI provider key fields on getTextAiConfig()'s return type. Caught at both
+  // top level and one nested level so `logger.info({ config }, "...")` and
+  // `logger.info(config, "...")` both redact (W1).
+  'openAiCompatibleApiKey',
+  'anthropicApiKey',
+  '*.openAiCompatibleApiKey',
+  '*.anthropicApiKey',
+];
+
 export const logger = pino({
   level: env.LOG_LEVEL || "info",
-  // Redact credentials that can appear in either headers or request bodies.
-  // Body fields are common in OAuth/integration callbacks and account flows;
-  // leaving them unredacted leaks tokens into log aggregators and Sentry
-  // breadcrumbs. `*` covers nested objects (e.g. req.body.strava.accessToken).
-  redact: [
-    ...SENSITIVE_REQUEST_HEADERS.map((header) => `req.headers.${header}`),
-    'req.body.password',
-    'req.body.newPassword',
-    'req.body.currentPassword',
-    'req.body.accessToken',
-    'req.body.refreshToken',
-    'req.body.token',
-    'req.body.apiKey',
-    'req.body.clientSecret',
-    // Workout-photo base64 can carry PII (faces, gym signage). pino-http doesn't
-    // serialize req.body today, but redact it declaratively as a safety net (S5).
-    'req.body.imageBase64',
-    'req.body.*.password',
-    'req.body.*.accessToken',
-    'req.body.*.refreshToken',
-    // 🛡️ Sentinel: Redact Web Push cryptographic secrets (p256dh, auth) to prevent them
-    // from leaking into logs if a request body is logged (e.g., during errors).
-    'req.body.keys.p256dh',
-    'req.body.keys.auth',
-    'req.body.*.p256dh',
-    'req.body.*.auth',
-    // AI provider key fields on getTextAiConfig()'s return type. Caught at both
-    // top level and one nested level so `logger.info({ config }, "...")` and
-    // `logger.info(config, "...")` both redact (W1).
-    'openAiCompatibleApiKey',
-    'anthropicApiKey',
-    '*.openAiCompatibleApiKey',
-    '*.anthropicApiKey',
-  ],
+  redact: LOG_REDACT_PATHS,
   transport: isDev
     ? {
         target: "pino-pretty",

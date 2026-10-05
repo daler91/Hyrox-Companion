@@ -81,6 +81,15 @@ describe("lookupBarcode", () => {
     expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
   });
 
+  it("degrades to null (no throw) when the Open Food Facts lookup fails (D43)", async () => {
+    vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
+    vi.mocked(resolveEdamamBarcode).mockResolvedValue(null);
+    vi.mocked(resolveBarcode).mockRejectedValue(new Error("OFF lookup failed with HTTP 429"));
+
+    expect(await lookupBarcode("0049000028")).toBeNull();
+    expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
+  });
+
   it("degrades to null (no throw) when caching the resolved food fails", async () => {
     vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
     vi.mocked(resolveEdamamBarcode).mockResolvedValue(mapped);

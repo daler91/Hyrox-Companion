@@ -245,7 +245,9 @@ describe("POST /sync import accounting", () => {
     expect(inserted.map((row) => row.garminActivityId)).toEqual(["2"]);
   });
 
-  it("translates a non-array activities response into 502 GARMIN_API_ERROR and records the error", async () => {
+  // D34 (CODEBASE_ANALYSIS_2026-10-03): only a genuine auth rejection records
+  // lastError, which also wipes the stored credentials.
+  it("translates a non-array activities response into 502 GARMIN_API_ERROR and keeps the connection", async () => {
     connectionMocks.getGarminConnection.mockResolvedValue(conn());
     FakeGarminConnect.getActivitiesImpl = () => Promise.resolve({ error: "maintenance" });
 
@@ -253,7 +255,37 @@ describe("POST /sync import accounting", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.code).toBe("GARMIN_API_ERROR");
-    expect(storage.users.setGarminError).toHaveBeenCalled();
+    expect(res.body.error).not.toMatch(/login failed/i);
+    expect(storage.users.setGarminError).not.toHaveBeenCalled();
+    expect(storage.users.updateGarminLastSync).not.toHaveBeenCalled();
+  });
+
+  it("records the error when Garmin rejects the activity fetch with a 401", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn());
+    FakeGarminConnect.getActivitiesImpl = () =>
+      Promise.reject(Object.assign(new Error("Request failed"), { response: { status: 401 } }));
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("GARMIN_API_ERROR");
+    expect(storage.users.setGarminError).toHaveBeenCalledWith(
+      "user-1",
+      expect.stringMatching(/rejected the credentials/i),
+    );
+  });
+
+  it("answers a DB failure during import with a 500 and keeps the Garmin connection", async () => {
+    connectionMocks.getGarminConnection.mockResolvedValue(conn());
+    FakeGarminConnect.getActivitiesImpl = () => Promise.resolve([activity(1)]);
+    connectionMocks.getExistingGarminActivityIds.mockRejectedValue(
+      new Error("canceling statement due to statement timeout"),
+    );
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(500);
+    expect(storage.users.setGarminError).not.toHaveBeenCalled();
     expect(storage.users.updateGarminLastSync).not.toHaveBeenCalled();
   });
 });

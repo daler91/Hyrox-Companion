@@ -13,13 +13,25 @@ const { Pool } = pg;
  */
 const vectorUrl = env.VECTOR_DATABASE_URL || env.DATABASE_URL;
 
+// Same SSL rule as the main pool (server/db.ts): Railway's internal Postgres
+// (*.railway.internal) does not support SSL, so in single-DB mode the fallback
+// to a Railway-internal DATABASE_URL must connect without it, or RAG, semantic
+// food search and account deletion all fail. D54 (CODEBASE_ANALYSIS_2026-10-03)
+const isInternalHost = (() => {
+  try {
+    return new URL(vectorUrl).hostname.endsWith(".railway.internal");
+  } catch {
+    return false;
+  }
+})();
+
 export const vectorPool = new Pool({
   connectionString: vectorUrl,
   max: 5,
   idleTimeoutMillis: DB_IDLE_TIMEOUT_MS,
   connectionTimeoutMillis: VECTOR_DB_CONNECTION_TIMEOUT_MS,
   statement_timeout: DB_STATEMENT_TIMEOUT_MS,
-  ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: true } : false,
+  ssl: env.NODE_ENV === "production" && !isInternalHost ? { rejectUnauthorized: true } : false,
 });
 
 vectorPool.on("error", (err) => {

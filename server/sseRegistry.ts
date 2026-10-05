@@ -8,8 +8,16 @@ import { logger } from "./logger";
 // always hit the shutdown-timeout force-exit path (CODEBASE_AUDIT.md §3).
 const activeControllers = new Set<AbortController>();
 
+// Set once shutdown starts draining. A stream that registers during or after
+// the drain (its request was mid-handler when SIGTERM arrived) is aborted on
+// the spot; otherwise it would hold `httpServer.close()` open until the 60 s
+// forced exit, which skips queue.stop(), pool.end() and the Sentry flush.
+// D31 (CODEBASE_ANALYSIS_2026-10-03)
+let shuttingDown = false;
+
 export function registerSseStream(controller: AbortController): () => void {
   activeControllers.add(controller);
+  if (shuttingDown) controller.abort();
   return () => {
     activeControllers.delete(controller);
   };
@@ -26,6 +34,7 @@ export function activeSseStreamCount(): number {
  * decide whether to force-close sockets.
  */
 export async function drainSseStreams(timeoutMs = 5_000): Promise<number> {
+  shuttingDown = true;
   if (activeControllers.size === 0) return 0;
   logger.info({ count: activeControllers.size }, "Aborting in-flight SSE streams for shutdown");
   for (const controller of activeControllers) {
@@ -53,4 +62,5 @@ async function waitForDrain(deadline: number): Promise<void> {
 // Exported for testing so suites can reset state between cases.
 export function __resetSseRegistryForTests(): void {
   activeControllers.clear();
+  shuttingDown = false;
 }

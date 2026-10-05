@@ -14,7 +14,7 @@ import {
 } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
-import { drainSseStreams } from "../../sseRegistry";
+import { __resetSseRegistryForTests, drainSseStreams } from "../../sseRegistry";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
 import { createTestApp, resetRouteTestState, setupTestErrorHandler } from "./testUtils";
@@ -974,6 +974,9 @@ describe("POST /api/chat/stream", () => {
       expect(chunks[1]).toContain('{"text":"Hello"}');
       expect(chunks[2]).toBe('data: {"error":"Stream error"}');
       expect(chunks).toHaveLength(3);
+      // A drain leaves the registry in shutdown mode (D31); later streams in
+      // this file must not be aborted on registration.
+      __resetSseRegistryForTests();
     });
   });
 });

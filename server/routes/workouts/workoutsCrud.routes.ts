@@ -1,7 +1,7 @@
 import {
   type AddExerciseSetBody,
   addExerciseSetBodySchema,
-  insertWorkoutLogSchema,
+  insertWorkoutLogRouteSchema,
   type PatchExerciseSetBody,
   patchExerciseSetBodySchema,
   structureBlockScoreSchema,
@@ -52,8 +52,11 @@ const exerciseHistoryQuerySchema = z.object({
   sessions: z.coerce.number().int().min(1).max(20).optional(),
 });
 
+// The same client-facing create schema as POST /workouts: no planId and no
+// device provenance; combineWorkouts derives planId from the kept plan day.
+// S9 (CODEBASE_ANALYSIS_2026-10-03)
 const combineWorkoutsSchema = z.object({
-  newWorkout: insertWorkoutLogSchema,
+  newWorkout: insertWorkoutLogRouteSchema,
   deleteWorkoutIds: z.array(z.string().min(1)).min(1).max(10),
   skipPlanDayIds: z.array(z.string().min(1)).max(10).optional(),
 });

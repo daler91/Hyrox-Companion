@@ -11,7 +11,7 @@ import { generateJsonText } from "../../ai/providers";
 import { streamChatWithCoach } from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../../services/planAdjustmentService";
-import { drainSseStreams } from "../../sseRegistry";
+import { __resetSseRegistryForTests, drainSseStreams } from "../../sseRegistry";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -106,6 +106,8 @@ describe("the server-owned chat conversation", () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     await resetRouteTestState();
+    // A drain leaves the registry in shutdown mode (D31).
+    __resetSseRegistryForTests();
     app = createTestApp(aiRouter);
     vi.mocked(buildTrainingContext).mockResolvedValue("Training context" as never);
   });

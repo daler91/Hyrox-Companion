@@ -297,6 +297,69 @@ async function registerUserEmailWorker({
   });
 }
 
+/**
+ * Midnight analytics recompute — refreshes a user's stored Coach Insights /
+ * Race Prediction when a workout was logged after it was generated. Enqueued
+ * by the analyticsRecompute cron at each user's local midnight. Exported for
+ * unit tests.
+ */
+export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
+  const { userId, feature, localDate } = job.data as RecomputeAnalyticsJobData;
+  if (!userId || !feature || !localDate) {
+    // jobId is a UUID and
+    // dataKeys are field names (not values); no PII or secrets.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing recompute-analytics fields, skipping");
+    return;
+  }
+  // Job data is a cast, not validated: reject unknown features BEFORE the
+  // once-per-day claim below so a bad payload can't burn today's recompute.
+  if (!ANALYTICS_FEATURES.includes(feature)) {
+    // jobId is a UUID, no PII
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ jobId: job.id }, "[pg-boss] Unknown recompute-analytics feature, skipping");
+    return;
+  }
+  const user = await storage.users.getUser(userId);
+  if (!user) {
+    logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping recompute-analytics job");
+    return;
+  }
+  // Atomic once-per-day claim (W4): if another delivery already recomputed
+  // this feature today, skip without spending AI. Also returns false if the
+  // stored row was deleted between scan enqueue and now.
+  const claimed = await storage.analyticsResults.markRecomputedOn(userId, feature, localDate);
+  if (!claimed) {
+    logger.info({ jobId: job.id }, "[pg-boss] recompute-analytics already claimed/absent, skipping");
+    return;
+  }
+  logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
+  try {
+    // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
+    // switch, unit-tested) — nutrition_insights used to fall through to the
+    // coach-insights branch here, running the wrong AI analysis nightly.
+    // jobId is a UUID bound as log context, no PII
+    // bearer:disable javascript_lang_logger_leak
+    await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
+      dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
+    );
+    logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
+  } catch (error) {
+    logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed recompute-analytics job");
+    // Release today's claim so pg-boss's retry can take it again; otherwise
+    // every retry exits at the claim above and a transient AI/DB failure
+    // leaves the analysis stale until the next local midnight. Only failures
+    // release, so a successful run still happens once a day.
+    // D37 (CODEBASE_ANALYSIS_2026-10-03)
+    try {
+      await storage.analyticsResults.releaseRecomputedOn(userId, feature, localDate);
+    } catch (releaseError) {
+      logger.error({ err: releaseError, jobId: job.id }, "[pg-boss] Failed to release recompute-analytics claim");
+    }
+    throw error;
+  }
+}
+
 const QUEUE_START_TIMEOUT_MS = 30_000;
 
 export async function startQueue() {
@@ -428,57 +491,10 @@ export async function startQueue() {
     });
   });
 
-  // Midnight analytics recompute — refreshes a user's stored Coach Insights /
-  // Race Prediction when a workout was logged after it was generated. Enqueued
-  // by the analyticsRecompute cron at each user's local midnight.
+  // Midnight analytics recompute; see processRecomputeAnalyticsJob.
   await queue.createQueue(RECOMPUTE_ANALYTICS_QUEUE);
   await queue.work(RECOMPUTE_ANALYTICS_QUEUE, async (jobs: Job[]) => {
-    await runBatch(RECOMPUTE_ANALYTICS_QUEUE, jobs, async (job) => {
-      const { userId, feature, localDate } = job.data as RecomputeAnalyticsJobData;
-      if (!userId || !feature || !localDate) {
-        // jobId is a UUID and
-        // dataKeys are field names (not values); no PII or secrets.
-        // bearer:disable javascript_lang_logger_leak
-        logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing recompute-analytics fields, skipping");
-        return;
-      }
-      // Job data is a cast, not validated: reject unknown features BEFORE the
-      // once-per-day claim below so a bad payload can't burn today's recompute.
-      if (!ANALYTICS_FEATURES.includes(feature)) {
-        // jobId is a UUID, no PII
-        // bearer:disable javascript_lang_logger_leak
-        logger.warn({ jobId: job.id }, "[pg-boss] Unknown recompute-analytics feature, skipping");
-        return;
-      }
-      const user = await storage.users.getUser(userId);
-      if (!user) {
-        logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping recompute-analytics job");
-        return;
-      }
-      // Atomic once-per-day claim (W4): if another delivery already recomputed
-      // this feature today, skip without spending AI. Also returns false if the
-      // stored row was deleted between scan enqueue and now.
-      const claimed = await storage.analyticsResults.markRecomputedOn(userId, feature, localDate);
-      if (!claimed) {
-        logger.info({ jobId: job.id }, "[pg-boss] recompute-analytics already claimed/absent, skipping");
-        return;
-      }
-      logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
-      try {
-        // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
-        // switch, unit-tested) — nutrition_insights used to fall through to the
-        // coach-insights branch here, running the wrong AI analysis nightly.
-        // jobId is a UUID bound as log context, no PII
-        // bearer:disable javascript_lang_logger_leak
-        await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
-          dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
-        );
-        logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
-      } catch (error) {
-        logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed recompute-analytics job");
-        throw error;
-      }
-    });
+    await runBatch(RECOMPUTE_ANALYTICS_QUEUE, jobs, processRecomputeAnalyticsJob);
   });
 
   logger.info("pg-boss queue started and workers registered");

@@ -1533,8 +1533,8 @@
           "duration": {
             "type": "integer",
             "nullable": true,
-            "minimum": -2147483648,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 2880
           },
           "rpe": {
             "type": "integer",
@@ -1576,8 +1576,8 @@
           "calories": {
             "type": "integer",
             "nullable": true,
-            "minimum": -2147483648,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 50000
           },
           "distanceMeters": {
             "type": "number",
@@ -1588,8 +1588,8 @@
           "elevationGain": {
             "type": "number",
             "nullable": true,
-            "minimum": -8388608,
-            "maximum": 8388607
+            "minimum": 0,
+            "maximum": 50000
           },
           "avgHeartrate": {
             "type": "integer",
@@ -1606,14 +1606,14 @@
           "avgSpeed": {
             "type": "number",
             "nullable": true,
-            "minimum": -8388608,
-            "maximum": 8388607
+            "minimum": 0,
+            "maximum": 200
           },
           "maxSpeed": {
             "type": "number",
             "nullable": true,
-            "minimum": -8388608,
-            "maximum": 8388607
+            "minimum": 0,
+            "maximum": 200
           },
           "avgCadence": {
             "type": "number",
@@ -1624,14 +1624,14 @@
           "avgWatts": {
             "type": "integer",
             "nullable": true,
-            "minimum": -2147483648,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 3000
           },
           "sufferScore": {
             "type": "integer",
             "nullable": true,
-            "minimum": -2147483648,
-            "maximum": 2147483647
+            "minimum": 0,
+            "maximum": 10000
           },
           "startedAt": {
             "type": "string",
@@ -2514,8 +2514,8 @@
               "duration": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 2880
               },
               "rpe": {
                 "type": "integer",
@@ -2537,8 +2537,8 @@
               "calories": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 50000
               },
               "distanceMeters": {
                 "type": "number",
@@ -2549,8 +2549,8 @@
               "elevationGain": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 50000
               },
               "avgHeartrate": {
                 "type": "integer",
@@ -2567,14 +2567,14 @@
               "avgSpeed": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 200
               },
               "maxSpeed": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 200
               },
               "avgCadence": {
                 "type": "number",
@@ -2585,14 +2585,14 @@
               "avgWatts": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 3000
               },
               "sufferScore": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 10000
               },
               "countsAsTraining": {
                 "type": "boolean"
@@ -2943,8 +2943,8 @@
               "duration": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 2880
               },
               "rpe": {
                 "type": "integer",
@@ -2961,8 +2961,8 @@
               "calories": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 50000
               },
               "distanceMeters": {
                 "type": "number",
@@ -2973,8 +2973,8 @@
               "elevationGain": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 50000
               },
               "avgHeartrate": {
                 "type": "integer",
@@ -2991,14 +2991,14 @@
               "avgSpeed": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 200
               },
               "maxSpeed": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 200
               },
               "avgCadence": {
                 "type": "number",
@@ -3009,14 +3009,14 @@
               "avgWatts": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 3000
               },
               "sufferScore": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 0,
+                "maximum": 10000
               },
               "countsAsTraining": {
                 "type": "boolean"
