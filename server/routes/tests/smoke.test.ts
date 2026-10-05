@@ -394,11 +394,21 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
   // ── Error Handling ────────────────────────────────────────────────
 
   describe("Error Handling", () => {
-    it("unknown route falls through to SPA", async () => {
-      const res = await request("/api/v1/nonexistent-route");
-      // SPA catch-all serves index.html for unmatched routes
+    it("unknown client route falls through to SPA", async () => {
+      const res = await request("/some/client-side/route");
+      // SPA catch-all serves index.html for unmatched client routes
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
+    });
+
+    // An unmatched /api path answers a JSON 404 rather than the SPA shell with
+    // a 200, which the offline queue read as a successful sync.
+    // C38 (CODEBASE_ANALYSIS_2026-10-03)
+    it("unknown API route returns a JSON 404", async () => {
+      const res = await request("/api/v1/nonexistent-route");
+      expect(res.status).toBe(404);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      expect(await res.json()).toEqual({ error: "API route not found", code: "NOT_FOUND" });
     });
 
     it("invalid workout payload returns 400", async () => {
