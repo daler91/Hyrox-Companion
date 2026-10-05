@@ -142,18 +142,16 @@ describe("backfill-structured-exercises (real Postgres)", () => {
       // A concurrent writer (an athlete edit or a second run) has inserted a
       // set but not committed: its foreign-key check holds FOR KEY SHARE on
       // the workout row until it does.
-      const writerMayCommit = Promise.withResolvers<void>();
-      const writerInserted = Promise.withResolvers<void>();
+      const writerMayCommit = Promise.withResolvers<true>();
+      const writerInserted = Promise.withResolvers<true>();
       const writer = db.transaction(async (tx) => {
-        await tx
-          .insert(exerciseSets)
-          .values({
-            workoutLogId: log.id,
-            exerciseName: "deadlift",
-            category: "strength",
-            setNumber: 1,
-          });
-        writerInserted.resolve();
+        await tx.insert(exerciseSets).values({
+          workoutLogId: log.id,
+          exerciseName: "deadlift",
+          category: "strength",
+          setNumber: 1,
+        });
+        writerInserted.resolve(true);
         await writerMayCommit.promise;
       });
       await writerInserted.promise;
@@ -166,7 +164,7 @@ describe("backfill-structured-exercises (real Postgres)", () => {
       // Blocked on the row lock rather than reading past the uncommitted set.
       expect(settled).toBe(false);
 
-      writerMayCommit.resolve();
+      writerMayCommit.resolve(true);
       await writer;
       expect(await backfill).toBe("already_structured");
       expect(await setsOf(log.id)).toHaveLength(1);
