@@ -204,7 +204,7 @@ export function useOnboardingWizard(
   // on the calendar (onboarding audit C3).
   const [startDate, setStartDate] = useState<Date>(() => parseISO(defaultPlanStartDate()));
   // The athlete's own answer to "set these as my targets"; null until touched.
-  const [applyTargetsChoice, setApplyTargets] = useState<boolean | null>(null);
+  const [applyTargetsChoice, setApplyTargetsChoice] = useState<boolean | null>(null);
   // The current daily target: carried forward on save, and left alone by a
   // re-run that changes nothing (CL20, CODEBASE_ANALYSIS_2026-10-03).
   const targetsQuery = useNutritionTargets(FUELLING_STEP_ENABLED);
@@ -630,7 +630,7 @@ export function useOnboardingWizard(
     weightGoalDirection,
     setWeightGoalDirection: edit("weightGoalDirection"),
     applyTargets,
-    setApplyTargets,
+    setApplyTargets: setApplyTargetsChoice,
     aiCoachEnabled,
     setAiCoachEnabled: edit("aiCoachEnabled"),
     handleNext,

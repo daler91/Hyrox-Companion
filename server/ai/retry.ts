@@ -56,6 +56,20 @@ function shouldRetry(error: unknown, attempt: number, maxRetries: number, baseDe
   return delay;
 }
 
+/** How one retried call is paced and bounded; every field has a default. */
+export interface RetryOptions {
+  /** Retries after the first attempt (default 4). */
+  readonly maxRetries?: number;
+  /** First backoff delay, doubled per retry (default 2 s). */
+  readonly baseDelayMs?: number;
+  /** Total time across every attempt and backoff (default `AI_REQUEST_TIMEOUT_MS`). */
+  readonly budgetMs?: number;
+  /** Cap on a single attempt (default `AI_CALL_TIMEOUT_MS`). */
+  readonly callTimeoutMs?: number;
+  /** The caller's own cancel signal, which `fn` already honours; see the catch below. */
+  readonly callerSignal?: AbortSignal;
+}
+
 export async function retryWithBackoff<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   label: string,
@@ -65,13 +79,15 @@ export async function retryWithBackoff<T>(
    * breaker it shares with an unrelated provider — AI2 (CODEBASE_ANALYSIS_2026-10-03).
    */
   breaker: AiCircuitBreaker,
-  maxRetries: number = 4,
-  baseDelayMs: number = 2000,
-  budgetMs: number = AI_REQUEST_TIMEOUT_MS,
-  callTimeoutMs: number = AI_CALL_TIMEOUT_MS,
-  /** The caller's own cancel signal, which `fn` already honours; see the catch below. */
-  callerSignal?: AbortSignal,
+  options: RetryOptions = {},
 ): Promise<T> {
+  const {
+    maxRetries = 4,
+    baseDelayMs = 2000,
+    budgetMs = AI_REQUEST_TIMEOUT_MS,
+    callTimeoutMs = AI_CALL_TIMEOUT_MS,
+    callerSignal,
+  } = options;
   // Fast-fail when the breaker is open so prolonged outages don't amplify
   // latency across every caller (CODEBASE_AUDIT.md §5). Breaker open error
   // is not retryable — bail immediately so upstream queues can back off.

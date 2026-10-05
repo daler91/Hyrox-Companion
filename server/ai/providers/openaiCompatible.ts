@@ -266,11 +266,7 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
         (signal) => postJson(request, options, false, signal),
         request.label,
         textBreakerFor("openai-compatible"),
-        undefined,
-        undefined,
-        request.timeoutMs,
-        request.timeoutMs,
-        request.signal,
+        { budgetMs: request.timeoutMs, callTimeoutMs: request.timeoutMs, callerSignal: request.signal },
       );
       const payload = await readJsonPayload(response);
       const text = parseOpenAiTextResponse(payload);

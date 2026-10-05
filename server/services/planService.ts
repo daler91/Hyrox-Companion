@@ -631,12 +631,16 @@ async function foldOntoPrescription(tx: Tx, dayId: string, logged: AthleteSets):
   const replaced = prescribed.filter((set) => !kept.has(set.id)).map((set) => set.id);
   if (replaced.length > 0) await tx.delete(exerciseSets).where(inArray(exerciseSets.id, replaced));
   const { moved, inserted } = orderSlots(slots);
-  for (const { id, sortOrder } of moved) {
-    await tx
-      .update(exerciseSets)
-      .set({ sortOrder, version: sql`${exerciseSets.version} + 1` })
-      .where(eq(exerciseSets.id, id));
-  }
+  // One row each, so order does not matter; the transaction's client runs
+  // them one after another.
+  await Promise.all(
+    moved.map(({ id, sortOrder }) =>
+      tx
+        .update(exerciseSets)
+        .set({ sortOrder, version: sql`${exerciseSets.version} + 1` })
+        .where(eq(exerciseSets.id, id)),
+    ),
+  );
   await insertOnPlanDay(tx, dayId, inserted);
 }
 

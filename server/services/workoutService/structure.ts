@@ -321,18 +321,22 @@ export async function applyStructureSetRelinks(
   if (existing.some((row) => !isOwnedBy(row, owner))) {
     throw new AppError(ErrorCode.NOT_FOUND, "Exercise set not found", 404);
   }
-  // The owner condition below also leaves the deleted ones untouched.
-  for (const group of groupRelinks(relinks)) {
-    await tx
-      .update(exerciseSets)
-      .set(group.values)
-      .where(and(
-        exerciseSetOwnerCondition(owner),
-        inArray(exerciseSets.id, group.setIds),
-        eq(exerciseSets.blockId, group.fromBlockId),
-        eq(exerciseSets.stepNumber, group.fromStepNumber),
-      ));
-  }
+  // The owner condition below also leaves the deleted ones untouched. Each
+  // set id is in one group only, so the groups touch disjoint rows and their
+  // order does not matter; the transaction's client runs them in turn.
+  await Promise.all(
+    groupRelinks(relinks).map((group) =>
+      tx
+        .update(exerciseSets)
+        .set(group.values)
+        .where(and(
+          exerciseSetOwnerCondition(owner),
+          inArray(exerciseSets.id, group.setIds),
+          eq(exerciseSets.blockId, group.fromBlockId),
+          eq(exerciseSets.stepNumber, group.fromStepNumber),
+        )),
+    ),
+  );
 }
 
 function structureBlockInsertValues(owner: SetOwner, block: StructureBlockInput, idx: number) {

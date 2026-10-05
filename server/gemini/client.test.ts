@@ -103,10 +103,8 @@ describe("retryWithBackoff abort plumbing (S6)", () => {
       },
       "abort-test",
       embeddingBreaker,
-      0, // maxRetries — fail fast
-      1, // baseDelayMs
-      1000, // budgetMs
-      15, // callTimeoutMs — short so the timeout fires
+      // Fail fast, with a call timeout short enough to fire.
+      { maxRetries: 0, baseDelayMs: 1, budgetMs: 1000, callTimeoutMs: 15 },
     );
     await expect(result).rejects.toThrow();
     expect(captured?.aborted).toBe(true);

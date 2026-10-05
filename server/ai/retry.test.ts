@@ -52,7 +52,7 @@ describe("retryWithBackoff — circuit breaker interplay", () => {
     for (let i = 0; i < 5; i++) breaker.recordFailure();
 
     const fn = vi.fn();
-    await expect(retryWithBackoff(fn, "breaker-open-test", breaker, 2, 1)).rejects.toBeInstanceOf(
+    await expect(retryWithBackoff(fn, "breaker-open-test", breaker, { maxRetries: 2, baseDelayMs: 1 })).rejects.toBeInstanceOf(
       CircuitBreakerOpenError,
     );
     expect(fn).not.toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe("retryWithBackoff — circuit breaker interplay", () => {
     // the breaker trips between attempts; it must not be treated as a
     // generic retryable/non-retryable failure and looped on.
     const fn = vi.fn().mockRejectedValue(new CircuitBreakerOpenError());
-    await expect(retryWithBackoff(fn, "mid-flight-test", breaker, 3, 1)).rejects.toBeInstanceOf(
+    await expect(retryWithBackoff(fn, "mid-flight-test", breaker, { maxRetries: 3, baseDelayMs: 1 })).rejects.toBeInstanceOf(
       CircuitBreakerOpenError,
     );
     expect(fn).toHaveBeenCalledTimes(1);
@@ -84,13 +84,13 @@ describe("retryWithBackoff — a call its caller cancelled", () => {
     const fn = vi.fn().mockRejectedValue(new DOMException("This operation was aborted", "AbortError"));
 
     for (let i = 0; i < 6; i++) {
-      await expect(retryWithBackoff(fn, "cancelled-test", breaker, 3, 1, 1_000, 1_000, controller.signal)).rejects.toMatchObject({
+      await expect(retryWithBackoff(fn, "cancelled-test", breaker, { maxRetries: 3, baseDelayMs: 1, budgetMs: 1_000, callTimeoutMs: 1_000, callerSignal: controller.signal })).rejects.toMatchObject({
         name: "AbortError",
       });
     }
 
     expect(fn).toHaveBeenCalledTimes(6);
-    await expect(retryWithBackoff(() => Promise.resolve("ok"), "after-cancels-test", breaker, 0, 1)).resolves.toBe("ok");
+    await expect(retryWithBackoff(() => Promise.resolve("ok"), "after-cancels-test", breaker, { maxRetries: 0, baseDelayMs: 1 })).resolves.toBe("ok");
   });
 
   it("still counts a provider failure while the caller is still waiting", async () => {
@@ -98,10 +98,10 @@ describe("retryWithBackoff — a call its caller cancelled", () => {
     const fn = vi.fn().mockRejectedValue(new Error("503 Service Unavailable"));
 
     for (let i = 0; i < 5; i++) {
-      await expect(retryWithBackoff(fn, "outage-test", breaker, 0, 1, 1_000, 1_000, controller.signal)).rejects.toThrow("503");
+      await expect(retryWithBackoff(fn, "outage-test", breaker, { maxRetries: 0, baseDelayMs: 1, budgetMs: 1_000, callTimeoutMs: 1_000, callerSignal: controller.signal })).rejects.toThrow("503");
     }
 
-    await expect(retryWithBackoff(fn, "outage-test", breaker, 0, 1)).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+    await expect(retryWithBackoff(fn, "outage-test", breaker, { maxRetries: 0, baseDelayMs: 1 })).rejects.toBeInstanceOf(CircuitBreakerOpenError);
   });
 });
 
@@ -117,7 +117,7 @@ describe("retryWithBackoff — the breaker each call goes through", () => {
     const fn = vi.fn().mockRejectedValue(new AiConfigurationError("GEMINI_API_KEY is required for AI features"));
 
     for (let i = 0; i < 6; i++) {
-      await expect(retryWithBackoff(fn, "embedding", embeddingBreaker, 3, 1)).rejects.toBeInstanceOf(AiConfigurationError);
+      await expect(retryWithBackoff(fn, "embedding", embeddingBreaker, { maxRetries: 3, baseDelayMs: 1 })).rejects.toBeInstanceOf(AiConfigurationError);
     }
 
     // Not retried (it would fail the same way), and never fast-failed by an open breaker.
@@ -127,14 +127,14 @@ describe("retryWithBackoff — the breaker each call goes through", () => {
   it("leaves the text provider's calls alone while embeddings are failing", async () => {
     const outage = vi.fn().mockRejectedValue(new Error("503 Service Unavailable"));
     for (let i = 0; i < 5; i++) {
-      await expect(retryWithBackoff(outage, "embedding", embeddingBreaker, 0, 1)).rejects.toThrow("503");
+      await expect(retryWithBackoff(outage, "embedding", embeddingBreaker, { maxRetries: 0, baseDelayMs: 1 })).rejects.toThrow("503");
     }
-    await expect(retryWithBackoff(outage, "embedding", embeddingBreaker, 0, 1)).rejects.toBeInstanceOf(
+    await expect(retryWithBackoff(outage, "embedding", embeddingBreaker, { maxRetries: 0, baseDelayMs: 1 })).rejects.toBeInstanceOf(
       CircuitBreakerOpenError,
     );
 
     const chat = vi.fn().mockResolvedValue("reply");
-    await expect(retryWithBackoff(chat, "chat", textBreakerFor("anthropic"), 0, 1)).resolves.toBe("reply");
+    await expect(retryWithBackoff(chat, "chat", textBreakerFor("anthropic"), { maxRetries: 0, baseDelayMs: 1 })).resolves.toBe("reply");
     expect(chat).toHaveBeenCalledOnce();
   });
 });

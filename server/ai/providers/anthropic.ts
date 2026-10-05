@@ -275,11 +275,7 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
         (signal) => postAnthropic(request, options, false, signal),
         request.label,
         textBreakerFor("anthropic"),
-        undefined,
-        undefined,
-        request.timeoutMs,
-        request.timeoutMs,
-        request.signal,
+        { budgetMs: request.timeoutMs, callTimeoutMs: request.timeoutMs, callerSignal: request.signal },
       );
       const payload = await readJsonPayload(response);
       const text = anthropicText(payload);

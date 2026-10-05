@@ -162,11 +162,7 @@ export const geminiTextProvider: TextAiProvider = {
         }),
       request.label,
       textBreakerFor("gemini"),
-      undefined,
-      undefined,
-      request.timeoutMs,
-      request.timeoutMs,
-      request.signal,
+      { budgetMs: request.timeoutMs, callTimeoutMs: request.timeoutMs, callerSignal: request.signal },
     );
 
     return {

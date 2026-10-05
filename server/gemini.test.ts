@@ -45,7 +45,7 @@ describe("retryWithBackoff", () => {
 
   it("succeeds on first try without retrying", async () => {
     const fn = vi.fn().mockResolvedValue("success");
-    const result = await retryWithBackoff(fn, "test", breaker, 2, 1);
+    const result = await retryWithBackoff(fn, "test", breaker, { maxRetries: 2, baseDelayMs: 1 });
     expect(result).toBe("success");
     expect(fn).toHaveBeenCalledTimes(1);
   });
@@ -55,20 +55,20 @@ describe("retryWithBackoff", () => {
       .fn()
       .mockRejectedValueOnce(new Error("503 Service Unavailable"))
       .mockResolvedValue("recovered");
-    const result = await retryWithBackoff(fn, "test", breaker, 2, 1);
+    const result = await retryWithBackoff(fn, "test", breaker, { maxRetries: 2, baseDelayMs: 1 });
     expect(result).toBe("recovered");
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
   it("does not retry on non-retryable error", async () => {
     const fn = vi.fn().mockRejectedValue(new Error("400 Bad Request"));
-    await expect(retryWithBackoff(fn, "test", breaker, 2, 1)).rejects.toThrow("400 Bad Request");
+    await expect(retryWithBackoff(fn, "test", breaker, { maxRetries: 2, baseDelayMs: 1 })).rejects.toThrow("400 Bad Request");
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
   it("throws after exhausting max retries", async () => {
     const fn = vi.fn().mockRejectedValue(new Error("503 Service Unavailable"));
-    await expect(retryWithBackoff(fn, "test", breaker, 2, 1)).rejects.toThrow("503 Service Unavailable");
+    await expect(retryWithBackoff(fn, "test", breaker, { maxRetries: 2, baseDelayMs: 1 })).rejects.toThrow("503 Service Unavailable");
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
@@ -94,7 +94,7 @@ describe("retryWithBackoff", () => {
         () => new Promise<string>((resolve) => setTimeout(() => resolve("done"), 100_000)),
       );
       // budgetMs and callTimeoutMs raised to 5min; maxRetries/baseDelayMs keep defaults.
-      const promise = retryWithBackoff(fn, "slow", breaker, undefined, undefined, 300_000, 300_000);
+      const promise = retryWithBackoff(fn, "slow", breaker, { budgetMs: 300_000, callTimeoutMs: 300_000 });
       await vi.advanceTimersByTimeAsync(100_000);
       await expect(promise).resolves.toBe("done");
     } finally {
@@ -107,7 +107,7 @@ describe("retryWithBackoff", () => {
     // fires before the first attempt — distinct from "exhausts max retries",
     // which always makes at least one call.
     const fn = vi.fn();
-    await expect(retryWithBackoff(fn, "budget-test", breaker, 2, 1, 0)).rejects.toThrow(
+    await expect(retryWithBackoff(fn, "budget-test", breaker, { maxRetries: 2, baseDelayMs: 1, budgetMs: 0 })).rejects.toThrow(
       "AI request budget exhausted for budget-test",
     );
     expect(fn).not.toHaveBeenCalled();
