@@ -39,15 +39,14 @@ export function parseBackfillFlags(
   extraValueFlags: readonly string[] = [],
 ): BackfillFlags {
   const flags: BackfillFlags = { apply: false, quiet: false };
-  const args = argv[Symbol.iterator]();
-  for (let next = args.next(); !next.done; next = args.next()) {
-    const arg = next.value;
+  const pending = [...argv];
+  for (let arg = pending.shift(); arg !== undefined; arg = pending.shift()) {
     if (arg === "--apply") flags.apply = true;
     else if (arg === "--quiet") flags.quiet = true;
-    else if (arg === "--user-id") flags.userId = requireValue(arg, args.next().value);
+    else if (arg === "--user-id") flags.userId = requireValue(arg, pending.shift());
     else if (arg.startsWith("--user-id=")) {
       flags.userId = requireValue("--user-id", arg.slice("--user-id=".length));
-    } else if (extraValueFlags.includes(arg)) requireValue(arg, args.next().value);
+    } else if (extraValueFlags.includes(arg)) requireValue(arg, pending.shift());
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return flags;

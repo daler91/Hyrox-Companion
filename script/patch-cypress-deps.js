@@ -13,8 +13,8 @@
  * applied only where the bundled copy is older, and a staged package
  * (pinned or transitive) never replaces a bundled copy at the same or a newer
  * version. The axios pin tracks the repo's own `^1.20.0` override floor, and
- * axios's direct dependencies are pinned through npm `overrides` to the
- * versions pnpm-lock.yaml resolves. Deeper transitive dependencies (e.g.
+ * axios's direct dependencies are installed alongside it at the exact
+ * versions pnpm-lock.yaml resolves, which npm then dedupes axios onto. Deeper transitive dependencies (e.g.
  * form-data's asynckit/mime-types) are still whatever npm resolves that day;
  * the no-downgrade rule keeps them from replacing anything newer.
  *
@@ -124,7 +124,6 @@ function readVersion(dir) {
   // staging dir) and a PINNED package name; no external input reaches it.
   // bearer:disable javascript_lang_path_traversal
   const pkg = path.join(dir, 'package.json');
-  if (!fs.existsSync(pkg)) return null;
   try {
     const { version } = JSON.parse(fs.readFileSync(pkg, 'utf8'));
     return typeof version === 'string' ? version : null;
@@ -156,30 +155,32 @@ function isAtLeast(version, target) {
   return true;
 }
 
-/**
- * The pinned packages the Cypress app actually bundles at a version older
- * than the pin. A bundled copy already at or above the pin is left alone, so
- * this is also what makes a re-run on a patched cache a no-op.
- */
-function selectWanted() {
+/** The pinned packages the Cypress app actually bundles. */
+function selectBundled() {
   return new Set(
     [...PINNED.keys()].filter((name) => {
       if (name === 'esbuild') {
-        const present = fs.existsSync(path.join(layout.appModules, 'esbuild')) || fs.existsSync(path.join(layout.appModules, '@esbuild'));
-        return present && !isAtLeast(readVersion(bundledDir(name)), PINNED.get(name));
+        return fs.existsSync(path.join(layout.appModules, 'esbuild')) || fs.existsSync(path.join(layout.appModules, '@esbuild'));
       }
-      if (!fs.existsSync(bundledDir(name))) return false;
-      return !isAtLeast(readVersion(bundledDir(name)), PINNED.get(name));
+      return fs.existsSync(bundledDir(name));
     }),
+  );
+}
+
+/**
+ * The bundled pinned packages at a version older than the pin. A bundled copy
+ * already at or above the pin is left alone, so this is also what makes a
+ * re-run on a patched cache a no-op.
+ */
+function selectWanted() {
+  return new Set(
+    [...selectBundled()].filter((name) => !isAtLeast(readVersion(bundledDir(name)), PINNED.get(name))),
   );
 }
 
 /** npm-install the pinned versions into the staging dir; records its node_modules in `layout`. */
 function stagePinned(specs) {
-  fs.writeFileSync(
-    path.join(layout.tempDir, 'package.json'),
-    JSON.stringify({ name: 'temp', private: true, overrides: TRANSITIVE_PINS }),
-  );
+  fs.writeFileSync(path.join(layout.tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
   execFileSync(IS_WINDOWS ? 'npm.cmd' : 'npm', [
     'install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock', '--save-exact', ...specs,
   ], { cwd: layout.tempDir, stdio: 'inherit' });
@@ -260,7 +261,12 @@ function main() {
   layout.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
   try {
     const specs = [...wanted].map((name) => `${name}@${PINNED.get(name)}`);
-    stagePinned(specs);
+    // axios's own dependencies go in at exact versions beside it, so npm
+    // dedupes axios onto them rather than resolving its ranges afresh.
+    const transitiveSpecs = wanted.has('axios')
+      ? Object.entries(TRANSITIVE_PINS).map(([name, version]) => `${name}@${version}`)
+      : [];
+    stagePinned([...specs, ...transitiveSpecs]);
     overlayTopLevel();
     overlayNested(wanted);
     // `specs` are the pinned name@version strings above — static data.
