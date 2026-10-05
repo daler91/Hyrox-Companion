@@ -1,4 +1,4 @@
-import type { ApplyMissedRecoveryBody, ApplyMissedRecoveryResponse, CreateSamplePlanInput, ExerciseSet, GeneratePlanInput, MissedSessionRecoveryPreview, PlanDay, PlanDayPriority, PlanDaySkipReason, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { ApplyMissedRecoveryBody, ApplyMissedRecoveryResponse, CreateSamplePlanInput, ExerciseSet, GeneratePlanInput, MissedSessionRecoveryPreview, PlanDay, PlanDayPriority, PlanDaySkipReason, StructureBlockInput, StructureSetRelink, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import { AI_REQUEST_OPTIONS, IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
@@ -84,11 +84,13 @@ export const plans = {
       `/api/v1/plans/days/${dayId}/sets?includeStructure=true`,
     ),
 
-  updateDayStructure: (dayId: string, structureBlocks: StructureBlockInput[]) =>
+  // The day's blocks and the rows that follow the steps they renumber, saved
+  // in one transaction (CL15, CODEBASE_ANALYSIS_2026-10-03).
+  updateDayStructure: (dayId: string, structureBlocks: StructureBlockInput[], relinks: StructureSetRelink[]) =>
     typedRequest<{ exerciseSets: ExerciseSet[]; structureBlocks: StructureBlockInput[] }>(
       "PATCH",
       `/api/v1/plans/days/${dayId}/structure`,
-      { structureBlocks },
+      { structureBlocks, relinks },
     ),
 
   ...(() => {

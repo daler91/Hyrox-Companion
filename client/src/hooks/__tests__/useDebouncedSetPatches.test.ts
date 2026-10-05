@@ -10,6 +10,13 @@ interface TestPatch {
 
 const DEBOUNCE_MS = 50;
 
+/** Lets every already-settled promise chain run; timers are fake here. */
+function drainMicrotasks(): Promise<void> {
+  let drained = Promise.resolve();
+  for (let tick = 0; tick < 10; tick += 1) drained = drained.then(() => undefined);
+  return drained;
+}
+
 describe("useDebouncedSetPatches", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -111,6 +118,69 @@ describe("useDebouncedSetPatches", () => {
     });
 
     expect(mutate).toHaveBeenCalledWith({ setId: "set-9", data: { reps: 4 }, ownerId: "workout-b" });
+  });
+
+  it("flushPendingSetPatches also waits for a PATCH the owner change already sent (CL15)", async () => {
+    // Closing the sheet sends the queued PATCH without waiting for it. A block
+    // save that flushed then found nothing queued and went out beside the row
+    // PATCH, so it could land first and miss the row it should have moved.
+    let land: () => void = () => undefined;
+    const mutate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          land = resolve;
+        }),
+    );
+    const initialProps: { ownerId: string | null } = { ownerId: "plan-day-a" };
+    const { result, rerender } = renderHook(
+      ({ ownerId }) => useDebouncedSetPatches<TestPatch>(mutate, DEBOUNCE_MS, ownerId),
+      { initialProps },
+    );
+    act(() => {
+      result.current.patchSetDebounced("set-1", { reps: 5 });
+    });
+    rerender({ ownerId: null });
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    let flushed = false;
+    const flush = result.current.flushPendingSetPatches().then(() => {
+      flushed = true;
+    });
+    await drainMicrotasks();
+    expect(flushed).toBe(false);
+
+    land();
+    await flush;
+    expect(flushed).toBe(true);
+    // Waited for, not sent again.
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushPendingSetPatches waits for a PATCH the unmount sent, and not for one that settled", async () => {
+    let land: () => void = () => undefined;
+    const mutate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          land = resolve;
+        }),
+    );
+    const { result, unmount } = renderHook(() => useDebouncedSetPatches<TestPatch>(mutate, DEBOUNCE_MS));
+    act(() => {
+      result.current.patchSetDebounced("set-1", { reps: 5 });
+    });
+    unmount();
+
+    let flushed = false;
+    const flush = result.current.flushPendingSetPatches().then(() => {
+      flushed = true;
+    });
+    await drainMicrotasks();
+    expect(flushed).toBe(false);
+    land();
+    await flush;
+
+    // Settled PATCHes are forgotten: the next flush has nothing to wait for.
+    await expect(result.current.flushPendingSetPatches()).resolves.toBeUndefined();
   });
 
   it("flushes pending PATCHes on unmount so dialog-close mid-edit doesn't drop the last keystroke", () => {

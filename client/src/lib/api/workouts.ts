@@ -5,6 +5,7 @@ import type {
   PersonalRecordAchievement,
   StructureBlockInput,
   StructureBlockScore,
+  StructureSetRelink,
   UpdateWorkoutLog,
   WorkoutLog,
 } from "@shared/schema";
@@ -114,8 +115,16 @@ export const workouts = {
 
   get: (id: string) => typedRequest<WorkoutDetail>("GET", `/api/v1/workouts/${id}`),
 
-  update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
-    typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),
+  // `relinks` rides with `structureBlocks`: the rows that follow the steps the
+  // save renumbers, moved in its transaction (CL15, CODEBASE_ANALYSIS_2026-10-03).
+  update: (
+    id: string,
+    data: UpdateWorkoutLog & {
+      exercises?: ParsedExercise[];
+      structureBlocks?: StructureBlockInput[];
+      relinks?: StructureSetRelink[];
+    },
+  ) => typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),
 
   // Device-activity links. A standalone Strava import can be merged by hand
   // into a plan day or a log the athlete wrote (POST), and a linked recording

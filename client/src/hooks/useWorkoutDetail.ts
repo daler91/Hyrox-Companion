@@ -2,6 +2,14 @@ import type { ExerciseSet, StructureBlockInput, StructureBlockScore, WorkoutLog 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
+import { EDIT_SAVE_DEBOUNCE_MS } from "@/components/workout-structure/editSaveDebounce";
+import {
+  applySetRelinks,
+  relinksForSets,
+  revertSetRelinks,
+  type SetRelink,
+  type StepLinkMove,
+} from "@/components/workout-structure/stepLinks";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
 import {
@@ -13,9 +21,32 @@ import {
   type WorkoutReferenceTextPayload,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
-import { flushWorkoutWriteInvalidation, scheduleWorkoutWriteInvalidation } from "@/lib/workoutInvalidation";
+import {
+  flushWorkoutWriteInvalidation,
+  scheduleWorkoutWriteInvalidation,
+  WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+} from "@/lib/workoutInvalidation";
 
 type WorkoutWithSets = WorkoutDetail;
+
+interface StructureSaveVariables {
+  /** Named here, not read from the render: a save sent as the sheet closes still reaches its workout. */
+  readonly workoutId: string;
+  readonly structureBlocks: StructureBlockInput[];
+  /** Rows that follow the steps this save renumbers, saved in the same request (CL15). */
+  readonly relinks: SetRelink[];
+}
+
+interface StructureSaveContext {
+  readonly prevBlocks: StructureBlockInput[] | undefined;
+  readonly prevSets: ExerciseSet[];
+}
+
+// One block save at a time, across every sheet that saves blocks: TanStack
+// runs mutations that share a scope in order. The id is fixed rather than per
+// workout because a pending mutation takes the latest render's options, and a
+// closed sheet's options name no workout (U3, CODEBASE_ANALYSIS_2026-10-03).
+const WORKOUT_STRUCTURE_SAVE_SCOPE = { id: "workout-structure-save" };
 
 export function isLatestMutationSequence(seq: number, latestSeq: number | undefined): boolean {
   return seq === latestSeq;
@@ -48,11 +79,6 @@ export function mergeServerStructureBlock(
 const workoutSetsMutationKey = (workoutId: string) =>
   ["workout-sets", workoutId] as const;
 
-// Debounce window the cell inputs used to own. Lifted here for the same
-// reason as usePlanDayExercises — the Save button needs a flush seam the
-// per-component debounce couldn't provide.
-const CELL_SAVE_DEBOUNCE_MS = 350;
-
 function isTimeoutLikeError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const message = error.message.toLowerCase();
@@ -67,6 +93,23 @@ function isWorkoutNotFoundError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const message = error.message.toLowerCase();
   return message.includes("404") && message.includes("workout not found");
+}
+
+/**
+ * What a seed, re-parse or photo parse refreshes: the workout and its
+ * history, plus the reads built from its training load (the day's periodised
+ * target, the Timeline fuel chips and the Fuelling block), since the load is
+ * computed from the sets these replace. Session fuelling reads no sets.
+ * CL19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function setReplacementQueryKeys(workoutId: string) {
+  return [
+    QUERY_KEYS.workout(workoutId),
+    QUERY_KEYS.workoutHistory(workoutId),
+    QUERY_KEYS.nutritionDayPrefix,
+    QUERY_KEYS.nutritionRangePrefix,
+    QUERY_KEYS.nutritionBlockPrefix,
+  ];
 }
 
 /**
@@ -185,7 +228,9 @@ export function useWorkoutDetail(workoutId: string | null) {
     // every keystroke's PATCH. One trailing invalidation per burst instead,
     // flushed the moment the sheet closes (effect below).
     onWriteSuccess: scheduleWorkoutWriteInvalidation,
-    cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
+    // The cell inputs' debounce, lifted here for the same reason as
+    // usePlanDayExercises: the Save button needs a flush seam.
+    cellSaveDebounceMs: EDIT_SAVE_DEBOUNCE_MS,
   });
 
   // Closing the sheet (or switching workouts) ends the editing burst: run any
@@ -198,9 +243,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     mutationFn: () => api.workouts.seedFromPlan(workoutId!),
     // Seed is idempotent on the server, so we can let React Query refetch
     // the workout once it succeeds rather than reconciling inline.
-    invalidateQueries: workoutId
-      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
-      : undefined,
+    invalidateQueries: workoutId ? setReplacementQueryKeys(workoutId) : undefined,
   });
 
   // Lazy parse for legacy free-text workouts: if seed-from-plan returned
@@ -212,9 +255,7 @@ export function useWorkoutDetail(workoutId: string | null) {
   const reparseFreeText = useApiMutation({
     mutationFn: (payload?: ReparseWorkoutTextPayload) =>
       api.workouts.reparse(workoutId!, payload),
-    invalidateQueries: workoutId
-      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
-      : undefined,
+    invalidateQueries: workoutId ? setReplacementQueryKeys(workoutId) : undefined,
     successToast: "Legacy workout converted",
     // No error toast — reparse failure is a best-effort fallback, not a
     // user-initiated action. Empty state + coach's prescription remain
@@ -228,9 +269,7 @@ export function useWorkoutDetail(workoutId: string | null) {
   const reparseFromImage = useApiMutation({
     mutationFn: (payload: ParseFromImagePayload) =>
       api.workouts.reparseFromImage(workoutId!, payload),
-    invalidateQueries: workoutId
-      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.workoutHistory(workoutId)]
-      : undefined,
+    invalidateQueries: workoutId ? setReplacementQueryKeys(workoutId) : undefined,
     errorToast: (error) =>
       isTimeoutLikeError(error)
         ? {
@@ -304,21 +343,71 @@ export function useWorkoutDetail(workoutId: string | null) {
         : { title: "Couldn't save prescription" },
   });
 
-  const updateStructure = useApiMutation({
+  // The blocks and the rows that follow a reordered or removed step go in ONE
+  // request, applied in one transaction. Sent as set PATCHes ahead of the
+  // blocks, a partial failure left rows on the new numbering beside blocks
+  // stored with the old one. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+  const updateStructure = useApiMutation<
+    WorkoutLog,
+    Error,
+    StructureSaveVariables,
+    StructureSaveContext | undefined
+  >({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
-    mutationFn: (structureBlocks: StructureBlockInput[]) =>
-      api.workouts.update(workoutId!, { structureBlocks }),
-    onMutate: (structureBlocks) => beginFieldPatch({ structureBlocks }),
-    onSuccess: () => {
-      markSaved();
-      if (workoutId) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workout(workoutId) }).catch(() => undefined);
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
-      }
+    scope: WORKOUT_STRUCTURE_SAVE_SCOPE,
+    mutationFn: ({ workoutId: target, structureBlocks, relinks }) =>
+      api.workouts.update(target, { structureBlocks, relinks }),
+    onMutate: async ({ workoutId: target, structureBlocks, relinks }) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(target) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(target));
+      if (!prev) return undefined;
+      const prevSets = prev.exerciseSets ?? [];
+      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(target), (curr) =>
+        curr ? { ...curr, structureBlocks, exerciseSets: applySetRelinks(curr.exerciseSets ?? [], relinks) } : curr,
+      );
+      return { prevBlocks: prev.structureBlocks, prevSets };
     },
-    onError: (_err, _vars, ctx) => rollbackFields(ctx),
+    onSuccess: (_log, { workoutId: target }) => {
+      markSaved();
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workout(target) }).catch(() => undefined);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
+    },
+    // Puts back the blocks and only the rows this save moved, so a set edit
+    // that landed meanwhile survives the rollback.
+    onError: (_err, { workoutId: target, relinks }, ctx) => {
+      if (!ctx) return;
+      queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(target), (curr) =>
+        curr
+          ? {
+              ...curr,
+              structureBlocks: ctx.prevBlocks,
+              exerciseSets: revertSetRelinks(curr.exerciseSets ?? [], relinks, ctx.prevSets),
+            }
+          : curr,
+      );
+    },
     errorToast: "Couldn't save workout blocks",
   });
+
+  /**
+   * The block builder's save: the edited blocks plus the relinks for the rows
+   * on every step it renumbered, read from the cache so they include an earlier
+   * save's moves. Rejects when the save fails, so the builder shows what is
+   * stored again.
+   *
+   * A row put on a block step in the pause before this save is still queued,
+   * or was sent as the sheet closed and has not landed, and names the
+   * numbering the save renumbers. Landed first, it is one of the rows the
+   * relinks move; landed after, it sat on its old step number under the new
+   * numbering. The flush waits for both. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  const saveStructure = async (structureBlocks: StructureBlockInput[], moves: readonly StepLinkMove[]) => {
+    if (!workoutId) throw new Error("There's no workout to save these blocks to.");
+    await flushPendingSetPatches();
+    const cached = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+    const relinks = relinksForSets(cached?.exerciseSets ?? [], moves);
+    return updateStructure.mutateAsync({ workoutId, structureBlocks, relinks });
+  };
 
   const blockScoreSeqByKeyRef = useRef(new Map<string, number>());
   const blockScoreSeqCounterRef = useRef(0);
@@ -410,6 +499,11 @@ export function useWorkoutDetail(workoutId: string | null) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workoutHistory(forWorkoutId) }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+        // The RPE sizes this session's fuelling targets, picks the day's primary
+        // session for its meal targets and weights its training load: the
+        // fuelling panel beside it kept the old targets for its staleTime.
+        // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+        ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ]);
     },
     errorToast: "Couldn't save that RPE",
@@ -417,14 +511,20 @@ export function useWorkoutDetail(workoutId: string | null) {
 
   // Inline session-time edit for a manual log without a device start time.
   // Optimistic like updateFocus: patch the cached workout so the picker
-  // reflects the choice immediately, then invalidate the timeline so the day's
-  // per-meal fuel timing recomputes. Roll back only timeOfDayMin on error.
+  // reflects the choice immediately. The day's per-meal fuel timing lives in
+  // its summary, so that refreshes with the timeline; the timeline alone left
+  // the meal targets on the old timing. Session fuelling windows only by a device
+  // start time. Roll back only timeOfDayMin on error.
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03)
   const updateTimeOfDay = useApiMutation({
     mutationFn: (timeOfDayMin: number | null) =>
       api.workouts.update(workoutId!, { timeOfDayMin }),
     onMutate: (timeOfDayMin) => beginFieldPatch({ timeOfDayMin }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDayPrefix }),
+      ]);
     },
     onError: (_err, _vars, ctx) => rollbackFields(ctx),
     errorToast: "Couldn't save the session time",
@@ -487,6 +587,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateNote,
     updatePrescription,
     updateStructure,
+    saveStructure,
     updateBlockScore,
     updateReference,
     updateFocus,

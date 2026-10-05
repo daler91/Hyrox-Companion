@@ -114,6 +114,29 @@ describe("usePlanDayExercises parse state scoping", () => {
     });
   });
 
+  // CL34 (CODEBASE_ANALYSIS_2026-10-03): the message is read by parseApiError,
+  // so a gateway's non-JSON body still names the status, and a code under a
+  // status that is not 502/504 still counts.
+  it("detects an upstream failure from apiRequest's status with a non-JSON body", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.(new Error("504: Gateway Timeout"));
+    expect(toast).toEqual({
+      title: "AI service temporarily unavailable",
+      description: "Please retry in a moment.",
+    });
+  });
+
+  it("detects an upstream failure from the body code under another status", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.(new Error('500: {"error":"AI timed out","code":"AI_UPSTREAM_TIMEOUT"}'));
+    expect(toast).toEqual({
+      title: "AI service temporarily unavailable",
+      description: "Please retry in a moment.",
+    });
+  });
+
   it("keeps generic parse toast copy for non-upstream failures", () => {
     renderHook(() => usePlanDayExercises("day-1"));
     const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };

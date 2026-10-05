@@ -2,11 +2,20 @@ import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
+import { EDIT_SAVE_DEBOUNCE_MS } from "@/components/workout-structure/editSaveDebounce";
+import {
+  applySetRelinks,
+  relinksForSets,
+  revertSetRelinks,
+  type SetRelink,
+  type StepLinkMove,
+} from "@/components/workout-structure/stepLinks";
 import { useToast } from "@/hooks/use-toast";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
 import { api, type ParseFromImagePayload, type PlanDayReparseTextPayload, QUERY_KEYS } from "@/lib/api";
 import type { ReparseResponse } from "@/lib/api/constants";
+import { parseApiError } from "@/lib/apiError";
 import { queryClient } from "@/lib/queryClient";
 
 // Tag every plan-day set mutation with this key family so useIsMutating
@@ -23,16 +32,28 @@ const planDaySetsMutationKey = (planDayId: string) => ["plan-day-sets", planDayI
 // running (CL21, CODEBASE_ANALYSIS_2026-10-03).
 const planDayReparseMutationKey = (planDayId: string) => ["plan-day-reparse", planDayId] as const;
 
-// Same debounce window the cell inputs used to own. Lifted to the hook
-// because LogSheet must flush pending cell edits before "log as planned"
-// (createWorkoutInTx copies the persisted plan-day rows) and before it
-// closes; a per-component debounce has no flush seam.
-const CELL_SAVE_DEBOUNCE_MS = 350;
-
 type PlanDayExerciseData = {
   exerciseSets: ExerciseSet[];
   structureBlocks: StructureBlockInput[];
 };
+
+interface StructureSaveVariables {
+  /** Named here, not read from the render: a save sent as the sheet closes still reaches its day. */
+  readonly planDayId: string;
+  readonly structureBlocks: StructureBlockInput[];
+  /** Rows that follow the steps this save renumbers, saved in the same request (CL15). */
+  readonly relinks: SetRelink[];
+}
+
+interface StructureSaveContext {
+  readonly prev: PlanDayExerciseData;
+}
+
+// One plan-day block save at a time: TanStack runs mutations that share a
+// scope in order. Fixed rather than per day because a pending mutation takes
+// the latest render's options, and a closed sheet's options name no day
+// (U3, CODEBASE_ANALYSIS_2026-10-03).
+const PLAN_DAY_STRUCTURE_SAVE_SCOPE = { id: "plan-day-structure-save" };
 
 type PlanDayExerciseQueryData = PlanDayExerciseData | ExerciseSet[];
 
@@ -72,23 +93,6 @@ function extractApiErrorCode(error: UnknownRecord): string | null {
   return typeof payload?.code === "string" ? payload.code : null;
 }
 
-function parseStatusFromMessage(message: string, fallbackStatus: number | null): number | null {
-  const statusMatch = /^(\d{3})\s*:/.exec(message);
-  return fallbackStatus ?? (statusMatch ? Number.parseInt(statusMatch[1], 10) : null);
-}
-
-function parseCodeFromMessageJson(message: string): string | null {
-  const jsonStart = message.indexOf("{");
-  if (jsonStart < 0) return null;
-
-  try {
-    const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
-    return typeof parsed.code === "string" ? parsed.code : null;
-  } catch {
-    return null;
-  }
-}
-
 function extractApiErrorStatusAndCode(error: unknown): ApiErrorStatusAndCode {
   const asRecord = toUnknownRecord(error);
   if (!asRecord) return { status: null, code: null };
@@ -97,12 +101,10 @@ function extractApiErrorStatusAndCode(error: unknown): ApiErrorStatusAndCode {
   const directCode = extractApiErrorCode(asRecord);
   if (directCode) return { status, code: directCode };
 
-  const message = typeof asRecord.message === "string" ? asRecord.message : "";
-  if (!message) return { status, code: null };
-
-  const parsedStatus = parseStatusFromMessage(message, status);
-  const parsedCode = parseCodeFromMessageJson(message);
-  return { status: parsedStatus, code: parsedCode };
+  // apiRequest's `${status}: ${body}` message, read by the one shared parser
+  // rather than a private copy. CL34 (CODEBASE_ANALYSIS_2026-10-03)
+  const parsed = parseApiError(error);
+  return { status: status ?? parsed?.status ?? null, code: parsed?.code ?? null };
 }
 
 function isUpstreamAiStatusOrCode({ status, code }: ApiErrorStatusAndCode): boolean {
@@ -173,7 +175,10 @@ export function usePlanDayExercises(planDayId: string | null) {
     addSetRequest: (id, data) => api.plans.addDayExercise(id, data),
     deleteSetRequest: (id, setId) => api.plans.deleteDayExercise(id, setId),
     deleteInvalidateQueries: (id) => [QUERY_KEYS.planDayExercises(id)],
-    cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
+    // The cell inputs' debounce, lifted to the hook because LogSheet must flush
+    // pending cell edits before "log as planned" (createWorkoutInTx copies the
+    // persisted plan-day rows) and before it closes.
+    cellSaveDebounceMs: EDIT_SAVE_DEBOUNCE_MS,
   });
   const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, addSet, deleteSet, isSaving, lastSavedAt, lastSaveErrorAt } = exerciseSetOps;
 
@@ -286,35 +291,75 @@ export function usePlanDayExercises(planDayId: string | null) {
     errorToast: "Couldn't save prescription",
   });
 
-  const updateStructure = useApiMutation({
+  // The blocks and the rows that follow a reordered or removed step go in ONE
+  // request, applied in one transaction, and the day rides in the variables:
+  // LogSheet used to send the relinks itself and then the blocks, so a sheet
+  // closed in between saved the rows and dropped the blocks. CL15
+  // (CODEBASE_ANALYSIS_2026-10-03)
+  const updateStructure = useApiMutation<
+    PlanDayExerciseData,
+    Error,
+    StructureSaveVariables,
+    StructureSaveContext | undefined
+  >({
     mutationKey: planDayId ? planDaySetsMutationKey(planDayId) : undefined,
-    mutationFn: (next: StructureBlockInput[]) => {
-      if (!planDayId) return Promise.resolve({ exerciseSets: [], structureBlocks: [] });
-      return api.plans.updateDayStructure(planDayId, next);
-    },
-    onMutate: async (next) => {
-      if (!planDayId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.planDayExercises(planDayId) });
-      const prev = queryClient.getQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(planDayId));
-      queryClient.setQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(planDayId), (current) => ({
-        exerciseSets: current?.exerciseSets ?? [],
-        structureBlocks: next,
-      }));
+    scope: PLAN_DAY_STRUCTURE_SAVE_SCOPE,
+    mutationFn: ({ planDayId: target, structureBlocks, relinks }) =>
+      api.plans.updateDayStructure(target, structureBlocks, relinks),
+    onMutate: async ({ planDayId: target, structureBlocks, relinks }) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.planDayExercises(target) });
+      const prev = normalizePlanDayExerciseData(
+        queryClient.getQueryData<PlanDayExerciseQueryData>(QUERY_KEYS.planDayExercises(target)),
+      );
+      if (!prev) return undefined;
+      queryClient.setQueryData<PlanDayExerciseData>(QUERY_KEYS.planDayExercises(target), {
+        exerciseSets: applySetRelinks(prev.exerciseSets, relinks),
+        structureBlocks,
+      });
       return { prev };
     },
-    onSuccess: (data) => {
-      if (planDayId) {
-        queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), data);
-      }
+    onSuccess: (data, { planDayId: target }) => {
+      queryClient.setQueryData(QUERY_KEYS.planDayExercises(target), data);
       exerciseSetOps.markSaved();
     },
-    onError: (_err, _variables, context) => {
-      const prev = (context as { prev?: PlanDayExerciseData } | undefined)?.prev;
-      if (planDayId && prev) queryClient.setQueryData(QUERY_KEYS.planDayExercises(planDayId), prev);
+    // Puts back the blocks and only the rows this save moved, so a set edit
+    // that landed meanwhile survives the rollback.
+    onError: (_err, { planDayId: target, relinks }, context) => {
+      if (!context) return;
+      queryClient.setQueryData<PlanDayExerciseQueryData>(QUERY_KEYS.planDayExercises(target), (current) => {
+        const data = normalizePlanDayExerciseData(current);
+        if (!data) return current;
+        return {
+          exerciseSets: revertSetRelinks(data.exerciseSets, relinks, context.prev.exerciseSets),
+          structureBlocks: context.prev.structureBlocks,
+        };
+      });
     },
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
     errorToast: "Couldn't save workout blocks",
   });
+
+  /**
+   * The block builder's save: the edited blocks plus the relinks for the rows
+   * on every step it renumbered, read from the cache so they include an earlier
+   * save's moves. Rejects when the save fails, so the builder shows what is
+   * stored again.
+   *
+   * A row put on a block step in the pause before this save is still queued,
+   * or was sent as the sheet closed and has not landed, and names the
+   * numbering the save renumbers. Landed first, it is one of the rows the
+   * relinks move; landed after, it sat on its old step number under the new
+   * numbering. The flush waits for both. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  const saveStructure = async (structureBlocks: StructureBlockInput[], moves: readonly StepLinkMove[]) => {
+    if (!planDayId) throw new Error("There's no planned day to save these blocks to.");
+    await flushPendingSetPatches();
+    const cached = normalizePlanDayExerciseData(
+      queryClient.getQueryData<PlanDayExerciseQueryData>(QUERY_KEYS.planDayExercises(planDayId)),
+    );
+    const relinks = relinksForSets(cached?.exerciseSets ?? [], moves);
+    return updateStructure.mutateAsync({ planDayId, structureBlocks, relinks });
+  };
 
   const exerciseSets = useMemo(() => planData?.exerciseSets ?? [], [planData]);
   const structureBlocks = useMemo(() => planData?.structureBlocks ?? [], [planData]);
@@ -352,5 +397,6 @@ export function usePlanDayExercises(planDayId: string | null) {
     retryParse,
     updatePrescription,
     updateStructure,
+    saveStructure,
   };
 }

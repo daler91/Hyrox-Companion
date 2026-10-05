@@ -1,3 +1,4 @@
+import type { StructureBlockInput } from "@shared/schema";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -8,7 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
-import { StructureBlocksEditor } from "@/components/workout-structure";
+import {
+  relinkDraftExercise,
+  type StepLinkMove,
+  StructureBlocksEditor,
+} from "@/components/workout-structure";
 
 import type { ComposerExerciseProps } from "../sharedComposerProps";
 import { StepFooter } from "../StepFooter";
@@ -104,6 +109,19 @@ export function ConfirmStep({
       reorderBlocks(nextOrder);
     },
     [cancelAutoParse, reorderBlocks],
+  );
+  // Rows link to a step by its number, so a reordered or removed step takes its
+  // rows with it. Left in place, the save copied step names from whichever rows
+  // now sat at each number and unlinked the rest. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+  const handleStructureChange = useCallback(
+    (next: StructureBlockInput[], moves: readonly StepLinkMove[]) => {
+      for (const [id, exercise] of Object.entries(exerciseData)) {
+        const relinked = relinkDraftExercise(exercise, moves);
+        if (relinked !== exercise) updateBlock(id, relinked);
+      }
+      setStructureBlocks(next);
+    },
+    [exerciseData, setStructureBlocks, updateBlock],
   );
   const handleConvertLegacyEmom = useCallback(() => {
     const firstLegacy = legacyEmomRowIds[0] ? exerciseData[legacyEmomRowIds[0]] : undefined;
@@ -245,7 +263,7 @@ export function ConfirmStep({
             structureBlocks={structureBlocks}
           />
 
-          <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
+          <StructureBlocksEditor value={structureBlocks} onChange={handleStructureChange} />
 
           {freeText.trim().length > 0 && (
             <Collapsible open={isLegacyNoteOpen} onOpenChange={handleLegacyNoteOpenChange}>

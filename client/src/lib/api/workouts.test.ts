@@ -43,6 +43,15 @@ describe('workouts API client', () => {
     expect(typedRequest).toHaveBeenCalledWith('PATCH', '/api/v1/workouts/123', data);
   });
 
+  it('update() sends a structure save\'s relinks with its blocks (CL15)', () => {
+    const data: Parameters<typeof workouts.update>[1] = {
+      structureBlocks: [],
+      relinks: [{ setId: 'set-1', fromBlockId: 'block-emom', fromStepNumber: 1, blockId: null, stepNumber: null }],
+    };
+    workouts.update('123', data);
+    expect(typedRequest).toHaveBeenCalledWith('PATCH', '/api/v1/workouts/123', data);
+  });
+
   it('delete() calls typedRequest with DELETE and correct id', () => {
     workouts.delete('123');
     expect(typedRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/123');

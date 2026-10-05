@@ -71,6 +71,11 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
     suggestedPlanDayId: true,
     suggestedWorkoutLogId: true,
     suggestedLinkConfidence: true,
+    // D12 (CODEBASE_ANALYSIS_2026-10-03): only the auto link sets this, and
+    // reopen and the parse candidates trust it to mean "holds none of the
+    // prescription". A client that cleared it would get its day replaced
+    // wholesale on reopen; one that set it would hide its own text from parsing.
+    autoLinkRecordingOnly: true,
   })
   .extend({
     date: workoutDateNotFuture,
@@ -153,6 +158,55 @@ export const insertWorkoutLogRouteSchema = insertWorkoutLogSchema.omit({
 });
 
 /**
+ * One exercise row a structure save moves along with its step. Rows link to a
+ * step by `blockId` + `stepNumber`, so when the athlete reorders or removes a
+ * step the rows linked to it have to follow, in the same transaction that
+ * saves the blocks: sent as separate set PATCHes, a partial failure left rows
+ * on the new numbering beside blocks still stored with the old one, and a
+ * sheet closed between the two dropped the blocks (CL15,
+ * CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * `fromBlockId` / `fromStepNumber` name the link the client saw. A row that no
+ * longer has it was relinked by a newer write and is left alone, so replaying
+ * a relink moves nothing twice. A null `blockId` / `stepNumber` unlinks the row
+ * (its step was removed). `cycleNumber` and `intervalMinute` are kept unless
+ * sent.
+ */
+export const structureSetRelinkSchema = z
+  .object({
+    setId: z.string().min(1).max(255),
+    fromBlockId: z.string().min(1).max(255),
+    fromStepNumber: z.number().int().min(1).max(10_000),
+    blockId: z.string().min(1).max(255).nullable(),
+    stepNumber: z.number().int().min(1).max(10_000).nullable(),
+    intervalMinute: z.number().int().min(0).max(10_000).nullable().optional(),
+    cycleNumber: z.number().int().min(1).max(10_000).nullable().optional(),
+  })
+  .strict()
+  .refine((relink) => (relink.blockId === null) === (relink.stepNumber === null), {
+    message: "blockId and stepNumber must both be set, or both be null to unlink the row.",
+    path: ["stepNumber"],
+  });
+
+// A row per set on every step one save renumbers; the 100 kb body limit caps
+// the request well before a save could carry many more.
+export const MAX_STRUCTURE_SET_RELINKS = 500;
+
+export const structureSetRelinksPayloadSchema = z
+  .array(structureSetRelinkSchema)
+  .max(MAX_STRUCTURE_SET_RELINKS)
+  .refine((relinks) => new Set(relinks.map((relink) => relink.setId)).size === relinks.length, {
+    message: "Each exercise set may be relinked once per save.",
+  })
+  .optional()
+  .openapi({
+    description:
+      "Exercise rows that follow the steps this structureBlocks save renumbers, applied in the same transaction. A row that belongs to another workout or plan day fails the save and nothing is written; a row that no longer exists is skipped; a row no longer on fromBlockId/fromStepNumber is left alone. Send only with structureBlocks.",
+  });
+
+export type StructureSetRelink = z.infer<typeof structureSetRelinkSchema>;
+
+/**
  * What a client may send when UPDATING a workout.
  *
  * Plan linkage is additionally omitted: this route scopes the row it writes by
@@ -167,12 +221,17 @@ export const insertWorkoutLogRouteSchema = insertWorkoutLogSchema.omit({
  * the route validators in `server/routes/workouts/shared.ts` and the published
  * OpenAPI contract in `shared/openapi.ts` both build on them, so the documented
  * contract cannot drift from what the server actually accepts.
+ *
+ * `relinks` rides with a `structureBlocks` save and is applied in its
+ * transaction (CL15, see structureSetRelinkSchema).
  */
-export const updateWorkoutLogRouteSchema = updateWorkoutLogSchema.omit({
-  planDayId: true,
-  planId: true,
-  ...DEVICE_PROVENANCE_FIELDS,
-});
+export const updateWorkoutLogRouteSchema = updateWorkoutLogSchema
+  .omit({
+    planDayId: true,
+    planId: true,
+    ...DEVICE_PROVENANCE_FIELDS,
+  })
+  .extend({ relinks: structureSetRelinksPayloadSchema });
 
 export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
@@ -191,6 +250,7 @@ export type WorkoutLogDeviceLinkColumns = Pick<
   | "suggestedPlanDayId"
   | "suggestedWorkoutLogId"
   | "suggestedLinkConfidence"
+  | "autoLinkRecordingOnly"
 >;
 export type WorkoutStructureBlock = typeof workoutStructureBlocks.$inferSelect;
 export type ExerciseLoadTag = typeof exerciseLoadTags.$inferSelect;
