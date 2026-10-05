@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
-import { isRecoverableEntry, MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
+import {
+  isRecoverableEntry,
+  MissedRecoveryPrompt,
+  type RecoverEntryHandler,
+} from "@/components/timeline/missed-recovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -278,7 +282,8 @@ function getTimelineCardCombineState({
 function getMissedDetail(entry: TimelineWorkoutEntry): MissedDetail {
   return {
     recovery: entry.recovery,
-    restDay: entry.type === "planned" && isRestLikePlanDay(entry.focus ?? "", entry.mainWorkout ?? ""),
+    restDay:
+      entry.type === "planned" && isRestLikePlanDay(entry.focus ?? "", entry.mainWorkout ?? ""),
     open: isRecoverableEntry(entry),
   };
 }
@@ -514,7 +519,11 @@ function TimelineCardLeadingAction({
         aria-label={`${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}`}
         data-testid={`button-bulk-select-${entry.id}`}
       >
-        {isBulkSelected ? <CheckCircle2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+        {isBulkSelected ? (
+          <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+        ) : (
+          <Square className="h-5 w-5" aria-hidden="true" />
+        )}
       </button>
     );
   }
@@ -532,7 +541,7 @@ function TimelineCardLeadingAction({
               data-testid={`button-complete-${entry.id}`}
               aria-label={`Mark ${entry.focus} as complete`}
             >
-              <Circle className="h-5 w-5" />
+              <Circle className="h-5 w-5" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

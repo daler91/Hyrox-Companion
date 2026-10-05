@@ -31,8 +31,10 @@ type MovementPatternCoverage = TrainingOverview["movementPatternCoverage"][numbe
 
 function getFreshnessColor(daysSince: number | null): string {
   if (daysSince === null) return "bg-muted/40 text-muted-foreground";
-  if (daysSince <= 7) return "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30";
-  if (daysSince <= 14) return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
+  if (daysSince <= 7)
+    return "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30";
+  if (daysSince <= 14)
+    return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
   return "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30";
 }
 
@@ -40,7 +42,13 @@ interface CategoryBreakdownTabProps {
   readonly dateParams: string;
 }
 
-function CategoryTooltip({ active, payload }: Readonly<{ active?: boolean; payload?: Array<{ name: string; value: number; payload?: { fill: string } }> }>) {
+function CategoryTooltip({
+  active,
+  payload,
+}: Readonly<{
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; payload?: { fill: string } }>;
+}>) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
@@ -89,7 +97,8 @@ function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage
       leastLoaded = item;
       continue;
     }
-    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
+    const cmp =
+      item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
     if (cmp < 0) {
       leastLoaded = item;
     }
@@ -113,7 +122,9 @@ function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage
     {
       label: "Gap",
       value: priorityGap?.item.label ?? "No stale gaps",
-      detail: priorityGap?.reason ?? "Every trained movement pattern is inside the 14-day freshness window.",
+      detail:
+        priorityGap?.reason ??
+        "Every trained movement pattern is inside the 14-day freshness window.",
       tone: priorityGap ? "gap" : "good",
     },
   ];
@@ -151,8 +162,12 @@ function MovementPatternCoverageCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2" className="text-base">Movement Pattern Coverage</CardTitle>
-        <CardDescription>Session coverage, set volume, and recency by strength movement pattern</CardDescription>
+        <CardTitle as="h2" className="text-base">
+          Movement Pattern Coverage
+        </CardTitle>
+        <CardDescription>
+          Session coverage, set volume, and recency by strength movement pattern
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <CoverageAnalysisPanel
@@ -166,21 +181,28 @@ function MovementPatternCoverageCard({
           totalSets={analysis.totalSets}
           unitLabel={{ singular: "pattern assignment", plural: "pattern assignments" }}
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3" data-testid="movement-pattern-coverage-grid">
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3"
+          data-testid="movement-pattern-coverage-grid"
+        >
           {patterns.map((pattern) => {
-            const barWidth = pattern.sessionCount > 0
-              ? Math.max(8, Math.round((pattern.sessionCount / maxSessionCount) * 100))
-              : 0;
+            const barWidth =
+              pattern.sessionCount > 0
+                ? Math.max(8, Math.round((pattern.sessionCount / maxSessionCount) * 100))
+                : 0;
             return (
               <div key={pattern.pattern} className="rounded-lg border bg-card p-3 text-sm">
                 <div className="flex min-h-10 items-start justify-between gap-2">
                   <p className="font-semibold leading-tight">{pattern.label}</p>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] leading-5 ${getFreshnessColor(pattern.daysSince)}`}>
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] leading-5 ${getFreshnessColor(pattern.daysSince)}`}
+                  >
                     {getFreshnessLabel(pattern.daysSince)}
                   </span>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  {formatCount(pattern.sessionCount, "session", "sessions")} - {formatCount(pattern.totalSets, "set", "sets")}
+                  {formatCount(pattern.sessionCount, "session", "sessions")} -{" "}
+                  {formatCount(pattern.totalSets, "set", "sets")}
                 </p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
                   <div
@@ -246,20 +268,14 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     );
   }
 
-  if (
-    !overview ||
-    (
-      pieData.length === 0 &&
-      !hasMovementPatternData &&
-      !hasMuscleHeatMapData
-    )
-  ) {
+  if (!overview || (pieData.length === 0 && !hasMovementPatternData && !hasMuscleHeatMapData)) {
     return (
       <div className="flex items-center justify-center py-12 text-center bg-muted/20 rounded-lg border border-dashed">
         <div className="space-y-3">
-          <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40" />
+          <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
-            Your training mix and coverage insights appear here once you&apos;ve logged a handful of workouts across different categories.
+            Your training mix and coverage insights appear here once you&apos;ve logged a handful of
+            workouts across different categories.
           </p>
           <Button variant="outline" asChild>
             <Link href="/log" data-testid="button-log-workout-from-breakdown">
@@ -280,7 +296,9 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
       {pieData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle as="h2" className="text-base">Training Distribution</CardTitle>
+            <CardTitle as="h2" className="text-base">
+              Training Distribution
+            </CardTitle>
             <CardDescription>Workout sessions by exercise category</CardDescription>
           </CardHeader>
           <CardContent>
