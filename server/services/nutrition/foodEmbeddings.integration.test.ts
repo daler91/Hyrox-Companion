@@ -1,6 +1,6 @@
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The provider is the boundary under test: record what would be sent to it and
 // return empty vectors, so nothing is written to food_embeddings.
@@ -8,6 +8,7 @@ vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbe
 
 import { db } from "../../db";
 import { generateEmbeddings } from "../../gemini/client";
+import { ensureVectorSchema } from "../../maintenance";
 import {
   resetIntegrationDb,
   seedCustomFood,
@@ -24,6 +25,12 @@ import { embedMissingFoods } from "./foodEmbeddings";
 describe("embedMissingFoods candidate scan (real Postgres)", () => {
   const CONSENTING = "embed-consenting";
   const DECLINING = "embed-declining";
+
+  // food_embeddings lives in the vector schema, which the server creates at
+  // boot rather than drizzle-kit push, so a freshly pushed CI database lacks it.
+  beforeAll(async () => {
+    await ensureVectorSchema();
+  });
 
   beforeEach(async () => {
     await resetIntegrationDb();

@@ -47,6 +47,17 @@ function needsStatusReset(day: PlanDay, dateStr: string, today: string): boolean
   return dateChanged && (day.status === "missed" || day.status === "skipped") && dateStr >= today;
 }
 
+// The plan's lowest week number (a missing week counts as week 1). A single
+// linear scan: no intermediate array, and no Math.min spread that can exceed
+// the call-stack limit on a very long plan.
+function lowestWeekNumber(days: readonly PlanDay[]): number {
+  let minWeek = Infinity;
+  for (const day of days) {
+    minWeek = Math.min(minWeek, day.weekNumber || 1);
+  }
+  return minWeek;
+}
+
 /** The state a recovery was planned against, re-checked under the row lock. */
 export interface PlanDayRecoveryGuard {
   readonly statuses: readonly string[];
@@ -649,15 +660,7 @@ export class PlanStorage {
 
     if (plan.days.length === 0) return "scheduled";
 
-    // ⚡ Perf: Replaced mapped array and Math.min spread with a single O(N) linear scan
-    // to avoid intermediate array allocation and prevent "Maximum call stack size exceeded" errors.
-    let minWeek = Infinity;
-    for (const day of plan.days) {
-      const week = day.weekNumber || 1;
-      if (week < minWeek) {
-        minWeek = week;
-      }
-    }
+    const minWeek = lowestWeekNumber(plan.days);
 
     // Whether a rescheduled day lands in the future is judged on the athlete's
     // calendar, like every other "today" in this class.

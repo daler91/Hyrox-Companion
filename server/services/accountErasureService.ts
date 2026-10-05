@@ -65,6 +65,32 @@ function clerkDeclined(status: number | undefined): boolean {
 }
 
 /**
+ * Step 2 of eraseAccount: delete the Clerk identity. If this fails the DB row
+ * must stay intact — otherwise ensureUserExists re-creates it on the next
+ * authenticated request, silently "undeleting" the account. A 404 from Clerk
+ * means the identity was already removed (e.g. a previous attempt succeeded
+ * here and failed later), so treat it as success: that is exactly the case
+ * the sweep retries.
+ */
+async function deleteClerkIdentity(userId: string, stampedAt: Date | null, log: Logger): Promise<void> {
+  if (!env.CLERK_SECRET_KEY) return;
+  try {
+    await clerkClient.users.deleteUser(userId);
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status;
+    if (status !== 404) {
+      // Clerk declining leaves the identity, so this run stopped short of
+      // its point of no return; any other failure may not have (P17).
+      if (clerkDeclined(status)) await withdrawErasureStamp(userId, stampedAt, log);
+      throw err;
+    }
+    // userId is the app-wide correlation id logged throughout this erasure.
+    // bearer:disable javascript_lang_logger_leak
+    log.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
+  }
+}
+
+/**
  * Run the full erasure for one user. Returns `deleted: false` only when there
  * was no such user row to delete (a 404 for the route; already-done for the
  * sweep). Throws if any fail-loud step fails. A failure past the Clerk step
@@ -133,28 +159,8 @@ export async function eraseAccount(
     throw err;
   }
 
-  // Step 2: delete the Clerk identity. If this fails the DB row must stay
-  // intact — otherwise ensureUserExists re-creates it on the next
-  // authenticated request, silently "undeleting" the account. A 404 from
-  // Clerk means the identity was already removed (e.g. a previous attempt
-  // succeeded here and failed later), so treat it as success: that is exactly
-  // the case the sweep retries.
-  if (env.CLERK_SECRET_KEY) {
-    try {
-      await clerkClient.users.deleteUser(userId);
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status !== 404) {
-        // Clerk declining leaves the identity, so this run stopped short of
-        // its point of no return; any other failure may not have (P17).
-        if (clerkDeclined(status)) await withdrawErasureStamp(userId, stampedAt, log);
-        throw err;
-      }
-      // userId is the app-wide correlation id logged throughout this erasure.
-      // bearer:disable javascript_lang_logger_leak
-      log.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
-    }
-  }
+  // Step 2: delete the Clerk identity (see deleteClerkIdentity).
+  await deleteClerkIdentity(userId, stampedAt, log);
 
   // Step 2b: from here on any session for this id is stale, but Clerk verifies
   // its JWT locally until it expires. Once step 5 deletes the row,
