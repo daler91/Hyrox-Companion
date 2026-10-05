@@ -1,7 +1,9 @@
 import { UtensilsCrossed } from "lucide-react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { queryLoadState } from "@/lib/queryLoadState";
 
 import { FuellingCorrelationCard } from "./FuellingCorrelationCard";
 import { IntakeVsTrainingChart } from "./IntakeVsTrainingChart";
@@ -30,10 +32,23 @@ function EmptyState() {
  */
 export function FuellingTab({ dateParams }: { readonly dateParams: string }) {
   const { query } = useFuellingAnalytics(dateParams);
-  const { data, isLoading, isError } = query;
+  const { data, refetch } = query;
+  // A first fetch paused offline is still loading, and a failed fetch is not
+  // "No nutrition logged in this range". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const { loading, failed, retrying } = queryLoadState(query);
 
-  if (isLoading && !data) return <LoadingSpinner />;
-  if (isError || !data) return <EmptyState />;
+  if (loading) return <LoadingSpinner />;
+  if (failed) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your fuelling data"
+        onRetry={() => refetch()}
+        isRetrying={retrying}
+        testId="fuelling-tab-error"
+      />
+    );
+  }
+  if (!data) return <EmptyState />;
 
   const hasAnyIntake = data.points.some((p) => p.calories > 0);
   if (!hasAnyIntake) return <EmptyState />;

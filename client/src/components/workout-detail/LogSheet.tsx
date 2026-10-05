@@ -1,11 +1,15 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { Check, Dumbbell, Gauge, Loader2, MessageSquare, SkipForward } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { type RefObject, useMemo, useRef, useState } from "react";
 
 import { MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { StructureBlocksEditor } from "@/components/workout-structure";
+import {
+  EDIT_SAVE_DEBOUNCE_MS,
+  StructureBlocksEditor,
+  type StructureBlocksEditorHandle,
+} from "@/components/workout-structure";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { featureFlags } from "@/lib/featureFlags";
@@ -127,7 +131,9 @@ function LogSheetTitle({ entry, mode, onRenameTitle, isRenamingTitle }: LogSheet
 
 interface PlannedPrescriptionProps {
   readonly entry: TimelineEntry;
+  readonly planDayId: string;
   readonly planSets: PlanDayExerciseState;
+  readonly structureEditorRef: RefObject<StructureBlocksEditorHandle | null>;
   readonly weightUnit: WorkoutWeightUnit;
   readonly distanceUnit: WorkoutDistanceUnit;
   readonly parseHelperVisible: boolean;
@@ -142,7 +148,9 @@ interface PlannedPrescriptionProps {
 
 function PlannedPrescription({
   entry,
+  planDayId,
   planSets,
+  structureEditorRef,
   weightUnit,
   distanceUnit,
   parseHelperVisible,
@@ -184,7 +192,7 @@ function PlannedPrescription({
         }
         table={
           <ExerciseTable
-            workoutId={entry.planDayId!}
+            workoutId={planDayId}
             exerciseSets={planSets.exerciseSets}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
@@ -211,16 +219,27 @@ function PlannedPrescription({
           />
         }
         structure={
-          <StructureBlocksEditor
-            value={planSets.structureBlocks}
-            onChange={(next) => planSets.updateStructure.mutate(next)}
-            exerciseSets={planSets.exerciseSets}
-            onUpdateSet={planSets.patchSetDebounced}
-            onAddSet={planSets.addSet.mutate}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            headerless
-          />
+          // Planned days only take blocks while the builder is enabled: the
+          // server answers 403 EMOM_BUILDER_DISABLED otherwise, and every edit
+          // offered here rolled back. CL13 (CODEBASE_ANALYSIS_2026-10-03)
+          // Saves after a pause; keyed by day so a waiting save reaches the
+          // day it was made on (U3). One request carries the blocks and the
+          // rows that follow a renumbered step (CL15).
+          featureFlags.emomBuilderEnabled ? (
+            <StructureBlocksEditor
+              key={planDayId}
+              ref={structureEditorRef}
+              value={planSets.structureBlocks}
+              onChange={(next, moves) => planSets.saveStructure(next, moves)}
+              saveDebounceMs={EDIT_SAVE_DEBOUNCE_MS}
+              exerciseSets={planSets.exerciseSets}
+              onUpdateSet={planSets.patchSetDebounced}
+              onAddSet={planSets.addSet.mutate}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              headerless
+            />
+          ) : undefined
         }
       />
     </DetailSection>
@@ -357,6 +376,7 @@ function LogCompletionControls({
 interface LogSheetPrescriptionContentProps {
   readonly entry: TimelineEntry;
   readonly planSets: PlanDayExerciseState;
+  readonly structureEditorRef: RefObject<StructureBlocksEditorHandle | null>;
   readonly weightUnit: WorkoutWeightUnit;
   readonly distanceUnit: WorkoutDistanceUnit;
   readonly isEditMode: boolean;
@@ -365,6 +385,7 @@ interface LogSheetPrescriptionContentProps {
 function LogSheetPrescriptionContent({
   entry,
   planSets,
+  structureEditorRef,
   weightUnit,
   distanceUnit,
   isEditMode,
@@ -380,7 +401,9 @@ function LogSheetPrescriptionContent({
   return (
     <PlannedPrescription
       entry={entry}
+      planDayId={entry.planDayId}
       planSets={planSets}
+      structureEditorRef={structureEditorRef}
       weightUnit={weightUnit}
       distanceUnit={distanceUnit}
       parseHelperVisible={isParseHelperVisible(entry, planSets)}
@@ -537,6 +560,7 @@ export function LogSheet({
   const completionEntryIdRef = useRef<string | null>(null);
 
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+  const structureEditorRef = useRef<StructureBlocksEditorHandle>(null);
 
   // ⚡ Bolt Performance Optimization: buildWorkoutCoachSeedMessage() copies,
   // sorts, and groups exerciseSets — the same grouping ExerciseTable already
@@ -576,9 +600,20 @@ export function LogSheet({
     // Flush any debounced cell edits before the log mutation runs — the
     // server's createWorkoutInTx copies persisted plan-day rows into
     // the new workoutLog, so a row edit still queued in the debounce
-    // coordinator would be missing from the snapshot.
+    // coordinator would be missing from the snapshot. A block edit still
+    // waiting out its pause was left out of the copy, or saved after it, so
+    // it is sent and landed too. Rows first: a queued row link names the
+    // numbering that block save is measured from, so the save then moves it
+    // with its step. A block save that failed has said so and put the stored
+    // blocks back; the log would copy those, so the athlete stays to retry.
+    // CL15 (CODEBASE_ANALYSIS_2026-10-03)
     try {
       await planSets.flushPendingSetPatches();
+      const blocksSaved = (await structureEditorRef.current?.flush()) ?? true;
+      if (!blocksSaved) {
+        finishCompletion(submittedEntryId);
+        return;
+      }
       await onLogAsPlanned(entry, rpe, note.trim().length > 0 ? note : null);
     } catch {
       finishCompletion(submittedEntryId);
@@ -646,6 +681,7 @@ export function LogSheet({
       <LogSheetPrescriptionContent
         entry={entry}
         planSets={planSets}
+        structureEditorRef={structureEditorRef}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
         isEditMode={isEditMode}

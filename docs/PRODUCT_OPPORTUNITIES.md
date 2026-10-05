@@ -91,8 +91,9 @@ rest defaults must come from `workout_structure_blocks.restSeconds`/`restInterva
 `workSeconds` (`tables.ts:568-575`) or a per-category constant table. And this does **not**
 need `VITE_EMOM_BUILDER_ENABLED` flipped: `STRUCTURED_BLOCKS_ENABLED` already defaults
 `"true"` (`server/env.ts:104`) and `StructureBlocksEditor` already renders unconditionally in
-`LogSheet.tsx:223` and `ReviewSurface.tsx:639`. That flag gates exactly one thing — writing
-structure onto _plan days_ (`server/routes/plans.ts:325` returns 403).
+`ReviewSurface.tsx` and the /log `ConfirmStep.tsx`. That flag gates exactly one thing — writing
+structure onto _plan days_ (`server/routes/plans.ts:325` returns 403), so `LogSheet.tsx` offers
+the builder on a planned day only while `VITE_EMOM_BUILDER_ENABLED` is on (CL13).
 
 **Success signal.** Sessions started in runner mode as a % of completed workouts; median
 app-foreground minutes per training day; completion rate of started sessions; drop in
@@ -510,10 +511,11 @@ differently, so the card will say 24 days while the coach says 6.
 
 **4. "Turn on the EMOM / structured-block builder" as a headline feature.** Mostly already
 exists. `STRUCTURED_BLOCKS_ENABLED` defaults `"true"` (`server/env.ts:104`) and
-`StructureBlocksEditor` already renders unconditionally in `LogSheet.tsx:223`,
-`ReviewSurface.tsx:639` and `ConfirmStep.tsx:229`. The flag gates exactly one thing: writing
-structure onto _plan days_ (`server/routes/plans.ts:325` returns 403). That is a 403 to
-remove, and it should ride along with Session Mode.
+`StructureBlocksEditor` already renders unconditionally in `ReviewSurface.tsx` and
+`ConfirmStep.tsx`. The flag gates exactly one thing: writing structure onto _plan days_
+(`server/routes/plans.ts:325` returns 403), and `LogSheet.tsx` hides the builder on planned
+days while it is off rather than offer edits that roll back (CL13). That is a 403 to remove,
+together with the `LogSheet` gate, and it should ride along with Session Mode.
 
 **5. Shipping the cohort ranking tables to the client to draw a finish-time CDF.**
 `raceRankingData.generated.ts` is 3,549 lines and server-only by explicit design. If we want

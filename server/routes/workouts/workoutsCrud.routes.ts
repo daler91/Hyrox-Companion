@@ -12,6 +12,7 @@ import { z } from "zod";
 import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
+import { invalidateAnalyticsCachesForUser } from "../../services/analyticsRouteCache";
 import {
   BULK_DELETE_WORKOUTS_NOT_FOUND,
   bulkDeleteWorkouts,
@@ -160,7 +161,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   }));
 
   protectedPost(router, "/api/v1/workouts/:id/seed-from-plan", { limiter: rateLimiter("workoutSet", 20) }, async (req: Request<{ id: string }>, res: Response) => {
-    const seeded = await storage.workouts.seedExerciseSetsFromPlanDay(req.params.id, getUserId(req));
+    const userId = getUserId(req);
+    const seeded = await storage.workouts.seedExerciseSetsFromPlanDay(req.params.id, userId);
+    // D10 (CODEBASE_ANALYSIS_2026-10-03): every workout write drops the
+    // athlete's cached analytics slices before answering, so the client's
+    // refetch reads the write instead of the pre-write cache.
+    if (seeded > 0) invalidateAnalyticsCachesForUser(userId);
     res.json({ seededCount: seeded });
   });
 
@@ -199,15 +205,17 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     res.json({ ...log, exerciseSets, structureBlocks, suggestedRpe });
   }));
 
-  protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request, res: Response) => {
+  protectedPost(router, "/api/v1/workouts", { limiter: rateLimiter("workout", 40), middleware: [validateBody(createWorkoutRouteSchema)] }, async (req: Request<Record<string, never>, unknown, z.infer<typeof createWorkoutRouteSchema>>, res: Response) => {
     if (rejectTextOnlyWriteIfNeeded(req, res, "workout_log")) return;
-    const result = await createWorkout({ userId: getUserId(req), payload: req.body as never });
+    // Typed by its validator, not cast, so tsc checks the body against createWorkout's payload. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+    const result = await createWorkout({ userId: getUserId(req), payload: req.body });
     res.json(result);
   });
 
-  protectedPatch(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40), middleware: [validateBody(updateWorkoutRouteSchema)] }, async (req: Request<{ id: string }>, res: Response) => {
+  protectedPatch(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40), middleware: [validateBody(updateWorkoutRouteSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof updateWorkoutRouteSchema>>, res: Response) => {
     if (rejectTextOnlyWriteIfNeeded(req, res, "workout_log")) return;
-    const result = await updateWorkoutUseCase({ userId: getUserId(req), workoutId: req.params.id, payload: req.body as never });
+    // Typed by its validator, not cast, so tsc checks the body against the use case payload. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+    const result = await updateWorkoutUseCase({ userId: getUserId(req), workoutId: req.params.id, payload: req.body });
     if (!result) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
@@ -226,10 +234,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   protectedDelete(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40) }, async (req: Request<{ id: string }>, res: Response) => {
-    const deleted = await storage.workouts.deleteWorkoutLog(req.params.id, getUserId(req));
+    const userId = getUserId(req);
+    const deleted = await storage.workouts.deleteWorkoutLog(req.params.id, userId);
     if (!deleted) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
+    invalidateAnalyticsCachesForUser(userId); // D10
     res.json({ success: true, recycleBinItemId: deleted.recycleBinItemId });
   });
 
@@ -241,6 +251,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
 
     try {
       const result = await bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds });
+      invalidateAnalyticsCachesForUser(userId); // D10
       res.json(result);
     } catch (error) {
       if (isBulkDeleteWorkoutsNotFoundError(error)) {
@@ -254,6 +265,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     const userId = getUserId(req);
     const { newWorkout, deleteWorkoutIds, skipPlanDayIds } = req.body as z.infer<typeof combineWorkoutsSchema>;
     const result = await combineWorkouts({ userId, newWorkout, deleteWorkoutIds, skipPlanDayIds });
+    invalidateAnalyticsCachesForUser(userId); // D10
     res.status(201).json(result);
   });
 

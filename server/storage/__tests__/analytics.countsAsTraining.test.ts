@@ -76,6 +76,15 @@ describe("counts_as_training", () => {
     expect(weeklyStats).toContain("eq(workoutLogs.countsAsTraining, true)");
   });
 
+  it("filters the streak's completed dates unconditionally", () => {
+    // The home card and the weekly email read their streak from here, so a
+    // synced walk kept it alive while the Analytics streak (training-only logs)
+    // read 0 (C18, CODEBASE_ANALYSIS_2026-10-03).
+    const source = readFileSync("server/storage/timeline.ts", "utf8");
+    const completedDates = source.slice(source.indexOf("async getCompletedWorkoutDates"));
+    expect(completedDates.slice(0, 1200)).toContain("eq(workoutLogs.countsAsTraining, true)");
+  });
+
   it("splits the AI context in memory rather than paying for a second query", () => {
     // The coach's load governor is built from every session (a walk is small
     // but real load, and under-counting softens a safety signal) while its

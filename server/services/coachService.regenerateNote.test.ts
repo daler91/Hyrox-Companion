@@ -2,13 +2,16 @@ import "./coachService.testSetup";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { AiConfigurationError } from "../ai/errors";
+import { ErrorCode } from "../errors";
 import { generateReviewNotes } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import { regenerateCoachNoteForPlanDay } from "./coachService";
 
 describe("coachService regenerateCoachNoteForPlanDay", () => {
-  it("passes plan-day exercise rows to Coach's Take and suppresses accessory/notes fallback", async () => {
+  /** A planned strength day with one prescribed set, and an athlete with no coaching materials. */
+  function arrangePlannedDay() {
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
       id: "day-1",
       planId: "plan-1",
@@ -55,6 +58,10 @@ describe("coachService regenerateCoachNoteForPlanDay", () => {
     });
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
+  }
+
+  it("passes plan-day exercise rows to Coach's Take and suppresses accessory/notes fallback", async () => {
+    arrangePlannedDay();
     vi.mocked(generateReviewNotes).mockResolvedValue([
       { workoutId: "day-1", note: "Looks right for the current phase." },
     ]);
@@ -92,5 +99,20 @@ describe("coachService regenerateCoachNoteForPlanDay", () => {
         promptSuffix: expect.stringContaining("Training style:"),
       }),
     );
+  });
+
+  it("reports a provider this deployment has not configured as the AI kill switch's 503, writing nothing", async () => {
+    // AI8 (CODEBASE_ANALYSIS_2026-10-03): the suggestion service passes the
+    // configuration error through unclassified, which alone would be a 500.
+    arrangePlannedDay();
+    vi.mocked(generateReviewNotes).mockRejectedValue(
+      new AiConfigurationError('AI text model is not configured for provider "anthropic".'),
+    );
+
+    await expect(regenerateCoachNoteForPlanDay("day-1", "user-1")).rejects.toMatchObject({
+      code: ErrorCode.AI_FEATURES_DISABLED,
+      status: 503,
+    });
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
   });
 });

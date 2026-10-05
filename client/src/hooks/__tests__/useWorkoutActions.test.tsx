@@ -327,22 +327,29 @@ describe('useWorkoutActions', () => {
         });
       });
 
-      it('deletes plan day if both workoutLogId and planDayId are present', async () => {
+      // A completed planned session carries both ids. ReviewSurface's
+      // "Delete workout?" promises the workout's data goes, so the log is
+      // deleted; deleting the plan day instead left the log behind as an
+      // unplanned workout (CL23, CODEBASE_ANALYSIS_2026-10-03).
+      it('deletes the workout log, not the plan day, when both ids are present', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
-        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', workoutLogId: 'w-1', date: '2024-01-01', focus: 'strength' });
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', workoutLogId: 'w-1', status: 'completed', date: '2024-01-01', focus: 'strength' });
 
         act(() => {
           result.current.handleDelete(mockEntry);
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1', undefined, expect.any(AbortSignal));
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('DELETE', '/api/v1/workouts/w-1', undefined, expect.any(AbortSignal));
         });
+        expect(queryClientLib.apiRequest).not.toHaveBeenCalledWith('DELETE', '/api/v1/plans/days/pd-1', undefined, expect.any(AbortSignal));
       });
     });
 
     describe('handleBulkDelete', () => {
-      it('sends standalone workout ids and plan-day ids in one request', async () => {
+      // linkedEntry is a completed planned session: its log goes, as with the
+      // single delete, not its plan day (CL23, CODEBASE_ANALYSIS_2026-10-03).
+      it('sends workout ids and plan-day ids in one request', async () => {
         const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
         const standalone = createMockTimelineEntry({ id: 'log-w-1', workoutLogId: 'w-1', planDayId: null, date: '2024-01-01', focus: 'strength' });
         const planEntry = createMockTimelineEntry({ id: 'plan-pd-1', planDayId: 'pd-1', workoutLogId: null, date: '2024-01-02', focus: 'conditioning' });
@@ -354,8 +361,8 @@ describe('useWorkoutActions', () => {
 
         await waitFor(() => {
           expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts/bulk-delete', {
-            workoutLogIds: ['w-1'],
-            planDayIds: ['pd-1', 'pd-2'],
+            workoutLogIds: ['w-1', 'w-2'],
+            planDayIds: ['pd-1'],
           }, expect.any(AbortSignal));
         });
       });

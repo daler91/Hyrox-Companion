@@ -1,5 +1,5 @@
 import type { FoodServing } from "@shared/schema";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../storage", () => ({
   storage: {
@@ -20,6 +20,7 @@ import { storage } from "../../storage";
 import { getFoodWithServings } from "./foodDetail";
 import { makeFood as food } from "./foodTestFixture";
 import { fetchUsdaFoodById, fetchUsdaFoodPortions } from "./usdaClient";
+import { PROVIDER_DEADLINE_MS } from "./utils";
 
 function serving(over: Partial<FoodServing> = {}): FoodServing {
   return {
@@ -69,7 +70,9 @@ describe("getFoodWithServings", () => {
 
     const result = await getFoodWithServings("user-1", "id1");
 
-    expect(fetchUsdaFoodPortions).toHaveBeenCalledWith("fdc-1");
+    const call = vi.mocked(fetchUsdaFoodPortions).mock.calls.at(0);
+    expect(call?.[0]).toBe("fdc-1");
+    expect(call?.[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(storage.nutrition.cacheServings).toHaveBeenCalledWith("id1", [{ label: "1 slice", grams: 30 }]);
     expect(result?.servings).toBe(cached);
   });
@@ -134,5 +137,59 @@ describe("getFoodWithServings", () => {
 
     expect(fetchUsdaFoodById).not.toHaveBeenCalled();
     expect(result?.food).toBe(f);
+  });
+});
+
+// D13 (CODEBASE_ANALYSIS_2026-10-03): the two USDA lookups ran back to back with
+// only their per-attempt timeouts, so a hanging USDA kept an un-enriched food
+// from opening at all.
+describe("getFoodWithServings provider deadline", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("opens the food with what is cached once USDA hangs past the deadline", async () => {
+    const cachedFood = food({ source: "usda", sourceId: "fdc-1", micros: null });
+    vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(cachedFood);
+    vi.mocked(storage.nutrition.getServings).mockResolvedValue([]);
+    vi.mocked(fetchUsdaFoodPortions).mockReturnValue(new Promise(() => { /* never settles */ }));
+    vi.mocked(fetchUsdaFoodById).mockReturnValue(new Promise(() => { /* never settles */ }));
+
+    const pending = getFoodWithServings("user-1", "id1");
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+    const result = await pending;
+
+    expect(result).toEqual({ food: cachedFood, servings: [] });
+    expect(storage.nutrition.cacheServings).not.toHaveBeenCalled();
+    expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
+  });
+
+  it("shares one deadline across both lookups rather than one each", async () => {
+    const cachedFood = food({ source: "usda", sourceId: "fdc-1", micros: null });
+    vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(cachedFood);
+    vi.mocked(storage.nutrition.getServings).mockResolvedValue([]);
+    // Portions answer after 8 s, inside the 9 s deadline; the micro lookup then hangs.
+    vi.mocked(fetchUsdaFoodPortions).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve([]);
+          }, 8_000);
+        }),
+    );
+    vi.mocked(fetchUsdaFoodById).mockReturnValue(new Promise(() => { /* never settles */ }));
+
+    const pending = getFoodWithServings("user-1", "id1");
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+    const result = await pending;
+
+    expect(result?.food).toBe(cachedFood);
+    const [, opts] = vi.mocked(fetchUsdaFoodById).mock.calls[0] ?? [];
+    expect(opts?.signal?.aborted).toBe(true);
   });
 });

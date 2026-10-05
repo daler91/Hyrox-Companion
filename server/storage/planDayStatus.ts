@@ -3,6 +3,27 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 
+type DerivedPlanDayStatus = "planned" | "completed";
+
+/**
+ * The status a plan day's linked-log count calls for, or null when the stored
+ * status stands. D19 (CODEBASE_ANALYSIS_2026-10-03): a "missed" day used to be
+ * skipped outright, so restoring its log from the recycle bin or linking a
+ * late log left it missed — done on the timeline, missed in weekly stats, the
+ * weekly review and the email. missed → completed is the "user back-fills a
+ * late log" arrow in shared/schema/enums.ts; a let-go on the day goes moot
+ * (the guards read it only while the day is still missed). Zero logs never
+ * moves a missed day: missed → planned belongs to a reschedule, not a delete.
+ */
+export function derivedPlanDayStatus(
+  status: string | null,
+  logCount: number,
+): DerivedPlanDayStatus | null {
+  if (status === "skipped") return null;
+  if (logCount > 0) return "completed";
+  return status === "missed" ? null : "planned";
+}
+
 /**
  * Re-derive plan_day.status from the current workout_logs count (S6).
  *
@@ -11,8 +32,11 @@ import { db, type DbExecutor } from "../db";
  * clerkAuth.ts → storage/index.ts, which breaks when workouts.ts (one of
  * storage/index.ts's dependencies) tries to call the helper during load.
  *
- * Semantics:
- *   - "skipped" and "missed" are explicit user/cron intent — never override.
+ * Semantics (see {@link derivedPlanDayStatus}):
+ *   - "skipped" is explicit user intent — never override.
+ *   - "missed" becomes "completed" once a log is linked (a late link, a
+ *     recycle-bin restore) — "log late = completed" — and otherwise stays
+ *     missed: the cron's verdict stands until the athlete trains.
  *   - Otherwise: "completed" iff any workout_log references this plan_day,
  *     "planned" when zero. (The missed-day cron will re-mark past-dated
  *     "planned" days on its next run, so ping-ponging is not a concern.)
@@ -52,15 +76,16 @@ async function syncInTransaction(planDayId: string, userId: string, tx: DbExecut
     .for("update", { of: planDays });
 
   if (row?.ownerId !== userId) return;
-  if (row.status === "skipped" || row.status === "missed") return;
+  if (row.status === "skipped") return;
 
   const [counted] = await tx
     .select({ count: sql<number>`cast(count(*) as int)` })
     .from(workoutLogs)
     .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
 
-  const nextStatus: "planned" | "completed" = (counted?.count ?? 0) > 0 ? "completed" : "planned";
-  if (row.status === nextStatus) return;
+  // COUNT(*) without GROUP BY always answers exactly one row.
+  const nextStatus = derivedPlanDayStatus(row.status, counted.count);
+  if (nextStatus === null || row.status === nextStatus) return;
 
   await tx.update(planDays).set({ status: nextStatus }).where(eq(planDays.id, planDayId));
 }
@@ -78,8 +103,9 @@ async function syncInTransaction(planDayId: string, userId: string, tx: DbExecut
  *      actually needs to change.
  *
  * Semantics are identical to the single-id version, applied per row:
- * "skipped"/"missed" are never overridden, ownership is enforced per row,
- * and a row already at its derived status is left untouched.
+ * "skipped" is never overridden, "missed" only moves to "completed",
+ * ownership is enforced per row, and a row already at its derived status is
+ * left untouched.
  */
 export function syncPlanDayStatusesFromWorkouts(
   planDayIds: readonly string[],
@@ -107,9 +133,7 @@ async function syncManyInTransaction(
     .where(inArray(planDays.id, planDayIds))
     .for("update", { of: planDays });
 
-  const eligible = rows.filter(
-    (row) => row.ownerId === userId && row.status !== "skipped" && row.status !== "missed",
-  );
+  const eligible = rows.filter((row) => row.ownerId === userId && row.status !== "skipped");
   if (eligible.length === 0) return;
 
   const counts = await tx
@@ -133,9 +157,8 @@ async function syncManyInTransaction(
   const toComplete: string[] = [];
   const toPlan: string[] = [];
   for (const row of eligible) {
-    const nextStatus: "planned" | "completed" =
-      (countByPlanDayId.get(row.id) ?? 0) > 0 ? "completed" : "planned";
-    if (row.status === nextStatus) continue;
+    const nextStatus = derivedPlanDayStatus(row.status, countByPlanDayId.get(row.id) ?? 0);
+    if (nextStatus === null || row.status === nextStatus) continue;
     (nextStatus === "completed" ? toComplete : toPlan).push(row.id);
   }
 

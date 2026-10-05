@@ -1,3 +1,5 @@
+import { textBreakerFor } from "../circuitBreaker";
+import { AiConfigurationError } from "../errors";
 import { retryWithBackoff } from "../retry";
 import {
   combineSignals,
@@ -6,6 +8,7 @@ import {
   parseToolArguments,
   readJsonPayload,
   streamSseTextChunks,
+  throwIfStreamError,
   trimTrailingSlashes,
 } from "./http";
 import type {
@@ -34,10 +37,10 @@ interface OpenAiCompatibleUsageShape {
 
 function requireAdapterConfig(options: OpenAiCompatibleAdapterOptions): { apiKey: string; url: string } {
   if (!options.apiKey) {
-    throw new Error(`AI_TEXT_API_KEY or the ${options.profile.toUpperCase()}_API_KEY environment variable is required for openai-compatible AI text provider`);
+    throw new AiConfigurationError(`AI_TEXT_API_KEY or the ${options.profile.toUpperCase()}_API_KEY environment variable is required for openai-compatible AI text provider`);
   }
   if (!options.baseUrl) {
-    throw new Error("AI_TEXT_BASE_URL is required for custom openai-compatible AI text provider");
+    throw new AiConfigurationError("AI_TEXT_BASE_URL is required for custom openai-compatible AI text provider");
   }
   const baseUrl = trimTrailingSlashes(options.baseUrl);
   return { apiKey: options.apiKey, url: `${baseUrl}/chat/completions` };
@@ -99,11 +102,51 @@ function openAiTools(request: ResolvedTextAiRequest) {
   };
 }
 
+/**
+ * `response_format: json_object` only ever returns an object, but the
+ * suggestions, review-notes and plan-generation prompts ask for a top-level
+ * array, and their parsers read an object as nothing: plan generation failed
+ * every billed chunk with "AI response is not an array", and suggestions and
+ * review notes came back silently empty. So JSON mode tells the model to wrap
+ * an array under one fixed key, and generateText hands the array back
+ * (unwrapArrayEnvelope) — AI6 (CODEBASE_ANALYSIS_2026-10-03). Naming JSON here
+ * also meets the API's rule that a json_object request mention it.
+ */
+// `safe`: "<that array>" is a placeholder in a prompt, not HTML (Codacy's XSS
+// rule reads any "<word" in a string as markup).
+const JSON_OBJECT_INSTRUCTION =
+  /* safe */ 'Respond with a single JSON object. If the instructions ask for a top-level JSON array, return {"jsonArray": <that array>} instead.';
+
+function systemInstructionFor(request: ResolvedTextAiRequest): string | undefined {
+  if (!request.json) return request.systemInstruction;
+  return [request.systemInstruction, JSON_OBJECT_INSTRUCTION].filter(Boolean).join("\n\n");
+}
+
+/**
+ * A JSON-mode reply whose only key is the `jsonArray` envelope becomes that
+ * array; any other reply is returned untouched. Only the fixed key is unwrapped,
+ * because a legitimate object reply can hold a single array of its own (meal
+ * parsing's `{"warnings": [...]}`, exercise parsing's `{"structureBlocks": [...]}`)
+ * and must reach its parser as it came. Exported for the regression test.
+ */
+export function unwrapArrayEnvelope(text: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return text;
+  if (Object.keys(parsed).length !== 1 || !("jsonArray" in parsed)) return text;
+  const value: unknown = parsed.jsonArray;
+  return Array.isArray(value) ? JSON.stringify(value) : text;
+}
+
 function requestBody(request: ResolvedTextAiRequest, options: OpenAiCompatibleAdapterOptions, stream: boolean) {
   const reasoningEffort = request.reasoningEffort ?? "none";
   return {
     model: request.model,
-    messages: openAiMessages(request.systemInstruction, request.messages),
+    messages: openAiMessages(systemInstructionFor(request), request.messages),
     stream,
     ...(stream ? { stream_options: { include_usage: true } } : {}),
     ...(request.json ? { response_format: { type: "json_object" } } : {}),
@@ -224,15 +267,13 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
       const response = await retryWithBackoff(
         (signal) => postJson(request, options, false, signal),
         request.label,
-        undefined,
-        undefined,
-        request.timeoutMs,
-        request.timeoutMs,
-        request.signal,
+        textBreakerFor("openai-compatible"),
+        { budgetMs: request.timeoutMs, callTimeoutMs: request.timeoutMs, callerSignal: request.signal },
       );
       const payload = await readJsonPayload(response);
+      const text = parseOpenAiTextResponse(payload);
       return {
-        text: parseOpenAiTextResponse(payload),
+        text: request.json ? unwrapArrayEnvelope(text) : text,
         model: request.model,
         usage: usageFromOpenAiCompatible(payload),
       };
@@ -247,7 +288,11 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
         postJson(request, options, true),
         (event) => {
           if (event === "[DONE]") return { ...flush(), done: true };
-          return streamEventFromPayload(JSON.parse(event) as unknown, toolCalls);
+          const payload = JSON.parse(event) as unknown;
+          // A top-level `error` mid-stream is a failure, not an empty chunk —
+          // AI3 (CODEBASE_ANALYSIS_2026-10-03).
+          throwIfStreamError(`openai-compatible ${options.profile}`, payload);
+          return streamEventFromPayload(payload, toolCalls);
         },
         flush,
       );

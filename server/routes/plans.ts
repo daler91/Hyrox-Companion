@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, type CreateSamplePlanInput, createSamplePlanSchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, type CreateSamplePlanInput, createSamplePlanSchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -9,6 +9,7 @@ import { AppError, classifyAiError, ErrorCode, isLikelyAiProviderFailure } from 
 import { reqLogger } from "../logger";
 import { sendJobNoRetry } from "../queue";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
+import { invalidateAnalyticsCachesForUser } from "../services/analyticsRouteCache";
 import { moveStatementsToCard } from "../services/athleteFactsService";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { createPendingPlan } from "../services/planGenerationService";
@@ -25,8 +26,12 @@ import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/prote
 
 const router = Router();
 
+// structureBlocks stays undefined when absent (no default), so the handler can
+// tell relinks sent without blocks from a body that clears them (CL15).
 const planDayStructureBodySchema = z.object({
-  structureBlocks: structureBlocksPayloadSchema.default([]),
+  structureBlocks: structureBlocksPayloadSchema,
+  // Rows that follow a renumbered step, saved with the blocks (CL15).
+  relinks: structureSetRelinksPayloadSchema,
 });
 
 const planDayReparseBodySchema = z.object({
@@ -325,7 +330,15 @@ protectedPatch(router, "/api/v1/plans/:id/retirement", { limiter: rateLimiter("p
     res.json(updated);
   });
 
-protectedDelete(router, "/api/v1/plans/:id", { limiter: rateLimiter("planDelete", 10) }, handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true, recycleBinItemId: deleted.recycleBinItemId } : null; }));
+// Deleting a plan or a plan day sets workout_logs.plan_day_id to NULL on the
+// athlete's logs (ON DELETE SET NULL), which the cached analytics slices hold.
+// D10 (CODEBASE_ANALYSIS_2026-10-03)
+protectedDelete(router, "/api/v1/plans/:id", { limiter: rateLimiter("planDelete", 10) }, handleGetOrDeletePlan(async (id, userId) => {
+  const deleted = await storage.plans.deleteTrainingPlan(id, userId);
+  if (!deleted) return null;
+  invalidateAnalyticsCachesForUser(userId);
+  return { success: true, recycleBinItemId: deleted.recycleBinItemId };
+}));
 
 protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("planSchedule", 10), middleware: [validateBody(schedulePlanRequestSchema)] }, async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const { startDate } = req.body;
@@ -376,6 +389,7 @@ protectedDelete(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("pla
     if (!deleted) {
       return sendNotFound(res, "Plan day not found");
     }
+    invalidateAnalyticsCachesForUser(userId); // D10
     res.json({ success: true, recycleBinItemId: deleted.recycleBinItemId });
   });
 
@@ -444,6 +458,13 @@ protectedPatch(
   "/api/v1/plans/days/:dayId/structure",
   { limiter: rateLimiter("planDaySet", 60), middleware: [validateBody(planDayStructureBodySchema)] },
   async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof planDayStructureBodySchema>>, res: Response) => {
+    // Relinks follow the steps a structureBlocks save renumbers. Sent without
+    // blocks they cleared the day's blocks; refuse them, as the workout PATCH
+    // does. A body without relinks still saves [] for older clients.
+    // CL15 (CODEBASE_ANALYSIS_2026-10-03)
+    if (req.body.structureBlocks === undefined && (req.body.relinks?.length ?? 0) > 0) {
+      throw new AppError(ErrorCode.VALIDATION_ERROR, "relinks are sent with structureBlocks.", 400);
+    }
     // W20: the structured-block / EMOM builder is feature-flagged. The flag was
     // UI-only — the server persisted structureBlocks regardless, so a client
     // with the flag forced on (or a direct API call) could write structured
@@ -458,6 +479,7 @@ protectedPatch(
       req.params.dayId,
       getUserId(req),
       req.body.structureBlocks ?? [],
+      req.body.relinks ?? [],
     );
     if (!result) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);

@@ -126,8 +126,14 @@ and the week is anchored from it. Absent → the most recently _completed_ week.
 
 `isWeekParamValid` is stricter than the shared `dateStringSchema`, which checks only the
 `YYYY-MM-DD` shape: `2026-02-31` passes that regex and then rolls forward into March, handing
-back a week nobody asked for. Validation round-trips the date components instead, using
-neither `Intl` nor string parsing, both of which throw on the inputs it exists to reject.
+back a week nobody asked for. Validation is the shared `isIsoCalendarDate()`
+(`shared/dateUtils.ts`): the date is built at UTC midnight from its components and must print
+back (`toISOString`) as the same string, so an impossible day, an unpadded month, a year that
+is not four digits and the years 0000–0099 (which `Date.UTC` maps to 1900–1999) are refused.
+A value that is no date at all is refused before `toISOString` could throw its `RangeError`,
+so a bad `?week=` gets a `400`, never a `500`. The onboarding race date, the sample-plan
+schema and the nutrition routes' dates use the same check (CL9, C49,
+CODEBASE_ANALYSIS_2026-10-03).
 
 **Not persisted.** `analytics_results.feature` is constrained to four literals
 (`shared/schema/tables.ts:205-206`), so a stored `weekly_review` feature would need a
@@ -138,7 +144,13 @@ four bounded queries.
 { now, week })`, reading:
 
 - `storage.analytics.getWorkoutLogsByDateRange` ×2 — this week and the week before
-- `storage.analytics.getPlanDaysByDateRange` ×2 — **new**, see below
+- `storage.analytics.getPlanDaysByDateRange` ×2 — **new**, see below. It applies the
+  plan-lifetime guard (`planDayWithinPlanLifetime()`), as the timeline does: a retired plan's
+  days from its `retired_on` cutoff on stay `planned` for good, so after a mid-week plan switch
+  they would otherwise be listed as still to do beside the new plan's sessions and inflate
+  `sessionsPlanned`. The retired plan's days before the cutoff are the week the athlete trained
+  it, and stay (AI17, CODEBASE_ANALYSIS_2026-10-03). The weekly summary email's counts
+  (`getWeeklyStats`) apply the same guard.
 - `storage.analytics.getExerciseSetsForPersonalRecords(userId)` — full history, because a PR
   means an all-time best; a week-scoped fetch would call every heaviest lift of the week a record
 - `storage.timelineAnnotations.list` — filtered by overlap, not containment
@@ -162,10 +174,14 @@ belong to the page (PR3), not to this endpoint.
 so a week is linkable and shareable — `/review?week=2026-08-04`.
 
 **Data.** `api.analytics.getWeeklyReview(week)`, `QUERY_KEYS.weeklyReview(week)`, and the
-`useWeeklyReview` hook. A closed week never changes, so it is cached with
-`staleTime: Infinity` and paging back through the year re-fetches nothing; the in-progress
-week keeps normal staleness. No localStorage snapshot (unlike `useRacePrediction`) — this is
-not an expensive AI payload.
+`useWeeklyReview` hook. The server builds a closed week's review live, so a late log, skip,
+move, delete or annotation still changes it. A closed week is cached with no expiry only
+while the timeline cache vouches nothing changed under it: once a timeline query is
+invalidated by a write or refetched after the review was, the review is stale and the next
+visit re-fetches it. Without a timeline cache to go by it falls back to a minute's staleness.
+Paging back through the year re-fetches nothing while nothing changed; the in-progress week
+keeps normal staleness (CL22, CODEBASE_ANALYSIS_2026-10-03). No localStorage snapshot (unlike
+`useRacePrediction`) — this is not an expensive AI payload.
 
 **The client computes the week twice, and the server wins.** The browser knows only its own
 timezone, so `client/src/lib/weekDates.ts` (`mondayOf`, `lastCompletedWeekStart`, mirroring

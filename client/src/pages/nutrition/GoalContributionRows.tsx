@@ -18,7 +18,9 @@ export function GoalContributionRows({
       <p className="text-xs font-semibold text-muted-foreground">Effect on today&apos;s goals</p>
       <div className="space-y-2.5">
         {rows.map((r) => {
-          const basePct = Math.min(Math.max(r.currentPct, 0), 100);
+          // An edit can shrink the day (CL32): the solid fill then stops at the
+          // projected point rather than at a total that no longer applies.
+          const basePct = Math.min(Math.max(r.currentPct, 0), 100, Math.max(r.projectedPct, 0));
           const projPct = Math.min(Math.max(r.projectedPct, 0), 100);
           const addedPct = Math.max(projPct - basePct, 0);
           const over = r.projectedPct > 100;

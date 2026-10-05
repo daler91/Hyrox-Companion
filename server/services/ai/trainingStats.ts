@@ -48,6 +48,22 @@ export function calculateTrainingStats(timeline: TimelineEntry[]) {
   };
 }
 
+/**
+ * The sessions the athlete has actually done: completed entries dated today or
+ * earlier. The experience level and the coverage-history gate read this, not
+ * `totalWorkouts`, which also counts every planned day in the window — the
+ * rest of the plan. A new athlete with a 12-week, 6-day plan and one logged
+ * session counted as 73 and was coached as intermediate.
+ * AI11 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function countCompletedThrough(timeline: TimelineEntry[], today: string): number {
+  let count = 0;
+  for (const entry of timeline) {
+    if (entry.status === "completed" && entry.date && entry.date <= today) count++;
+  }
+  return count;
+}
+
 const functionalRegex = new RegExp(FUNCTIONAL_EXERCISES.join('|'), 'gi');
 
 export function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, number> {

@@ -52,6 +52,16 @@ describe("chat system prompt — medical safety", () => {
     expect(prompt).toContain("hasn't logged any training data yet");
     expect(prompt).toContain(CHAT_HR_MEDICATION_GUIDANCE);
   });
+
+  // AI11 (CODEBASE_ANALYSIS_2026-10-03): the no-data check reads the total,
+  // which includes the plan ahead, so a new athlete's plan stays in context.
+  it("gives a brand-new athlete with a plan and no logs their plan, not the no-data prompt", () => {
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({ totalWorkouts: 72, completedWorkouts: 0, plannedWorkouts: 72 }),
+    );
+    expect(prompt).not.toContain("hasn't logged any training data yet");
+    expect(prompt).toContain("- Completed: 0\n- Planned (upcoming): 72");
+  });
 });
 
 describe("chat system prompt — what a reply can and cannot do", () => {

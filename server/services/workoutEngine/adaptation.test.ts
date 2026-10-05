@@ -114,6 +114,19 @@ describe("adaptPlan — strength", () => {
     expect(a.inputsUsed.planPhase).toBe("build");
   });
 
+  it("leaves a variant of the lift in the accessory text alone (C15)", () => {
+    const withVariant = UPCOMING.map((day) => ({
+      ...day,
+      accessory: "C) Paused Front Squat 2x3 @ 60 kg (RPE 6)",
+    }));
+    const result = adaptPlan(
+      input({ upcoming: withVariant, sets: squatSets("l1", "2026-10-13", [8, 8, 8, 8], 82.5) }),
+    );
+    const dayA = result.days.find((day) => day.planDayId === "a");
+    expect(dayA?.mainWorkout).toContain("A) Front Squat 4x6 @ 90 kg");
+    expect(dayA?.accessory).toBeUndefined();
+  });
+
   it("applies each logged workout once", () => {
     const first = adaptPlan(input({ sets: squatSets("l1", "2026-10-13", [8, 8, 8, 8], 82.5) }));
     expect(first.adaptedLogIds).toEqual(["l1"]);
@@ -262,6 +275,114 @@ describe("adaptPlan — strength", () => {
     // 185 x 1.05 = 194.25 → 195 on 5 lb steps.
     expect(weights(result, "a")).toEqual([195, 195, 195, 195]);
     expect(result.days[0].mainWorkout).toBe("A) Front Squat 4x6 @ 195 lbs");
+  });
+});
+
+describe("adaptPlan — several logs in one pass (C14)", () => {
+  it("does not stack the raises of logs that beat the same prescription", () => {
+    // Re-enabling the coach, the debounce or a backfill hands one pass two
+    // logs, each measured against the same stale 82.5 kg prescription.
+    const result = adaptPlan(
+      input({
+        logs: [log("l0", "2026-10-09"), log("l1", "2026-10-13")],
+        sets: [
+          ...squatSets("l0", "2026-10-09", [8, 8, 8, 8], 82.5),
+          ...squatSets("l1", "2026-10-13", [8, 8, 8, 8], 82.5),
+        ],
+      }),
+    );
+    // One session's 5%: 85 → 90, not 85 x 1.05 x 1.05 → 95.
+    expect(weights(result, "a")).toEqual([90, 90, 90, 90]);
+    expect(weights(result, "b")).toEqual([92.5, 92.5, 92.5, 92.5]);
+    expect(result.adaptedLogIds).toEqual(["l0", "l1"]);
+  });
+
+  it("does not stack catch-ups from two stronger ad-hoc sessions either", () => {
+    const result = adaptPlan(
+      input({
+        logs: [log("l0", "2026-10-09"), log("l1", "2026-10-13")],
+        sets: [
+          ...squatSets("l0", "2026-10-09", [5, 5, 5, 5], 100, null),
+          ...squatSets("l1", "2026-10-13", [5, 5, 5, 5], 100, null),
+        ],
+      }),
+    );
+    expect(weights(result, "a")).toEqual([90, 90, 90, 90]);
+  });
+
+  it("still raises from a load an earlier log in the pass held down", () => {
+    const result = adaptPlan(
+      input({
+        logs: [log("l0", "2026-10-09"), log("l1", "2026-10-13")],
+        sets: [
+          ...squatSets("l0", "2026-10-09", [6, 6, 5, 4], 82.5),
+          ...squatSets("l1", "2026-10-13", [8, 8, 8, 8], 82.5),
+        ],
+      }),
+    );
+    // Held at 82.5, then 82.5 x 1.05 → 87.5: below the plan's 85 x 1.05.
+    expect(weights(result, "a")).toEqual([87.5, 87.5, 87.5, 87.5]);
+  });
+});
+
+describe("adaptPlan — custom lifts (D14)", () => {
+  function customDay(): AdaptablePlanDay {
+    return {
+      id: "custom",
+      date: "2026-10-16",
+      weekNumber: 5,
+      mainWorkout: "A) Atlas Stone Load 3x5 @ 42.5 kg (RPE 8)\nB) Husafell Carry 4x20 m @ 150 kg",
+      accessory: null,
+      notes: null,
+      aiInputsUsed: null,
+      sets: [
+        ...[1, 2, 3].map((n) => ({
+          id: `stone-${n}`,
+          exerciseName: "custom",
+          customLabel: "Atlas Stone Load",
+          reps: 5,
+          weight: 42.5,
+          weightUnit: "kg",
+        })),
+        ...[1, 2, 3, 4].map((n) => ({
+          id: `carry-${n}`,
+          exerciseName: "custom",
+          customLabel: "Husafell Carry",
+          reps: 1,
+          weight: 150,
+          weightUnit: "kg",
+        })),
+      ],
+    };
+  }
+
+  const stoneSets = (reps: number[], customLabel: string | null = "Atlas Stone Load") =>
+    squatSets("l1", "2026-10-13", reps, 40, { reps: 5, weight: 40 }).map((set) => ({
+      ...set,
+      exerciseName: "custom",
+      customLabel,
+    }));
+
+  it("holds the custom lift that was missed and leaves every other custom lift alone", () => {
+    const result = adaptPlan(input({ upcoming: [customDay()], sets: stoneSets([5, 5, 4]) }));
+    const day = result.days.find((entry) => entry.planDayId === "custom");
+    if (!day) throw new Error("expected the custom day to be adapted");
+    expect(day.setUpdates).toEqual(
+      ["stone-1", "stone-2", "stone-3"].map((setId) => ({ setId, weight: 40, weightUnit: "kg" })),
+    );
+    expect(day.mainWorkout).toBe(
+      "A) Atlas Stone Load 3x5 @ 40 kg (RPE 8)\nB) Husafell Carry 4x20 m @ 150 kg",
+    );
+    expect(day.changes).toEqual([
+      { exercise: "Atlas Stone Load", kind: "hold", from: 42.5, to: 40, unit: "kg" },
+    ]);
+    expect(day.rationale).toContain("Atlas Stone Load repeats that load");
+  });
+
+  it("never adapts a custom set with no label to tell it apart", () => {
+    expect(
+      adaptPlan(input({ upcoming: [customDay()], sets: stoneSets([5, 5, 4], null) })).days,
+    ).toEqual([]);
   });
 });
 

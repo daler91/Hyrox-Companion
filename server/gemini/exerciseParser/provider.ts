@@ -1,3 +1,4 @@
+import { visionBreaker } from "../../ai/circuitBreaker";
 import { generateJsonText } from "../../ai/providers";
 import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
@@ -102,6 +103,9 @@ export async function callGeminiParseImage(
         ],
       }),
     "exercise-parse-image",
+    // Vision has its own breaker, apart from the text provider's — AI2
+    // (CODEBASE_ANALYSIS_2026-10-03).
+    visionBreaker,
   );
 
   if (userId) trackUsageFromResponse(userId, GEMINI_VISION_MODEL, "parse", response);

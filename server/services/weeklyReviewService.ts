@@ -14,6 +14,7 @@
  */
 
 import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
+import { isIsoCalendarDate } from "@shared/dateUtils";
 import type {
   PersonalRecord,
   PersonalRecordMetric,
@@ -371,18 +372,10 @@ export async function buildWeeklyReview(
  * Stricter than `dateStringSchema`, which checks only the shape: a well-formed
  * but impossible date ("2026-02-31") passes the regex and then rolls forward
  * into March, so the athlete would silently get a week they never asked for.
- * Component round-tripping is the check; no `Intl` and no string parsing, both
- * of which throw on inputs this function is supposed to reject calmly.
+ * The check is the shared calendar round trip (isIsoCalendarDate): the same
+ * dates the regex-and-components copy here took, and no throw on the inputs
+ * this function exists to reject calmly. CL9 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function isWeekParamValid(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const [, yyyy, mm, dd] = match;
-  const utc = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)));
-  return (
-    utc.getUTCFullYear() === Number(yyyy)
-    && utc.getUTCMonth() === Number(mm) - 1
-    && utc.getUTCDate() === Number(dd)
-  );
+  return typeof value === "string" && isIsoCalendarDate(value);
 }

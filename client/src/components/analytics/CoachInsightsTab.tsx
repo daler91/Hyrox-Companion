@@ -12,6 +12,7 @@ import { readAnalyticsSnapshot, useWriteAnalyticsSnapshot } from "@/lib/analytic
 import { api, QUERY_KEYS } from "@/lib/api";
 import type { CoachInsightsResponse } from "@/lib/api/coaching";
 import { describeAiError } from "@/lib/describeAiError";
+import { queryLoadState } from "@/lib/queryLoadState";
 
 import { LastUpdatedNote } from "./LastUpdatedNote";
 
@@ -70,9 +71,13 @@ export function CoachInsightsTab() {
   const data = query.data;
   const hasInsights = data?.insights != null;
   const isGenerating = regenerate.isPending;
+  // A first fetch paused offline is still loading too: it showed the
+  // "Generate" prompt over insights the athlete already has.
+  // U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const firstLoadPending = userId !== undefined && queryLoadState(query).loading;
   // Spinner only when there is genuinely nothing to show yet (no snapshot, no
   // stored result) and we're loading or generating the first one.
-  const showInitialSpinner = (query.isLoading || isGenerating) && !hasInsights;
+  const showInitialSpinner = (firstLoadPending || isGenerating) && !hasInsights;
   const activeError = regenerate.error ?? query.error;
   const errorMessage = activeError ? describeError(activeError) : null;
 

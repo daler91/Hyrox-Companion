@@ -13,6 +13,7 @@ import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
+import { invalidateAnalyticsCachesForUser } from "./services/analyticsRouteCache";
 import {
   dropCrossProviderDuplicates,
   recordingTimingFromStrava,
@@ -1015,6 +1016,10 @@ export async function syncStravaForUser(
   // actually wrote, not an optimistic pre-insert count (S2).
   const imported = counts.enriched + counts.completedPlanDays + counts.suggested + counts.standalone;
   const totalSkipped = skipped + counts.skipped;
+  // D10 (CODEBASE_ANALYSIS_2026-10-03): the imports and links just written
+  // change the logs and sets the analytics caches hold. A background sync
+  // clears only its own process's copy; the TTL covers the rest.
+  if (imported > 0) invalidateAnalyticsCachesForUser(userId);
 
   await advanceStravaSyncCursor(userId, activities, hasMore);
 

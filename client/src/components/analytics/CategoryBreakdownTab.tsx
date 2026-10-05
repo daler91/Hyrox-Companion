@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Link } from "wouter";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -12,6 +13,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
+import { queryLoadState } from "@/lib/queryLoadState";
 
 import {
   type AnalysisMetric,
@@ -207,10 +209,14 @@ function legendPercent(data: ReadonlyArray<{ name: string; value: number }>, nam
 
 export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) {
   const isMobile = useIsMobile();
-  const { data: overview, isLoading } = useQuery<TrainingOverview>({
+  const overviewQuery = useQuery<TrainingOverview>({
     queryKey: ["/api/v1/training-overview", dateParams],
     queryFn: () => api.analytics.getTrainingOverview(dateParams),
   });
+  const { data: overview, refetch } = overviewQuery;
+  // A first fetch paused offline is still loading, and a failed fetch is not
+  // "log a handful of workouts". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const { loading, failed, retrying } = queryLoadState(overviewQuery);
 
   const pieData = useMemo(() => {
     if (!overview) return [];
@@ -238,11 +244,22 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     (muscle) => muscle.sessionCount > 0 || muscle.totalSets > 0 || muscle.lastTrained !== null,
   );
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your training mix"
+        onRetry={() => refetch()}
+        isRetrying={retrying}
+        testId="category-breakdown-error"
+      />
     );
   }
 

@@ -14,14 +14,15 @@ import {
   flushWorkoutWriteInvalidation,
   invalidateWorkoutWriteQueries,
   scheduleWorkoutWriteInvalidation,
+  WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
   WORKOUT_WRITE_INVALIDATION_DELAY_MS,
 } from "./workoutInvalidation";
 
 /**
- * The derived-view keys a workout write moves. Seven invalidations per call is
+ * The derived-view keys a workout write moves. Eleven invalidations per call is
  * the contract the coalescing below is measured against.
  */
-const DERIVED_KEY_COUNT = 7;
+const DERIVED_KEY_COUNT = 11;
 
 describe("workoutInvalidation", () => {
   beforeEach(() => {
@@ -44,6 +45,19 @@ describe("workoutInvalidation", () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.personalRecords });
     // A re-linked or edited run can change its session grade.
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.sessionGradesPrefix });
+    // CL19 (CODEBASE_ANALYSIS_2026-10-03): session fuelling reads the workout's
+    // start time, duration and RPE, so an edit moves its window and targets;
+    // the day summary, the chips and the Fuelling block read the day's
+    // workouts and training load.
+    for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
+      expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey });
+    }
+    expect(WORKOUT_DERIVED_NUTRITION_QUERY_KEYS).toEqual([
+      QUERY_KEYS.nutritionSessionFuellingPrefix,
+      QUERY_KEYS.nutritionDayPrefix,
+      QUERY_KEYS.nutritionRangePrefix,
+      QUERY_KEYS.nutritionBlockPrefix,
+    ]);
   });
 
   it("coalesces a burst of set saves into ONE trailing invalidation", () => {

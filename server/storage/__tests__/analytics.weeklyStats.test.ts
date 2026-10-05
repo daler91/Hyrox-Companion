@@ -1,3 +1,5 @@
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { selectMock } = vi.hoisted(() => ({ selectMock: vi.fn() }));
@@ -56,6 +58,20 @@ describe("AnalyticsStorage.getWeeklyStats", () => {
 
     expect(result.completedCount).toBe(4);
     expect(result.totalDuration).toBe(240);
+  });
+
+  // AI17 (CODEBASE_ANALYSIS_2026-10-03): a retired plan's days from its
+  // cutoff on stay `planned` for good; the email counted them as still to do.
+  // The real-schema check is retiredPlanWeekCounts.integration.test.ts.
+  it("keeps a retired plan's days from its cutoff on out of the plan-day counts", async () => {
+    mockQueries();
+
+    await storage.getWeeklyStats("user-1", "2026-06-08", "2026-06-14");
+
+    const daysQuery = selectMock.mock.results[1]?.value as { where: ReturnType<typeof vi.fn> };
+    const rendered = new PgDialect().sqlToQuery(daysQuery.where.mock.calls[0][0] as SQL).sql;
+    expect(rendered).toContain('"training_plans"."retired_on" IS NULL');
+    expect(rendered).toContain('"plan_days"."scheduled_date" < "training_plans"."retired_on"');
   });
 
   it("falls back to zero when the week has no logged sessions", async () => {

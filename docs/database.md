@@ -211,6 +211,12 @@ weeks they actually trained keep their real status and still resolve for a past
 date. Written by the supersede step of plan generation and by
 `PATCH /api/v1/plans/:id/retirement`, and always clamped forward to the
 athlete's own today. The predicates live in `server/storage/planRetirement.ts`.
+The timeline, the missed sweep and the adherence denominator apply that rule,
+and so do the weekly review (`getPlanDaysByDateRange`), the weekly summary
+email's counts (`getWeeklyStats`) and the per-meal fuel targets
+(`getPlannedDaysForDate`) through `planDayWithinPlanLifetime()`, so a retired
+plan's remaining `planned` days are never counted beside the new plan's (AI17,
+CODEBASE_ANALYSIS_2026-10-03).
 
 **Constraints:**
 - `training_plans_generation_status_check`: `generation_status IN ('pending', 'generating', 'ready', 'failed')`
@@ -284,7 +290,7 @@ Logged workouts, entered manually or synced from Strava/Garmin. A synced Strava 
 | `notes` | `text` | nullable |
 | `prescribed_main_workout` | `text` | nullable — free-text prescription snapshot copied at log create |
 | `prescribed_accessory` | `text` | nullable |
-| `prescribed_notes` | `text` | nullable |
+| `prescribed_notes` | `text` | nullable — the notes the log was created with. On a plan-day log a device link created it is the day's notes and the `Strava: <name>` line, plus, for a manual link, what the athlete typed on the import it merged; unlink reads a difference from it as the athlete's edit (`hasAthleteEdits`), and hands that typed note back to the recording when it deletes the log (D12, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)) |
 | `planned_set_count` | `integer` | nullable — adherence snapshot |
 | `actual_set_count` | `integer` | nullable |
 | `matched_set_count` | `integer` | nullable |
@@ -313,6 +319,7 @@ Logged workouts, entered manually or synced from Strava/Garmin. A synced Strava 
 | `counts_as_training` | `boolean` | NOT NULL, default `true` — does this count as a session the athlete *did*? Derived once at import from the provider's sport type (`countsAsTraining` in `shared/deviceSportTypes.ts`, a deny-list: walks, e-bikes, yoga, pilates, golf) and never re-derived; only the athlete changes it afterwards. Filtering is opt-in per caller (`{ onlyTraining: true }`): the training overview, weekly review, home summary card and set-derived panels pass it; nutrition energy balance, the coach's load governor and data export deliberately do not |
 | `device_link_source` | `text` | nullable — `'auto'` (matcher) or `'manual'` (athlete); NULL when no device activity is linked, including a standalone import |
 | `device_link_confidence` | `real` | nullable — matcher score in [0, 1] for auto links |
+| `auto_link_recording_only` | `boolean` | NOT NULL, default `false` — `true` on a plan-day log an auto device link created, which holds the recording (its one synthesised set, if any) and none of the prescription (D12, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)). Written once by `createLogFromPlanDayWithStravaInTx` and never cleared: unlink adopts an edited log as `manual` and clears the `device_*` columns, and this is then the only record that the log never held the prescription. "Reopen workout" folds such a log onto the day per exercise instead of replacing the day's sets with it, and batch reparse, `GET /api/v1/workouts/unstructured` and the assisted-migration backfill skip it outright (`autoLinkedLogStillPrescription()`, which also skips an auto link that still stands): its `main_workout` and `accessory` are the prescription whatever the athlete edits, since the description editor writes `prescribed_main_workout` / `prescribed_accessory`. Unlink reads it too: a `strava` log carrying it is the auto link's own log even after the athlete moves it off its plan day (`isLinkCreatedLog` in `server/services/deviceActivityLink.ts`), so it is deleted unedited, or adopted as `manual` without the recording's set, rather than unwound like the athlete's own log with the run left on it twice. On a log carrying it, unlink takes the sets as the link's while they are nothing or that one set uncorrected (a note on it goes to the recording's row with it), whatever adherence snapshot a set edit has re-derived since, and any structure block, scored or not, as the athlete's, since the auto link writes none (`hasAthleteEdits`; on a log a manual link, or an auto link made before it, created, which copied the plan's structure in, only a scored block is). "Reopen workout" releases that uncorrected set with the recording too, its note onto the released row's set, rather than folding it onto the day. `false` for the athlete's own logs, manual links and auto links made before it (which copied the prescription in). Server-owned: the workout insert/update schemas omit it, so no request body writes it. Migration `0120` |
 | `device_activity` | `jsonb` | nullable — `DeviceActivitySnapshot`: the raw provider row plus the metric columns the link filled, so an unlink can NULL exactly those |
 | `suggested_plan_day_id` | `varchar(255)` | nullable, FK -> `plan_days.id` ON DELETE SET NULL — on a standalone import, the plausible match the sync did not act on |
 | `suggested_workout_log_id` | `varchar(255)` | nullable, FK -> `workout_logs.id` ON DELETE SET NULL — same, when the candidate is a manual log |
@@ -499,6 +506,8 @@ Individual steps inside a `workout_structure_block` (e.g. each minute of an EMOM
 ### structured_exercise_backfill_reviews
 
 Tracks owners (plan days / workout logs) whose structured exercise data needs manual review during the legacy-to-structured backfill.
+
+The backfill (`runAssistedMigrationBackfill` in `server/services/assistedMigrationService.ts`) parses each candidate's `main_workout` and `accessory` on their own lines, with whitespace trimmed off the ends: `btrim` with the characters JavaScript's `trim()` removes (spaces, tabs, line breaks, vertical tab, form feed, no-break and the other Unicode spaces). A log or plan day with no text left is not a candidate: it is never sent to the parser, takes no place in the batch and is not flagged `parse_returned_no_rows`. Postgres `trim()` strips spaces only, so a log with no accessory was parsed with a trailing newline and one with neither text was queued as `"\n"` (D12, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -839,7 +848,7 @@ Short-lived shared runtime cache for safe multi-instance operation, read and wri
 Current use cases:
 - Clerk auth seen-cache (`auth-seen:*`, `server/clerkAuth.ts`)
 - RAG embedding-health probe (`rag-health:embedding`) and RAG retrieval cache (`rag:*`), both in `server/services/ragService.ts`
-- AI circuit-breaker state (`ai-circuit-breaker:state`, `server/ai/circuitBreaker.ts`), restored at startup
+- AI circuit-breaker state, one key per provider and capability (`ai-circuit-breaker:<capability>:<provider>`, e.g. `ai-circuit-breaker:text:anthropic`, `server/ai/circuitBreaker.ts`), restored at startup
 - Planned-session duration/RPE estimates (`planned-session-estimate:*`, `server/services/sessionEstimate/plannedSessionEstimate.ts`)
 - Single-use Strava OAuth state (`strava-oauth-state:*`, `server/strava.ts`), claimed atomically with `claimRuntimeCacheKey()` so a replayed callback is rejected
 - Strava webhook subscription record (`strava:webhook-subscription`, `server/stravaWebhook.ts`) and the shared background-sync cooldown after a 429 (`strava:sync-cooldown`, `server/services/stravaAutoSync.ts`)
@@ -1420,7 +1429,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **120 migrations**, `0000` through `0119`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **121 migrations**, `0000` through `0120`:
 
 ```
 migrations/
@@ -1514,6 +1523,7 @@ Notable recent migrations:
 - `0106`: Adds `plan_days.priority`, `plan_days.recovery` and `plan_days.missed_on` (with CHECK constraints on the first two) for session priority tiers and missed-session recovery. All three are nullable, so existing rows need no backfill: an unset tier is inferred from the day's title at read time.
 - `0107`: Adds `plan_days.recovery_undo`, the record that lets a fold or shorten be undone. Nullable: sessions moved before it existed simply offer no undo.
 - `0108`: Creates `workout_log_streams`, the compact HR/pace streams session grading reads. A new table only; existing runs are backfilled by the `sessionStreamBackfill` cron, not the migration.
+- `0120`: Adds `workout_logs.auto_link_recording_only` (NOT NULL, default `false`), the durable mark of a plan-day log an auto device link created from the recording alone, which outlives an unlink (D12). No backfill: every existing row is right at `false`, since the auto links made before D12 copied the prescription in and no log of the new shape existed before the column.
 
 ### Startup Migration
 
@@ -1642,7 +1652,7 @@ for (const ex of exercises) {
 ## Performance Considerations
 
 **Coalesced Analytics Cache:**
-The analytics routes (`server/routes/analytics.ts`) use three in-memory promise caches — exercise sets (`getExerciseSetsCoalesced`), the column-slim sets behind Personal Records (`getPersonalRecordSetsCoalesced`, keys prefixed `pr-`) and workout logs (`getWorkoutLogsCoalesced`, prefixed `wl-`) — to prevent redundant DB queries within a single process. All three are built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`, which also exports `invalidateAnalyticsCachesForUser()`; the exercise-set mutation use case (`server/usecases/workouts/mutateExerciseSet.usecase.ts`) calls it to drop that athlete's entries from this process's caches instead of waiting out the TTL. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query. This in-memory coalescing is separate from the durable [`analytics_results`](#analytics_results) store, which persists the last *computed* Coach Insights / Race Prediction across restarts for instant paint and the midnight recompute.
+The analytics routes (`server/routes/analytics.ts`) use three in-memory promise caches — exercise sets (`getExerciseSetsCoalesced`), the column-slim sets behind Personal Records (`getPersonalRecordSetsCoalesced`, keys prefixed `pr-`) and workout logs (`getWorkoutLogsCoalesced`, prefixed `wl-`) — to prevent redundant DB queries within a single process. All three are built by `createCoalescedCache()` in `server/services/analyticsRouteCache.ts`, which also exports `invalidateAnalyticsCachesForUser()`. Every workout write path calls it to drop that athlete's entries from this process's caches instead of waiting out the TTL (D10, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)): the workout and exercise-set use cases (`server/services/workoutUseCases.ts`, `server/usecases/workouts/mutateExerciseSet.usecase.ts`); the workout routes for delete, bulk delete, combine, seed-from-plan, reparse, device link and unlink, and the assisted-migration backfill; recycle-bin restore; the Strava and Garmin syncs when they import anything; reopening a completed plan day (`updatePlanDayStatus`, which deletes or unlinks its logs and releases a Strava recording); and deleting a plan or a plan day, which sets `workout_logs.plan_day_id` to NULL. Other app instances keep their own copies until the TTL runs out. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query. This in-memory coalescing is separate from the durable [`analytics_results`](#analytics_results) store, which persists the last *computed* Coach Insights / Race Prediction across restarts for instant paint and the midnight recompute.
 
 ```typescript
 // Multiple concurrent requests for the same user's analytics data

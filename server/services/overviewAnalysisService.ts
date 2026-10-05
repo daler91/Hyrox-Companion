@@ -64,8 +64,12 @@ export const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
   "- Monotony (Foster): >2.0 flags overtraining/illness risk from too-samey training; variety lowers it.",
   "- Strain (Foster) = weekly load × monotony; high strain with high monotony is the risky combination.",
   "- Fitness (chronic EWMA) vs Fatigue (acute EWMA): fitness above fatigue and rising is a good base; fatigue spiking above fitness means a hard block.",
-  "- UTSS is this app's own training-load unit. It prefers heart rate, then power, then the athlete's RPE — so it is NOT a purely subjective measure, and a session with HR data barely uses RPE at all.",
+  // Heart rate drives UTSS only with a max HR or age on file (audit H3) and for
+  // a sport whose HR reflects effort; lifting imports are scored from RPE.
+  // C10, C12 (CODEBASE_ANALYSIS_2026-10-03)
+  "- UTSS is this app's own training-load unit. A session's intensity comes from heart rate when it has HR data and the athlete's max HR or age is on file, otherwise from power, otherwise from the athlete's RPE — so it is NOT a purely subjective measure. Heart rate is not used for lifting (or yoga and Pilates) recordings, whose average HR is mostly rest between sets and understates the effort, so those sessions are scored from the athlete's RPE.",
   "- hrTSS / Power TSS are separate objective loads shown for reference only; they never feed UTSS and sit on a different scale, so do not tell the athlete they should agree or read a gap between them as an inconsistency.",
+  "- hrTSS and HR zones need a max HR or an age on file to anchor on. When estimatedLthr is null, hrTSS is missing for that reason, not because the athlete has no heart-rate data: if they record heart rate, say adding their age or max HR fills it in, and never tell them they have no heart-rate data.",
   "- Load by body system: each session's RPE × minutes (session-RPE load) is split into aerobic, running impact, leg muscle and upper-body pull by what the session contained, and each system is compared ONLY with its own usual week (the mean of the four weeks before this one): ratio <0.8 low, 0.8-1.3 normal, 1.3-1.5 high, >1.5 very high; 'new' is a real week of load after almost none; a six-week high is the heaviest week of the last six for that system. Numbers are not comparable across systems, so never compare one system's number with another's. When `divergence` is present it is the headline — explain what it means for the coming week. When many sessions were estimated (no RPE or duration logged), say the split is approximate and that rating sessions sharpens it.",
   "- UTSS and body-system load are different models on different scales; do not convert between them or read a gap between them as an inconsistency.",
   "- Weekly Workouts vs the weekly goal shows consistency against target; RPE/Duration trends show how hard and how long sessions are trending; the consistency heatmap + streak show training regularity.",
@@ -197,6 +201,10 @@ export function buildOverviewChartFacts(
   }
 
   // objectiveLoad — matches ObjectiveLoadTrendCharts' render condition.
+  // hrTSS needs heart rate AND an LTHR, which is null without a measured max
+  // HR or an age (C10), so a missing hrTSS does not mean missing heart-rate
+  // data. The fact is named for what it measures, and estimatedLthr (null in
+  // that case) tells the model why. C10 (CODEBASE_ANALYSIS_2026-10-03)
   const hasHrTss = trend.filter((p) => p.hrTss != null).length >= MIN_POINTS;
   const hasTss = trend.filter((p) => p.tss != null).length >= MIN_POINTS;
   const fitnessPoints = trend.filter((p) => p.chronicEwma != null && p.acuteEwma != null);
@@ -205,7 +213,7 @@ export function buildOverviewChartFacts(
     out.objectiveLoad = {
       title: CHART_TITLES.objectiveLoad,
       facts: {
-        hasHeartRateData: hasHrTss,
+        hasHrTssData: hasHrTss,
         hasPowerData: hasTss,
         currentHrTss: round(load.hrTss),
         currentHrZone: load.hrZone,

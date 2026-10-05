@@ -1,4 +1,4 @@
-import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type updateWorkoutLogSchema } from "@shared/schema";
+import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureSetRelink, type updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { isTextAiProviderConfigured } from "../ai/providers";
@@ -8,6 +8,7 @@ import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { checkAiBudget } from "./aiUsageService";
+import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import { findInconsistentHeartRate } from "./heartRateConsistency";
 import { findPersonalRecordAchievements } from "./personalRecordAchievements";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
@@ -19,6 +20,12 @@ type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
 type UpdateWorkoutPayload = z.infer<typeof updateWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
   structureBlocks?: StructureBlockInput[];
+  /**
+   * The rows a structureBlocks save moves with its renumbered steps. They stay
+   * in `updateData`, and updateWorkout splits them off before the columns are
+   * written (CL15, CODEBASE_ANALYSIS_2026-10-03).
+   */
+  relinks?: StructureSetRelink[];
 };
 
 /**
@@ -94,6 +101,10 @@ export async function createWorkout(input: {
   }
 
   const createdWorkout = await createWorkoutAndScheduleCoaching(workoutData, structured, input.userId, structureBlocks);
+  // D10 (CODEBASE_ANALYSIS_2026-10-03): every workout write drops the athlete's
+  // cached analytics slices, or the refetch after the save is answered from the
+  // pre-write cache for up to its TTL and reads as "my workout didn't save".
+  invalidateAnalyticsCachesForUser(input.userId);
   if (!createdWorkout.exerciseSets || createdWorkout.exerciseSets.length === 0) return createdWorkout;
 
   let newPersonalRecords: ReturnType<typeof findPersonalRecordAchievements>;
@@ -163,7 +174,10 @@ export async function updateWorkoutUseCase(input: {
     }
   }
 
-  return updateWorkout(input.workoutId, updateData, structured, input.userId, structureBlocks);
+  const updated = await updateWorkout(input.workoutId, updateData, structured, input.userId, structureBlocks);
+  // D10: see createWorkout.
+  if (updated) invalidateAnalyticsCachesForUser(input.userId);
+  return updated;
 }
 
 export async function assignWorkoutPlanDayUseCase(input: {
@@ -171,5 +185,8 @@ export async function assignWorkoutPlanDayUseCase(input: {
   workoutId: string;
   planDayId: string | null;
 }) {
-  return assignWorkoutPlanDay(input.workoutId, input.planDayId, input.userId);
+  const assigned = await assignWorkoutPlanDay(input.workoutId, input.planDayId, input.userId);
+  // D10: the cached logs carry planDayId, so a re-link changes them too.
+  if (assigned) invalidateAnalyticsCachesForUser(input.userId);
+  return assigned;
 }

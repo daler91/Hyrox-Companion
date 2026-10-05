@@ -83,8 +83,10 @@ export interface NutritionCoachContext {
   };
   /** Up to 3 highest training-load days with that day's intake (to spot under-fuelling). */
   highLoadDays: Array<{ date: string; utss: number; calories: number; proteinG: number }>;
-  /** Today's tracked micronutrients below 50% of reference intake, formatted e.g. "Iron 32%". */
+  /** `microDate`'s tracked micronutrients below 50% of reference intake, formatted e.g. "Iron 32%". */
   lowMicros: string[];
+  /** The day the micros were judged on: the latest complete logged day. Absent when there is none. */
+  microDate?: string;
   /**
    * Pre/post fuelling target for the next upcoming planned session (Phase 3b),
    * from the athlete's saved expected duration/RPE or an estimate derived from

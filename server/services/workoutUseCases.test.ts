@@ -4,8 +4,9 @@ import { env } from "../env";
 import { parseExercisesFromText } from "../gemini";
 import { storage } from "../storage";
 import { checkAiBudget } from "./aiUsageService";
-import { createWorkoutAndScheduleCoaching } from "./workoutService";
-import { createWorkout } from "./workoutUseCases";
+import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
+import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
+import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "./workoutUseCases";
 
 vi.mock("../ai/providers", () => ({ isTextAiProviderConfigured: () => true }));
 vi.mock("../gemini", () => ({ parseExercisesFromText: vi.fn() }));
@@ -16,6 +17,7 @@ vi.mock("../storage", () => ({
   },
 }));
 vi.mock("./aiUsageService", () => ({ checkAiBudget: vi.fn() }));
+vi.mock("./analyticsRouteCache", () => ({ invalidateAnalyticsCachesForUser: vi.fn() }));
 vi.mock("./workoutService", () => ({
   createWorkoutAndScheduleCoaching: vi.fn(),
   updateWorkout: vi.fn(),
@@ -59,5 +61,34 @@ describe("createWorkout legacy text parse", () => {
 
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(createWorkoutAndScheduleCoaching).toHaveBeenCalledWith(expect.objectContaining({ mainWorkout: TEXT_ONLY.mainWorkout }), undefined, USER_ID, undefined);
+  });
+});
+
+// D10 (CODEBASE_ANALYSIS_2026-10-03): the analytics routes cache an athlete's
+// logs and sets for minutes; each write must drop them before it answers.
+describe("workout use cases drop the athlete's cached analytics", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createWorkoutAndScheduleCoaching).mockResolvedValue({ id: "w1", exerciseSets: [] } as never);
+  });
+
+  it("after a create", async () => {
+    await createWorkout({ userId: USER_ID, payload: { ...TEXT_ONLY, exercises: PARSED } });
+
+    expect(invalidateAnalyticsCachesForUser).toHaveBeenCalledWith(USER_ID);
+  });
+
+  it.each([
+    ["an update", () => updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { notes: "felt good" } }), updateWorkout],
+    ["a plan-day assignment", () => assignWorkoutPlanDayUseCase({ userId: USER_ID, workoutId: "w1", planDayId: "pd-1" }), assignWorkoutPlanDay],
+  ] as const)("after %s that found the workout, and not after one that did not", async (_label, run, write) => {
+    vi.mocked(write).mockResolvedValueOnce({ id: "w1" } as never);
+    await run();
+    expect(invalidateAnalyticsCachesForUser).toHaveBeenCalledWith(USER_ID);
+
+    vi.clearAllMocks();
+    vi.mocked(write).mockResolvedValueOnce(null);
+    await run();
+    expect(invalidateAnalyticsCachesForUser).not.toHaveBeenCalled();
   });
 });

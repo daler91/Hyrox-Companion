@@ -50,6 +50,29 @@ const RECENT_SESSIONS = 4;
 /** A best session further than this above the next is treated as an outlier. */
 const OUTLIER_MARGIN = 0.1;
 
+const CUSTOM_LIFT_PREFIX = "custom:";
+
+/**
+ * Which lift a set is: its exerciseName, or `custom:<label>` for a custom one,
+ * the key the load anchors and the PR tracker already use. Every custom lift
+ * is named "custom", so by name alone a 150 kg yoke carry and a 40 kg sandbag
+ * clean were one lift to the overload clamp and the adaptation.
+ * D14 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function liftKey(set: {
+  readonly exerciseName: string;
+  readonly customLabel?: string | null;
+}): string {
+  return set.exerciseName === "custom" && set.customLabel
+    ? `${CUSTOM_LIFT_PREFIX}${set.customLabel}`
+    : set.exerciseName;
+}
+
+/** The label a custom lift's key carries; undefined for a catalogue lift. */
+export function customLiftLabel(key: string): string | undefined {
+  return key.startsWith(CUSTOM_LIFT_PREFIX) ? key.slice(CUSTOM_LIFT_PREFIX.length) : undefined;
+}
+
 /** Round to the implement's step. `down` for anything a ceiling must hold. */
 export function roundLoad(
   value: number,

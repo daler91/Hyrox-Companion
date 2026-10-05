@@ -77,9 +77,16 @@ function letGoLine(letGoWorkouts: number | undefined): string {
   return `\n- Let go by choice after missing (not counted as missed or in the rate): ${letGoWorkouts}`;
 }
 
+/**
+ * `totalWorkouts` counts every entry in the timeline window, the scheduled
+ * plan ahead included. Printed as "Total workouts tracked" it told the model a
+ * brand-new athlete with a 12-week plan and one logged session had 73
+ * workouts behind them, so it is labelled for what it is; "Completed" is the
+ * count of sessions done. AI11 (CODEBASE_ANALYSIS_2026-10-03)
+ */
 export function buildOverallStats(trainingContext: TrainingContext): string {
   let section = `\nOverall Stats:
-- Total workouts tracked: ${trainingContext.totalWorkouts}
+- Sessions on the timeline, done or scheduled (includes the plan ahead): ${trainingContext.totalWorkouts}
 - Completed: ${trainingContext.completedWorkouts}
 - Planned (upcoming): ${trainingContext.plannedWorkouts}
 - Missed: ${trainingContext.missedWorkouts}${letGoLine(trainingContext.letGoWorkouts)}

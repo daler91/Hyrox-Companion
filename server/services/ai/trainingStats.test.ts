@@ -6,6 +6,7 @@ import {
   collectRecentMisses,
   collectRecentSkips,
   collectRecentWorkouts,
+  countCompletedThrough,
   getExerciseBreakdown,
   getStructuredExerciseStats,
 } from "./trainingStats";
@@ -127,6 +128,23 @@ describe("calculateTrainingStats", () => {
     ]);
     expect(stats.completedWorkouts).toBe(1);
     expect(stats.totalWorkouts).toBe(1);
+  });
+});
+
+// AI11 (CODEBASE_ANALYSIS_2026-10-03): the experience level's input.
+describe("countCompletedThrough", () => {
+  it("counts completed sessions up to today, never planned or future-dated ones", () => {
+    const timeline = [
+      makeEntry({ status: COMPLETED, date: "2026-01-01" }),
+      makeEntry({ status: COMPLETED, date: "2026-01-05" }),
+      makeEntry({ status: MISSED, date: "2026-01-03" }),
+      makeEntry({ status: SKIPPED, date: "2026-01-04" }),
+      makeEntry({ status: PLANNED, date: "2026-01-06" }),
+      makeEntry({ status: PLANNED, date: "2026-03-01" }),
+      makeEntry({ status: COMPLETED, date: "2026-01-06" }),
+    ];
+    expect(countCompletedThrough(timeline, "2026-01-05")).toBe(2);
+    expect(calculateTrainingStats(timeline).totalWorkouts).toBe(7);
   });
 });
 

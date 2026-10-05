@@ -152,6 +152,37 @@ describe("Workouts Routes", () => {
     expect(payload).toMatchObject({ notes: "edited" });
   });
 
+  it("passes the rows a block save relinks through to the save, and rejects a malformed relink (CL15)", async () => {
+    const { updateWorkoutUseCase } = await import("../../services/workoutUseCases");
+    vi.mocked(updateWorkoutUseCase).mockClear();
+    const block = {
+      id: "block-emom",
+      sectionType: "main",
+      formatType: "emom",
+      durationMinutes: 8,
+      steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "burpees" }],
+    };
+    const relink = { setId: "set-1", fromBlockId: "block-emom", fromStepNumber: 2, blockId: "block-emom", stepNumber: 1, intervalMinute: 1 };
+    const save = (relinks: unknown[]) =>
+      request(app).patch("/api/v1/workouts/workout-1").send({ structureBlocks: [block], relinks });
+
+    const res = await save([relink, { ...relink, setId: "set-2", blockId: null, stepNumber: null }]);
+
+    expect(res.status).toBe(200);
+    const payload = vi.mocked(updateWorkoutUseCase).mock.calls[0][0].payload as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      structureBlocks: [expect.objectContaining({ id: "block-emom" })],
+      relinks: [relink, { ...relink, setId: "set-2", blockId: null, stepNumber: null }],
+    });
+
+    // Half a link, the same row twice, and more than a save can carry.
+    expect((await save([{ ...relink, stepNumber: null }])).status).toBe(400);
+    expect((await save([relink, relink])).status).toBe(400);
+    const tooMany = Array.from({ length: 501 }, (_, idx) => ({ ...relink, setId: `set-${idx}` }));
+    expect((await save(tooMany)).status).toBe(400);
+    expect(updateWorkoutUseCase).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a plan-day assignment with a missing/invalid body and 404s when the workout is gone", async () => {
     const { assignWorkoutPlanDayUseCase } = await import("../../services/workoutUseCases");
 

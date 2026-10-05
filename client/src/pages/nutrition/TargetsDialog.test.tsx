@@ -11,7 +11,12 @@ import { TargetsDialog } from "./TargetsDialog";
 
 vi.mock("@/lib/api", () => ({
   api: { nutrition: { setTarget: vi.fn() } },
-  QUERY_KEYS: { nutritionTargets: ["/api/v1/nutrition/targets"] },
+  QUERY_KEYS: {
+    nutritionTargets: ["/api/v1/nutrition/targets"],
+    nutritionDayPrefix: ["/api/v1/nutrition/summary"],
+    nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
+    nutritionBlockPrefix: ["/api/v1/nutrition/block"],
+  },
 }));
 
 const CURRENT: NutritionTarget = {
@@ -94,6 +99,47 @@ describe("TargetsDialog", () => {
         phaseAware: true,
         preloadCarbGramsPerUtss: expect.any(Number),
         preloadDaysAhead: expect.any(Number),
+      }),
+    );
+  });
+
+  // CL33 (CODEBASE_ANALYSIS_2026-10-03): the slope, cap and pre-load derive
+  // from the carb baseline, so a new baseline must not copy the old ones.
+  it("re-bases the periodisation knobs onto a new carb baseline", async () => {
+    const user = userEvent.setup();
+    // The defaults for a 400 g baseline at the assumed 50 UTSS reference.
+    const periodized: NutritionTarget = {
+      ...CURRENT,
+      carbG: 400,
+      periodizationEnabled: true,
+      referenceUtss: 50,
+      carbGramsPerUtss: 4,
+      recoveryEnabled: true,
+      recoveryProteinBumpFrac: 0.15,
+      preloadCarbGramsPerUtss: 2,
+      preloadDaysAhead: 1,
+      phaseAware: true,
+      maxCarbDeltaG: 300,
+    };
+    vi.mocked(api.nutrition.setTarget).mockResolvedValue(periodized);
+    renderDialog(periodized);
+
+    await user.clear(screen.getByTestId("input-target-carbG"));
+    await user.type(screen.getByTestId("input-target-carbG"), "150");
+    await user.click(screen.getByTestId("button-save-targets"));
+
+    await waitFor(() => {
+      expect(api.nutrition.setTarget).toHaveBeenCalledTimes(1);
+    });
+    expect(api.nutrition.setTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        carbG: 150,
+        referenceUtss: 50,
+        carbGramsPerUtss: 1.5,
+        preloadCarbGramsPerUtss: 0.8,
+        maxCarbDeltaG: 112.5,
+        recoveryProteinBumpFrac: 0.15,
+        preloadDaysAhead: 1,
       }),
     );
   });

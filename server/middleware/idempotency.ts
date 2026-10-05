@@ -24,6 +24,20 @@ const MAX_KEY_LENGTH = 255;
 const MAX_CACHED_PAYLOAD_BYTES = 64 * 1024;
 const OVERSIZED_SENTINEL_BODY = { idempotencyReplayed: true as const };
 
+/** Cache this request's 2xx response on the claim it owns. */
+async function completeClaim(
+  req: Request,
+  claim: { userId: string; key: string; claimToken: string },
+  record: { statusCode: number; responseBody: unknown },
+): Promise<void> {
+  const stored = await storage.idempotency.complete(claim.userId, claim.key, claim.claimToken, record, IDEMPOTENCY_TTL_SECONDS);
+  if (!stored) {
+    // The claim lapsed (a handler slower than CLAIM_TTL_SECONDS) and another
+    // request took the key over; its row is left alone.
+    reqLogger(req).warn("Idempotency claim lapsed before the response; result not cached");
+  }
+}
+
 /**
  * Server-side enforcement for the `X-Idempotency-Key` header that
  * `client/src/lib/offlineQueue.ts` sends on replay (CODEBASE_AUDIT.md §2).
@@ -89,7 +103,9 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
 
   // outcome.outcome === "claimed": we own the key. Persist the real response on
   // a 2xx result; otherwise release the claim so the same key can be retried.
-  // `settle` runs the terminal action exactly once.
+  // `settle` runs the terminal action exactly once, and both actions are fenced
+  // to this request's claim token.
+  const { claimToken } = outcome;
   let settled = false;
   const settle = (work: () => Promise<void>): void => {
     if (settled) return;
@@ -124,22 +140,28 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
         );
       }
       const storedBody: unknown = oversized ? OVERSIZED_SENTINEL_BODY : body;
-      settle(() =>
-        storage.idempotency.complete(userId, key, { statusCode, responseBody: storedBody }, IDEMPOTENCY_TTL_SECONDS),
-      );
+      settle(() => completeClaim(req, { userId, key, claimToken }, { statusCode, responseBody: storedBody }));
     } else {
-      settle(() => storage.idempotency.release(userId, key));
+      settle(() => storage.idempotency.release(userId, key, claimToken));
     }
     return originalJson(body);
   }) as typeof res.json;
 
-  // Backstop: if the response finishes or the connection closes without going
-  // through res.json (an error sent via res.end, a streamed/redirect response,
-  // or a client abort), release the claim so it doesn't pin retries until the
-  // short claim TTL lapses. The `settled` guard keeps this idempotent.
-  const releaseIfUnsettled = (): void => settle(() => storage.idempotency.release(userId, key));
-  res.on("finish", releaseIfUnsettled);
-  res.on("close", releaseIfUnsettled);
+  // Backstop: if the response finishes without going through res.json (an
+  // error sent via res.end, a streamed/redirect response), release the claim so
+  // it doesn't pin retries until the short claim TTL lapses. The `settled`
+  // guard keeps this idempotent.
+  //
+  // A client disconnect ("close" before "finish") deliberately releases
+  // nothing: the handler is still running and may yet commit. Releasing there
+  // let the offline queue's replay, sent with the same key, claim it again and
+  // run POST /api/v1/workouts a second time. The handler's own res.json still
+  // settles the claim after the socket is gone, so the replay gets a 409 while
+  // it runs and the stored result after; a handler that never answers leaves
+  // the claim to lapse after CLAIM_TTL_SECONDS. D8 (CODEBASE_ANALYSIS_2026-10-03)
+  res.on("finish", () => {
+    settle(() => storage.idempotency.release(userId, key, claimToken));
+  });
 
   next();
 }

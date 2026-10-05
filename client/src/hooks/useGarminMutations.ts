@@ -1,4 +1,5 @@
 import { api, QUERY_KEYS } from "@/lib/api";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -43,6 +44,9 @@ export function useGarminMutations() {
       // New Garmin activities can set PRs and shift analytics — invalidate both.
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
+      // The imported workouts add to their days' training load, calories and
+      // meal targets. CL19 (CODEBASE_ANALYSIS_2026-10-03)
+      ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
     ],
     successToast: (data) => ({
       title: "Sync Complete",

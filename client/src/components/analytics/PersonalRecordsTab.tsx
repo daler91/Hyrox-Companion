@@ -3,6 +3,7 @@ import { Dumbbell, Sparkles,Trophy } from "lucide-react";
 import { useMemo,useState } from "react";
 import { Link } from "wouter";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api } from "@/lib/api";
 import { toISODateString } from "@/lib/dateUtils";
+import { queryLoadState } from "@/lib/queryLoadState";
 
 import { PersonalRecordItem } from "./PersonalRecordItem";
 
@@ -37,7 +39,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const dLabel = distanceUnit === "km" ? "m" : "ft";
 
-  const { data: rawPRs, isLoading } = useQuery<Record<string, RawPREntry>>({
+  const prsQuery = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
     // ⚡ Perf: kill rapid tab-toggle refetches but auto-heal after 5 min if
@@ -46,6 +48,10 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
     // invalidations in useStrava/Garmin/Combine/DataTools.)
     staleTime: 5 * 60 * 1000,
   });
+  const { data: rawPRs, refetch } = prsQuery;
+  // A first fetch paused offline is still loading, and a failed fetch is not
+  // "No personal records yet". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const { loading, failed, retrying } = queryLoadState(prsQuery);
 
   const { filteredPRs, recentPRs } = useMemo(() => {
     if (!rawPRs) return { filteredPRs: [], recentPRs: [] };
@@ -93,6 +99,17 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
     return { filteredPRs: results, recentPRs: recent };
   }, [rawPRs, categoryFilter]);
 
+  if (failed) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your personal records"
+        onRetry={() => refetch()}
+        isRetrying={retrying}
+        testId="personal-records-error"
+      />
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -120,7 +137,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
       </CardHeader>
       <CardContent>
         {(() => {
-          if (isLoading) {
+          if (loading) {
             return (
               <div className="flex items-center justify-center py-8">
                 <LoadingSpinner iconClassName="h-6 w-6" />

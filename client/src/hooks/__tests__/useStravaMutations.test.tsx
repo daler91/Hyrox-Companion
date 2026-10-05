@@ -30,6 +30,12 @@ vi.mock("@/lib/api", () => ({
     workouts: ["/api/v1/workouts"],
     personalRecords: ["/api/v1/personal-records"],
     exerciseAnalytics: ["/api/v1/exercise-analytics"],
+    // Read by WORKOUT_DERIVED_NUTRITION_QUERY_KEYS, which a sync spreads in.
+    // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+    nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
+    nutritionDayPrefix: ["/api/v1/nutrition/summary"],
+    nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
+    nutritionBlockPrefix: ["/api/v1/nutrition/block"],
   },
 }));
 

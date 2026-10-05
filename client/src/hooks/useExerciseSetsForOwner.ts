@@ -3,6 +3,7 @@ import { restampSetPatch } from "@shared/unitConversion";
 import { useIsMutating } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
+import { EDIT_SAVE_DEBOUNCE_MS } from "@/components/workout-structure/editSaveDebounce";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -41,6 +42,11 @@ type Params<TSnapshot> = {
    * of those derived views.
    */
   onWriteSuccess?: () => void;
+  /**
+   * How long a cell edit waits before it saves. Defaults to the window the
+   * block builder shares, so one pause saves both (U3,
+   * CODEBASE_ANALYSIS_2026-10-03); a copy of its value here could drift apart.
+   */
   cellSaveDebounceMs?: number;
 };
 
@@ -115,7 +121,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
   addInvalidateQueries,
   deleteInvalidateQueries,
   onWriteSuccess,
-  cellSaveDebounceMs = 350,
+  cellSaveDebounceMs = EDIT_SAVE_DEBOUNCE_MS,
 }: Params<TSnapshot>) {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [lastSaveErrorAt, setLastSaveErrorAt] = useState<number | null>(null);

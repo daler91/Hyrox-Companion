@@ -1,11 +1,7 @@
 import { env } from "../../env";
 import { recordAiUsage } from "../../services/aiUsageService";
-import {
-  assertBreakerClosed,
-  recordBreakerFailure,
-  recordBreakerSuccess,
-  releaseBreakerProbe,
-} from "../circuitBreaker";
+import { textBreakerFor } from "../circuitBreaker";
+import { AiConfigurationError } from "../errors";
 import { createAnthropicTextProvider } from "./anthropic";
 import {
   configuredTextProviderHasApiKey,
@@ -16,6 +12,7 @@ import { geminiTextProvider } from "./gemini";
 import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
 import type {
   ResolvedTextAiRequest,
+  TextAiModelRole,
   TextAiProvider,
   TextAiRequest,
   TextAiResponse,
@@ -68,7 +65,7 @@ export function getTextAiProvider(): TextAiProvider {
   // itself, not just the aiBudgetCheck HTTP middleware, so service/cron callers
   // that bypass the middleware also honor AI_FEATURES_ENABLED=false.
   if (env.AI_FEATURES_ENABLED === "false") {
-    throw new Error("AI features are disabled (AI_FEATURES_ENABLED=false)");
+    throw new AiConfigurationError("AI features are disabled (AI_FEATURES_ENABLED=false)");
   }
   textAiProvider ??= buildTextAiProvider();
   return textAiProvider;
@@ -78,8 +75,9 @@ export function __resetTextAiProviderForTests(): void {
   textAiProvider = null;
 }
 
-export function isTextAiProviderConfigured(): boolean {
-  return configuredTextProviderHasApiKey();
+/** Whether a text call in `role` (default "fast", the parsers' role) can be made. */
+export function isTextAiProviderConfigured(role: TextAiModelRole = "fast"): boolean {
+  return configuredTextProviderHasApiKey(role);
 }
 
 function resolveRequest(request: TextAiRequest): ResolvedTextAiRequest {
@@ -121,7 +119,8 @@ async function* streamChunks(request: TextAiRequest): AsyncGenerator<TextAiStrea
   // this the breaker is blind in both directions: streaming callers keep
   // hammering a provider it has already given up on, and their failures never
   // count toward opening it for anyone else.
-  assertBreakerClosed();
+  const breaker = textBreakerFor(resolved.providerId);
+  breaker.assertClosed();
   let latestUsage: TextAiUsage | undefined;
   let model = resolved.model;
   // A stream its caller cancelled (the athlete's Stop or disconnect, the SSE
@@ -137,19 +136,19 @@ async function* streamChunks(request: TextAiRequest): AsyncGenerator<TextAiStrea
       yield chunk;
     }
     if (!resolved.signal?.aborted) {
-      recordBreakerSuccess();
+      breaker.recordSuccess();
       recorded = true;
     }
   } catch (error) {
     if (!resolved.signal?.aborted) {
-      recordBreakerFailure(error);
+      breaker.recordFailure(error);
       recorded = true;
     }
     throw error;
   } finally {
     // Cancelled, or left unread by its consumer: neutral, but a half-open
     // probe gives its slot back.
-    if (!recorded) releaseBreakerProbe();
+    if (!recorded) breaker.releaseProbe();
     trackTextUsage(resolved.userId, resolved.feature, model, latestUsage);
   }
 }

@@ -3,8 +3,10 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { queryLoadState } from "@/lib/queryLoadState";
 import { flattenTimelineCache, type TimelineCache, type TimelinePage } from "@/lib/timelineCache";
 
+import { ignoreResult } from "./chat/chatSessionModel";
 import { usePendingWorkoutEntries } from "./usePendingWorkoutEntries";
 
 export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded = true) {
@@ -14,10 +16,17 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
     todayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
+  const plansQuery = useQuery<TrainingPlan[]>({
     queryKey: QUERY_KEYS.plans,
     enabled: isAuthUserLoaded,
   });
+  const { data: plansData, refetch: refetchPlans } = plansQuery;
+  const plans = useMemo(() => plansData ?? [], [plansData]);
+  const {
+    loading: plansLoading,
+    failed: plansFailed,
+    retrying: plansRetrying,
+  } = queryLoadState(plansQuery);
 
   const { data: personalRecords } = useQuery<Record<string, PersonalRecord>>({
     queryKey: QUERY_KEYS.personalRecords,
@@ -29,19 +38,20 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
   // `loadOlderEntries`. An invalidation refetches the loaded pages in order,
   // so the cost of a write stays proportional to what the athlete has opened
   // rather than to their whole history.
-  const {
-    data: timelineCache,
-    isLoading,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery<TimelinePage, Error, TimelineCache, (string | null)[], string | null>({
+  const timelineQuery = useInfiniteQuery<TimelinePage, Error, TimelineCache, (string | null)[], string | null>({
     queryKey: [...QUERY_KEYS.timeline, selectedPlanId],
     queryFn: ({ pageParam }) => api.timeline.getPage(selectedPlanId, pageParam),
     initialPageParam: null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: isAuthUserLoaded,
   });
+  const { data: timelineCache, refetch: refetchTimeline, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    timelineQuery;
+  const {
+    loading: timelinePending,
+    failed: timelineFailed,
+    retrying: timelineRetrying,
+  } = queryLoadState(timelineQuery);
   const serverTimelineData = useMemo(() => flattenTimelineCache(timelineCache), [timelineCache]);
   const loadOlderEntries = useCallback(() => {
     if (!isFetchingNextPage) void fetchNextPage();
@@ -67,9 +77,27 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
     enabled: isAuthUserLoaded,
   });
 
-  const timelineLoading = !isAuthUserLoaded || isLoading;
+  // A failed fetch is not an empty account. Both queries default to [] when
+  // they have no data, so without this a 5xx or an unreachable server read
+  // as a brand-new athlete: the welcome card with "Generate AI Plan" and
+  // "Use 8-Week Template", and onboarding launched for a returning user. An
+  // empty timeline cannot tell a first-run account from a returning one
+  // until the plans answer, so the plans count under it; a plans failure
+  // under a timeline with entries still shows the entries.
+  // U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const timelineEmpty = serverTimelineData.length === 0;
+  const timelineLoading = !isAuthUserLoaded || timelinePending || (timelineEmpty && plansLoading);
+  const isError = timelineFailed || (timelineEmpty && plansFailed);
+  const isRetrying = timelineRetrying || (timelineEmpty && plansRetrying);
+  const retry = useCallback(() => {
+    if (timelineFailed) refetchTimeline().catch(ignoreResult);
+    if (plansFailed) refetchPlans().catch(ignoreResult);
+  }, [timelineFailed, plansFailed, refetchTimeline, refetchPlans]);
 
-  const isNewUser = isAuthUserLoaded && !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
+  // New only once both answered, empty: never while either is loading,
+  // paused offline or failed. U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const isNewUser =
+    isAuthUserLoaded && plansData?.length === 0 && timelineCache !== undefined && timelineData.length === 0;
 
   return {
     plans,
@@ -77,6 +105,9 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
     personalRecords,
     timelineData,
     timelineLoading,
+    isError,
+    isRetrying,
+    retry,
     annotations,
     isNewUser,
     todayRef,

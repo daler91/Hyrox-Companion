@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { analyzeFuellingCorrelation, type FuellingCorrelationDay } from "./fuellingCorrelation";
 
 function day(over: Partial<FuellingCorrelationDay> = {}): FuellingCorrelationDay {
-  return { carbG: 300, carbTargetG: 300, avgRpe: null, compliancePct: null, ...over };
+  return {
+    calories: 2000,
+    carbG: 300,
+    carbTargetG: 300,
+    avgRpe: null,
+    compliancePct: null,
+    ...over,
+  };
 }
 
 // 3 hit + 3 miss days (vs a 300g target; hit = ≥270g) with RPE + compliance.
@@ -82,6 +89,26 @@ describe("analyzeFuellingCorrelation", () => {
     ]);
 
     expect(out.eligibleDays).toBe(6);
+  });
+
+  it("does not count a day with no food logged as a carb miss (C20)", () => {
+    // An unlogged day reads 0 g of carbs. It used to land in the miss bucket,
+    // so three hard training days the athlete simply did not log food for
+    // dragged the "missed" RPE up and invented a fuelling effect.
+    const unlogged = day({ calories: 0, carbG: 0, avgRpe: 9, compliancePct: 50 });
+    const out = analyzeFuellingCorrelation([...BALANCED, unlogged, unlogged, unlogged]);
+
+    expect(out.eligibleDays).toBe(6);
+    expect(out.rpe).toEqual({ hitDays: 3, missDays: 3, hitAvg: 6.3, missAvg: 7.3, delta: -1 });
+    expect(out.compliance).toMatchObject({ missDays: 3, missAvg: 78 });
+  });
+
+  it("still counts a logged day with little carbohydrate as a miss", () => {
+    // Food logged, carbs far short: a real miss, not a missing log.
+    const lowCarb = day({ calories: 1800, carbG: 40, avgRpe: 8 });
+    const out = analyzeFuellingCorrelation([...BALANCED, lowCarb]);
+
+    expect(out.rpe?.missDays).toBe(4);
   });
 
   it("flags an empty range", () => {

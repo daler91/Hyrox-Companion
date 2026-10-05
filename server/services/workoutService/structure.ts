@@ -8,6 +8,7 @@ import {
   type StructureBlockInput,
   type StructureBlockScore,
   structureBlockScoreSchema,
+  type StructureSetRelink,
   workoutLogs,
   workoutStructureBlocks,
   workoutStructureSteps,
@@ -20,6 +21,7 @@ import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
+import { getMutationOwnerAdapter } from "../../storage/exerciseSetOwners";
 import { prescribedSetToLogRow, structureTargetsFromExerciseSet } from "../../storage/shared";
 import {
   exerciseSetOwnerCondition,
@@ -220,6 +222,16 @@ async function mirrorStructureStepsFromExerciseRows(
   }));
 }
 
+/** The link columns of a row whose step is gone. */
+const UNLINKED_STRUCTURE_SET = {
+  blockId: null,
+  stepNumber: null,
+  intervalMinute: null,
+  cycleNumber: null,
+  stepRole: null,
+  groupId: null,
+} as const;
+
 async function clearStaleStructureSetLinks(
   tx: WorkoutTx,
   owner: SetOwner,
@@ -238,15 +250,93 @@ async function clearStaleStructureSetLinks(
   if (staleIds.length === 0) return;
   await tx
     .update(exerciseSets)
-    .set({
-      blockId: null,
-      stepNumber: null,
-      intervalMinute: null,
-      cycleNumber: null,
-      stepRole: null,
-      groupId: null,
-    })
+    .set(UNLINKED_STRUCTURE_SET)
     .where(inArray(exerciseSets.id, staleIds));
+}
+
+interface RelinkGroup {
+  readonly fromBlockId: string;
+  readonly fromStepNumber: number;
+  readonly values: Partial<InsertExerciseSet>;
+  readonly setIds: string[];
+}
+
+function relinkValues(relink: StructureSetRelink): Partial<InsertExerciseSet> {
+  if (relink.blockId === null || relink.stepNumber === null) return UNLINKED_STRUCTURE_SET;
+  return {
+    blockId: relink.blockId,
+    stepNumber: relink.stepNumber,
+    ...(relink.intervalMinute === undefined ? {} : { intervalMinute: relink.intervalMinute }),
+    ...(relink.cycleNumber === undefined ? {} : { cycleNumber: relink.cycleNumber }),
+  };
+}
+
+/** Relinks that write the same values from the same step, so each group is one UPDATE. */
+function groupRelinks(relinks: readonly StructureSetRelink[]): RelinkGroup[] {
+  const groups = new Map<string, RelinkGroup>();
+  for (const relink of relinks) {
+    const values = relinkValues(relink);
+    const key = JSON.stringify([relink.fromBlockId, relink.fromStepNumber, values]);
+    const group = groups.get(key);
+    if (group) {
+      group.setIds.push(relink.setId);
+    } else {
+      groups.set(key, {
+        fromBlockId: relink.fromBlockId,
+        fromStepNumber: relink.fromStepNumber,
+        values,
+        setIds: [relink.setId],
+      });
+    }
+  }
+  return [...groups.values()];
+}
+
+function isOwnedBy(row: Pick<ExerciseSet, "workoutLogId" | "planDayId">, owner: SetOwner): boolean {
+  return "workoutLogId" in owner ? row.workoutLogId === owner.workoutLogId : row.planDayId === owner.planDayId;
+}
+
+/**
+ * Move the owner's rows along with the steps a structure edit renumbered, in
+ * the transaction that saves the edit, so the rows and the steps change
+ * together or not at all. A set that belongs to anyone but `owner` fails the
+ * whole save before anything is written. A set that no longer exists was
+ * deleted after the client computed the relinks: there is nothing left to
+ * move, so it is skipped rather than failing the save, which reverted the
+ * athlete's block edit over a row they had just removed. A row whose link is
+ * no longer the one the client saw was relinked by a newer write since, and
+ * is left where that write put it. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function applyStructureSetRelinks(
+  tx: WorkoutTx,
+  owner: SetOwner,
+  relinks: readonly StructureSetRelink[],
+): Promise<void> {
+  if (relinks.length === 0) return;
+  const setIds = relinks.map((relink) => relink.setId);
+  const existing = await tx
+    .select({ workoutLogId: exerciseSets.workoutLogId, planDayId: exerciseSets.planDayId })
+    .from(exerciseSets)
+    .where(inArray(exerciseSets.id, setIds));
+  if (existing.some((row) => !isOwnedBy(row, owner))) {
+    throw new AppError(ErrorCode.NOT_FOUND, "Exercise set not found", 404);
+  }
+  // The owner condition below also leaves the deleted ones untouched. Each
+  // set id is in one group only, so the groups touch disjoint rows and their
+  // order does not matter; the transaction's client runs them in turn.
+  await Promise.all(
+    groupRelinks(relinks).map((group) =>
+      tx
+        .update(exerciseSets)
+        .set(group.values)
+        .where(and(
+          exerciseSetOwnerCondition(owner),
+          inArray(exerciseSets.id, group.setIds),
+          eq(exerciseSets.blockId, group.fromBlockId),
+          eq(exerciseSets.stepNumber, group.fromStepNumber),
+        )),
+    ),
+  );
 }
 
 function structureBlockInsertValues(owner: SetOwner, block: StructureBlockInput, idx: number) {
@@ -556,10 +646,21 @@ export async function replacePlanDayStructure(
   planDayId: string,
   userId: string,
   structureBlocks: StructureBlockInput[],
+  relinks: readonly StructureSetRelink[] = [],
 ): Promise<{ exerciseSets: ExerciseSet[]; structureBlocks: StructureBlockInput[] } | null> {
-  const planDay = await storage.plans.getPlanDay(planDayId, userId);
-  if (!planDay) return null;
-  await db.transaction((tx) => replaceStructureForOwner(tx, { planDayId }, structureBlocks));
+  const owner = { planDayId };
+  const saved = await db.transaction(async (tx) => {
+    // The plan-day row lock serializes two saves of this day's blocks. Without
+    // it the second one's insert could collide with the first one's block ids
+    // (the client re-sends them) while the first was still committing
+    // (U3, CL15, CODEBASE_ANALYSIS_2026-10-03).
+    const adapter = getMutationOwnerAdapter({ kind: "planDay", id: planDayId, userId });
+    if (!(await adapter.lockOwnedContainer(tx, planDayId, userId))) return false;
+    await applyStructureSetRelinks(tx, owner, relinks);
+    await replaceStructureForOwner(tx, owner, structureBlocks);
+    return true;
+  });
+  if (!saved) return null;
   const [exerciseSetsForDay, savedStructure] = await Promise.all([
     storage.workouts.getExerciseSetsByPlanDay(planDayId, userId),
     storage.workouts.getWorkoutStructureByPlanDay(planDayId, userId),

@@ -2,6 +2,7 @@ import type { Food, FoodWithServingsResponse } from "@shared/schema";
 
 import { storage } from "../../storage";
 import { fetchUsdaFoodById, fetchUsdaFoodPortions } from "./usdaClient";
+import { type ProviderDeadline, startProviderDeadline } from "./utils";
 
 /**
  * A food plus its named servings for the log dialog (FR-2.4). For a USDA food
@@ -29,15 +30,33 @@ export async function getFoodWithServings(
   ]);
   if (!food) return null;
 
+  // Both USDA lookups share one deadline, retries included: chained with only
+  // their per-attempt timeouts they could outlast the client's request
+  // timeout, and the food could not be opened to log at all. Past it, the food
+  // opens with what is cached. D13 (CODEBASE_ANALYSIS_2026-10-03)
+  const deadline = startProviderDeadline();
+  return enrichFromUsda(id, food, initialServings, deadline).finally(() => {
+    deadline.clear();
+  });
+}
+
+/** Backfill a food's named servings and micros from USDA, within `deadline`. */
+async function enrichFromUsda(
+  id: string,
+  food: Food,
+  initialServings: FoodWithServingsResponse["servings"],
+  deadline: ProviderDeadline,
+): Promise<FoodWithServingsResponse> {
   let servings = initialServings;
   if (servings.length === 0 && food.source === "usda" && food.sourceId) {
-    const portions = await fetchUsdaFoodPortions(food.sourceId);
+    const portions = await deadline
+      .within(fetchUsdaFoodPortions(food.sourceId, { signal: deadline.signal }))
+      .catch(() => []);
     if (portions.length > 0) {
       servings = await storage.nutrition.cacheServings(id, portions);
     }
   }
-
-  return { food: await enrichUsdaMicros(food), servings };
+  return { food: await enrichUsdaMicros(food, deadline), servings };
 }
 
 /**
@@ -46,11 +65,13 @@ export async function getFoodWithServings(
  * foods have null micros until now. Best-effort: returns the original food
  * unchanged on any miss/error so opening a food never fails on enrichment.
  */
-async function enrichUsdaMicros(food: Food): Promise<Food> {
+async function enrichUsdaMicros(food: Food, deadline: ProviderDeadline): Promise<Food> {
   if (food.source !== "usda" || !food.sourceId) return food;
   if (food.micros && Object.keys(food.micros).length > 0) return food;
   try {
-    const detail = await fetchUsdaFoodById(food.sourceId);
+    const detail = await deadline.within(
+      fetchUsdaFoodById(food.sourceId, { signal: deadline.signal }),
+    );
     if (!detail?.micros || Object.keys(detail.micros).length === 0) return food;
     const [updated] = await storage.nutrition.upsertFoods([detail]);
     return updated ?? food;

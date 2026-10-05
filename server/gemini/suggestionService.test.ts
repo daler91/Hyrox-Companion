@@ -1,7 +1,19 @@
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
+import { AiConfigurationError } from "../ai/errors";
+import { generateJsonText } from "../ai/providers";
+import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
-import { parseAndValidateSuggestions } from "./suggestionService";
+import {
+  generateReviewNotes,
+  generateWorkoutSuggestions,
+  parseAndValidateReviewNotes,
+  parseAndValidateSuggestions,
+  rethrowCoachCallFailure,
+} from "./suggestionService";
+import type { TrainingContext } from "./types";
+
+vi.mock("../ai/providers", () => ({ generateJsonText: vi.fn() }));
 
 vi.mock("../logger", () => ({
   logger: {
@@ -98,18 +110,34 @@ describe("suggestionService - parseAndValidateSuggestions", () => {
     expect(result[0].rationale).toBe("Lower back and hamstrings");
   });
 
-  it("should gracefully handle malformed JSON and log an error", () => {
+  // AI8 (CODEBASE_ANALYSIS_2026-10-03): `[]` is the model's answer "nothing
+  // to change". An unreadable reply used to come back as the same `[]`.
+  it("throws on malformed JSON instead of reading it as no suggestions, and logs it", () => {
     const invalidJson = "This is definitely not JSON";
 
-    const result = parseAndValidateSuggestions(invalidJson);
-
-    expect(result).toEqual([]);
+    expect(() => parseAndValidateSuggestions(invalidJson)).toThrow(AppError);
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({
         responseLength: 27
       }),
       "[gemini] suggestions JSON.parse failed."
     );
+  });
+
+  it.each([
+    ["an empty reply", ""],
+    ["a JSON object", JSON.stringify({ suggestions: [] })],
+    ["a JSON null", "null"],
+  ])("throws on %s, which is not the array asked for", (_label, text) => {
+    expect(() => parseAndValidateSuggestions(text)).toThrow(
+      expect.objectContaining({ code: ErrorCode.AI_ERROR, status: 502 }),
+    );
+    expect(() => parseAndValidateReviewNotes(text)).toThrow(AppError);
+  });
+
+  it("reads an empty array as the model finding nothing to change", () => {
+    expect(parseAndValidateSuggestions("[]")).toEqual([]);
+    expect(parseAndValidateReviewNotes("[]")).toEqual([]);
   });
 
   it("should drop suggestions that fail schema validation and log a warning", () => {
@@ -161,5 +189,85 @@ describe("suggestionService - parseAndValidateSuggestions", () => {
     expect(logged.item).toContain("forged");
     expect(logged.item).not.toContain("\n");
     expect(logged.issues).not.toContain("\n");
+  });
+});
+
+/**
+ * AI8 (CODEBASE_ANALYSIS_2026-10-03): both coach calls caught every failure
+ * and returned `[]`, so an outage read as "the plan still fits". A failed call
+ * now rejects with a classified AppError the caller can act on.
+ */
+describe("suggestionService - failed coach calls", () => {
+  const context = {
+    totalWorkouts: 0,
+    completedWorkouts: 0,
+    plannedWorkouts: 1,
+    missedWorkouts: 0,
+    skippedWorkouts: 0,
+    completionRate: 0,
+    currentStreak: 0,
+    recentWorkouts: [],
+    exerciseBreakdown: {},
+  } as unknown as TrainingContext;
+  const upcoming = [{ id: "day-1", date: "2026-06-16", focus: "Run", mainWorkout: "Easy 5k" }];
+  const calls = [
+    ["suggestions", () => generateWorkoutSuggestions(context, upcoming)],
+    ["review notes", () => generateReviewNotes(context, upcoming)],
+  ] as const;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(calls)("%s: a provider outage rejects with its classified code", async (_label, call) => {
+    vi.mocked(generateJsonText).mockRejectedValue(
+      new Error("AI provider temporarily unavailable (circuit breaker open)"),
+    );
+
+    await expect(call()).rejects.toMatchObject({ code: ErrorCode.AI_UNAVAILABLE, status: 503 });
+  });
+
+  it.each(calls)("%s: an empty reply rejects rather than reading as no changes", async (_label, call) => {
+    vi.mocked(generateJsonText).mockResolvedValue({ text: "", model: "m" });
+
+    await expect(call()).rejects.toMatchObject({ code: ErrorCode.AI_ERROR, status: 502 });
+  });
+
+  it.each(calls)("%s: an empty array is a real answer", async (_label, call) => {
+    vi.mocked(generateJsonText).mockResolvedValue({ text: "[]", model: "m" });
+
+    await expect(call()).resolves.toEqual([]);
+  });
+
+  it.each(calls)("%s: a call this deployment cannot make rejects with the configuration error itself", async (_label, call) => {
+    // Wrapped as a classified AppError, a missing reasoning model read as an
+    // outage and the auto-coach retried it three times to the same end.
+    const missingModel = new AiConfigurationError('AI text model is not configured for provider "anthropic".');
+    vi.mocked(generateJsonText).mockRejectedValue(missingModel);
+
+    await expect(call()).rejects.toBe(missingModel);
+  });
+
+  it("makes no call when there is nothing upcoming", async () => {
+    await expect(generateWorkoutSuggestions(context, [])).resolves.toEqual([]);
+    await expect(generateReviewNotes(context, [])).resolves.toEqual([]);
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+});
+
+describe("rethrowCoachCallFailure", () => {
+  it("reports a configuration error as the AI kill switch's 503", () => {
+    const missingKey = new AiConfigurationError("GEMINI_API_KEY is required for AI features");
+
+    expect(() => rethrowCoachCallFailure(missingKey)).toThrow(AppError);
+    expect(() => rethrowCoachCallFailure(missingKey)).toThrow(
+      expect.objectContaining({ code: ErrorCode.AI_FEATURES_DISABLED, status: 503 }),
+    );
+  });
+
+  it("rethrows any other failure unchanged", () => {
+    const outage = new AppError(ErrorCode.AI_UNAVAILABLE, "AI service temporarily unavailable.", 503);
+
+    expect(() => rethrowCoachCallFailure(outage)).toThrow(outage);
   });
 });

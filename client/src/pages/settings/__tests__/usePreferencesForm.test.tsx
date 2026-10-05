@@ -8,16 +8,25 @@ import { usePreferencesForm } from "../usePreferencesForm";
 const harness = {
   toast: vi.fn(),
   updatePreferences: vi.fn<(payload: unknown) => Promise<unknown>>(),
+  invalidateQueries: vi.fn<(filters: unknown) => Promise<void>>(),
 };
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/lib/queryClient", () => ({
-  queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
+  queryClient: { invalidateQueries: (filters: unknown) => harness.invalidateQueries(filters) },
 }));
 vi.mock("@/lib/api", () => ({
   QUERY_KEYS: {
     preferences: ["preferences"],
     authUser: ["auth"],
+    // Every key the save reaches: one left out is an undefined key, which on
+    // a real QueryClient invalidates every query.
+    sessionGradesPrefix: ["/api/v1/session-grades"],
+    workouts: ["/api/v1/workouts"],
+    nutritionSessionFuellingPrefix: ["/api/v1/nutrition/session-fuelling"],
+    nutritionDayPrefix: ["/api/v1/nutrition/summary"],
+    nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
+    nutritionBlockPrefix: ["/api/v1/nutrition/block"],
   },
   api: {
     preferences: { update: (payload: unknown) => harness.updatePreferences(payload) },
@@ -75,6 +84,7 @@ describe("usePreferencesForm", () => {
     vi.clearAllMocks();
     localStorage.clear();
     harness.updatePreferences.mockResolvedValue({});
+    harness.invalidateQueries.mockResolvedValue();
   });
 
   it("hydrates the draft from server preferences and starts clean", async () => {
@@ -218,6 +228,39 @@ describe("usePreferencesForm", () => {
     expect(result.current.hasChanges).toBe(false);
   });
 
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03): a session's fuelling targets and the
+  // day's meal targets are sized to the bodyweight, and the training load
+  // behind the chips and the Fuelling block reads it, the heart rates and the
+  // units: each kept its old figures after a save.
+  it("refreshes the fuelling reads when a new bodyweight is saved", async () => {
+    const reads = new QueryClient();
+    const session = ["/api/v1/nutrition/session-fuelling", "w1"];
+    const day = ["/api/v1/nutrition/summary", "2026-09-15"];
+    const range = ["/api/v1/nutrition/summary-range", "2026-09-09", "2026-09-15"];
+    const block = ["/api/v1/nutrition/block", "2026-08-17", "2026-09-15"];
+    const micros = ["/api/v1/nutrition/micros", "2026-09-15"];
+    for (const key of [session, day, range, block, micros]) reads.setQueryData(key, {});
+    harness.invalidateQueries.mockImplementation((filters) =>
+      reads.invalidateQueries(filters as { queryKey: readonly unknown[] }),
+    );
+    const { result } = await renderHydratedForm();
+
+    act(() => {
+      result.current.updateField("bodyweightKg", 82);
+    });
+    act(() => {
+      result.current.handleSave();
+    });
+
+    await waitFor(() => {
+      for (const key of [session, day, range, block]) {
+        expect(reads.getQueryState(key)?.isInvalidated).toBe(true);
+      }
+    });
+    expect(reads.getQueryState(micros)?.isInvalidated).toBe(false);
+    expect(harness.updatePreferences).toHaveBeenCalledWith(expect.objectContaining({ bodyweightKg: 82 }));
+  });
+
   it("keeps unsaved edits when a background refetch delivers changed preferences", async () => {
     const { result, qc } = await renderHydratedForm();
 
@@ -269,6 +312,148 @@ describe("usePreferencesForm", () => {
       expect.objectContaining({ title: "Complete MAF setup" }),
     );
     expect(result.current.hasRequiredMafInputs).toBe(false);
+  });
+
+  // CL34 (CODEBASE_ANALYSIS_2026-10-03): accounts set up before audit M6 are on
+  // MAF with no category (migration 0090 did not backfill one). Every save was
+  // refused until they answered it, and answering rewrote their ceiling.
+  describe("a MAF account set up before the category question", () => {
+    const legacyMaf = serverPreferences({
+      trainingStyleId: "maf_method",
+      mafAge: 40,
+      mafConsistency: "high",
+      mafTrend: "improving",
+      mafCategory: null,
+      mafHr: 145,
+    });
+
+    async function renderLegacyMafForm() {
+      const view = renderForm(legacyMaf);
+      await waitFor(() => {
+        expect(view.result.current.draft.mafAgeInput).toBe("40");
+      });
+      return view;
+    }
+
+    function savedPayload(): Record<string, unknown> {
+      const [payload] = harness.updatePreferences.mock.calls.at(-1) ?? [];
+      return payload as Record<string, unknown>;
+    }
+
+    it("saves other settings and leaves the stored ceiling alone", async () => {
+      const { result } = await renderLegacyMafForm();
+
+      act(() => {
+        result.current.updateField("weightUnit", "lbs");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(harness.updatePreferences).toHaveBeenCalledTimes(1);
+      });
+      expect(harness.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Complete MAF setup" }));
+      expect(savedPayload()).toMatchObject({ weightUnit: "lbs", trainingStyleId: "maf_method", mafCategory: null });
+      // Absent on the wire: the server keeps the proxy-derived ceiling.
+      expect(savedPayload().mafHr).toBeUndefined();
+    });
+
+    it("still asks for the category when the age that moves the ceiling changes", async () => {
+      const { result } = await renderLegacyMafForm();
+
+      act(() => {
+        result.current.updateField("mafAgeInput", "41");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      expect(harness.updatePreferences).not.toHaveBeenCalled();
+      expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Complete MAF setup" }));
+    });
+
+    it("recomputes the ceiling once the category is answered", async () => {
+      const { result } = await renderLegacyMafForm();
+
+      act(() => {
+        result.current.updateField("mafCategoryInput", "training_interrupted");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(harness.updatePreferences).toHaveBeenCalledTimes(1);
+      });
+      // 180 - 40, then -5 for this category.
+      expect(savedPayload()).toMatchObject({ mafCategory: "training_interrupted", mafHr: 135 });
+    });
+
+    // The server accepts no category only beside the legacy consistency/trend
+    // pair, and never without an age (validateMafTransition): those saves came
+    // back 400 MAF_SETUP_REQUIRED, shown as "Failed to save settings".
+    it.each([
+      { name: "no legacy consistency/trend pair", overrides: { mafConsistency: null, mafTrend: null } },
+      { name: "only half of that pair", overrides: { mafTrend: null } },
+      { name: "no age", overrides: { mafAge: null } },
+    ])("asks for MAF setup, before saving, on an account with $name", async ({ overrides }) => {
+      const { result } = renderForm({ ...legacyMaf, ...overrides });
+      await waitFor(() => {
+        expect(result.current.draft.trainingStyleId).toBe("maf_method");
+      });
+
+      act(() => {
+        result.current.updateField("weightUnit", "lbs");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      expect(harness.updatePreferences).not.toHaveBeenCalled();
+      expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Complete MAF setup" }));
+    });
+
+    it("asks for MAF setup when the server refuses the save as incomplete", async () => {
+      harness.updatePreferences.mockRejectedValueOnce(
+        new Error(
+          `400: ${JSON.stringify({ error: "MAF setup is incomplete", code: "MAF_SETUP_REQUIRED", details: [] })}`,
+        ),
+      );
+      const { result } = await renderLegacyMafForm();
+
+      act(() => {
+        result.current.updateField("weightUnit", "lbs");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Complete MAF setup" }));
+      });
+      expect(harness.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ description: "Failed to save settings. Please try again." }),
+      );
+    });
+
+    it("still says the save failed for any other refusal", async () => {
+      harness.updatePreferences.mockRejectedValueOnce(new Error("500: Internal Server Error"));
+      const { result } = await renderLegacyMafForm();
+
+      act(() => {
+        result.current.updateField("weightUnit", "lbs");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(harness.toast).toHaveBeenCalledWith(
+          expect.objectContaining({ description: "Failed to save settings. Please try again." }),
+        );
+      });
+    });
   });
 
   it("reports a style change as saved even when its audit entry can't be stored", async () => {

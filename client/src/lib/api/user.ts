@@ -132,12 +132,22 @@ export const preferences = {
     typedRequest<User>("PATCH", "/api/v1/preferences", data),
 } as const;
 
+/**
+ * A device sync fetches the provider's activities and enriches them (Strava
+ * alone allows itself 30 s of enrichment) before it answers, so the 15 s
+ * default cut Strava's sync off mid-import (CL26, CODEBASE_ANALYSIS_2026-10-03).
+ */
+const DEVICE_SYNC_TIMEOUT_MS = 60_000;
+
 export const strava = {
   auth: () => typedRequest<{ authUrl: string }>("GET", "/api/v1/strava/auth"),
 
   disconnect: () => rawRequest("DELETE", "/api/v1/strava/disconnect").then(() => undefined),
 
-  sync: () => typedRequest<StravaSyncResponse>("POST", "/api/v1/strava/sync"),
+  sync: () =>
+    typedRequest<StravaSyncResponse>("POST", "/api/v1/strava/sync", undefined, {
+      timeoutMs: DEVICE_SYNC_TIMEOUT_MS,
+    }),
 } as const;
 
 export interface GarminStatus {
@@ -169,7 +179,7 @@ export const garmin = {
 
   sync: () =>
     typedRequest<GarminSyncResponse>("POST", "/api/v1/garmin/sync", undefined, {
-      timeoutMs: 60_000,
+      timeoutMs: DEVICE_SYNC_TIMEOUT_MS,
     }),
 } as const;
 

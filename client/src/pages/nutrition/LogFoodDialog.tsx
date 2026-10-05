@@ -92,6 +92,12 @@ function scaleEntryPreview(
   return roundMacros(scaleNutrition(entry.per100g, quantityG));
 }
 
+/** The serving an edit replaces: the entry as saved, which today's totals
+ *  already count (CL32, CODEBASE_ANALYSIS_2026-10-03). None for a new log. */
+function replacedServing(state: LogDialogState): NutritionMacroTotals | undefined {
+  return state.mode === "edit" ? scaleEntryPreview(state.entry, state.entry.quantityG) : undefined;
+}
+
 /** Servings visible to the user (fetched + optimistic), de-duped by id, by grams. */
 function computeMergedServings(
   fetched: readonly FoodServing[],
@@ -347,7 +353,7 @@ function LogFoodForm({
     enrichedFood ? previewMicrosScaled(enrichedFood, quantityG) : {},
   );
   const goalRows = todayTotals
-    ? projectGoalContribution(todayTotals, preview, effectiveTarget)
+    ? projectGoalContribution(todayTotals, preview, effectiveTarget, replacedServing(state))
     : [];
 
   const handleUnitChange = (value: string) => {

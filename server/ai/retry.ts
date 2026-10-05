@@ -2,13 +2,7 @@ import { randomInt } from "node:crypto";
 
 import { AI_CALL_TIMEOUT_MS, AI_REQUEST_TIMEOUT_MS } from "../constants";
 import { logger } from "../logger";
-import {
-  assertBreakerClosed,
-  CircuitBreakerOpenError,
-  recordBreakerFailure,
-  recordBreakerSuccess,
-  releaseBreakerProbe,
-} from "./circuitBreaker";
+import { type AiCircuitBreaker, CircuitBreakerOpenError } from "./circuitBreaker";
 
 // Provider-neutral retry and timeout core shared by every text AI provider
 // (A2). Keep this module free of provider SDK imports so a policy change here
@@ -62,20 +56,42 @@ function shouldRetry(error: unknown, attempt: number, maxRetries: number, baseDe
   return delay;
 }
 
+/** How one retried call is paced and bounded; every field has a default. */
+export interface RetryOptions {
+  /** Retries after the first attempt (default 4). */
+  readonly maxRetries?: number;
+  /** First backoff delay, doubled per retry (default 2 s). */
+  readonly baseDelayMs?: number;
+  /** Total time across every attempt and backoff (default `AI_REQUEST_TIMEOUT_MS`). */
+  readonly budgetMs?: number;
+  /** Cap on a single attempt (default `AI_CALL_TIMEOUT_MS`). */
+  readonly callTimeoutMs?: number;
+  /** The caller's own cancel signal, which `fn` already honours; see the catch below. */
+  readonly callerSignal?: AbortSignal;
+}
+
 export async function retryWithBackoff<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   label: string,
-  maxRetries: number = 4,
-  baseDelayMs: number = 2000,
-  budgetMs: number = AI_REQUEST_TIMEOUT_MS,
-  callTimeoutMs: number = AI_CALL_TIMEOUT_MS,
-  /** The caller's own cancel signal, which `fn` already honours; see the catch below. */
-  callerSignal?: AbortSignal,
+  /**
+   * The breaker for this call's provider and capability (`textBreakerFor`,
+   * `embeddingBreaker`, `visionBreaker`). Required, so no call lands on a
+   * breaker it shares with an unrelated provider — AI2 (CODEBASE_ANALYSIS_2026-10-03).
+   */
+  breaker: AiCircuitBreaker,
+  options: RetryOptions = {},
 ): Promise<T> {
+  const {
+    maxRetries = 4,
+    baseDelayMs = 2000,
+    budgetMs = AI_REQUEST_TIMEOUT_MS,
+    callTimeoutMs = AI_CALL_TIMEOUT_MS,
+    callerSignal,
+  } = options;
   // Fast-fail when the breaker is open so prolonged outages don't amplify
   // latency across every caller (CODEBASE_AUDIT.md §5). Breaker open error
   // is not retryable — bail immediately so upstream queues can back off.
-  assertBreakerClosed();
+  breaker.assertClosed();
 
   const deadline = Date.now() + budgetMs;
   // One attempt, then — after its backoff — the next, while the failure is
@@ -98,7 +114,7 @@ export async function retryWithBackoff<T>(
         label,
         () => controller.abort(new Error(`AI call timed out (${label})`)),
       );
-      recordBreakerSuccess();
+      breaker.recordSuccess();
       return result;
     } catch (error) {
       // A breaker-open error thrown mid-flight (from nested retryWithBackoff
@@ -108,7 +124,7 @@ export async function retryWithBackoff<T>(
       // provider's health, unlike the per-call timeout, which still counts —
       // AI5 (CODEBASE_ANALYSIS_2026-10-03).
       if (callerSignal?.aborted) {
-        releaseBreakerProbe();
+        breaker.releaseProbe();
         throw error;
       }
       const delay = shouldRetry(error, attempt, maxRetries, baseDelayMs, deadline);
@@ -118,7 +134,7 @@ export async function retryWithBackoff<T>(
         // tripping. The error goes with it so a request the provider rejected
         // as malformed doesn't push the breaker toward cutting off every
         // other caller.
-        recordBreakerFailure(error);
+        breaker.recordFailure(error);
         throw error;
       }
       logger.warn("[ai] provider request failed; retry scheduled");

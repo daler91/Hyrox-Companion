@@ -8,10 +8,12 @@
  *
  *   link → workout_log   the athlete already logged it: attach the recording
  *                        (fill NULL metrics, never overwrite their numbers)
- *   link → plan_day      not logged yet: the activity becomes the day's log,
- *                        built like a manual confirm (prescription, copied
- *                        sets, adherence, day marked completed), RPE only
- *                        from the athlete's own Strava rating, else NULL
+ *   link → plan_day      not logged yet: the activity becomes the day's log
+ *                        (prescription text, day marked completed) holding
+ *                        only what the recording measured — no prescribed set
+ *                        copied in as an actual, no compliance (D12, see
+ *                        createLogFromPlanDayWithStravaInTx), RPE only from
+ *                        the athlete's own Strava rating, else NULL
  *   suggest              plausible but not certain: import standalone and
  *                        record the candidate for the timeline to offer
  *   none                 import standalone, exactly as before

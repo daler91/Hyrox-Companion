@@ -58,9 +58,15 @@ export function BulkDeleteControls({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete selected workouts?</AlertDialogTitle>
+            {/* A completed planned session deletes its log, not its plan day,
+                so the day stays on the plan and reads planned again, or missed
+                once its date has passed; say so rather than imply the
+                prescription goes too. CL23 (CODEBASE_ANALYSIS_2026-10-03) */}
             <AlertDialogDescription>
               This will remove {selectedCount} selected workout{selectedCount === 1 ? "" : "s"} from
-              your timeline.
+              your timeline. Completed planned sessions keep their plan days: only their logged
+              workouts are removed, and each day shows as planned again, or missed if its date has
+              passed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

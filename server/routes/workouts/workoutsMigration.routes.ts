@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, validateBody, validateQuery } from "../../routeUtils";
+import { invalidateAnalyticsCachesForUser } from "../../services/analyticsRouteCache";
 import { listBackfillReviews, resolveBackfillReview, runAssistedMigrationBackfill } from "../../services/assistedMigrationService";
 import { getUserId } from "../../types";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
@@ -27,7 +28,11 @@ export function registerWorkoutMigrationRoutes(router: Router): void {
   // takes the same consent and budget gates as batch-reparse — P6
   // (CODEBASE_ANALYSIS_2026-10-03).
   protectedPost(router, "/api/v1/workouts/migration/backfill", { limiter: rateLimiter("migrationBackfill", 2), aiConsent: true, aiBudget: true }, async (req: Request, res: Response) => {
-    const result = await runAssistedMigrationBackfill(getUserId(req));
+    const userId = getUserId(req);
+    const result = await runAssistedMigrationBackfill(userId);
+    // D10 (CODEBASE_ANALYSIS_2026-10-03): the backfill writes sets onto the
+    // athlete's workouts, so their cached analytics slices are stale.
+    invalidateAnalyticsCachesForUser(userId);
     res.json(result);
   });
 

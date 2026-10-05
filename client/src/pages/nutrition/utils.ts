@@ -1,4 +1,4 @@
-import { KCAL_PER_G } from "@shared/nutritionScaling";
+import { emptyTotals, KCAL_PER_G } from "@shared/nutritionScaling";
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 import type { MealType } from "@shared/schema/enums";
 import { MICRO_DISPLAY_DEFS } from "@shared/schema/micros";
@@ -239,19 +239,28 @@ export interface GoalContributionRow {
  * row per macro the user has set a goal for. Reuses computeTargetProgress for
  * both the current and the projected (totals + serving) points, so the same
  * unset-goal skipping applies. Empty when no target is set.
+ *
+ * Editing an entry passes its saved serving as `replacing`: the day's totals
+ * already include it, so adding the new serving on top counted the entry twice
+ * (an untouched 600 kcal dinner showed "75% → 100%" and could flag over
+ * target). The projection swaps the old serving for the new one, so an
+ * unchanged edit shows no change. CL32 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function projectGoalContribution(
   todayTotals: NutritionMacroTotals,
   serving: NutritionMacroTotals,
   target: TargetLike | null,
+  replacing?: NutritionMacroTotals,
 ): GoalContributionRow[] {
   if (!target) return [];
+  // The change first, then the total: an unchanged edit adds exactly 0.
+  const old = replacing ?? emptyTotals();
   const projectedTotals: NutritionMacroTotals = {
-    calories: todayTotals.calories + serving.calories,
-    protein: todayTotals.protein + serving.protein,
-    carb: todayTotals.carb + serving.carb,
-    fat: todayTotals.fat + serving.fat,
-    fiber: todayTotals.fiber + serving.fiber,
+    calories: todayTotals.calories + (serving.calories - old.calories),
+    protein: todayTotals.protein + (serving.protein - old.protein),
+    carb: todayTotals.carb + (serving.carb - old.carb),
+    fat: todayTotals.fat + (serving.fat - old.fat),
+    fiber: todayTotals.fiber + (serving.fiber - old.fiber),
   };
   const currentByKey = new Map(computeTargetProgress(todayTotals, target).map((r) => [r.key, r]));
   const rows: GoalContributionRow[] = [];

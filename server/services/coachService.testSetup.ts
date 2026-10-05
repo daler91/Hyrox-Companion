@@ -39,6 +39,12 @@ vi.mock("../db", () => ({
 }));
 
 vi.mock("./ai", () => ({ buildTrainingContext: vi.fn() }));
+// The text provider counts as configured unless a test says otherwise (the
+// configuration-error path in coachService.autoCoach.modelFailure.test.ts).
+vi.mock("../ai/providers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../ai/providers")>()),
+  isTextAiProviderConfigured: vi.fn(() => true),
+}));
 // The write-time lock and staleness check (AI16) has its own SQL-level tests
 // in autoCoachWriteGuard.test.ts; here every snapshot is still current unless
 // a test says otherwise.

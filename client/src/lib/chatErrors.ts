@@ -1,3 +1,4 @@
+import { parseApiError } from "@/lib/apiError";
 import { describeAiError } from "@/lib/describeAiError";
 import { AiBudgetExceededError, humanizeApiError, RateLimitError } from "@/lib/queryClient";
 import { SSEStreamError } from "@/lib/sseStream";
@@ -43,35 +44,18 @@ const failure = (message: string, retryable: boolean): ChatFailureDescription =>
   retryable,
 });
 
-/**
- * The HTTP status and body of an apiRequest error (thrown as "403: {...}"), or
- * null for any other error. String ops rather than a regex, for the same
- * SonarCloud hotspot reason as humanizeApiError.
- */
-function parseHttpError(error: Error): { status: number; body: string } | null {
-  const head = error.message.slice(0, 3);
-  const isStatus = error.message[3] === ":" && [...head].every((c) => c >= "0" && c <= "9");
-  return isStatus ? { status: Number(head), body: error.message.slice(4).trimStart() } : null;
-}
-
-function errorCodeOf(body: string): string | null {
-  try {
-    const code = (JSON.parse(body) as { code?: unknown } | null)?.code;
-    return typeof code === "string" ? code : null;
-  } catch {
-    return null;
-  }
-}
-
 function describeHttpFailure(error: Error): ChatFailureDescription {
-  const http = parseHttpError(error);
+  // apiRequest throws `${status}: ${body}`; the shared parseApiError reads the
+  // status and the body's code rather than a private copy of it.
+  // CL34 (CODEBASE_ANALYSIS_2026-10-03)
+  const http = parseApiError(error);
   if (!http) return failure(CHAT_GENERIC_FAILURE, true);
   if (http.status < 500) {
     // The server refused the request (AI coaching off, a message over the
     // limit): its own message says why, and resending won't change it.
     return failure(humanizeApiError(error), false);
   }
-  const code = errorCodeOf(http.body) ?? "";
+  const code = http.code ?? "";
   const unavailable = KNOWN_UNAVAILABLE_CODES.get(code);
   if (unavailable) return failure(unavailable, false);
   return failure(KNOWN_RETRYABLE_CODES.get(code) ?? CHAT_GENERIC_FAILURE, true);

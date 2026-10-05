@@ -23,6 +23,11 @@ interface BlockSetLocation {
   readonly setIdx: number;
 }
 
+interface PatchedBlocks {
+  readonly base: ReadonlyMap<string, StructuredExercise>;
+  readonly blocks: Map<string, StructuredExercise>;
+}
+
 const OPTIONAL_NUMBER_SET_FIELDS = [
   "reps",
   "weight",
@@ -268,6 +273,15 @@ export function DraftExerciseTable({
     queueMicrotask(flushPendingDeletes);
   }, [flushPendingDeletes]);
 
+  // Blocks this render's handlers have already patched. The row menu's block
+  // assignment patches every set of a row in the same tick, and each call
+  // used to start from the render's copy of the block and replace the whole
+  // block, so only the last set kept its assignment. Each patch now builds on
+  // the one before it; the copy is dropped once the parent's data moves on.
+  // CL16 (CODEBASE_ANALYSIS_2026-10-03)
+  const exerciseDataById = useMemo(() => new Map(Object.entries(exerciseData)), [exerciseData]);
+  const patchedBlocksRef = useRef<PatchedBlocks | null>(null);
+
   const handleUpdateSet = useCallback(
     (setId: string, patch: PatchExerciseSetPayload) => {
       const loc = locationRef.current.get(setId);
@@ -282,15 +296,21 @@ export function DraftExerciseTable({
         return;
       }
 
-      const data = exerciseData[loc.blockId];
+      const patched =
+        patchedBlocksRef.current?.base === exerciseDataById
+          ? patchedBlocksRef.current.blocks
+          : new Map<string, StructuredExercise>();
+      const data = patched.get(loc.blockId) ?? exerciseDataById.get(loc.blockId);
       if (!data) return;
       const baseSets = data.sets.length > 0 ? data.sets : [createDefaultSet(1)];
       const nextSets = baseSets.slice();
       nextSets[loc.setIdx] = applySetPatch(nextSets[loc.setIdx], patch);
       const nextBlock = applyBlockPatch({ ...data, sets: nextSets }, patch);
+      patched.set(loc.blockId, nextBlock);
+      patchedBlocksRef.current = { base: exerciseDataById, blocks: patched };
       updateBlock(loc.blockId, nextBlock);
     },
-    [exerciseData, scheduleSortFlush, updateBlock],
+    [exerciseDataById, scheduleSortFlush, updateBlock],
   );
 
   const handleAddSet = useCallback(

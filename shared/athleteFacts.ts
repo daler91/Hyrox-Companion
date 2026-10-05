@@ -75,8 +75,56 @@ function fitToFact(piece: string): string {
   return `${(lastSpace > ATHLETE_FACT_MAX_LENGTH / 2 ? room.slice(0, lastSpace) : room).trimEnd()}…`;
 }
 
-/** A leading list marker the athlete typed: "-", "*", "•", "1." or "1)". */
-const LIST_MARKER = /^(?:[-*•–—]+|\d+[.)])\s*/u;
+/**
+ * A leading list marker the athlete typed: "-", "*", "•", "1." or "1)". A
+ * digit after the dot makes it a decimal, not a marker: "2.5 kg max on
+ * overhead press" was stored as "5 kg max …" (D23, CODEBASE_ANALYSIS_2026-10-03).
+ */
+const LIST_MARKER = /^(?:[-*•–—]+|\d+(?:\.(?!\d)|\)))\s*/u;
+
+/**
+ * Abbreviations whose full stop doesn't end the sentence: "See Dr. Patel",
+ * "e.g. box jumps". Months too: "surgery Mar. 2024." split off "2024.", a
+ * piece with no letters, so the year was dropped.
+ */
+const ABBREVIATIONS = new Set([
+  "approx",
+  "dr",
+  "e.g",
+  "eg",
+  "esp",
+  "i.e",
+  "ie",
+  "incl",
+  "mr",
+  "mrs",
+  "ms",
+  "prof",
+  "vs",
+  // Months ("may" never takes a full stop).
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "sept",
+  "oct",
+  "nov",
+  "dec",
+]);
+
+/**
+ * Whether the full stop at `stopIndex` closes one of the abbreviations above
+ * (D23, CODEBASE_ANALYSIS_2026-10-03).
+ */
+function closesAbbreviation(text: string, stopIndex: number): boolean {
+  let start = stopIndex;
+  while (start > 0 && /[\p{L}.]/u.test(text.charAt(start - 1))) start -= 1;
+  return ABBREVIATIONS.has(text.slice(start, stopIndex).toLowerCase());
+}
 
 /**
  * Free text the athlete wrote elsewhere (the plan wizard's injuries box, the
@@ -88,7 +136,9 @@ export function splitIntoFacts(text: string): string[] {
   const seen = new Set<string>();
   const facts: string[] = [];
   const pieces = text
-    .replaceAll(/([.!?])\s+/g, "$1\n")
+    .replaceAll(/([.!?])\s+/g, (gap: string, mark: string, at: number) =>
+      mark === "." && closesAbbreviation(text, at) ? gap : `${mark}\n`,
+    )
     .split(/[\n;]+/)
     .map((piece) => fitToFact(normalizeFactText(normalizeFactText(piece).replace(LIST_MARKER, ""))));
   for (const piece of pieces) {

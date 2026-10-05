@@ -361,7 +361,7 @@ constraint rather than on branch logic.
 | `server/storage/__tests__/exerciseSetOwnership.integration.test.ts` | Exercise-set mutation IDOR guards (workout and plan-day owners), the W18 optimistic lock, the L4 unit re-stamp |
 | `server/storage/__tests__/timelineWindow.integration.test.ts`   | `getTimeline`: three-source merge per athlete, newest-first ordering, limit/offset windowing, set hydration       |
 | `server/storage/__tests__/nutritionLogging.integration.test.ts` | Food visibility predicate, food-log round trip and ownership, one-version-per-day targets (migration 0091)      |
-| `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct logged-workout and completed-plan-day dates, parity with the full timeline's completed set |
+| `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct dates of logged workouts that count as training (a synced walk does not) and of completed plan days, parity with the full timeline's completed training |
 | `server/storage/__tests__/recycleBin.integration.test.ts`      | Recycle bin: capture inside the delete transaction, restore with the original ids and re-links (plan day, MAF analysis, plan-day status), all-or-nothing batch restore, device-sync dedupe while binned, per-user isolation |
 
 Run them locally against any Postgres with the `vector` extension:

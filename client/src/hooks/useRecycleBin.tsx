@@ -10,6 +10,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { humanizeApiError } from "@/lib/queryClient";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -26,6 +27,9 @@ const RESTORE_INVALIDATIONS = [
   QUERY_KEYS.personalRecords,
   QUERY_KEYS.exerciseAnalytics,
   QUERY_KEYS.trainingOverview,
+  // A restored workout or plan day is back in the day's meal targets, session
+  // fuelling and the Fuelling views. CL19 (CODEBASE_ANALYSIS_2026-10-03)
+  ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
 ];
 
 export function useRecycleBin(enabled = true) {

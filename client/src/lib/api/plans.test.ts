@@ -44,6 +44,18 @@ describe('plans API client', () => {
     );
   });
 
+  it('updateDayStructure() sends the blocks and the rows that follow them in one PATCH (CL15)', () => {
+    const blocks = [{ id: 'block-emom', sectionType: 'main', formatType: 'emom', steps: [] }] as Parameters<typeof plans.updateDayStructure>[1];
+    const relinks = [{ setId: 'set-1', fromBlockId: 'block-emom', fromStepNumber: 2, blockId: 'block-emom', stepNumber: 1 }];
+
+    plans.updateDayStructure('day-1', blocks, relinks);
+
+    expect(typedRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/day-1/structure', {
+      structureBlocks: blocks,
+      relinks,
+    });
+  });
+
   it('getGenerationStatus() GETs the status endpoint for the given plan', () => {
     plans.getGenerationStatus('plan-123');
     expect(typedRequest).toHaveBeenCalledWith(

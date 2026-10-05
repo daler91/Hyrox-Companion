@@ -36,6 +36,7 @@ import type {
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
+import { AI_REQUEST_OPTIONS } from "./constants";
 
 const base = "/api/v1/nutrition";
 const enc = encodeURIComponent;
@@ -149,14 +150,16 @@ export const nutrition = {
     ),
 
   // --- Phase 4: natural-language meal logging ---
+  // Each parse is an AI call: it waits out the server's AI budget rather than
+  // the 15 s default (CL26, CODEBASE_ANALYSIS_2026-10-03).
   parseMealText: (text: string) =>
-    typedRequest<ParseMealResponse>("POST", `${base}/parse/text`, { text }),
+    typedRequest<ParseMealResponse>("POST", `${base}/parse/text`, { text }, AI_REQUEST_OPTIONS),
 
   parseMealPhoto: (imageBase64: string, mimeType: string) =>
-    typedRequest<ParseMealResponse>("POST", `${base}/parse/photo`, { imageBase64, mimeType }),
+    typedRequest<ParseMealResponse>("POST", `${base}/parse/photo`, { imageBase64, mimeType }, AI_REQUEST_OPTIONS),
 
   parseLabel: (imageBase64: string, mimeType: string) =>
-    typedRequest<ParseLabelResponse>("POST", `${base}/parse/label`, { imageBase64, mimeType }),
+    typedRequest<ParseLabelResponse>("POST", `${base}/parse/label`, { imageBase64, mimeType }, AI_REQUEST_OPTIONS),
 
   createLogBatch: (data: CreateFoodLogBatchInput) =>
     typedRequest<BatchLogResponse>("POST", `${base}/logs/batch`, data),
@@ -183,5 +186,6 @@ export const nutrition = {
   // --- Phase 5: AI insights ---
   getInsights: () => typedRequest<NutritionInsightsResponse>("GET", `${base}/insights`),
 
-  regenerateInsights: () => typedRequest<NutritionInsightsResponse>("POST", `${base}/insights`),
+  regenerateInsights: () =>
+    typedRequest<NutritionInsightsResponse>("POST", `${base}/insights`, undefined, AI_REQUEST_OPTIONS),
 } as const;

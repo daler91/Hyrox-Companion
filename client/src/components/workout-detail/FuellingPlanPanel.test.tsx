@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 import { makeTimelineEntry } from "@/test/factories/timelineEntryFactory";
 import { renderWithBodyweight } from "@/test/support/renderWithBodyweight";
 
@@ -20,6 +21,7 @@ vi.mock("@/lib/api", () => ({
   QUERY_KEYS: {
     preferences: ["/api/v1/preferences"],
     timeline: ["/api/v1/timeline"],
+    nutritionDayPrefix: ["/api/v1/nutrition/summary"],
     nutritionPlannedSessionEstimate: (planDayId: string) => [
       "/api/v1/nutrition/planned-session-estimate",
       planDayId,
@@ -169,5 +171,30 @@ describe("FuellingPlanPanel", () => {
         plannedTimeOfDayMin: 450,
       }),
     );
+  });
+
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03): a day with no log takes its meal
+  // targets from the planned session's expected duration, RPE and start time,
+  // so the day summary showed the old targets for its staleTime. Session
+  // fuelling, the chips and the Fuelling block read logged workouts only.
+  it("refreshes the day summaries, and no other fuelling read, when it saves", async () => {
+    const user = userEvent.setup();
+    const day = ["/api/v1/nutrition/summary", "2026-09-15"];
+    const others = [
+      ["/api/v1/nutrition/session-fuelling", "w1"],
+      ["/api/v1/nutrition/summary-range", "2026-09-09", "2026-09-15"],
+      ["/api/v1/nutrition/block", "2026-08-17", "2026-09-15"],
+    ];
+    queryClient.clear();
+    for (const key of [day, ...others]) queryClient.setQueryData(key, {});
+    renderWithClient(<FuellingPlanPanel entry={makeEntry({ expectedDurationMin: 60 })} />);
+
+    await user.click(screen.getByTestId("fuelling-plan-adjust"));
+    await user.click(screen.getByTestId("button-rpe-8"));
+
+    await waitFor(() => {
+      expect(queryClient.getQueryState(day)?.isInvalidated).toBe(true);
+    });
+    for (const key of others) expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
 });

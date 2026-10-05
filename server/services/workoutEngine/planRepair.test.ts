@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import { buildWorkoutEnginePlan, type WorkoutEnginePlan } from "./enginePlan";
 import type { EngineSet } from "./loadMath";
 import {
+  namesExercise,
   type RepairableDay,
   type RepairableSet,
   repairPrimaryLifts,
   rewriteLiftLine,
+  rewriteLiftLoad,
 } from "./planRepair";
 import type { LiftWeekTarget } from "./strength";
 
@@ -151,6 +153,20 @@ describe("repairPrimaryLifts", () => {
     expect(firstSets(raceWeek).at(0)?.weight).toBe(50);
   });
 
+  it("leaves a variant of the lift in the accessory text alone (C15)", () => {
+    const plan = engine();
+    const target = plan.lifts[0].weeks[0];
+    const day = strengthDay(1, "Monday", [
+      { exerciseName: "front_squat", sets: squatSets([60, 70, 70]) },
+    ]);
+    day.accessory = "C) Paused Front Squat 2x3 @ 50 kg (RPE 6)";
+
+    repairPrimaryLifts([day], plan);
+
+    expect(day.accessory).toBe("C) Paused Front Squat 2x3 @ 50 kg (RPE 6)");
+    expect(day.mainWorkout.split("\n")[0]).toContain(`@ ${target.load} kg`);
+  });
+
   it("does nothing without an engine plan", () => {
     const day = strengthDay(1, "Monday", [{ exerciseName: "front_squat", sets: squatSets([60]) }]);
     expect(repairPrimaryLifts([day], null)).toEqual([]);
@@ -178,5 +194,48 @@ describe("rewriteLiftLine", () => {
 
   it("leaves text that never names the lift untouched", () => {
     expect(rewriteLiftLine("Easy run 30 min", "front_squat", want, "kg")).toBe("Easy run 30 min");
+  });
+});
+
+describe("rewriteLiftLoad — the lift's own line, never a variant's (C15)", () => {
+  it("skips a variant whose name contains the lift's and rewrites the lift's line", () => {
+    const text = "A) Romanian Deadlift 3x10 @ 70 kg (RPE 7)\nB) Deadlift 4x5 @ 140 kg (RPE 8)";
+    expect(rewriteLiftLoad(text, "deadlift", 147.5, "kg").split("\n")).toEqual([
+      "A) Romanian Deadlift 3x10 @ 70 kg (RPE 7)",
+      "B) Deadlift 4x5 @ 147.5 kg (RPE 8)",
+    ]);
+  });
+
+  it("leaves text that names only variants untouched", () => {
+    const accessory =
+      "B1) Romanian Deadlift 3x10 @ 70 kg\nB2) Trap-bar deadlift 3x5 @ 120 kg\nB3) Incline Bench Press 3x8 @ 50 kg";
+    expect(rewriteLiftLoad(accessory, "deadlift", 147.5, "kg")).toBe(accessory);
+    expect(rewriteLiftLoad(accessory, "bench_press", 82.5, "kg")).toBe(accessory);
+    expect(rewriteLiftLoad("Bulgarian Split Squat 3x8 @ 20 kg", "split_squat", 40, "kg")).toBe(
+      "Bulgarian Split Squat 3x8 @ 20 kg",
+    );
+    expect(rewriteLiftLoad("Sandbag Lunges 4x25 m @ 20 kg", "lunges", 40, "kg")).toBe(
+      "Sandbag Lunges 4x25 m @ 20 kg",
+    );
+  });
+
+  it("never reads a line as naming an empty name (C15)", () => {
+    expect(namesExercise("A) Deadlift 4x5 @ 140 kg", "")).toBe(false);
+    expect(namesExercise("", "")).toBe(false);
+    expect(namesExercise("a) deadlift 4x5 @ 140 kg", "deadlift")).toBe(true);
+    expect(namesExercise("a) romanian deadlift 3x10", "deadlift")).toBe(false);
+  });
+
+  it("finds the lift after a block label, a list mark, a set scheme or at the line start", () => {
+    for (const line of [
+      "Deadlift 4x5 @ 140 kg",
+      "- Deadlift 4x5 @ 140 kg",
+      "Main: Deadlift 4x5 @ 140 kg",
+      "4x5 deadlift @ 140 kg",
+    ]) {
+      expect(rewriteLiftLoad(line, "deadlift", 147.5, "kg")).toBe(
+        line.replace("@ 140 kg", "@ 147.5 kg"),
+      );
+    }
   });
 });

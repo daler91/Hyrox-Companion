@@ -7,10 +7,13 @@ import {
   type StyleAuditEntry,
 } from "@/components/settings/TrainingStyleSection";
 import { ToastAction } from "@/components/ui/toast";
+import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import { queryClient } from "@/lib/queryClient";
 import { safeLocalStorage } from "@/lib/safeStorage";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import {
   ageInputToSnapshot,
@@ -28,6 +31,56 @@ import {
 } from "./preferencesSnapshot";
 
 const STYLE_AUDIT_STORAGE_KEY = "fitai-settings-style-audit";
+
+/**
+ * Whether a save recomputes the MAF ceiling (and so needs a valid age and
+ * category). Accounts on MAF from before audit M6 have no category, since
+ * migration 0090 did not backfill one: a change of units or a notification
+ * toggle was refused until they answered it, which also rewrote their
+ * ceiling. Their stored ceiling now stands until they change what sets it
+ * (switching to MAF, the age or the category). CL34 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function recomputesMafCeiling(
+  draft: PreferencesDraft,
+  committed: PreferencesSnapshot | null,
+): boolean {
+  if (draft.trainingStyleId !== "maf_method") return false;
+  if (draft.mafCategoryInput || !committed) return true;
+  return (
+    committed.trainingStyleId !== "maf_method" ||
+    committed.mafCategory != null ||
+    ageInputToSnapshot(draft.mafAgeInput) !== committed.mafAge
+  );
+}
+
+/**
+ * Whether the server would refuse this save as MAF_SETUP_REQUIRED (its
+ * validateMafTransition): on MAF it needs an age, and a category unless the
+ * legacy consistency/trend pair is stored. recomputesMafCeiling lets a
+ * legacy account without a category save, so one without that pair, or
+ * without an age, got the generic "Failed to save settings" instead of the
+ * MAF prompt.
+ * CL34 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function serverNeedsMafSetup(
+  draft: PreferencesDraft,
+  stored: UserPreferences | undefined,
+): boolean {
+  if (draft.trainingStyleId !== "maf_method") return false;
+  if (ageInputToSnapshot(draft.mafAgeInput) == null) return true;
+  return !draft.mafCategoryInput && (stored?.mafConsistency == null || stored.mafTrend == null);
+}
+
+/** Whether a failed save was the server's MAF_SETUP_REQUIRED (CL34). */
+function isMafSetupRequired(error: unknown): boolean {
+  return parseApiError(error)?.code === "MAF_SETUP_REQUIRED";
+}
+
+const MAF_SETUP_TOAST = {
+  title: "Complete MAF setup",
+  description: "Enter a valid age and select the required MAF fields before saving.",
+  variant: "destructive",
+} as const;
 
 // Owns the Settings preferences form: the draft state behind every
 // controlled field, snapshot-equality dirty tracking, the save mutation
@@ -110,6 +163,14 @@ export function usePreferencesForm() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessionGradesPrefix }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: ["/api/v1/weekly-review"] }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
+      // The bodyweight, heart rates, units and meal schedule saved here size
+      // session fuelling, the day's meal targets and energy balance, and the
+      // training load behind the chips and the Fuelling block: a new weight
+      // left them on the old figures for their staleTime.
+      // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+      for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
+        queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
+      }
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = savePayloadToSnapshot(variables);
@@ -146,8 +207,12 @@ export function usePreferencesForm() {
         ) : undefined,
       });
     },
-    onError: () => {
+    onError: (saveError) => {
       pendingStyleAuditRef.current = null;
+      if (isMafSetupRequired(saveError)) {
+        toast(MAF_SETUP_TOAST);
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to save settings. Please try again.",
@@ -173,16 +238,13 @@ export function usePreferencesForm() {
     // write-once (a healed injury, a second training anniversary). Legacy
     // accounts without a category keep their stored proxy-derived ceiling
     // until they answer it — the save payload omits the proxy fields entirely,
-    // so saving other settings never disturbs them (audit M6).
+    // and mafHr too unless the ceiling is recomputed (audit M6, CL34).
     const mafCategory = draft.mafCategoryInput || null;
     const hasValidMafInputs = mafAge != null && mafAge >= 16 && mafAge <= 99 && mafCategory != null;
+    const recomputeMaf = recomputesMafCeiling(draft, baselineSnapshotRef.current);
 
-    if (draft.trainingStyleId === "maf_method" && !hasValidMafInputs) {
-      toast({
-        title: "Complete MAF setup",
-        description: "Enter a valid age and select the required MAF fields before saving.",
-        variant: "destructive",
-      });
+    if ((recomputeMaf && !hasValidMafInputs) || serverNeedsMafSetup(draft, preferences)) {
+      toast(MAF_SETUP_TOAST);
       return;
     }
 
@@ -193,7 +255,7 @@ export function usePreferencesForm() {
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
     const maf =
-      draft.trainingStyleId === "maf_method" && hasValidMafInputs
+      recomputeMaf && hasValidMafInputs
         ? calculateMafHr({ age: mafAge, category: mafCategory })
         : null;
     pendingStyleAuditRef.current = styleChanged
@@ -211,13 +273,13 @@ export function usePreferencesForm() {
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
-      mafHr: draft.trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
+      mafHr: maf?.ceiling,
       mafBaselineTestScheduledAt:
         styleChanged && draft.trainingStyleId === "maf_method"
           ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
           : undefined,
     });
-  }, [saveMutation, draft, toast]);
+  }, [saveMutation, draft, preferences, toast]);
 
   const mafAgeValue = ageInputToSnapshot(draft.mafAgeInput);
   const hasRequiredMafInputs =

@@ -1,4 +1,5 @@
-﻿import { planDayPriorityEnum, planDayRecoveryEnum } from "../enums";
+﻿import { dayDiff, isIsoCalendarDate, toIsoDateUtc } from "../../dateUtils";
+import { planDayPriorityEnum, planDayRecoveryEnum } from "../enums";
 import { type planDayMoves, planDays, trainingPlans } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { PlanDayRecoveryUndo } from "./recovery";
@@ -20,13 +21,38 @@ export const updateTrainingPlanGoalSchema = z.object({
  * Optional body for `POST /api/v1/plans/sample`. Onboarding passes the goal the
  * athlete picked and any race date they gave, which used to be discarded for
  * template users (onboarding audit M3). An empty body keeps the old behaviour.
+ *
+ * The race date may not be past: one (a mistyped year) made every day of the
+ * template plan post-race recovery, and no route edits a plan's race date
+ * afterwards. The schema cannot see the athlete's timezone, so it allows the
+ * day before UTC's: the athlete's today is never earlier than that (UTC-12).
+ * It must also be a real day: the regex takes "2026-13-45", which UTC date
+ * math rolls forward into a later one, so it passed as a race still ahead.
+ * Each check runs only on a date the earlier ones passed (see
+ * passedEarlierChecks), so a bad date is named once: Zod runs a refine after a
+ * failed regex, and "15/11/2026" also came back "can't be in the past".
+ * CL9 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export const createSamplePlanSchema = z
   .object({
     goal: z.string().trim().max(500).optional(),
-    raceDate: dateStringSchema.optional(),
+    raceDate: dateStringSchema
+      .refine(isIsoCalendarDate, {
+        message: "Race date must be a real calendar date",
+        when: passedEarlierChecks,
+      })
+      .refine((date) => dayDiff(toIsoDateUtc(new Date()), date) >= -1, {
+        message: "Race date can't be in the past",
+        when: passedEarlierChecks,
+      })
+      .optional(),
   })
   .default({});
+
+/** A Zod `when`: run this check only if no earlier one raised an issue. */
+function passedEarlierChecks({ issues }: { readonly issues: readonly unknown[] }): boolean {
+  return issues.length === 0;
+}
 
 /**
  * Archive a plan effective a date, or restore it with `null`. The route clamps

@@ -1,5 +1,6 @@
 import { BarChart3 } from "lucide-react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
@@ -23,6 +24,9 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
   const {
     overview,
     isLoading,
+    loadFailed,
+    isRetrying,
+    retry,
     stats,
     previousStats,
     rpeData,
@@ -38,6 +42,18 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
       <div className="flex items-center justify-center py-12">
         <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
+    );
+  }
+
+  // A failed fetch is not "No workout data yet". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (loadFailed) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your training overview"
+        onRetry={() => retry()}
+        isRetrying={isRetrying}
+        testId="training-overview-error"
+      />
     );
   }
 

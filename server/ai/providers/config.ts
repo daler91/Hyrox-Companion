@@ -1,4 +1,5 @@
 import { env } from "../../env";
+import { AiConfigurationError } from "../errors";
 import type {
   TextAiModelRole,
   TextAiOpenAiCompatibleProfile,
@@ -106,15 +107,23 @@ export function resolveTextAiModel(provider: TextAiProviderId, role: TextAiModel
     if (provider === "gemini") return env.GEMINI_SUGGESTIONS_MODEL;
   }
 
-  throw new Error(
+  // Missing configuration, like a missing key, so a caller can tell it from a
+  // provider failure a retry might fix (AI8, CODEBASE_ANALYSIS_2026-10-03).
+  throw new AiConfigurationError(
     `AI text model is not configured for provider "${provider}". Set AI_TEXT_MODEL or the role-specific AI_TEXT_${role === "fast" ? "FAST" : "REASONING"}_MODEL.`,
   );
 }
 
-export function configuredTextProviderHasApiKey(): boolean {
+/**
+ * Whether a text call in `role` can be made: a model for the role and the
+ * provider's key. A non-Gemini provider can configure the fast model alone,
+ * so a caller of the reasoning model asks for that role (AI8,
+ * CODEBASE_ANALYSIS_2026-10-03).
+ */
+export function configuredTextProviderHasApiKey(role: TextAiModelRole = "fast"): boolean {
   const config = getTextAiConfig();
   try {
-    resolveTextAiModel(config.provider, "fast");
+    resolveTextAiModel(config.provider, role);
   } catch {
     return false;
   }

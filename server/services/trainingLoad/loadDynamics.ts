@@ -28,16 +28,17 @@ const CHRONIC_LAMBDA = 2 / (28 + 1); // ≈ 0.069
  * Logged history the EWMAs need behind them before their values mean what their
  * names say.
  *
- * Both are seeded at the first log the CALLER passed, so a short fetch window
- * silently reseeds them: the nutrition recovery path fetched 7 days and read a
+ * Both start at the first log the CALLER passed, so a short fetch window
+ * silently restarts them: the nutrition recovery path fetched 7 days and read a
  * "28-day chronic baseline" off the result. For an athlete tapering after eight
  * heavy weeks that reported 26.1 against a true 107.2 — a 4x understatement of
  * the baseline their fuelling targets are scaled from, at exactly the moment
  * fuelling matters most (audit H21).
  *
- * Two chronic windows. The seed's weight decays as (1 - CHRONIC_LAMBDA)^n, so it
- * still carries ~13% at 28 days and under 2% at 56 — the point where the answer
- * stops depending on where the caller happened to start looking.
+ * Two chronic windows. History older than n days would still carry
+ * (1 - CHRONIC_LAMBDA)^n of the chronic weight — ~13% at 28 days and under 2%
+ * at 56, the point where the answer stops depending on where the caller
+ * happened to start looking.
  */
 export const EWMA_WARMUP_DAYS = 56;
 
@@ -147,12 +148,23 @@ export function resolveAcwrZone(acwr: number | null, chronicAvg: number): LoadGo
 
 // ACWR needs a real chronic baseline before the ratio means anything, so the
 // ratio is gated behind ~2 weeks of logged history (ACWR_MIN_HISTORY_DAYS). The
-// EWMAs are SEEDED at firstLogDate with that day's UTSS (not zero) and advanced
-// day-by-day across the whole range, including rest days. Seeding at the first
-// real day — instead of letting pre-history zeros bleed into the average — is the
-// EWMA-native replacement for the old coverage-adjusted chronic denominator: it
-// stops a brand-new athlete's empty pre-history from deflating the baseline and
-// inflating ACWR (e.g. 18 steady days read ≈1.0, not "danger").
+// EWMAs start at firstLogDate and advance day-by-day across the whole range,
+// including rest days. Starting at the first real day — instead of letting
+// pre-history zeros bleed into the average — is the EWMA-native replacement for
+// the old coverage-adjusted chronic denominator: it stops a brand-new athlete's
+// empty pre-history from deflating the baseline and inflating ACWR (e.g. 18
+// steady days read ≈1.0, not "danger").
+//
+// They are BIAS-CORRECTED rather than seeded: each runs from zero and is divided
+// by the weight its days have accumulated, 1 - (1 - λ)^n after n days, so every
+// day counts by its EWMA weight alone. Both used to be seeded with the first
+// day's UTSS, and that one day still made up ~40% of chronic load when the gate
+// opened on day 14. A first session twice the usual length read "undertraining"
+// for weeks, a short one read "yellow", and the governor trimmed or softened
+// upcoming sessions off it. Seeding with a training day also overstated the
+// daily mean for anyone who takes rest days, which biased every new athlete's
+// ratio low (C11, CODEBASE_ANALYSIS_2026-10-03). Past the warmup the correction
+// is under 2% and established athletes read as before.
 const ACWR_MIN_HISTORY_DAYS = 14;
 
 // Monotony reads a trailing 7-day window and treats absent days as rest, so it
@@ -172,13 +184,16 @@ export function applyLoadDynamics(
 ): void {
   const ratioFrom = firstLogDate ? addDays(firstLogDate, ACWR_MIN_HISTORY_DAYS - 1) : null;
   const monotonyFrom = firstLogDate ? addDays(firstLogDate, MONOTONY_WINDOW_DAYS - 1) : null;
-  let acute: number | null = null;
-  let chronic: number | null = null;
+  // Zero-started EWMA sums and the weight each has accumulated (see above).
+  let acuteSum = 0;
+  let chronicSum = 0;
+  let acuteWeight = 0;
+  let chronicWeight = 0;
 
   for (const date of dateRange(start, end)) {
     const day = getOrCreateDay(days, date);
 
-    // Pre-history: no baseline to seed from yet.
+    // Pre-history: nothing logged yet for the EWMAs to start from.
     if (firstLogDate == null || date < firstLogDate) {
       day.acwr = null;
       day.zone = "insufficient_data";
@@ -190,17 +205,16 @@ export function applyLoadDynamics(
       continue;
     }
 
-    if (acute == null || chronic == null) {
-      // Seed both EWMAs with the first logged day's UTSS so the baseline is the
-      // athlete's real first-day load, not zero.
-      acute = day.utss;
-      chronic = day.utss;
-    } else {
-      acute = ACUTE_LAMBDA * day.utss + (1 - ACUTE_LAMBDA) * acute;
-      chronic = CHRONIC_LAMBDA * day.utss + (1 - CHRONIC_LAMBDA) * chronic;
-    }
-    day.acuteEwma = round(acute, 1);
-    day.chronicEwma = round(chronic, 1);
+    acuteSum = ACUTE_LAMBDA * day.utss + (1 - ACUTE_LAMBDA) * acuteSum;
+    acuteWeight = ACUTE_LAMBDA + (1 - ACUTE_LAMBDA) * acuteWeight;
+    chronicSum = CHRONIC_LAMBDA * day.utss + (1 - CHRONIC_LAMBDA) * chronicSum;
+    chronicWeight = CHRONIC_LAMBDA + (1 - CHRONIC_LAMBDA) * chronicWeight;
+    const acute = acuteSum / acuteWeight;
+    const chronic = chronicSum / chronicWeight;
+    const acuteEwma = round(acute, 1);
+    const chronicEwma = round(chronic, 1);
+    day.acuteEwma = acuteEwma;
+    day.chronicEwma = chronicEwma;
 
     const { monotony, strain } = computeMonotonyStrain(days, date, monotonyFrom);
     day.monotony = monotony;
@@ -217,7 +231,10 @@ export function applyLoadDynamics(
       day.tsb = null;
       continue;
     }
-    day.tsb = round(chronic - acute, 1);
+    // From the rounded values, so Form is exactly the chronic − acute the athlete
+    // is shown, and a steady load reads 0 rather than the -0 the correction's
+    // float noise can leave (C11, CODEBASE_ANALYSIS_2026-10-03).
+    day.tsb = round(chronicEwma - acuteEwma, 1);
     const acwr = chronic > 0 ? round(acute / chronic, 2) : null;
     day.acwr = acwr;
     day.zone = resolveAcwrZone(acwr, chronic);

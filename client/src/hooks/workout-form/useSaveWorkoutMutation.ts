@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import { runWithOfflineFallback } from "@/lib/offlineMutationFallback";
 import { WORKOUT_CREATE_URL } from "@/lib/pendingWorkouts";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
@@ -90,18 +91,9 @@ function extractApiErrorCode(error: unknown): string | null {
   );
   if (responseDataCode) return responseDataCode;
 
-  const message = asRecord.message;
-  if (typeof message !== "string") return null;
-
-  const jsonStart = message.indexOf("{");
-  if (jsonStart < 0) return null;
-
-  try {
-    const parsed = JSON.parse(message.slice(jsonStart)) as { code?: unknown };
-    return typeof parsed.code === "string" ? parsed.code : null;
-  } catch {
-    return null;
-  }
+  // apiRequest's `${status}: ${body}` message, read by the shared
+  // parseApiError (CL34, CODEBASE_ANALYSIS_2026-10-03).
+  return parseApiError(error)?.code ?? null;
 }
 
 function getCodeFromPayload(payload: unknown): string | null {

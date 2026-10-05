@@ -77,6 +77,8 @@ Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter`
 
 Every route except `/privacy` and the 404 is wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. The whole `Switch` sits inside one shared `Suspense` boundary whose fallback is a centred `LoadingSpinner`.
 
+Each page is lazy-loaded through `lazyWithReload` (`client/src/lib/lazyWithReload.ts`), a `React.lazy` wrapper for chunks a deploy has removed. A tab still on the previous build asks for an old `/assets/*.js`, the server answers 404 (`Cache-Control: no-store`), the import rejects with "Failed to fetch dynamically imported module", and React keeps the rejected import, so re-rendering cannot recover. On such a failure the wrapper reloads the page once onto the current build, keeping the spinner up meanwhile. A `sessionStorage` timestamp limits this to one reload a minute, and it never reloads offline or when storage is blocked. Any rejected page import is handled the same way, since React cannot retry a module that threw while loading either. A chunk that still fails reaches the error boundary as a `ChunkLoadError`, and both boundaries' "Try again" reloads the page for it (`isChunkLoadError`) rather than resetting.
+
 The `Landing` page is also lazy-loaded and rendered outside the authenticated layout when the user is not signed in.
 
 ---
@@ -88,7 +90,8 @@ The `Landing` page is also lazy-loaded and rendered outside the authenticated la
 The home page and primary view. Displays a chronological timeline of training plan days and logged workouts. Key features:
 
 - **Onboarding wizard** -- Shown for new users via `OnboardingWizard` dialog.
-- **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile.
+- **AI Coach panel** -- A slide-out `CoachPanel` for chatting with the AI coach, visible as a sidebar on desktop and a fullscreen overlay on mobile. The phone overlay is a modal Radix dialog (`TimelineCoachPanels`): it takes focus and keeps it, hides the timeline from assistive tech, closes on Escape and hands focus back to the coach FAB. It is hidden rather than unmounted while a workout sheet is open, so a chat stream survives.
+- **Load failures** -- When the timeline (or, under an empty timeline, the plans list) fails to load, `TimelineContent` shows a `LoadErrorCard` with a retry instead of the first-run welcome, and `useTimelineData` keeps `isNewUser` false so onboarding does not launch. The card stays up, its button reading "Retrying…", while a retry runs or waits for the network. A first fetch paused because the browser is offline counts as loading (the skeleton, under the "You're offline" pill), never as an empty account, and onboarding only launches by itself once the auth user says it is not completed: a failed auth-user query leaves that unknown (`useIsOnboardingCompleted` returns `undefined`). Nutrition's day summary and the Analytics Overview, Breakdown, PRs & Trends, MAF Trend and Fuelling tabs follow the same rule through `queryLoadState` (`client/src/lib/queryLoadState.ts`, which `useTimelineData` uses too): a first fetch paused offline shows their spinner, and a failed one a `LoadErrorCard` that stays up, marked retrying, while its retry runs, rather than a 0 kcal day or "No workout data yet". Coach Insights uses it for its spinner only, so a paused first fetch never shows the "Generate" prompt. Race Predictor and Session Quality use it too: a paused first fetch shows their spinner, and only a failed one their own "Couldn't load…" message. Race Predictor's Retry regenerates the prediction, which may spend AI budget, so it runs only when tapped. It reads "Retrying…" while the tab's own re-read or the athlete's Retry is in flight, and the message stops asking to try again meanwhile.
 - **Virtual scrolling** -- Uses `@tanstack/react-virtual` (`useVirtualizer`) to efficiently render large timeline lists.
 - **Timeline filtering** -- Filter by plan and by workout status (completed, planned, missed, skipped; deep-linkable as `?status=`). Collapsible past/future groups with "show more" buttons.
 - **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting. Every start-date picker (this dialog, the onboarding `ScheduleStep` and the AI generator) defaults to the next Monday, or today on a Monday, via `defaultPlanStartDate()` in `lib/planStart.ts`, and a midweek pick explains which week-1 sessions it leaves off the calendar.
@@ -102,7 +105,7 @@ State management is centralized in the `useTimelineState` custom hook, with `Tim
 
 `LogWorkout.tsx` is a thin page wrapper that gates rendering on auth resolution and mounts `LogWorkoutForm` (keyed by user ID so an in-place account switch fully remounts the form and discards the previous user's draft). The form itself lives under `client/src/pages/log-workout/` and is a three-step stepper rendered by `LogWorkoutStepperLayout`:
 
-1. **Capture** (`steps/CaptureStep.tsx`) -- Workout title and date (`WorkoutDateFields`) plus the `WorkoutComposer`: a structured exercise list with a collapsible "Describe / dictate" panel that auto-parses free text or a photo into exercises.
+1. **Capture** (`steps/CaptureStep.tsx`) -- Workout title and date (`WorkoutDateFields`) plus the `WorkoutComposer`: a structured exercise list with a collapsible "Describe / dictate" panel that auto-parses free text or a photo into exercises. "Continue to exercises" stops a running dictation and waits for the recogniser's final result before it parses and changes step, so the parse includes the phrase being spoken and nothing said afterwards is added to the description where it cannot be seen. It also waits when the mic button stopped dictation just before.
 2. **Confirm** (`steps/ConfirmStep.tsx`) -- Review and correct the parsed exercise rows in a `DraftExerciseTable` before saving.
 3. **Reflect** (`steps/ReflectStep.tsx`) -- Capture effort (RPE) and notes for the session.
 
@@ -119,11 +122,13 @@ Displays training data analysis across six base tabs plus two conditional ones �
 - **Coach Insights** (`CoachInsightsTab`) -- AI-surfaced coaching signals: RPE trends, plan phase, weekly volume, station gaps, and fatigue/progression flags. Paints the last stored result instantly and shows a `LastUpdatedNote` (see [stored-first Coach Insights](api-reference.md#get-apiv1coach-insights)).
 - **Race Predictor** (`RacePredictorTab`) -- Predicted HYROX finish time from logged history; also stored-first with instant paint and a manual refresh button.
 - **MAF Trend** (`MafTrendTab`, MAF training style only) -- Pace-at-MAF-ceiling trend across MAF tests over time.
-- **Fuelling** (`FuellingTab`, nutrition flag only) -- The nutrition block view for the selected range: daily intake vs. training load (`IntakeVsTrainingChart`) plus a `FuellingCorrelationCard` comparing session RPE and workout compliance on days the load-adjusted carb target was hit vs. missed. "All time" is capped to the last 365 days.
+- **Fuelling** (`FuellingTab`, nutrition flag only) -- The nutrition block view for the selected range: daily intake vs. training load (`IntakeVsTrainingChart`) plus a `FuellingCorrelationCard` comparing session RPE and workout compliance on days the load-adjusted carb target was hit vs. missed, among days with food logged (an unlogged day is not a miss). "All time" is capped to the last 365 days.
 
 A date range selector (`?range=`; 30 days, 90 days (default), 6 months, 1 year, all time) filters the Overview, Breakdown, PRs & Trends and Fuelling tabs. Session Quality is scoped to a plan instead, and Coach Insights, Race Predictor and MAF Trend do not take the range.
 
-The same grade appears on a completed plan-linked run's detail sheet as the **Did it do its job?** card (`SessionGradeCard`, over `useWorkoutSessionGrade`, which re-reads every 30 s while the run's Strava stream is still pending) and as a chip on each Weekly Review session row. All three share `GradeVerdictBadge` and `lib/sessionGradeFormat.ts`, so a verdict always reads the same. Workout writes invalidate `QUERY_KEYS.sessionGradesPrefix`; saving preferences invalidates grades, weekly reviews and workouts, because a new max HR re-grades everything.
+Every tab but Overview and PRs & Trends is its own lazy chunk, loaded when first opened. Each loads through `lazyWithReload`, like the routes (see [Routing](#routing)), so a tab chunk a deploy removed reloads the page instead of failing. The wrapper is generic over props, so Breakdown and Fuelling carry the date range through it.
+
+The same grade appears on a completed plan-linked run's detail sheet as the **Did it do its job?** card (`SessionGradeCard`, over `useWorkoutSessionGrade`, which re-reads every 30 s while the run's Strava stream is still pending) and as a chip on each Weekly Review session row. All three share `GradeVerdictBadge` and `lib/sessionGradeFormat.ts`, so a verdict always reads the same. Workout writes invalidate `QUERY_KEYS.sessionGradesPrefix`; saving preferences invalidates grades, weekly reviews and workouts, because a new max HR re-grades everything, and the nutrition reads sized by the profile (`WORKOUT_DERIVED_NUTRITION_QUERY_KEYS` in `lib/workoutInvalidation.ts`): session fuelling, whose targets read the bodyweight, each day's summary, whose meal targets and energy balance read the body profile, and the Timeline fuel chips and Analytics → Fuelling block, whose training load reads the units, heart rates and bodyweight.
 
 ### Weekly Review (`client/src/pages/Review.tsx`)
 
@@ -214,7 +219,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 - `WelcomeStep` -- Introduction: how long setup takes, what it leads to, and the privacy notice with a policy link (the privacy banner stays hidden while the wizard is open).
 - `UnitsStep` -- Weight and distance units, HYROX division, gender and an optional age (Race Predictor age group; max-HR estimate), each radio group named by its visible label. Prefilled from saved preferences; a first run from a US-region browser is offered lbs/miles. An impossible age is flagged inline.
-- `GoalStep` -- Goal, training style (MAF setup with a labelled age field and inline errors), and an optional race date. The goal and race date become a HYROX-specific goal for the AI generator and are stored on a template plan (`describeOnboardingGoal()` in `onboardingGoals.ts`); a race date also becomes the AI plan's end date, flagged as race day.
+- `GoalStep` -- Goal, training style (MAF setup with a labelled age field and inline errors), and an optional race date. The goal and race date become a HYROX-specific goal for the AI generator and are stored on a template plan (`describeOnboardingGoal()` in `onboardingGoals.ts`); a race date also becomes the AI plan's end date, flagged as race day. A typed date already past (the picker's `min` does not stop typing), or one that is not a real day (a five-digit year, which the browser's date field accepts), is named under the field and holds the step until it is corrected or cleared. The earliest date offered is today, read again whenever the Goal step comes into view (from Units, Back from the next step, or the wizard reopening on it) and on Continue (`useOnboardingWizard`), so a wizard left open overnight does not offer yesterday. Continue checks the date against today as it is then (`raceDateError`) and moves focus to the field. `POST /api/v1/plans/sample` refuses both.
 - `FuellingStep` -- Optional body profile (weight, height, age, activity, goal) → suggested nutrition target; shown only when the nutrition module is enabled. Height is in feet and inches for an athlete who weighs in pounds. "Lose weight" on the Goal step starts the weight goal on Lose. The button reads Skip until the profile is complete.
 - `CoachStep` -- Introduces the AI Coach and records the `aiCoachEnabled` consent. Starts from the saved answer (off for a new account); choosing "on" shows the data disclosure before Continue saves it.
 - `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip). The AI plan leads only when the AI Coach is on; otherwise the template leads and the AI option says it needs the coach.
@@ -307,9 +312,12 @@ Shared building blocks for the Log Workout stepper's Capture and Confirm steps:
 
 Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals):
 
-- `WorkoutStructureEditor` -- Top-level editor for a workout's structure blocks and steps.
-- `StructureBlocksEditor` -- Block-list editor for adding, ordering, and configuring structure blocks.
-- `configToStructureBlocks.ts` -- Converts editor config into the persisted `structureBlocks` shape.
+- `WorkoutStructureEditor` -- Editor for one block: its section, its setup number (EMOM minutes, AMRAP time cap or round count) and score, and its steps (add, remove, reorder, retype, duration), with each work step's links to exercise rows. It can also show a format picker, but its only caller, `StructureBlocksEditor`, passes `showFormatField={false}`: a block's format is fixed by the button that added it.
+- `StructureBlocksEditor` -- The block builder: adds EMOM, AMRAP and rounds blocks, edits and removes them, and renders a `WorkoutStructureEditor` per block. Its ref handle's `flush()` sends a save still waiting out its pause and resolves once every save has settled, true when the last one landed (or at once, true, when none is waiting or out); LogSheet awaits it before "log as planned". A row assigned or added from a block card while a save is waiting or in flight is linked only after that save lands, so it takes the numbering that save stores (CL15, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+- `useStructureDrafts.ts` -- The builder's working copy of its blocks and their save. Saves go out one at a time, `saveDebounceMs` after the last edit: LogSheet and ReviewSurface pass `EDIT_SAVE_DEBOUNCE_MS`, and the /log ConfirmStep passes none, so it saves on every edit. Each save reports the steps it renumbered, measured from what the last save stored, or from what is stored when that save failed. A `value` that arrives while a save is waiting or in flight is adopted only once the builder is idle, and a save still waiting when the builder unmounts is sent then (U3, CL15).
+- `configToStructureBlocks.ts` -- Converts between the editor's config and the persisted `structureBlocks` shape. `applyConfigToStructureBlock` merges an edit onto the stored block without loss: steps keep their stored category, customLabel, stepRole, intensity, tempo and numeric targets, and blocks keep "quality" / "activation", instructions and intervals unless the athlete changed them. An EMOM step keeps its stored minute unless it moved; a moved step takes the stored minute of the slot it moved into when that is free, else the next free one (CL14). When no free minute fits between a step's neighbours (a stored pattern out of minute order), `placeEmomMinutes` renumbers every step of the block by position, since the server rejects two steps on one minute. Retyping a step to rest or transition clears its exercise, category, customLabel, stepRole and performance targets (reps, time, distance, weight), which described the movement it replaced and which a rest step may not carry.
+- `stepLinks.ts` -- Step moves and the row relinks they imply (CL15): `relinksForSets` turns an edit's moves into the `relinks` a save sends with its blocks (`useWorkoutDetail`, `usePlanDayExercises`), and `relinkDraftExercise` moves the /log draft's rows. A later-cycle EMOM row keeps its cycle and lands that many new patterns (`emomPatternLength`) after its step's new minute.
+- `editSaveDebounce.ts` -- `EDIT_SAVE_DEBOUNCE_MS`, the pause before an inline edit saves, shared by the block builder and the set cells (it is `useExerciseSetsForOwner`'s default), so one pause saves both (U3). The set cells' `flushPendingSetPatches` (`hooks/useDebouncedSetPatches.ts`) sends the queued set PATCHes and waits for those already in flight.
 - `emomPreview.ts` -- Builds a minute-by-minute preview for EMOM blocks.
 
 ### Root-level Components
@@ -558,7 +566,7 @@ survived both sign-out and account deletion.
 A full-page error screen with:
 
 - Error icon and user-friendly message.
-- "Try again" button (calls `resetError`) and "Refresh Page" button.
+- "Try again" button (calls `resetError`, or reloads the page when the error is a failed code chunk) and "Refresh Page" button.
 - In non-production environments, displays the raw error message in a monospaced block.
 
 ### FeatureErrorBoundaryWrapper (`client/src/components/FeatureErrorBoundaryWrapper.tsx`)
@@ -586,9 +594,9 @@ Vite 8 bundles with Rolldown, and `vite.config.ts` groups vendor code through
 every first paint — including the signed-out Landing page — statically imports the charts chunk.
 `pnpm check:bundle` (`script/bundle-check.ts`) fails CI if that regresses.
 
-Route-level code splitting is achieved via `React.lazy`: every page — `Timeline`, `LogWorkout`,
-`Settings`, `Analytics`, `Nutrition`, `Review`, `Landing`, and `Privacy` — is lazy-loaded in
-`App.tsx`, each producing its own chunk.
+Route-level code splitting is achieved via `React.lazy`, wrapped by `lazyWithReload` (see
+[Routing](#routing)): every page — `Timeline`, `LogWorkout`, `Settings`, `Analytics`, `Nutrition`,
+`Review`, `Landing`, and `Privacy` — is lazy-loaded in `App.tsx`, each producing its own chunk.
 
 Build output goes to `dist/public`.
 

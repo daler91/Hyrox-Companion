@@ -38,7 +38,11 @@ export function buildCspDirectives({ isDev }: { isDev: boolean }): CspDirectives
     // production, so the primary XSS vector (script injection) is still closed.
     styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", ...CLERK_DOMAINS],
     fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-    imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
+    // blob: for the previews built with URL.createObjectURL (chat-attachment
+    // and workout-scan thumbnails): browsers never match a blob: URL against
+    // 'self', so without it every preview rendered as a broken image.
+    // U6 (CODEBASE_ANALYSIS_2026-10-03)
+    imgSrc: ["'self'", "data:", "blob:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
     connectSrc: [
       "'self'",
       ...CLERK_DOMAINS,

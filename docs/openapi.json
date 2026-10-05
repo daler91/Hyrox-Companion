@@ -217,6 +217,9 @@
             "minimum": -8388608,
             "maximum": 8388607
           },
+          "autoLinkRecordingOnly": {
+            "type": "boolean"
+          },
           "deviceActivity": {
             "anyOf": [
               {
@@ -301,6 +304,7 @@
           "countsAsTraining",
           "deviceLinkSource",
           "deviceLinkConfidence",
+          "autoLinkRecordingOnly",
           "deviceActivity",
           "suggestedPlanDayId",
           "suggestedWorkoutLogId",
@@ -505,6 +509,9 @@
             "nullable": true,
             "minimum": -8388608,
             "maximum": 8388607
+          },
+          "autoLinkRecordingOnly": {
+            "type": "boolean"
           },
           "deviceActivity": {
             "anyOf": [
@@ -770,6 +777,7 @@
           "countsAsTraining",
           "deviceLinkSource",
           "deviceLinkConfidence",
+          "autoLinkRecordingOnly",
           "deviceActivity",
           "suggestedPlanDayId",
           "suggestedWorkoutLogId",
@@ -974,6 +982,9 @@
             "nullable": true,
             "minimum": -8388608,
             "maximum": 8388607
+          },
+          "autoLinkRecordingOnly": {
+            "type": "boolean"
           },
           "deviceActivity": {
             "anyOf": [
@@ -1213,6 +1224,7 @@
           "countsAsTraining",
           "deviceLinkSource",
           "deviceLinkConfidence",
+          "autoLinkRecordingOnly",
           "deviceActivity",
           "suggestedPlanDayId",
           "suggestedWorkoutLogId",
@@ -3023,6 +3035,63 @@
                 "type": "string",
                 "nullable": true,
                 "maxLength": 50000
+              },
+              "relinks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "setId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "fromBlockId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "fromStepNumber": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "blockId": {
+                      "type": "string",
+                      "nullable": true,
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "stepNumber": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    },
+                    "intervalMinute": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 10000
+                    },
+                    "cycleNumber": {
+                      "type": "integer",
+                      "nullable": true,
+                      "minimum": 1,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "setId",
+                    "fromBlockId",
+                    "fromStepNumber",
+                    "blockId",
+                    "stepNumber"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500,
+                "description": "Exercise rows that follow the steps this structureBlocks save renumbers, applied in the same transaction. A row that belongs to another workout or plan day fails the save and nothing is written; a row that no longer exists is skipped; a row no longer on fromBlockId/fromStepNumber is left alone. Send only with structureBlocks."
               }
             }
           },

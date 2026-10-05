@@ -1,22 +1,24 @@
 import type { ExerciseSet, StructureBlockInput, StructureBlockScore } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
 import { Plus, Trash2 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { type GroupedExercise, groupExerciseSets } from "@/lib/exerciseUtils";
 import { assignmentPatchForStep, isUnassignedGroup } from "@/lib/workoutStructureAssignments";
 
-import { configToStructureBlock, structureBlockToConfig } from "./configToStructureBlocks";
 import { UNASSIGNED_WORK_STEP_LABEL, type WorkoutStructureConfig } from "./types";
+import {
+  blockFromDraft,
+  type DraftBlock,
+  newDraft,
+  type StructureChangeHandler,
+  useStructureDrafts,
+} from "./useStructureDrafts";
 import { FORMAT_GUIDE, isGuidedFormat, type StepLinking, WorkoutStructureEditor } from "./WorkoutStructureEditor";
-
-interface DraftBlock {
-  readonly id: string;
-  readonly config: WorkoutStructureConfig;
-}
 
 type StructureStep = StructureBlockInput["steps"][number];
 type AssignGroupHandler = (
@@ -26,9 +28,29 @@ type AssignGroupHandler = (
 ) => void;
 type AddLinkedRowHandler = (block: StructureBlockInput, step: StructureStep) => void;
 
+/** What an owner can ask of the builder. */
+export interface StructureBlocksEditorHandle {
+  /**
+   * Send a save still waiting out its pause and wait for every save to settle.
+   * Resolves with whether the last save landed (a failed one is not reported
+   * once a later one has gone out), or true at once when no save is waiting
+   * or out; never rejects. CL15 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  readonly flush: () => Promise<boolean>;
+}
+
 interface Props {
+  readonly ref?: Ref<StructureBlocksEditorHandle>;
   readonly value?: StructureBlockInput[];
-  readonly onChange: (next: StructureBlockInput[]) => void;
+  /**
+   * Receives every block after an edit, and the steps it renumbered so the
+   * owner can keep exercise rows on the step they belong to (CL15). A
+   * returned promise is the save: the next one waits for it, and a rejection
+   * reloads `value` because the save didn't land.
+   */
+  readonly onChange: StructureChangeHandler;
+  /** Delay before onChange after the last edit. 0, the default, calls it on every edit. */
+  readonly saveDebounceMs?: number;
   readonly exerciseSets?: ExerciseSet[];
   readonly onUpdateSet?: (setId: string, data: PatchExerciseSetPayload) => void;
   readonly onAddSet?: (data: AddExerciseSetPayload) => void;
@@ -92,21 +114,6 @@ function normalizeValue(value: StructureBlockInput[] | undefined): readonly Stru
   return Array.isArray(value) ? value : EMPTY_STRUCTURE_BLOCKS;
 }
 
-function draftsFromValue(value: readonly StructureBlockInput[]): DraftBlock[] {
-  return value.map((block) => ({ id: block.id ?? generateId(), config: structureBlockToConfig(block) }));
-}
-
-function blockFromDraft(draft: DraftBlock, idx: number): StructureBlockInput {
-  return configToStructureBlock(
-    { ...draft.config, id: draft.config.id ?? draft.id },
-    { sequenceOrder: idx, sortOrder: idx },
-  );
-}
-
-function draftsToValue(drafts: readonly DraftBlock[]): StructureBlockInput[] {
-  return drafts.map((draft, idx) => blockFromDraft(draft, idx));
-}
-
 function formatBlockType(type: StructureBlockInput["formatType"]): string {
   return type === "amrap" || type === "emom" ? type.toUpperCase() : "Rounds";
 }
@@ -139,8 +146,10 @@ function addPayloadForStep(
 }
 
 export function StructureBlocksEditor({
+  ref,
   value,
   onChange,
+  saveDebounceMs = 0,
   exerciseSets = EMPTY_EXERCISE_SETS,
   onUpdateSet,
   onAddSet,
@@ -150,82 +159,89 @@ export function StructureBlocksEditor({
   onScoreChange,
   headerless = false,
 }: Props) {
-  const normalizedValue = normalizeValue(value);
-  const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(normalizedValue));
-  const [trackedValue, setTrackedValue] = useState(normalizedValue);
+  const { drafts, commit, updateScore, flush, isIdle } = useStructureDrafts(
+    normalizeValue(value),
+    onChange,
+    saveDebounceMs,
+  );
+  useImperativeHandle(ref, () => ({ flush }), [flush]);
   const [addOpen, setAddOpen] = useState(false);
   const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
   const unassignedGroups = useMemo(() => groups.filter(isUnassignedGroup), [groups]);
 
-  if (normalizedValue !== trackedValue) {
-    setTrackedValue(normalizedValue);
-    const externalSnapshot = JSON.stringify(normalizedValue);
-    const localSnapshot = JSON.stringify(draftsToValue(drafts));
-    if (externalSnapshot !== localSnapshot) {
-      setDrafts(draftsFromValue(normalizedValue));
-    }
-  }
-
-  const commit = useCallback(
-    (next: DraftBlock[]) => {
-      setDrafts(next);
-      onChange(draftsToValue(next));
-    },
-    [onChange],
-  );
-
   const handleAddEmom = useCallback(() => {
-    commit([...drafts, { id: generateId(), config: emptyEmomConfig() }]);
-  }, [commit, drafts]);
+    commit((current) => [...current, newDraft(emptyEmomConfig())]);
+  }, [commit]);
 
   const handleAddAmrap = useCallback(() => {
-    commit([...drafts, { id: generateId(), config: emptyAmrapConfig() }]);
-  }, [commit, drafts]);
+    commit((current) => [...current, newDraft(emptyAmrapConfig())]);
+  }, [commit]);
 
   const handleAddRounds = useCallback(() => {
-    commit([...drafts, { id: generateId(), config: emptyRoundsConfig() }]);
-  }, [commit, drafts]);
+    commit((current) => [...current, newDraft(emptyRoundsConfig())]);
+  }, [commit]);
 
   const handleUpdateBlock = useCallback(
     (id: string, next: WorkoutStructureConfig) => {
-      commit(drafts.map((draft) => (draft.id === id ? { ...draft, config: next } : draft)));
+      commit((current) => current.map((draft) => (draft.id === id ? { ...draft, config: next, edited: true } : draft)));
     },
-    [commit, drafts],
+    [commit],
   );
 
   const handleUpdateScore = useCallback(
     (draftId: string, blockId: string, score: StructureBlockScore | null) => {
-      setDrafts((prev) =>
-        prev.map((draft) =>
-          draft.id === draftId ? { ...draft, config: { ...draft.config, score } } : draft,
-        ),
-      );
+      updateScore(draftId, score);
       onScoreChange?.(blockId, score);
     },
-    [onScoreChange],
+    [onScoreChange, updateScore],
   );
 
   const handleRemoveBlock = useCallback(
     (id: string) => {
-      commit(drafts.filter((draft) => draft.id !== id));
+      commit((current) => current.filter((draft) => draft.id !== id));
     },
-    [commit, drafts],
+    [commit],
+  );
+
+  // A row assigned here takes the step number the athlete sees. With a block
+  // save still waiting or out, that numbering isn't stored yet, and the save
+  // would then move the row a second time as if it had the old one. So the
+  // save goes first, and the row is linked once it has landed. CL15
+  // (CODEBASE_ANALYSIS_2026-10-03)
+  const afterSave = useCallback(
+    (link: () => void) => {
+      if (isIdle()) {
+        link();
+        return;
+      }
+      // flush never rejects; a save that failed resolves false, so the row stays put.
+      flush().then((saved) => {
+        if (saved) link();
+      }, ignoreResult);
+    },
+    [flush, isIdle],
   );
 
   const handleAssignGroup = useCallback<AssignGroupHandler>(
     (group, block, step) => {
       if (!onUpdateSet) return;
       const patch = assignmentPatchForStep(block, step);
-      for (const set of group.sets) onUpdateSet(set.id, patch);
+      afterSave(() => {
+        for (const set of group.sets) onUpdateSet(set.id, patch);
+      });
     },
-    [onUpdateSet],
+    [afterSave, onUpdateSet],
   );
 
   const handleAddLinkedRow = useCallback<AddLinkedRowHandler>(
     (block, step) => {
-      onAddSet?.(addPayloadForStep(block, step));
+      if (!onAddSet) return;
+      const payload = addPayloadForStep(block, step);
+      afterSave(() => {
+        onAddSet(payload);
+      });
     },
-    [onAddSet],
+    [afterSave, onAddSet],
   );
 
   const hasBlocks = drafts.length > 0;

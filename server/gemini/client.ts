@@ -1,6 +1,7 @@
 import type { GenerateContentResponse } from "@google/genai";
 import { inChunks, inSequence } from "@shared/inSequence";
 
+import { embeddingBreaker } from "../ai/circuitBreaker";
 import { getAiClient } from "../ai/geminiSdk";
 import { usageFromGeminiResponse } from "../ai/providers/gemini";
 import { retryWithBackoff } from "../ai/retry";
@@ -93,6 +94,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         config: { abortSignal: signal },
       }),
     "embedding",
+    // Its own breaker: an embedding incident must not cut off the text
+    // provider — AI2 (CODEBASE_ANALYSIS_2026-10-03).
+    embeddingBreaker,
   );
   const values = response.embeddings?.[0]?.values;
   if (!values || values.length === 0) {

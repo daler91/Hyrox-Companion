@@ -246,6 +246,72 @@ describe("estimatePlannedSession", () => {
     expect(e.durationMin).toBe(20);
   });
 
+  // --- C22 (CODEBASE_ANALYSIS_2026-10-03): sets attributed to their own block ---
+
+  it("counts an untimed block's sets once per round alongside timed blocks", () => {
+    // Every linked set used to be dropped once any block was timed, and no round
+    // count was ever read: this session was estimated at 15 minutes.
+    const estimate = estimatePlannedSession({
+      structureBlocks: [
+        { id: "warm", sectionType: "warmup", formatType: "steady", durationMinutes: 10 },
+        { id: "main", sectionType: "main", formatType: "rounds", roundCount: 4 },
+        { id: "cool", sectionType: "cooldown", formatType: "steady", durationMinutes: 5 },
+      ],
+      exerciseSets: [
+        // Inside the timed warm-up: its 10 minutes already hold this.
+        { exerciseName: "easy_run", blockId: "warm", plannedDistance: 1000 },
+        // One round of the main block: 5 (1 km) + 3 + 3 (per-set floor) = 11 min.
+        { exerciseName: "run_1k", blockId: "main", plannedDistance: 1000 },
+        { exerciseName: "sled_push", blockId: "main", plannedDistance: 50 },
+        { exerciseName: "wall_balls", blockId: "main", plannedReps: 20 },
+      ],
+    });
+
+    expect(estimate.source).toBe("structure_and_sets");
+    expect(estimate.durationMin).toBe(59); // 10 + 4 x 11 + 5
+    expect(estimate.rpe).toBe(7); // the main "rounds" block
+  });
+
+  it("multiplies by the round count when no block is timed", () => {
+    const estimate = estimatePlannedSession({
+      structureBlocks: [{ id: "main", sectionType: "main", formatType: "rounds", roundCount: 3 }],
+      exerciseSets: [
+        { exerciseName: "wall_balls", blockId: "main", plannedReps: 20 },
+        { exerciseName: "burpee_broad_jump", blockId: "main", plannedReps: 10 },
+        { exerciseName: "back_squat", blockId: null, plannedReps: 5 },
+      ],
+    });
+
+    expect(estimate.source).toBe("sets");
+    expect(estimate.durationMin).toBe(21); // 3 x (3 + 3) + one unattached 3
+  });
+
+  it("counts an untimed block with no round count once", () => {
+    const estimate = estimatePlannedSession({
+      structureBlocks: [
+        { id: "warm", sectionType: "warmup", formatType: "steady", durationMinutes: 10 },
+        { id: "main", sectionType: "main", formatType: "steady" },
+      ],
+      exerciseSets: [{ exerciseName: "easy_run", blockId: "main", plannedTime: 30 }],
+    });
+
+    expect(estimate.durationMin).toBe(40);
+  });
+
+  it("does not multiply rows that already list each round", () => {
+    const estimate = estimatePlannedSession({
+      structureBlocks: [{ id: "main", sectionType: "main", formatType: "rounds", roundCount: 4 }],
+      exerciseSets: [1, 2, 3, 4].map((cycleNumber) => ({
+        exerciseName: "wall_balls",
+        blockId: "main",
+        cycleNumber,
+        plannedReps: 20,
+      })),
+    });
+
+    expect(estimate.durationMin).toBe(12); // 4 rows x 3 min, not 4 x 4 x 3
+  });
+
   it("says when the estimate is a clamp rather than a measurement", () => {
     // Both bounds used to be applied silently, so a four-hour session and a
     // three-hour one both read "180" with nothing to distinguish them.

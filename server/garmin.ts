@@ -32,6 +32,7 @@ import { env } from "./env";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "./routeUtils";
+import { invalidateAnalyticsCachesForUser } from "./services/analyticsRouteCache";
 import {
   dropCrossProviderDuplicates,
   recordingTimingFromLog,
@@ -74,10 +75,14 @@ import { getUserId } from "./types";
 //   from python-garminconnect is "wait 60 seconds" — we wait much longer
 //   because we don't know how widely the ban will propagate.
 //
-// Layer 6 — No automatic re-login on stale tokens
-//   Tokens are good for ~1 year. If a fresh-looking cached token unexpectedly
-//   401s, we surface the error and require manual reconnect rather than
-//   silently re-logging in. This caps the cost of a "weird" failure mode.
+// Layer 6 — Re-mint before re-login
+//   The OAuth1 token lasts ~1 year; the OAuth2 token the API takes is
+//   short-lived. An expired OAuth2 is re-minted from the stored OAuth1 (no
+//   SSO); only an OAuth1 Garmin rejects falls back to an email/password login
+//   (D6, CODEBASE_ANALYSIS_2026-10-03). If a fresh-looking cached token
+//   unexpectedly 401s, we surface the error and require manual reconnect
+//   rather than silently re-logging in. This caps the cost of a "weird"
+//   failure mode.
 //
 // Layer 7 — Audit logging
 //   Every Garmin API call and login is logged at info level with the userId
@@ -309,10 +314,11 @@ const inFlightUsers = new Set<string>();
 // same athlete in twice — exactly the burst the breaker exists to prevent —
 // so the claim is ALSO taken in server_runtime_cache, where it is atomic
 // across instances. TTL bounds the claim if the process dies mid-call; it is
-// longer than the worst case of the two timed calls (login + activities) so a
-// live operation never loses its lock. Best-effort like the breaker: if the
-// shared store is unreachable the local Set is still authoritative.
-const USER_LOCK_TTL_MS = 2 * GARMIN_CALL_TIMEOUT_MS + 30_000;
+// longer than the worst case of the three timed calls (OAuth2 refresh, then a
+// login when Garmin rejects the OAuth1, then activities) so a live operation
+// never loses its lock. Best-effort like the breaker: if the shared store is
+// unreachable the local Set is still authoritative.
+const USER_LOCK_TTL_MS = 3 * GARMIN_CALL_TIMEOUT_MS + 30_000;
 
 function userLockKey(userId: string): string {
   return `garmin:inflight:${userId}`;
@@ -404,14 +410,132 @@ function tokensStillFresh(tokenExpiresAt: Date | null): boolean {
 // =============================================================================
 
 /**
+ * Thrown when Garmin could not re-mint the OAuth2 token for a reason that says
+ * nothing about the athlete's credentials (a timeout, a 5xx, a 429). The sync
+ * answers 502 and records no lastError: setGarminError would also wipe the
+ * stored credentials and force a reconnect over a Garmin-side hiccup.
+ */
+class GarminTokenRefreshError extends Error {
+  constructor(message: string, options: { cause: unknown }) {
+    super(message, options);
+    this.name = "GarminTokenRefreshError";
+  }
+}
+
+/**
+ * Whether a failed OAuth2 refresh means Garmin no longer accepts the stored
+ * OAuth1 token, so only a fresh login can help. A structured or textual
+ * 401/403 says so; so does a TypeError, because the SDK's 401 interceptor bails
+ * out when no OAuth2 token is set — and the exchange clears it before posting
+ * — so a rejected exchange resolves with no response and the SDK then throws
+ * reading the token off it.
+ */
+function oauth1Rejected(err: unknown): boolean {
+  return looksLikeUnauthorized(err) || err instanceof TypeError;
+}
+
+/** Persist the client's current tokens so the next sync can skip both login and refresh. */
+async function persistGarminTokens(
+  client: GarminConnect,
+  userId: string,
+  reqLog: typeof logger,
+): Promise<void> {
+  try {
+    const tokens = client.exportToken();
+    // UNIX seconds; a token row without one is stored as "expiry unknown".
+    const expiresAtSec = tokens.oauth2.expires_at;
+    const tokenExpiresAt =
+      Number.isFinite(expiresAtSec) && expiresAtSec > 0 ? new Date(expiresAtSec * 1000) : null;
+    await storage.users.updateGarminTokens(
+      userId,
+      JSON.stringify(tokens.oauth1),
+      JSON.stringify(tokens.oauth2),
+      tokenExpiresAt,
+    );
+    reqLog.info(
+      { userId, context: LOG_CTX, expiresAt: tokenExpiresAt?.toISOString() ?? null },
+      "Persisted fresh Garmin tokens",
+    );
+  } catch (err) {
+    // Non-fatal — the next sync just refreshes (or logs in) again.
+    reqLog.warn({ err, userId, context: LOG_CTX }, "Failed to persist Garmin tokens");
+  }
+}
+
+/**
+ * Re-mint an expired OAuth2 token from the cached OAuth1 one: one call to
+ * Garmin's token exchange, no SSO. Resolves true when the client is ready,
+ * false when Garmin rejected the OAuth1 token and only a fresh login can help.
+ * Any other failure throws without touching the stored connection.
+ */
+async function refreshOauth2FromOauth1(
+  client: GarminConnect,
+  userId: string,
+  reqLog: typeof logger,
+): Promise<boolean> {
+  reqLog.info({ userId, context: LOG_CTX }, "Refreshing Garmin OAuth2 from the cached OAuth1 token");
+  try {
+    await withCircuitBreaker("refreshOauth2", () => client.client.refreshOauth2Token());
+  } catch (err) {
+    if (err instanceof GarminCircuitOpenError) throw err;
+    // Status and message only, not `err`: an axios error carries the signed
+    // exchange URL — the OAuth1 token among its query parameters — on its config.
+    const failure = {
+      status: errorHttpStatus(err),
+      error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    };
+    if (!looksLike429(err) && oauth1Rejected(err)) {
+      reqLog.warn({ ...failure, userId, context: LOG_CTX }, "Garmin rejected the cached OAuth1 token; logging in again");
+      return false;
+    }
+    reqLog.warn({ ...failure, userId, context: LOG_CTX }, "Garmin OAuth2 refresh failed");
+    const message = looksLike429(err)
+      ? translateGarminError(err)
+      : "Garmin did not respond. Please try again in a few minutes.";
+    throw new GarminTokenRefreshError(message, { cause: err });
+  }
+  await persistGarminTokens(client, userId, reqLog);
+  return true;
+}
+
+/**
+ * Load the cached tokens into the client. False when there are none or they
+ * are corrupted, in which case only a fresh login can help.
+ */
+function loadCachedTokens(
+  client: GarminConnect,
+  conn: { encryptedOauth1Token: string | null; encryptedOauth2Token: string | null },
+  userId: string,
+  reqLog: typeof logger,
+): boolean {
+  if (!conn.encryptedOauth1Token || !conn.encryptedOauth2Token) return false;
+  try {
+    const oauth1 = JSON.parse(conn.encryptedOauth1Token) as IOauth1Token;
+    const oauth2 = JSON.parse(conn.encryptedOauth2Token) as IOauth2Token;
+    client.loadToken(oauth1, oauth2);
+    return true;
+  } catch (err) {
+    // Corrupted JSON in DB — fall through to fresh login.
+    reqLog.warn({ err, userId, context: LOG_CTX }, "Failed to parse cached Garmin tokens, will re-login");
+    return false;
+  }
+}
+
+/**
  * Resolves to a logged-in GarminConnect client for the user.
  *
- * Strategy: heavy preference for cached tokens (which last ~1 year). We only
- * perform a fresh login when there are no cached tokens at all OR they're
- * within the expiry buffer. Notably we do NOT auto-relogin if a "fresh-looking"
- * token unexpectedly fails — that goes through the lastError path so the user
- * has to disconnect+reconnect manually. This caps the worst-case cost of any
- * Garmin-side weirdness to one wasted API call per Sync click.
+ * Strategy: heavy preference for cached tokens. A fresh OAuth2 token is used
+ * as-is. An expired one is re-minted from the long-lived OAuth1 token, which
+ * costs one token exchange and no SSO. D6 (CODEBASE_ANALYSIS_2026-10-03): this
+ * used to go straight to a full email/password SSO login whenever the
+ * short-lived OAuth2 had lapsed — most syncs — from the shared server IP,
+ * where a captcha, MFA prompt or 429 wipes the stored credentials and forces a
+ * reconnect. A full login now happens only with no usable cached tokens or
+ * when Garmin rejects the OAuth1 one. Notably we do NOT auto-relogin if a
+ * "fresh-looking" token unexpectedly fails — that goes through the lastError
+ * path so the user has to disconnect+reconnect manually. This caps the
+ * worst-case cost of any Garmin-side weirdness to one wasted API call per
+ * Sync click.
  */
 async function getGarminClient(userId: string, reqLog: typeof logger): Promise<GarminConnect> {
   const conn = await storage.users.getGarminConnection(userId);
@@ -440,21 +564,12 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
 
   // Fast path: load cached tokens. If they fail at the next API call we
   // surface the error and require manual reconnect — we do NOT auto-relogin.
-  if (
-    tokensStillFresh(conn.tokenExpiresAt) &&
-    conn.encryptedOauth1Token &&
-    conn.encryptedOauth2Token
-  ) {
-    try {
-      const oauth1 = JSON.parse(conn.encryptedOauth1Token) as IOauth1Token;
-      const oauth2 = JSON.parse(conn.encryptedOauth2Token) as IOauth2Token;
-      client.loadToken(oauth1, oauth2);
+  if (loadCachedTokens(client, conn, userId, reqLog)) {
+    if (tokensStillFresh(conn.tokenExpiresAt)) {
       reqLog.info({ userId, context: LOG_CTX }, "Using cached Garmin tokens");
       return client;
-    } catch (err) {
-      // Corrupted JSON in DB — fall through to fresh login.
-      reqLog.warn({ err, userId, context: LOG_CTX }, "Failed to parse cached Garmin tokens, will re-login");
     }
+    if (await refreshOauth2FromOauth1(client, userId, reqLog)) return client;
   }
 
   // Slow path: full SSO login. This is the expensive call we want to avoid
@@ -475,23 +590,7 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
   // Persist the freshly-minted tokens so subsequent /sync calls can skip
   // login entirely. exportToken() throws if tokens aren't set yet — but
   // we just successfully logged in, so this is safe.
-  try {
-    const tokens = client.exportToken();
-    const tokenExpiresAtMs = (tokens.oauth2?.expires_at ?? 0) * 1000;
-    await storage.users.updateGarminTokens(
-      userId,
-      JSON.stringify(tokens.oauth1),
-      JSON.stringify(tokens.oauth2),
-      tokenExpiresAtMs > 0 ? new Date(tokenExpiresAtMs) : null,
-    );
-    reqLog.info(
-      { userId, context: LOG_CTX, expiresAt: new Date(tokenExpiresAtMs).toISOString() },
-      "Persisted fresh Garmin tokens",
-    );
-  } catch (err) {
-    // Non-fatal — we'll just re-login on the next sync.
-    reqLog.warn({ err, userId, context: LOG_CTX }, "Failed to persist Garmin tokens after login");
-  }
+  await persistGarminTokens(client, userId, reqLog);
 
   return client;
 }
@@ -764,6 +863,10 @@ async function handleGarminSync(req: Request, res: Response) {
           sendCircuitOpen(res, err.message);
           return;
         }
+        if (err instanceof GarminTokenRefreshError) {
+          res.status(502).json({ error: err.message, code: "GARMIN_API_ERROR" });
+          return;
+        }
         const message = err instanceof Error ? err.message : "Garmin sync failed";
         res.status(401).json({ error: message, code: "GARMIN_AUTH_FAILED" });
         return;
@@ -785,6 +888,9 @@ async function handleGarminSync(req: Request, res: Response) {
       }
 
       await storage.users.updateGarminLastSync(userId);
+      // D10 (CODEBASE_ANALYSIS_2026-10-03): new logs change what the analytics
+      // caches hold, and the client refetches as soon as this answers.
+      if (result.imported > 0) invalidateAnalyticsCachesForUser(userId);
 
       reqLog.info({ userId, context: LOG_CTX, ...result }, "Garmin /sync succeeded");
 

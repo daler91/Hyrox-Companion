@@ -564,7 +564,8 @@ describe("planService", () => {
 
       await uncomplete();
 
-      expect(releaseStravaActivityInTx).toHaveBeenCalledWith(tx, linked, userId, "mi");
+      // No marker, so no recording set was left out of the fold, and no note goes with it.
+      expect(releaseStravaActivityInTx).toHaveBeenCalledWith(tx, linked, userId, "mi", null);
       // Only once the log holding the same activity id is gone: the partial
       // unique index on (user_id, strava_activity_id) refuses the row before.
       const lastDelete = Math.max(...tx.deleteWhere.mock.invocationCallOrder);

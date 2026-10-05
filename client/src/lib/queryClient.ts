@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+import { parseApiError } from "./apiError";
 import { timeoutSignal } from "./timeoutSignal";
 
 export class RateLimitError extends Error {
@@ -44,16 +45,13 @@ function extractServerMessage(body: string): string | null {
  */
 export function humanizeApiError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "";
-  // apiRequest throws `${status}: ${body}` where status is a 3-digit HTTP code.
-  // Parse it without a regex (string ops only) so this stays off SonarCloud's
-  // "regex is security-sensitive" hotspot rule — equivalent and ReDoS-free.
-  const colonIdx = raw.indexOf(":");
-  const head = colonIdx >= 0 ? raw.slice(0, colonIdx) : "";
-  const isHttpStatus = head.length === 3 && [...head].every((c) => c >= "0" && c <= "9");
-  if (!isHttpStatus) {
+  // apiRequest throws `${status}: ${body}`; parseApiError reads the status
+  // (CL34, CODEBASE_ANALYSIS_2026-10-03).
+  const parsed = parseApiError(error);
+  if (!parsed) {
     return raw.trim() || "Something went wrong. Please try again.";
   }
-  const status = Number(head);
+  const { status } = parsed;
   // Never surface 5xx bodies — they can carry internals and the server already
   // masks them to "Internal Server Error".
   if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
@@ -61,7 +59,7 @@ export function humanizeApiError(error: unknown): string {
   // be shown (Strava "not connected or token expired", AI-consent "enable it in
   // Settings", Zod validation errors). Fall back to friendly status-specific
   // copy only for plain/empty bodies (e.g. a bare "Unauthorized"/"Forbidden").
-  const body = raw.slice(colonIdx + 1).trimStart();
+  const body = raw.slice(raw.indexOf(":") + 1).trimStart();
   const serverMessage = extractServerMessage(body);
   if (serverMessage) return serverMessage;
   if (status === 401) return "Your session has expired. Please sign in again.";

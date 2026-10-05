@@ -225,6 +225,62 @@ describe("rateLimiter", () => {
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
+  // C5 (CODEBASE_ANALYSIS_2026-10-03): the mocked store is ONE map shared by
+  // every limiter, the way production shares rate_limit_buckets. Keyed by
+  // category alone, the 120/min limiter's hits counted against the 1/min cap.
+  it("keeps two limiters in one category on separate counters", () => {
+    const setCellPatch = rateLimiter("workoutSet", 3, DEFAULT_WINDOW_MS);
+    const addSet = rateLimiter("workoutSet", 1, DEFAULT_WINDOW_MS);
+
+    setCellPatch(req, res as Response, next);
+    setCellPatch(req, res as Response, next);
+    addSet(req, res as Response, next); // its own first request
+
+    expect(next).toHaveBeenCalledTimes(3);
+    expect(res.status).not.toHaveBeenCalled();
+
+    addSet(req, res as Response, next); // its own second request (blocked)
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("keeps limiters with the same cap but different windows apart", () => {
+    rateLimiter("analytics", 1, DEFAULT_WINDOW_MS)(req, res as Response, next);
+    rateLimiter("analytics", 1, DEFAULT_WINDOW_MS * 15)(req, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("still shares one counter between routes with the same category, cap and window", () => {
+    rateLimiter("analytics", 1, DEFAULT_WINDOW_MS)(req, res as Response, next);
+    rateLimiter("analytics", 1, DEFAULT_WINDOW_MS)(req, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("counts a limiter's reads and writes together (W6 keeps one bucket per limiter)", () => {
+    const limiter = rateLimiter("annotations", 1, DEFAULT_WINDOW_MS);
+
+    limiter({ ...req, method: "GET" } as unknown as Request, res as Response, next);
+    limiter({ ...req, method: "POST" } as unknown as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
+  it("keeps `:user:` and the user's id at the end of the key, which account erasure purges by", () => {
+    vi.mocked(rateLimit).mockClear();
+    rateLimiter("workoutSet", 60, DEFAULT_WINDOW_MS)(req, res as Response, next);
+
+    const { keyGenerator } = vi.mocked(rateLimit).mock.calls[0][0] as {
+      keyGenerator: (r: unknown) => string;
+    };
+    const key = keyGenerator(req);
+    expect(key).toBe(`workoutSet:60:${DEFAULT_WINDOW_MS}:user:user123`);
+    expect(key.split(":user:")[1]).toBe("user123");
+  });
+
   it("builds a fail-open limiter for safe-method reads but fail-closed for mutations (W6)", () => {
     vi.mocked(rateLimit).mockClear();
     const limiter = rateLimiter("analytics", 5, DEFAULT_WINDOW_MS);

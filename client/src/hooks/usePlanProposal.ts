@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 
 import type { Message } from "@/hooks/useChatSession";
 import { api, type PlanProposalView, QUERY_KEYS, type UndoPlanProposalResponse } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import { createLocalMessage } from "@/lib/chatMessage";
 import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
 
@@ -27,6 +28,9 @@ function appliedChanges(proposal: PlanProposalView, planDayIds?: readonly string
 function invalidatePlanQueries(changes: PlanProposalView["changes"]): void {
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+  // The day summary falls back to a planned session's duration, RPE and start
+  // time, which a proposal can change. CL19 (CODEBASE_ANALYSIS_2026-10-03)
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDayPrefix }).catch(ignoreResult);
   let structuredChanged = false;
   let prescriptionChanged = false;
   for (const change of changes) {
@@ -68,9 +72,12 @@ export function useLiveProposal(snapshot: PlanProposalView): PlanProposalView {
   return data;
 }
 
-/** The server's own explanation, from a conflict whose body is parseable JSON. */
+/**
+ * The server's own explanation, from a conflict whose body is parseable JSON.
+ * The status is parseApiError's to read (CL34, CODEBASE_ANALYSIS_2026-10-03).
+ */
 function conflictMessage(error: unknown): string | undefined {
-  if (!(error instanceof Error) || !error.message.startsWith("409")) return undefined;
+  if (!(error instanceof Error) || parseApiError(error)?.status !== 409) return undefined;
   const jsonStart = error.message.indexOf("{");
   if (jsonStart === -1) return undefined;
   try {
@@ -88,7 +95,7 @@ function humanizeApplyError(error: unknown): string {
   if (error instanceof RateLimitError) {
     return "You're sending requests too quickly. Please wait a moment and try again.";
   }
-  if (error instanceof Error && error.message.startsWith("409")) {
+  if (parseApiError(error)?.status === 409) {
     // Conflict — the proposal went stale or was resolved elsewhere.
     return (
       conflictMessage(error) ??

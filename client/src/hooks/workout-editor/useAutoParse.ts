@@ -126,14 +126,15 @@ export function useAutoParse({ blockCounterRef, blocksRef, dataRef, onApply }: U
         lastErrorReason: parseErrorReason(err),
       }));
     } finally {
-      // Always clear the spinner. Earlier this was gated on
-      // `!controller.signal.aborted`, but that left the state stuck
-      // true when a parse was aborted AND the subsequent debounced
-      // call short-circuited (empty text, under-length, etc.) —
-      // nothing in that fast-path resets the flag. A fresh parse will
-      // immediately setAutoParsing(true) again; React batches these
-      // so there's no visible flicker.
-      setAutoParsing(false);
+      // Clear the spinner unless a newer run has taken over. Gating on
+      // `!controller.signal.aborted` left it stuck true when an aborted
+      // parse was followed by a call that short-circuited (empty text,
+      // under-length, etc.). Clearing it unconditionally let the aborted
+      // run's late `finally` hide the spinner — and enable Save — while the
+      // run Next started was still parsing (CL25, CODEBASE_ANALYSIS_2026-10-03).
+      // A run owns the flag while its controller is the latest one; an abort
+      // that starts no new run leaves it the latest, so it still clears.
+      if (abortRef.current === controller) setAutoParsing(false);
     }
   }, [applyAutoParseResult]);
 

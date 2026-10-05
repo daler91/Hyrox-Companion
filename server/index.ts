@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/node";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import express, { NextFunction,type Request, Response } from "express";
+import express, { type Request } from "express";
 import helmet from "helmet";
 import { stdSerializers } from "pino";
 import pinoHttp from "pino-http";
@@ -19,12 +19,13 @@ import { configureObservability, registerProcessErrorHandlers } from "./bootstra
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
-import { AppError, shouldReportToSentry } from "./errors";
 import { isChatSendPath, isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
 import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
 import { buildCspDirectives } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
+import { globalErrorHandler } from "./middleware/errorHandler";
+import { permissionsPolicy } from "./middleware/permissionsPolicy";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
@@ -95,15 +96,6 @@ const app = express();
 
 const { isDev } = configureApp(app);
 const httpServer = createServer(app);
-
-// A loose shape for errors that are not AppErrors, so the error handler can
-// read the ad-hoc status/code properties third-party middleware attaches.
-interface LegacyError extends Error {
-  status?: number;
-  statusCode?: number;
-  code?: string;
-  details?: unknown;
-}
 
 declare module "http" {
   interface IncomingMessage {
@@ -213,13 +205,7 @@ app.use(
   }),
 );
 
-app.use((req, res, next) => {
-  res.setHeader(
-    "Permissions-Policy",
-    "camera=(), microphone=(self), geolocation=()",
-  );
-  next();
-});
+app.use(permissionsPolicy);
 
 // Coaching material routes accept large document content (up to 1.5M chars)
 app.use("/api/v1/coaching-materials", express.json({ limit: "2mb" }));
@@ -416,42 +402,7 @@ try {
     );
   }
 
-  app.use((err: AppError | LegacyError, _req: Request, res: Response, _next: NextFunction) => {
-    // Derive status and code from either the structured AppError class
-    // or legacy ad-hoc error properties (e.g. from third-party middleware).
-    const isAppError = err.name === "AppError" && "code" in err;
-    const status = isAppError
-      ? (err as AppError).status
-      : ((err as LegacyError).status || (err as LegacyError).statusCode || 500);
-    const defaultCode = status >= 500 ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST";
-    const code = isAppError
-      ? (err as AppError).code
-      : ((err as LegacyError).code || defaultCode);
-    const details = isAppError
-      ? (err as AppError).details
-      : (err as LegacyError).details;
-
-    // 🛡️ Sentinel: Prevent leaking sensitive error details to the client
-    const message =
-      status === 500
-        ? "Internal Server Error"
-        : err.message || "An error occurred";
-
-    // S3 — body-parser's default 413 message is just "request entity too large"
-    // which gives the user no hint about the per-route limit (100kb default,
-    // 2mb for coaching materials). Rewrite to something actionable.
-    if (status === 413) {
-      return res.status(413).json({
-        error: "Request body too large for this endpoint — try a smaller payload or split the upload.",
-        code: "PAYLOAD_TOO_LARGE",
-      });
-    }
-
-    // Only server faults and sustained rate-limiting are Sentry-worthy; see
-    // shouldReportToSentry. Everything is still logged and still returned.
-    if (shouldReportToSentry(status)) Sentry.captureException(err);
-    res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
-  });
+  app.use(globalErrorHandler);
 
   // Sentry Express error handler — captures unhandled errors that bypass
   // the custom handler above (e.g. middleware crashes).

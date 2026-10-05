@@ -26,6 +26,7 @@ vi.mock("@google/genai", () => ({
 
 vi.mock("../services/aiUsageService", () => ({ recordAiUsage: vi.fn(() => Promise.resolve()) }));
 
+import { embeddingBreaker } from "../ai/circuitBreaker";
 import { recordAiUsage } from "../services/aiUsageService";
 import { __resetEmbeddingCacheForTests, generateEmbedding, retryWithBackoff, trackUsageFromResponse, withTimeout } from "./client";
 
@@ -101,10 +102,9 @@ describe("retryWithBackoff abort plumbing (S6)", () => {
         });
       },
       "abort-test",
-      0, // maxRetries — fail fast
-      1, // baseDelayMs
-      1000, // budgetMs
-      15, // callTimeoutMs — short so the timeout fires
+      embeddingBreaker,
+      // Fail fast, with a call timeout short enough to fire.
+      { maxRetries: 0, baseDelayMs: 1, budgetMs: 1000, callTimeoutMs: 15 },
     );
     await expect(result).rejects.toThrow();
     expect(captured?.aborted).toBe(true);

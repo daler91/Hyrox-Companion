@@ -17,7 +17,6 @@ import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 import { QUERY_KEYS } from "@/lib/api";
-import { getTodayString } from "@/lib/dateUtils";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
@@ -84,6 +83,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     mafErrors,
     raceDate,
     setRaceDate,
+    minRaceDate,
+    raceDateInputRef,
     goalDescription,
     activityLevel,
     setActivityLevel,
@@ -104,7 +105,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     nextLabel,
     isPrefsPending,
     isSchedulePending,
-  } = useOnboardingWizard(onComplete);
+  } = useOnboardingWizard(onComplete, open);
 
   // Esc and ✕ ask before leaving: one reflexive keypress used to end
   // onboarding for good (onboarding audit H4). Backdrop clicks stay blocked in
@@ -175,7 +176,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             mafErrors={mafErrors}
             raceDate={raceDate}
             onRaceDateChange={setRaceDate}
-            minRaceDate={getTodayString()}
+            minRaceDate={minRaceDate}
+            raceDateInputRef={raceDateInputRef}
           />
         )}
         {step === "fuelling" && (

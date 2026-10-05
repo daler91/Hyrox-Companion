@@ -1,17 +1,26 @@
 import { calculateMafHr, type MafCategory } from "@shared/maf";
-import { calculateNutritionTarget } from "@shared/nutritionTargets";
-import type { UpsertNutritionTargetInput } from "@shared/schema";
+import {
+  calculateNutritionTarget,
+  carryPeriodizationForward,
+  type NutritionTargetInput,
+} from "@shared/nutritionTargets";
+import type { NutritionTarget, UpsertNutritionTargetInput } from "@shared/schema";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
 import { connectDeviceToastAction } from "@/components/onboarding/connectDeviceToastAction";
-import { parseFuellingProfile } from "@/components/onboarding/FuellingStep";
+import {
+  type FuellingProfileFields,
+  resolveFuellingProfile,
+} from "@/components/onboarding/FuellingStep";
+import { raceDateError } from "@/components/onboarding/GoalStep";
 import {
   DEFAULT_ONBOARDING_GOAL_ID,
   describeOnboardingGoal,
 } from "@/components/onboarding/onboardingGoals";
+import { ignoreResult } from "@/hooks/chat/chatSessionModel";
 import {
   bodyweightInput,
   changedFields,
@@ -23,10 +32,13 @@ import {
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { useToast } from "@/hooks/use-toast";
 import { useCompleteOnboarding } from "@/hooks/useCompleteOnboarding";
+import { NUTRITION_TARGET_QUERY_KEYS, useNutritionTargets } from "@/hooks/useNutrition";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
+import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { defaultPlanStartDate } from "@/lib/planStart";
 import { queryClient } from "@/lib/queryClient";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 // The fuelling step only earns its place when the nutrition module is on —
 // without it there is nowhere for the computed targets to live.
@@ -66,7 +78,38 @@ function validateAge(value: string): string | null {
     : "Enter a whole number between 13 and 100, or leave it blank.";
 }
 
-export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
+/** Whether the resolved fuelling profile matches what is saved, field for field. */
+function isSavedFuellingProfile(
+  profile: NutritionTargetInput,
+  saved: UserPreferences | undefined,
+): boolean {
+  return (
+    profile.bodyweightKg === (saved?.bodyweightKg ?? null) &&
+    profile.heightCm === (saved?.heightCm ?? null) &&
+    profile.ageYears === (saved?.age ?? null) &&
+    profile.activityLevel === (saved?.activityLevel ?? null) &&
+    profile.goalDirection === (saved?.weightGoalDirection ?? null)
+  );
+}
+
+/**
+ * The target a fuelling-step save writes: the computed macros, with the current
+ * version's periodisation carried forward. Bare macros wrote a version with
+ * periodisation, recovery and phase-awareness off and every knob nulled.
+ * CL20 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function fuellingTargetInput(
+  macros: Pick<UpsertNutritionTargetInput, "calories" | "proteinG" | "carbG" | "fatG">,
+  current: NutritionTarget | null,
+): UpsertNutritionTargetInput {
+  return current ? { ...macros, ...carryPeriodizationForward(current, macros.carbG ?? null) } : macros;
+}
+
+export function useOnboardingWizard(
+  onComplete: (choice: OnboardingCompletionChoice) => void,
+  /** Whether the wizard is showing. It stays mounted while hidden (see useOnboarding). */
+  open: boolean,
+) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const completeOnboarding = useCompleteOnboarding();
@@ -128,9 +171,25 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const [typedBodyweight, setTypedBodyweight] = useState<string | null>(null);
   const bodyweight = typedBodyweight ?? bodyweightInput(savedPreferences?.bodyweightKg, weightUnit);
 
-  // A race the athlete has booked, "" when none. Not a preference: it anchors
-  // the AI plan's end date and is kept on a template plan.
+  // A race the athlete has booked, as typed, "" when none. Not a preference:
+  // it anchors the AI plan's end date and is kept on a template plan. One the
+  // Goal step can't use (not a real day, or past) holds that step, so later
+  // steps only ever see a usable date (CL9, CODEBASE_ANALYSIS_2026-10-03).
   const [raceDate, setRaceDate] = useState("");
+  // The earliest race date offered: today, read again each time the Goal step
+  // comes into view (from Units, Back from the next step, or the wizard
+  // reopening on it) and on its Continue. The wizard stays mounted while
+  // hidden, so a today read once on mount went stale overnight, and the
+  // picker's `min` and the step's error used yesterday.
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03)
+  const [minRaceDate, setMinRaceDate] = useState(getTodayString);
+  const goalStepShown = open && step === "goal";
+  const [wasGoalStepShown, setWasGoalStepShown] = useState(goalStepShown);
+  if (goalStepShown !== wasGoalStepShown) {
+    setWasGoalStepShown(goalStepShown);
+    if (goalStepShown) setMinRaceDate(getTodayString());
+  }
+  const raceDateInputRef = useRef<HTMLInputElement>(null);
   // Inline validation, named per field; the wizard only toasted a generic
   // "Complete required MAF profile fields" (onboarding audit M4).
   const [ageError, setAgeError] = useState<string | null>(null);
@@ -144,20 +203,40 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   // The next Monday, not tomorrow: a Monday start keeps every week-1 session
   // on the calendar (onboarding audit C3).
   const [startDate, setStartDate] = useState<Date>(() => parseISO(defaultPlanStartDate()));
-  const [applyTargets, setApplyTargets] = useState(true);
+  // The athlete's own answer to "set these as my targets"; null until touched.
+  const [applyTargetsChoice, setApplyTargetsChoice] = useState<boolean | null>(null);
+  // The current daily target: carried forward on save, and left alone by a
+  // re-run that changes nothing (CL20, CODEBASE_ANALYSIS_2026-10-03).
+  const targetsQuery = useNutritionTargets(FUELLING_STEP_ENABLED);
+  const currentTarget = targetsQuery.data?.current ?? null;
+  // Until the targets have loaded, one may exist and must not be replaced.
+  const mayHaveTarget = targetsQuery.data === undefined || currentTarget != null;
 
   const prefsMutation = useMutation({
     mutationFn: (prefs: Record<string, unknown>) => api.preferences.update(prefs),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(ignoreResult);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(ignoreResult);
+      // The bodyweight, height, age, sex and units saved here size session
+      // fuelling, the day's meal targets and energy balance, and the training
+      // load behind the chips and the Fuelling block. The training-style and
+      // AI Coach saves share this mutation and change none of those reads;
+      // marking them stale after those saves costs at most one refetch.
+      // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+      for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
+        queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
+      }
     },
   });
 
   const targetMutation = useMutation({
     mutationFn: (input: UpsertNutritionTargetInput) => api.nutrition.setTarget(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionTargets }).catch(() => {});
+      // The day summary and Timeline chips carry the target too (CL19,
+      // CODEBASE_ANALYSIS_2026-10-03).
+      for (const queryKey of NUTRITION_TARGET_QUERY_KEYS) {
+        queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
+      }
     },
   });
 
@@ -254,13 +333,32 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     setStep("goal");
   };
 
+  // Whether the race date can be used, judged on Continue against today as it
+  // is then, by the rule the Goal step shows (raceDateError): a race typed for
+  // today just before midnight is past once Continue is pressed after it.
+  // Refreshing today has the step name it too, and the field takes focus so a
+  // keyboard or screen-reader user lands on what holds the step.
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03)
+  const checkRaceDate = () => {
+    const today = getTodayString();
+    setMinRaceDate(today);
+    if (raceDateError(raceDate, today) === null) return true;
+    raceDateInputRef.current?.focus();
+    return false;
+  };
+
   // Saves the training style when it changed. An untouched training style is
   // left as saved, even a legacy MAF profile this step would no longer accept
-  // as complete.
+  // as complete. A race date the step names as unusable keeps the athlete
+  // here: a past one made every day of a template plan post-race recovery.
+  // Both checks run, so every error on the step shows at once.
+  // CL9 (CODEBASE_ANALYSIS_2026-10-03)
   const handleGoalNext = async () => {
     const goalChanges = changedFields(shown, saved, GOAL_STEP_FIELDS);
     const hasGoalChanges = Object.keys(goalChanges).length > 0;
-    if (hasGoalChanges && !hasValidMafProfile()) return;
+    const mafValid = !hasGoalChanges || hasValidMafProfile();
+    const raceDateUsable = checkRaceDate();
+    if (!mafValid || !raceDateUsable) return;
 
     try {
       const payload = hasGoalChanges ? buildTrainingStylePayload(goalChanges) : {};
@@ -281,78 +379,72 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
   };
 
-  // Saves the optional fuelling profile: with a complete, plausible profile the
-  // fields are persisted and (unless declined) the computed target is set, so
-  // per-meal fuel targets and the Timeline fuelling chips light up from day one.
-  // An incomplete profile just skips ahead — the step is optional and Settings
-  // can finish the job later. Nutrition setup never blocks onboarding.
-  const handleFuellingNext = async () => {
-    const parsed = parseFuellingProfile({
-      bodyweight,
-      heightCm,
-      age,
-      activityLevel,
-      weightGoalDirection,
-      weightUnit,
-      gender,
+  // The fuelling step's profile, resolved exactly as its preview resolves it
+  // (see resolveFuellingProfile), or null while incomplete.
+  const fuellingFields: FuellingProfileFields = {
+    bodyweight,
+    heightCm,
+    age,
+    activityLevel,
+    weightGoalDirection,
+    weightUnit,
+    gender,
+  };
+  const fuellingProfile = resolveFuellingProfile(fuellingFields, savedPreferences);
+  // A re-run must not re-save an untouched profile, or replace targets the
+  // athlete tuned by hand, just because the prefilled step was complete. So
+  // "unchanged" is judged on the fields this step shows; the goal rate is not
+  // one of them.
+  const fuellingUnchanged =
+    fuellingProfile != null && isSavedFuellingProfile(fuellingProfile, savedPreferences);
+  // The switch starts on unless that would replace a target over an untouched
+  // profile; whatever it shows is what Continue does. It used to start on and
+  // then be ignored for an unchanged profile, so a checked switch set nothing
+  // (CL20, CODEBASE_ANALYSIS_2026-10-03).
+  const applyTargets = applyTargetsChoice ?? (!mayHaveTarget || !fuellingUnchanged);
+
+  const saveFuellingTargets = async (profile: NutritionTargetInput) => {
+    const target = calculateNutritionTarget(profile);
+    // The version to carry forward must be known, not still loading.
+    const current = targetsQuery.isSuccess
+      ? currentTarget
+      : ((await targetsQuery.refetch({ throwOnError: true })).data?.current ?? null);
+    await targetMutation.mutateAsync(
+      fuellingTargetInput(
+        { calories: target.calories, proteinG: target.proteinG, carbG: target.carbG, fatG: target.fatG },
+        current,
+      ),
+    );
+    toast({
+      title: "Daily fuelling targets set",
+      description: `${target.calories} kcal · ${target.proteinG} g protein to start — adjust anytime in Nutrition.`,
     });
-    if (!parsed) {
-      setStep("coach");
-      return;
-    }
-    // A re-run must not re-save an untouched profile, or replace targets the
-    // athlete tuned by hand, just because the prefilled step was complete. So
-    // "unchanged" is judged on the fields this step shows; the goal rate is not
-    // one of them. Untouched bodyweight keeps its exact saved kilograms rather
-    // than the rounded figure the input shows, and an unchanged lose/gain goal
-    // keeps the rate set in Settings rather than the onboarding default.
-    const savedRate = savedPreferences?.weightGoalRateKgPerWeek;
-    const keepSavedRate =
-      parsed.goalDirection !== "maintain" &&
-      parsed.goalDirection === saved.weightGoalDirection &&
-      savedRate != null &&
-      savedRate > 0;
-    const profile = {
-      ...parsed,
-      bodyweightKg:
-        typedBodyweight === null && savedPreferences?.bodyweightKg != null
-          ? savedPreferences.bodyweightKg
-          : parsed.bodyweightKg,
-      goalRateKgPerWeek: keepSavedRate ? savedRate : parsed.goalRateKgPerWeek,
-    };
-    const unchanged =
-      profile.bodyweightKg === (savedPreferences?.bodyweightKg ?? null) &&
-      profile.heightCm === (savedPreferences?.heightCm ?? null) &&
-      profile.ageYears === (savedPreferences?.age ?? null) &&
-      profile.activityLevel === (savedPreferences?.activityLevel ?? null) &&
-      profile.goalDirection === (savedPreferences?.weightGoalDirection ?? null);
-    if (unchanged) {
+  };
+
+  // Saves the optional fuelling profile: with a complete, plausible profile the
+  // changed fields are persisted and (unless declined) the computed target is
+  // set, so per-meal fuel targets and the Timeline fuelling chips light up from
+  // day one. An incomplete profile just skips ahead — the step is optional and
+  // Settings can finish the job later. Nutrition setup never blocks onboarding.
+  const handleFuellingNext = async () => {
+    const profile = fuellingProfile;
+    if (!profile || (fuellingUnchanged && !applyTargets)) {
       setStep("coach");
       return;
     }
 
     try {
-      await prefsMutation.mutateAsync({
-        bodyweightKg: profile.bodyweightKg,
-        heightCm: profile.heightCm,
-        age: profile.ageYears,
-        activityLevel: profile.activityLevel,
-        weightGoalDirection: profile.goalDirection,
-        weightGoalRateKgPerWeek: profile.goalRateKgPerWeek,
-      });
-      if (applyTargets) {
-        const target = calculateNutritionTarget(profile);
-        await targetMutation.mutateAsync({
-          calories: target.calories,
-          proteinG: target.proteinG,
-          carbG: target.carbG,
-          fatG: target.fatG,
-        });
-        toast({
-          title: "Daily fuelling targets set",
-          description: `${target.calories} kcal · ${target.proteinG} g protein to start — adjust anytime in Nutrition.`,
+      if (!fuellingUnchanged) {
+        await prefsMutation.mutateAsync({
+          bodyweightKg: profile.bodyweightKg,
+          heightCm: profile.heightCm,
+          age: profile.ageYears,
+          activityLevel: profile.activityLevel,
+          weightGoalDirection: profile.goalDirection,
+          weightGoalRateKgPerWeek: profile.goalRateKgPerWeek,
         });
       }
+      if (applyTargets) await saveFuellingTargets(profile);
     } catch {
       toast({
         title: "Could not save your fuelling profile",
@@ -476,16 +568,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const total = planIdx + 1;
   // The optional fuelling step saves nothing unless the profile is complete,
   // so its button says Skip until then (audit L5).
-  const fuellingComplete =
-    parseFuellingProfile({
-      bodyweight,
-      heightCm,
-      age,
-      activityLevel,
-      weightGoalDirection,
-      weightUnit,
-      gender,
-    }) !== null;
+  const fuellingComplete = fuellingProfile !== null;
 
   return {
     step,
@@ -522,6 +605,8 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     mafErrors,
     raceDate,
     setRaceDate,
+    minRaceDate,
+    raceDateInputRef,
     goalDescription: describeOnboardingGoal(selectedGoal, {
       division,
       raceDate: raceDate || undefined,
@@ -545,7 +630,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     weightGoalDirection,
     setWeightGoalDirection: edit("weightGoalDirection"),
     applyTargets,
-    setApplyTargets,
+    setApplyTargets: setApplyTargetsChoice,
     aiCoachEnabled,
     setAiCoachEnabled: edit("aiCoachEnabled"),
     handleNext,

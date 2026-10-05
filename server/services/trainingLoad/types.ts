@@ -122,7 +122,8 @@ export interface DailyTrainingLoad {
   acuteEwma: number | null;
   chronicEwma: number | null;
   // Training Stress Balance / "Form" = chronicEwma − acuteEwma. Positive ⇒
-  // fresh/rested, negative ⇒ fatigued. Null until the EWMAs are seeded.
+  // fresh/rested, negative ⇒ fatigued. Null before the first log and until the
+  // same 14-day history gate as ACWR opens (audit C3).
   tsb: number | null;
   // Foster monotony (mean ÷ population SD of the trailing 7-day UTSS) and strain
   // (weekly UTSS × monotony). Null only when the week carried no load at all, or

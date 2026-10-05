@@ -81,7 +81,13 @@ export function useWorkoutActions(selectedPlanId: string | null) {
 
   const handleDelete = useCallback(
     (entry: TimelineEntry) => {
-      if (entry.workoutLogId && !entry.planDayId) {
+      // A completed planned session carries both ids, and every surface that
+      // calls this asks "Delete workout?". The log is that workout: deleting
+      // it lets the server re-sync the plan day back to planned or missed.
+      // Preferring the plan day removed only the prescription and left the
+      // log behind as an unplanned workout. Only an entry with no log
+      // (planned or skipped) deletes its plan day. CL23 (CODEBASE_ANALYSIS_2026-10-03)
+      if (entry.workoutLogId) {
         deleteWorkoutMutation.mutate(entry.workoutLogId);
       } else if (entry.planDayId) {
         deletePlanDayMutation.mutate(entry.planDayId);

@@ -5,7 +5,12 @@ import type { Logger } from "pino";
 
 import { db } from "../db";
 import { env } from "../env";
-import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/index";
+import {
+  generateWorkoutSuggestions,
+  type UpcomingWorkout,
+  type WorkoutSuggestion,
+} from "../gemini/index";
+import { rethrowCoachCallFailure } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
@@ -276,6 +281,31 @@ async function buildNoUpcomingWorkoutsMessage(userId: string, timezone: string):
   return "You have no upcoming planned workouts. Schedule some or start a new plan and I'll suggest improvements.";
 }
 
+/**
+ * The model's suggestions. A failed call throws, so the athlete is told the
+ * coach couldn't look rather than "your upcoming workouts look well-balanced"
+ * (it used to come back as an empty 200); a call this deployment cannot make
+ * (AiConfigurationError) gets the AI kill switch's 503 rather than a 500. The
+ * exception is a red-flag safety escalation: it replaces every suggestion
+ * anyway, so it still reaches the athlete through an outage.
+ * AI8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function requestSuggestions(
+  call: () => Promise<WorkoutSuggestion[]>,
+  redFlagDetected: boolean,
+  log: TimelineSuggestionLogger,
+): Promise<WorkoutSuggestion[]> {
+  try {
+    return await call();
+  } catch (error) {
+    if (!redFlagDetected) rethrowCoachCallFailure(error);
+    // The provider's error only, through the shared serializer; no user data.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn({ err: error }, "[suggestions] Model call failed; surfacing the safety escalation alone");
+    return [];
+  }
+}
+
 export async function generateTimelineAiSuggestions(
   userId: string,
   log: TimelineSuggestionLogger,
@@ -325,13 +355,18 @@ export async function generateTimelineAiSuggestions(
 
   const safetySignals = analyzeSafetySignals(aiContext.trainingContext, upcomingWorkouts);
 
-  const rawSuggestions = await generateWorkoutSuggestions(
-    aiContext.trainingContext,
-    upcomingWorkouts,
-    undefined,
-    coachingMaterials,
-    userId,
-    stylePromptContext,
+  const rawSuggestions = await requestSuggestions(
+    () =>
+      generateWorkoutSuggestions(
+        aiContext.trainingContext,
+        upcomingWorkouts,
+        undefined,
+        coachingMaterials,
+        userId,
+        stylePromptContext,
+      ),
+    safetySignals.redFlagDetected,
+    log,
   );
 
   const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);

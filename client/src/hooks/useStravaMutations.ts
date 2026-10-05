@@ -1,6 +1,7 @@
 import { api, QUERY_KEYS } from "@/lib/api";
 import type { StravaSyncResponse } from "@/lib/api/user";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
+import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -62,6 +63,10 @@ export function useStravaMutations() {
       // New Strava activities can set PRs and shift analytics — invalidate both.
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
+      // A sync imports workouts and adds a recording's start time, duration
+      // and calories to ones already logged: the fuelling reads built from
+      // them move too. CL19 (CODEBASE_ANALYSIS_2026-10-03)
+      ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
     ],
     successToast: (data) => ({
       title: "Sync Complete",

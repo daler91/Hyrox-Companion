@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../storage", () => ({
   storage: { nutrition: { searchLocalFoods: vi.fn(), upsertFoods: vi.fn() } },
@@ -23,6 +23,21 @@ import { makeFood as food } from "./foodTestFixture";
 import { searchOffFoods } from "./offClient";
 import { maybeSemanticSearch } from "./semanticSearch";
 import { searchUsdaFoods } from "./usdaClient";
+import { PROVIDER_DEADLINE_MS } from "./utils";
+
+const TEST_USDA_KEY = "test-key";
+
+type UsdaEnv = { USDA_API_KEY?: string };
+
+/** Configure USDA on the mocked env. */
+function setUsdaKey(value: string): void {
+  (env as UsdaEnv).USDA_API_KEY = value;
+}
+
+/** Unconfigure USDA on the mocked env. */
+function clearUsdaKey(): void {
+  (env as UsdaEnv).USDA_API_KEY = undefined;
+}
 
 const mappedUsda = {
   source: "usda" as const,
@@ -43,7 +58,7 @@ const mappedOff = { ...mappedUsda, source: "off" as const, sourceId: "off1" };
 describe("searchFoods", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
+    setUsdaKey(TEST_USDA_KEY);
     // Default: Edamam unconfigured/unreached, USDA + OFF + local empty.
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: false });
     vi.mocked(searchUsdaFoods).mockResolvedValue([]);
@@ -79,7 +94,7 @@ describe("searchFoods", () => {
   });
 
   it("is not degraded when Edamam reached the API even with no matches (USDA off)", async () => {
-    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
+    clearUsdaKey();
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: true });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
@@ -88,7 +103,7 @@ describe("searchFoods", () => {
   });
 
   it("flags degraded when no provider is live (cache-only)", async () => {
-    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
+    clearUsdaKey();
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
     const result = await searchFoods("banana", "u1");
@@ -176,7 +191,7 @@ describe("searchFoods", () => {
   });
 
   it("keeps search live (not degraded) when only OFF reaches its API", async () => {
-    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined; // USDA + Edamam unconfigured
+    clearUsdaKey(); // USDA + Edamam unconfigured
     vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: true });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
@@ -185,7 +200,7 @@ describe("searchFoods", () => {
   });
 
   it("flags degraded only when OFF also fails to reach its API", async () => {
-    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
+    clearUsdaKey();
     vi.mocked(searchOffFoods).mockRejectedValue(new Error("off down"));
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
@@ -299,7 +314,7 @@ describe("searchFoods", () => {
 describe("searchFoods provider fan-out gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
+    setUsdaKey(TEST_USDA_KEY);
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: true });
     vi.mocked(searchUsdaFoods).mockResolvedValue([]);
     vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: true });
@@ -339,11 +354,176 @@ describe("searchFoods provider fan-out gate", () => {
 
     const result = await searchFoods("banana", "u1");
 
-    expect(searchEdamamFoods).toHaveBeenCalledWith("banana");
-    expect(searchUsdaFoods).toHaveBeenCalledWith("banana");
-    expect(searchOffFoods).toHaveBeenCalledWith("banana");
+    // Each provider gets the query and the request's deadline signal (D13).
+    for (const call of [
+      vi.mocked(searchEdamamFoods).mock.calls.at(0),
+      vi.mocked(searchUsdaFoods).mock.calls.at(0),
+      vi.mocked(searchOffFoods).mock.calls.at(0),
+    ]) {
+      expect(call?.[0]).toBe("banana");
+      expect(call?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    }
     expect(storage.nutrition.upsertFoods).toHaveBeenCalledWith([mappedUsda]);
     expect(result.apiDegraded).toBe(false);
     expect(result.results.map((f) => f.id)).toContain("usda1");
+  });
+});
+
+// D13 (CODEBASE_ANALYSIS_2026-10-03): search waited on every provider with no
+// overall deadline, so one hanging provider outlasted the client's 15 s timeout.
+describe("searchFoods provider deadline", () => {
+  /** A provider call that never answers on its own, only to its abort signal. */
+  function hangUntilAborted(opts?: { signal?: AbortSignal }): Promise<never> {
+    return new Promise((_, reject) => {
+      opts?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("aborted", "AbortError"));
+      });
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    setUsdaKey(TEST_USDA_KEY);
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
+    vi.mocked(maybeSemanticSearch).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("answers cache-only with apiDegraded once every provider hangs past the deadline", async () => {
+    let edamamSignal: AbortSignal | undefined;
+    vi.mocked(searchEdamamFoods).mockImplementation((_q, opts) => {
+      edamamSignal = opts?.signal;
+      return hangUntilAborted(opts);
+    });
+    vi.mocked(searchUsdaFoods).mockImplementation((_q, opts) => hangUntilAborted(opts));
+    vi.mocked(searchOffFoods).mockImplementation((_q, opts) => hangUntilAborted(opts));
+
+    const pending = searchFoods("banana", "u1");
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+    const result = await pending;
+
+    expect(result.apiDegraded).toBe(true);
+    expect(result.results.map((f) => f.id)).toEqual(["local1"]);
+    // The calls are told to stop, with a plain AbortError that is never retried.
+    expect(edamamSignal?.aborted).toBe(true);
+    expect((edamamSignal?.reason as DOMException).name).toBe("AbortError");
+  });
+
+  it("keeps the providers that answered when one never does", async () => {
+    vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: false });
+    vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
+    // A provider that ignores its signal entirely still cannot hold the search.
+    vi.mocked(searchOffFoods).mockReturnValue(
+      new Promise(() => {
+        /* never settles */
+      }),
+    );
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "usda1", source: "usda", sourceId: "1" }),
+    ]);
+
+    const pending = searchFoods("banana", "u1");
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+    const result = await pending;
+
+    expect(result.apiDegraded).toBe(false);
+    expect(result.results.map((f) => f.id)).toContain("usda1");
+  });
+});
+
+// D13 (CODEBASE_ANALYSIS_2026-10-03): with NUTRITION_SEMANTIC_ENABLED on, the
+// semantic fallback ran after the providers' deadline with no bound of its own.
+describe("searchFoods semantic fallback deadline", () => {
+  /** Settles `ms` after it is called, on the (fake) timers. */
+  function after<T>(ms: number, value: T): Promise<T> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(value);
+      }, ms);
+    });
+  }
+
+  /** Start a search and report whether it has settled yet. */
+  function track(promise: Promise<unknown>): { settled: () => boolean } {
+    let done = false;
+    promise.then(
+      () => {
+        done = true;
+      },
+      () => {
+        done = true;
+      },
+    );
+    return { settled: () => done };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    setUsdaKey(TEST_USDA_KEY);
+    // A thin keyword set (one local hit), so the semantic fallback fires.
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
+    vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: true });
+    vi.mocked(searchUsdaFoods).mockResolvedValue([]);
+    vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("answers with the keyword results when the semantic search hangs", async () => {
+    vi.mocked(maybeSemanticSearch).mockReturnValue(
+      new Promise(() => {
+        /* never settles */
+      }),
+    );
+
+    const pending = searchFoods("protein", "u1");
+    const search = track(pending);
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+
+    expect(search.settled()).toBe(true);
+    const result = await pending;
+    expect(result.results.map((f) => f.id)).toEqual(["local1"]);
+    expect(result.apiDegraded).toBe(false);
+  });
+
+  it("shares the providers' deadline instead of starting a fresh one", async () => {
+    // The providers use most of the budget; the semantic search gets the rest.
+    vi.mocked(searchOffFoods).mockReturnValue(
+      after(PROVIDER_DEADLINE_MS - 1_000, { foods: [], reached: true }),
+    );
+    vi.mocked(maybeSemanticSearch).mockReturnValue(
+      new Promise(() => {
+        /* never settles */
+      }),
+    );
+
+    const search = track(searchFoods("protein", "u1"));
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+
+    expect(maybeSemanticSearch).toHaveBeenCalledOnce();
+    expect(search.settled()).toBe(true);
+  });
+
+  it("skips the semantic search once the providers used up the deadline", async () => {
+    vi.mocked(searchOffFoods).mockReturnValue(
+      new Promise(() => {
+        /* never settles */
+      }),
+    );
+    vi.mocked(maybeSemanticSearch).mockResolvedValue([]);
+
+    const pending = searchFoods("protein", "u1");
+    await vi.advanceTimersByTimeAsync(PROVIDER_DEADLINE_MS);
+    const result = await pending;
+
+    expect(maybeSemanticSearch).not.toHaveBeenCalled();
+    expect(result.results.map((f) => f.id)).toEqual(["local1"]);
   });
 });

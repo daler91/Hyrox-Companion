@@ -36,6 +36,10 @@ vi.mock("../../storage", () => ({
 vi.mock("../../logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+const lockOwnedContainer = vi.hoisted(() => vi.fn<() => Promise<boolean>>());
+vi.mock("../../storage/exerciseSetOwners", () => ({
+  getMutationOwnerAdapter: () => ({ lockOwnedContainer }),
+}));
 
 type StepTargets = StructureBlockInput["steps"][number]["targets"];
 
@@ -291,10 +295,17 @@ describe("updateWorkoutStructureBlockScore", () => {
 });
 
 describe("replacePlanDayStructure", () => {
-  it("returns null and skips the transaction when the plan day is missing", async () => {
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(undefined);
-    expect(await replacePlanDayStructure("pd1", "user-1", [])).toBeNull();
-    expect(db.transaction).not.toHaveBeenCalled();
+  it("returns null and writes nothing when the plan day isn't the athlete's", async () => {
+    // Ownership is proved by the row lock that serializes this day's block saves.
+    lockOwnedContainer.mockResolvedValue(false);
+    const tx = { select: vi.fn(), update: vi.fn(), delete: vi.fn(), insert: vi.fn() };
+    vi.mocked(db).transaction.mockImplementation((run) => run(tx as never));
+
+    expect(await replacePlanDayStructure("pd1", "user-1", [], [])).toBeNull();
+    expect(lockOwnedContainer).toHaveBeenCalledWith(tx, "pd1", "user-1");
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(tx.delete).not.toHaveBeenCalled();
+    expect(tx.insert).not.toHaveBeenCalled();
   });
 });
 

@@ -1,3 +1,4 @@
+import { addDaysToISODate, toIsoDateUtc } from "@shared/dateUtils";
 import express from "express";
 import request from "supertest";
 import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
@@ -321,19 +322,21 @@ describe("POST /api/v1/plans/sample", () => {
 
   // Onboarding keeps the goal and race date template users give (audit M3).
   it("passes onboarding's goal and race date through", async () => {
+    const raceDate = addDaysToISODate(toIsoDateUtc(new Date()), 42);
     const response = await request(app)
       .post("/api/v1/plans/sample")
-      .send({ goal: "Complete HYROX Open", raceDate: "2026-11-15" });
+      .send({ goal: "Complete HYROX Open", raceDate });
 
     expect(response.status).toBe(200);
     expect(createSamplePlan).toHaveBeenCalledWith("test_user_id", {
       goal: "Complete HYROX Open",
-      raceDate: "2026-11-15",
+      raceDate,
     });
   });
 
-  it("rejects a malformed race date", async () => {
-    const response = await request(app).post("/api/v1/plans/sample").send({ raceDate: "15/11/2026" });
+  // A past race made the whole template post-race recovery (CL9, CODEBASE_ANALYSIS_2026-10-03).
+  it.each(["15/11/2026", "2025-11-15"])("rejects a malformed or past race date (%s)", async (raceDate) => {
+    const response = await request(app).post("/api/v1/plans/sample").send({ raceDate });
 
     expect(response.status).toBe(400);
     expect(createSamplePlan).not.toHaveBeenCalled();
@@ -729,8 +732,10 @@ describe("plan-day exercise routes", () => {
       .send({ structureBlocks: [] });
 
     expect(response.status).toBe(200);
-    expect(replacePlanDayStructure).toHaveBeenCalledWith("day-1", "test_user_id", []);
+    expect(replacePlanDayStructure).toHaveBeenCalledWith("day-1", "test_user_id", [], []);
   });
+
+  // Relinks (CL15) are covered in planDayStructure.test.ts.
 
   describe("set writes carry the units they were composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
     const PLAN_DAY = { kind: "planDay", ownerId: "day-1" };

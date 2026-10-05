@@ -375,6 +375,137 @@ describe("AI write unit normalization", () => {
     expect(normalizeWorkoutTextUnits(input, preferences)).toBe(expected);
   });
 
+  // C23 (CODEBASE_ANALYSIS_2026-10-03): the H3 fix read only a dash right
+  // before the high bound, so a spaced dash or "to" left the low bound in the
+  // source unit: "60 – 70 kg" was saved as "60 – 154 lbs". A spaced
+  // separator also reads as a label ("Round 1 - 500m"), so there the low bound
+  // must stand alone and run up to the high bound within 10x. A lowercase
+  // word before it ("sets", "reps") is not a heading, so that is a range, and
+  // so is a number after a colon, comma or "of" when the word before that is
+  // not a label or a count ("Set 1:", "Squat:", "a pair of").
+  it.each([
+    ["a spaced en dash range", IMPERIAL, "Squat 60 \u2013 70 kg", "Squat 132 \u2013 154 lbs"],
+    ["a spaced hyphen range", IMPERIAL, "Squat 60 - 70 kg", "Squat 132 - 154 lbs"],
+    ["an en dash range spaced on one side", IMPERIAL, "Squat 60\u2013 70kg", "Squat 132\u2013 154 lbs"],
+    ["a range spaced with no-break spaces", IMPERIAL, "60\u00a0\u2013\u00a070 kg", "132\u00a0\u2013\u00a0154 lbs"],
+    ["a range spaced with thin spaces", IMPERIAL, "60\u2009\u2013\u200970 kg", "132\u2009\u2013\u2009154 lbs"],
+    ["a \"to\" range", IMPERIAL, "Deadlift 100 to 110kg", "Deadlift 220 to 243 lbs"],
+    ["a \"to\" distance range", IMPERIAL, "Run 2 to 3 km", "Run 2000 to 3000 m"],
+    ["a spaced range back to metric", METRIC, "Carry 3 To 4 miles", "Carry 4.83 To 6.44 km"],
+    ["a lowercase plural before a range", IMPERIAL, "Working sets 60 - 70 kg", "Working sets 132 - 154 lbs"],
+    ["a rep count before a load range", IMPERIAL, "8 reps 20 - 24kg", "8 reps 44 - 53 lbs"],
+    ["a lowercase \"session\" before a range", IMPERIAL, "Each session 5 - 8km", "Each session 5000 - 8000 m"],
+    ["a zone shorthand before a range", IMPERIAL, "Z2 5 - 8km", "Z2 5000 - 8000 m"],
+    ["a numbered heading and a colon", IMPERIAL, "Set 1: 60 - 70kg", "Set 1: 132 - 154 lbs"],
+    ["an exercise and a colon", IMPERIAL, "Squat: 60 - 70 kg", "Squat: 132 - 154 lbs"],
+    ["a numbered zone and a colon", IMPERIAL, "Zone 2: 5 - 8km", "Zone 2: 5000 - 8000 m"],
+    ["sets x reps and a comma", IMPERIAL, "Bench 5 x 8, 60 - 70kg", "Bench 5 x 8, 132 - 154 lbs"],
+    ["a range after a bullet", IMPERIAL, "Squat\n- 60 - 70 kg x 5", "Squat\n- 132 - 154 lbs x 5"],
+    ["a range after a bullet on the first line", IMPERIAL, "- 5 - 8 km easy", "- 5000 - 8000 m easy"],
+    ["a noun and \"of\"", IMPERIAL, "Carry a pair of 24 - 32kg", "Carry a pair of 53 - 71 lbs"],
+    ["a spaced range read as minutes", IMPERIAL, "Row 10 - 20m", "Row 10 - 20m"],
+    ["a label before a spaced dash", IMPERIAL, "Round 1 - 500m row", "Round 1 - 1640 ft row"],
+    ["a time before a spaced dash", IMPERIAL, "Rest 1:30 - 400m", "Rest 1:30 - 1312 ft"],
+    ["\"to\" without a number before it", IMPERIAL, "Build up to 80kg", "Build up to 176 lbs"],
+  ])("normalizes %s", (_label, preferences, input, expected) => {
+    expect(normalizeWorkoutTextUnits(input, preferences)).toBe(expected);
+  });
+
+  // C23 (CODEBASE_ANALYSIS_2026-10-03) guards. A spaced pair is a range only on one line: workout text is one
+  // line per exercise, and reading across a line break turned "Superset x 3"
+  // over a "- 20kg" bullet into "Superset x 7". Nor is it one when the first
+  // number counts reps ("5 x 8 - 60kg") or a capitalised heading ("Station 7
+  // - 20kg"), or when its ends sit more than 2x apart ("Squat 8 - 60kg" is 8
+  // reps at 60 kg), so those convert the load alone, as before C23. "8 -20kg"
+  // is then reps and an assisted load; "60 -70 kg" reads as a range as readily
+  // as a load, so it is left alone.
+  it.each([
+    ["a bullet under a number", IMPERIAL, "Superset x 3\r\n- 20kg press", "Superset x 3\r\n- 44 lbs press"],
+    ["an en dash bullet", IMPERIAL, "Main set x 4\n\u2013 16kg swings", "Main set x 4\n\u2013 35 lbs swings"],
+    ["a tight dash bullet under a number", IMPERIAL, "Rounds: 3\n-20kg lunges", "Rounds: 3\n-44 lbs lunges"],
+    ["a distance bullet under a number", IMPERIAL, "Week 1 Day 2\n- 5km easy", "Week 1 Day 2\n- 5000 m easy"],
+    ["a range on the line under a number", IMPERIAL, "Superset x 3\n60 - 70 kg", "Superset x 3\n132 - 154 lbs"],
+    ["sets x reps before a spaced dash", IMPERIAL, "Bench 5 x 8 - 60kg", "Bench 5 x 8 - 132 lbs"],
+    ["sets x 20 reps before a spaced dash", IMPERIAL, "Lunges 3 x 20 - 20kg", "Lunges 3 x 20 - 44 lbs"],
+    ["sets \u00d7 reps before a spaced dash", IMPERIAL, "Bench 5 \u00d7 8 - 60kg", "Bench 5 \u00d7 8 - 132 lbs"],
+    ["\"5x 8\" before a spaced dash", IMPERIAL, "Bench 5x 8 - 60kg", "Bench 5x 8 - 132 lbs"],
+    ["a station number before a load", IMPERIAL, "Station 7 - 20kg lunges", "Station 7 - 44 lbs lunges"],
+    ["a station number before an en dash", IMPERIAL, "Station 8 \u2013 9kg balls", "Station 8 \u2013 20 lbs balls"],
+    ["a day number before a distance", IMPERIAL, "Day 3 - 5 km", "Day 3 - 5000 m"],
+    ["a set number before a load", IMPERIAL, "Set 1 - 5kg", "Set 1 - 11 lbs"],
+    ["a lowercase \"set\" before a range", IMPERIAL, "Main set 5 - 6 km tempo", "Main set 5000 - 6000 m tempo"],
+    ["a hyphen spaced only before it", IMPERIAL, "Squat 60 -70 kg", "Squat 60 -70 kg"],
+    ["reps then an assisted load", IMPERIAL, "Assisted pull-ups 8 -20kg", "Assisted pull-ups 8 -44 lbs"],
+    ["reps then a load more than 2x the count", IMPERIAL, "Squat 8 - 60kg", "Squat 8 - 132 lbs"],
+    ["a distance pair wider than 2x (known limit)", IMPERIAL, "Run 3 - 8 km", "Run 3 - 8000 m"],
+  ])("normalizes %s", (_label, preferences, input, expected) => {
+    expect(normalizeWorkoutTextUnits(input, preferences)).toBe(expected);
+  });
+
+  // C23 (CODEBASE_ANALYSIS_2026-10-03) hardening: inputs that converted
+  // correctly before C23 and that the first spaced-range reading broke, pinned
+  // to their output from before C23. A negative load after sets x reps is a
+  // load, not the dash of a range. A spaced pair is a range only when it runs
+  // as a prescription does, low to high within 10x: equal ends and a
+  // descending pair are reps then a load. A capitalised heading, a zone, a
+  // counted "3 sets" or "5 rounds", or an interval format (EMOM, E2MOM, AMRAP)
+  // before the first number makes it a label or a count, read past a colon, a
+  // comma or "of" ("Sets: 3", "4 sets of 8"). The tail of a dash chain
+  // ("21-15-9 - 40kg") is not a low bound either, though a bullet's dash is.
+  // Known limits: a range wider than 10x ("Run 1 to 15 km"), a load range
+  // after counted sets ("3 sets 60 - 70 kg") or one after a dash mid-line
+  // keeps its low bound unconverted, as before C23.
+  it.each([
+    ["sets x reps then an assisted load", IMPERIAL, "Assisted pull-ups 3x8 -20kg", "Assisted pull-ups 3x8 -44 lbs"],
+    ["spaced sets x reps then an assisted load", IMPERIAL, "Dips 3 x 10 -10kg", "Dips 3 x 10 -22 lbs"],
+    ["reps then a lighter assisted load", IMPERIAL, "Pull-ups 20 -10kg", "Pull-ups 20 -22 lbs"],
+    ["equal ends", IMPERIAL, "Sandbag lunges 20 - 20kg", "Sandbag lunges 20 - 44 lbs"],
+    ["a descending pair", IMPERIAL, "Wall balls 20 - 9kg", "Wall balls 20 - 20 lbs"],
+    ["a descending drop set", IMPERIAL, "Drop set 80 - 60 kg", "Drop set 80 - 132 lbs"],
+    ["a plural rounds heading", IMPERIAL, "Rounds 1 - 5km", "Rounds 1 - 5000 m"],
+    ["a plural sets heading", IMPERIAL, "Sets 3 - 20kg", "Sets 3 - 44 lbs"],
+    ["a plural weeks heading", IMPERIAL, "Weeks 1 - 4km", "Weeks 1 - 4000 m"],
+    ["a plural days heading", IMPERIAL, "Days 2 - 5km", "Days 2 - 5000 m"],
+    ["a plural reps heading", IMPERIAL, "Reps 10 - 20kg", "Reps 10 - 44 lbs"],
+    ["a plural stations heading", IMPERIAL, "Stations 1 - 8kg", "Stations 1 - 18 lbs"],
+    ["an EMOM length", IMPERIAL, "EMOM 10 - 12kg KB swings", "EMOM 10 - 26 lbs KB swings"],
+    ["an E2MOM length", IMPERIAL, "E2MOM 10 - 20kg", "E2MOM 10 - 44 lbs"],
+    ["an AMRAP length", IMPERIAL, "amrap 12 - 16kg", "amrap 12 - 35 lbs"],
+    ["a zone label", IMPERIAL, "Zone 2 - 8km easy run", "Zone 2 - 8000 m easy run"],
+    ["a lowercase zone label", IMPERIAL, "zone 2 - 8km easy", "zone 2 - 8000 m easy"],
+    ["a zone label mid-line", IMPERIAL, "Easy run Zone 2 - 10 km", "Easy run Zone 2 - 10000 m"],
+    ["a zone label before a tight dash", IMPERIAL, "Zone 2 -8km", "Zone 2 -8000 m"],
+    ["counted sets then reps and a load", IMPERIAL, "3 sets 10 - 20kg", "3 sets 10 - 44 lbs"],
+    ["counted rounds then a distance", IMPERIAL, "5 rounds 1 - 5km", "5 rounds 1 - 5000 m"],
+    ["counted sets then an assisted load", IMPERIAL, "3 sets 10 -20kg", "3 sets 10 -44 lbs"],
+    ["counted sets of reps then a load", IMPERIAL, "Squat 4 sets of 8 - 60kg", "Squat 4 sets of 8 - 132 lbs"],
+    ["counted rounds of reps then a load", IMPERIAL, "3 rounds of 10 - 20kg", "3 rounds of 10 - 44 lbs"],
+    ["counted sets of swings", IMPERIAL, "KB swings 3 sets of 15 - 24kg", "KB swings 3 sets of 15 - 53 lbs"],
+    ["counted sets of lunges", IMPERIAL, "Lunges 3 sets of 12 - 16kg", "Lunges 3 sets of 12 - 35 lbs"],
+    ["counted sets and a comma", IMPERIAL, "Squat 3 sets, 8 - 60kg", "Squat 3 sets, 8 - 132 lbs"],
+    ["counted sets and a dash", IMPERIAL, "Squat 3 sets - 8 - 60kg", "Squat 3 sets - 8 - 132 lbs"],
+    ["a sets heading and a colon", IMPERIAL, "Sets: 3 - 20kg", "Sets: 3 - 44 lbs"],
+    ["a reps heading and a colon", IMPERIAL, "Reps: 10 - 20kg", "Reps: 10 - 44 lbs"],
+    ["a station heading and a colon", IMPERIAL, "Station: 7 - 20kg", "Station: 7 - 44 lbs"],
+    ["an EMOM length and a colon", IMPERIAL, "EMOM: 10 - 12kg", "EMOM: 10 - 26 lbs"],
+    ["an AMRAP length and a colon", IMPERIAL, "AMRAP: 12 - 16kg", "AMRAP: 12 - 35 lbs"],
+    ["a zone label and a colon", IMPERIAL, "Zone: 2 - 8km", "Zone: 2 - 8000 m"],
+    ["a rounds heading and a colon", IMPERIAL, "Rounds: 2 - 5km", "Rounds: 2 - 5000 m"],
+    ["a sets heading, a colon and an assisted load", IMPERIAL, "Sets: 3 -20kg", "Sets: 3 -44 lbs"],
+    ["a rep scheme before a load", IMPERIAL, "Thrusters 21-15-9 - 40kg", "Thrusters 21-15-9 - 88 lbs"],
+    ["a load ladder", IMPERIAL, "Squat 60 - 70 - 80 kg", "Squat 60 - 70 - 176 lbs"],
+    ["a session heading", IMPERIAL, "Session 2 - 8km", "Session 2 - 8000 m"],
+    ["a phase heading", IMPERIAL, "Phase 1 - 5km", "Phase 1 - 5000 m"],
+    ["a level heading", IMPERIAL, "Level 3 - 5km", "Level 3 - 5000 m"],
+    ["a workout heading", IMPERIAL, "Workout 3 - 5km", "Workout 3 - 5000 m"],
+    ["a range wider than 10x (known limit)", IMPERIAL, "Run 1 to 15 km", "Run 1 to 15000 m"],
+    ["a load range after counted sets (known limit)", IMPERIAL, "Back squat 3 sets 60 - 70 kg", "Back squat 3 sets 60 - 154 lbs"],
+    ["a load range after counted sets of (known limit)", IMPERIAL, "3 sets of 60 - 70 kg", "3 sets of 60 - 154 lbs"],
+    ["a load range after a dash mid-line (known limit)", IMPERIAL, "Back squat - 60 - 70 kg", "Back squat - 60 - 154 lbs"],
+  ])("keeps the pre-C23 output for %s", (_label, preferences, input, expected) => {
+    expect(normalizeWorkoutTextUnits(input, preferences)).toBe(expected);
+  });
+
   it("still reads a genuine negative number", () => {
     expect(normalizeWorkoutTextUnits("Deficit -90kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
       "Deficit -198 lbs",

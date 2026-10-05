@@ -120,6 +120,59 @@ describe("computePlanAdaptation", () => {
     expect(result?.result.days).toEqual([]);
   });
 
+  // D14 (CODEBASE_ANALYSIS_2026-10-03): a custom lift is keyed by its label, so
+  // the stored plan sets must carry it, or no logged custom lift ever finds its
+  // planned sets, and the day's other custom lifts would share one identity.
+  it("adapts a custom lift by its label and leaves the day's other custom lift alone", async () => {
+    const custom = (id: string, customLabel: string, weight: number) => ({
+      id,
+      exerciseName: "custom",
+      customLabel,
+      reps: 6,
+      weight,
+      weightUnit: "kg",
+      notes: null,
+    });
+    plans.getPlanDaysForAdaptation.mockResolvedValueOnce([
+      {
+        ...planDayRow(),
+        mainWorkout: "A) Yoke Carry 3x6 @ 100 kg\nB) Sandbag Clean 3x6 @ 40 kg",
+        sets: [
+          custom("y1", "Yoke Carry", 100),
+          custom("y2", "Yoke Carry", 100),
+          custom("y3", "Yoke Carry", 100),
+          custom("c1", "Sandbag Clean", 40),
+          custom("c2", "Sandbag Clean", 40),
+          custom("c3", "Sandbag Clean", 40),
+        ],
+      },
+    ]);
+    analytics.getAllExerciseSetsWithDates.mockResolvedValueOnce(
+      [1, 2, 3].map((setNumber) => ({
+        workoutLogId: "log-1",
+        date: "2026-10-13",
+        exerciseName: "custom",
+        customLabel: "Yoke Carry",
+        category: "strength",
+        setNumber,
+        reps: 8,
+        weight: 100,
+        weightUnit: "kg",
+        plannedReps: 6,
+        plannedWeight: 100,
+      })),
+    );
+
+    const result = await computePlanAdaptation("user-1", context, units, new Set());
+
+    const day = result?.result.days.at(0);
+    expect(day?.setUpdates).toEqual(
+      ["y1", "y2", "y3"].map((setId) => ({ setId, weight: 105, weightUnit: "kg" })),
+    );
+    expect(day?.mainWorkout).toBe("A) Yoke Carry 3x6 @ 105 kg\nB) Sandbag Clean 3x6 @ 40 kg");
+    expect(day?.changes.map((change) => change.exercise)).toEqual(["Yoke Carry"]);
+  });
+
   it("is null without an active plan, and never throws", async () => {
     plans.getActivePlan.mockResolvedValueOnce(undefined);
     expect(await computePlanAdaptation("user-1", context, units, new Set())).toBeNull();

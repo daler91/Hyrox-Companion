@@ -1,7 +1,7 @@
 /**
  * Shared nutrition aggregation for AI context (Phase 1 of the nutrition↔training
  * integration). Gathers the athlete's recent fuelling (intake) and joins it to
- * training load (UTSS) + targets + today's micronutrients into one compact,
+ * training load (UTSS) + targets + micronutrients into one compact,
  * structured summary.
  *
  * Consumed by both the nutrition-insights prompt
@@ -17,6 +17,7 @@ import { getLocalDateStr } from "../../timezone";
 import { calculateTrainingLoad } from "../trainingLoadService";
 import { buildBlockView } from "./blockView";
 import { buildMicroSummary } from "./micros";
+import type { LogEntryWithFood } from "./rollup";
 
 export const NUTRITION_SUMMARY_WINDOW_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -54,10 +55,48 @@ export interface NutritionSummary {
   highLoadDays: NutritionHighLoadDay[];
   /** Whether any training load was recorded in the window. */
   hasTrainingLoad: boolean;
-  /** Micronutrient coverage for today's logged foods. */
+  /**
+   * The day the micros were judged on: the latest COMPLETE logged day (before
+   * local today) in the window, or null when there is none.
+   */
+  microDate: string | null;
+  /** Micronutrient coverage for `microDate`'s logged foods. */
   microStatus: "no_data" | "all_ok" | "low";
-  /** Today's tracked micros below 50% of reference intake (empty unless `low`). */
+  /** `microDate`'s tracked micros below 50% of reference intake (empty unless `low`). */
   lowMicros: NutritionLowMicro[];
+}
+
+/**
+ * The latest day before local `today` with food logged, or null. Micros were
+ * judged on today alone, which the nightly recompute reads at local midnight
+ * (empty, so every regenerated insight said "no micronutrient data") and a
+ * mid-morning regenerate reads part-eaten (a breakfast against a full day's
+ * reference intake, so the coach repeated false "low" flags). A finished day
+ * is the earliest one whose totals mean anything. C8 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function latestCompleteLoggedDay(rows: LogEntryWithFood[], today: string): string | null {
+  let latest: string | null = null;
+  for (const row of rows) {
+    if (row.logDate < today && (latest == null || row.logDate > latest)) latest = row.logDate;
+  }
+  return latest;
+}
+
+/** Micronutrient coverage on the latest complete logged day (or none). */
+function judgeMicros(
+  rows: LogEntryWithFood[],
+  today: string,
+): Pick<NutritionSummary, "microDate" | "microStatus" | "lowMicros"> {
+  const microDate = latestCompleteLoggedDay(rows, today);
+  const micros =
+    microDate == null ? [] : buildMicroSummary(rows.filter((r) => r.logDate === microDate));
+  const lowMicros = micros
+    .filter((m) => m.pctRdi < 50)
+    .map((m) => ({ label: m.label, pctRdi: m.pctRdi }));
+  let microStatus: NutritionSummary["microStatus"] = "all_ok";
+  if (micros.length === 0) microStatus = "no_data";
+  else if (lowMicros.length > 0) microStatus = "low";
+  return { microDate, microStatus, lowMicros };
 }
 
 function average(points: BlockViewPoint[], select: (p: BlockViewPoint) => number): number {
@@ -86,13 +125,12 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
     tz,
   );
 
-  const [rows, workoutLogs, exerciseSets, loadTags, target, todayRows] = await Promise.all([
+  const [rows, workoutLogs, exerciseSets, loadTags, target] = await Promise.all([
     storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
     storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
     storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
     storage.analytics.getExerciseLoadTags(),
     storage.nutrition.getCurrentTarget(userId, to),
-    storage.nutrition.listEntriesWithFoodForDate(userId, to),
   ]);
 
   const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
@@ -117,14 +155,6 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
     .slice(0, 5)
     .map((p) => ({ date: p.date, utss: p.utss, calories: p.calories, protein: p.protein }));
 
-  const micros = buildMicroSummary(todayRows);
-  const lowMicros = micros
-    .filter((m) => m.pctRdi < 50)
-    .map((m) => ({ label: m.label, pctRdi: m.pctRdi }));
-  let microStatus: NutritionSummary["microStatus"] = "all_ok";
-  if (micros.length === 0) microStatus = "no_data";
-  else if (lowMicros.length > 0) microStatus = "low";
-
   return {
     windowDays: NUTRITION_SUMMARY_WINDOW_DAYS,
     from,
@@ -146,7 +176,6 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
       : null,
     highLoadDays,
     hasTrainingLoad: highLoadDays.length > 0,
-    microStatus,
-    lowMicros,
+    ...judgeMicros(rows, to),
   };
 }

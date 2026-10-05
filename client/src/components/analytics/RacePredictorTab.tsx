@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { queryLoadState } from "@/lib/queryLoadState";
 import { formatSecondsToClock, formatSecondsToMmSs } from "@/lib/statsUtils";
 import { cn } from "@/lib/utils";
 
@@ -167,10 +168,16 @@ function ReadinessCard({ readiness }: Readonly<{ readiness: RaceReadiness }>) {
 export function RacePredictorTab() {
   const { query, refresh, isRefreshing } = useRacePrediction();
   const data = query.data;
+  const loadState = queryLoadState(query);
 
   // Spinner only on a true cold start — when a snapshot/stored result exists it
   // paints immediately as placeholderData and we skip straight to the result.
-  if (query.isLoading && !data) {
+  // A first fetch paused offline is a cold start too: it is not `isLoading`,
+  // and read as a failure it showed "Couldn't load" before anything had
+  // failed. Retry stays the athlete's own tap, since it regenerates the
+  // prediction and may spend AI budget; it only waits while the query's own
+  // retry (a remount, a reconnect) is in flight. U5 (CODEBASE_ANALYSIS_2026-10-03)
+  if (loadState.loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <LoadingSpinner iconClassName="h-6 w-6" />
@@ -179,24 +186,30 @@ export function RacePredictorTab() {
   }
 
   if (!data) {
+    const retryBusy = isRefreshing || loadState.retrying;
+    // "Please try again" beside a disabled "Retrying…" asked for what was
+    // already happening, so it shows only while Retry can be pressed.
+    // U5 (CODEBASE_ANALYSIS_2026-10-03)
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/20 py-12 text-center text-muted-foreground">
         <AlertTriangle className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
-        <p>Couldn't load your race prediction. Please try again.</p>
+        <p data-testid="race-prediction-load-error">
+          Couldn&apos;t load your race prediction.{retryBusy ? null : " Please try again."}
+        </p>
         <Button
           variant="outline"
           size="sm"
           onClick={refresh}
-          disabled={isRefreshing}
+          disabled={retryBusy}
           aria-label="Retry loading prediction"
           data-testid="race-prediction-retry"
         >
-          {isRefreshing ? (
+          {retryBusy ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
             <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
-          {isRefreshing ? "Retrying…" : "Retry"}
+          {retryBusy ? "Retrying…" : "Retry"}
         </Button>
       </div>
     );

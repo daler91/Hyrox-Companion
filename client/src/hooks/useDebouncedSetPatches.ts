@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 
+/** A sent PATCH's outcome is the mutation's to report; the queue only waits for it. */
+function ignoreSettled(): void {
+  // Nothing to do: settling is all a flush waits for.
+}
+
 interface PendingSetPatch<TPatch> {
   timer: ReturnType<typeof setTimeout>;
   patch: TPatch;
@@ -27,6 +32,13 @@ interface PendingSetPatch<TPatch> {
  * and the owner switch used to CANCEL the queue (firing it would have PATCHed
  * the new owner). Closing the sheet any way but its Done/Log buttons dropped
  * the last edit (CL18, CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * `flushPendingSetPatches` also waits for the PATCHes already sent and not yet
+ * landed. Closing the sheet sends the queue without waiting, so a block save
+ * that flushed right after found nothing queued, went out beside the row PATCH
+ * and could land first: it missed the row it should have moved, and the row
+ * then landed on its old step number under the new numbering. CL15
+ * (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function useDebouncedSetPatches<TPatch extends object>(
   mutate: (args: { setId: string; data: TPatch; ownerId?: string }) => unknown,
@@ -34,6 +46,8 @@ export function useDebouncedSetPatches<TPatch extends object>(
   ownerId?: string | null,
 ) {
   const pendingRef = useRef<Map<string, PendingSetPatch<TPatch>>>(new Map());
+  // Sent and not yet settled; each removes itself once it has (CL15).
+  const inFlightRef = useRef<Set<Promise<void>>>(new Set());
   const fireRef = useRef<(setId: string) => Promise<void>>(() => Promise.resolve());
 
   // Keep `fireRef` bound to the latest `mutate` from an effect rather
@@ -41,12 +55,20 @@ export function useDebouncedSetPatches<TPatch extends object>(
   // react-hooks/refs). react-query's mutate is stable, so this effect
   // runs once on mount in practice.
   useEffect(() => {
-    fireRef.current = async (setId) => {
+    const inFlight = inFlightRef.current;
+    fireRef.current = (setId) => {
       const entry = pendingRef.current.get(setId);
-      if (!entry) return;
+      if (!entry) return Promise.resolve();
       clearTimeout(entry.timer);
       pendingRef.current.delete(setId);
-      await Promise.resolve(mutate({ setId, data: entry.patch, ownerId: entry.ownerId })).catch(() => undefined);
+      const sent = Promise.resolve(mutate({ setId, data: entry.patch, ownerId: entry.ownerId })).then(
+        ignoreSettled,
+        ignoreSettled,
+      );
+      inFlight.add(sent);
+      return sent.finally(() => {
+        inFlight.delete(sent);
+      });
     };
   }, [mutate]);
 
@@ -69,8 +91,8 @@ export function useDebouncedSetPatches<TPatch extends object>(
   }, [debounceMs, ownerId]);
 
   const flushPendingSetPatches = useCallback(async () => {
-    const ids = Array.from(pendingRef.current.keys());
-    await Promise.all(ids.map((setId) => fireRef.current(setId)));
+    const fired = Array.from(pendingRef.current.keys(), (setId) => fireRef.current(setId));
+    await Promise.all([...fired, ...inFlightRef.current]);
   }, []);
 
   const getPendingPatches = useCallback(() => {

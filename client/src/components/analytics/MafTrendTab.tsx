@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, HeartPulse } from "lucide-react";
 import { useMemo } from "react";
 
+import { LoadErrorCard } from "@/components/LoadErrorCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -11,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { readAnalyticsSnapshot, useWriteAnalyticsSnapshot } from "@/lib/analyticsSnapshot";
 import { api, type MafTestsListResponse, QUERY_KEYS } from "@/lib/api";
+import { queryLoadState } from "@/lib/queryLoadState";
 import { formatSecondsToMmSs } from "@/lib/statsUtils";
 
 import { LastUpdatedNote } from "./LastUpdatedNote";
@@ -56,14 +58,28 @@ export function MafTrendTab() {
     () => (snapshotKey ? readAnalyticsSnapshot<MafTestsListResponse>(snapshotKey) : undefined),
     [snapshotKey],
   );
-  const { data, isLoading, isPlaceholderData } = useQuery<MafTestsListResponse>({
+  const mafTestsQuery = useQuery<MafTestsListResponse>({
     queryKey: QUERY_KEYS.mafTests,
     queryFn: () => api.mafTests.list(),
     placeholderData: placeholder,
   });
+  const { data, isPlaceholderData, refetch } = mafTestsQuery;
   useWriteAnalyticsSnapshot(snapshotKey, data, isPlaceholderData);
+  // A first fetch paused offline with no snapshot is still loading, and a
+  // failed fetch is not "No MAF tests yet". U5 (CODEBASE_ANALYSIS_2026-10-03)
+  const { loading, failed, retrying } = queryLoadState(mafTestsQuery);
 
-  if (isLoading && !data) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner />;
+  if (failed) {
+    return (
+      <LoadErrorCard
+        title="Couldn't load your MAF tests"
+        onRetry={() => refetch()}
+        isRetrying={retrying}
+        testId="maf-trend-error"
+      />
+    );
+  }
 
   const rows = buildTestRows(data);
   if (rows.length === 0) return <EmptyState />;

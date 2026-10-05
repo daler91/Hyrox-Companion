@@ -80,7 +80,7 @@ export async function fetchDailyTrainingLoad(
   return calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
     currentDate: to,
     // Declares the true extent of what was fetched, so the EWMAs are withheld
-    // rather than reseeded if this range is ever narrowed again (audit H21).
+    // rather than restarted if this range is ever narrowed again (audit H21).
     historyFrom: from,
     weightUnit: user?.weightUnit || "kg",
     distanceUnit: user?.distanceUnit || "km",
@@ -137,7 +137,7 @@ export async function fetchTrainingLoadWindow(
 ): Promise<TrainingLoadWindow> {
   // Fetch the EWMA warmup, not just the recovery window. `recentLoads` below
   // still reads only the trailing RECOVERY_WINDOW_DAYS, but acuteEwma and
-  // chronicEwma are seeded at the first log in whatever range is fetched — so
+  // chronicEwma start at the first log in whatever range is fetched — so
   // fetching 7 days handed the effective target a "28-day chronic baseline"
   // built from one week. A taper after eight heavy weeks reported 26.1 against
   // a true 107.2, scaling the athlete's fuelling off a quarter of their real

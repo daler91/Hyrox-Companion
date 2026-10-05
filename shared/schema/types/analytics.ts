@@ -77,7 +77,7 @@ export interface TrainingLoadTrendPoint {
   utss: number;
   acwr: number | null;
   zone: LoadGovernorAcwrZone;
-  /** Training Stress Balance (chronic − acute EWMA), "Form". Null until seeded. */
+  /** Training Stress Balance (chronic − acute EWMA), "Form". Null before the first log and until the 14-day history gate opens. */
   tsb: number | null;
   /** Foster monotony (mean ÷ SD of trailing 7-day UTSS). Null when SD is 0. */
   monotony: number | null;
@@ -91,9 +91,9 @@ export interface TrainingLoadTrendPoint {
   /** Display-only objective external load (power TSS, estimated from avg power).
    *  Null without power + FTP. */
   tss: number | null;
-  /** Acute fatigue: 7-day EWMA of UTSS. Null until seeded at the first log. */
+  /** Acute fatigue: 7-day EWMA of UTSS. Null before the first log. */
   acuteEwma: number | null;
-  /** Chronic fitness: 28-day EWMA of UTSS. Null until seeded at the first log. */
+  /** Chronic fitness: 28-day EWMA of UTSS. Null before the first log. */
   chronicEwma: number | null;
 }
 
@@ -114,7 +114,7 @@ export interface TrainingLoadOverview {
   chronicAvg: number;
   acwr: number | null;
   zone: LoadGovernorAcwrZone;
-  /** Training Stress Balance / "Form" (chronicAvg − acuteAvg). Null until seeded. */
+  /** Training Stress Balance / "Form" (chronicAvg − acuteAvg). Null before the first log and until the 14-day history gate opens. */
   tsb: number | null;
   /** Foster monotony for the trailing 7 days. Null when SD is 0. */
   monotony: number | null;
@@ -130,8 +130,10 @@ export interface TrainingLoadOverview {
   /** Karvonen %HRR zone bpm boundaries (Z1–Z5) for this athlete (estimated
    *  rest/max fallbacks applied). For the zone legend. */
   hrZones: HrZoneBoundary[];
-  /** Estimated LTHR (bpm) anchoring hrTSS (~0.88×HRmax). */
-  estimatedLthr: number;
+  /** Estimated LTHR (bpm) anchoring hrTSS (~0.88×HRmax). Null without a
+   *  measured max HR or an age, when `hrZones` is empty too
+   *  (C10, CODEBASE_ANALYSIS_2026-10-03). */
+  estimatedLthr: number | null;
   /** True when power TSS is estimated (NP≈avgWatts; no power stream available). */
   powerTssEstimated: boolean;
   flaggedVectors: LoadGovernorVector[];

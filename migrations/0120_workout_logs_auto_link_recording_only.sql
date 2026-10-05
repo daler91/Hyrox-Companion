@@ -1,0 +1,20 @@
+-- D12 (CODEBASE_ANALYSIS_2026-10-03): an auto device link now creates a
+-- plan-day log from the recording alone (the day's prescription text, the one
+-- set synthesised from the recording, none of the prescribed sets). While the
+-- link stands, source = 'strava' and device_link_source = 'auto' say so, but
+-- unlinking a log the athlete has edited adopts it as source = 'manual' and
+-- clears every device-link column, and prescribed_main_workout cannot tell it
+-- apart either (0029 backfilled it to main_workout on every older log). This
+-- column is the durable marker: "Reopen workout" folds such a log onto the day
+-- per exercise instead of replacing the day's sets with it, and batch reparse,
+-- GET /workouts/unstructured and the assisted-migration backfill skip it
+-- whatever its text: its main_workout and accessory stay the prescription,
+-- since the athlete's description edits go to prescribed_*.
+--
+-- Additive, and every existing row is right at the default (false), so there
+-- is no backfill. The auto links made before D12 copied the prescription in
+-- (each set with its planned* snapshot), so those logs hold the whole session
+-- and replacing the day's sets with them on reopen is still correct. No log
+-- of the D12 shape exists outside development: D12 is unreleased, and the
+-- server sets this column in the same change that starts writing that shape.
+ALTER TABLE "workout_logs" ADD COLUMN "auto_link_recording_only" boolean DEFAULT false NOT NULL;

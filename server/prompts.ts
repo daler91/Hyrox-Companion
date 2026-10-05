@@ -812,6 +812,11 @@ export function buildSystemPrompt(
 
   const base = basePrompt(options.chatTools);
 
+  // `totalWorkouts` on purpose, not the completed count: it includes the plan
+  // ahead, so a brand-new athlete with a plan and no logs still gets the full
+  // context (their upcoming sessions, "Completed: 0"). Only an athlete with
+  // nothing on the timeline at all gets the "hasn't logged anything" prompt.
+  // AI11 (CODEBASE_ANALYSIS_2026-10-03)
   if (!trainingContext || trainingContext.totalWorkouts === 0) {
     return (
       buildNoDataPrompt(base, trainingContext, coachingMaterials, retrievedChunks, options.focusedWorkout) +

@@ -1,7 +1,6 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import {
   CheckCircle2,
-  ChevronRight,
   Clock,
   Dumbbell,
   Gauge,
@@ -12,7 +11,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
@@ -20,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { StructureBlocksEditor } from "@/components/workout-structure";
+import { EDIT_SAVE_DEBOUNCE_MS, StructureBlocksEditor } from "@/components/workout-structure";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
@@ -42,6 +41,7 @@ import {
 } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { ResultsEditingTools } from "./shared/ResultsEditingTools";
 import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPlanDayPicker } from "./shared/WorkoutPlanDayPicker";
@@ -683,7 +683,7 @@ function ReviewActualsSection({
         // The description is reference once rows exist, so it sits under
         // them, folded away with the structure builder.
         belowTable={
-          <ResultsEditingTools open={!hasSets}>
+          <ResultsEditingTools key={workoutLogId} openWhileEmpty={!hasSets}>
             <PrescriptionEditor
               entryId={entry.id}
               hasSets={hasSets}
@@ -712,8 +712,14 @@ function ReviewActualsSection({
               compact
             />
             <StructureBlocksEditor
+              // Saves after a pause, not per keystroke; keyed by workout so a
+              // save still waiting goes to the workout it was made in (U3).
+              // One request carries the blocks and the rows that follow a
+              // renumbered step (CL15).
+              key={workoutLogId}
               value={structureBlocks}
-              onChange={(next) => detail.updateStructure.mutate(next)}
+              onChange={(next, moves) => detail.saveStructure(next, moves)}
+              saveDebounceMs={EDIT_SAVE_DEBOUNCE_MS}
               exerciseSets={exerciseSets}
               onUpdateSet={detail.patchSetDebounced}
               onAddSet={detail.addSet.mutate}
@@ -749,35 +755,6 @@ function ReviewActualsSection({
         }
       />
     </DetailSection>
-  );
-}
-
-/**
- * The workout description (with scan / parse) and the structure builder under
- * the results. With no rows yet they are how the athlete fills the workout in,
- * so they start open; once rows exist they fold into one quiet line. A native
- * <details> hides rather than unmounts, so the autosaving description and the
- * structure editor keep their pending saves whether it is open or shut — and
- * the same tree renders either way, so rows landing never remounts them.
- */
-function ResultsEditingTools({
-  open,
-  children,
-}: {
-  readonly open: boolean;
-  readonly children: ReactNode;
-}) {
-  return (
-    <details className="group" open={open || undefined} data-testid="review-editing-tools">
-      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-        <ChevronRight
-          className="h-3.5 w-3.5 transition-transform group-open:rotate-90"
-          aria-hidden
-        />
-        Description &amp; structure
-      </summary>
-      <div className="mt-3 space-y-3">{children}</div>
-    </details>
   );
 }
 
@@ -858,6 +835,21 @@ function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReview
   );
 }
 
+/**
+ * Deleting a completed planned session removes its log and keeps its plan
+ * day, which then reads planned again, or missed once its date has passed;
+ * the copy said the workout was "permanently removed" as though the session
+ * went too. Either way the log goes to the recycle bin, with an Undo, so it
+ * isn't permanent. Matches the bulk-delete copy. CL23
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function deleteConfirmDescription(entry: TimelineEntry): string {
+  if (entry.planDayId) {
+    return "This removes the logged workout from your timeline. The planned session stays on your plan and shows as planned again, or missed if its date has passed.";
+  }
+  return "This removes the workout and all of its data from your timeline.";
+}
+
 interface ReviewActionButtonsProps {
   readonly entry: TimelineEntry;
   readonly deleteConfirmOpen: boolean;
@@ -925,7 +917,7 @@ function ReviewActionButtons({
           open={deleteConfirmOpen}
           onOpenChange={onDeleteConfirmOpenChange}
           title="Delete workout?"
-          description="This workout and all of its data will be permanently removed. This cannot be undone."
+          description={deleteConfirmDescription(entry)}
           confirmText="Delete"
           cancelText="Cancel"
           onConfirm={onDeleteConfirm}

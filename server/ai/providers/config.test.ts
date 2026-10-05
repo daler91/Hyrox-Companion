@@ -68,6 +68,29 @@ describe("text AI provider config", () => {
     expect(config.configuredTextProviderHasApiKey()).toBe(true);
   });
 
+  it("checks the role it is asked about: a fast model alone does not make the reasoning role ready", async () => {
+    // AI8 (CODEBASE_ANALYSIS_2026-10-03): the coach's calls run on the
+    // reasoning model, and a check of the fast one let them through to fail.
+    const fastOnly = await loadConfigWithEnv({
+      AI_TEXT_PROVIDER: "anthropic",
+      AI_TEXT_FAST_MODEL: "claude-haiku-4-5",
+      ANTHROPIC_API_KEY: "anthropic-key",
+    });
+    const { AiConfigurationError } = await import("../errors");
+
+    expect(fastOnly.configuredTextProviderHasApiKey("fast")).toBe(true);
+    expect(fastOnly.configuredTextProviderHasApiKey("reasoning")).toBe(false);
+    expect(() => fastOnly.resolveTextAiModel("anthropic", "reasoning")).toThrow(AiConfigurationError);
+
+    const both = await loadConfigWithEnv({
+      AI_TEXT_PROVIDER: "anthropic",
+      AI_TEXT_FAST_MODEL: "claude-haiku-4-5",
+      AI_TEXT_REASONING_MODEL: "claude-sonnet-4-5",
+      ANTHROPIC_API_KEY: "anthropic-key",
+    });
+    expect(both.configuredTextProviderHasApiKey("reasoning")).toBe(true);
+  });
+
   it("resolves xAI through the OpenAI-compatible profile defaults", async () => {
     const configModule = await loadConfigWithEnv({
       AI_TEXT_PROVIDER: "openai-compatible",

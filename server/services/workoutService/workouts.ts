@@ -6,6 +6,7 @@ import {
   type ParsedExercise,
   planDays,
   type StructureBlockInput,
+  type StructureSetRelink,
   trainingPlans,
   type UpdateWorkoutLog,
   users,
@@ -24,6 +25,7 @@ import { loadUnitPreferences } from "../unitPreferences";
 import { persistAdherenceSnapshot } from "./adherence";
 import { expandExercisesToSetRows,extractAndDeduplicateCustomExercises } from "./setRows";
 import {
+  applyStructureSetRelinks,
   copyPrescribedSetsIntoLog,
   copyPrescribedStructureIntoLog,
   replaceWorkoutStructure,
@@ -309,13 +311,69 @@ export async function createWorkoutAndScheduleCoaching(
   return workout;
 }
 
+/**
+ * Write a PATCH's column values and return the row, or just read the row when
+ * the PATCH carries none. drizzle's `.set()` throws "No values to set" when every
+ * value is undefined, and the workout sheet's block builder sends a
+ * structure-only PATCH, so every block edit there failed and rolled back.
+ * CL14 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function writeWorkoutLogColumns(
+  tx: WorkoutTx,
+  workoutId: string,
+  userId: string,
+  updateData: UpdateWorkoutLog,
+): Promise<WorkoutLog | undefined> {
+  const owned = and(eq(workoutLogs.id, workoutId), eq(workoutLogs.userId, userId));
+  // A key sent as undefined writes nothing either (drizzle drops it before the check).
+  const hasColumnValues = Object.values(updateData).some((value: unknown) => value !== undefined);
+  if (!hasColumnValues) {
+    // Locked like the UPDATE below locks it, so two block saves of one workout
+    // run one after the other: overlapping, the second one's insert could
+    // collide with the block ids the first was still committing
+    // (U3, CL15, CODEBASE_ANALYSIS_2026-10-03).
+    const [log] = await tx.select().from(workoutLogs).where(owned).for("update");
+    return log;
+  }
+  const [log] = await tx.update(workoutLogs).set(updateData).where(owned).returning();
+  return log;
+}
+
+/**
+ * A workout PATCH body: column values, plus the row relinks a structure save
+ * carries, which the route passes through in the same body.
+ */
+type WorkoutPatch = UpdateWorkoutLog & { readonly relinks?: StructureSetRelink[] };
+
+/**
+ * Relinks move rows to the steps a `structureBlocks` save renumbers, so they
+ * mean nothing without one, and nothing when `exercises` replaces every row.
+ */
+function assertRelinksFitPatch(
+  relinks: readonly StructureSetRelink[],
+  exercises: ParsedExercise[] | undefined,
+  structureBlocks: StructureBlockInput[] | undefined,
+): void {
+  if (relinks.length === 0) return;
+  if (structureBlocks === undefined || exercises !== undefined) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      "relinks are sent with structureBlocks, and not with exercises.",
+      400,
+    );
+  }
+}
+
 export async function updateWorkout(
   workoutId: string,
-  updateData: UpdateWorkoutLog,
+  patch: WorkoutPatch,
   exercises: ParsedExercise[] | undefined,
   userId: string,
   structureBlocks?: StructureBlockInput[],
 ): Promise<UpdateWorkoutResult | null> {
+  // The relinks are not a column: split them off before the columns are written.
+  const { relinks = [], ...updateData } = patch;
+  assertRelinksFitPatch(relinks, exercises, structureBlocks);
   if (exercises && Array.isArray(exercises)) {
     const result = await db.transaction(async (tx) => {
       const existing = await tx
@@ -326,11 +384,8 @@ export async function updateWorkout(
 
       const previousDate = existing[0].date;
 
-      const [log] = await tx
-        .update(workoutLogs)
-        .set(updateData)
-        .where(eq(workoutLogs.id, workoutId))
-        .returning();
+      const log = await writeWorkoutLogColumns(tx, workoutId, userId, updateData);
+      if (!log) return null;
 
       await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, log.id));
 
@@ -367,13 +422,12 @@ export async function updateWorkout(
   const previous = await storage.workouts.getWorkoutLog(workoutId, userId);
   if (!previous) return null;
   const result = await db.transaction(async (tx) => {
-    const [log] = await tx
-      .update(workoutLogs)
-      .set(updateData)
-      .where(and(eq(workoutLogs.id, workoutId), eq(workoutLogs.userId, userId)))
-      .returning();
+    const log = await writeWorkoutLogColumns(tx, workoutId, userId, updateData);
     if (!log) return null;
     if (structureBlocks !== undefined) {
+      // Rows follow their renumbered steps in the same transaction as the
+      // blocks, so a failure leaves both as they were (CL15).
+      await applyStructureSetRelinks(tx, { workoutLogId: log.id }, relinks);
       await replaceWorkoutStructure(tx, log.id, structureBlocks);
     }
     return log;

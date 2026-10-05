@@ -1,4 +1,4 @@
-import { dayDiff } from "../dateUtils";
+import { dayDiff, isIsoCalendarDate } from "../dateUtils";
 import type { EnergyBalanceSummary } from "../energyBalance";
 import type { MealFuelTargets } from "../mealFuelling";
 import { NUTRITION_RANGE_MAX_DAYS } from "../nutritionRange";
@@ -22,12 +22,11 @@ export type { SessionFuellingTarget } from "../sessionFuellingTargets";
  * timezone, `entryMethod` forced to "manual" in Phase 1).
  */
 
-// Accept an ISO calendar date (YYYY-MM-DD). Both the shape and real-date checks
-// run so "2026-13-40" is rejected.
-const isoDate = z.string().refine(
-  (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)),
-  { message: "Expected an ISO date (YYYY-MM-DD)" },
-);
+// Accept a real ISO calendar date (YYYY-MM-DD). Date.parse took "2026-02-30"
+// and rolled it into March, so the summary, targets and block routes answered
+// it with a database 500; the shared UTC round trip refuses it, and checks the
+// shape too, so a bad value gets this one issue. C49 (CODEBASE_ANALYSIS_2026-10-03)
+const isoDate = z.string().refine(isIsoCalendarDate, { message: "Expected an ISO date (YYYY-MM-DD)" });
 
 // Accept any parseable ISO instant (the client sends `new Date().toISOString()`).
 const isoDateTime = z.string().refine((s) => !Number.isNaN(Date.parse(s)), {
@@ -312,13 +311,20 @@ export { NUTRITION_RANGE_MAX_DAYS };
 const NUTRITION_RANGE_EARLIEST = "1900-01-01";
 const NUTRITION_RANGE_LATEST = "2100-12-31";
 
+// Checked only on a real date, so "0050-01-01" (which Date.UTC reads as 1950)
+// is named once, by isoDate. C49 (CODEBASE_ANALYSIS_2026-10-03)
 const rangeDate = isoDate.refine(
   (s) => s >= NUTRITION_RANGE_EARLIEST && s <= NUTRITION_RANGE_LATEST,
-  { message: `Expected a date from ${NUTRITION_RANGE_EARLIEST} to ${NUTRITION_RANGE_LATEST}` },
+  {
+    message: `Expected a date from ${NUTRITION_RANGE_EARLIEST} to ${NUTRITION_RANGE_LATEST}`,
+    when: ({ issues }) => issues.length === 0,
+  },
 );
 
 function checkRangeSpan({ from, to }: { from: string; to?: string }, ctx: z.RefinementCtx): void {
-  if (to === undefined) return;
+  // A date that is not a real day already has its issue; comparing it would
+  // name it twice. C49 (CODEBASE_ANALYSIS_2026-10-03)
+  if (to === undefined || ctx.issues.length > 0) return;
   if (from > to) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "from must be on or before to", path: ["from"] });
   } else if (dayDiff(from, to) >= NUTRITION_RANGE_MAX_DAYS) {

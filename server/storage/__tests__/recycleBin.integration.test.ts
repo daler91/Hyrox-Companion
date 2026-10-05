@@ -180,6 +180,25 @@ describe("RecycleBinStorage (real Postgres)", () => {
     expect(logBack.planDayId).toBeNull();
   });
 
+  it("completes a day the sweep marked missed while its log sat in the bin (D19)", async () => {
+    // D19 (CODEBASE_ANALYSIS_2026-10-03): the status sync skipped a missed day,
+    // so the restored log showed on the timeline while weekly stats, the review
+    // and the email still counted the day as missed.
+    const { plan, day } = await seedPlan(ALICE);
+    const log = await seedWorkoutLog(ALICE, "2026-06-01", { planId: plan.id, planDayId: day.id });
+    await db.update(planDays).set({ status: "completed" }).where(eq(planDays.id, day.id));
+    const deleted = await storage.workouts.deleteWorkoutLog(log.id, ALICE);
+    if (!deleted) throw new Error("The delete did not bin the workout");
+    // The nightly sweep finds the reopened past day and marks it missed.
+    await db.update(planDays).set({ status: "missed" }).where(eq(planDays.id, day.id));
+
+    const restored = await storage.recycleBin.restore(ALICE, deleted.recycleBinItemId);
+
+    expect(restored.ok).toBe(true);
+    const [dayBack] = await db.select().from(planDays).where(eq(planDays.id, day.id));
+    expect(dayBack.status).toBe("completed");
+  });
+
   it("restores a plan day, re-linking the workout its delete unlinked and re-deriving its status", async () => {
     const { plan, day } = await seedPlan(ALICE);
     const log = await seedWorkoutLog(ALICE, "2026-06-01", { planId: plan.id, planDayId: day.id });

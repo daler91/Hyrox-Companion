@@ -1,9 +1,15 @@
 import type { ParseLabelResponse, ParseMealResponse } from "@shared/schema";
-import { ChefHat, Plus, ScanLine, Sparkles, Target } from "lucide-react";
+import { ChefHat, Loader2, Plus, ScanLine, Sparkles, Target } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
+import { useToast } from "@/hooks/use-toast";
+import {
+  type ParseImageInput,
+  useParseMealPhoto,
+  useParseNutritionLabel,
+} from "@/hooks/useNutrition";
 
 import { ScanLabelButton } from "./ScanLabelButton";
 import { SnapMealButton } from "./SnapMealButton";
@@ -16,8 +22,15 @@ import { SnapMealButton } from "./SnapMealButton";
  * (describe / photo / barcode / label) as full-width rows, with the
  * create-and-manage actions (custom food, recipe, targets) as a compact
  * secondary row below. Rows that hand off to another surface close the sheet
- * as they do so; the photo rows stay put until their parse resolves, since
- * their loading state lives on the row itself.
+ * as they do so; the photo rows stay put until their parse resolves, showing
+ * its progress.
+ *
+ * The photo parses are owned here, not by their rows: the sheet can be
+ * dismissed during the 5-15 s vision call, and once a row unmounted TanStack
+ * skipped its mutate-level onSuccess, so the billed parse finished with no
+ * review sheet or toast. This component lives as long as the page, so the
+ * result still lands, and the Log food button shows the parse is running.
+ * CL31 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function LogFoodActions({
   onDescribe,
@@ -37,17 +50,61 @@ export function LogFoodActions({
   readonly onTargets: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const parseMeal = useParseMealPhoto();
+  const parseLabel = useParseNutritionLabel();
+  const { toast } = useToast();
+  const parsing = parseMeal.isPending || parseLabel.isPending;
 
   const closeAnd = (action: () => void) => () => {
     setOpen(false);
     action();
   };
 
+  const snapMeal = (image: ParseImageInput) => {
+    parseMeal.mutate(image, {
+      onSuccess: (result) => {
+        setOpen(false);
+        onMealParsed(result);
+      },
+    });
+  };
+
+  const scanLabel = (image: ParseImageInput) => {
+    parseLabel.mutate(image, {
+      onSuccess: (result) => {
+        if (result.label === null) {
+          toast({
+            title: "No nutrition label found",
+            description: "Try a closer, well-lit photo of the nutrition facts panel.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setOpen(false);
+        onLabelExtracted(result);
+      },
+    });
+  };
+
   return (
     <>
-      <Button onClick={() => setOpen(true)} data-testid="button-log-food">
-        <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> Log food
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        aria-busy={parsing}
+        data-testid="button-log-food"
+      >
+        {parsing ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+        )}
+        Log food
       </Button>
+      <span role="status" aria-live="polite" className="sr-only" data-testid="status-photo-parse">
+        {parsing ? "Reading your photo" : ""}
+      </span>
 
       <ResponsiveSheet
         open={open}
@@ -68,10 +125,8 @@ export function LogFoodActions({
           <SnapMealButton
             size="default"
             className="w-full justify-start"
-            onParsed={(r) => {
-              setOpen(false);
-              onMealParsed(r);
-            }}
+            onImage={snapMeal}
+            isParsing={parseMeal.isPending}
           />
           <Button
             variant="outline"
@@ -84,10 +139,8 @@ export function LogFoodActions({
           <ScanLabelButton
             size="default"
             className="w-full justify-start"
-            onExtracted={(r) => {
-              setOpen(false);
-              onLabelExtracted(r);
-            }}
+            onImage={scanLabel}
+            isParsing={parseLabel.isPending}
           />
         </div>
 

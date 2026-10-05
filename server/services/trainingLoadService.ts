@@ -447,6 +447,8 @@ function applyCardioLoad(
     | "mainWorkout"
     | "accessory"
     | "notes"
+    | "source"
+    | "deviceActivity"
   >,
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
@@ -566,7 +568,8 @@ export function calculateTrainingLoad(
 
   const firstLogDate = earliestLogDate(workoutLogs);
   // A window that starts later than the warmup cannot support the EWMAs no
-  // matter what is in it: whatever log lands first becomes the seed for both.
+  // matter what is in it: both start at whatever log lands first, so they would
+  // describe only the window, not the athlete's history before it.
   const truncated =
     options.historyFrom != null &&
     // -(N - 1): a window covering [currentDate - (N-1) .. currentDate] IS N days,

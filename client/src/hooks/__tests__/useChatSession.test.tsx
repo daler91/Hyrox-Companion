@@ -7,6 +7,10 @@ import * as queryClient from '@/lib/queryClient';
 
 import { useChatSession } from '../useChatSession';
 
+// The clear-history mutation empties every cached thread (CL17); the real
+// cache behaviour is covered in chat/__tests__/useChatHistory.test.tsx.
+const { setQueriesDataMock } = vi.hoisted(() => ({ setQueriesDataMock: vi.fn() }));
+
 // Setup mock QueryClient
 const testQueryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
@@ -32,6 +36,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
     ...mod,
     useQueryClient: vi.fn(() => ({
       invalidateQueries: queryClient.queryClient.invalidateQueries,
+      setQueriesData: setQueriesDataMock,
     })),
     useQuery: vi.fn(() => ({ data: [], isLoading: false })),
     useMutation: vi.fn(({ mutationFn, onSuccess }: { mutationFn?: (...args: unknown[]) => Promise<unknown>; onSuccess?: () => void }) => {
@@ -255,6 +260,7 @@ describe('useChatSession', () => {
       result.current.clearHistory();
     });
 
+    expect(setQueriesDataMock).toHaveBeenCalledWith({ queryKey: ["/api/v1/chat/history"] }, []);
     expect(queryClient.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/chat/history"] });
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].id).toBe('welcome');

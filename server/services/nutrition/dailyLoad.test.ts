@@ -54,7 +54,7 @@ describe("fetchTrainingLoadWindow", () => {
     expect(w.recentLoads.filter((v) => v === 0)).toHaveLength(6);
     expect(w.acuteEwma).toBe(60);
     expect(w.tsb).toBe(-10);
-    // The EWMAs are seeded at the first log in whatever range is fetched, so the
+    // The EWMAs start at the first log in whatever range is fetched, so the
     // fetch must cover the warmup even though recentLoads only reads 7 days.
     // Fetching 7 handed the effective target a 28-day baseline built from one
     // week: 26.1 against a true 107.2 for a tapering athlete (audit H21).

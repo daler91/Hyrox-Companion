@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetCircuitBreakerForTests,
   CircuitBreakerOpenError,
-  recordBreakerFailure,
+  embeddingBreaker,
+  textBreakerFor,
 } from "./circuitBreaker";
+import { AiConfigurationError } from "./errors";
 import { isRetryableError, retryWithBackoff } from "./retry";
+
+const breaker = textBreakerFor("gemini");
 
 /**
  * server/gemini.test.ts already exercises retryWithBackoff/isRetryableError
@@ -44,11 +48,11 @@ describe("retryWithBackoff — circuit breaker interplay", () => {
 
   it("fails fast without calling fn when the breaker is already open", async () => {
     // Trip the breaker for real (FAILURE_THRESHOLD is 5) rather than mocking
-    // assertBreakerClosed, so this pins the actual integration.
-    for (let i = 0; i < 5; i++) recordBreakerFailure();
+    // the breaker's assertClosed, so this pins the actual integration.
+    for (let i = 0; i < 5; i++) breaker.recordFailure();
 
     const fn = vi.fn();
-    await expect(retryWithBackoff(fn, "breaker-open-test", 2, 1)).rejects.toBeInstanceOf(
+    await expect(retryWithBackoff(fn, "breaker-open-test", breaker, { maxRetries: 2, baseDelayMs: 1 })).rejects.toBeInstanceOf(
       CircuitBreakerOpenError,
     );
     expect(fn).not.toHaveBeenCalled();
@@ -59,7 +63,7 @@ describe("retryWithBackoff — circuit breaker interplay", () => {
     // the breaker trips between attempts; it must not be treated as a
     // generic retryable/non-retryable failure and looped on.
     const fn = vi.fn().mockRejectedValue(new CircuitBreakerOpenError());
-    await expect(retryWithBackoff(fn, "mid-flight-test", 3, 1)).rejects.toBeInstanceOf(
+    await expect(retryWithBackoff(fn, "mid-flight-test", breaker, { maxRetries: 3, baseDelayMs: 1 })).rejects.toBeInstanceOf(
       CircuitBreakerOpenError,
     );
     expect(fn).toHaveBeenCalledTimes(1);
@@ -80,13 +84,13 @@ describe("retryWithBackoff — a call its caller cancelled", () => {
     const fn = vi.fn().mockRejectedValue(new DOMException("This operation was aborted", "AbortError"));
 
     for (let i = 0; i < 6; i++) {
-      await expect(retryWithBackoff(fn, "cancelled-test", 3, 1, 1_000, 1_000, controller.signal)).rejects.toMatchObject({
+      await expect(retryWithBackoff(fn, "cancelled-test", breaker, { maxRetries: 3, baseDelayMs: 1, budgetMs: 1_000, callTimeoutMs: 1_000, callerSignal: controller.signal })).rejects.toMatchObject({
         name: "AbortError",
       });
     }
 
     expect(fn).toHaveBeenCalledTimes(6);
-    await expect(retryWithBackoff(() => Promise.resolve("ok"), "after-cancels-test", 0, 1)).resolves.toBe("ok");
+    await expect(retryWithBackoff(() => Promise.resolve("ok"), "after-cancels-test", breaker, { maxRetries: 0, baseDelayMs: 1 })).resolves.toBe("ok");
   });
 
   it("still counts a provider failure while the caller is still waiting", async () => {
@@ -94,9 +98,43 @@ describe("retryWithBackoff — a call its caller cancelled", () => {
     const fn = vi.fn().mockRejectedValue(new Error("503 Service Unavailable"));
 
     for (let i = 0; i < 5; i++) {
-      await expect(retryWithBackoff(fn, "outage-test", 0, 1, 1_000, 1_000, controller.signal)).rejects.toThrow("503");
+      await expect(retryWithBackoff(fn, "outage-test", breaker, { maxRetries: 0, baseDelayMs: 1, budgetMs: 1_000, callTimeoutMs: 1_000, callerSignal: controller.signal })).rejects.toThrow("503");
     }
 
-    await expect(retryWithBackoff(fn, "outage-test", 0, 1)).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+    await expect(retryWithBackoff(fn, "outage-test", breaker, { maxRetries: 0, baseDelayMs: 1 })).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+  });
+});
+
+// AI2 (CODEBASE_ANALYSIS_2026-10-03): with AI_TEXT_PROVIDER=anthropic and no
+// GEMINI_API_KEY, one coaching-material upload's five failing embedding calls
+// opened the one shared breaker, and every athlete's chat failed for 30 s.
+describe("retryWithBackoff — the breaker each call goes through", () => {
+  beforeEach(() => {
+    __resetCircuitBreakerForTests();
+  });
+
+  it("does not count a call this deployment isn't configured to make", async () => {
+    const fn = vi.fn().mockRejectedValue(new AiConfigurationError("GEMINI_API_KEY is required for AI features"));
+
+    for (let i = 0; i < 6; i++) {
+      await expect(retryWithBackoff(fn, "embedding", embeddingBreaker, { maxRetries: 3, baseDelayMs: 1 })).rejects.toBeInstanceOf(AiConfigurationError);
+    }
+
+    // Not retried (it would fail the same way), and never fast-failed by an open breaker.
+    expect(fn).toHaveBeenCalledTimes(6);
+  });
+
+  it("leaves the text provider's calls alone while embeddings are failing", async () => {
+    const outage = vi.fn().mockRejectedValue(new Error("503 Service Unavailable"));
+    for (let i = 0; i < 5; i++) {
+      await expect(retryWithBackoff(outage, "embedding", embeddingBreaker, { maxRetries: 0, baseDelayMs: 1 })).rejects.toThrow("503");
+    }
+    await expect(retryWithBackoff(outage, "embedding", embeddingBreaker, { maxRetries: 0, baseDelayMs: 1 })).rejects.toBeInstanceOf(
+      CircuitBreakerOpenError,
+    );
+
+    const chat = vi.fn().mockResolvedValue("reply");
+    await expect(retryWithBackoff(chat, "chat", textBreakerFor("anthropic"), { maxRetries: 0, baseDelayMs: 1 })).resolves.toBe("reply");
+    expect(chat).toHaveBeenCalledOnce();
   });
 });

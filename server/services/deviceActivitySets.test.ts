@@ -173,6 +173,108 @@ describe("deviceActivitySetRow", () => {
   });
 });
 
+/**
+ * Pinned with literal values, not computed ones: isUncorrectedRecordingSet
+ * (deviceActivityLink.ts) knows the set an auto link wrote on a plan-day log
+ * by calling deviceActivitySetRow again on the stored recording and comparing.
+ * A change to what it returns for a recording already stored makes every one
+ * of those sets read as one the athlete typed, so unlink leaves the watch's
+ * run on the log beside the released one, and reopen folds it onto the plan
+ * day as a run the athlete added. If one of these moves, the rows already
+ * written need a way to still be recognised first.
+ * D12 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+describe("deviceActivitySetRow output is pinned (isUncorrectedRecordingSet rebuilds stored sets with it)", () => {
+  const ROW = {
+    workoutLogId: "log-strava",
+    planDayId: null,
+    customLabel: null,
+    setNumber: 1,
+    reps: null,
+    weight: null,
+    sortOrder: 0,
+  };
+
+  it("a run, for a km athlete: metres and fractional minutes", () => {
+    expect(deviceActivitySetRow(importedLog(), KM)).toEqual({
+      ...ROW,
+      exerciseName: "run",
+      category: "running",
+      distance: 10050,
+      time: 52.21666666666667,
+      weightUnit: "kg",
+      distanceUnit: "m",
+    });
+  });
+
+  it("the same run, for a miles athlete: whole feet", () => {
+    expect(deviceActivitySetRow(importedLog(), MILES)).toEqual({
+      ...ROW,
+      exerciseName: "run",
+      category: "running",
+      distance: 32972,
+      time: 52.21666666666667,
+      weightUnit: "lbs",
+      distanceUnit: "ft",
+    });
+  });
+
+  it("a ride, its fractional metres rounded, in either unit", () => {
+    const ride = importedLog(
+      raw({ type: "Ride", sport_type: "GravelRide", distance: 42195.6, moving_time: 5521 }),
+    );
+    const cycling = { ...ROW, exerciseName: "cycling", category: "conditioning", time: 92.01666666666667 };
+    expect(deviceActivitySetRow(ride, KM)).toEqual({
+      ...cycling,
+      distance: 42196,
+      weightUnit: "kg",
+      distanceUnit: "m",
+    });
+    expect(deviceActivitySetRow(ride, MILES)).toEqual({
+      ...cycling,
+      distance: 138437,
+      weightUnit: "lbs",
+      distanceUnit: "ft",
+    });
+  });
+
+  it("an indoor run, filed as a treadmill run", () => {
+    const treadmill = importedLog(
+      raw({ type: "VirtualRun", sport_type: "VirtualRun", distance: 5000.4, moving_time: 1834 }),
+    );
+    expect(deviceActivitySetRow(treadmill, KM)).toEqual({
+      ...ROW,
+      exerciseName: "treadmill_run",
+      category: "running",
+      distance: 5000,
+      time: 30.566666666666666,
+      weightUnit: "kg",
+      distanceUnit: "m",
+    });
+  });
+
+  it("a distance-less cardio session: the time alone", () => {
+    const elliptical = importedLog(
+      raw({ type: "Elliptical", sport_type: "Elliptical", distance: 0, moving_time: 1834 }),
+    );
+    expect(deviceActivitySetRow(elliptical, KM)).toEqual({
+      ...ROW,
+      exerciseName: "elliptical",
+      category: "conditioning",
+      distance: null,
+      time: 30.566666666666666,
+      weightUnit: "kg",
+      distanceUnit: "m",
+    });
+  });
+
+  it.each(["WeightTraining", "Workout"])("no set at all for %s", (sport) => {
+    const session = importedLog(raw({ type: sport, sport_type: sport, distance: 0, moving_time: 3600 }));
+    expect(deviceActivitySetRow(session, KM)).toBeNull();
+    expect(deviceActivitySetRow(session, MILES)).toBeNull();
+  });
+});
+
 describe("deviceActivitySetRows", () => {
   it("keeps the describable sports and drops the rest", () => {
     const rows = deviceActivitySetRows(

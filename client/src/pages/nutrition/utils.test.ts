@@ -144,6 +144,25 @@ describe("projectGoalContribution", () => {
       projectedPct: 70,
     });
   });
+
+  // CL32 (CODEBASE_ANALYSIS_2026-10-03): an edit's old serving is already in
+  // today's totals, so it is swapped out rather than added to.
+  it("shows no change for an edit that replaces a serving with the same one", () => {
+    const rows = projectGoalContribution(today, serving, target(), serving);
+    for (const r of rows) {
+      expect(r.added).toBe(0);
+      expect(r.projected).toBe(r.current);
+      expect(r.projectedPct).toBe(r.currentPct);
+    }
+  });
+
+  it("projects a smaller edited serving below the current total", () => {
+    const half: NutritionMacroTotals = { calories: 150, protein: 15, carb: 5, fat: 2.5, fiber: 1 };
+    const protein = projectGoalContribution(today, half, target(), serving).find(
+      (r) => r.key === "protein",
+    );
+    expect(protein).toMatchObject({ current: 75, added: -15, projected: 60, projectedPct: 40 });
+  });
 });
 
 describe("updateAt", () => {

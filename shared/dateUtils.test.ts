@@ -5,10 +5,12 @@ import {
   computePlanWeeks,
   dayDiff,
   describeWeekdaySpan,
+  isIsoCalendarDate,
   MAX_PLAN_WEEKS,
   MIN_PLAN_WEEKS,
   nextPlanStartDate,
   parseIsoDate,
+  planSpanWeeks,
   planWeekOneMonday,
   toIsoDateUtc,
   weekdayIndex,
@@ -51,6 +53,51 @@ describe("computePlanWeeks", () => {
   it("clamps to the maximum for very long spans", () => {
     expect(computePlanWeeks("2026-01-01", "2027-01-01")).toBe(MAX_PLAN_WEEKS); // 365 days
   });
+
+  describe("an end date that is the race (C19)", () => {
+    const race = { endDateIsRaceDate: true } as const;
+
+    it("runs a midweek-start plan through the week that holds the race", () => {
+      // Wed 2026-10-07 to Sat 2026-11-28: rounded, 7 weeks ended on 22 Nov.
+      expect(computePlanWeeks("2026-10-07", "2026-11-28")).toBe(7);
+      expect(computePlanWeeks("2026-10-07", "2026-11-28", race)).toBe(8);
+    });
+
+    it("keeps a Monday-to-Thursday race on a Monday-start plan", () => {
+      expect(computePlanWeeks("2026-01-05", "2026-02-26", race)).toBe(8); // Thursday
+      expect(computePlanWeeks("2026-01-05", "2026-03-02", race)).toBe(9); // Monday of week 9
+      expect(computePlanWeeks("2026-01-05", "2026-02-28", race)).toBe(8); // Saturday, as before
+    });
+
+    it("always ends the plan in race week, whatever the weekdays", () => {
+      for (let startOffset = 0; startOffset < 7; startOffset++) {
+        const start = addDaysToISODate("2026-01-05", startOffset);
+        for (let span = 1; span <= 70; span++) {
+          const raceDate = addDaysToISODate(start, span);
+          const weeks = computePlanWeeks(start, raceDate, race);
+          const raceWeekMonday = addDaysToISODate(planWeekOneMonday(start), (weeks - 1) * 7);
+          expect(raceDate >= raceWeekMonday && raceDate <= addDaysToISODate(raceWeekMonday, 6)).toBe(
+            true,
+          );
+        }
+      }
+    });
+  });
+});
+
+describe("planSpanWeeks", () => {
+  // The unclamped count the schema and the form range-check, so a race in the
+  // 25th week is refused rather than clamped off the plan's end.
+  // C19 (CODEBASE_ANALYSIS_2026-10-03)
+  it("counts the same weeks as computePlanWeeks, without the clamp", () => {
+    // Wed 6 May to Sat 24 Oct: 24 weeks rounded, the race in week 25.
+    expect(planSpanWeeks("2026-05-06", "2026-10-24")).toBe(24);
+    expect(planSpanWeeks("2026-05-06", "2026-10-24", { endDateIsRaceDate: true })).toBe(25);
+    expect(computePlanWeeks("2026-05-06", "2026-10-24", { endDateIsRaceDate: true })).toBe(
+      MAX_PLAN_WEEKS,
+    );
+    expect(planSpanWeeks("2026-01-01", "2027-01-01")).toBe(52);
+  });
 });
 
 describe("addDaysToISODate", () => {
@@ -84,6 +131,68 @@ describe("toIsoDateUtc / parseIsoDate", () => {
     expect(parsed.toISOString()).toBe("2024-02-29T00:00:00.000Z");
     expect(toIsoDateUtc(parsed)).toBe("2024-02-29");
   });
+});
+
+// CL9, C49 (CODEBASE_ANALYSIS_2026-10-03): the one calendar-date check the
+// onboarding race date, the sample-plan schema, the weekly review and the
+// nutrition routes' dates share.
+describe("isIsoCalendarDate", () => {
+  it.each(["2026-10-04", "2026-01-01", "2026-12-31", "0100-01-01", "0999-01-01", "9999-12-31"])(
+    "takes the real day %s",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(true);
+    },
+  );
+
+  it.each([
+    ["2024-02-29", true],
+    ["2000-02-29", true],
+    ["2026-02-29", false],
+    ["1900-02-29", false],
+  ])("knows the leap day %s is %s", (value, real) => {
+    expect(isIsoCalendarDate(value)).toBe(real);
+  });
+
+  // UTC date math rolls each of these forward into a later, real day.
+  it.each(["2026-13-01", "2026-00-10", "2026-02-30", "2026-04-31", "2026-11-00", "2026-13-45"])(
+    "refuses the impossible day %s",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  // A browser date field takes a five-digit year.
+  it.each(["20266-11-15", "-2026-01-01", "+2026-01-01"])(
+    "refuses %s, whose year is not four digits",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  // Four digits, but Date.UTC reads a year below 100 as 19xx, so the round
+  // trip prints another year.
+  it.each(["0000-01-01", "0050-01-01", "0099-12-31"])(
+    "refuses %s, which Date.UTC reads as a 19xx date",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  it.each(["2026-1-5", "15/11/2026", "2026-01-05T00:00:00Z", " 2026-01-05", "2026-01-05 ", "2026-01-05-01"])(
+    "refuses %j, which is not written YYYY-MM-DD",
+    (value) => {
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
+
+  // toISOString throws a RangeError for an invalid Date.
+  it.each(["", "aaaa", "last-week", "2026-aa-01", "300000-01-01"])(
+    "is false, not a throw, for %j",
+    (value) => {
+      expect(() => isIsoCalendarDate(value)).not.toThrow();
+      expect(isIsoCalendarDate(value)).toBe(false);
+    },
+  );
 });
 
 // 2026-09-21 is a Monday.

@@ -55,9 +55,10 @@ function MetricRow({
  * compares session RPE and prescription compliance between days the athlete hit
  * ≥90% of their (load-adjusted) carb target and days they missed it. Computed
  * client-side with the pure shared calculator from the block-view points the
- * tab already loads. Renders nothing when no day in range has both a carb
- * target and a training outcome; shows a keep-logging note under the min-N
- * guard. Framed as an association, not causation.
+ * tab already loads. Only days with food logged are compared (C20,
+ * CODEBASE_ANALYSIS_2026-10-03). Renders nothing when no day in range has logged
+ * food, a carb target and a training outcome; shows a keep-logging note under
+ * the min-N guard. Framed as an association, not causation.
  */
 export function FuellingCorrelationCard({
   points,
@@ -68,6 +69,7 @@ export function FuellingCorrelationCard({
     () =>
       analyzeFuellingCorrelation(
         points.map((p) => ({
+          calories: p.calories,
           carbG: p.carb,
           carbTargetG: p.carbTargetG ?? null,
           avgRpe: p.avgRpe ?? null,
@@ -113,8 +115,8 @@ export function FuellingCorrelationCard({
               />
             )}
             <p className="text-[11px] text-muted-foreground">
-              {result.eligibleDays} training days compared (carb target hit = ≥{result.carbHitPct}%
-              of that day's target). Association, not causation.
+              {result.eligibleDays} training days with food logged compared (carb target hit = ≥
+              {result.carbHitPct}% of that day&apos;s target). Association, not causation.
             </p>
           </div>
         ) : (

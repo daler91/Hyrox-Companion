@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 import { useEmptyRecycleBin, useRestoreRecycleBinItem } from "./useRecycleBin";
 
@@ -91,6 +92,40 @@ describe("recycle bin mutation hooks", () => {
     await waitFor(() => {
       expect(mocks.toast).toHaveBeenCalledWith(toast);
     });
+  });
+
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03): a restored workout or plan day is
+  // back in the day's meal targets, session fuelling and the Fuelling views.
+  it("refreshes the nutrition reads a restored workout feeds", async () => {
+    vi.mocked(api.recycleBin.restore).mockResolvedValue({
+      ok: true,
+      entityType: "workout_log",
+      entityId: "w1",
+      batchId: null,
+      warnings: [],
+    });
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+    const { result } = renderHook(() => useRestoreRecycleBinItem(), {
+      wrapper: wrapperFor(client),
+    });
+
+    act(() => {
+      result.current.mutate("rb-1");
+    });
+
+    await waitFor(() => {
+      expect(mocks.toast).toHaveBeenCalled();
+    });
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        ["/api/v1/nutrition/session-fuelling"],
+        ["/api/v1/nutrition/summary"],
+        ["/api/v1/nutrition/summary-range"],
+        ["/api/v1/nutrition/block"],
+      ]),
+    );
+    invalidate.mockRestore();
   });
 
   it("reports how many items emptying the bin removed", async () => {

@@ -8,10 +8,12 @@ import { resetIntegrationDb, seedUser, seedWorkoutLog } from "./integrationDb";
 /**
  * getCompletedWorkoutDates against the REAL schema. It replaces "hydrate the
  * whole timeline and keep the completed dates" for the weekly email's streak,
- * so it must return exactly the dates getTimeline would have marked completed:
- * every logged workout, every completed plan day inside its plan's lifetime —
- * and nothing from another athlete, a retired plan's cutoff onward, or a plan
- * day that is merely planned/missed/skipped.
+ * so it must return exactly the dates getTimeline would have marked completed
+ * training: every log that counts as training (not a synced walk; C18,
+ * CODEBASE_ANALYSIS_2026-10-03), every
+ * completed plan day inside its plan's lifetime — and nothing from another
+ * athlete, a retired plan's cutoff onward, or a plan day that is merely
+ * planned/missed/skipped.
  */
 describe("TimelineStorage.getCompletedWorkoutDates (real Postgres)", () => {
   const ALICE = "completed-alice";
@@ -54,6 +56,13 @@ describe("TimelineStorage.getCompletedWorkoutDates (real Postgres)", () => {
     await seedWorkoutLog(ALICE, "2026-05-01");
     await seedWorkoutLog(ALICE, "2026-05-09");
     await seedWorkoutLog(ALICE, "2026-05-09", { focus: "Second session" });
+    // Synced walks do not count as training, so they never keep a streak alive
+    // on their own (C18, CODEBASE_ANALYSIS_2026-10-03): 05-03 and 05-08 have
+    // nothing else. On 05-09 the training log still counts the day.
+    const walk = { focus: "Walk", mainWorkout: "Walk", source: "strava", countsAsTraining: false } as const;
+    await seedWorkoutLog(ALICE, "2026-05-03", walk);
+    await seedWorkoutLog(ALICE, "2026-05-08", walk);
+    await seedWorkoutLog(ALICE, "2026-05-09", walk);
 
     // Another athlete's completed day and log must never surface for Alice.
     const [bobPlan] = await db
@@ -73,9 +82,11 @@ describe("TimelineStorage.getCompletedWorkoutDates (real Postgres)", () => {
     expect([...dates].sort()).toEqual(["2026-04-29", "2026-05-01", "2026-05-04", "2026-05-09"]);
   });
 
-  it("matches what the full timeline reports as completed", async () => {
+  it("matches what the full timeline reports as completed training", async () => {
     const timeline = await storage.timeline.getTimeline(ALICE);
-    const fromTimeline = new Set(timeline.filter((e) => e.status === "completed").map((e) => e.date));
+    const fromTimeline = new Set(
+      timeline.filter((e) => e.status === "completed" && e.countsAsTraining !== false).map((e) => e.date),
+    );
     const slim = await storage.timeline.getCompletedWorkoutDates(ALICE);
     expect([...slim].sort()).toEqual([...fromTimeline].sort());
   });

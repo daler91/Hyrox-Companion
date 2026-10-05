@@ -1,9 +1,10 @@
-import type { TimelineEntry } from "@shared/schema";
-import { fireEvent, render, screen } from "@testing-library/react";
+import type { StructureBlockInput, TimelineEntry } from "@shared/schema";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { StepLinkMove } from "@/components/workout-structure";
 import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
@@ -59,8 +60,21 @@ vi.mock("@/components/RpeSelector", () => ({
   ),
 }));
 
-vi.mock("@/components/workout-structure", () => ({
-  StructureBlocksEditor: () => <div data-testid="structure-blocks-editor" />,
+const structureEditor = vi.hoisted(() => ({
+  props: undefined as
+    | {
+        onChange: (next: StructureBlockInput[], moves: readonly StepLinkMove[]) => unknown;
+        saveDebounceMs?: number;
+      }
+    | undefined,
+}));
+
+vi.mock("@/components/workout-structure", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/workout-structure")>()),
+  StructureBlocksEditor: (props: NonNullable<typeof structureEditor.props>) => {
+    structureEditor.props = props;
+    return <div data-testid="structure-blocks-editor" />;
+  },
 }));
 
 vi.mock("../shared/WorkoutPlanDayPicker", () => ({
@@ -536,5 +550,99 @@ describe("ReviewSurface", () => {
 
     expect(onDelete).not.toHaveBeenCalled();
     expect(screen.queryByTestId("review-confirm-delete-entry-1")).not.toBeInTheDocument();
+  });
+
+  it("saves the block builder after a pause, the blocks and the rows that follow them together (CL15, U3)", async () => {
+    const saveStructure = vi.fn(() => Promise.resolve());
+    const updateStructure = { mutate: vi.fn() };
+    mockUseWorkoutDetail.mockReturnValue(makeDetail({ saveStructure, updateStructure }));
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+    const next: StructureBlockInput[] = [{
+      id: "block-emom",
+      sectionType: "main",
+      formatType: "emom",
+      durationMinutes: 8,
+      steps: [{ stepNumber: 1, minuteIndex: 1, stepType: "work", exerciseName: "burpees", stepRole: "work" }],
+    }];
+    const moves: StepLinkMove[] = [
+      { blockId: "block-emom", fromStepNumber: 1, toStepNumber: null, fromMinuteIndex: 1, toMinuteIndex: null },
+      { blockId: "block-emom", fromStepNumber: 2, toStepNumber: 1, fromMinuteIndex: 2, toMinuteIndex: 1 },
+    ];
+
+    let saved: unknown;
+    await act(async () => {
+      saved = structureEditor.props?.onChange(next, moves);
+      await saved;
+    });
+
+    expect(structureEditor.props?.saveDebounceMs).toBeGreaterThan(0);
+    expect(saveStructure).toHaveBeenCalledWith(next, moves);
+    expect(updateStructure.mutate).not.toHaveBeenCalled();
+    expect(saved).toBe(saveStructure.mock.results[0]?.value);
+  });
+
+  function editingTools(): HTMLDetailsElement {
+    const tools = screen.getByTestId("review-editing-tools");
+    if (!(tools instanceof HTMLDetailsElement)) throw new Error("expected a <details>");
+    return tools;
+  }
+
+  it("keeps the description and structure tools open when the first block brings its row (CL14)", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+    const { rerender } = render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+    expect(editingTools().open).toBe(true);
+
+    // The athlete adds a block; the server derives an "Unassigned exercise" row from its step.
+    const derived = [makeExerciseSet({ id: "derived-1", exerciseName: "custom", customLabel: "Unassigned exercise" })];
+    mockUseWorkoutDetail.mockReturnValue(makeDetail({ workout: makeWorkout({ exerciseSets: derived }) }));
+    rerender(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    expect(editingTools().open).toBe(true);
+  });
+
+  it("opens the tools again when the last row goes, and otherwise leaves them as the athlete set them (CL14)", () => {
+    const rows = [makeExerciseSet({ id: "squat-1" })];
+    mockUseWorkoutDetail.mockReturnValue(makeDetail({ workout: makeWorkout({ exerciseSets: rows }) }));
+    const { rerender } = render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+    expect(editingTools().open).toBe(false);
+
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+    rerender(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+    expect(editingTools().open).toBe(true);
+
+    // The athlete folds them away; a row arriving later keeps them folded.
+    act(() => {
+      editingTools().open = false;
+      fireEvent(editingTools(), new Event("toggle"));
+    });
+    mockUseWorkoutDetail.mockReturnValue(makeDetail({ workout: makeWorkout({ exerciseSets: rows }) }));
+    rerender(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+    expect(editingTools().open).toBe(false);
+  });
+
+  it("says a deleted planned session stays on the plan (CL23)", async () => {
+    const user = userEvent.setup();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+    render(<ReviewSurface entry={makeEntry({ planDayId: "plan-day-1" })} onClose={vi.fn()} onDelete={vi.fn()} />);
+
+    await user.click(screen.getByTestId("review-delete-entry-1"));
+    const dialog = await screen.findByRole("alertdialog");
+
+    expect(dialog).toHaveTextContent(
+      "The planned session stays on your plan and shows as planned again, or missed if its date has passed.",
+    );
+    expect(dialog).not.toHaveTextContent(/permanently|cannot be undone/i);
+  });
+
+  it("describes deleting a workout logged without a plan (CL23)", async () => {
+    const user = userEvent.setup();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+    render(<ReviewSurface entry={makeEntry({ planDayId: null })} onClose={vi.fn()} onDelete={vi.fn()} />);
+
+    await user.click(screen.getByTestId("review-delete-entry-1"));
+    const dialog = await screen.findByRole("alertdialog");
+
+    expect(dialog).toHaveTextContent("This removes the workout and all of its data from your timeline.");
+    expect(dialog).not.toHaveTextContent(/plan/i);
   });
 });
