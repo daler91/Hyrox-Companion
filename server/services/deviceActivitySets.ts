@@ -12,14 +12,22 @@
  *
  * A recording knows exactly one thing in set terms: this much distance in this
  * much time, of this kind of work. That is what this module writes, once, per
- * standalone import. It is deliberately NOT written for:
+ * standalone import, and once per plan-day log an AUTO link creates (D12,
+ * CODEBASE_ANALYSIS_2026-10-03): nobody has reviewed that link, so the log
+ * records what the watch measured, never the prescription as performed. When
+ * the recording leaves such a log (unlink, "Reopen workout"), its set leaves
+ * with it while the athlete has not corrected it, a note on it going along
+ * (`isUncorrectedRecordingSet` in deviceActivityLink.ts: the stored set still
+ * holds both of the watch's numbers and none of `AthleteSetDetails`). It is
+ * deliberately NOT written for:
  *
  *   - an import that ATTACHED to a log the athlete wrote themselves. Their own
  *     text is the better description of that session, and it is what the AI
  *     parser reads; a synthesised row would both duplicate their sets and hide
  *     the log from `getWorkoutsWithoutExerciseSets`.
- *   - an import that COMPLETED a plan day, which already copies the day's
- *     prescribed sets across.
+ *   - an import the athlete MANUALLY linked to a plan day. They said the
+ *     recording was that session, so the link copies the day's prescribed
+ *     sets across, as "Log as planned" does.
  *   - a sport we cannot describe as a set. "WeightTraining" and "Workout" say
  *     an hour happened and nothing about what was in it; inventing a set for
  *     those would put fiction into the PR table. Those logs keep the behaviour
@@ -121,6 +129,21 @@ function measurementsFor(log: WorkoutLog): ActivityMeasurements | null {
  * `preferences` are the athlete's units: the row is stamped with them like every
  * other set the product writes (L4), so a later kg/lbs or km/miles switch
  * converts this row instead of reinterpreting it.
+ *
+ * STORED ROWS DEPEND ON THIS OUTPUT. `isUncorrectedRecordingSet` and
+ * `isCorrectedRecordingSet` (deviceActivityLink.ts) know the set an auto link
+ * wrote on a plan-day log by calling this again on the stored recording and
+ * comparing the result with the stored set: exercise, distance, moving time.
+ * The set that leaves with the recording (`isUncorrectedRecordingSet`) must
+ * match in all three and carry none of `AthleteSetDetails`, a note at most.
+ * Change what this returns for a recording (the sport map, the rounding, the
+ * unit stamp, the clock source) and every set already written stops
+ * matching, so unlink and "Reopen workout" read each one as a set the athlete
+ * typed: unlink keeps it on the log while the released recording gets its
+ * own (the run counted twice), and reopen adds the watch's numbers to the
+ * plan day's prescription as a run the athlete added. `deviceActivitySets.test.ts`
+ * pins the output with literal values; a change that moves them needs a way
+ * to recognise the rows already written. D12 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function deviceActivitySetRow(
   log: WorkoutLog,

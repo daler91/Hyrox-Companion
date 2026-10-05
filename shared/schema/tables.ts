@@ -610,6 +610,25 @@ export const workoutLogs = pgTable(
     deviceLinkSource: text("device_link_source"),
     // Matcher score in [0, 1] for auto links; NULL for manual links.
     deviceLinkConfidence: real("device_link_confidence"),
+    // True on a plan-day log an AUTO link created from the recording alone:
+    // the day's prescription text, the one set synthesised from the recording
+    // (none for "WeightTraining"/"Workout"), and none of the prescribed sets
+    // copied in as performed. So its text is not a description of what was
+    // done, and an exercise missing from its sets was never there to drop.
+    //
+    // Written once, when the auto link creates the log, and never cleared:
+    // unlink adopts an edited log as `source = 'manual'` and clears every
+    // device-link column above, and this is then the only thing on the row
+    // that says the log never held the prescription. "Reopen workout" folds
+    // such a log onto the day per exercise instead of replacing the day's
+    // sets with it; the paths that parse set-less text into sets skip it
+    // whatever its text, since its main_workout and accessory stay the
+    // prescription (the athlete's description edits go to prescribed_*); and
+    // unlink still treats it as the link's log once it is moved off its plan
+    // day. False for the athlete's own logs, manual links (which copy the
+    // prescription in) and auto links made before it existed (which did too).
+    // D12 (CODEBASE_ANALYSIS_2026-10-03)
+    autoLinkRecordingOnly: boolean("auto_link_recording_only").notNull().default(false),
     // The raw provider row plus the metric columns the link filled, so an
     // unlink can NULL exactly those and re-create the activity as its own row.
     deviceActivity: jsonb("device_activity").$type<DeviceActivitySnapshot>(),

@@ -841,6 +841,13 @@
       "when": 1790993951469,
       "tag": "0119_chat_message_attachment",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1791141958336,
+      "tag": "0120_workout_logs_auto_link_recording_only",
+      "breakpoints": true
     }
   ]
 }

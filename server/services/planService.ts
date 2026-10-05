@@ -1,8 +1,8 @@
-import type { InsertPlanDay, PlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
-import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+import type { ExerciseSet, InsertPlanDay, PlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay, WorkoutLog } from "@shared/schema";
+import { exerciseSets, isRunningExerciseName, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import type { DistanceUnit } from "@shared/unitConversion";
 import { parse } from "csv-parse/sync";
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { db, type Tx } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -11,8 +11,14 @@ import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
 import { planSlotForMove } from "../storage/planSlot";
 import { getLocalDateStrSafe } from "../timezone";
+import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
-import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
+import {
+  isCorrectedRecordingSet,
+  isUncorrectedRecordingSet,
+  releaseStravaActivityInTx,
+  stripStravaActivityLabel,
+} from "./deviceActivityLink";
 import { captureMove } from "./missedRecovery/undo";
 import { recordPlanDayMove } from "./planDayMoves";
 
@@ -440,36 +446,16 @@ async function foldLinkedLogsBackOntoPlanDay(
         ? stripStravaActivityLabel(existingLog.notes, existingLog)
         : existingLog.notes;
 
-      // Snapshot the logged sets, then replace the plan day's prescribed
-      // sets with them. We re-map the rows from workoutLogId-owned to
-      // planDayId-owned by inserting fresh rows (the exercise_set_single_
-      // owner_check constraint makes in-place ownership swaps illegal).
-      const loggedSets = await tx
-        .select()
-        .from(exerciseSets)
-        .where(eq(exerciseSets.workoutLogId, existingLog.id))
-        .orderBy(asc(exerciseSets.sortOrder));
-
-      await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, dayId));
-
-      if (loggedSets.length > 0) {
-        // Carry every column across by spreading the row and overriding
-        // only ownership. The previous explicit field list silently
-        // dropped 17 of them — including the L4 weightUnit/distanceUnit
-        // stamps (so re-completing re-read the numbers against the
-        // athlete's CURRENT preference, the exact ~2.2x misread the stamp
-        // exists to prevent), the planned* prescription snapshot, and the
-        // block/step/group structure columns. Spreading also means a
-        // column added later is carried by default rather than quietly
-        // lost here.
-        await tx.insert(exerciseSets).values(
-          loggedSets.map(({ id: _id, workoutLogId: _workoutLogId, planDayId: _planDayId, version: _version, ...rest }) => ({
-            ...rest,
-            workoutLogId: null,
-            planDayId: dayId,
-          })),
-        );
-      }
+      // Snapshot the logged sets, then fold them onto the plan day.
+      const logged = athleteLoggedSets(
+        existingLog,
+        await tx
+          .select()
+          .from(exerciseSets)
+          .where(eq(exerciseSets.workoutLogId, existingLog.id))
+          .orderBy(asc(exerciseSets.sortOrder)),
+      );
+      await foldSetsOntoPlanDay(tx, dayId, existingLog, logged);
 
       // Delete ONLY the log we just copied onto the plan day — its
       // exercise_sets cascade, but they are already on the day above.
@@ -478,9 +464,17 @@ async function foldLinkedLogsBackOntoPlanDay(
       // After the delete: the recording's row can only exist once no other
       // row of the athlete's carries the same activity id. The released row
       // keeps that id, so the next sync neither re-imports the activity nor
-      // re-completes the day the athlete just reopened.
+      // re-completes the day the athlete just reopened. Its set takes the
+      // note the athlete wrote on the recording's set, which was not folded
+      // onto the day (athleteLoggedSets). D12 (CODEBASE_ANALYSIS_2026-10-03)
       if (releasesRecording) {
-        await releaseStravaActivityInTx(tx, existingLog, userId, await userDistanceUnit(userId));
+        await releaseStravaActivityInTx(
+          tx,
+          existingLog,
+          userId,
+          await userDistanceUnit(userId),
+          logged.recordingSetNotes,
+        );
       }
 
       // Any other log that pointed at this day keeps all of its data and
@@ -502,6 +496,253 @@ async function foldLinkedLogsBackOntoPlanDay(
       }
     }
   return carried;
+}
+
+/** What the folded log holds of the athlete's. */
+interface AthleteSets {
+  sets: ExerciseSet[];
+  /**
+   * On a log an auto link created and still carries: the set it synthesised
+   * from the recording, since corrected by the athlete (isCorrectedRecordingSet).
+   * The only running set on the log that stands for prescribed running
+   * (standsFor).
+   */
+  correctedRecordingSet: ExerciseSet | undefined;
+  /**
+   * The note on the recording's set left out of `sets`, for the set the
+   * release writes on the recording's own row (releaseStravaActivityInTx).
+   */
+  recordingSetNotes: string | null;
+}
+
+/**
+ * The log's sets minus the one an auto link synthesised from its recording,
+ * while the athlete has not corrected it (isUncorrectedRecordingSet):
+ * untouched, or saved again with both of the watch's numbers, a note at most.
+ * That set describes the recording, which "Reopen workout" releases to its
+ * own row with the same set, and its note goes with it (recordingSetNotes),
+ * so folding it onto the day as well would put the watch's 6.1 km into the
+ * day's prescription. Unlink reads the set the same way (takeRecordingSet).
+ * Reopen once left out only a set nobody had saved since the link (version 1,
+ * no note), so a run the athlete only annotated was folded onto the day after
+ * the prescribed 8 km while the release wrote it again on the recording's
+ * row: completing the day again counted the 6.1 km twice. Once the athlete
+ * has corrected it, it is theirs and stays (and is named, for standsFor).
+ *
+ * On a log an auto link created whose link has since been undone, the
+ * recording is gone and so is its set (unlinkDeviceActivity takes the
+ * uncorrected one off). A set of the recording's exercise left there is one
+ * the athlete typed or corrected after all, and the recording it would have
+ * corrected was not this session, so none is named. D12
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function athleteLoggedSets(log: WorkoutLog, sets: ExerciseSet[]): AthleteSets {
+  if (!log.autoLinkRecordingOnly || !stillCarriesItsAutoLink(log)) {
+    return { sets, correctedRecordingSet: undefined, recordingSetNotes: null };
+  }
+  const recordingSet = sets.find((set) => isUncorrectedRecordingSet(log, set));
+  if (recordingSet) {
+    return {
+      sets: sets.filter((set) => set !== recordingSet),
+      correctedRecordingSet: undefined,
+      recordingSetNotes: recordingSet.notes,
+    };
+  }
+  return {
+    sets,
+    correctedRecordingSet: sets.find((set) => isCorrectedRecordingSet(log, set)),
+    recordingSetNotes: null,
+  };
+}
+
+/**
+ * Put the folded log's sets on the plan day, as fresh rows the day owns (the
+ * exercise_set_single_owner_check constraint makes in-place ownership swaps
+ * illegal).
+ *
+ * The log's sets are the athlete's version of the session and replace the
+ * day's, so the un-completed day reflects their last-known content. Not so
+ * for a log an auto link created since D12 (`autoLinkRecordingOnly`), linked
+ * still or unlinked and adopted as the athlete's own: it never held the
+ * prescription, so an exercise it lacks was not dropped, only not typed. Its
+ * sets replace the day's per exercise instead (foldOntoPrescription), and
+ * with nothing on it the prescription is left alone. Replacing the whole day
+ * dropped the tempo run for the strides added after it, the runs of a HYROX
+ * day for the wall balls typed on it, and with nothing on the log (an RPE or
+ * a note the only edit) a strength day's 5x5. The marker, not the link
+ * columns, says which log this is: unlink clears those.
+ *
+ * An auto link made before D12 copied the prescription in, so its log has no
+ * marker and replaces the day like the athlete's own. So does a marked log
+ * the athlete has since filled with a copy of the prescription (seed from
+ * plan writes each set with its planned* snapshot): it is the whole session
+ * now. D12 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function foldSetsOntoPlanDay(
+  tx: Tx,
+  dayId: string,
+  log: WorkoutLog,
+  logged: AthleteSets,
+): Promise<void> {
+  if (log.autoLinkRecordingOnly && !logged.sets.some(hasPrescriptionSnapshot)) {
+    await foldOntoPrescription(tx, dayId, logged);
+    return;
+  }
+  await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, dayId));
+  await insertOnPlanDay(tx, dayId, logged.sets);
+}
+
+function hasPrescriptionSnapshot(set: ExerciseSet): boolean {
+  return (
+    set.plannedReps != null ||
+    set.plannedWeight != null ||
+    set.plannedDistance != null ||
+    set.plannedTime != null
+  );
+}
+
+/** A set of the day's prescription, as foldOntoPrescription reads it. */
+type PrescribedSet = Pick<ExerciseSet, "id" | "exerciseName" | "customLabel" | "sortOrder">;
+
+/** One place in the reopened day's order: a prescribed set it keeps, or one of the athlete's. */
+type DaySlot = { kept: PrescribedSet } | { logged: ExerciseSet };
+
+/**
+ * Fold an auto-created log's sets onto the day per exercise: each prescribed
+ * set the athlete logged a version of (standsFor) gives way to theirs, which
+ * take its place in the day's order; every other prescribed set stays where it
+ * is, and a set that stands for nothing prescribed (the strides) goes after
+ * them all. D12 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function foldOntoPrescription(tx: Tx, dayId: string, logged: AthleteSets): Promise<void> {
+  if (logged.sets.length === 0) return;
+  const prescribed = await tx
+    .select({
+      id: exerciseSets.id,
+      exerciseName: exerciseSets.exerciseName,
+      customLabel: exerciseSets.customLabel,
+      sortOrder: exerciseSets.sortOrder,
+    })
+    .from(exerciseSets)
+    .where(eq(exerciseSets.planDayId, dayId))
+    .orderBy(asc(exerciseSets.sortOrder));
+  const slots = slotsOnPrescription(prescribed, logged);
+  const kept = new Set(slots.flatMap((slot) => ("kept" in slot ? [slot.kept.id] : [])));
+  const replaced = prescribed.filter((set) => !kept.has(set.id)).map((set) => set.id);
+  if (replaced.length > 0) await tx.delete(exerciseSets).where(inArray(exerciseSets.id, replaced));
+  const { moved, inserted } = orderSlots(slots);
+  for (const { id, sortOrder } of moved) {
+    await tx
+      .update(exerciseSets)
+      .set({ sortOrder, version: sql`${exerciseSets.version} + 1` })
+      .where(eq(exerciseSets.id, id));
+  }
+  await insertOnPlanDay(tx, dayId, inserted);
+}
+
+/** The reopened day's order: the prescription, with the athlete's sets in place of those they stand for. */
+function slotsOnPrescription(prescribed: PrescribedSet[], logged: AthleteSets): DaySlot[] {
+  const placed = new Set<ExerciseSet>();
+  const slots: DaySlot[] = [];
+  const place = (own: ExerciseSet) => {
+    if (placed.has(own)) return;
+    placed.add(own);
+    slots.push({ logged: own });
+  };
+  for (const set of prescribed) {
+    const theirs = logged.sets.filter((own) => standsFor(own, set, logged));
+    if (theirs.length === 0) slots.push({ kept: set });
+    else theirs.forEach(place);
+  }
+  logged.sets.forEach(place);
+  return slots;
+}
+
+/**
+ * Whether a set on the log is the athlete's version of `prescribed`: the same
+ * exercise, a custom one by its label (every custom exercise is filed as
+ * "custom").
+ *
+ * Running is the exception: a running set the athlete typed stands for no
+ * prescribed run, before unlink or after, whatever the recording was. Nothing
+ * on the log tells a run they typed as their version of the prescribed one
+ * from strides typed as a 6x100 m "run" on an 8 km day, or a cool-down run on
+ * a HYROX day, which add to the session, as they did when the log carried a
+ * copy of the prescription before D12. Matched by name, they deleted the
+ * 8 km, or every prescribed 1 km run; read as additions, the worst case is a
+ * run on the reopened day twice. Only the recording's set the athlete
+ * corrected (correctedRecordingSet) stands for prescribed running, all of
+ * it: a "Run" recording on a tempo-run day measured the tempo run, under the
+ * catalogue's plain "run". Only running is one movement across its catalogue
+ * category; rowing shares one with the sled push, cycling with every custom
+ * exercise. D12 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function standsFor(own: ExerciseSet, prescribed: PrescribedSet, logged: AthleteSets): boolean {
+  if (isRunningExerciseName(own.exerciseName) && isRunningExerciseName(prescribed.exerciseName)) {
+    return own === logged.correctedRecordingSet;
+  }
+  return exerciseIdentity(own) === exerciseIdentity(prescribed);
+}
+
+function exerciseIdentity(set: Pick<ExerciseSet, "exerciseName" | "customLabel">): string {
+  const label = set.exerciseName === "custom" ? set.customLabel?.trim().toLowerCase() : undefined;
+  return label ? `custom:${label}` : set.exerciseName;
+}
+
+/**
+ * Sort orders for the reopened day, in slot order. A kept set keeps its own
+ * unless the athlete's sets before it need the room, so the common fold moves
+ * no prescribed row.
+ */
+function orderSlots(slots: DaySlot[]): {
+  moved: { id: string; sortOrder: number }[];
+  inserted: ExerciseSet[];
+} {
+  const moved: { id: string; sortOrder: number }[] = [];
+  const inserted: ExerciseSet[] = [];
+  let last = -1;
+  for (const slot of slots) {
+    if ("kept" in slot) {
+      const sortOrder = Math.max(slot.kept.sortOrder ?? 0, last + 1);
+      if (sortOrder !== slot.kept.sortOrder) moved.push({ id: slot.kept.id, sortOrder });
+      last = sortOrder;
+    } else {
+      last += 1;
+      inserted.push({ ...slot.logged, sortOrder: last });
+    }
+  }
+  return { moved, inserted };
+}
+
+/**
+ * Insert `sets` as rows the plan day owns. Carry every column across by
+ * spreading the row and overriding only ownership. The previous explicit field
+ * list silently dropped 17 of them — including the L4 weightUnit/distanceUnit
+ * stamps (so re-completing re-read the numbers against the athlete's CURRENT
+ * preference, the exact ~2.2x misread the stamp exists to prevent), the
+ * planned* prescription snapshot, and the block/step/group structure columns.
+ * Spreading also means a column added later is carried by default rather than
+ * quietly lost here.
+ */
+async function insertOnPlanDay(tx: Tx, dayId: string, sets: ExerciseSet[]): Promise<void> {
+  if (sets.length === 0) return;
+  await tx.insert(exerciseSets).values(
+    sets.map(({ id: _id, workoutLogId: _workoutLogId, planDayId: _planDayId, version: _version, ...rest }) => ({
+      ...rest,
+      workoutLogId: null,
+      planDayId: dayId,
+    })),
+  );
+}
+
+/**
+ * Whether the auto link that created this log still stands, so its recording
+ * (and the set synthesised from it) may still be on the log. Unlink adopts
+ * the log as `manual` and clears the link columns; a recording linked to the
+ * adopted log later is attached to it, which writes no set.
+ */
+function stillCarriesItsAutoLink(log: WorkoutLog): boolean {
+  return log.source === "strava" && log.deviceLinkSource === "auto";
 }
 
 async function userDistanceUnit(userId: string): Promise<DistanceUnit> {
@@ -549,7 +790,7 @@ export async function updatePlanDayStatus(
   // Transition path: do the read, transition check, optional log cleanup,
   // and write inside a single transaction so a concurrent cron or workout
   // mutation can't race the check and sneak through a forbidden from-state.
-  const { updatedDay, dateChanged, previousDate } = await db.transaction(async (tx) => {
+  const { updatedDay, dateChanged, previousDate, reopened } = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         planId: planDays.planId,
@@ -597,11 +838,8 @@ export async function updatePlanDayStatus(
     // Running this on same-state idempotent writes (e.g. planned → planned)
     // or transitions that don't involve "completed" would silently destroy
     // user data (R8).
-    // Only clean up the linked workout log when actually leaving "completed".
-    // Running this on same-state idempotent writes (e.g. planned → planned)
-    // or transitions that don't involve "completed" would silently destroy
-    // user data (R8).
-    if (from === "completed" && status !== "completed") {
+    const leavesCompleted = from === "completed" && status !== "completed";
+    if (leavesCompleted) {
       Object.assign(updates, await foldLinkedLogsBackOntoPlanDay(tx, dayId, userId));
     }
 
@@ -615,8 +853,14 @@ export async function updatePlanDayStatus(
     const dateChanged =
       scheduledDate !== undefined && (scheduledDate ?? null) !== (current.scheduledDate ?? null);
 
-    return { updatedDay: row, dateChanged, previousDate: current.scheduledDate };
+    return { updatedDay: row, dateChanged, previousDate: current.scheduledDate, reopened: leavesCompleted };
   });
+
+  // Reopening deletes the linked log, unlinks any others and gives a Strava
+  // recording its own row back, so the cached analytics slices are stale.
+  // After the commit, so a refetch in between cannot re-cache the old rows.
+  // D10 (CODEBASE_ANALYSIS_2026-10-03)
+  if (reopened) invalidateAnalyticsCachesForUser(userId);
 
   if (updatedDay && dateChanged) {
     await recordPlanDayMove(userId, {

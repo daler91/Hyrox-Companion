@@ -17,7 +17,7 @@ import {
 } from "@shared/schema";
 import { normalizeExerciseName } from "@shared/schema/exercises";
 import { restampSetPatch, type UnitPreferences } from "@shared/unitConversion";
-import { and, asc, desc, eq, gt, gte, inArray,isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray,isNotNull, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -159,6 +159,45 @@ function uniqueActivityIds(...rowSets: Array<Array<{ activityId: string | null }
     }
   }
   return [...ids];
+}
+
+/**
+ * A plan-day log an AUTO device link created, whose `main_workout` and
+ * `accessory` are therefore the prescription it copied from the day.
+ *
+ * Since D12 such a log records only what the watch measured: one synthesised
+ * set for a distance sport, none for "Weight Training" or "Workout". Its
+ * `main_workout` and `accessory` are the plan's prescription, not a
+ * description of what was done, so the paths that turn set-less text into
+ * sets (batch reparse, GET /workouts/unstructured, the assisted-migration
+ * backfill) must skip it. Parsing it would write the prescribed 110 kg squat
+ * back in as performed, the invented-sets defect D12 removed.
+ *
+ * Skipped whatever its text columns hold, because nothing the athlete does
+ * rewrites those two. The Review surface's "Workout description" editor
+ * sends PATCH {prescribedMainWorkout} / {prescribedAccessory}, and the
+ * per-log Parse reads `prescribed_*` first; no client path writes a log's
+ * `main_workout`. Comparing `main_workout` with `prescribed_main_workout`
+ * therefore read one description edit as "rewritten" while `main_workout`
+ * was still the plan's text, and the bulk paths, which read `main_workout`,
+ * parsed the prescription. The athlete's own description is parsed by the
+ * per-log Parse; a missing bulk parse costs nothing they wrote, an invented
+ * set costs false volume.
+ *
+ * Two ways to know the log: `auto_link_recording_only`, which the link sets
+ * and unlink keeps, so a log unlinked after an RPE or a note (adopted as
+ * `manual`, link columns cleared, sets none) is still skipped; and, as
+ * before, an auto link that still stands (source "strava", link source
+ * "auto"; an auto attach to the athlete's own log keeps its source, so its
+ * text stays theirs). D12 (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * `IS NOT DISTINCT FROM`: `source` and `device_link_source` are nullable, and
+ * a NULL inside `NOT (...)` would drop ordinary logs too. The marker is NOT
+ * NULL.
+ */
+export function autoLinkedLogStillPrescription(): SQL {
+  const linkStands = sql`${workoutLogs.source} IS NOT DISTINCT FROM 'strava' AND ${workoutLogs.deviceLinkSource} IS NOT DISTINCT FROM 'auto'`;
+  return sql`(${workoutLogs.autoLinkRecordingOnly} OR (${linkStands}))`;
 }
 
 export class WorkoutStorage {
@@ -1113,7 +1152,8 @@ export class WorkoutStorage {
           eq(workoutLogs.userId, userId),
           isNull(exerciseSets.id),
           isNotNull(workoutLogs.mainWorkout),
-          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`
+          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`,
+          not(autoLinkedLogStillPrescription()),
         )
       );
     return results.map(r => r.workoutLog);

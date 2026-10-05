@@ -1,10 +1,11 @@
 import { inSequence } from "@shared/inSequence";
 import { exerciseSets, planDays, structuredExerciseBackfillReviews, trainingPlans, workoutLogs } from "@shared/schema";
-import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, type AnyColumn, asc, desc, eq, gt, isNull, ne, not, or, type SQL, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
+import { autoLinkedLogStillPrescription } from "../storage/workouts";
 import { expandExercisesToPlanDaySetRows, expandExercisesToSetRows } from "./workoutService/parsing";
 
 type OwnerType = "workoutLog" | "planDay";
@@ -48,32 +49,69 @@ async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; 
   });
 }
 
+/**
+ * The characters trimmed off a candidate's text: the ones JavaScript's
+ * String.prototype.trim removes (ECMAScript WhiteSpace and LineTerminator),
+ * so text made only of a vertical tab, a form feed or a no-break space is
+ * empty here as it is to any trim in the app.
+ */
+const TRIMMED_WHITESPACE =
+  " \t\n\v\f\r\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
+
+/**
+ * The text a candidate is parsed from: its main workout and accessory on their
+ * own lines, with the whitespace round them trimmed (TRIMMED_WHITESPACE).
+ * Postgres trim() strips spaces only, so a log with no accessory went to the
+ * parser ending in a newline, and one with neither text went as "\n": queued,
+ * sent to the AI parser, and flagged parse_returned_no_rows.
+ * D12 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function candidateText(mainWorkout: AnyColumn, accessory: AnyColumn): SQL<string> {
+  return sql<string>`btrim(coalesce(${mainWorkout}, '') || E'\\n' || coalesce(${accessory}, ''), ${TRIMMED_WHITESPACE}::text)`;
+}
+
 export async function runAssistedMigrationBackfill(userId: string) {
   // Backfill cutoff for a batch job, not a window any athlete sees. A day
   // either side changes only which rows this sweep picks up, and the next run
   // picks up the rest.
   // eslint-disable-next-line no-restricted-syntax
   const today = new Date().toISOString().slice(0, 10);
+  const logText = candidateText(workoutLogs.mainWorkout, workoutLogs.accessory);
   const candidates = await db.select({
     ownerType: sql<OwnerType>`'workoutLog'`,
     ownerId: workoutLogs.id,
     userId: workoutLogs.userId,
-    text: sql<string>`trim(coalesce(${workoutLogs.mainWorkout}, '') || '\n' || coalesce(${workoutLogs.accessory}, ''))`,
-    hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.workout_log_id = ${workoutLogs.id})::int`,
+    text: logText,
+    // The outer row's id, qualified by hand: in a one-table select Drizzle
+    // writes `${workoutLogs.id}` as a bare "id", which inside this subquery is
+    // exercise_sets.id. That never matched, so every log read as set-less and
+    // the parse added a second copy of the sets a log already had.
+    hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.workout_log_id = ${workoutLogs}.${sql.identifier(workoutLogs.id.name)})::int`,
   }).from(workoutLogs)
-    .where(and(eq(workoutLogs.userId, userId), gt(workoutLogs.date, sql`${today}::date - interval '90 day'`)))
+    .where(and(
+      eq(workoutLogs.userId, userId),
+      gt(workoutLogs.date, sql`${today}::date - interval '90 day'`),
+      // Nothing to parse: left out here, so it takes no place in the batch.
+      ne(logText, ""),
+      // A log an auto link created, linked still or since unlinked: its
+      // main_workout and accessory are the plan's prescription whatever the
+      // athlete edited (their description lives in prescribed_*), so parsing
+      // them would invent performed sets. D12 (CODEBASE_ANALYSIS_2026-10-03)
+      not(autoLinkedLogStillPrescription()),
+    ))
     .orderBy(desc(workoutLogs.date))
     .limit(BATCH_SIZE);
 
+  const planDayText = candidateText(planDays.mainWorkout, planDays.accessory);
   const upcomingPlanCandidates = await db.select({
     ownerType: sql<OwnerType>`'planDay'`,
     ownerId: planDays.id,
     userId: trainingPlans.userId,
-    text: sql<string>`trim(coalesce(${planDays.mainWorkout}, '') || '\n' || coalesce(${planDays.accessory}, ''))`,
+    text: planDayText,
     hasSets: sql<number>`exists(select 1 from ${exerciseSets} es where es.plan_day_id = ${planDays.id})::int`,
   }).from(planDays)
     .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
-    .where(and(eq(trainingPlans.userId, userId), gt(planDays.scheduledDate, today)))
+    .where(and(eq(trainingPlans.userId, userId), gt(planDays.scheduledDate, today), ne(planDayText, "")))
     .orderBy(asc(planDays.scheduledDate))
     .limit(BATCH_SIZE);
 

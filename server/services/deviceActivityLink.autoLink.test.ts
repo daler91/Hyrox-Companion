@@ -126,6 +126,8 @@ describe("createLogFromPlanDayWithStravaInTx — auto link (D12)", () => {
       distanceMeters: 6100,
       mainWorkout: "8 km tempo",
       prescribedMainWorkout: "8 km tempo",
+      // The record that outlives the link: this log never held the prescription.
+      autoLinkRecordingOnly: true,
     });
     // No adherence snapshot: one recording cannot be compared set for set.
     expect(logRow.compliancePct).toBeUndefined();
@@ -149,7 +151,11 @@ describe("createLogFromPlanDayWithStravaInTx — auto link (D12)", () => {
     const { tx, logRow, setRows } = await autoLink(SQUAT_DAY, WEIGHT_TRAINING);
 
     expect(createWorkoutInTx).not.toHaveBeenCalled();
-    expect(logRow).toMatchObject({ planDayId: "pd-squat", deviceLinkSource: "auto" });
+    expect(logRow).toMatchObject({
+      planDayId: "pd-squat",
+      deviceLinkSource: "auto",
+      autoLinkRecordingOnly: true,
+    });
     // No 110 kg squat nobody lifted: no set at all, so no false PR.
     expect(setRows).toEqual([]);
     expect(syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("pd-squat", USER, tx);
@@ -189,6 +195,8 @@ describe("createLogFromPlanDayWithStravaInTx — auto link (D12)", () => {
       undefined,
       USER,
     );
+    // A manual link copies the prescription in, so its log is not marked.
+    expect(vi.mocked(createWorkoutInTx).mock.calls[0][1]).not.toHaveProperty("autoLinkRecordingOnly");
     expect(tx.insert).not.toHaveBeenCalled();
   });
 });
@@ -212,6 +220,7 @@ describe("hasAthleteEdits — an auto link since D12", () => {
       stravaActivityId: "9001",
       deviceLinkSource: "auto",
       deviceLinkConfidence: 0.8,
+      autoLinkRecordingOnly: true,
       deviceActivity: {
         provider: "strava",
         raw: SHORT_RUN,
@@ -233,11 +242,13 @@ describe("hasAthleteEdits — an auto link since D12", () => {
     plannedDistance: null,
     time: 30,
     plannedTime: null,
+    distanceUnit: "m",
   } as const;
 
   const untouched: LinkCreatedLogContents = {
     planDay: TEMPO_DAY,
     sets: [RECORDED_SET],
+    blocks: 0,
     scoredBlocks: 0,
   };
 
@@ -256,18 +267,48 @@ describe("hasAthleteEdits — an auto link since D12", () => {
   });
 
   it.each<[string, LinkCreatedLogContents["sets"]]>([
-    ["an edited recording set", [{ ...RECORDED_SET, version: 2 }]],
+    ["a corrected recording set", [{ ...RECORDED_SET, distance: 6000, version: 2 }]],
+    // The watch's numbers, but labelled as part of their session (InlineSetEditor).
+    ["a labelled recording set", [{ ...RECORDED_SET, customLabel: "Tempo with hills", version: 2 }]],
+    ["a recording set put on a structure step", [{ ...RECORDED_SET, blockId: "b-1", stepNumber: 1, version: 2 }]],
+    // The prescription copied in by the athlete (seed from plan): not the auto link's shape.
+    ["a copy of the prescription", [{ ...RECORDED_SET, distance: 8000, plannedDistance: 8000, time: null }]],
     [
       "a lift typed in its place",
       [{ ...RECORDED_SET, exerciseName: "back_squat", reps: 5, weight: 110 }],
     ],
     ["a set of other work", [{ ...RECORDED_SET, exerciseName: "rowing" }]],
+    // Version 1 like the recording's set, which they deleted; not its distance.
+    ["a run typed in place of the recording's", [{ ...RECORDED_SET, distance: 5000 }]],
     ["an added set", [RECORDED_SET, { ...RECORDED_SET, distance: 1000 }]],
   ])("sees %s", (_label, sets) => {
     expect(hasAthleteEdits(autoLinkedLog(), { ...untouched, sets })).toBe(true);
   });
 
-  it("sees sets re-derived by an edit once the adherence snapshot has been taken", () => {
-    expect(hasAthleteEdits(autoLinkedLog({ plannedSetCount: 1 }), untouched)).toBe(true);
+  // D12 (CODEBASE_ANALYSIS_2026-10-03): a note on the run is about the
+  // recording and leaves with it on unlink. Read as an edit, it kept an empty
+  // log that still completed the day.
+  it("finds nothing when the athlete only wrote a note on the recording's set", () => {
+    const noted = { ...RECORDED_SET, version: 2, notes: "Windy" };
+    expect(hasAthleteEdits(autoLinkedLog(), { ...untouched, sets: [noted] })).toBe(false);
+  });
+
+  // The set PATCH re-derives an adherence snapshot (refreshDerivedStateAfterLoggedSetChange),
+  // and moving the log back onto its day writes one: derived from the link's own set.
+  it("does not read an adherence snapshot taken from the link's own set as an edit", () => {
+    const rederived = autoLinkedLog({ plannedSetCount: 1, actualSetCount: 1, compliancePct: 100 });
+    expect(hasAthleteEdits(rederived, untouched)).toBe(false);
+  });
+
+  // D12 (CODEBASE_ANALYSIS_2026-10-03): the auto link writes no structure, so
+  // every block on its log is the athlete's. Saving one leaves the recording's
+  // set off its steps, so counting only scored blocks, unlink deleted the log
+  // and the structure with it.
+  it.each<[string, Partial<LinkCreatedLogContents>]>([
+    ["an unscored block", { blocks: 1 }],
+    ["an unscored block beside a note on the recording's set", { blocks: 1, sets: [{ ...RECORDED_SET, version: 2, notes: "Windy" }] }],
+    ["a scored block", { blocks: 1, scoredBlocks: 1 }],
+  ])("sees %s the athlete built on it", (_label, contents) => {
+    expect(hasAthleteEdits(autoLinkedLog(), { ...untouched, ...contents })).toBe(true);
   });
 });

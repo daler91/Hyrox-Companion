@@ -45,6 +45,7 @@ export function makeWorkoutLog(overrides: Partial<WorkoutLog> = {}): WorkoutLog 
     timeOfDayMin: null,
     deviceLinkSource: null,
     deviceLinkConfidence: null,
+    autoLinkRecordingOnly: false,
     deviceActivity: null,
     suggestedPlanDayId: null,
     suggestedWorkoutLogId: null,
