@@ -67,15 +67,20 @@ const RED_FLAG_SYMPTOM_PATTERNS = [
 ];
 
 // One intensifier right before "faint", removed so the lead-word patterns
-// above read "felt pretty faint" as "felt faint". Two lists rather than one
-// pattern, to keep each simple enough to read.
+// above read "felt pretty faint" as "felt faint". They run on text whose
+// whitespace is already single spaces, so each matches one literal space and
+// cannot backtrack over a run of them. Two lists rather than one pattern, to
+// keep each simple enough to read.
 const FAINT_INTENSIFIER_PATTERNS = [
-  /\s+(?:really|very|quite|so|slightly|pretty|extremely|super|rather|somewhat|totally|kinda)(?=\s+faint\b)/gi,
-  /\s+(?:a\s+(?:bit|little|tad)|(?:kind|sort)\s+of)(?=\s+faint\b)/gi,
+  / (?:really|very|quite|so|slightly|pretty|extremely|super|rather|somewhat|totally|kinda)(?= faint\b)/gi,
+  / (?:a (?:bit|little|tad)|(?:kind|sort) of)(?= faint\b)/gi,
 ];
 
 function hasRedFlagSymptom(text: string): boolean {
-  const plain = FAINT_INTENSIFIER_PATTERNS.reduce((out, pattern) => out.replace(pattern, ""), text);
+  const plain = FAINT_INTENSIFIER_PATTERNS.reduce(
+    (out, pattern) => out.replaceAll(pattern, ""),
+    text.replaceAll(/\s+/g, " "),
+  );
   return RED_FLAG_SYMPTOM_PATTERNS.some((pattern) => pattern.test(plain));
 }
 

@@ -447,6 +447,11 @@ async function refreshBackingFood(
     .where(eq(foods.id, current.id));
 }
 
+interface DependentRecipes {
+  reached: Map<string, RecipeRef>;
+  usedBy: Map<string, Set<string>>;
+}
+
 /**
  * The athlete's recipes that use `foodId`, directly or through other recipes,
  * keyed by backing food in the order found, plus `usedBy`: for each food
@@ -454,30 +459,43 @@ async function refreshBackingFood(
  * `foodId` itself is never reached, even when a recipe cycle leads back to it.
  */
 async function collectDependentRecipes(tx: DbExecutor, userId: string, foodId: string) {
-  const reached = new Map<string, RecipeRef>();
-  const usedBy = new Map<string, Set<string>>();
-  let frontier = [foodId];
-  while (frontier.length > 0) {
-    const uses = await tx
-      .select({
-        ingredientFoodId: recipeIngredients.foodId,
-        id: recipes.id,
-        foodId: recipes.foodId,
-        servings: recipes.servings,
-      })
-      .from(recipes)
-      .innerJoin(recipeIngredients, eq(recipeIngredients.recipeId, recipes.id))
-      .where(and(inArray(recipeIngredients.foodId, frontier), eq(recipes.userId, userId)));
-    frontier = [];
-    for (const { ingredientFoodId, ...recipe } of uses) {
-      const users = usedBy.get(ingredientFoodId) ?? new Set<string>();
-      usedBy.set(ingredientFoodId, users.add(recipe.foodId));
-      if (recipe.foodId === foodId || reached.has(recipe.foodId)) continue;
-      reached.set(recipe.foodId, recipe);
-      frontier.push(recipe.foodId);
-    }
+  const found: DependentRecipes = { reached: new Map(), usedBy: new Map() };
+  await collectLevel(tx, userId, foodId, [foodId], found);
+  return found;
+}
+
+/**
+ * One level of collectDependentRecipes: the athlete's recipes that use any of
+ * `frontier`, then the level above them. Each level needs the one before it,
+ * so they run one after another, one query per level.
+ */
+async function collectLevel(
+  tx: DbExecutor,
+  userId: string,
+  foodId: string,
+  frontier: string[],
+  found: DependentRecipes,
+): Promise<void> {
+  if (frontier.length === 0) return;
+  const uses = await tx
+    .select({
+      ingredientFoodId: recipeIngredients.foodId,
+      id: recipes.id,
+      foodId: recipes.foodId,
+      servings: recipes.servings,
+    })
+    .from(recipes)
+    .innerJoin(recipeIngredients, eq(recipeIngredients.recipeId, recipes.id))
+    .where(and(inArray(recipeIngredients.foodId, frontier), eq(recipes.userId, userId)));
+  const next: string[] = [];
+  for (const { ingredientFoodId, ...recipe } of uses) {
+    const users = found.usedBy.get(ingredientFoodId) ?? new Set<string>();
+    found.usedBy.set(ingredientFoodId, users.add(recipe.foodId));
+    if (recipe.foodId === foodId || found.reached.has(recipe.foodId)) continue;
+    found.reached.set(recipe.foodId, recipe);
+    next.push(recipe.foodId);
   }
-  return { reached, usedBy };
+  await collectLevel(tx, userId, foodId, next, found);
 }
 
 /**
@@ -549,10 +567,23 @@ export async function refreshRecipesAfterMacroEdit(
 ): Promise<void> {
   if (!changesMacros(current, next)) return;
   const { reached, usedBy } = await collectDependentRecipes(tx, userId, current.id);
-  // In order, and inside one transaction: each refresh reads the ones before it.
-  for (const recipe of refreshOrder(reached, usedBy)) {
-    await refreshBackingFood(tx, userId, recipe);
-  }
+  await refreshInOrder(tx, userId, refreshOrder(reached, usedBy), 0);
+}
+
+/**
+ * Refresh `order` from `index` on, one recipe at a time and inside the edit's
+ * transaction: each refresh reads the ones before it.
+ */
+async function refreshInOrder(
+  tx: DbExecutor,
+  userId: string,
+  order: readonly RecipeRef[],
+  index: number,
+): Promise<void> {
+  const recipe = order.at(index);
+  if (!recipe) return;
+  await refreshBackingFood(tx, userId, recipe);
+  await refreshInOrder(tx, userId, order, index + 1);
 }
 
 

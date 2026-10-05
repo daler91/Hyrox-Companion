@@ -52,15 +52,15 @@ const request: TextAiRequest = {
   feature: "coach_chat",
 };
 
-/** Read a stream to its end, returning the error it threw, if any. */
-async function drain(): Promise<unknown> {
+/** Read a stream to its end: the text it gave, and the error it threw, if any. */
+async function drain(): Promise<{ text: string; error: unknown }> {
   const chunks: string[] = [];
   try {
     for await (const chunk of streamText(request)) chunks.push(chunk);
   } catch (error) {
-    return error;
+    return { text: chunks.join(""), error };
   }
-  return null;
+  return { text: chunks.join(""), error: null };
 }
 
 describe("the text facade records each call's usage", () => {
@@ -107,7 +107,7 @@ describe("the text facade records each call's usage", () => {
       };
     });
 
-    await expect(drain()).resolves.toBeNull();
+    await expect(drain()).resolves.toEqual({ text: "Solid week.", error: null });
 
     expect(recordAiUsage).toHaveBeenCalledOnce();
     expect(recordAiUsage).toHaveBeenCalledWith(
@@ -130,7 +130,10 @@ describe("the text facade records each call's usage", () => {
       throw new Error("503 upstream unavailable");
     });
 
-    await expect(drain()).resolves.toMatchObject({ message: "503 upstream unavailable" });
+    await expect(drain()).resolves.toMatchObject({
+      text: "Solid ",
+      error: { message: "503 upstream unavailable" },
+    });
 
     expect(recordAiUsage).toHaveBeenCalledWith(
       "user-1",
