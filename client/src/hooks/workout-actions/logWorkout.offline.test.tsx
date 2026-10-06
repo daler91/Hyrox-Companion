@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, type QueryKey } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,8 +31,9 @@ vi.mock("@/lib/queryClient", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/queryClient")>()),
   queryClient: {
     cancelQueries: (...args: unknown[]) => queryClient.cancelQueries(...(args as [never])),
-    getQueryData: (...args: unknown[]) => queryClient.getQueryData(...(args as [never])),
-    setQueryData: (...args: unknown[]) => queryClient.setQueryData(...(args as [never, never])),
+    getQueryData: (...args: unknown[]) => queryClient.getQueryData(...(args as [QueryKey])),
+    setQueryData: (...args: unknown[]) =>
+      queryClient.setQueryData(...(args as [QueryKey, unknown])),
     setQueriesData: (...args: unknown[]) => queryClient.setQueriesData(...(args as [never, never])),
     invalidateQueries: (...args: unknown[]) => queryClient.invalidateQueries(...(args as [never])),
   },
@@ -105,7 +106,9 @@ describe("logging a planned session offline", () => {
     setOnline(true);
   });
 
-  afterEach(() => setOnline(true));
+  afterEach(() => {
+    setOnline(true);
+  });
 
   it("queues the log when the browser is offline and hands the caller onQueued", async () => {
     setOnline(false);

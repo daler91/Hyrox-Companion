@@ -123,21 +123,21 @@ function mockFiveStructuredDays(): void {
     }),
   );
   const setsByDay = new Map(days.map((day) => [day.id, setsFor(day.id)]));
-  vi.mocked(storage.planProposals.getById).mockResolvedValue(
+  vi.mocked(storage.planProposals).getById.mockResolvedValue(
     proposalRow(days.map(structuredChange)),
   );
-  vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue(days);
-  vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(setsByDay);
-  vi.mocked(storage.plans.lockPlanDaysWithSets).mockResolvedValue({ days, setsByDay });
-  vi.mocked(storage.users.getUser).mockResolvedValue({
+  vi.mocked(storage.plans).getPlanDaysByIds.mockResolvedValue(days);
+  vi.mocked(storage.workouts).getExerciseSetsByPlanDays.mockResolvedValue(setsByDay);
+  vi.mocked(storage.plans).lockPlanDaysWithSets.mockResolvedValue({ days, setsByDay });
+  vi.mocked(storage.users).getUser.mockResolvedValue({
     weightUnit: "kg",
     distanceUnit: "km",
   } as never);
-  vi.mocked(storage.plans.updatePlanDay).mockImplementation((id, updates) => {
+  vi.mocked(storage.plans).updatePlanDay.mockImplementation((id, updates) => {
     const day = days.find((candidate) => candidate.id === id);
     return Promise.resolve(day ? { ...day, ...updates } : day);
   });
-  vi.mocked(storage.planProposals.markApplied).mockResolvedValue(proposalRow([], "applied"));
+  vi.mocked(storage.planProposals).markApplied.mockResolvedValue(proposalRow([], "applied"));
 }
 
 /** Each parse takes a while, later days less than earlier ones, so they finish out of order. */
@@ -190,7 +190,7 @@ describe("applyPlanAdjustmentProposal re-parsing several table-backed days", () 
     );
     // Every parse ran before the transaction locked the days, none inside it (D45).
     const parseOrders = vi.mocked(parseStructuredPlanDaySuggestionRows).mock.invocationCallOrder;
-    const [lockOrder] = vi.mocked(storage.plans.lockPlanDaysWithSets).mock.invocationCallOrder;
+    const [lockOrder] = vi.mocked(storage.plans).lockPlanDaysWithSets.mock.invocationCallOrder;
     expect(Math.max(...parseOrders)).toBeLessThan(lockOrder);
   });
 
@@ -205,9 +205,9 @@ describe("applyPlanAdjustmentProposal re-parsing several table-backed days", () 
       .mocked(parseStructuredPlanDaySuggestionRows)
       .mock.calls.map((call) => call[0].workoutId);
     expect(parsedDays).toEqual(["day-1", "day-2", "day-3"]);
-    expect(storage.plans.lockPlanDaysWithSets).not.toHaveBeenCalled();
-    expect(storage.plans.updatePlanDay).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).lockPlanDaysWithSets).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.plans).updatePlanDay.mock.calls).toEqual([]);
     // Left pending, not invalidated: a retry may succeed.
-    expect(storage.planProposals.resolve).not.toHaveBeenCalled();
+    expect(vi.mocked(storage.planProposals).resolve.mock.calls).toEqual([]);
   });
 });

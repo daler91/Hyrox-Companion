@@ -649,8 +649,10 @@ describe("usePreferencesForm", () => {
       action?: { props: { onClick: () => void } };
     };
 
+    const undo = toastCall.action?.props.onClick;
+    if (!undo) throw new Error("the MAF change toast has no Undo action");
     act(() => {
-      toastCall.action!.props.onClick();
+      undo();
     });
 
     await waitFor(() => {

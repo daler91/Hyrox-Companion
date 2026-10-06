@@ -410,29 +410,46 @@ function PersonalPortions({
           <span className="min-w-0 truncate">
             {s.label} · {Math.round(s.grams)} g
           </span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0"
-                  aria-label={`Remove ${s.label}`}
-                  disabled={disabled}
-                  onClick={() => onRemove(s)}
-                  data-testid="button-remove-portion"
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Remove {s.label}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <RemovePortionButton serving={s} disabled={disabled} onRemove={onRemove} />
         </div>
       ))}
     </div>
+  );
+}
+
+/** One portion's remove button, with a tooltip naming the portion. */
+function RemovePortionButton({
+  serving,
+  disabled,
+  onRemove,
+}: {
+  readonly serving: FoodServing;
+  readonly disabled: boolean;
+  readonly onRemove: (serving: FoodServing) => void;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            aria-label={`Remove ${serving.label}`}
+            disabled={disabled}
+            onClick={() => {
+              onRemove(serving);
+            }}
+            data-testid="button-remove-portion"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Remove {serving.label}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

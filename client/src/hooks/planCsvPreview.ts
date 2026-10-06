@@ -115,7 +115,8 @@ function column(record: readonly string[], index: number): string {
  */
 export function parsePlanCsvPreview(csvContent: string): PlanCsvPreview {
   const [header, ...dataRows] = parseCsvRecords(csvContent);
-  if (!header || dataRows.length === 0) return { rows: [], remainingRows: 0 };
+  // No data rows also covers an empty file, where there is no header either.
+  if (dataRows.length === 0) return { rows: [], remainingRows: 0 };
 
   const headers = header.map((name) => name.toLowerCase());
   const weekIdx = headers.findIndex((name) => name.includes("week"));

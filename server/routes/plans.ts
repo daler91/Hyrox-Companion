@@ -535,7 +535,8 @@ protectedPatch(
   async (req: ExpressRequest<{ dayId: string }, Record<string, never>, ExerciseSetOrderBody>, res: Response) => {
     const sets = await storage.workouts.mutateExerciseSetOrder({ kind: "planDay", ownerId: req.params.dayId }, req.body.setIds, getUserId(req));
     if (!sets) {
-      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
+      sendNotFound(res, PLAN_DAY_NOT_FOUND);
+      return;
     }
     res.json(sets);
   },

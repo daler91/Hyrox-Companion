@@ -2,7 +2,6 @@ import { is } from "drizzle-orm";
 import { getTableConfig, type Index, PgDialect, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import * as allTables from "./tables";
 import { chatMessages, foodServings, stravaConnections, users } from "./tables";
 
 /** The column names an index covers, in order; an expression reads as "". */
@@ -38,13 +37,14 @@ function wherePredicate(index: Index): string | null {
 }
 
 describe("foreign keys are indexed (PF18, CODEBASE_ANALYSIS_2026-10-03)", () => {
-  it("leads an index with every foreign-key column", () => {
+  it("leads an index with every foreign-key column", async () => {
     // Deleting a parent row finds its referencing rows by the FK column, both
     // to run the ON DELETE action and to check a RESTRICT. With no index
     // leading with that column Postgres scans the whole referencing table once
     // per deleted parent: deleting a plan scanned chat_messages once per
     // proposal. Index the column in shared/schema/tables.ts (a partial index
     // on `col IS NOT NULL` serves a mostly-NULL column).
+    const allTables = await import("./tables");
     const unindexed: string[] = [];
     for (const table of Object.values(allTables)) {
       if (!is(table, PgTable)) continue;

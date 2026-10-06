@@ -52,7 +52,7 @@ function toRows(items: ParsedFoodItem[]): ReviewRow[] {
   }));
 }
 
-function isLoggable(row: ReviewRow): boolean {
+function isLoggable(row: ReviewRow): row is ReviewRow & { food: Food } {
   return row.food !== null && Number.isFinite(row.quantityG) && row.quantityG > 0;
 }
 
@@ -73,7 +73,7 @@ function ReviewRowCard({
   readonly onSwapToggle: (open: boolean) => void;
   readonly onSwap: (food: Food) => void;
 }) {
-  const preview = row.food && isLoggable(row) ? previewNutrition(row.food, row.quantityG) : null;
+  const preview = isLoggable(row) ? previewNutrition(row.food, row.quantityG) : null;
 
   return (
     <div className="space-y-2 rounded-md border p-3" data-testid={`meal-review-row-${index}`}>
@@ -193,19 +193,18 @@ function ReviewForm({
   const submit = () => {
     if (loggable.length === 0) return;
     const items = loggable.map((r) => ({
-      // food is non-null for loggable rows (isLoggable guards it).
-      foodId: r.food!.id,
+      foodId: r.food.id,
       quantityG: r.quantityG,
       mealType: r.mealType,
       parseConfidence: r.confidence,
     }));
     // The server dates the batch by the profile's timezone (CL65).
-    runSynced(() =>
+    runSynced(() => {
       logBatch.mutate(
         { entryMethod, rawInput: result.rawInput, loggedAt: loggedAtForDate(date), items },
         { onSuccess: onClose },
-      ),
-    );
+      );
+    });
   };
 
   return (

@@ -68,8 +68,14 @@ describe("executePlanGeneration when a chunk fails", () => {
       const isFirst = signals.length === 1;
       return new Promise((resolve, reject) => {
         // The first chunk fails; the others run until they are cancelled.
-        if (isFirst) setTimeout(() => reject(failure), 1);
-        signal.addEventListener("abort", () => reject(new Error("aborted")));
+        if (isFirst) {
+          setTimeout(() => { // DevSkim: ignore DS172411
+            reject(failure);
+          }, 1);
+        }
+        signal.addEventListener("abort", () => {
+          reject(new Error("aborted"));
+        });
       });
     });
 
@@ -79,11 +85,10 @@ describe("executePlanGeneration when a chunk fails", () => {
     });
 
     // The three chunks already running, of twelve.
-    expect(mocks.generateJsonText.mock.calls.map(([request]) => request.label)).toEqual([
-      "planGeneration:w1-2",
-      "planGeneration:w3-4",
-      "planGeneration:w5-6",
-    ]);
+    const labels = mocks.generateJsonText.mock.calls.map(
+      ([request]) => (request as { label: string }).label,
+    );
+    expect(labels).toEqual(["planGeneration:w1-2", "planGeneration:w3-4", "planGeneration:w5-6"]);
     expect(signals.every((signal) => signal.aborted)).toBe(true);
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith(

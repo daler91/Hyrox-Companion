@@ -154,7 +154,8 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   protectedPatch(router, "/api/v1/workouts/:id/set-order", { limiter: rateLimiter("setOrder", 30), middleware: [validateBody(exerciseSetOrderBodySchema)] }, async (req: Request<{ id: string }, Record<string, never>, ExerciseSetOrderBody>, res: Response) => {
     const sets = await storage.workouts.mutateExerciseSetOrder({ kind: "workoutLog", ownerId: req.params.id }, req.body.setIds, getUserId(req));
     if (!sets) {
-      return sendNotFound(res, WORKOUT_NOT_FOUND);
+      sendNotFound(res, WORKOUT_NOT_FOUND);
+      return;
     }
     res.json(sets);
   });

@@ -90,13 +90,17 @@ describe("useLogTimezoneSync", () => {
     const write = vi.fn();
     const { result, queryClient } = renderSync(LONDON);
 
-    act(() => result.current.runSynced(write));
+    act(() => {
+      result.current.runSynced(write);
+    });
 
     expect(write).not.toHaveBeenCalled();
     expect(result.current.isSyncing).toBe(true);
     expect(update).toHaveBeenCalledWith({ userTimezone: NEW_YORK });
 
-    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(write).toHaveBeenCalledTimes(1);
+    });
     expect(result.current.isSyncing).toBe(false);
     expect(queryClient.getQueryData<User>(QUERY_KEYS.authUser)?.userTimezone).toBe(NEW_YORK);
     expect(toastMock).not.toHaveBeenCalled();
@@ -113,9 +117,13 @@ describe("useLogTimezoneSync", () => {
     const write = vi.fn();
     const { result } = renderSync(LONDON);
 
-    act(() => result.current.runSynced(write));
+    act(() => {
+      result.current.runSynced(write);
+    });
 
-    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledTimes(1);
+    });
     expect(write).not.toHaveBeenCalled();
     expect(result.current.isSyncing).toBe(false);
 
@@ -157,10 +165,14 @@ describe("useLogTimezoneSync", () => {
     const write = vi.fn();
     const { result } = renderSync(stale);
 
-    act(() => result.current.runSynced(write));
+    act(() => {
+      result.current.runSynced(write);
+    });
 
     expect(update).toHaveBeenCalledWith({ userTimezone: loadedIn });
     expect(update).not.toHaveBeenCalledWith({ userTimezone: flownTo });
-    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(write).toHaveBeenCalledTimes(1);
+    });
   });
 });
