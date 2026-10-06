@@ -949,9 +949,9 @@ export class PlanStorage {
       return count;
     });
     // Zones nobody is in any more are dropped, so the record stays as long as
-    // the zone list.
+    // the zone list. Deleting the entry being visited is safe mid-iteration.
     const live = new Set(zones.map(({ tz }) => tz));
-    for (const tz of [...this.sweptZoneDates.keys()]) {
+    for (const tz of this.sweptZoneDates.keys()) {
       if (!live.has(tz)) this.sweptZoneDates.delete(tz);
     }
     return marked.reduce((total, count) => total + count, 0);

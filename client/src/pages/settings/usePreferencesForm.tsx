@@ -97,9 +97,8 @@ const UNIT_CONVERTED_QUERY_KEYS = [
 
 /** Whether a save changed the weight or distance unit (CL67). */
 function unitsChanged(before: PreferencesSnapshot | null, saved: PreferencesSnapshot): boolean {
-  return (
-    !before || before.weightUnit !== saved.weightUnit || before.distanceUnit !== saved.distanceUnit
-  );
+  if (!before) return true;
+  return before.weightUnit !== saved.weightUnit || before.distanceUnit !== saved.distanceUnit;
 }
 
 /** Refreshes the reads a saved preference feeds. */
