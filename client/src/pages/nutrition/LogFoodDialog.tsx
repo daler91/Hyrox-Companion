@@ -352,7 +352,9 @@ function AddPortionForm({
         <Input
           placeholder="e.g. 1 slice"
           value={label}
-          onChange={(e) => setLabel(e.target.value)}
+          onChange={(e) => {
+            setLabel(e.target.value);
+          }}
           aria-label="Portion label"
           data-testid="input-portion-label"
         />
@@ -364,7 +366,9 @@ function AddPortionForm({
           placeholder="grams"
           className="w-24"
           value={grams}
-          onChange={(e) => setGrams(e.target.value)}
+          onChange={(e) => {
+            setGrams(e.target.value);
+          }}
           aria-label="Portion size in grams"
           data-testid="input-portion-grams"
         />
@@ -624,12 +628,12 @@ function LogFoodForm({
     if (state.mode === "create") {
       const { food, entryMethod } = state;
       // The server dates a new entry by the profile's timezone (CL65).
-      runSynced(() =>
+      runSynced(() => {
         logFood.mutate(
           { foodId: food.id, quantityG, mealType, loggedAt: loggedAtForDate(date), entryMethod },
           { onSuccess: onClose },
-        ),
-      );
+        );
+      });
     } else {
       // An untouched amount is left out, so the stored grams stand (CL63).
       updateLog.mutate(
@@ -660,7 +664,9 @@ function LogFoodForm({
             inputMode="decimal"
             className="w-24"
             value={Number.isFinite(count) ? count : ""}
-            onChange={(e) => amount.editCount(Number(e.target.value))}
+            onChange={(e) => {
+              amount.editCount(Number(e.target.value));
+            }}
             data-testid="input-quantity"
           />
           <Select value={selectedUnit?.value ?? "g"} onValueChange={handleUnitChange}>
@@ -688,7 +694,9 @@ function LogFoodForm({
           <AddPortionForm
             foodId={foodId}
             onAdded={handlePortionAdded}
-            onCancel={() => setShowAddPortion(false)}
+            onCancel={() => {
+              setShowAddPortion(false);
+            }}
           />
         )}
 
