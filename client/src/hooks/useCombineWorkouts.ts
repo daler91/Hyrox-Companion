@@ -5,6 +5,7 @@ import { useCallback,useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { EXERCISE_HISTORY_QUERY_PREFIX } from "@/lib/workoutInvalidation";
 
 export function useCombineWorkouts() {
   const { toast } = useToast();
@@ -36,6 +37,15 @@ export function useCombineWorkouts() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
+      // The "Last time" history still names the sources' ids, so the merged
+      // workout's own sheet would quote its sets back as the last session.
+      // CL43 (CODEBASE_ANALYSIS_2026-10-03)
+      queryClient
+        .invalidateQueries({ queryKey: EXERCISE_HISTORY_QUERY_PREFIX })
+        .catch(() => undefined);
+      // Device-imported sources go to the recycle bin before they are deleted.
+      // CL50 (CODEBASE_ANALYSIS_2026-10-03)
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.recycleBin }).catch(() => undefined);
       setCombiningEntry(null);
       setCombineSecondEntry(null);
       setShowCombineDialog(false);

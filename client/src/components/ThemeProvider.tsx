@@ -1,5 +1,7 @@
 import { createContext, useCallback,useContext, useEffect, useMemo, useState } from "react";
 
+import { getStorageItem, setStorageItem } from "@/lib/safeStorage";
+
 type Theme = "light" | "dark";
 
 interface ThemeContextType {
@@ -10,10 +12,13 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Through safeStorage: with site data blocked, reading `localStorage` itself
+  // throws, and this renders on every route, so the landing page fell to the
+  // error boundary. CL60 (CODEBASE_ANALYSIS_2026-10-03)
   const [theme, setTheme] = useState<Theme>(() => {
     if (globalThis.window !== undefined) {
-      const stored = localStorage.getItem("theme") as Theme;
-      if (stored) return stored;
+      const stored = getStorageItem("localStorage", "theme");
+      if (stored === "light" || stored === "dark") return stored;
       return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
     return "light";
@@ -23,7 +28,7 @@ export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
-    localStorage.setItem("theme", theme);
+    setStorageItem("localStorage", "theme", theme);
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

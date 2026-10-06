@@ -58,11 +58,10 @@ describe("useSuggestions error handling", () => {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
-  const renderSuggestionsHook = (timeline = []) => {
+  const renderSuggestionsHook = () => {
     return renderHook(
       () =>
         useSuggestions({
-          timeline,
           addLocalMessage: mockAddLocalMessage,
           saveMessage: mockSaveMessage,
         }),
@@ -154,12 +153,7 @@ describe("useSuggestions error handling", () => {
         new Error("Failed to apply")
       );
 
-      // Mock timeline with the workout
-      const timeline: any = [
-        { planDayId: "workout-1" }
-      ];
-
-      const { result } = renderSuggestionsHook(timeline);
+      const { result } = renderSuggestionsHook();
 
       // We need to await the execution since it's an async function
       await act(async () => {
@@ -174,9 +168,10 @@ describe("useSuggestions error handling", () => {
       );
     });
 
-    it("handles error when workout is not found in timeline", async () => {
-      // Empty timeline
-      const { result } = renderSuggestionsHook([]);
+    it("says the workout is gone when the server cannot find its plan day", async () => {
+      const body = JSON.stringify({ error: "Plan day not found", code: "NOT_FOUND" });
+      vi.mocked(api.timeline.applySuggestion).mockRejectedValueOnce(new Error(`404: ${body}`));
+      const { result } = renderSuggestionsHook();
 
       await act(async () => {
         await result.current.handleApplySuggestion(mockSuggestion);
@@ -185,7 +180,30 @@ describe("useSuggestions error handling", () => {
       expect(mockAddLocalMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           role: "assistant",
-          content: "Could not find the workout for Leg Day (2024-01-01). The suggestion is still available to retry.",
+          content: "Could not find the workout for Leg Day (2024-01-01). It may have been removed from your plan.",
+        })
+      );
+      expect(result.current.applyingId).toBeNull();
+    });
+
+    // CL36 (CODEBASE_ANALYSIS_2026-10-03): the day was looked up in the
+    // plan-filtered, paged timeline, so with another plan selected every
+    // apply failed before it reached the server.
+    it("applies a suggestion whose day is on a plan the timeline is not showing", async () => {
+      vi.mocked(api.timeline.applySuggestion).mockResolvedValueOnce({ applied: true, structured: false });
+      const { result } = renderSuggestionsHook();
+
+      await act(async () => {
+        await result.current.handleApplySuggestion(mockSuggestion);
+      });
+
+      expect(api.timeline.applySuggestion).toHaveBeenCalledWith(
+        expect.objectContaining({ workoutId: "workout-1" })
+      );
+      expect(mockAddLocalMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: "assistant",
+          content: "Applied suggestion to Leg Day (2024-01-01). The main workout has been updated.",
         })
       );
     });
@@ -196,11 +214,7 @@ describe("useSuggestions error handling", () => {
         message: "Server rejected the suggestion",
       } as any);
 
-      const timeline: any = [
-        { planDayId: "workout-1" }
-      ];
-
-      const { result } = renderSuggestionsHook(timeline);
+      const { result } = renderSuggestionsHook();
 
       await act(async () => {
         await result.current.handleApplySuggestion(mockSuggestion);

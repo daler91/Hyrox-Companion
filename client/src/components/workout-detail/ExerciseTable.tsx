@@ -76,6 +76,13 @@ interface ExerciseTableProps {
   readonly currentWorkoutLogId?: string | null;
   readonly onOpenConversionHelper?: () => void;
   readonly structureBlocks?: StructureBlockInput[];
+  /**
+   * The owner's one-request order save, for a table whose rows are saved: a
+   * drag then shows the new order at once and saves all of it as one of the
+   * owner's set writes (PF5, CODEBASE_ANALYSIS_2026-10-03). Omit for a draft
+   * table, whose drag goes through `onUpdateSet` per moved set.
+   */
+  readonly onSaveOrder?: (setIds: string[]) => void;
 }
 
 /**
@@ -101,6 +108,7 @@ export function ExerciseTable({
   currentWorkoutLogId,
   onOpenConversionHelper,
   structureBlocks = [],
+  onSaveOrder,
 }: ExerciseTableProps) {
   // Every read below this line (prescription line, planned diffs, the inline
   // editor, last time and the next-target suggestion) sees values in the
@@ -128,7 +136,7 @@ export function ExerciseTable({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleDragEnd = useExerciseDndHandler(groups, rowKeys, onUpdateSet);
+  const handleDragEnd = useExerciseDndHandler(groups, rowKeys, onUpdateSet, onSaveOrder);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() =>
     defaultExpanded ? new Set(rowKeys) : new Set(),
   );

@@ -1,9 +1,9 @@
-import type { TimelineEntry } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import type { Message } from "@/hooks/useChatSession";
 import { api, QUERY_KEYS, type RagInfo,type Suggestion } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import { createLocalMessage } from "@/lib/chatMessage";
 import { describeAiError } from "@/lib/describeAiError";
 import { queryClient } from "@/lib/queryClient";
@@ -11,12 +11,19 @@ import { queryClient } from "@/lib/queryClient";
 import { SuggestionCard } from "./SuggestionCard";
 
 interface UseSuggestionsOptions {
-  timeline: TimelineEntry[];
   addLocalMessage: (message: Message) => void;
   saveMessage: (msg: { role: string; content: string }) => void;
 }
 
-export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSuggestionsOptions) {
+/** The chat's reply when the suggestion's plan day no longer exists. */
+function workoutNotFoundMessage(suggestion: Suggestion): Message {
+  return createLocalMessage(
+    "assistant",
+    `Could not find the workout for ${suggestion.focus} (${suggestion.date}). It may have been removed from your plan.`,
+  );
+}
+
+export function useSuggestions({ addLocalMessage, saveMessage }: UseSuggestionsOptions) {
   const [pendingSuggestions, setPendingSuggestions] = useState<Suggestion[]>([]);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [suggestionsRagInfo, setSuggestionsRagInfo] = useState<RagInfo | undefined>();
@@ -56,16 +63,11 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
   const handleApplySuggestion = async (suggestion: Suggestion) => {
     setApplyingId(suggestion.workoutId);
     try {
-      const workoutExists = timeline.some(e => e.planDayId === suggestion.workoutId);
-      if (!workoutExists) {
-        const errorMessage = createLocalMessage(
-          "assistant",
-          `Could not find the workout for ${suggestion.focus} (${suggestion.date}). The suggestion is still available to retry.`,
-        );
-        addLocalMessage(errorMessage);
-        return;
-      }
-
+      // The server looks the plan day up by id and answers 404 when it is
+      // gone. The timeline this used to check first is filtered to the
+      // selected plan and paged, so with another plan selected, or the day
+      // on an unloaded page, every apply failed as "Could not find the
+      // workout". CL36 (CODEBASE_ANALYSIS_2026-10-03)
       const result = await api.timeline.applySuggestion({
         ...suggestion,
         aiSource: suggestionsRagInfo?.source ?? null,
@@ -90,7 +92,11 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
         `Applied suggestion to ${suggestion.focus} (${suggestion.date}). The ${suggestion.targetField === "mainWorkout" ? "main workout" : suggestion.targetField} has been updated.`,
       );
       addLocalMessage(confirmMessage);
-    } catch {
+    } catch (error) {
+      if (parseApiError(error)?.status === 404) {
+        addLocalMessage(workoutNotFoundMessage(suggestion));
+        return;
+      }
       const errorMessage = createLocalMessage(
         "assistant",
         `Failed to apply suggestion to ${suggestion.focus}. Please try again.`,

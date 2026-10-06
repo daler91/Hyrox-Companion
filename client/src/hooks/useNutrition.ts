@@ -32,7 +32,7 @@ import type {
   UpsertMealTargetInput,
   UpsertNutritionTargetInput,
 } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
@@ -361,8 +361,10 @@ export function useBlockView(from: string, to: string, enabled = true) {
 
 /**
  * Per-day fuelling progress over a date range, for the Timeline home-screen chips
- * (Phase 2). One request for the whole visible window. `refetchOnMount` keeps the
- * chips fresh when returning to the Timeline after logging elsewhere.
+ * (Phase 2). One request for the rows on screen. `refetchOnMount` keeps the
+ * chips fresh when returning to the Timeline after logging elsewhere. The range
+ * moves as the athlete scrolls (PF7, CODEBASE_ANALYSIS_2026-10-03), so the last
+ * range's days stay up while the next loads rather than every chip blinking out.
  */
 export function useFuellingRange(from: string, to: string, enabled = true) {
   return useQuery<FuellingRangeResponse>({
@@ -371,6 +373,7 @@ export function useFuellingRange(from: string, to: string, enabled = true) {
     enabled: enabled && from.length > 0 && to.length > 0,
     staleTime: 60_000,
     refetchOnMount: true,
+    placeholderData: keepPreviousData,
   });
 }
 

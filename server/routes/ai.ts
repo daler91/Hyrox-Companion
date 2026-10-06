@@ -18,7 +18,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } 
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { analyzeChatSafety, buildChatSafetyNotice, type ChatSafetySignals } from "../services/aiSafety";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
-import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
+import { computeStale, getTrainingAnchor, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { type CoachReply, type Conversation, type ConversationTurn, fitHistoryWindow, loadConversation, saveCoachReply, saveUserTurn, type ServerOwnedTurn, serverOwnedTurn, type TurnFocus } from "../services/chatConversation";
 import { decideChatFactProposal, type FactCandidate, settleFactProposal, startFactProposal } from "../services/chatFactProposal";
 import { classifyPlanEditIntent, isPlanEditIntent, mayRequestPlanEdit } from "../services/chatIntentService";
@@ -1062,7 +1062,8 @@ router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics"
     // sequential DB round-trips on this instant-paint path.
     const [row, anchor] = await Promise.all([
       storage.analyticsResults.get(userId, "overview_analysis"),
-      getWorkoutAnchor(userId),
+      // Training logs only, as the analysis reads (PF10).
+      getTrainingAnchor(userId),
     ]);
     if (!row) {
       res.json({ sections: null });

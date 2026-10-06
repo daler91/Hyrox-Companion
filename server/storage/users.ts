@@ -640,8 +640,9 @@ export class UserStorage {
 
   /**
    * Webhook `owner_id` → app users. One Strava athlete can be connected to
-   * more than one account (strava_athlete_id carries no unique index), so
-   * this is a list. Ids and the reauth flag only — no token material.
+   * more than one account (idx_strava_connections_strava_athlete_id, which
+   * serves this lookup, is not unique), so this is a list. Ids and the reauth
+   * flag only — no token material. PF17 (CODEBASE_ANALYSIS_2026-10-03)
    * Accounts mid-erasure are left out: the webhook is the primary auto-sync
    * producer, and a stranded erasure can still hold a live connection (the
    * step-3 deauth is best-effort). P17 (CODEBASE_ANALYSIS_2026-10-03)

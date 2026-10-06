@@ -2,12 +2,23 @@ import { safeLocalStorage } from "@/lib/safeStorage";
 
 export const ONBOARDING_COMPLETE_STORAGE_KEY = "fitai-onboarding-complete";
 
-export function hasLocalOnboardingComplete(): boolean {
-  return safeLocalStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY) !== null;
+/**
+ * Whether this device recorded that the athlete `userId` finished onboarding.
+ * The flag holds the athlete's id rather than "true": an unscoped flag let the
+ * next account on a shared device skip onboarding, and useOnboarding's sync
+ * then marked that account complete on the server. A legacy "true", or another
+ * athlete's id, names someone else and reads as not completed.
+ * CL45 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function hasLocalOnboardingComplete(userId: string | undefined): boolean {
+  if (!userId) return false;
+  return safeLocalStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY) === userId;
 }
 
-export function markLocalOnboardingComplete(): void {
-  safeLocalStorage.setItem(ONBOARDING_COMPLETE_STORAGE_KEY, "true");
+/** Records that `userId` finished onboarding; a no-op until the athlete is known. */
+export function markLocalOnboardingComplete(userId: string | undefined): void {
+  if (!userId) return;
+  safeLocalStorage.setItem(ONBOARDING_COMPLETE_STORAGE_KEY, userId);
 }
 
 export function clearLocalOnboardingComplete(): void {

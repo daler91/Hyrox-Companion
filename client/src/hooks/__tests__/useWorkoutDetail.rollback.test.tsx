@@ -126,3 +126,79 @@ describe("useWorkoutDetail rollbacks are scoped to the fields each mutation writ
     expect(cached().exerciseSets).toEqual([{ id: "set-1", reps: 12 }]);
   });
 });
+
+/**
+ * A set PATCH or delete that fails rolled back by restoring the whole cached
+ * workout as it was when the write started, so an RPE, a title or another set
+ * saved in the meantime reverted on screen. CL52 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+describe("useWorkoutDetail set rollbacks put back only the failed set", () => {
+  beforeEach(() => {
+    queryClient.clear();
+    queryClient.setQueryData(workoutKey, {
+      id: WORKOUT_ID,
+      rpe: 6,
+      focus: "Old title",
+      exerciseSets: [
+        { id: "set-1", reps: 5, version: 1 },
+        { id: "set-2", reps: 8, version: 1 },
+      ],
+    });
+  });
+
+  /** An RPE, a title, another set's PATCH and a new set, all landing while a write is out. */
+  function concurrentWritesLand() {
+    act(() => {
+      queryClient.setQueryData<Record<string, unknown>>(workoutKey, (prev) => ({
+        ...prev,
+        rpe: 9,
+        focus: "New title",
+        exerciseSets: [
+          ...(prev?.exerciseSets as Record<string, unknown>[]).map((row) =>
+            row.id === "set-2" ? { id: "set-2", reps: 12, version: 2 } : row,
+          ),
+          { id: "set-3", reps: 3, version: 1 },
+        ],
+      }));
+    });
+  }
+
+  it("reverts the failed set's edit and keeps everything saved meanwhile", async () => {
+    const { result } = renderHook(() => useWorkoutDetail(WORKOUT_ID), { wrapper });
+    const updateSet = configOf(result.current.updateSet);
+    const variables = { setId: "set-1", data: { reps: 10 } };
+
+    const context = await act(() => updateSet.onMutate!(variables as never));
+    expect(cached().exerciseSets).toContainEqual(
+      expect.objectContaining({ id: "set-1", reps: 10 }),
+    );
+    concurrentWritesLand();
+    act(() => updateSet.onError!(new Error("500"), variables as never, context));
+
+    expect(cached().exerciseSets).toEqual([
+      expect.objectContaining({ id: "set-1", reps: 5 }),
+      { id: "set-2", reps: 12, version: 2 },
+      { id: "set-3", reps: 3, version: 1 },
+    ]);
+    expect(cached().rpe).toBe(9);
+    expect(cached().focus).toBe("New title");
+  });
+
+  it("puts a set whose delete failed back without reverting the title", async () => {
+    const { result } = renderHook(() => useWorkoutDetail(WORKOUT_ID), { wrapper });
+    const deleteSet = configOf(result.current.deleteSet);
+
+    const context = await act(() => deleteSet.onMutate!("set-1" as never));
+    expect(cached().exerciseSets).toEqual([{ id: "set-2", reps: 8, version: 1 }]);
+    concurrentWritesLand();
+    act(() => deleteSet.onError!(new Error("500"), "set-1" as never, context));
+
+    expect(cached().exerciseSets).toEqual([
+      { id: "set-1", reps: 5, version: 1 },
+      { id: "set-2", reps: 12, version: 2 },
+      { id: "set-3", reps: 3, version: 1 },
+    ]);
+    expect(cached().focus).toBe("New title");
+    expect(cached().rpe).toBe(9);
+  });
+});

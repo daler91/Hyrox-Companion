@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef } from "react";
 
-/** A sent PATCH's outcome is the mutation's to report; the queue only waits for it. */
-function ignoreSettled(): void {
-  // Nothing to do: settling is all a flush waits for.
+import { useFlushOnPageHide } from "@/hooks/useFlushOnPageHide";
+
+/**
+ * A sent PATCH's error is the mutation's to report (its toast, its rollback);
+ * the queue only notes whether it landed, so a flush can tell its caller.
+ */
+function landed(): boolean {
+  return true;
+}
+
+function failed(): boolean {
+  return false;
 }
 
 interface PendingSetPatch<TPatch> {
@@ -10,6 +19,14 @@ interface PendingSetPatch<TPatch> {
   patch: TPatch;
   /** The owner the edit was made under, so a flush after an owner change still targets it. */
   ownerId: string | undefined;
+}
+
+type FireSetPatch = (setId: string) => Promise<boolean>;
+
+/** Sends every queued PATCH now without waiting on it: an owner change, unmount or hidden page. */
+function sendQueuedPatches(pending: ReadonlyMap<string, unknown>, fire: FireSetPatch): void {
+  const ids = Array.from(pending.keys());
+  Promise.all(ids.map((setId) => fire(setId))).catch(() => undefined);
 }
 
 /**
@@ -39,6 +56,15 @@ interface PendingSetPatch<TPatch> {
  * and could land first: it missed the row it should have moved, and the row
  * then landed on its old step number under the new numbering. CL15
  * (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * It resolves to whether every PATCH it sent or waited for landed. It used to
+ * swallow a rejection, so "Complete workout" went ahead after a flushed cell
+ * PATCH failed (409, 400, 429) and logged the pre-edit value. CL39
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ *
+ * The queue is also sent when the page is hidden or put away (CL42): a phone
+ * discards a backgrounded page without unmounting it, so an edit typed just
+ * before swiping the app away never left the queue.
  */
 export function useDebouncedSetPatches<TPatch extends object>(
   mutate: (args: { setId: string; data: TPatch; ownerId?: string }) => unknown,
@@ -47,8 +73,8 @@ export function useDebouncedSetPatches<TPatch extends object>(
 ) {
   const pendingRef = useRef<Map<string, PendingSetPatch<TPatch>>>(new Map());
   // Sent and not yet settled; each removes itself once it has (CL15).
-  const inFlightRef = useRef<Set<Promise<void>>>(new Set());
-  const fireRef = useRef<(setId: string) => Promise<void>>(() => Promise.resolve());
+  const inFlightRef = useRef<Set<Promise<boolean>>>(new Set());
+  const fireRef = useRef<FireSetPatch>(() => Promise.resolve(true));
 
   // Keep `fireRef` bound to the latest `mutate` from an effect rather
   // than assigning to `.current` during render (which trips
@@ -58,12 +84,12 @@ export function useDebouncedSetPatches<TPatch extends object>(
     const inFlight = inFlightRef.current;
     fireRef.current = (setId) => {
       const entry = pendingRef.current.get(setId);
-      if (!entry) return Promise.resolve();
+      if (!entry) return Promise.resolve(true);
       clearTimeout(entry.timer);
       pendingRef.current.delete(setId);
       const sent = Promise.resolve(mutate({ setId, data: entry.patch, ownerId: entry.ownerId })).then(
-        ignoreSettled,
-        ignoreSettled,
+        landed,
+        failed,
       );
       inFlight.add(sent);
       return sent.finally(() => {
@@ -90,9 +116,10 @@ export function useDebouncedSetPatches<TPatch extends object>(
     pendingRef.current.set(setId, { timer, patch: merged, ownerId: ownerId ?? undefined });
   }, [debounceMs, ownerId]);
 
-  const flushPendingSetPatches = useCallback(async () => {
+  const flushPendingSetPatches = useCallback(async (): Promise<boolean> => {
     const fired = Array.from(pendingRef.current.keys(), (setId) => fireRef.current(setId));
-    await Promise.all([...fired, ...inFlightRef.current]);
+    const outcomes = await Promise.all([...fired, ...inFlightRef.current]);
+    return outcomes.every(Boolean);
   }, []);
 
   const getPendingPatches = useCallback(() => {
@@ -109,10 +136,15 @@ export function useDebouncedSetPatches<TPatch extends object>(
     const pending = pendingRef.current;
     const fire = fireRef;
     return () => {
-      const ids = Array.from(pending.keys());
-      Promise.all(ids.map((setId) => fire.current(setId))).catch(() => undefined);
+      sendQueuedPatches(pending, fire.current);
     };
   }, [ownerId]);
+
+  // Hidden or put-away page: send now, before the browser freezes it (CL42).
+  const sendQueuedNow = useCallback(() => {
+    sendQueuedPatches(pendingRef.current, fireRef.current);
+  }, []);
+  useFlushOnPageHide(sendQueuedNow);
 
   return {
     patchSetDebounced,

@@ -1,7 +1,9 @@
 import type { PersonalRecordAchievement } from "@shared/schema";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { QUERY_KEYS } from "./api";
 import { toastPersonalRecordAchievements } from "./personalRecordAchievements";
+import { queryClient } from "./queryClient";
 
 function achievement(overrides: Partial<PersonalRecordAchievement> = {}): PersonalRecordAchievement {
   return {
@@ -20,6 +22,10 @@ function achievement(overrides: Partial<PersonalRecordAchievement> = {}): Person
 }
 
 describe("toastPersonalRecordAchievements", () => {
+  afterEach(() => {
+    queryClient.removeQueries({ queryKey: QUERY_KEYS.preferences });
+  });
+
   it("shows one success toast for a single achievement", () => {
     const toast = vi.fn();
 
@@ -45,6 +51,54 @@ describe("toastPersonalRecordAchievements", () => {
       title: "2 new PRs",
       description: "Back Squat: Max weight 105 · KB Swings: Est. 1RM 40",
     });
+  });
+
+  // CL58 (CODEBASE_ANALYSIS_2026-10-03): best time is stored in minutes and
+  // printed as decimal minutes ("Best time 3.9" for 3:52); weight and
+  // distance had no unit.
+  it("reads a best time as a clock, not decimal minutes", () => {
+    const toast = vi.fn();
+
+    toastPersonalRecordAchievements(toast, [
+      achievement({ exerciseName: "skierg", category: "functional", metric: "bestTime", metricLabel: "Best time", value: 3 + 52 / 60 }),
+    ]);
+
+    expect(toast).toHaveBeenCalledWith({ title: "New PR", description: "SkiErg: Best time 3:52" });
+  });
+
+  it("labels weight and distance in the athlete's own units", () => {
+    const toast = vi.fn();
+
+    toastPersonalRecordAchievements(
+      toast,
+      [
+        achievement({ value: 225.5 }),
+        achievement({ exerciseName: "sled_push", category: "functional", metric: "maxDistance", metricLabel: "Max distance", value: 164 }),
+      ],
+      { weightLabel: "lbs", distanceUnit: "miles" },
+    );
+
+    expect(toast).toHaveBeenCalledWith({
+      title: "2 new PRs",
+      description: "Back Squat: Max weight 225.5 lbs · Sled Push: Max distance 164 ft",
+    });
+  });
+
+  it("takes the units from the athlete's loaded preferences when the caller passes none", () => {
+    const toast = vi.fn();
+    queryClient.setQueryData(QUERY_KEYS.preferences, { weightUnit: "lbs", distanceUnit: "miles" });
+
+    toastPersonalRecordAchievements(toast, [achievement({ value: 225 })]);
+
+    expect(toast).toHaveBeenCalledWith({ title: "New PR", description: "Back Squat: Max weight 225 lbs" });
+  });
+
+  it("leaves the unit off rather than guess one before the preferences have loaded", () => {
+    const toast = vi.fn();
+
+    toastPersonalRecordAchievements(toast, [achievement({ value: 102.25 })]);
+
+    expect(toast).toHaveBeenCalledWith({ title: "New PR", description: "Back Squat: Max weight 102.25" });
   });
 
   it("does nothing when there are no improvements", () => {

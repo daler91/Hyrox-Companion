@@ -35,6 +35,15 @@ function setOnline(online: boolean) {
   });
 }
 
+/** A request the server never answers: like fetch, it settles only when its signal aborts. */
+function neverAnswered(_method: string, _url: string, _body?: unknown, signal?: AbortSignal): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    signal?.addEventListener("abort", () => {
+      reject(new DOMException("Request timed out", "TimeoutError"));
+    });
+  });
+}
+
 /** The bodies apiRequest was called with, in call order. */
 function sentBodies(): unknown[] {
   return vi.mocked(apiRequest).mock.calls.map(([, , body]) => body);
@@ -78,7 +87,7 @@ describe("offlineQueue", () => {
     const result = await flushQueue();
 
     expect(id).toBe("fixed-id");
-    expect(apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts", body, undefined, {
+    expect(apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts", body, expect.any(AbortSignal), {
       "X-Idempotency-Key": "fixed-id",
     });
     expect(result).toEqual({ synced: 1, failed: 0, dropped: 0 });
@@ -341,7 +350,7 @@ describe("offlineQueue", () => {
 
       await vi.advanceTimersByTimeAsync(5_000);
 
-      expect(apiRequest).toHaveBeenCalledExactlyOnceWith("POST", "/api/v1/workouts", { title: "Timed out" }, undefined, {
+      expect(apiRequest).toHaveBeenCalledExactlyOnceWith("POST", "/api/v1/workouts", { title: "Timed out" }, expect.any(AbortSignal), {
         "X-Idempotency-Key": "timed-out",
       });
       expect(getPendingCount()).toBe(0);
@@ -365,7 +374,7 @@ describe("offlineQueue", () => {
       await vi.advanceTimersByTimeAsync(5_000);
 
       // Same idempotency key, so a live attempt that did commit dedupes server-side.
-      expect(apiRequest).toHaveBeenCalledExactlyOnceWith("POST", "/api/v1/workouts", body, undefined, {
+      expect(apiRequest).toHaveBeenCalledExactlyOnceWith("POST", "/api/v1/workouts", body, expect.any(AbortSignal), {
         "X-Idempotency-Key": id,
       });
       expect(getPendingCount()).toBe(0);
@@ -464,9 +473,47 @@ describe("offlineQueue", () => {
       enqueueMutation("POST", "/api/v1/workouts", { title: "B's" }, { id: "b" });
       await vi.advanceTimersByTimeAsync(5_000);
 
-      expect(apiRequest).toHaveBeenCalledExactlyOnceWith("POST", "/api/v1/workouts", { title: "B's" }, undefined, {
+      expect(apiRequest).toHaveBeenCalledExactlyOnceWith("POST", "/api/v1/workouts", { title: "B's" }, expect.any(AbortSignal), {
         "X-Idempotency-Key": "b",
       });
+    });
+
+    // CL57 (CODEBASE_ANALYSIS_2026-10-03): a replay had no timeout, and every
+    // later flush joined the in-flight run, so one request the server never
+    // answered held every queued write until a reload.
+    it("gives up on a replay that never answers and sends the queue on the next retry", async () => {
+      vi.mocked(apiRequest)
+        .mockImplementationOnce(neverAnswered)
+        .mockResolvedValue(new Response("{}"));
+      reconcileQueueOwner("user-a");
+      enqueueMutation("POST", "/api/v1/workouts", { title: "Hung" }, { id: "hung" });
+      enqueueMutation("POST", "/api/v1/workouts", { title: "Behind it" }, { id: "behind" });
+
+      let settled: unknown = null;
+      flushQueue().then(
+        (result) => {
+          settled = result;
+        },
+        (error: unknown) => {
+          settled = error;
+        },
+      );
+      // The scheduled retry fires meanwhile and joins the run in flight.
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(settled).toBeNull();
+      expect(apiRequest).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toEqual({ synced: 0, failed: 1, dropped: 0 });
+      // No answer is no verdict: the write keeps its retry budget and its place.
+      expect(readStoredQueue()).toEqual([
+        expect.objectContaining({ id: "hung", retryCount: 0 }),
+        expect.objectContaining({ id: "behind", retryCount: 0 }),
+      ]);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(sentBodies()).toEqual([{ title: "Hung" }, { title: "Hung" }, { title: "Behind it" }]);
+      expect(getPendingCount()).toBe(0);
     });
 
     it("stops retrying once sign-out clears the queue", async () => {

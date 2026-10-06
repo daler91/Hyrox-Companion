@@ -10,7 +10,10 @@ const invalidateQueries = vi.hoisted(() =>
   vi.fn<(filters: { queryKey: readonly unknown[] }) => Promise<void>>().mockResolvedValue(),
 );
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mockToast }) }));
-vi.mock("@/lib/queryClient", () => ({ queryClient: { invalidateQueries } }));
+vi.mock("@/lib/queryClient", async (importOriginal) => ({
+  humanizeApiError: (await importOriginal<typeof import("@/lib/queryClient")>()).humanizeApiError,
+  queryClient: { invalidateQueries },
+}));
 // Every key the hook reaches, NUTRITION_TARGET_QUERY_KEYS's and
 // WORKOUT_DERIVED_NUTRITION_QUERY_KEYS's included: one left out is an undefined
 // key, which on a real QueryClient invalidates every query.
@@ -57,8 +60,12 @@ function mockSamplePlanCreation() {
   vi.mocked(api.plans.createSample).mockResolvedValueOnce(samplePlan);
 }
 
+const ATHLETE_ID = "user-1";
+
 function renderOnboardingWizard(onComplete = vi.fn()) {
   const queryClient = new QueryClient();
+  // The signed-in athlete, whose id the local completion flag holds (CL45).
+  queryClient.setQueryData(["authUser"], { id: ATHLETE_ID });
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
@@ -198,7 +205,7 @@ describe("useOnboardingWizard", () => {
     });
 
     expect(onComplete).toHaveBeenCalledWith("skip");
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe(ATHLETE_ID);
     expect(mockToast).toHaveBeenCalledWith({
       title: "Setup closed",
       description: "Run it again anytime from Settings → Account → Getting Started.",
@@ -212,7 +219,7 @@ describe("useOnboardingWizard", () => {
       result.current.handleSkip();
     });
 
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe(ATHLETE_ID);
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
     expect(onComplete).toHaveBeenCalledWith("skip");
   });
@@ -224,7 +231,7 @@ describe("useOnboardingWizard", () => {
       result.current.handleGeneratedPlan();
     });
 
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe(ATHLETE_ID);
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
     expect(onComplete).toHaveBeenCalledWith("generated");
   });
@@ -247,7 +254,7 @@ describe("useOnboardingWizard", () => {
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledWith("sample");
     });
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe(ATHLETE_ID);
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
     // Points at connecting a device, which setup never mentioned (audit L7).
     expect(mockToast).toHaveBeenLastCalledWith(
@@ -582,6 +589,115 @@ describe("useOnboardingWizard", () => {
       { queryKey: ["nutritionRange"] },
       { queryKey: ["nutritionBlock"] },
     ]);
+  });
+
+  describe("the fuelling step", () => {
+    async function walkToFuelling(result: WizardHook) {
+      await pressContinue(result); // welcome -> units
+      await pressContinue(result); // units -> goal
+      await pressContinue(result); // goal -> fuelling
+      expect(result.current.step).toBe("fuelling");
+    }
+
+    function fillProfile(result: WizardHook, age: string) {
+      act(() => {
+        result.current.setBodyweight("80");
+        result.current.setHeightCm("180");
+        result.current.setAge(age);
+        result.current.setActivityLevel("moderate");
+      });
+    }
+
+    // CL37 (CODEBASE_ANALYSIS_2026-10-03): a decimal age passed the step, and
+    // the server's whole-number rule refused the whole profile and its targets.
+    it("holds the step with an inline error for a decimal age, then saves the whole number", async () => {
+      const { result } = renderOnboardingWizard();
+      await walkToFuelling(result);
+      fillProfile(result, "34.5");
+
+      await pressContinue(result);
+
+      expect(result.current.step).toBe("fuelling");
+      expect(result.current.ageError).toMatch(/whole number between 13 and 100/);
+      expect(result.current.nextLabel).toBe("Skip");
+      expect(api.preferences.update).not.toHaveBeenCalled();
+      expect(api.nutrition.setTarget).not.toHaveBeenCalled();
+
+      act(() => {
+        result.current.setAge("34");
+      });
+      expect(result.current.ageError).toBeNull();
+      await pressContinue(result);
+
+      expect(result.current.step).toBe("coach");
+      expect(api.preferences.update).toHaveBeenCalledWith(
+        expect.objectContaining({ age: 34, bodyweightKg: 80, heightCm: 180 }),
+      );
+      expect(api.nutrition.setTarget).toHaveBeenCalledTimes(1);
+    });
+
+    it("says why the server refused the profile", async () => {
+      const body = JSON.stringify({ code: "VALIDATION_ERROR", message: "Invalid input: expected int, received number" });
+      vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error(`400: ${body}`));
+      const { result } = renderOnboardingWizard();
+      await walkToFuelling(result);
+      fillProfile(result, "34");
+
+      await pressContinue(result);
+
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Could not save your fuelling profile",
+        description:
+          "Invalid input: expected int, received number. You can set it up later in Nutrition → Targets.",
+        variant: "destructive",
+      });
+    });
+
+    // CL46 (CODEBASE_ANALYSIS_2026-10-03): switching kg/lbs after typing a
+    // bodyweight re-read the number in the new unit, so 80 kg saved as 36.3 kg.
+    it("converts a typed bodyweight when the athlete goes back and switches kg/lbs", async () => {
+      const { result } = renderOnboardingWizard();
+      await walkToFuelling(result);
+      fillProfile(result, "34");
+      act(() => {
+        result.current.handleBack(); // fuelling -> goal
+      });
+      act(() => {
+        result.current.handleBack(); // goal -> units
+      });
+
+      act(() => {
+        result.current.setWeightUnit("lbs");
+      });
+      expect(result.current.bodyweight).toBe("176.4");
+      act(() => {
+        result.current.setWeightUnit("kg");
+      });
+      expect(result.current.bodyweight).toBe("80");
+      act(() => {
+        result.current.setWeightUnit("lbs");
+      });
+
+      await pressContinue(result); // units -> goal
+      await pressContinue(result); // goal -> fuelling
+      await pressContinue(result); // fuelling -> coach
+
+      expect(result.current.step).toBe("coach");
+      expect(api.preferences.update).toHaveBeenCalledWith(
+        expect.objectContaining({ bodyweightKg: 80 }),
+      );
+    });
+
+    it("leaves a bodyweight that is not a number as typed when the unit changes", () => {
+      const { result } = renderOnboardingWizard();
+      act(() => {
+        result.current.setBodyweight("");
+      });
+      act(() => {
+        result.current.setWeightUnit("lbs");
+      });
+      expect(result.current.bodyweight).toBe("");
+    });
   });
 
   it("starts the MAF age from the age already given", () => {

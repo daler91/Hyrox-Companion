@@ -8,10 +8,11 @@
  * result for, it enqueues a recompute job ONLY when new activity was logged
  * after that result was generated — so we never spend AI refreshing a result
  * that already reflects the latest data. Staleness is compared against that
- * feature's own anchor: the latest workout date for the training surfaces,
- * the latest FOOD-LOG date for nutrition_insights (matching what
- * persistNutritionInsights stamps into lastWorkoutDateAtGeneration and what
- * GET /api/v1/nutrition/insights uses for its own stale flag). Scope is
+ * feature's own anchor: the latest training log for race_prediction and
+ * overview_analysis, the latest log of any kind (walks included) for
+ * coach_insights, the latest FOOD-LOG date for nutrition_insights (matching
+ * what persistNutritionInsights stamps into lastWorkoutDateAtGeneration and
+ * what GET /api/v1/nutrition/insights uses for its own stale flag). Scope is
  * limited to users who have a stored result (i.e. who actually use the
  * feature).
  */
@@ -30,48 +31,77 @@ import { computeStale, type HistoryAnchor } from "./analyticsStaleness";
 
 /**
  * For one user at their local midnight, enqueue a recompute job for each feature
- * with a stored result that is stale relative to that feature's anchor (latest
- * workout for training surfaces, latest food-log date for nutrition_insights).
+ * with a stored result that is stale relative to that feature's anchor (see
+ * anchorKindFor).
  * `resultsByFeature` is this user's stored rows, preloaded in a single batched
  * query by the caller (see runAnalyticsRecomputeScan) instead of being fetched
  * one-by-one here. Returns the number of jobs enqueued.
  */
+/** Which history a feature's staleness is anchored on. */
+type AnchorKind = "training" | "allWorkouts" | "nutrition";
+
+/**
+ * The same history analyticsPersistence stamps each feature's row with.
+ * race_prediction and overview_analysis read training logs only, so a synced
+ * walk or yoga session no longer reads them as stale and spends a nightly
+ * regeneration on unchanged inputs; coach_insights keeps every log, because
+ * walks feed its load governor. PF10 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function anchorKindFor(feature: AnalyticsFeature): AnchorKind {
+  switch (feature) {
+    case "nutrition_insights":
+      return "nutrition";
+    case "coach_insights":
+      return "allWorkouts";
+    case "race_prediction":
+    case "overview_analysis":
+      return "training";
+    default: {
+      const exhaustive: never = feature;
+      return exhaustive;
+    }
+  }
+}
+
+async function readAnchor(storage: IStorage, userId: string, kind: AnchorKind): Promise<HistoryAnchor> {
+  if (kind === "nutrition") {
+    const [latestDate, entryCount] = await Promise.all([
+      storage.nutrition.getLatestLogDate(userId),
+      storage.nutrition.countLogEntries(userId),
+    ]);
+    return { latestDate, entryCount };
+  }
+  const filter = { onlyTraining: kind === "training" };
+  const [[latestWorkout], entryCount] = await Promise.all([
+    storage.workouts.listWorkoutLogs(userId, 1, 0, filter),
+    storage.workouts.countWorkoutLogs(userId, filter),
+  ]);
+  return { latestDate: latestWorkout?.date ?? null, entryCount };
+}
+
 async function enqueueStaleRecomputes(
   storage: IStorage,
   userId: string,
   localDate: string,
   resultsByFeature: ReadonlyMap<AnalyticsFeature, AnalyticsResult>,
 ): Promise<number> {
-  // Anchors are fetched lazily and memoized: the workout anchor is shared by
-  // three features, and the nutrition queries are skipped entirely for users
-  // without a stored nutrition row. `undefined` = not yet fetched. An athlete
-  // with no activity of that kind anchors at { latestDate: null, entryCount: 0 },
-  // which matches what was stored for them, so such features are never stale.
+  // Anchors are fetched lazily and memoized per kind: the training anchor is
+  // shared by two features, and an anchor no stored row needs (the nutrition
+  // one, for most users) is never queried. An athlete with no activity of that
+  // kind anchors at { latestDate: null, entryCount: 0 }, which matches what was
+  // stored for them, so such features are never stale.
   //
   // Each anchor is a date AND a row count (audit L16): the date alone cannot
   // see a second session logged on a day that already had one, which is an
   // ordinary week rather than an edge case.
-  let workoutAnchor: HistoryAnchor | undefined;
-  let nutritionAnchor: HistoryAnchor | undefined;
+  const anchors = new Map<AnchorKind, HistoryAnchor>();
   const anchorFor = async (feature: AnalyticsFeature): Promise<HistoryAnchor> => {
-    if (feature === "nutrition_insights") {
-      if (nutritionAnchor === undefined) {
-        const [latestDate, entryCount] = await Promise.all([
-          storage.nutrition.getLatestLogDate(userId),
-          storage.nutrition.countLogEntries(userId),
-        ]);
-        nutritionAnchor = { latestDate, entryCount };
-      }
-      return nutritionAnchor;
-    }
-    if (workoutAnchor === undefined) {
-      const [[latestWorkout], entryCount] = await Promise.all([
-        storage.workouts.listWorkoutLogs(userId, 1),
-        storage.workouts.countWorkoutLogs(userId),
-      ]);
-      workoutAnchor = { latestDate: latestWorkout?.date ?? null, entryCount };
-    }
-    return workoutAnchor;
+    const kind = anchorKindFor(feature);
+    const cached = anchors.get(kind);
+    if (cached !== undefined) return cached;
+    const anchor = await readAnchor(storage, userId, kind);
+    anchors.set(kind, anchor);
+    return anchor;
   };
 
   // One feature at a time, so the features sharing an anchor wait for the

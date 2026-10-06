@@ -193,6 +193,7 @@ function PlannedPrescription({
         table={
           <ExerciseTable
             workoutId={planDayId}
+            onSaveOrder={planSets.saveSetOrder}
             exerciseSets={planSets.exerciseSets}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
@@ -531,6 +532,25 @@ function commitFocusedField(): void {
 }
 
 /**
+ * Lands the edits still waiting before "Complete workout" copies the plan day:
+ * the queued cell PATCHes and a drag's order save (PF5), then a block edit
+ * still waiting out its pause. Rows first: a queued row link names the
+ * numbering that block save is measured from, so the save then moves it with
+ * its step (CL15). False when any failed: the failed save has said so and put
+ * the stored value back, and the log would copy that. The cell flush used to
+ * swallow its failure, so a 409, 400 or 429 logged the pre-edit value. CL39
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function landEditsBeforeLog(
+  planSets: PlanDayExerciseState,
+  structureEditorRef: RefObject<StructureBlocksEditorHandle | null>,
+): Promise<boolean> {
+  const rowsSaved = await planSets.flushPendingSetPatches();
+  if (!rowsSaved) return false;
+  return (await structureEditorRef.current?.flush()) ?? true;
+}
+
+/**
  * Sheet-native surface for planned cards. Single-tier:
  * the prescription editor is inline (no disclosure tap) so per-set
  * tweaks are one tap away. In log mode, edits autosave before the log
@@ -602,15 +622,11 @@ export function LogSheet({
     // the new workoutLog, so a row edit still queued in the debounce
     // coordinator would be missing from the snapshot. A block edit still
     // waiting out its pause was left out of the copy, or saved after it, so
-    // it is sent and landed too. Rows first: a queued row link names the
-    // numbering that block save is measured from, so the save then moves it
-    // with its step. A block save that failed has said so and put the stored
-    // blocks back; the log would copy those, so the athlete stays to retry.
-    // CL15 (CODEBASE_ANALYSIS_2026-10-03)
+    // it is sent and landed too. When either save failed the athlete stays
+    // on the sheet to retry (CL15, CL39).
     try {
-      await planSets.flushPendingSetPatches();
-      const blocksSaved = (await structureEditorRef.current?.flush()) ?? true;
-      if (!blocksSaved) {
+      const editsSaved = await landEditsBeforeLog(planSets, structureEditorRef);
+      if (!editsSaved) {
         finishCompletion(submittedEntryId);
         return;
       }

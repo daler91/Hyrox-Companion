@@ -73,7 +73,7 @@ before changing anything in this module.
 |-----------|---------------|----------------|
 | **All nutrition is stored per-100g** and scaled by logged grams at read time. | USDA values are immutable per `fdcId`; storing scaled snapshots would invite a wrong-basis bug and drift. Column names literally say `*_per_100g`. | `foods` table; `server/services/nutrition/rollup.ts` (`scaleNutrition`, the single scaling site) |
 | **Numbers never come from AI.** | Trust. The model estimates portion size and writes prose; it never originates a calorie or macro. | `BRD §7`, enforced by routing all macros through `foods` rows |
-| **`logDate` is the user's *local* calendar day**, derived server-side from `users.user_timezone`. | A meal logged at 11pm in UTC+10 must land on the right day's totals. The client sends an instant (`loggedAt`); the server computes the date. | `server/routes/nutrition/nutritionLogs.routes.ts` (every log write, via `getUserTimezone` in `shared.ts`); `shared/schema/nutrition.ts` |
+| **`logDate` is the user's *local* calendar day**, derived server-side from `users.user_timezone`. | A meal logged at 11pm in UTC+10 must land on the right day's totals. The client sends an instant (`loggedAt`); the server computes the date. The page dates entries in the device's timezone as of page load (an open tab keeps it across an OS timezone change), so before a log write the client brings a stale stored timezone up to that zone (`pageTimezone`); if that save fails, the write waits behind a "Log anyway" toast naming the timezone in force (CL65). | `server/routes/nutrition/nutritionLogs.routes.ts` (every log write, via `getUserTimezone` in `shared.ts`); `shared/schema/nutrition.ts`; `useLogTimezoneSync` (client) |
 | **The food cache is shared and non-per-user.** A USDA food is cached once and reused by everyone. | Avoids N copies of "banana"; keeps the DB small and search fast. | `foods.createdByUserId IS NULL` = shared; visibility predicate `visibleTo(userId)` |
 | **Custom foods are private**; visibility is checked on every food resolution. | No cross-user leakage of a user's own foods/recipes. | `NutritionStorage.getVisibleFoodById` etc. |
 | **Logged history is immutable-by-reference.** A food referenced by a log entry can't be deleted (`onDelete: restrict`). | Historical entries must never lose their nutrition source. | FK constraints on `food_log_entries.foodId`, `recipe_ingredients.foodId` |
@@ -101,11 +101,11 @@ nutrition_targets        (versioned calorie/macro goals, by effective_from)
 | Table | Purpose | Notable columns / rules |
 |-------|---------|-------------------------|
 | `foods` | Shared reference cache + private custom foods. | `source` ∈ {`usda`,`off`,`edamam`,`custom`} in practice (the CHECK also still allows the retired `fatsecret` / `spoonacular`, rendered from `FOOD_SOURCES`); `*_per_100g` macros; `micros` JSONB; `serving_size_g`; partial-unique on `(source, source_id)`; `createdByUserId` NULL = shared. |
-| `food_servings` | Named portions for a food. | `label`, `grams`; lazily filled from USDA portions on first food-detail view. |
+| `food_servings` | Named portions for a food. | `label`, `grams`; lazily filled from USDA portions on first food-detail view. Shared rows (NULL owner) are unique on `(food_id, label, grams)` (`uq_food_servings_shared`, migration 0122), so two first opens at once cache each portion once. |
 | `food_log_entries` | A single logged food. | `loggedAt` (instant), `logDate` (local day), `quantityG`, `mealType`, `entryMethod` ∈ {`manual`,`barcode`,`nl`,`photo`}; `rawInput` + `parseConfidence` + `pendingReview` for AI provenance. |
 | `nutrition_targets` | Versioned macro/calorie goals. | `calories`, `proteinG`, `carbG`, `fatG`, `effectiveFrom`; insert-only history (one row per `(user, effectiveFrom)`). **No fibre target column.** |
 | `meal_targets` | Versioned **per-meal** macro/calorie goals. | `mealType` ∈ `MEAL_TYPES` (CHECK rendered from the constant), `calories`, `proteinG`, `carbG`, `fatG`, `effectiveFrom`; unique on `(user, mealType, effectiveFrom)` to match `upsertMealTarget`'s delete-then-insert. Surfaced as `DailySummaryResponse.mealTargets` on `GET /summary`. |
-| `food_favorites` | Per-user favourites over the cache. | Unique `(userId, foodId)`. |
+| `food_favorites` | Per-user favourites over the cache. | Unique `(userId, foodId)`; also indexed on `foodId` for the cascade when a food is deleted. |
 | `recipes` | A custom food + an ingredient breakdown. | `foodId` is the backing `source='custom'` food; macros computed from ingredients so a recipe logs like any food. |
 | `recipe_ingredients` | One ingredient line. | `foodId` (`restrict`), `quantityG`, `position`. |
 
@@ -437,9 +437,9 @@ foods & recipes) → `NutritionInsightsPanel`.
 | Component | Role |
 |-----------|------|
 | `DailyTotalsHeader` | Running calorie/macro totals + progress vs. targets. |
-| `FoodSearch` | Debounced (2+ char) search with a degraded-API banner; opens `LogFoodDialog`. |
+| `FoodSearch` | Debounced (2+ char) search with a degraded-API banner; opens `LogFoodDialog`. Enter picks the top hit only from results for the text as typed: mid-debounce it runs the search at once and picks when that answer lands. |
 | `QuickAddBar` | Horizontally scrollable recent/favourite chips for one-tap logging. |
-| `LogFoodDialog` | Create or edit an entry: quantity + unit (named servings) + meal, with a live nutrition preview. When editing, the "effect on today's goals" swaps the entry's saved serving for the new one. |
+| `LogFoodDialog` | Create or edit an entry: quantity + unit (named servings) + meal, with a live nutrition preview. When editing, the "effect on today's goals" swaps the entry's saved serving for the new one, and an untouched amount is not re-sent, so the stored grams survive a meal-only edit. |
 | `MealSection` | One meal's entries with edit/delete. |
 | `BarcodeScanner` | `BarcodeDetector` camera scan (rear camera) + manual fallback. |
 | `CustomFoodDialog` | Create/edit a custom food (per-100g macros + servings). |
@@ -583,7 +583,9 @@ stamps `lastFetchedAt`; a shared external row older than 60 days (or never stamp
 is re-fetched from its source in the background when a search result or a barcode
 cache hit serves it, at most 3 per request. The athlete gets the cached row
 instantly, a failed refresh leaves it in place, and custom foods (no upstream) are
-never refreshed.
+never refreshed. A refetch that fails or finds nothing is not tried again by that
+instance for 6 hours, and one food is never refreshed twice at once, so a row its
+source no longer has doesn't cost an upstream call on every response (PF13).
 
 ---
 
@@ -683,9 +685,10 @@ The biggest unrealised value is connecting fuelling to the race itself:
   fills the form from `calculateNutritionTarget` (`shared/nutritionTargets.ts`):
   Mifflin–St Jeor BMR × activity multiplier, adjusted for the weight goal, with
   protein and fat anchored to bodyweight (1.8 / 1.0 g/kg by default) and carbs
-  filling the remainder. The athlete can tweak it before saving; the onboarding
-  `FuellingStep` suggests the same target, previewed with the goal rate the save
-  uses. A save from either place carries the current version's periodisation
+  filling the remainder. A lose or gain goal with no weekly rate set calculates at
+  onboarding's 0.25 kg/week rather than at maintenance. The athlete can tweak it
+  before saving; the onboarding `FuellingStep` suggests the same target, previewed
+  with the goal rate the save uses. A save from either place carries the current version's periodisation
   forward (`nextPeriodizationSettings` / `carryPeriodizationForward`), re-basing
   the slope, pre-load rate and cap onto a changed carb baseline. On a re-run with
   targets on file and an untouched profile, the step's "Replace my daily
@@ -724,15 +727,19 @@ The biggest unrealised value is connecting fuelling to the race itself:
 - **[DONE] Semantic (embeddings) search.** Flag-gated (`NUTRITION_SEMANTIC_ENABLED`,
   default off) and off the hot path: when keyword/fuzzy returns few hits, the query is
   embedded (`gemini-embedding-001`, LRU-cached) and matched by cosine similarity
-  against a `food_embeddings` vector table (populated by a bounded background cron),
+  against a `food_embeddings` vector table (populated by a bounded background cron
+  that pages through `foods` in id order, each run carrying on where the last stopped),
   so a conceptual query ("post-workout protein") can surface foods sharing no tokens.
   Consent + budget are checked inline so plain search is never blocked
   (`semanticSearch.ts` / `foodEmbeddings.ts`). _Remaining:_ provider-side synonym
   query-expansion (deferred); on-upsert incremental embedding (currently cron-only).
 - **[DONE] Backfill micronutrients.** Most cached foods carried no micros, so the
   micro panel was often sparse. Opening a USDA food's detail now backfills its
-  micronutrients from the USDA detail endpoint alongside the named servings
-  (`enrichUsdaMicros` in `foodDetail.ts`). _Remaining:_ foods from other sources,
+  micronutrients from the USDA detail endpoint alongside the named servings, in
+  one read (`enrichFromUsda` in `foodDetail.ts`). What a read comes back without
+  (no portions, no micros) is remembered in `server_runtime_cache` for 30 days,
+  and a later open skips the read only when USDA lacks everything that open is
+  missing, so a Branded food is not re-read on every open (PF11). _Remaining:_ foods from other sources,
   and a proactive backfill of popular foods.
 - **[P3] Auto-resolve parsed items against USDA.** The meal parser resolves names
   against the **local cache only**, so common foods not yet cached come back

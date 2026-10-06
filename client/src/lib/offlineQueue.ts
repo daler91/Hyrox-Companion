@@ -1,8 +1,8 @@
 import { inSequence } from "@shared/inSequence";
 import { z } from "zod";
 
+import { rawRequest } from "./api/client";
 import { parseApiError } from "./apiError";
-import { apiRequest } from "./queryClient";
 
 export interface PendingMutation {
   id: string;
@@ -118,6 +118,14 @@ const MAX_QUEUE_SIZE = 100;
 // doubling with each replay that stopped on a failure, up to 5 minutes.
 const RETRY_BASE_DELAY_MS = 5_000;
 const RETRY_MAX_DELAY_MS = 5 * 60 * 1000;
+// How long one replay may take. Without a bound, a request that never answered
+// held the run, and every later flush joined that run, so one hung POST blocked
+// every queued write until the browser gave up on the connection or the page
+// reloaded. Twice the live request's 15 s, since a slow connection is often why
+// the write was queued. A timeout is a failure with no answer: it spends no
+// retry budget, and the retry reuses the idempotency key, so a replay the server
+// did commit is not applied twice. CL57 (CODEBASE_ANALYSIS_2026-10-03)
+const REPLAY_TIMEOUT_MS = 30_000;
 
 // The user reconcileQueueOwner last confirmed in this page. Automatic retries
 // wait for it, so they never replay a queue that a previous athlete left on the
@@ -438,8 +446,9 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
     }
 
     try {
-      await apiRequest(mutation.method, mutation.url, mutation.body, undefined, {
-        "X-Idempotency-Key": mutation.id,
+      await rawRequest(mutation.method, mutation.url, mutation.body, {
+        timeoutMs: REPLAY_TIMEOUT_MS,
+        headers: { "X-Idempotency-Key": mutation.id },
       });
       synced++;
       syncedRequests.push({ url: mutation.url, method: mutation.method });

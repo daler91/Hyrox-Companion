@@ -30,22 +30,30 @@ export const SET_TIME_MAX_MINUTES = 1_440;
  */
 export const SET_NUMBER_MAX = 100;
 // Workout log types and schemas
-// Reject workout dates more than 24h in the future. A 24h grace window lets
+// Reject workout dates after tomorrow. A one-day grace window lets
 // Strava/Garmin activities that straddle midnight in the user's timezone
 // still land, while preventing users from logging genuinely future workouts
 // (which otherwise skew Week-over-Week deltas and completion stats).
+//
+// This check knows no timezone, so it takes tomorrow wherever on Earth that is
+// latest (UTC+14), and the workout use cases hold the date to the athlete's own
+// tomorrow (assertWorkoutDateNotFuture in server/services/workoutUseCases.ts).
+// It took UTC's tomorrow only, so "Move to tomorrow" on a logged workout failed
+// for a UTC+N athlete until N o'clock local time. CL70
+// (CODEBASE_ANALYSIS_2026-10-03)
 //
 // The day must be a real one first: Date.parse rolls "2026-02-30" into March,
 // so it passed here and Postgres then refused it with a 500 (C50,
 // CODEBASE_ANALYSIS_2026-10-03). The future check runs only on a real day, so
 // a malformed date is named once, as a format error.
+const FURTHEST_AHEAD_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
 const workoutDateNotFuture = calendarDateSchema.refine(
   (d) => {
     // ⚡ Bolt Performance Optimization:
     // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
     // when calculating dates.
     const target = Date.parse(`${d}T00:00:00Z`);
-    return target <= Date.now() + 24 * 60 * 60 * 1000;
+    return target <= Date.now() + FURTHEST_AHEAD_UTC_OFFSET_MS + 24 * 60 * 60 * 1000;
   },
   { message: "Workout date cannot be in the future", when: ({ issues }) => issues.length === 0 },
 );
@@ -962,6 +970,21 @@ export const addExerciseSetBodySchema = disallowLegacyEmomRowName(
   ),
 );
 export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
+
+// The whole order of one workout's or plan day's sets, saved in one request.
+// A drag used to send one PATCH per moved set, so a long list could use up the
+// set-write rate limit part way through and leave an exercise split between
+// saved and unsaved rows. PF5 (CODEBASE_ANALYSIS_2026-10-03)
+export const EXERCISE_SET_ORDER_MAX = 1000;
+export const exerciseSetOrderBodySchema = z
+  .object({
+    setIds: z.array(z.string().min(1).max(255)).min(1).max(EXERCISE_SET_ORDER_MAX),
+  })
+  .refine((body) => new Set(body.setIds).size === body.setIds.length, {
+    message: "setIds lists each set once.",
+    path: ["setIds"],
+  });
+export type ExerciseSetOrderBody = z.infer<typeof exerciseSetOrderBodySchema>;
 
 export interface ParsedExercise extends ParsedExerciseSetStructureMetadata {
   exerciseName: string;

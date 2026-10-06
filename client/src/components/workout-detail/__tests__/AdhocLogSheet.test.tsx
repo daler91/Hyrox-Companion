@@ -68,7 +68,8 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/queryClient", () => ({
-  queryClient: { invalidateQueries: invalidateQueriesMock },
+  // getQueryData: the PR toast reads the athlete's units from the cache (CL58).
+  queryClient: { invalidateQueries: invalidateQueriesMock, getQueryData: vi.fn() },
 }));
 
 vi.mock("@/hooks/use-toast", () => ({

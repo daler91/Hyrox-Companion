@@ -2,6 +2,7 @@ import { Ruler, Timer, TrendingUp,Weight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { categoryChipColors, categoryLabels, getExerciseLabel } from "@/lib/exerciseUtils";
+import { formatRecordAmount, formatRecordTime } from "@/lib/personalRecordFormat";
 
 interface PersonalRecordItemProps {
   readonly pr: {
@@ -46,7 +47,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
             </div>
             <div>
               <p className="font-bold tabular-nums" data-testid={`text-pr-weight-${pr.exerciseName}`}>
-                {pr.maxWeight}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel}</span>
+                {formatRecordAmount(pr.maxWeight)}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel}</span>
               </p>
               {pr.maxWeightDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxWeightDate)}</p>}
             </div>
@@ -60,7 +61,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
             </div>
             <div>
               <p className="font-bold tabular-nums" data-testid={`text-pr-distance-${pr.exerciseName}`}>
-                {pr.maxDistance}<span className="text-muted-foreground text-xs font-normal ml-0.5">{dLabel}</span>
+                {formatRecordAmount(pr.maxDistance)}<span className="text-muted-foreground text-xs font-normal ml-0.5">{dLabel}</span>
               </p>
               {pr.maxDistanceDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.maxDistanceDate)}</p>}
             </div>
@@ -74,7 +75,8 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
             </div>
             <div>
               <p className="font-bold tabular-nums" data-testid={`text-pr-time-${pr.exerciseName}`}>
-                {pr.bestTime}<span className="text-muted-foreground text-xs font-normal ml-0.5">min</span>
+                {/* Stored in minutes; read as a clock, not "3.7666667min". CL35 (CODEBASE_ANALYSIS_2026-10-03) */}
+                {formatRecordTime(pr.bestTime)}
               </p>
               {pr.bestTimeDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.bestTimeDate)}</p>}
             </div>
@@ -88,7 +90,7 @@ export function PersonalRecordItem({ pr, weightLabel, dLabel }: PersonalRecordIt
             </div>
             <div>
               <p className="font-bold tabular-nums" data-testid={`text-pr-e1rm-${pr.exerciseName}`}>
-                {pr.estimated1RM}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel} e1RM</span>
+                {formatRecordAmount(pr.estimated1RM)}<span className="text-muted-foreground text-xs font-normal ml-0.5">{weightLabel} e1RM</span>
               </p>
               {pr.estimated1RMDate && <p className="text-[10px] text-muted-foreground">{formatDate(pr.estimated1RMDate)}</p>}
             </div>

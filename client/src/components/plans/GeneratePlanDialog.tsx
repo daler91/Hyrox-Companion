@@ -51,7 +51,9 @@ function getDescription(
   mode: GeneratePlanDialogProps["mode"],
   isGenerating: boolean,
 ): string {
-  if (isGenerating) return "Generating your plan — this takes 1–2 minutes…";
+  if (isGenerating) {
+    return "Generating your plan — this takes 1–2 minutes. You can close this window; it keeps generating.";
+  }
   if (step === 0) return "What's your training goal?";
   if (step === 1 && mode === "onboarding") {
     return "Set your plan dates, schedule, and experience level.";
@@ -95,13 +97,23 @@ export function GeneratePlanDialog({
   });
   const generatePlan = useGeneratePlan();
 
+  // The dialog closes while a plan generates; the generation goes on, and so
+  // does the watch on it, so the plan still arrives with its toast. Refusing to
+  // close trapped the athlete behind a job that never settled.
+  // CL47 (CODEBASE_ANALYSIS_2026-10-03)
   const handleOpenChange = (nextOpen: boolean) => {
-    if (generatePlan.isPending) return; // prevent closing while generating
     onOpenChange(nextOpen);
-    if (!nextOpen) {
-      form.resetForm();
-      generatePlan.reset();
+    if (nextOpen) return;
+    if (generatePlan.isPending) {
+      toast({
+        title: "Your plan is still generating",
+        description:
+          "It will appear in your plans when it's ready, usually within a couple of minutes.",
+      });
+      return;
     }
+    form.resetForm();
+    generatePlan.reset();
   };
 
   const handleEnableAiCoach = () => {

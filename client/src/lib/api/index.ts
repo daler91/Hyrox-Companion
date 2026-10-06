@@ -6,7 +6,15 @@ export type {
 } from "./analytics";
 export { analytics, timeline } from "./analytics";
 export { athleteFacts } from "./athleteFacts";
-export type { ChatFocus, ChatHistoryMessage, ChatTurnIds, RagInfo, RagStatus } from "./coaching";
+export type {
+  ChatFocus,
+  ChatHistoryCursor,
+  ChatHistoryMessage,
+  ChatHistoryPage,
+  ChatTurnIds,
+  RagInfo,
+  RagStatus,
+} from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
 export {
@@ -137,6 +145,8 @@ export const QUERY_KEYS = {
   planProposal: (id: string) => ["/api/v1/plan-proposals", id] as const,
   planProposalPrefix: ["/api/v1/plan-proposals"] as const,
   coachingMaterials: ["/api/v1/coaching-materials"] as const,
+  // Under coachingMaterials, so a create or delete refreshes the list (PF4).
+  coachingMaterialSummaries: ["/api/v1/coaching-materials", "summaries"] as const,
   ragStatus: ["/api/v1/coaching-materials/rag-status"] as const,
   stravaStatus: ["/api/v1/strava/status"] as const,
   garminStatus: ["/api/v1/garmin/status"] as const,

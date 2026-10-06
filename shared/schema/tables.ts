@@ -236,7 +236,7 @@ export const users = pgTable("users", {
   erasureRequestedAt: timestamp("erasure_requested_at", { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, () => [
+}, (table) => [
   check("users_notify_hour_check", sql`notify_hour IS NULL OR (notify_hour BETWEEN 0 AND 23)`),
   check(
     "users_notify_hour_weekly_summary_check",
@@ -258,6 +258,9 @@ export const users = pgTable("users", {
     "users_notify_hour_analysis_digest_check",
     sql`notify_hour_analysis_digest IS NULL OR (notify_hour_analysis_digest BETWEEN 0 AND 23)`,
   ),
+  // The missed-day sweep reads one timezone's athletes at a time
+  // (PlanStorage.markMissedPlanDays). PF16 (CODEBASE_ANALYSIS_2026-10-03)
+  index("idx_users_user_timezone").on(table.userTimezone),
 ]);
 
 export const rateLimitBuckets = pgTable(
@@ -713,7 +716,12 @@ export const stravaConnections = pgTable("strava_connections", {
   // reconnect (upsert) and on any successful token refresh.
   requiresReauth: boolean("requires_reauth").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // The Strava webhook finds an event's owners by athlete id
+  // (listStravaConnectionUsersByAthleteId). Not unique: one athlete can be
+  // connected to more than one account. PF17 (CODEBASE_ANALYSIS_2026-10-03)
+  index("idx_strava_connections_strava_athlete_id").on(table.stravaAthleteId),
+]);
 
 // The compact Strava stream behind a graded run ("did the session do its
 // job?"). One row per workout log, only for runs linked to a plan day whose
@@ -1432,6 +1440,8 @@ export const planAdjustmentProposals = pgTable(
       sql`status IN ('pending','applied','dismissed','superseded','invalidated','reverted')`,
     ),
     index("idx_plan_proposals_user_status").on(table.userId, table.status),
+    // Deleting a plan cascades here by plan_id. PF18 (CODEBASE_ANALYSIS_2026-10-03)
+    index("idx_plan_adjustment_proposals_plan_id").on(table.planId),
     // At most one pending proposal per athlete (D51, CODEBASE_ANALYSIS_2026-10-03).
     // PlanProposalStorage.create supersedes the pending one before inserting;
     // this is what holds when two turns create at once.
@@ -1468,6 +1478,8 @@ export const planDayMoves = pgTable(
   },
   (table) => [
     index("idx_plan_day_moves_user_moved").on(table.userId, table.movedAt),
+    // Deleting a plan day cascades here by plan_day_id. PF18 (CODEBASE_ANALYSIS_2026-10-03)
+    index("idx_plan_day_moves_plan_day_id").on(table.planDayId),
     check("plan_day_moves_kind_check", sql`kind IN (${inValues(planDayMoveKindEnum)})`),
     check("plan_day_moves_dates_check", sql`from_date <> to_date`),
   ],
@@ -1515,6 +1527,14 @@ export const chatMessages = pgTable(
     // costing an extra btree maintained on every insert/delete to this
     // high-write-volume table.
     index("idx_chat_messages_user_time").on(table.userId, table.timestamp),
+    // Deleting a proposal (with its plan, or the account) sets proposal_id to
+    // NULL on the replies that carried it, which without this scanned the
+    // whole table once per proposal. Partial: only `proposal` replies carry
+    // one, so the rest of this high-write table adds nothing to it.
+    // PF18 (CODEBASE_ANALYSIS_2026-10-03)
+    index("idx_chat_messages_proposal_id")
+      .on(table.proposalId)
+      .where(sql`${table.proposalId} IS NOT NULL`),
     check("chat_messages_kind_check", sql`kind IN (${inValues(chatMessageKindEnum)})`),
     check("chat_messages_feedback_check", sql`feedback IS NULL OR feedback IN (${inValues(chatFeedbackEnum)})`),
   ],
@@ -1888,6 +1908,13 @@ export const foodServings = pgTable(
   (table) => [
     index("idx_food_servings_food_id").on(table.foodId),
     index("idx_food_servings_created_by_user_id").on(table.createdByUserId),
+    // One copy of each shared portion: two first opens of a USDA food at once
+    // both cached its portions (cacheServings inserts with ON CONFLICT DO
+    // NOTHING against this). Personal portions are deduped per owner and label
+    // by createServing. PF11 (CODEBASE_ANALYSIS_2026-10-03)
+    uniqueIndex("uq_food_servings_shared")
+      .on(table.foodId, table.label, table.grams)
+      .where(sql`${table.createdByUserId} IS NULL`),
     check("food_servings_grams_positive_check", sql`grams > 0`),
   ],
 );
@@ -2044,6 +2071,9 @@ export const foodFavorites = pgTable(
   },
   (table) => [
     uniqueIndex("uq_food_favorites_user_food").on(table.userId, table.foodId),
+    // Deleting a food cascades here by food_id, which the unique index above
+    // (user first) cannot serve. Same gap as PF18 (CODEBASE_ANALYSIS_2026-10-03).
+    index("idx_food_favorites_food_id").on(table.foodId),
   ],
 );
 export type FoodFavorite = typeof foodFavorites.$inferSelect;

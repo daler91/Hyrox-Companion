@@ -1,6 +1,8 @@
 import {
   type AddExerciseSetBody,
   addExerciseSetBodySchema,
+  type ExerciseSetOrderBody,
+  exerciseSetOrderBodySchema,
   insertWorkoutLogRouteSchema,
   type PatchExerciseSetBody,
   patchExerciseSetBodySchema,
@@ -145,6 +147,16 @@ export function registerWorkoutCrudRoutes(router: Router): void {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
     res.status(201).json(created);
+  });
+
+  // The workout's whole set order in one write (PF5, CODEBASE_ANALYSIS_2026-10-03);
+  // see the plan-day twin in routes/plans.ts.
+  protectedPatch(router, "/api/v1/workouts/:id/set-order", { limiter: rateLimiter("setOrder", 30), middleware: [validateBody(exerciseSetOrderBodySchema)] }, async (req: Request<{ id: string }, Record<string, never>, ExerciseSetOrderBody>, res: Response) => {
+    const sets = await storage.workouts.mutateExerciseSetOrder({ kind: "workoutLog", ownerId: req.params.id }, req.body.setIds, getUserId(req));
+    if (!sets) {
+      return sendNotFound(res, WORKOUT_NOT_FOUND);
+    }
+    res.json(sets);
   });
 
   protectedDelete(router, "/api/v1/workouts/:id/sets/:setId", { limiter: rateLimiter("workoutSet", 60) }, async (req: Request<{ id: string; setId: string }>, res: Response) => {

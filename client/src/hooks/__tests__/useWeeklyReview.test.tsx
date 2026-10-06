@@ -1,14 +1,15 @@
 import type { WeeklyReview } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
+import { queryClient as appQueryClient } from "@/lib/queryClient";
 
-import { useWeeklyReview } from "../useWeeklyReview";
+import { useSetWeeklyReviewIntent, useWeeklyReview } from "../useWeeklyReview";
 
-const mocks = vi.hoisted(() => ({ getWeeklyReview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getWeeklyReview: vi.fn(), setWeeklyReviewIntent: vi.fn() }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -16,7 +17,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     api: {
       ...actual.api,
-      analytics: { ...actual.api.analytics, getWeeklyReview: mocks.getWeeklyReview },
+      analytics: {
+        ...actual.api.analytics,
+        getWeeklyReview: mocks.getWeeklyReview,
+        setWeeklyReviewIntent: mocks.setWeeklyReviewIntent,
+      },
     },
   };
 });
@@ -106,5 +111,69 @@ describe("useWeeklyReview closed-week caching (CL22)", () => {
     await mount();
 
     expect(mocks.getWeeklyReview).toHaveBeenCalledTimes(2);
+  });
+});
+
+// CL51 (CODEBASE_ANALYSIS_2026-10-03): a mid-week `?week=` link and the intent
+// save must land on one cache key, or the save never refreshes the open page.
+describe("useWeeklyReview week key (CL51)", () => {
+  // Wednesdays of two consecutive closed weeks (Mondays 2025-01-06 and -13).
+  const MID_WEEK = "2025-01-08";
+  const NEXT_MID_WEEK = "2025-01-15";
+
+  beforeEach(() => {
+    mocks.getWeeklyReview.mockReset();
+    mocks.getWeeklyReview.mockImplementation(() => Promise.resolve(review()));
+    mocks.setWeeklyReviewIntent.mockReset();
+    mocks.setWeeklyReviewIntent.mockResolvedValue({ weekStart: CLOSED_WEEK, intent: "Hold the pace" });
+  });
+
+  afterEach(() => {
+    appQueryClient.clear();
+  });
+
+  it("asks for and caches a mid-week date under its Monday", async () => {
+    const { client } = setup();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const hook = renderHook(() => useWeeklyReview(MID_WEEK), { wrapper });
+    await waitFor(() => {
+      expect(hook.result.current.isSuccess).toBe(true);
+    });
+
+    expect(mocks.getWeeklyReview).toHaveBeenCalledWith(CLOSED_WEEK);
+    expect(client.getQueryData(QUERY_KEYS.weeklyReview(CLOSED_WEEK))).toBeDefined();
+    expect(client.getQueryData(QUERY_KEYS.weeklyReview(MID_WEEK))).toBeUndefined();
+  });
+
+  it("refetches the open mid-week review and next week's after an intent save", async () => {
+    // useApiMutation invalidates through the app's client, so both render under it.
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={appQueryClient}>{children}</QueryClientProvider>
+    );
+    const hook = renderHook(
+      () => ({
+        thisWeek: useWeeklyReview(MID_WEEK),
+        nextWeek: useWeeklyReview(NEXT_MID_WEEK),
+        save: useSetWeeklyReviewIntent(CLOSED_WEEK),
+      }),
+      { wrapper },
+    );
+    await waitFor(() => {
+      expect(hook.result.current.thisWeek.isSuccess).toBe(true);
+      expect(hook.result.current.nextWeek.isSuccess).toBe(true);
+    });
+    mocks.getWeeklyReview.mockClear();
+
+    await act(async () => {
+      await hook.result.current.save.mutateAsync("Hold the pace");
+    });
+
+    await waitFor(() => {
+      expect(mocks.getWeeklyReview).toHaveBeenCalledWith(CLOSED_WEEK);
+      expect(mocks.getWeeklyReview).toHaveBeenCalledWith("2025-01-13");
+    });
   });
 });

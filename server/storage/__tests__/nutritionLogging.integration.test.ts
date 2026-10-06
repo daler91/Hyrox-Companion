@@ -1,5 +1,5 @@
-import { foods } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { foods, foodServings } from "@shared/schema";
+import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "../../db";
@@ -489,6 +489,57 @@ describe("NutritionStorage (real Postgres)", () => {
       expect(await storage.nutrition.getCurrentTarget(ALICE, "2026-08-25")).toMatchObject({ calories: 2300 });
       expect(await storage.nutrition.getCurrentTarget(ALICE, "2026-07-31")).toBeUndefined();
       expect(await storage.nutrition.getCurrentTarget(BOB, "2026-08-25")).toBeUndefined();
+    });
+  });
+
+  // PF11 (CODEBASE_ANALYSIS_2026-10-03): two first opens of a USDA food at once
+  // both cached its portions, so it listed each one twice.
+  describe("shared servings are stored once", () => {
+    const PORTIONS = [
+      { label: "1 bar", grams: 40 },
+      { label: "2 bars", grams: 80 },
+    ];
+
+    async function servingRows(foodId: string) {
+      return await db
+        .select({ label: foodServings.label, grams: foodServings.grams, owner: foodServings.createdByUserId })
+        .from(foodServings)
+        .where(eq(foodServings.foodId, foodId))
+        .orderBy(asc(foodServings.grams));
+    }
+
+    it("keeps one copy when two opens cache the same portions at once", async () => {
+      const bar = await seedCustomFood(BOB, "Granola bar", { createdByUserId: null, isPublic: true });
+
+      const [first, second] = await Promise.all([
+        storage.nutrition.cacheServings(bar.id, PORTIONS),
+        storage.nutrition.cacheServings(bar.id, PORTIONS),
+      ]);
+
+      expect(await servingRows(bar.id)).toEqual(PORTIONS.map((portion) => ({ ...portion, owner: null })));
+      // Each open still gets the food's whole list, whichever one inserted it.
+      expect(first.map((row) => row.label).sort((left, right) => left.localeCompare(right))).toEqual(["1 bar", "2 bars"]);
+      expect(second.map((row) => row.label).sort((left, right) => left.localeCompare(right))).toEqual(["1 bar", "2 bars"]);
+    });
+
+    it("stores a custom food's seed portion once when the form lists it twice", async () => {
+      const food = await storage.nutrition.createCustomFood(BOB, {
+        name: "Bob's flapjack",
+        caloriesPer100g: 450,
+        servings: [PORTIONS[0], PORTIONS[0], PORTIONS[1]],
+      });
+
+      expect(await servingRows(food.id)).toEqual(PORTIONS.map((portion) => ({ ...portion, owner: null })));
+    });
+
+    it("lets an athlete's own portion match a shared one", async () => {
+      const bar = await seedCustomFood(BOB, "Granola bar", { createdByUserId: null, isPublic: true });
+      await storage.nutrition.cacheServings(bar.id, [PORTIONS[0]]);
+
+      const own = await storage.nutrition.createServing(ALICE, bar.id, PORTIONS[0]);
+
+      expect(own).toMatchObject({ createdByUserId: ALICE });
+      expect(await servingRows(bar.id)).toHaveLength(2);
     });
   });
 });

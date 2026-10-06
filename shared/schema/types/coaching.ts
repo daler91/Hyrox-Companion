@@ -24,6 +24,16 @@ export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials
 export type InsertCoachingMaterial = z.infer<typeof insertCoachingMaterialSchema>;
 export type CoachingMaterial = typeof coachingMaterials.$inferSelect;
 
+/**
+ * A material as the Settings list shows it (`GET /api/v1/coaching-materials/summaries`):
+ * its text left out and its length counted by the server. The list used to
+ * download every material's full text, up to 1.5M characters each, to show
+ * that length. PF4 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export type CoachingMaterialSummary = Omit<CoachingMaterial, "content" | "userId"> & {
+  contentLength: number;
+};
+
 // Document chunk types
 export type DocumentChunk = typeof documentChunks.$inferSelect;
 export type InsertDocumentChunk = typeof documentChunks.$inferInsert;

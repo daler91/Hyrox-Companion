@@ -1,7 +1,7 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
 import { hasLocalOnboardingComplete } from "@/hooks/onboardingStorage";
-import { useCompleteOnboarding } from "@/hooks/useCompleteOnboarding";
+import { useCompleteOnboarding, useOnboardingUserId } from "@/hooks/useCompleteOnboarding";
 import { queryClient } from "@/lib/queryClient";
 
 import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
@@ -35,6 +35,10 @@ export function useOnboarding(
   const { onboardingCompleted } = options;
   const isAuthUserLoaded = options.isAuthUserLoaded ?? true;
   const completeOnboarding = useCompleteOnboarding();
+  // The local flag is this athlete's alone: an unscoped one let the next account
+  // on the device skip onboarding, and the sync below marked it complete on
+  // the server. CL45 (CODEBASE_ANALYSIS_2026-10-03)
+  const userId = useOnboardingUserId();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingTriggered, setOnboardingTriggered] = useState(false);
   const [pendingImportCompletion, setPendingImportCompletion] = useState(false);
@@ -45,10 +49,10 @@ export function useOnboarding(
   useEffect(() => {
     if (!isAuthUserLoaded) return;
     if (onboardingCompleted || syncedLocalCompletionRef.current) return;
-    if (!hasLocalOnboardingComplete()) return;
+    if (!hasLocalOnboardingComplete(userId)) return;
     syncedLocalCompletionRef.current = true;
     completeOnboarding();
-  }, [completeOnboarding, isAuthUserLoaded, onboardingCompleted]);
+  }, [completeOnboarding, isAuthUserLoaded, onboardingCompleted, userId]);
 
   useEffect(() => {
     if (onboardingTriggered) return;
@@ -56,7 +60,8 @@ export function useOnboarding(
     // Only a server that answered "not completed" launches it: a failed
     // auth-user query leaves completion unknown, and a returning athlete on a
     // device without the local flag got the wizard. U5 (CODEBASE_ANALYSIS_2026-10-03)
-    const isFirstTime = isNewUser && onboardingCompleted === false && !hasLocalOnboardingComplete();
+    const isFirstTime =
+      isNewUser && onboardingCompleted === false && !hasLocalOnboardingComplete(userId);
     if (forcedByUrl || isFirstTime) {
       if (forcedByUrl) {
         clearOnboardingForceParam();
@@ -65,7 +70,7 @@ export function useOnboarding(
       setOnboardingTriggered(true);
       setShowOnboarding(true);
     }
-  }, [isNewUser, onboardingCompleted, onboardingTriggered]);
+  }, [isNewUser, onboardingCompleted, onboardingTriggered, userId]);
 
   useEffect(() => {
     if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {

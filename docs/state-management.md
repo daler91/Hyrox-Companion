@@ -133,7 +133,7 @@ All hooks are in `client/src/hooks/`.
 | Hook | File | Purpose |
 |------|------|---------|
 | `useAuth` | `useAuth.ts` | Integrates Clerk auth with database user sync. Polls the `authUser` query every 2s while `isAutoCoaching` is true (max 5 min, pauses while the tab is hidden). Invalidates timeline queries when auto-coaching completes. Resets the cached CSRF token on sign-in state transitions. Also exports `useIsAutoCoaching`, `useIsAiCoachEnabled`, `useIsOnboardingCompleted`, and `useIsAuthUserLoaded` -- thin `select`-based subscribers to single auth-user fields. |
-| `useSignOut` | `useSignOut.ts` | Clerk sign-out. Calls `clearUserLocalData()` to purge the offline queue and workout drafts from local/session storage before signing out. |
+| `useSignOut` | `useSignOut.ts` | Clerk sign-out. Calls `clearUserLocalData()` to purge the offline queue and workout drafts from local/session storage before signing out. `useConfirmedSignOut`, which the Log out button uses, asks first while offline writes are still queued. |
 | `useEmailCheck` | `useEmailCheck.ts` | Fire-and-forget email check once per authenticated session (gated on `isAuthenticated` and `isAppUserLoaded`). |
 
 ### Data Loading
@@ -170,7 +170,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 | Hook | File | Purpose |
 |------|------|---------|
 | `useChatSession` | `useChatSession.ts` | One coach chat surface: the message buffer, `sendMessage` (SSE streaming with `requestAnimationFrame` batching, RAG info and safety-notice tracking) and failed sends (turns saved once the server accepts them, failure notes worded by `describeChatFailure`, and `retryMessage`). Composes the three hooks below; the SSE request lives in `chat/chatStream.ts` and the pure history, turn-saving and failure rules in `chat/chatSessionModel.ts`. |
-| `useChatHistory` | `chat/useChatHistory.ts` | Loads the saved conversation once into the chat buffer, and clears it; the server saves the turns. |
+| `useChatHistory` | `chat/useChatHistory.ts` | Loads the saved conversation once into the chat buffer, keeping any message sent before it arrived (CL41), and clears it; the server saves the turns. |
 | `useChatAutoScroll` | `chat/useChatAutoScroll.ts` | Keeps the chat viewport pinned to the newest message while the athlete is at the bottom. |
 | `useBudgetWarning` | `chat/useBudgetWarning.ts` | One toast per session when a chat response carries `X-AI-Budget-Warning`. |
 
@@ -192,7 +192,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 | Hook | File | Purpose |
 |------|------|---------|
 | `useTimelineFilters` | `useTimelineFilters.ts` | Filter state for timeline (plan selector, status filter, date range). |
-| `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local legacy fallback. |
+| `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local fallback that holds the signed-in athlete's id (`onboardingStorage.ts`), so another account on the device neither skips onboarding nor is marked complete by it. |
 | `useEnableAiCoach` | `useEnableAiCoach.ts` | Mutation that turns `aiCoachEnabled` on (the consent every AI route checks) and refreshes the auth user and preferences. Used by the AI plan generator's consent step. |
 | `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state and navigation. The form is a draft over the athlete's saved preferences (`onboardingProfile.ts`), and each step writes only the fields that differ from what is saved, so "Run setup again" never resets an established athlete's settings. |
 | `useOnlineStatus` | `useOnlineStatus.ts` | Tracks `navigator.onLine` with event listeners. |
@@ -243,7 +243,7 @@ flowchart TD
 
 A localStorage-backed mutation queue. Writes opt in through `runWithOfflineFallback` (`client/src/lib/offlineMutationFallback.ts`), which enqueues instead of sending when the browser is offline, or when the live call fails with a connectivity-shaped error (application 4xx/5xx errors are rethrown, not queued). Three writes use it:
 
-- workout-log creates — `POST /api/v1/workouts` (`useSaveWorkoutMutation`);
+- workout-log creates — `POST /api/v1/workouts`, from /log (`useSaveWorkoutMutation`) and from a planned session ticked off on the timeline or with LogSheet's "Log workout" (`useWorkoutActionMutations`). A queued planned-session log takes the planned row off the cached timeline for the session, since the pending-workout overlay already shows the queued log (CL55);
 - plan-day status changes, skips included — `PATCH /api/v1/plans/days/:dayId/status` (`useWorkoutActionMutations`), whose optimistic timeline flip stays in place for the session while the change is queued;
 - food-log creates — `POST /api/v1/nutrition/logs` (`useLogFood`).
 
@@ -256,8 +256,9 @@ All other mutations use direct server requests.
 - **Max age:** 7 days -- stale mutations are dropped during flush.
 - **Max retries:** 5 definitive rejections per mutation -- dropped after exceeding. Only a 4xx that a retry won't change counts: not a 401 (session lapsed while offline), 408, 429, a 409 `IDEMPOTENT_REQUEST_IN_PROGRESS` or a 403 `EBADCSRFTOKEN`. Network errors, timeouts and 5xx keep the mutation's count, so a flaky connection can't drop it; the max age still bounds those. A plain 500 counts toward a separate cap of 20 instead (502/503/504 never count): because a replay stops at a failed entry, a write the server fails every time would otherwise hold everything queued behind it for the full 7 days.
 - **Ordering:** Replay goes one mutation at a time, oldest first, and stops at the first one that fails. The mutations behind it stay queued in order, so a newer edit to the same record can never land before an older one.
+- **Replay timeout:** Each replay request is abandoned after 30 s and counts as a failure with no answer (it keeps its retry count), so a request the server never answers can't hold the run, and every flush that joins it, until a reload. The retry reuses the idempotency key, so a write the server did commit is not applied twice (CL57).
 - **Idempotency:** Each queue-backed write generates a crypto-backed unique ID before the first request, sends it as `X-Idempotency-Key`, and reuses it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
-- **Privacy cleanup:** Signout and account deletion clear queued mutation bodies and user-scoped drafts from browser storage.
+- **Privacy cleanup:** Signout and account deletion clear queued mutation bodies and user-scoped drafts from browser storage. While writes are queued, the Log out button asks first (`useConfirmedSignOut`), since signing out deletes them; a different athlete signing in still drops them without asking, announced as `wrong_account` (CL61).
 
 ### API
 
@@ -331,7 +332,8 @@ The Log Workout page autosaves a working draft to `localStorage` so an accidenta
   - `fitai-log-workout-draft:<userKey>` — the draft payload, in `localStorage` (durable across sessions and tabs). A draft whose stored `userKey` does not match is ignored.
   - `fitai-log-workout-draft-announced:<userKey>` — a per-tab flag in `sessionStorage` that suppresses re-showing the "Draft restored" toast more than once within the same browser session. Scoped to `sessionStorage` deliberately so a fresh tab announces the restore again.
 - **Schema version:** `DRAFT_VERSION = 5` (v5 added the manual session start time `timeOfDayMin`, v4 `distance` / `avgHeartrate` / `maxHeartrate`, v3 `durationMinutes`). Drafts written under v2–v4 still load, with the missing fields hydrated as blank/null; any other version (v1) is discarded on load.
-- **Lifetime:** Drafts persist **indefinitely** until they are explicitly cleared. The hook stores `savedAt: Date.now()` but never checks the timestamp for expiry — clearing only happens when the user successfully saves the workout, empties the form (a blank draft is removed rather than saved), signs out (via `clearUserLocalData()` in `client/src/hooks/useSignOut.ts`), or deletes their account (via `AccountDangerZone`). This is intentional, since the draft is single-user device-local state with no privacy retention concern beyond the signout/deletion paths that already clear it.
+- **Restoring:** A restored draft resumes on the step it was left on, under a notice (`RestoredDraftNotice`) that names the date the save will use, offers "Use today's date" when that date is not today, and a "Discard draft" that clears it and starts a blank form (CL44).
+- **Lifetime:** Drafts persist **indefinitely** until they are explicitly cleared. The hook stores `savedAt: Date.now()` but never checks the timestamp for expiry — clearing only happens when the user successfully saves the workout, discards it from the restored-draft notice, empties the form (a blank draft is removed rather than saved), signs out (via `clearUserLocalData()` in `client/src/hooks/useSignOut.ts`), or deletes their account (via `AccountDangerZone`). This is intentional, since the draft is single-user device-local state with no privacy retention concern beyond the signout/deletion paths that already clear it.
 
 ---
 
@@ -370,7 +372,7 @@ Performance: Uses `Set`-based lookups for O(1) membership checks instead of `Arr
 
 | Function | Description |
 |----------|-------------|
-| `calculateStats(timeline)` | One pass over the timeline entries → `TrainingStats` for the Coach panel: `workoutsThisWeek` / `completedThisWeek` (Monday-start week, matching the server), `plannedUpcoming`, and an all-time `completionRate` over finished days — today and `excused` days are left out, and it is `null` until something has come due |
+| `calculateStats(timeline)` | One pass over the timeline entries → `TrainingStats` for the Coach panel: `workoutsThisWeek` / `completedThisWeek` (Monday-start week, matching the server), `plannedUpcoming`, and a `completionRate` over the finished days of the last 4 weeks (`COMPLETION_RATE_WINDOW_DAYS`, which the Timeline's first page holds, so "Load older workouts" does not move it; the panel labels it "4wk rate") — today and `excused` days are left out, and it is `null` when nothing came due in the window |
 | `formatSecondsToMmSs(seconds)` | A split as `M:SS` (272 → `4:32`) |
 | `formatSecondsToClock(seconds)` | Re-exported from `shared/formatClock.ts`: a duration as `H:MM:SS` |
 

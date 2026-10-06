@@ -310,6 +310,23 @@ describe("GET /api/v1/overview-analysis", () => {
     expect(response.body.stale).toBe(true);
   });
 
+  // PF10 (CODEBASE_ANALYSIS_2026-10-03): the analysis reads training logs only,
+  // so a walk synced since it was generated changes nothing it was built on.
+  it("does not flag the stored analysis stale for a walk logged since", async () => {
+    mockStoredAnalyticsResult("overview_analysis", { sections: {} });
+    vi.mocked(storage.workouts.listWorkoutLogs).mockImplementation((_userId, _limit, _offset, filter) =>
+      Promise.resolve((filter?.onlyTraining ? [{ date: "2026-06-01" }] : [{ date: "2026-06-04" }]) as never),
+    );
+    vi.mocked(storage.workouts.countWorkoutLogs).mockImplementation((_userId, filter) =>
+      Promise.resolve(filter?.onlyTraining ? 1 : 2),
+    );
+
+    const response = await request(app).get("/api/v1/overview-analysis");
+
+    expect(response.status).toBe(200);
+    expect(response.body.stale).toBe(false);
+  });
+
   // AI31 (CODEBASE_ANALYSIS_2026-10-03): a reading of one range must not sit
   // beside the charts of another.
   describe("with the page's range", () => {
@@ -1082,19 +1099,33 @@ describe("Chat History and Messages Routes", () => {
     const mockMessages = [{ id: "m1", role: "user", content: "Hi", timestamp: new Date("2025-01-01T00:00:00Z") }];
     vi.mocked(storage.users.getChatMessages).mockResolvedValue(mockMessages);
 
-    const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
+    const response = await request(app).get(`${CHAT_HISTORY_ENDPOINT}?limit=1`);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockMessages.map((m) => ({ ...m, timestamp: m.timestamp.toISOString() })));
     // Without a workout, the general conversation (I4).
     expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", {
-      limit: undefined,
+      limit: 1,
       beforeTimestamp: undefined,
       beforeId: undefined,
       thread: { planDayId: undefined, workoutLogId: undefined },
     });
     expect(response.headers["x-next-cursor"]).toBe("2025-01-01T00:00:00.000Z");
     expect(response.headers["x-next-cursor-id"]).toBe("m1");
+  });
+
+  // CL56 (CODEBASE_ANALYSIS_2026-10-03): only a full page can have older rows.
+  it("sends no cursor for a page shorter than the limit", async () => {
+    vi.mocked(storage.users.getChatMessages).mockResolvedValue([
+      { id: "m1", role: "user", content: "Hi", timestamp: new Date("2025-01-01T00:00:00Z") },
+    ]);
+
+    const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
+
+    expect(response.status).toBe(200);
+    expect(storage.users.getChatMessages).toHaveBeenCalledWith("test_user_id", expect.objectContaining({ limit: 50 }));
+    expect(response.headers["x-next-cursor"]).toBeUndefined();
+    expect(response.headers["x-next-cursor-id"]).toBeUndefined();
   });
 
   it("never shows a long session's rolling notes", async () => {

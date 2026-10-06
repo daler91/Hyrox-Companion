@@ -96,7 +96,10 @@ M8 — the code did not know the unit, guessed metric, and rendered the guess as
 
 - `exercise_sets.time` now holds fractional values (a 45-second step is `0.75`). Anything
   rendering it must go through `formatMinutes`, which shows sub-minute values as seconds
-  rather than `"0.75min"`.
+  rather than `"0.75min"`. A personal record's best time goes through `formatRecordTime`
+  (`client/src/lib/personalRecordFormat.ts`) instead, which reads it as a race clock
+  (`"0:45"`, `"3:46"`), on the weekly review, the PR list and the new-PR toast alike
+  (CL35, CL58).
 - The set-level zod bound moved from `max(86_400)` to `max(SET_TIME_MAX_MINUTES)` (1440).
   The old bound permitted a 60-day set and so could never catch a seconds value in a
   minutes field.

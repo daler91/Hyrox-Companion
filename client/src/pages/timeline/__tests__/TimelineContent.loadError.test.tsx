@@ -65,7 +65,7 @@ function renderContent(overrides: Partial<Props> = {}) {
     ...overrides,
   } as unknown as Props;
   render(<TimelineContent {...props} />);
-  return { onRetryTimeline };
+  return { onRetryTimeline, props };
 }
 
 describe("TimelineContent load failure (U5)", () => {
@@ -101,5 +101,39 @@ describe("TimelineContent load failure (U5)", () => {
     renderContent({ timelineLoading: true, timelineError: true });
 
     expect(screen.getByTestId("timeline-skeleton")).toBeInTheDocument();
+  });
+});
+
+// CL71 (CODEBASE_ANALYSIS_2026-10-03): a status filter with no match in the
+// loaded pages said "No skipped workouts" with no way to look further back.
+describe("TimelineContent with nothing loaded matching the filter (CL71)", () => {
+  it("offers to load older sessions instead of saying there are none", async () => {
+    const user = userEvent.setup();
+    const { props } = renderContent({ filterStatus: "skipped", hasOlderEntries: true });
+
+    expect(screen.getByTestId("timeline-no-loaded-matches")).toHaveTextContent(
+      "No skipped workouts in the sessions loaded so far. Older sessions may match.",
+    );
+    expect(screen.queryByTestId("timeline-welcome")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("button-load-older"));
+    expect(props.onLoadOlder).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByTestId("button-clear-filter"));
+    expect(props.setFilterStatus).toHaveBeenCalledWith("all");
+  });
+
+  it("shows the older page loading in place", () => {
+    renderContent({ filterStatus: "skipped", hasOlderEntries: true, isLoadingOlder: true });
+
+    expect(screen.getByTestId("button-load-older")).toBeDisabled();
+    expect(screen.getByTestId("button-load-older")).toHaveTextContent("Loading older workouts…");
+  });
+
+  it("keeps the empty state once there is nothing older to load", () => {
+    renderContent({ filterStatus: "skipped", hasOlderEntries: false });
+
+    expect(screen.getByTestId("timeline-welcome")).toBeInTheDocument();
+    expect(screen.queryByTestId("button-load-older")).not.toBeInTheDocument();
   });
 });

@@ -46,11 +46,12 @@ vi.mock("../../services/workoutService", () => ({
 
 vi.mock("../../storage", async () =>
   (await import("../__tests__/testUtils")).mockStorageModule({
-    workouts: ["listWorkoutLogs", "getExerciseSetsByWorkoutLog", "getWorkoutStructureByWorkoutLog", "getWorkoutLog", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
+    workouts: ["listWorkoutLogs", "getExerciseSetsByWorkoutLog", "getWorkoutStructureByWorkoutLog", "getWorkoutLog", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete", "mutateExerciseSetOrder"],
     users: ["getUser"],
   }),
 );
 
+import { AppError, ErrorCode } from "../../errors";
 import { deriveMissingWorkoutSetsFromStructure } from "../../services/workoutService";
 import { storage } from "../../storage";
 
@@ -191,5 +192,63 @@ describe("GET /api/v1/workouts/:id", () => {
     expect(response.status).toBe(200);
     expect(response.body.suggestedRpe).toBeNull();
     expect(storage.users.getUser).not.toHaveBeenCalled();
+  });
+});
+
+// PF5 (CODEBASE_ANALYSIS_2026-10-03): a drag sent one PATCH per moved set.
+describe("PATCH /api/v1/workouts/:id/set-order", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = buildApp();
+  });
+
+  it("saves the workout's whole set order in one storage call", async () => {
+    const saved = [{ id: "set-b", sortOrder: 0 }, { id: "set-a", sortOrder: 1 }];
+    vi.mocked(storage.workouts.mutateExerciseSetOrder).mockResolvedValue(saved as never);
+
+    const response = await request(app).patch("/api/v1/workouts/log-1/set-order").send({ setIds: ["set-b", "set-a"] });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(saved);
+    expect(storage.workouts.mutateExerciseSetOrder).toHaveBeenCalledWith(
+      { kind: "workoutLog", ownerId: "log-1" },
+      ["set-b", "set-a"],
+      "test_user_id",
+    );
+  });
+
+  it("404s when the workout is not the athlete's", async () => {
+    // A bare mock resolves to nothing, as storage does for a workout that is not theirs.
+    vi.mocked(storage.workouts.mutateExerciseSetOrder).mockReset();
+
+    const response = await request(app).patch("/api/v1/workouts/log-1/set-order").send({ setIds: ["set-a"] });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({ error: "Workout not found" });
+  });
+
+  it.each([
+    ["an empty list", { setIds: [] }],
+    ["a set named twice", { setIds: ["set-a", "set-a"] }],
+    ["no list", {}],
+  ])("rejects %s without writing", async (_label, body) => {
+    const response = await request(app).patch("/api/v1/workouts/log-1/set-order").send(body);
+
+    expect(response.status).toBe(400);
+    expect(storage.workouts.mutateExerciseSetOrder).not.toHaveBeenCalled();
+  });
+
+  it("answers 409 when the list no longer matches the workout's sets", async () => {
+    vi.mocked(storage.workouts.mutateExerciseSetOrder).mockRejectedValue(
+      new AppError(ErrorCode.CONFLICT, "The exercise list changed since it was loaded.", 409),
+    );
+
+    const response = await request(app).patch("/api/v1/workouts/log-1/set-order").send({ setIds: ["set-a"] });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({ code: "CONFLICT" });
   });
 });

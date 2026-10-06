@@ -21,6 +21,7 @@ import { and, asc, desc, eq, gt, gte, inArray,isNotNull, isNull, lt, not, or, ty
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
+import { mutateExerciseSetOrder } from "./exerciseSetOrder";
 import {
   getMutationOwnerAdapter,
   type MutationOwnerAdapter,
@@ -34,6 +35,7 @@ import {
   queryExerciseSetsWithDates,
   structureTargetsFromExerciseSet,
 } from "./shared";
+import { countWorkoutLogs, listWorkoutLogs } from "./workoutLogReads";
 import { bestPriorWeightsKg, countPrSets, setsInKg } from "./workoutsPrCount";
 
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
@@ -390,37 +392,10 @@ export class WorkoutStorage {
     return createdLogs;
   }
 
-  async listWorkoutLogs(userId: string, limit?: number, offset?: number): Promise<WorkoutLog[]> {
-    let query = db
-      .select()
-      .from(workoutLogs)
-      .where(eq(workoutLogs.userId, userId))
-      .orderBy(desc(workoutLogs.date))
-      .$dynamic();
-
-    if (limit !== undefined) {
-      query = query.limit(limit);
-    }
-    if (offset !== undefined) {
-      query = query.offset(offset);
-    }
-
-    return await query;
-  }
-
-  /**
-   * How many workout logs the athlete has, total. Half of the analytics
-   * staleness anchor (audit L16) — the latest DATE cannot see a second session
-   * logged on a day that already had one, nor a delete of anything but the
-   * single latest row, and both change the history an analysis was built on.
-   */
-  async countWorkoutLogs(userId: string): Promise<number> {
-    const [row] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(workoutLogs)
-      .where(eq(workoutLogs.userId, userId));
-    return row?.total ?? 0;
-  }
+  // Module functions bound here (see workoutLogReads.ts); the
+  // storage.workouts.* calls and their mocks still work.
+  readonly listWorkoutLogs = listWorkoutLogs;
+  readonly countWorkoutLogs = countWorkoutLogs;
 
   async getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined> {
     const [log] = await db
@@ -926,6 +901,10 @@ export class WorkoutStorage {
   async mutateExerciseSetDelete(owner: SetRouteOwner, setId: string, userId: string): Promise<boolean> {
     return await this.deleteExerciseSetNormalized(toMutationOwnerContext(owner, userId), setId);
   }
+
+  // One owner's whole set order in one transaction (PF5); a module function
+  // bound here, like createGarminWorkoutLogs, since it uses no instance state.
+  readonly mutateExerciseSetOrder = mutateExerciseSetOrder;
 
   // -------------------------------------------------------------------
   // Plan-day prescribed exerciseSets — reads. Writes go through the

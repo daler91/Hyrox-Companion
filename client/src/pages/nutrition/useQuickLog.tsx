@@ -4,6 +4,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteLog, useLogFood } from "@/hooks/useNutrition";
 
+import { useLogTimezoneSync } from "./useLogTimezoneSync";
 import { loggedAtForDate, MEAL_LABELS } from "./utils";
 
 export interface QuickLogItem {
@@ -27,8 +28,9 @@ export function useQuickLog(date: string): {
   const logFood = useLogFood(date);
   const deleteLog = useDeleteLog(date);
   const { toast } = useToast();
+  const { runSynced, isSyncing } = useLogTimezoneSync();
 
-  const quickLog = (item: QuickLogItem) => {
+  const logItem = (item: QuickLogItem) => {
     logFood.mutate(
       {
         foodId: item.foodId,
@@ -60,5 +62,8 @@ export function useQuickLog(date: string): {
     );
   };
 
-  return { quickLog, isPending: logFood.isPending };
+  // The server dates a new entry by the profile's timezone (CL65).
+  const quickLog = (item: QuickLogItem) => runSynced(() => logItem(item));
+
+  return { quickLog, isPending: logFood.isPending || isSyncing };
 }

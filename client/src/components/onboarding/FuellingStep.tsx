@@ -73,7 +73,9 @@ export function parseFuellingProfile(f: FuellingProfileFields): NutritionTargetI
   const bodyweightKg = Math.round(convertWeight(bw, f.weightUnit, "kg") * 10) / 10;
   if (bodyweightKg < 30 || bodyweightKg > 300) return null;
   if (height < 120 || height > 250) return null;
-  if (age < 13 || age > 100) return null;
+  // A whole number, as the server stores it: a decimal age (34.5) previewed a
+  // target the save then lost. CL37 (CODEBASE_ANALYSIS_2026-10-03)
+  if (!Number.isInteger(age) || age < 13 || age > 100) return null;
 
   let sex: BmrSex = null;
   if (f.gender === "male") sex = "male";
@@ -234,6 +236,7 @@ export function FuellingStep({
   onBodyweightChange,
   onHeightCmChange,
   onAgeChange,
+  ageError,
   onActivityLevelChange,
   onWeightGoalDirectionChange,
   applyTargets,
@@ -243,6 +246,8 @@ export function FuellingStep({
   readonly onBodyweightChange: (v: string) => void;
   readonly onHeightCmChange: (v: string) => void;
   readonly onAgeChange: (v: string) => void;
+  /** Why Continue refused the age (not a whole number from 13 to 100), if it did. */
+  readonly ageError?: string | null;
   readonly onActivityLevelChange: (v: ActivityLevel) => void;
   readonly onWeightGoalDirectionChange: (v: WeightGoalDirection) => void;
   readonly applyTargets: boolean;
@@ -292,12 +297,21 @@ export function FuellingStep({
           <Input
             id="fuelling-age"
             type="number"
-            min={0}
+            min={13}
+            max={100}
+            step={1}
             inputMode="numeric"
             value={fields.age}
             onChange={(e) => onAgeChange(e.target.value)}
+            aria-invalid={ageError ? true : undefined}
+            aria-describedby={ageError ? "fuelling-age-error" : undefined}
             data-testid="input-fuelling-age"
           />
+          {ageError && (
+            <p id="fuelling-age-error" className="text-sm text-destructive">
+              {ageError}
+            </p>
+          )}
         </div>
       </div>
 

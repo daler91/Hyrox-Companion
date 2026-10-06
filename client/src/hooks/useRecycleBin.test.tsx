@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
-import { useEmptyRecycleBin, useRestoreRecycleBinItem } from "./useRecycleBin";
+import { useEmptyRecycleBin, useRestoreRecycleBinItem, useUndoDeleteToast } from "./useRecycleBin";
 
 const mocks = vi.hoisted(() => ({ toast: vi.fn() }));
 
@@ -125,6 +125,24 @@ describe("recycle bin mutation hooks", () => {
         ["/api/v1/nutrition/block"],
       ]),
     );
+    // CL43 (CODEBASE_ANALYSIS_2026-10-03): its sets count in "Last time" again.
+    expect(keys).toContainEqual(["/api/v1/exercises"]);
+    invalidate.mockRestore();
+  });
+
+  // CL50 (CODEBASE_ANALYSIS_2026-10-03): every delete that lands in the bin
+  // shows this toast, and none of them refreshed the bin's list, so an athlete
+  // who let the Undo expire could not find the item in Settings for a while.
+  it("marks the recycle-bin list stale when a delete announces itself", () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+    const { result } = renderHook(() => useUndoDeleteToast(), { wrapper: wrapperFor(client) });
+
+    act(() => {
+      result.current({ title: "Workout deleted", target: { itemId: "rb-1" } });
+    });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["/api/v1/recycle-bin"] });
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Workout deleted" }));
     invalidate.mockRestore();
   });
 

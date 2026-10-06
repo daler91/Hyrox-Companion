@@ -271,7 +271,7 @@ interface UsdaFoodPortion {
   measureUnit?: { name?: string };
 }
 
-interface UsdaFoodDetail {
+interface UsdaDetailBody {
   foodPortions?: UsdaFoodPortion[];
 }
 
@@ -311,30 +311,44 @@ function portionLabel(p: UsdaFoodPortion): string | null {
   return p.modifier?.trim() || null;
 }
 
+/** A detail response's named portions, e.g. "1 cup" → grams; skips any without a positive weight or a label. */
+function mapUsdaPortions(raw: UsdaDetailBody): { label: string; grams: number }[] {
+  const portions = Array.isArray(raw.foodPortions) ? raw.foodPortions : [];
+  const out: { label: string; grams: number }[] = [];
+  for (const portion of portions) {
+    const grams = portion.gramWeight;
+    if (typeof grams !== "number" || !Number.isFinite(grams) || grams <= 0) continue;
+    const label = portionLabel(portion);
+    if (label) out.push({ label, grams });
+  }
+  return out;
+}
+
+/** What one read of a food's detail endpoint gives the food-detail open. */
+export interface UsdaFoodDetail {
+  /** The food in our per-100g shape, micros included; null if the body was unusable. */
+  food: MappedFood | null;
+  /** Its named portions; [] when it has none, which is common for Branded foods. */
+  portions: { label: string; grams: number }[];
+}
+
 /**
- * Fetch a USDA food's named portions, e.g. "1 cup" → grams. Best-effort: returns
- * [] when the food has no portions (common for Branded foods) or on any error —
- * named servings are a nicety and must never block logging.
+ * Read a USDA food's detail once for both things the food-detail open
+ * backfills: named portions and the full micronutrient set. Fetching them
+ * separately sent the same request twice. PF11 (CODEBASE_ANALYSIS_2026-10-03)
+ * Best-effort: null on any error or a key-less config, so the caller can tell
+ * "USDA did not answer" from "USDA has no portions or micros for this food".
  */
-export async function fetchUsdaFoodPortions(
+export async function fetchUsdaFoodDetail(
   fdcId: string,
   opts: { signal?: AbortSignal } = {},
-): Promise<{ label: string; grams: number }[]> {
+): Promise<UsdaFoodDetail | null> {
   try {
-    const raw = await fetchUsdaDetail<UsdaFoodDetail>(fdcId, opts);
-    if (!raw) return []; // key-less config
-
-    const portions = Array.isArray(raw.foodPortions) ? raw.foodPortions : [];
-    const out: { label: string; grams: number }[] = [];
-    for (const portion of portions) {
-      const grams = portion.gramWeight;
-      if (typeof grams !== "number" || !Number.isFinite(grams) || grams <= 0) continue;
-      const label = portionLabel(portion);
-      if (label) out.push({ label, grams });
-    }
-    return out;
+    const raw = await fetchUsdaDetail<UsdaSearchFood & UsdaDetailBody>(fdcId, opts);
+    if (!raw) return null; // key-less config
+    return { food: mapUsdaSearchFood(raw), portions: mapUsdaPortions(raw) };
   } catch {
-    return [];
+    return null;
   }
 }
 

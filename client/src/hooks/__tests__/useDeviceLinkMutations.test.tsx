@@ -58,6 +58,9 @@ const DEVICE_LINK_KEYS = [
   ["/api/v1/nutrition/summary"],
   ["/api/v1/nutrition/summary-range"],
   ["/api/v1/nutrition/block"],
+  // The recorded set moves the "Last time" history for its exercise (CL43,
+  // CODEBASE_ANALYSIS_2026-10-03).
+  ["/api/v1/exercises"],
 ];
 
 type DeviceLinkMutations = ReturnType<typeof useDeviceLinkMutations>;

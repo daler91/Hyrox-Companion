@@ -1,3 +1,4 @@
+import { calculateNutritionTarget } from "@shared/nutritionTargets";
 import type { NutritionTarget } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -5,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api } from "@/lib/api";
+import { api, type UserPreferences } from "@/lib/api";
 
 import { TargetsDialog } from "./TargetsDialog";
 
@@ -16,6 +17,8 @@ vi.mock("@/lib/api", () => ({
     nutritionDayPrefix: ["/api/v1/nutrition/summary"],
     nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
     nutritionBlockPrefix: ["/api/v1/nutrition/block"],
+    preferences: ["/api/v1/preferences"],
+    trainingOverview: ["/api/v1/training-overview"],
   },
 }));
 
@@ -38,8 +41,15 @@ const CURRENT: NutritionTarget = {
   effectiveFrom: "2026-06-01",
 };
 
-function renderDialog(current: NutritionTarget | null, onClose = vi.fn()) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderDialog(
+  current: NutritionTarget | null,
+  onClose = vi.fn(),
+  profile?: Partial<UserPreferences>,
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+  });
+  if (profile) queryClient.setQueryData(["/api/v1/preferences"], profile);
   const ui: ReactNode = <TargetsDialog open current={current} onClose={onClose} />;
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
   return { onClose };
@@ -142,5 +152,68 @@ describe("TargetsDialog", () => {
         preloadDaysAhead: 1,
       }),
     );
+  });
+
+  // CL64 (CODEBASE_ANALYSIS_2026-10-03): a lose/gain goal with no rate set
+  // calculates at onboarding's 0.25 kg/week, not at maintenance.
+  describe("Calculate from profile", () => {
+    const PROFILE: Partial<UserPreferences> = {
+      bodyweightKg: 80,
+      heightCm: 180,
+      age: 30,
+      gender: "male",
+      activityLevel: "moderate",
+      weightGoalDirection: "lose",
+      weightGoalRateKgPerWeek: null,
+    };
+    const BODY = {
+      bodyweightKg: 80,
+      heightCm: 180,
+      ageYears: 30,
+      sex: "male",
+      activityLevel: "moderate",
+      goalDirection: "lose",
+    } as const;
+
+    /** Calculate from `profile` and return the calories field it fills. */
+    async function calculateFrom(profile: Partial<UserPreferences>) {
+      const user = userEvent.setup();
+      renderDialog(null, vi.fn(), profile);
+      await user.click(screen.getByTestId("button-calculate-targets"));
+      return screen.getByTestId("input-target-calories");
+    }
+
+    it("applies onboarding's default rate to a lose goal with no rate", async () => {
+      const onboarding = calculateNutritionTarget({ ...BODY, goalRateKgPerWeek: 0.25 });
+      const maintenance = calculateNutritionTarget({ ...BODY, goalRateKgPerWeek: 0 });
+      expect(onboarding.calories).toBeLessThan(maintenance.calories);
+
+      expect(await calculateFrom(PROFILE)).toHaveValue(onboarding.calories);
+    });
+
+    it("treats a saved rate of 0 on a lose goal as unset, as onboarding does", async () => {
+      const onboarding = calculateNutritionTarget({ ...BODY, goalRateKgPerWeek: 0.25 });
+      expect(await calculateFrom({ ...PROFILE, weightGoalRateKgPerWeek: 0 })).toHaveValue(
+        onboarding.calories,
+      );
+    });
+
+    it("keeps a saved rate", async () => {
+      const saved = calculateNutritionTarget({ ...BODY, goalRateKgPerWeek: 0.5 });
+      expect(await calculateFrom({ ...PROFILE, weightGoalRateKgPerWeek: 0.5 })).toHaveValue(
+        saved.calories,
+      );
+    });
+
+    it("calculates maintenance with no rate for a maintain goal", async () => {
+      const maintenance = calculateNutritionTarget({
+        ...BODY,
+        goalDirection: "maintain",
+        goalRateKgPerWeek: 0,
+      });
+      expect(await calculateFrom({ ...PROFILE, weightGoalDirection: "maintain" })).toHaveValue(
+        maintenance.calories,
+      );
+    });
   });
 });

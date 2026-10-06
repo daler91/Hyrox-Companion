@@ -5,12 +5,18 @@ import { useCallback } from "react";
 import type { PatchExerciseSetPayload } from "@/lib/api";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
 
-import { dispatchSortOrderMutations } from "./state";
+import { dispatchSortOrderMutations, orderedSetIds } from "./state";
 
+/**
+ * Drop handler for the exercise table. `onSaveOrder` saves the whole new order
+ * in one request where the table persists (PF5, CODEBASE_ANALYSIS_2026-10-03);
+ * without it each moved set goes through `onUpdateSet`.
+ */
 export function useExerciseDndHandler(
   groups: readonly GroupedExercise[],
   rowKeys: readonly string[],
   onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void,
+  onSaveOrder?: (setIds: string[]) => void,
 ) {
   return useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -20,6 +26,7 @@ export function useExerciseDndHandler(
     if (oldIndex < 0 || newIndex < 0) return;
 
     const nextGroups = arrayMove([...groups], oldIndex, newIndex);
-    dispatchSortOrderMutations(nextGroups, onUpdateSet);
-  }, [groups, rowKeys, onUpdateSet]);
+    if (onSaveOrder) onSaveOrder(orderedSetIds(nextGroups));
+    else dispatchSortOrderMutations(nextGroups, onUpdateSet);
+  }, [groups, rowKeys, onUpdateSet, onSaveOrder]);
 }

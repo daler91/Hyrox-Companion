@@ -16,6 +16,7 @@ import {
 } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 import { eq } from "drizzle-orm";
+import pLimit from "p-limit";
 import type { Logger } from "pino";
 
 import { db, type Tx } from "../db";
@@ -48,6 +49,14 @@ type PlanAdjustmentLogger = Pick<Logger, "info" | "warn" | "error">;
 
 /** How many upcoming planned days the coach may see and touch (~4 weeks). */
 const UPCOMING_DAY_WINDOW = 28;
+
+/**
+ * Structured re-parses an apply runs at once. Mirrors AI_PARSE_CONCURRENCY in
+ * workoutService/reparse.ts: one parse after another, up to 14 of them, could
+ * outlast the client's 90 s timeout while the server finished the apply.
+ * PF14 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const STRUCTURED_REPARSE_CONCURRENCY = 3;
 
 export type PlanAdjustmentProposalResult =
   | { kind: "proposal"; proposal: PlanAdjustmentProposal }
@@ -632,53 +641,82 @@ function buildUpdatePlanDayPayload(
 
 type StructuredRows = Awaited<ReturnType<typeof parseStructuredPlanDaySuggestionRows>>;
 
+/** Who the re-parse is for, for its AI call and its log lines. */
+interface ReparseContext {
+  readonly unitPreferences: UnitPreferences;
+  readonly userId: string;
+  readonly proposalId: string;
+  readonly log: PlanAdjustmentLogger;
+}
+
+/** One day's re-parse: its rows, or null (logged) when it failed or produced none. */
+async function reparseStructuredDay(
+  change: EnrichedPlanAdjustmentChange,
+  live: LivePlanDay,
+  { unitPreferences, userId, proposalId, log }: ReparseContext,
+): Promise<StructuredRows | null> {
+  try {
+    const rows = await parseStructuredPlanDaySuggestionRows(
+      {
+        workoutId: change.planDayId,
+        recommendation: buildStructuredParseText(change, live.day),
+      },
+      unitPreferences,
+      userId,
+    );
+    if (rows.length > 0) return rows;
+    // internal identifiers only, no message or workout content.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn(
+      { userId, proposalId, planDayId: change.planDayId },
+      "[plan-adjustment] Structured re-parse produced no rows",
+    );
+    return null;
+  } catch (err) {
+    // err is an AI parse error plus internal identifiers, no message or
+    // workout content.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn(
+      { err, userId, proposalId, planDayId: change.planDayId },
+      "[plan-adjustment] Structured re-parse failed; proposal left pending",
+    );
+    return null;
+  }
+}
+
 /**
- * Re-parse the table-backed prescriptions this proposal rewrites. Returns null
- * when any day fails to parse — the caller leaves the proposal pending.
+ * Re-parse the table-backed prescriptions this proposal rewrites, a few at a
+ * time (PF14). Returns null when any day fails to parse — the caller leaves
+ * the proposal pending.
  */
 async function reparseStructuredRows(
   structuredChanges: EnrichedPlanAdjustmentChange[],
   liveDays: Map<string, LivePlanDay>,
-  unitPreferences: UnitPreferences,
-  userId: string,
-  proposalId: string,
-  log: PlanAdjustmentLogger,
+  context: ReparseContext,
 ): Promise<Map<string, StructuredRows> | null> {
-  const structuredRowsByDayId = new Map<string, StructuredRows>();
-  for (const change of structuredChanges) {
+  const targets = structuredChanges.flatMap((change) => {
     const live = liveDays.get(change.planDayId);
-    if (!live) continue;
-    try {
-      const rows = await parseStructuredPlanDaySuggestionRows(
-        {
-          workoutId: change.planDayId,
-          recommendation: buildStructuredParseText(change, live.day),
-        },
-        unitPreferences,
-        userId,
-      );
-      if (rows.length === 0) {
-        // internal identifiers only, no message or workout content.
-        // bearer:disable javascript_lang_logger_leak
-        log.warn(
-          { userId, proposalId, planDayId: change.planDayId },
-          "[plan-adjustment] Structured re-parse produced no rows",
-        );
-        return null;
-      }
-      structuredRowsByDayId.set(change.planDayId, rows);
-    } catch (err) {
-      // err is an AI parse error plus internal identifiers, no message or
-      // workout content.
-      // bearer:disable javascript_lang_logger_leak
-      log.warn(
-        { err, userId, proposalId, planDayId: change.planDayId },
-        "[plan-adjustment] Structured re-parse failed; proposal left pending",
-      );
-      return null;
-    }
-  }
-  return structuredRowsByDayId;
+    return live ? [{ change, live }] : [];
+  });
+  const limit = pLimit(STRUCTURED_REPARSE_CONCURRENCY);
+  // One day that fails fails the whole apply, so the days still queued
+  // behind it are not parsed, and billed, for nothing.
+  const outcome = { failed: false };
+  const parsed = await Promise.all(
+    targets.map(({ change, live }) =>
+      limit(async (): Promise<[string, StructuredRows] | null> => {
+        if (outcome.failed) return null;
+        const rows = await reparseStructuredDay(change, live, context);
+        if (!rows) {
+          outcome.failed = true;
+          return null;
+        }
+        return [change.planDayId, rows];
+      }),
+    ),
+  );
+  if (outcome.failed) return null;
+  return new Map(parsed.filter((entry): entry is [string, StructuredRows] => entry !== null));
 }
 
 interface WriteProposalChangesOptions {
@@ -864,14 +902,12 @@ export async function applyPlanAdjustmentProposal(
     if (blocker) return applyFailure(blocker.reason);
   }
 
-  const structuredRowsByDayId = await reparseStructuredRows(
-    structuredChanges,
-    liveDays,
+  const structuredRowsByDayId = await reparseStructuredRows(structuredChanges, liveDays, {
     unitPreferences,
     userId,
     proposalId,
     log,
-  );
+  });
   if (!structuredRowsByDayId) return applyFailure("structured_parse_failed");
 
   let staleUnderLock: StaleChange[];

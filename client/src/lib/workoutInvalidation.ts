@@ -20,8 +20,24 @@ export const WORKOUT_DERIVED_NUTRITION_QUERY_KEYS = [
   QUERY_KEYS.nutritionBlockPrefix,
 ] as const;
 
+/**
+ * Every exercise's "Last time" history (useExerciseHistory), whatever its name
+ * and session count: the root of QUERY_KEYS.exerciseHistory, which TanStack
+ * matches as a prefix (workoutInvalidation.test.ts holds the two together).
+ * Its staleTime is ten minutes, so a corrected or deleted session kept driving
+ * the line and its suggested next target. CL43 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const EXERCISE_HISTORY_QUERY_PREFIX = ["/api/v1/exercises"] as const;
+
 export function invalidateWorkoutWriteQueries(): void {
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(ignoreResult);
+  // Marked stale without a refetch: a burst of set edits lands here, and the
+  // "Last time" rows on screen are the editing sheet's own, which leave its
+  // session out (pickRecentSessions), so refetching one query per exercise on
+  // every burst bought nothing. The next sheet to show them refetches them.
+  queryClient
+    .invalidateQueries({ queryKey: EXERCISE_HISTORY_QUERY_PREFIX, refetchType: "none" })
+    .catch(ignoreResult);
   for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
     queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
   }

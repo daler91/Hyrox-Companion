@@ -194,6 +194,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             onBodyweightChange={setBodyweight}
             onHeightCmChange={setHeightCm}
             onAgeChange={setAge}
+            ageError={ageError}
             onActivityLevelChange={setActivityLevel}
             onWeightGoalDirectionChange={setWeightGoalDirection}
             applyTargets={applyTargets}

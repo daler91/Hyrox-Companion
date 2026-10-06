@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { EXERCISE_HISTORY_QUERY_PREFIX } from "@/lib/workoutInvalidation";
 
 export interface ParseResults {
   readonly success: number;
@@ -44,6 +45,11 @@ export function useWorkoutReparseTools() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
+      // The parsed sets are new sessions in each exercise's "Last time" history.
+      // CL43 (CODEBASE_ANALYSIS_2026-10-03)
+      queryClient
+        .invalidateQueries({ queryKey: EXERCISE_HISTORY_QUERY_PREFIX })
+        .catch(() => undefined);
       toast({
         title: "Parsing Complete",
         description: `Parsed ${data.parsed} workouts successfully. ${data.failed} could not be parsed.`,

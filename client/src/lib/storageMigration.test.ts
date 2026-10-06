@@ -68,6 +68,21 @@ describe("migrateLegacyKeys", () => {
     expect(() => migrateLegacyKeys(mockStorage)).not.toThrow();
   });
 
+  // CL60 (CODEBASE_ANALYSIS_2026-10-03): with site data blocked, reading
+  // `localStorage` itself throws, and main.tsx runs this at module load.
+  it("does not throw when reading the page's localStorage throws", () => {
+    const blocked = vi.spyOn(globalThis, "localStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+
+    try {
+      expect(() => migrateLegacyKeys()).not.toThrow();
+      expect(blocked).toHaveBeenCalled();
+    } finally {
+      blocked.mockRestore();
+    }
+  });
+
   it("should do nothing if old key is not present", () => {
     migrateLegacyKeys(mockStorage);
 

@@ -109,6 +109,7 @@ export function CoachPanel({
     clearHistory,
     isClearingHistory,
     scrollToBottom,
+    olderMessages,
   } = useChatSession({ useStreaming: true, welcomeMessage: welcome?.greeting });
 
   const messages = useMemo(() => {
@@ -154,7 +155,7 @@ export function CoachPanel({
     handleApplySuggestion,
     handleDismissSuggestion,
     clearSuggestions,
-  } = useSuggestions({ timeline, addLocalMessage, saveMessage });
+  } = useSuggestions({ addLocalMessage, saveMessage });
 
   const { proposal, isApplyingProposal, undoingProposalId, applyProposal, dismissProposal, undoProposal } =
     usePlanProposal({ addLocalMessage, saveMessage });
@@ -237,6 +238,7 @@ export function CoachPanel({
         onRetryMessage={retryMessage}
         onRateMessage={rateMessage}
         onDecideFactProposal={decideFactProposal}
+        olderMessages={olderMessages}
       />
       <CoachPanelFooter
         quickActions={welcome?.quickActions ?? selectQuickActions(timeline.some((entry) => entry.status === "completed"))}

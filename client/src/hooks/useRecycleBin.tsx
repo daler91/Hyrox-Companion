@@ -9,8 +9,11 @@ import { useCallback } from "react";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
-import { humanizeApiError } from "@/lib/queryClient";
-import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
+import { humanizeApiError, queryClient } from "@/lib/queryClient";
+import {
+  EXERCISE_HISTORY_QUERY_PREFIX,
+  WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+} from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -30,7 +33,14 @@ const RESTORE_INVALIDATIONS = [
   // A restored workout or plan day is back in the day's meal targets, session
   // fuelling and the Fuelling views. CL19 (CODEBASE_ANALYSIS_2026-10-03)
   ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+  // A restored session's sets count in "Last time" again.
+  // CL43 (CODEBASE_ANALYSIS_2026-10-03)
+  EXERCISE_HISTORY_QUERY_PREFIX,
 ];
+
+function ignoreRefetchFailure(): void {
+  // A failed background refetch surfaces on the bin's own query.
+}
 
 export function useRecycleBin(enabled = true) {
   return useQuery<RecycleBinListResponse>({
@@ -116,6 +126,11 @@ export interface UndoDeleteToastOptions {
  * path for a mis-tap; the Settings → Recycle bin tab is the durable
  * one. A single delete undoes by item id; a bulk delete by its batch id, so
  * the whole selection comes back together.
+ *
+ * Every delete that lands in the bin announces itself here, so this is also
+ * where the bin's list is marked stale: no delete invalidated it, and an
+ * athlete who let the toast expire could look for the item in Settings and not
+ * find it for the list's staleTime. CL50 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function useUndoDeleteToast() {
   const { toast } = useToast();
@@ -126,6 +141,9 @@ export function useUndoDeleteToast() {
 
   return useCallback(
     ({ title, description, target }: UndoDeleteToastOptions) => {
+      queryClient
+        .invalidateQueries({ queryKey: QUERY_KEYS.recycleBin })
+        .catch(ignoreRefetchFailure);
       toast({
         title,
         description,

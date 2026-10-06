@@ -259,9 +259,12 @@ export async function createCustomFood(userId: string, data: CreateCustomFoodInp
       })
       .returning();
     if (data.servings?.length) {
+      // Seed servings are shared rows, so a portion listed twice (same label
+      // and grams) is kept once rather than failing uq_food_servings_shared.
       await tx
         .insert(foodServings)
-        .values(data.servings.map((s) => ({ foodId: food.id, label: s.label, grams: s.grams })));
+        .values(data.servings.map((s) => ({ foodId: food.id, label: s.label, grams: s.grams })))
+        .onConflictDoNothing();
     }
     return food;
   });
@@ -678,16 +681,29 @@ export async function getServings(foodId: string, userId: string): Promise<FoodS
 }
 
 
-/** Cache enrichment servings (e.g. USDA portions) for a food. */
+/**
+ * Cache enrichment servings (e.g. USDA portions) for a food, as shared rows.
+ * Two first opens of a food at once both get here: uq_food_servings_shared
+ * keeps one copy of each portion, and an open whose rows were already there
+ * reads back the food's shared servings instead of returning a short list.
+ * PF11 (CODEBASE_ANALYSIS_2026-10-03)
+ */
 export async function cacheServings(
   foodId: string,
   servings: { label: string; grams: number }[],
 ): Promise<FoodServing[]> {
   if (servings.length === 0) return [];
-  return await db
+  const inserted = await db
     .insert(foodServings)
     .values(servings.map((s) => ({ foodId, label: s.label, grams: s.grams })))
+    .onConflictDoNothing()
     .returning();
+  if (inserted.length === servings.length) return inserted;
+  return await db
+    .select()
+    .from(foodServings)
+    .where(and(eq(foodServings.foodId, foodId), isNull(foodServings.createdByUserId)))
+    .orderBy(asc(foodServings.grams));
 }
 
 

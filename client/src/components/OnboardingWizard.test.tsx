@@ -203,6 +203,8 @@ describe("OnboardingWizard Error Handling", () => {
   });
 
   it("completes onboarding when an AI plan is generated", async () => {
+    // The local flag holds the signed-in athlete's id (CL45).
+    queryClient.setQueryData(QUERY_KEYS.authUser, { id: "user-1" });
     renderComponent();
 
     await walkToPlanStep();
@@ -213,7 +215,7 @@ describe("OnboardingWizard Error Handling", () => {
     await waitFor(() => {
       expect(mockOnComplete).toHaveBeenCalledWith("generated");
     });
-    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("user-1");
   });
 
   // A new account's AI Coach is off, and the server refuses AI plans without

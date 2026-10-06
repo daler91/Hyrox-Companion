@@ -27,6 +27,9 @@ vi.mock("@/lib/api", () => ({
     nutritionDayPrefix: ["/api/v1/nutrition/summary"],
     nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
     nutritionBlockPrefix: ["/api/v1/nutrition/block"],
+    personalRecords: ["/api/v1/personal-records"],
+    exerciseAnalytics: ["/api/v1/exercise-analytics"],
+    trainingOverview: ["/api/v1/training-overview"],
   },
   api: {
     preferences: { update: (payload: unknown) => harness.updatePreferences(payload) },
@@ -259,6 +262,97 @@ describe("usePreferencesForm", () => {
     });
     expect(reads.getQueryState(micros)?.isInvalidated).toBe(false);
     expect(harness.updatePreferences).toHaveBeenCalledWith(expect.objectContaining({ bodyweightKg: 82 }));
+  });
+
+  // CL67 (CODEBASE_ANALYSIS_2026-10-03): the server converts these into the
+  // athlete's units, so a units change relabelled the cached numbers (a 100 kg
+  // PR read "100 lbs") until their staleTime ran out.
+  describe("the unit-converted analytics", () => {
+    const records = ["/api/v1/personal-records", "2026-01-01", "2026-09-30"];
+    const analytics = ["/api/v1/exercise-analytics", "2026-01-01", "2026-09-30"];
+    const overview = ["/api/v1/training-overview", "2026-01-01", "2026-09-30"];
+    const summary = ["/api/v1/training-overview", "summary"];
+
+    async function saveEdit(field: "weightUnit" | "distanceUnit" | "weeklyGoal", value: string) {
+      const reads = new QueryClient();
+      for (const key of [records, analytics, overview, summary]) reads.setQueryData(key, {});
+      harness.invalidateQueries.mockImplementation((filters) =>
+        reads.invalidateQueries(filters as { queryKey: readonly unknown[] }),
+      );
+      const { result } = await renderHydratedForm();
+
+      act(() => {
+        result.current.updateField(field, value);
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+      await waitFor(() => {
+        expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Settings saved" }));
+      });
+      return reads;
+    }
+
+    it.each([
+      { field: "weightUnit", value: "lbs" },
+      { field: "distanceUnit", value: "miles" },
+    ] as const)("are refetched when the $field changes", async ({ field, value }) => {
+      const reads = await saveEdit(field, value);
+
+      for (const key of [records, analytics, overview, summary]) {
+        expect(reads.getQueryState(key)?.isInvalidated).toBe(true);
+      }
+    });
+
+    it("are left alone by a save that keeps the units", async () => {
+      const reads = await saveEdit("weeklyGoal", "6");
+
+      for (const key of [records, analytics, overview, summary]) {
+        expect(reads.getQueryState(key)?.isInvalidated).toBe(false);
+      }
+    });
+  });
+
+  // CL68 (CODEBASE_ANALYSIS_2026-10-03): the save cleared the dirty flag, so
+  // its own refetch overwrote an edit made while it was in flight and the Save
+  // bar went away with it.
+  it("keeps an edit made while the save was in flight, and keeps it dirty", async () => {
+    const { result, qc } = await renderHydratedForm();
+    const pendingSave = Promise.withResolvers<unknown>();
+    harness.updatePreferences.mockReturnValueOnce(pendingSave.promise);
+
+    act(() => {
+      result.current.updateField("weeklyGoal", "6");
+    });
+    act(() => {
+      result.current.handleSave();
+    });
+    act(() => {
+      result.current.updateField("weightUnit", "lbs");
+    });
+    await act(async () => {
+      pendingSave.resolve({});
+      await pendingSave.promise;
+    });
+    await waitFor(() => {
+      expect(harness.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Settings saved" }));
+    });
+    // The refetch the save triggers delivers the row as saved.
+    act(() => {
+      qc.setQueryData(["preferences"], serverPreferences({ weeklyGoal: 6 }));
+    });
+    await waitFor(() => {
+      expect(result.current.preferences?.weeklyGoal).toBe(6);
+    });
+
+    expect(result.current.draft.weightUnit).toBe("lbs");
+    expect(result.current.draft.weeklyGoal).toBe("6");
+    expect(result.current.hasChanges).toBe(true);
+    // The saved goal is the new baseline: only the later edit is unsaved.
+    act(() => {
+      result.current.updateField("weightUnit", "kg");
+    });
+    expect(result.current.hasChanges).toBe(false);
   });
 
   it("keeps unsaved edits when a background refetch delivers changed preferences", async () => {
@@ -521,5 +615,50 @@ describe("usePreferencesForm", () => {
     expect(harness.updatePreferences).toHaveBeenLastCalledWith(
       expect.objectContaining({ weeklyGoal: 5 }),
     );
+    // A save that left the MAF ceiling alone is undone without touching it.
+    expect(harness.updatePreferences.mock.calls.at(-1)?.[0]).not.toHaveProperty("mafHr");
+  });
+
+  // CL69 (CODEBASE_ANALYSIS_2026-10-03): Undo restored the age and category
+  // but not the ceiling computed from them, so grading kept the undone one.
+  it("restores the MAF ceiling when it undoes a change to the age", async () => {
+    const { result } = renderForm(
+      serverPreferences({
+        trainingStyleId: "maf_method",
+        mafAge: 40,
+        mafCategory: "consistent_up_to_2y",
+        mafHr: 140,
+      }),
+    );
+    await waitFor(() => {
+      expect(result.current.draft.mafAgeInput).toBe("40");
+    });
+
+    act(() => {
+      result.current.updateField("mafAgeInput", "50");
+    });
+    act(() => {
+      result.current.handleSave();
+    });
+    await waitFor(() => {
+      expect(harness.updatePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ mafAge: 50, mafHr: 130 }),
+      );
+    });
+    const toastCall = harness.toast.mock.calls.at(-1)?.[0] as {
+      action?: { props: { onClick: () => void } };
+    };
+
+    act(() => {
+      toastCall.action!.props.onClick();
+    });
+
+    await waitFor(() => {
+      expect(harness.updatePreferences).toHaveBeenCalledTimes(2);
+    });
+    expect(harness.updatePreferences).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mafAge: 40, mafHr: 140 }),
+    );
+    expect(result.current.draft.mafAgeInput).toBe("40");
   });
 });

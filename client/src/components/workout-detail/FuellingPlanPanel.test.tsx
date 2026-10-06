@@ -1,7 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -35,6 +35,19 @@ const makeEntry = makeTimelineEntry;
 
 function renderWithClient(ui: ReactNode, bodyweightKg: number | null = 75) {
   return renderWithBodyweight(ui, QUERY_KEYS.preferences, bodyweightKg);
+}
+
+/** An open sheet whose entry is swapped for another session, as a deep link does. */
+function RetargetedPanel({ first, second }: { readonly first: TimelineEntry; readonly second: TimelineEntry }) {
+  const [entry, setEntry] = useState(first);
+  return (
+    <>
+      <button type="button" data-testid="retarget" onClick={() => setEntry(second)}>
+        Open the next session
+      </button>
+      <FuellingPlanPanel entry={entry} />
+    </>
+  );
 }
 
 describe("FuellingPlanPanel", () => {
@@ -171,6 +184,45 @@ describe("FuellingPlanPanel", () => {
         plannedTimeOfDayMin: 450,
       }),
     );
+  });
+
+  // CL40 (CODEBASE_ANALYSIS_2026-10-03): the drafts were seeded on mount only,
+  // so a sheet re-targeted while open showed the first session's values and a
+  // stepper tap PATCHed the new day with a value worked out from them.
+  it("re-seeds from the new session when an open sheet is re-targeted", async () => {
+    const user = userEvent.setup();
+    const first = makeEntry({ expectedDurationMin: 60, expectedRpe: 7 });
+    const second = makeEntry({ id: "entry-2", planDayId: "day-2", expectedDurationMin: 90, expectedRpe: 5 });
+    renderWithClient(<RetargetedPanel first={first} second={second} />);
+
+    await user.click(screen.getByTestId("retarget"));
+
+    const adjust = screen.getByTestId("fuelling-plan-adjust");
+    expect(adjust).toHaveTextContent("Adjust session estimate · 90 min · RPE 5");
+    await user.click(adjust);
+    expect(screen.getByTestId("fuelling-plan-duration")).toHaveValue(90);
+
+    await user.click(screen.getByTestId("fuelling-plan-duration-increment"));
+    await waitFor(() =>
+      expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledWith("day-2", { expectedDurationMin: 95 }),
+    );
+    expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a change still waiting to the session it was made on when the sheet is re-targeted", async () => {
+    const first = makeEntry();
+    const second = makeEntry({ id: "entry-2", planDayId: "day-2" });
+    renderWithClient(<RetargetedPanel first={first} second={second} />);
+
+    fireEvent.change(screen.getByTestId("fuelling-plan-time"), { target: { value: "07:30" } });
+    fireEvent.click(screen.getByTestId("retarget"));
+
+    await waitFor(() =>
+      expect(api.plans.updateDayWithoutPlan).toHaveBeenCalledWith("day-1", { plannedTimeOfDayMin: 450 }),
+    );
+    expect(api.plans.updateDayWithoutPlan).not.toHaveBeenCalledWith("day-2", expect.anything());
+    // The new session's time input starts from its own (unset) start time.
+    expect(screen.getByTestId("fuelling-plan-time")).toHaveValue("");
   });
 
   // CL19 (CODEBASE_ANALYSIS_2026-10-03): a day with no log takes its meal

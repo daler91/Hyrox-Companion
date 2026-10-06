@@ -101,7 +101,16 @@ describe("usePlanImport", () => {
         expect(result.current.csvPreview).toEqual({
           fileName: "plan.csv",
           content,
-          rows: [{ weekNumber: 1, dayName: "Monday", focus: "Strength", mainWorkout: "Squats" }],
+          rows: [
+            {
+              rowNumber: 1,
+              weekNumber: 1,
+              dayName: "Monday",
+              focus: "Strength",
+              mainWorkout: "Squats",
+            },
+          ],
+          remainingRows: 0,
         });
     });
   });
@@ -126,7 +135,13 @@ describe("usePlanImport", () => {
     const cases: MutationTestCase[] = [
       {
         name: "confirmImport",
-        setup: (res) => res.current.setCsvPreview({ fileName: "plan.csv", content: "c", rows: [] }),
+        setup: (res) =>
+          res.current.setCsvPreview({
+            fileName: "plan.csv",
+            content: "c",
+            rows: [],
+            remainingRows: 0,
+          }),
         trigger: (res) => res.current.confirmImport(),
         method: "POST",
         endpoint: "/api/v1/plans/import",
@@ -154,7 +169,7 @@ describe("usePlanImport", () => {
         payload: { startDate: "2023-10-01" },
         sToast: "Training plan scheduled!",
         eToast: "Failed to schedule plan",
-        inv: [["/api/v1/timeline", "test-plan-id"], ["/api/v1/plans"]],
+        inv: [["/api/v1/timeline"], ["/api/v1/plans"]],
         postAssert: (res, mockFn) => {
           expect(mockFn).toHaveBeenCalledWith("test-plan-id");
           expect(res.current.schedulingPlanId).toBeNull();
@@ -245,6 +260,35 @@ describe("usePlanImport", () => {
       });
     });
 
+    // CL48 (CODEBASE_ANALYSIS_2026-10-03): only the scheduled plan's timeline
+    // was refreshed, so "All plans" kept showing the timeline without its days.
+    it("refreshes every timeline view, All plans included, when a plan is scheduled", async () => {
+      const allPlans = ["/api/v1/timeline", null];
+      const thisPlan = ["/api/v1/timeline", "test-plan-id"];
+      const otherPlan = ["/api/v1/timeline", "other-plan"];
+      for (const key of [allPlans, thisPlan, otherPlan]) qc.setQueryData(key, []);
+      vi.mocked(queryClientLib.queryClient.invalidateQueries).mockImplementation((filters) =>
+        qc.invalidateQueries(filters),
+      );
+      const { result } = runHook();
+      act(() => {
+        result.current.setSchedulingPlanId("test-plan-id");
+      });
+
+      act(() => {
+        result.current.schedulePlanMutation.mutate({
+          planId: "test-plan-id",
+          startDate: "2026-10-12",
+        });
+      });
+
+      await waitFor(() => {
+        expect(qc.getQueryState(allPlans)?.isInvalidated).toBe(true);
+      });
+      expect(qc.getQueryState(thisPlan)?.isInvalidated).toBe(true);
+      expect(qc.getQueryState(otherPlan)?.isInvalidated).toBe(true);
+    });
+
     it("shows the server's reason when a plan can't be scheduled from that date", async () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(
         new Error(
@@ -272,7 +316,12 @@ describe("usePlanImport", () => {
       vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error(`400: ${body}`));
       const { result } = runHook();
       act(() => {
-        result.current.setCsvPreview({ fileName: "plan.csv", content: "c", rows: [] });
+        result.current.setCsvPreview({
+          fileName: "plan.csv",
+          content: "c",
+          rows: [],
+          remainingRows: 0,
+        });
       });
       act(() => {
         result.current.confirmImport();
@@ -291,7 +340,12 @@ describe("usePlanImport", () => {
       const { result } = runHook({ onPlanImported });
 
       act(() => {
-        result.current.setCsvPreview({ fileName: "plan.csv", content: "c", rows: [] });
+        result.current.setCsvPreview({
+          fileName: "plan.csv",
+          content: "c",
+          rows: [],
+          remainingRows: 0,
+        });
       });
       act(() => {
         result.current.confirmImport();

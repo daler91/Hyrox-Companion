@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { inChunks, inSequence } from "@shared/inSequence";
 import { foods, users } from "@shared/schema";
-import { eq, inArray, ne, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, or } from "drizzle-orm";
 
 import { db } from "../../db";
 import { EMBEDDING_DIMENSIONS, generateEmbeddings } from "../../gemini/client";
@@ -23,9 +23,24 @@ import { vectorPool } from "../../vectorDb";
 
 const EMBEDDING_MODEL = "gemini-embedding-001";
 // Per backfill run: bound the embeddings generated (cost/time) and the candidate
-// scan. The cron drains any backlog over multiple runs.
+// scan (pages of CANDIDATE_PAGE_SIZE foods, at most MAX_SCAN_PAGES of them). The
+// cron drains any backlog over multiple runs.
 const MAX_BATCH = 200;
-const CANDIDATE_SCAN_LIMIT = 5000;
+const CANDIDATE_PAGE_SIZE = 5000;
+const MAX_SCAN_PAGES = 4;
+
+// Where the next backfill run picks up its id-ordered scan of `foods`; null
+// starts from the lowest id. The scan used to read the same unordered
+// 5000-row prefix every run, so once that prefix was embedded, foods cached
+// later were rarely or never reached. Moving on from wherever the last run
+// stopped means every food is reached within a few runs, and one that keeps
+// failing to embed holds the batch only once per pass. Kept in process: a
+// restart only starts the next pass early. PF12 (CODEBASE_ANALYSIS_2026-10-03)
+let scanCursor: string | null = null;
+
+export function __resetFoodEmbeddingScanForTests(): void {
+  scanCursor = null;
+}
 
 /** The text embedded for a food: its name plus brand (brand disambiguates products). */
 export function foodEmbeddingText(food: { name: string; brand: string | null }): string {
@@ -128,6 +143,57 @@ export async function pruneDanglingFoodEmbeddings(): Promise<{ pruned: number }>
   return { pruned: dangling.length };
 }
 
+type PendingEmbedding = { id: string; text: string; hash: string };
+
+/** One page of the candidate scan: foods after `after`, in id order. */
+async function fetchCandidatePage(
+  after: string | null,
+): Promise<{ id: string; name: string; brand: string | null }[]> {
+  // A private custom food's name and brand are its owner's data, and this
+  // cron runs for every athlete rather than behind aiConsentCheck, so they
+  // reach the embedding provider only while the owner consents to AI
+  // processing. Provider-cached rows and publicly shared custom foods are
+  // shared reference data. A private custom food with no owner left has
+  // nobody to consent and is skipped too. P14 (CODEBASE_ANALYSIS_2026-10-03)
+  const shareable = or(
+    ne(foods.source, "custom"),
+    eq(foods.isPublic, true),
+    eq(users.aiCoachEnabled, true),
+  );
+  return await db
+    .select({ id: foods.id, name: foods.name, brand: foods.brand })
+    .from(foods)
+    .leftJoin(users, eq(users.id, foods.createdByUserId))
+    .where(after === null ? shareable : and(shareable, gt(foods.id, after)))
+    .orderBy(asc(foods.id))
+    .limit(CANDIDATE_PAGE_SIZE);
+}
+
+/**
+ * Page through `foods` in id order from `after` until `limit` foods need an
+ * embedding, the table ends, or `pagesLeft` pages have been read. `cursor` is
+ * where the next run should start: the last food examined, or null once the
+ * scan reached the end of the table. The embedding table can live in another
+ * database (server/vectorDb.ts), so "already embedded" is the hash map read
+ * from it rather than a join.
+ */
+async function scanForPending(
+  existingHash: ReadonlyMap<string, string>,
+  limit: number,
+  after: string | null,
+  pagesLeft: number,
+): Promise<{ pending: PendingEmbedding[]; cursor: string | null }> {
+  const page = await fetchCandidatePage(after);
+  const pending = selectFoodsToEmbed(page, existingHash, limit);
+  // A full batch stopped partway through the page, at its last pick.
+  if (pending.length >= limit) return { pending, cursor: pending.at(-1)?.id ?? after };
+  const last = page.at(-1);
+  if (!last || page.length < CANDIDATE_PAGE_SIZE) return { pending, cursor: null };
+  if (pagesLeft <= 1) return { pending, cursor: last.id };
+  const rest = await scanForPending(existingHash, limit - pending.length, last.id, pagesLeft - 1);
+  return { pending: [...pending, ...rest.pending], cursor: rest.cursor };
+}
+
 /**
  * Embed a bounded batch of cached foods that lack a current embedding, upserting
  * them into `food_embeddings`. Returns how many were embedded. Best-effort — assumes
@@ -140,21 +206,11 @@ export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: 
   );
   const existingHash = new Map(existing.rows.map((row) => [row.food_id, row.text_hash]));
 
-  // A private custom food's name and brand are its owner's data, and this
-  // cron runs for every athlete rather than behind aiConsentCheck, so they
-  // reach the embedding provider only while the owner consents to AI
-  // processing. Provider-cached rows and publicly shared custom foods are
-  // shared reference data. A private custom food with no owner left has
-  // nobody to consent and is skipped too. P14 (CODEBASE_ANALYSIS_2026-10-03)
-  const candidates = await db
-    .select({ id: foods.id, name: foods.name, brand: foods.brand })
-    .from(foods)
-    .leftJoin(users, eq(users.id, foods.createdByUserId))
-    .where(or(ne(foods.source, "custom"), eq(foods.isPublic, true), eq(users.aiCoachEnabled, true)))
-    .limit(CANDIDATE_SCAN_LIMIT);
-
-  const pending = selectFoodsToEmbed(candidates, existingHash, limit);
-  if (pending.length === 0) return { embedded: 0 };
+  const { pending, cursor } = await scanForPending(existingHash, limit, scanCursor, MAX_SCAN_PAGES);
+  if (pending.length === 0) {
+    scanCursor = cursor;
+    return { embedded: 0 };
+  }
 
   const vectors = await generateEmbeddings(pending.map((p) => p.text));
   const rows: { id: string; vectorStr: string; hash: string }[] = [];
@@ -187,6 +243,9 @@ export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: 
     );
   }
 
+  // Only once the batch is stored: a provider outage retries the same foods
+  // next run instead of skipping past them.
+  scanCursor = cursor;
   const embedded = rows.length;
   logger.info(
     { context: "nutrition", embedded, pending: pending.length },

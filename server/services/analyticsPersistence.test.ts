@@ -22,7 +22,10 @@ vi.mock("./racePrediction/racePredictionService", () => ({ generateRacePredictio
 
 import {
   getNutritionAnchor,
+  getTrainingAnchor,
   getWorkoutAnchor,
+  persistCoachInsights,
+  persistOverviewAnalysis,
   persistRacePrediction,
   regenerateAndStoreRacePrediction,
 } from "./analyticsPersistence";
@@ -53,6 +56,53 @@ describe("getWorkoutAnchor", () => {
     countWorkoutLogs.mockResolvedValue(2);
 
     expect((await getWorkoutAnchor("u1")).entryCount).toBe(2);
+  });
+});
+
+// PF10 (CODEBASE_ANALYSIS_2026-10-03): the latest log is a synced walk, which
+// counts as activity but not as training.
+function mockHistoryEndingInAWalk(): void {
+  const readsTrainingOnly = (filter: unknown): boolean =>
+    (filter as { onlyTraining?: boolean } | undefined)?.onlyTraining === true;
+  listWorkoutLogs.mockImplementation((...args: unknown[]) =>
+    Promise.resolve(readsTrainingOnly(args.at(-1)) ? [{ date: "2026-09-01" }] : [{ date: "2026-09-03" }]),
+  );
+  countWorkoutLogs.mockImplementation((...args: unknown[]) =>
+    Promise.resolve(readsTrainingOnly(args.at(-1)) ? 4 : 5),
+  );
+}
+
+describe("getTrainingAnchor", () => {
+  it("anchors on the logs that count as training only", async () => {
+    mockHistoryEndingInAWalk();
+
+    expect(await getTrainingAnchor("u1")).toEqual({ latestDate: "2026-09-01", entryCount: 4 });
+    expect(listWorkoutLogs).toHaveBeenCalledWith("u1", 1, 0, { onlyTraining: true });
+    expect(countWorkoutLogs).toHaveBeenCalledWith("u1", { onlyTraining: true });
+    // The all-logs anchor still sees the walk.
+    expect(await getWorkoutAnchor("u1")).toEqual({ latestDate: "2026-09-03", entryCount: 5 });
+  });
+
+  it("stamps the race prediction and overview analysis with it, but coach insights with every log", async () => {
+    upsert.mockClear();
+    mockHistoryEndingInAWalk();
+    const generatedAt = "2026-09-03T10:00:00.000Z";
+
+    await persistRacePrediction("u1", { generatedAt } as never);
+    await persistOverviewAnalysis("u1", { generatedAt } as never);
+    await persistCoachInsights("u1", { generatedAt } as never);
+
+    type StampedRow = { feature: string; lastWorkoutDateAtGeneration: string; entryCountAtGeneration: number };
+    const stamped = new Map(
+      upsert.mock.calls.map((args: unknown[]) => {
+        const row = args.at(0) as StampedRow;
+        return [row.feature, [row.lastWorkoutDateAtGeneration, row.entryCountAtGeneration]];
+      }),
+    );
+    expect(stamped.get("race_prediction")).toEqual(["2026-09-01", 4]);
+    expect(stamped.get("overview_analysis")).toEqual(["2026-09-01", 4]);
+    // Walks feed the coach's load governor, so a walk does change its inputs.
+    expect(stamped.get("coach_insights")).toEqual(["2026-09-03", 5]);
   });
 });
 

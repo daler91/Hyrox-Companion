@@ -6,6 +6,7 @@ import type {
   ChatPhoto,
   ChatSafetyNotice,
   CoachingMaterial,
+  CoachingMaterialSummary,
   CoachWelcome,
   RagInfo,
 } from "@shared/schema";
@@ -81,6 +82,57 @@ export interface ChatFocus {
   focusWorkoutLogId?: string;
 }
 
+/**
+ * Where the next older page of chat history starts: the server's
+ * `X-Next-Cursor` (a timestamp) and `X-Next-Cursor-Id` (a row id), sent back
+ * together as `before` and `beforeId`.
+ */
+export interface ChatHistoryCursor {
+  before: string;
+  beforeId: string;
+}
+
+/** One page of a conversation, oldest row first. */
+export interface ChatHistoryPage {
+  messages: ChatHistoryMessage[];
+  /** null once the page reaches the conversation's first message. */
+  nextCursor: ChatHistoryCursor | null;
+}
+
+function chatHistoryUrl(focus: ChatFocus, cursor: ChatHistoryCursor | null): string {
+  const params = new URLSearchParams();
+  if (focus.focusPlanDayId) params.set("focusPlanDayId", focus.focusPlanDayId);
+  if (focus.focusWorkoutLogId) params.set("focusWorkoutLogId", focus.focusWorkoutLogId);
+  if (cursor) {
+    params.set("before", cursor.before);
+    params.set("beforeId", cursor.beforeId);
+  }
+  const search = params.toString();
+  return search ? `/api/v1/chat/history?${search}` : "/api/v1/chat/history";
+}
+
+/** The older-page cursor a history response carries, when it carries both halves. */
+function readChatHistoryCursor(headers: Headers): ChatHistoryCursor | null {
+  const before = headers.get("X-Next-Cursor");
+  const beforeId = headers.get("X-Next-Cursor-Id");
+  return before && beforeId ? { before, beforeId } : null;
+}
+
+/**
+ * One page of the saved conversation: a workout's own thread when `focus`
+ * names it, the general one otherwise (I4). Without a cursor, the newest
+ * page. The client never read the cursor headers, so every message older than
+ * the newest 50 rows was out of reach. CL56 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function getChatHistoryPage(
+  focus: ChatFocus = {},
+  cursor: ChatHistoryCursor | null = null,
+): Promise<ChatHistoryPage> {
+  const res = await rawRequest("GET", chatHistoryUrl(focus, cursor));
+  const messages = (await res.json()) as ChatHistoryMessage[];
+  return { messages, nextCursor: readChatHistoryCursor(res.headers) };
+}
+
 export const chat = {
   sendStream: (
     data: {
@@ -119,17 +171,20 @@ export const chat = {
     ),
 
   /**
-   * The saved conversation: a workout's own thread when `focus` names it,
-   * the general one otherwise (AI coach chat review, I4).
+   * The newest page of the saved conversation: a workout's own thread when
+   * `focus` names it, the general one otherwise (AI coach chat review, I4).
+   * `onNextCursor` is told where the next older page starts (CL56).
    */
-  getHistory: (focus: ChatFocus = {}) => {
-    const params = new URLSearchParams();
-    if (focus.focusPlanDayId) params.set("focusPlanDayId", focus.focusPlanDayId);
-    if (focus.focusWorkoutLogId) params.set("focusWorkoutLogId", focus.focusWorkoutLogId);
-    const search = params.toString();
-    const query = search ? `?${search}` : "";
-    return typedRequest<ChatHistoryMessage[]>("GET", `/api/v1/chat/history${query}`);
+  getHistory: async (
+    focus: ChatFocus = {},
+    onNextCursor?: (cursor: ChatHistoryCursor | null) => void,
+  ) => {
+    const page = await getChatHistoryPage(focus);
+    onNextCursor?.(page.nextCursor);
+    return page.messages;
   },
+
+  getHistoryPage: getChatHistoryPage,
 
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
 
@@ -168,6 +223,10 @@ export const chat = {
 
 export const coaching = {
   list: () => typedRequest<CoachingMaterial[]>("GET", "/api/v1/coaching-materials"),
+
+  /** Each material's title, type and length, without its text (PF4). */
+  listSummaries: () =>
+    typedRequest<CoachingMaterialSummary[]>("GET", "/api/v1/coaching-materials/summaries"),
 
   create: (data: { title: string; content: string; type: "principles" | "document" }) =>
     typedRequest<CoachingMaterial>("POST", "/api/v1/coaching-materials", data),

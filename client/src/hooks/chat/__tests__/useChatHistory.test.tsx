@@ -67,7 +67,17 @@ function renderHistory(queryClient: QueryClient, focus?: ChatFocus) {
   const view = renderHook(() => useChatHistory({ welcomeMessage: WELCOME, setMessages, focus }), {
     wrapper,
   });
-  return { ...view, ids: () => messages.map((m) => m.id) };
+  return {
+    ...view,
+    ids: () => messages.map((m) => m.id),
+    contentOf: (id: string) => messages.find((m) => m.id === id)?.content,
+    /** What useChatSession's send does to the buffer: the athlete's turn and the reply it streams into. */
+    send: (...sent: Message[]) => setMessages((current) => [...current, ...sent]),
+  };
+}
+
+function localMessage(id: string, role: Message["role"], content: string): Message {
+  return { id, role, content, timestamp: "", createdAtMs: 1_000 };
 }
 
 describe("useChatHistory", () => {
@@ -91,6 +101,50 @@ describe("useChatHistory", () => {
     await waitFor(() => {
       expect(ids()).toEqual(["welcome", "row-1", "row-2"]);
     });
+  });
+
+  // CL41 (CODEBASE_ANALYSIS_2026-10-03): the history replaced the buffer, so a
+  // message sent before it arrived vanished with the reply streaming into it.
+  it("keeps a message sent before the saved history arrives, after it", async () => {
+    const history = pendingHistory();
+    getHistory.mockReturnValueOnce(history.promise);
+    const { result, ids, contentOf, send } = renderHistory(queryClient);
+    expect(result.current.historyLoading).toBe(true);
+
+    send(
+      localMessage("sent-1", "user", "Easy run today?"),
+      localMessage("reply-1", "assistant", "Keep it"),
+    );
+    await act(async () => {
+      history.resolve(SAVED);
+      await history.promise;
+    });
+
+    await waitFor(() => {
+      expect(ids()).toEqual(["welcome", "row-1", "row-2", "sent-1", "reply-1"]);
+    });
+    expect(contentOf("reply-1")).toBe("Keep it");
+  });
+
+  it("shows a turn the history already saved once, as the copy that was sent here", async () => {
+    const history = pendingHistory();
+    getHistory.mockReturnValueOnce(history.promise);
+    const { ids, contentOf, send } = renderHistory(queryClient);
+
+    // The server saved the athlete's turn before answering the history read.
+    send(
+      localMessage("row-2", "user", "And tomorrow?"),
+      localMessage("reply-2", "assistant", "Rest"),
+    );
+    await act(async () => {
+      history.resolve(SAVED);
+      await history.promise;
+    });
+
+    await waitFor(() => {
+      expect(ids()).toEqual(["welcome", "row-1", "row-2", "reply-2"]);
+    });
+    expect(contentOf("reply-2")).toBe("Rest");
   });
 
   // CL17 (CODEBASE_ANALYSIS_2026-10-03): the cache still held the old history

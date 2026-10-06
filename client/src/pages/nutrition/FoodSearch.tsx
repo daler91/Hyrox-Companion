@@ -1,6 +1,6 @@
 import type { Food } from "@shared/schema";
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { useSearchFoods } from "@/hooks/useNutrition";
@@ -14,15 +14,56 @@ const MIN_QUERY_LENGTH = 2;
 export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => void }) {
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
+  // Enter pressed before the results for the typed text arrived. Picked up once
+  // they land; typing again cancels it.
+  const enterQueued = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(term), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [term]);
 
-  const { data, isFetching } = useSearchFoods(debounced);
+  const { data, isFetching, isError, isPlaceholderData } = useSearchFoods(debounced);
   const results = data?.results ?? [];
   const showResults = debounced.trim().length >= MIN_QUERY_LENGTH;
+  // Whether the list on screen answers the text in the box. Within the 300 ms
+  // debounce it still answers the previous query, and Enter picked that query's
+  // top hit, which the recipe builder appends with no confirmation step.
+  // CL62 (CODEBASE_ANALYSIS_2026-10-03)
+  const resultsAreCurrent = data !== undefined && !isPlaceholderData && debounced === term;
+  const topResult = resultsAreCurrent ? results.at(0) : undefined;
+
+  useEffect(() => {
+    if (!enterQueued.current) return;
+    if (resultsAreCurrent) {
+      enterQueued.current = false;
+      if (topResult) onSelect(topResult);
+    } else if (isError) {
+      // A failed search drops the Enter rather than acting on it after a retry.
+      enterQueued.current = false;
+    }
+  }, [resultsAreCurrent, isError, topResult, onSelect]);
+
+  const handleTermChange = (value: string) => {
+    setTerm(value);
+    enterQueued.current = false;
+  };
+
+  // Keyboard fast-path: Enter picks the top result (the same one a tap on the
+  // first row would), but only from results for the text as typed. Mid-debounce
+  // it runs the search now and picks once that answer is in.
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    if (topResult) {
+      e.preventDefault();
+      onSelect(topResult);
+      return;
+    }
+    if (resultsAreCurrent || term.trim().length < MIN_QUERY_LENGTH) return;
+    e.preventDefault();
+    enterQueued.current = true;
+    setDebounced(term);
+  };
 
   const plural = results.length === 1 ? "" : "s";
   const resultsText =
@@ -36,15 +77,8 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
         <Input
           type="search"
           value={term}
-          onChange={(e) => setTerm(e.target.value)}
-          onKeyDown={(e) => {
-            // Keyboard fast-path: Enter picks the top result (the same one a
-            // tap on the first row would).
-            if (e.key === "Enter" && results.length > 0) {
-              e.preventDefault();
-              onSelect(results[0]);
-            }
-          }}
+          onChange={(e) => handleTermChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Search foods (e.g. banana, chicken breast)"
           autoComplete="off"
           className="pl-9"

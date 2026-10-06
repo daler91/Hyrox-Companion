@@ -9,7 +9,7 @@ import { env } from "../../env";
 import { errResponse, ok as okResponse } from "./httpClientTestSupport";
 import {
   fetchUsdaFoodById,
-  fetchUsdaFoodPortions,
+  fetchUsdaFoodDetail,
   mapUsdaSearchFood,
   searchUsdaFoods,
 } from "./usdaClient";
@@ -175,7 +175,7 @@ describe("searchUsdaFoods", () => {
   });
 });
 
-describe("fetchUsdaFoodPortions", () => {
+describe("fetchUsdaFoodDetail", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
@@ -197,30 +197,48 @@ describe("fetchUsdaFoodPortions", () => {
         ],
       }),
     );
-    expect(await fetchUsdaFoodPortions("123")).toEqual([
+    expect((await fetchUsdaFoodDetail("123"))?.portions).toEqual([
       { label: "1 cup", grams: 240 },
       { label: "1 tablespoon", grams: 30 },
     ]);
   });
 
-  it("returns [] when the food has no portions", async () => {
+  it("returns no portions when the food has none", async () => {
     fetchMock.mockResolvedValue(detail({}));
-    expect(await fetchUsdaFoodPortions("123")).toEqual([]);
+    expect((await fetchUsdaFoodDetail("123"))?.portions).toEqual([]);
   });
 
-  it("returns [] on API error (best-effort)", async () => {
+  // PF11 (CODEBASE_ANALYSIS_2026-10-03): portions and micros used to be two
+  // requests for the same URL.
+  it("maps the food and its portions from one request", async () => {
+    fetchMock.mockResolvedValue(
+      detail({
+        fdcId: 123,
+        description: "Granola bar",
+        foodNutrients: [{ nutrient: { id: 1093, unitName: "MG" }, amount: 79 }],
+        foodPortions: [{ gramWeight: 40, portionDescription: "1 bar" }],
+      }),
+    );
+    const result = await fetchUsdaFoodDetail("123");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result?.portions).toEqual([{ label: "1 bar", grams: 40 }]);
+    expect(result?.food).toMatchObject({ source: "usda", sourceId: "123", name: "Granola bar" });
+    expect(result?.food?.micros).toMatchObject({ sodium: 79 });
+  });
+
+  it("returns null on API error (best-effort)", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 500,
       json: async () => ({}),
       headers: { get: () => null },
     });
-    expect(await fetchUsdaFoodPortions("123")).toEqual([]);
+    expect(await fetchUsdaFoodDetail("123")).toBeNull();
   });
 
-  it("returns [] when no API key is configured", async () => {
+  it("returns null when no API key is configured", async () => {
     (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
-    expect(await fetchUsdaFoodPortions("123")).toEqual([]);
+    expect(await fetchUsdaFoodDetail("123")).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

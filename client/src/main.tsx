@@ -1,7 +1,7 @@
-import "@fontsource/open-sans/400.css";
-import "@fontsource/open-sans/500.css";
-import "@fontsource/open-sans/600.css";
-import "@fontsource/open-sans/700.css";
+// Only the families index.css's font stacks name (Geist, Geist Mono, Space
+// Grotesk): every face imported here is emitted, and its latin subset is
+// precached by the service worker. Open Sans was imported but never used.
+// PF6 (CODEBASE_ANALYSIS_2026-10-03)
 import "@fontsource/space-grotesk/400.css";
 import "@fontsource/space-grotesk/500.css";
 import "@fontsource/space-grotesk/600.css";

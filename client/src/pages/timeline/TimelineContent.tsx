@@ -66,6 +66,68 @@ interface TimelineContentProps {
   fuellingByDate?: Map<string, FuellingDayPoint>;
 }
 
+interface LoadOlderButtonProps {
+  readonly isLoadingOlder: TimelineData["isLoadingOlder"];
+  readonly onLoadOlder: TimelineData["loadOlderEntries"];
+}
+
+function LoadOlderButton({ isLoadingOlder, onLoadOlder }: LoadOlderButtonProps) {
+  return (
+    <Button
+      variant="outline"
+      className="w-full"
+      onClick={onLoadOlder}
+      disabled={isLoadingOlder}
+      aria-busy={isLoadingOlder}
+      data-testid="button-load-older"
+    >
+      {isLoadingOlder ? (
+        <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+      ) : (
+        <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
+      )}
+      {isLoadingOlder ? "Loading older workouts…" : "Load older workouts"}
+    </Button>
+  );
+}
+
+interface NoLoadedMatchesProps extends LoadOlderButtonProps {
+  readonly filterStatus: TimelineFiltersState["filterStatus"];
+  readonly setFilterStatus: TimelineFiltersState["setFilterStatus"];
+}
+
+/**
+ * Nothing in the loaded pages matches, but older pages exist. The definitive
+ * empty state rendered here instead, with no way to look further back, so
+ * "No skipped workouts" showed although older skipped sessions existed.
+ * CL71 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function NoLoadedMatches({
+  filterStatus,
+  setFilterStatus,
+  isLoadingOlder,
+  onLoadOlder,
+}: NoLoadedMatchesProps) {
+  const what = filterStatus === "all" ? "workouts" : `${filterStatus} workouts`;
+  return (
+    <div className="space-y-4 text-center" data-testid="timeline-no-loaded-matches">
+      <p className="text-sm text-muted-foreground">
+        No {what} in the sessions loaded so far. Older sessions may match.
+      </p>
+      <LoadOlderButton isLoadingOlder={isLoadingOlder} onLoadOlder={onLoadOlder} />
+      {filterStatus === "all" ? null : (
+        <Button
+          variant="ghost"
+          onClick={() => setFilterStatus("all")}
+          data-testid="button-clear-filter"
+        >
+          Show all
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function TimelineContent({
   timelineLoading,
   timelineError,
@@ -133,6 +195,16 @@ export function TimelineContent({
   // `allVisibleGroups` includes annotation-only rows from useTimelineFilters,
   // so this empty state is only for a truly empty render target.
   if (allVisibleGroups.length === 0) {
+    if (hasOlderEntries) {
+      return (
+        <NoLoadedMatches
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={onLoadOlder}
+        />
+      );
+    }
     return (
       <TimelineEmptyState
         filterStatus={filterStatus}
@@ -174,21 +246,7 @@ export function TimelineContent({
       )}
 
       {hiddenPastCount === 0 && hasOlderEntries && (
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={onLoadOlder}
-          disabled={isLoadingOlder}
-          aria-busy={isLoadingOlder}
-          data-testid="button-load-older"
-        >
-          {isLoadingOlder ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
-          ) : (
-            <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
-          )}
-          {isLoadingOlder ? "Loading older workouts…" : "Load older workouts"}
-        </Button>
+        <LoadOlderButton isLoadingOlder={isLoadingOlder} onLoadOlder={onLoadOlder} />
       )}
 
       {showAllPast && pastGroups.length > 7 && (

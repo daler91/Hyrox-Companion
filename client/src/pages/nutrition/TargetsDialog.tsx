@@ -35,6 +35,22 @@ function canCalculateFromProfile(p: UserPreferences | undefined): p is UserPrefe
   );
 }
 
+/** Onboarding's weekly rate for a lose/gain goal with none set (FuellingStep). */
+const DEFAULT_GOAL_RATE_KG_PER_WEEK = 0.25;
+
+/**
+ * The weekly rate to calculate with, resolved as onboarding resolves it: none
+ * for maintenance, else the saved rate, else onboarding's default. An unset
+ * rate used to count as 0 kg/week, so a "lose" goal was handed maintenance
+ * calories (2,656 kcal where onboarding gives about 2,381).
+ * CL64 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function goalRateForCalculation(p: UserPreferences): number {
+  if (p.weightGoalDirection === "maintain") return 0;
+  const saved = p.weightGoalRateKgPerWeek;
+  return saved != null && saved > 0 ? saved : DEFAULT_GOAL_RATE_KG_PER_WEEK;
+}
+
 function TargetsForm({
   current,
   onClose,
@@ -80,7 +96,7 @@ function TargetsForm({
       sex,
       activityLevel: profile.activityLevel!,
       goalDirection: profile.weightGoalDirection!,
-      goalRateKgPerWeek: profile.weightGoalRateKgPerWeek ?? 0,
+      goalRateKgPerWeek: goalRateForCalculation(profile),
     });
     setValues({
       calories: String(result.calories),

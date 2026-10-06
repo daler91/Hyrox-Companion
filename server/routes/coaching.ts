@@ -29,6 +29,14 @@ router.get("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching"
     res.json(materials);
   }));
 
+// Each material's title, type and length without its text: the Settings list
+// shows no more, and fetching the full list for it downloaded every
+// material's text. PF4 (CODEBASE_ANALYSIS_2026-10-03)
+router.get("/api/v1/coaching-materials/summaries", isAuthenticated, rateLimiter("coaching", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    res.json(await storage.coaching.listCoachingMaterialSummaries(userId));
+  }));
+
 const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
 protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(createMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);

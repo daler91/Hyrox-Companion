@@ -54,8 +54,20 @@ function planHint(opts: {
  * athlete saved on the plan day, then fed to the shared `computeSessionFuellingTarget`.
  * Editing duration/effort persists to the plan day so the target is remembered.
  * The caller gates on `featureFlags.nutritionEnabled && entry.planDayId`.
+ *
+ * Keyed by the entry: the drafts, the touched flags and a save still waiting
+ * out its debounce all belong to one session. Seeded only on mount, a sheet
+ * re-targeted to another session while open (deep link, notification,
+ * back/forward) kept showing the first one's duration, RPE and start time, and
+ * a stepper tap PATCHed the new day with a value worked out from the old.
+ * Remounting also sends the waiting save to the day it was made on.
+ * CL40 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) {
+  return <EntryFuellingPlanPanel key={entry.id} entry={entry} />;
+}
+
+function EntryFuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) {
   const { data: preferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
   const bodyweightKg = preferences?.bodyweightKg ?? null;
 

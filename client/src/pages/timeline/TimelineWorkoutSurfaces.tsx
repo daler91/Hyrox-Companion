@@ -263,6 +263,13 @@ export function TimelineWorkoutSurfaces({
                 }
                 resolve();
               },
+              // Queued offline: no log to review yet, so the sheet just closes
+              // (CL55, CODEBASE_ANALYSIS_2026-10-03).
+              onQueued: () => {
+                closeEmbeddedCoach();
+                setLogEntry(null);
+                resolve();
+              },
               onError: reject,
             });
           });

@@ -13,6 +13,7 @@ import type { Logger } from "pino";
 
 import {
   getNutritionAnchor,
+  getTrainingAnchor,
   getWorkoutAnchor,
   persistCoachInsights,
   persistNutritionInsights,
@@ -38,8 +39,9 @@ export async function dispatchRecomputeAnalytics(
       // Self-gated: leave the prior stored analysis intact when consent/budget
       // block the call (the caller's once-per-day claim stops a same-day retry).
       // The anchor is read before generating for the reason documented on
-      // regenerateAndStore (analyticsPersistence.ts).
-      const anchor = await getWorkoutAnchor(userId);
+      // regenerateAndStore (analyticsPersistence.ts). Training logs only, as
+      // the analysis reads (PF10).
+      const anchor = await getTrainingAnchor(userId);
       const outcome = await generateOverviewAnalysisIfAllowed(userId, log);
       if (outcome.ok) {
         await persistOverviewAnalysis(userId, outcome.result, localDate, anchor);

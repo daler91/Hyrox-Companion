@@ -7,6 +7,7 @@ import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
+import { addDaysLocal, getLocalDateStrSafe } from "../timezone";
 import { checkAiBudget } from "./aiUsageService";
 import { invalidateAnalyticsCachesForUser } from "./analyticsRouteCache";
 import { findInconsistentHeartRate } from "./heartRateConsistency";
@@ -75,11 +76,28 @@ async function parseLegacyWorkoutText(userId: string, textToParse: string): Prom
   return structured;
 }
 
+/**
+ * A workout log may be dated no later than the athlete's own tomorrow. The
+ * route schema cannot know their timezone, so it lets through tomorrow
+ * wherever that is latest (UTC+14) and this holds the date to theirs; it used
+ * UTC's, refusing "Move to tomorrow" for a UTC+N athlete until N o'clock.
+ * CL70 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function assertWorkoutDateNotFuture(userId: string, date: string | undefined): Promise<void> {
+  if (date === undefined) return;
+  const user = await storage.users.getUser(userId);
+  const tomorrow = addDaysLocal(getLocalDateStrSafe(new Date(), user?.userTimezone), 1);
+  if (date > tomorrow) {
+    throw new AppError(ErrorCode.VALIDATION_ERROR, "Workout date cannot be in the future", 400);
+  }
+}
+
 export async function createWorkout(input: {
   userId: string;
   payload: CreateWorkoutPayload;
 }) {
   const { exercises, structureBlocks, ...workoutData } = input.payload;
+  await assertWorkoutDateNotFuture(input.userId, workoutData.date);
   let structured = exercises as ParsedExercise[] | undefined;
   const hasStructureBlocks = Array.isArray(structureBlocks);
   // Skip the legacy AI reparse when the workout is backed by a plan day:
@@ -160,6 +178,7 @@ export async function updateWorkoutUseCase(input: {
   if (updateLint.schemaErrors.length > 0) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, updateLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
   }
+  await assertWorkoutDateNotFuture(input.userId, updateData.date);
 
   // The update route schema can only compare HR fields present in the same
   // PATCH body, so a one-sided change (e.g. only maxHeartrate) could otherwise

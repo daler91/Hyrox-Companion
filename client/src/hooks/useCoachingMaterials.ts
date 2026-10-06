@@ -1,4 +1,4 @@
-import type { CoachingMaterial } from "@shared/schema";
+import type { CoachingMaterialSummary } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
@@ -8,10 +8,16 @@ import { useApiMutation } from "./useApiMutation";
 
 export type { RagStatus } from "@/lib/api";
 
+/**
+ * The athlete's materials as Settings lists them: no text, its length counted
+ * by the server. The full list sent every material's text, up to 1.5M
+ * characters each, to be parsed on every remount just to show that length.
+ * PF4 (CODEBASE_ANALYSIS_2026-10-03)
+ */
 export function useCoachingMaterials() {
-  return useQuery<CoachingMaterial[]>({
-    queryKey: QUERY_KEYS.coachingMaterials,
-    queryFn: () => api.coaching.list(),
+  return useQuery<CoachingMaterialSummary[]>({
+    queryKey: QUERY_KEYS.coachingMaterialSummaries,
+    queryFn: () => api.coaching.listSummaries(),
   });
 }
 

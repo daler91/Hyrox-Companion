@@ -1,3 +1,18 @@
+/** The athlete the default `/api/v1/auth/user` fixture below signs in as. */
+export const FIXTURE_ATHLETE_ID = "test-user-123";
+
+/**
+ * Records on this device that the fixture athlete finished onboarding, so the
+ * wizard doesn't auto-open (and scroll-lock the body with pointer-events: none)
+ * over the screen under test. Pass it as `cy.visit`'s `onBeforeLoad`, which runs
+ * before the app boots. The flag holds the athlete's id: a legacy "true", or
+ * any other athlete's id, no longer skips onboarding.
+ * CL45 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function skipOnboardingOnLoad(win: Window): void {
+  win.localStorage.setItem("fitai-onboarding-complete", FIXTURE_ATHLETE_ID);
+}
+
 /**
  * Fixture bodies are forwarded verbatim to `cy.intercept`, which accepts any
  * serialisable value, so these stay `unknown`-based rather than importing the
@@ -53,7 +68,7 @@ export function setupAuthIntercepts(overrides?: {
   cy.intercept("GET", "/api/v1/auth/user", {
     statusCode: 200,
     body: {
-      id: "test-user-123",
+      id: FIXTURE_ATHLETE_ID,
       username: "testathlete",
       firstName: "Test",
       lastName: "Athlete",

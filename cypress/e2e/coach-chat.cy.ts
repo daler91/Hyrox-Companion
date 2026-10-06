@@ -1,4 +1,4 @@
-import { setupAuthIntercepts } from "../support/authIntercepts";
+import { setupAuthIntercepts, skipOnboardingOnLoad } from "../support/authIntercepts";
 
 // Smoke coverage for the Coach panel. SSE streaming mocking in Cypress is
 // fragile, so this tests the affordances rather than end-to-end stream
@@ -23,11 +23,7 @@ describe("AI Coach Panel", () => {
   // runs on the app origin's window after navigation but before the
   // React app mounts.
   const visitWithOnboardingSkipped = (path: string) => {
-    cy.visit(path, {
-      onBeforeLoad: (win) => {
-        win.localStorage.setItem("fitai-onboarding-complete", "true");
-      },
-    });
+    cy.visit(path, { onBeforeLoad: skipOnboardingOnLoad });
   };
 
   it("opens the coach panel from the floating action button", () => {

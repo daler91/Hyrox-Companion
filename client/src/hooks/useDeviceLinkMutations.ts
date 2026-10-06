@@ -2,7 +2,10 @@ import type { WorkoutLog } from "@shared/schema";
 
 import { api, QUERY_KEYS } from "@/lib/api";
 import { humanizeApiError } from "@/lib/queryClient";
-import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
+import {
+  EXERCISE_HISTORY_QUERY_PREFIX,
+  WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+} from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -12,6 +15,8 @@ export type DeviceLinkTarget = { planDayId: string } | { workoutLogId: string };
 // lists change shape, a plan day flips status, and the metrics that feed PRs
 // and analytics move with the recording. Its start time and duration move too,
 // and the fuelling reads built from them (CL19, CODEBASE_ANALYSIS_2026-10-03).
+// The recorded set moves with it, and with it the session the "Last time"
+// history quotes for that exercise (CL43, CODEBASE_ANALYSIS_2026-10-03).
 const DEVICE_LINK_QUERY_KEYS = [
   QUERY_KEYS.timeline,
   QUERY_KEYS.workouts,
@@ -20,6 +25,7 @@ const DEVICE_LINK_QUERY_KEYS = [
   QUERY_KEYS.exerciseAnalytics,
   QUERY_KEYS.trainingOverview,
   ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+  EXERCISE_HISTORY_QUERY_PREFIX,
 ] as const;
 
 /**

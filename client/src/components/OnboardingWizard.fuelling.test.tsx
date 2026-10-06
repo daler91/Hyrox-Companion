@@ -148,6 +148,31 @@ describe("OnboardingWizard fuelling step", () => {
     expect(invalidated).toContainEqual(QUERY_KEYS.nutritionRangePrefix);
   });
 
+  // CL37 (CODEBASE_ANALYSIS_2026-10-03): a decimal age previewed a target the
+  // server then refused, losing the whole profile behind a generic toast.
+  it("names a decimal age inline and keeps the athlete on the step", async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await walkToFuellingStep();
+    await fillCompleteProfile(user);
+    const age = screen.getByTestId("input-fuelling-age");
+    fireEvent.change(age, { target: { value: "34.5" } });
+
+    expect(screen.queryByTestId("fuelling-suggested-targets")).not.toBeInTheDocument();
+    const callsBefore = vi.mocked(queryClientLib.apiRequest).mock.calls.length;
+    fireEvent.click(screen.getByText("Skip"));
+
+    const error = await screen.findByText(/whole number between 13 and 100/);
+    expect(age).toHaveAttribute("aria-invalid", "true");
+    expect(age).toHaveAttribute("aria-describedby", error.id);
+    expect(screen.queryByTestId("coach-step")).not.toBeInTheDocument();
+    expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
+
+    fireEvent.change(age, { target: { value: "34" } });
+    expect(screen.queryByText(/whole number between 13 and 100/)).not.toBeInTheDocument();
+    expect(await screen.findByTestId("fuelling-suggested-targets")).toBeInTheDocument();
+  });
+
   it("skips straight to the plan step when left blank, writing nothing", async () => {
     renderComponent();
     await walkToFuellingStep();

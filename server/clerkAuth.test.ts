@@ -2,7 +2,14 @@ import { clerkClient, getAuth } from "@clerk/express";
 import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { clearUserSeenCache, evictUserFromSeenCache, isAuthenticated, rememberUserErased } from "./clerkAuth";
+import {
+  clearUserSeenCache,
+  evictUserFromSeenCache,
+  isAuthenticated,
+  rememberUserErased,
+  USER_SEEN_CACHE_MAX_ENTRIES,
+  userSeenCacheSize,
+} from "./clerkAuth";
 import { storage } from "./storage";
 
 vi.mock("@clerk/express", () => ({
@@ -218,5 +225,78 @@ describe("isAuthenticated middleware", () => {
     expect(next).not.toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+  });
+});
+
+// PF9 (CODEBASE_ANALYSIS_2026-10-03): the seen-cache kept an entry for every
+// user an instance had ever served; expired ones were only replaced when the
+// same user came back.
+describe("user seen-cache bounds", () => {
+  const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+  const next: NextFunction = vi.fn();
+
+  async function authenticateAs(userId: string): Promise<void> {
+    vi.mocked(getAuth).mockReturnValue({ userId });
+    await isAuthenticated({ headers: {}, path: "/test" } as Request, res, next);
+  }
+
+  beforeEach(() => {
+    clearUserSeenCache();
+    vi.clearAllMocks();
+    vi.mocked(storage.users.getUser).mockImplementation((id: string) => Promise.resolve({ id }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetAllMocks();
+  });
+
+  it("drops users whose entry has expired when another user is seen", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-06T08:00:00Z"));
+    await authenticateAs("user-a");
+    await authenticateAs("user-b");
+    expect(userSeenCacheSize()).toBe(2);
+
+    vi.setSystemTime(new Date("2026-10-06T08:05:01Z"));
+    await authenticateAs("user-c");
+
+    expect(userSeenCacheSize()).toBe(1);
+  });
+
+  it("keeps a re-confirmed user behind users seen before it", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-06T08:00:00Z"));
+    await authenticateAs("user-a");
+    vi.setSystemTime(new Date("2026-10-06T08:03:00Z"));
+    await authenticateAs("user-b");
+    // user-a's entry has expired, so this re-reads storage and re-stamps it.
+    vi.setSystemTime(new Date("2026-10-06T08:05:30Z"));
+    await authenticateAs("user-a");
+    vi.mocked(storage.users.getUser).mockClear();
+
+    // user-b expires at 08:08; the re-stamped user-a is still fresh then.
+    vi.setSystemTime(new Date("2026-10-06T08:08:30Z"));
+    await authenticateAs("user-c");
+    await authenticateAs("user-a");
+
+    expect(userSeenCacheSize()).toBe(2);
+    expect(storage.users.getUser).toHaveBeenCalledTimes(1);
+    expect(storage.users.getUser).toHaveBeenCalledWith("user-c");
+  });
+
+  it("caps the cache, dropping the least recently seen user first", async () => {
+    const userIds = Array.from(Array(USER_SEEN_CACHE_MAX_ENTRIES + 1).keys(), (index) => `user-${index}`);
+    await userIds.reduce(
+      (previous, userId) => previous.then(() => authenticateAs(userId)),
+      Promise.resolve(),
+    );
+    expect(userSeenCacheSize()).toBe(USER_SEEN_CACHE_MAX_ENTRIES);
+
+    vi.mocked(storage.users.getUser).mockClear();
+    await authenticateAs("user-1");
+    expect(storage.users.getUser).not.toHaveBeenCalled();
+    await authenticateAs("user-0");
+    expect(storage.users.getUser).toHaveBeenCalledWith("user-0");
   });
 });

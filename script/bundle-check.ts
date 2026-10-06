@@ -1,9 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { type BundleStats, readBundleStats } from "./bundleStats";
+
 /**
  * Client-bundle regression guard. CI's build workflow never runs `pnpm build`,
- * so the two structural bundle invariants below are otherwise only protected by
+ * so the structural bundle invariants below are otherwise only protected by
  * someone eyeballing dist/. Run standalone via `pnpm check:bundle` (hard fail),
  * or non-fatally from script/build.ts after every production build.
  *
@@ -17,9 +19,47 @@ import path from "node:path";
  *    contains drizzle-orm/drizzle-zod modules because some client file
  *    value-imports the @shared/schema barrel instead of a pure deep module
  *    (@shared/schema/exercises, /structureLint, /enums, /micros).
+ * 3. lucide-react icons of the lazy routes stay off first paint. Symptom: a
+ *    code-splitting group gathers icons into one shared chunk (the old
+ *    `vendor-ui`) that the entry imports, and the eager graph carries every
+ *    icon the app uses (~140) instead of the shell's own (~20). Counted by the
+ *    build itself (script/bundleStats.ts), which still knows each chunk's
+ *    modules.
  */
 
 const DIST = "dist/public";
+
+/**
+ * Most lucide-react icons the eager graph (each entry chunk and, transitively,
+ * its static imports) may carry. The app shell renders about 20 itself:
+ * navigation, header, theme toggle, offline banner. Raise this deliberately
+ * when the shell gains icons. PF19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const MAX_EAGER_LUCIDE_ICONS = 30;
+
+/**
+ * Invariant 3, from the stats the build recorded (script/bundleStats.ts). Also
+ * fails when the build recorded nothing, or found no icon anywhere: the module
+ * path it matches no longer fits lucide-react, and the guard has gone blind.
+ */
+export function eagerLucideIconFailures(stats: BundleStats | null): string[] {
+  if (stats === null) {
+    return [
+      "dist/bundle-stats.json is missing — build with vite.config.ts, whose bundle-stats plugin writes it",
+    ];
+  }
+  if (stats.totalLucideIcons === 0) {
+    return [
+      "the build found no lucide-react icon modules — LUCIDE_ICON_MODULE in script/bundleStats.ts no longer " +
+        "matches lucide-react's module paths, so the eager-icon guard cannot count icons",
+    ];
+  }
+  if (stats.eagerLucideIcons <= MAX_EAGER_LUCIDE_ICONS) return [];
+  return [
+    `the eager graph carries ${stats.eagerLucideIcons} lucide-react icons (budget ${MAX_EAGER_LUCIDE_ICONS}) — ` +
+      "icons of lazy routes are on first paint; check vite.config.ts codeSplitting for a group that captures lucide-react",
+  ];
+}
 
 /**
  * Whether a built chunk carries drizzle runtime code. Prefers its sourcemap's
@@ -37,7 +77,7 @@ function shipsDrizzle(assets: string, file: string): Promise<boolean> {
   );
 }
 
-/** Run both invariant checks against dist/. Returns [] when the bundle is clean. */
+/** Run the invariant checks against dist/. Returns [] when the bundle is clean. */
 export async function collectBundleCheckFailures(): Promise<string[]> {
   const failures: string[] = [];
 
@@ -59,6 +99,8 @@ export async function collectBundleCheckFailures(): Promise<string[]> {
       `${file} contains drizzle-orm/drizzle-zod runtime code — a client file value-imports the @shared/schema barrel`,
     );
   }
+
+  failures.push(...eagerLucideIconFailures(await readBundleStats()));
 
   return failures;
 }

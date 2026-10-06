@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import {
+  EXERCISE_HISTORY_QUERY_PREFIX,
   flushWorkoutWriteInvalidation,
   scheduleWorkoutWriteInvalidation,
   WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
@@ -50,6 +51,28 @@ const WORKOUT_STRUCTURE_SAVE_SCOPE = { id: "workout-structure-save" };
 
 export function isLatestMutationSequence(seq: number, latestSeq: number | undefined): boolean {
   return seq === latestSeq;
+}
+
+/**
+ * The rollback of a failed set write (update or delete): the workout's rows as
+ * they were when it started, except a row whose version has moved past its
+ * snapshot, which another write saved meanwhile and keeps, and a row added
+ * since, which stays. Only the sets are touched; the RPE, title and every other
+ * field of the cached workout are left as they are now. Restoring the whole
+ * workout snapshot reverted whatever succeeded while the failing PATCH was out.
+ * CL52 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function restoreSetRows(
+  current: readonly ExerciseSet[],
+  snapshot: readonly ExerciseSet[],
+): ExerciseSet[] {
+  const currentById = new Map(current.map((row) => [row.id, row]));
+  const restored = snapshot.map((before) => {
+    const now = currentById.get(before.id);
+    return now && now.version > before.version ? now : before;
+  });
+  const snapshotIds = new Set(snapshot.map((row) => row.id));
+  return [...restored, ...current.filter((row) => !snapshotIds.has(row.id))];
 }
 
 export function mergeServerStructureBlock(
@@ -101,6 +124,8 @@ function isWorkoutNotFoundError(error: unknown): boolean {
  * target, the Timeline fuel chips and the Fuelling block), since the load is
  * computed from the sets these replace. Session fuelling reads no sets.
  * CL19 (CODEBASE_ANALYSIS_2026-10-03)
+ * The replaced sets are also this session's part of every exercise's "Last
+ * time" line. CL43 (CODEBASE_ANALYSIS_2026-10-03)
  */
 function setReplacementQueryKeys(workoutId: string) {
   return [
@@ -109,6 +134,7 @@ function setReplacementQueryKeys(workoutId: string) {
     QUERY_KEYS.nutritionDayPrefix,
     QUERY_KEYS.nutritionRangePrefix,
     QUERY_KEYS.nutritionBlockPrefix,
+    EXERCISE_HISTORY_QUERY_PREFIX,
   ];
 }
 
@@ -203,22 +229,27 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateSet,
     patchSetDebounced,
     flushPendingSetPatches,
+    saveSetOrder,
     addSet,
     deleteSet,
     isSaving,
     lastSavedAt,
     lastSaveErrorAt,
     markSaved,
-  } = useExerciseSetsForOwner<WorkoutWithSets>({
+  } = useExerciseSetsForOwner<ExerciseSet[]>({
     ownerId: workoutId,
     mutationKeyFamily: workoutSetsMutationKey,
     setsQueryKey: QUERY_KEYS.workout,
     patchCachedSets,
-    getSnapshot: (id) => queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(id)),
-    restoreSnapshot: (id, snapshot) => queryClient.setQueryData(QUERY_KEYS.workout(id), snapshot),
+    // The sets alone, put back row by row (restoreSetRows): CL52
+    // (CODEBASE_ANALYSIS_2026-10-03), the set half of the scoped field rollbacks above.
+    getSnapshot: (id) => queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(id))?.exerciseSets,
+    restoreSnapshot: (id, snapshot) => patchCachedSets(id, (sets) => restoreSetRows(sets, snapshot)),
     updateSetRequest: (id, setId, data) => api.workouts.updateSet(id, setId, data),
     addSetRequest: (id, data) => api.workouts.addSet(id, data),
     deleteSetRequest: (id, setId) => api.workouts.deleteSet(id, setId),
+    // A drag's one-request order save (PF5, CODEBASE_ANALYSIS_2026-10-03).
+    saveSetOrderRequest: (id, setIds) => api.workouts.saveSetOrder(id, setIds),
     addInvalidateQueries: (id) => [QUERY_KEYS.workoutHistory(id)],
     deleteInvalidateQueries: (id) => [QUERY_KEYS.workout(id), QUERY_KEYS.workoutHistory(id)],
     // Set edits move PRs, exercise analytics and the training overview just as
@@ -504,6 +535,10 @@ export function useWorkoutDetail(workoutId: string | null) {
         // fuelling panel beside it kept the old targets for its staleTime.
         // CL19 (CODEBASE_ANALYSIS_2026-10-03)
         ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+        // The RPE weights the session's training load, which the training
+        // overview charts; it kept the pre-RPE load until a remount.
+        // CL53 (CODEBASE_ANALYSIS_2026-10-03)
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
       ]);
     },
     errorToast: "Couldn't save that RPE",
@@ -516,6 +551,10 @@ export function useWorkoutDetail(workoutId: string | null) {
   // the meal targets on the old timing. Session fuelling windows only by a device
   // start time. Roll back only timeOfDayMin on error.
   // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+  // The time also picks which of two same-day sessions "Last time" quotes
+  // (pickLastSession). This sheet's own rows leave its session out, so the
+  // history is only marked stale for the next sheet.
+  // CL43 (CODEBASE_ANALYSIS_2026-10-03)
   const updateTimeOfDay = useApiMutation({
     mutationFn: (timeOfDayMin: number | null) =>
       api.workouts.update(workoutId!, { timeOfDayMin }),
@@ -524,6 +563,10 @@ export function useWorkoutDetail(workoutId: string | null) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDayPrefix }),
+        queryClient.invalidateQueries({
+          queryKey: EXERCISE_HISTORY_QUERY_PREFIX,
+          refetchType: "none",
+        }),
       ]);
     },
     onError: (_err, _vars, ctx) => rollbackFields(ctx),
@@ -579,6 +622,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateSet,
     patchSetDebounced,
     flushPendingSetPatches,
+    saveSetOrder,
     addSet,
     deleteSet,
     seedFromPlan,
