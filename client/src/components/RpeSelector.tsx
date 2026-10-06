@@ -71,7 +71,7 @@ export function RpeSelector({
     <fieldset className="space-y-2 border-0 m-0 p-0">
       {showLabel && (
         <legend className="flex items-center gap-1 text-sm font-medium">
-          <Gauge className="h-3.5 w-3.5" />
+          <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
           RPE (Rate of Perceived Exertion)
         </legend>
       )}

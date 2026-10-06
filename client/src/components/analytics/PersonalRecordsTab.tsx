@@ -115,7 +115,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
       <CardHeader>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
+            <Trophy className="h-5 w-5 text-yellow-500" aria-hidden="true" />
             <CardTitle as="h2">Personal Records</CardTitle>
           </div>
           <div className="flex items-center gap-2">
@@ -147,7 +147,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
           if (filteredPRs.length === 0) {
             return (
               <div className="text-center py-4 space-y-3" data-testid="text-no-prs">
-                <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                <Dumbbell className="h-10 w-10 mx-auto text-muted-foreground/40" aria-hidden="true" />
                 <p className="text-muted-foreground text-sm">
                   No personal records yet. Log workouts with structured exercise data to see your PRs here.
                 </p>
@@ -165,7 +165,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
               {recentPRs.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
                     <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">Recent PRs (last 30 days)</p>
                   </div>
                   <div className="divide-y border rounded-lg overflow-hidden border-amber-500/30 bg-amber-500/5">
