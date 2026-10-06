@@ -92,7 +92,7 @@ function planDayState(overrides: Record<string, unknown> = {}) {
     isSaving: false,
     lastSavedAt: null,
     structureBlocks: [],
-    flushPendingSetPatches: vi.fn(() => Promise.resolve()),
+    flushPendingSetPatches: vi.fn(() => Promise.resolve(true)),
     patchSetDebounced: vi.fn(),
     updateSet: { mutateAsync: vi.fn(() => Promise.resolve()) },
     addSet: { mutate: vi.fn() },
@@ -188,7 +188,7 @@ describe("LogSheet structure builder", () => {
       structureBlocks: [emomBlock],
       flushPendingSetPatches: vi.fn(() => {
         order.push("rows");
-        return Promise.resolve();
+        return Promise.resolve(true);
       }),
     });
     mocks.usePlanDayExercises.mockReturnValue(state);
@@ -213,6 +213,26 @@ describe("LogSheet structure builder", () => {
     });
     // Queued row links land first, so the block save moves them with their steps.
     expect(order).toEqual(["rows", "blocks", "log"]);
+  });
+
+  it("stops completing at a flushed cell edit that failed (CL39)", async () => {
+    mocks.flags.emomBuilderEnabled = true;
+    const state = planDayState({
+      structureBlocks: [emomBlock],
+      flushPendingSetPatches: vi.fn(() => Promise.resolve(false)),
+    });
+    mocks.usePlanDayExercises.mockReturnValue(state);
+    const onLogAsPlanned = vi.fn(() => Promise.resolve());
+    render(<LogSheet entry={entry} onClose={vi.fn()} onLogAsPlanned={onLogAsPlanned} />);
+
+    fireEvent.click(screen.getByTestId("log-as-planned-entry-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("log-as-planned-entry-1")).not.toBeDisabled();
+    });
+    expect(state.flushPendingSetPatches).toHaveBeenCalledTimes(1);
+    // Completion stops at the failed cell edit; the block edit still saves after its own pause.
+    expect(mocks.editor.flush).not.toHaveBeenCalled();
+    expect(onLogAsPlanned).not.toHaveBeenCalled();
   });
 
   it("does not complete the workout when the block edit it sent fails (CL15)", async () => {

@@ -104,6 +104,9 @@ const SESSION_STORAGE_PREFIXES = [
  * get the effect; the returned promise settles once the asynchronous Cache
  * Storage purge and the push unsubscribe are done, and callers that can await
  * it should.
+ *
+ * That includes offline writes still waiting to sync, so the Log out button
+ * asks before it gets here while any are queued (useConfirmedSignOut, CL61).
  */
 export function clearUserLocalData(): Promise<void> {
   clearOfflineQueue();

@@ -82,6 +82,84 @@ const MAF_SETUP_TOAST = {
   variant: "destructive",
 } as const;
 
+/**
+ * The reads the server converts into the athlete's units. A units change
+ * relabelled their cached numbers without refetching them, so for their
+ * staleTime a 100 kg PR read "100 lbs". Exercise history is not here: its
+ * rows keep the unit they were logged in and the client converts them.
+ * CL67 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+const UNIT_CONVERTED_QUERY_KEYS = [
+  QUERY_KEYS.personalRecords,
+  QUERY_KEYS.exerciseAnalytics,
+  QUERY_KEYS.trainingOverview,
+] as const;
+
+/** Whether a save changed the weight or distance unit (CL67). */
+function unitsChanged(before: PreferencesSnapshot | null, saved: PreferencesSnapshot): boolean {
+  if (!before) return true;
+  return before.weightUnit !== saved.weightUnit || before.distanceUnit !== saved.distanceUnit;
+}
+
+/** Refreshes the reads a saved preference feeds. */
+function invalidateAfterPreferencesSave(withUnitConverted: boolean): void {
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(ignoreResult);
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(ignoreResult);
+  // Session grades are measured against max/resting HR, age and units:
+  // re-grade everything, closed Weekly Review weeks included.
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessionGradesPrefix }).catch(ignoreResult);
+  queryClient.invalidateQueries({ queryKey: ["/api/v1/weekly-review"] }).catch(ignoreResult);
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(ignoreResult);
+  // The bodyweight, heart rates, units and meal schedule saved here size
+  // session fuelling, the day's meal targets and energy balance, and the
+  // training load behind the chips and the Fuelling block: a new weight
+  // left them on the old figures for their staleTime.
+  // CL19 (CODEBASE_ANALYSIS_2026-10-03)
+  for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
+    queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
+  }
+  if (!withUnitConverted) return;
+  for (const queryKey of UNIT_CONVERTED_QUERY_KEYS) {
+    queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
+  }
+}
+
+/** Whether the draft differs from a committed baseline. */
+function isDirtyAgainst(draft: PreferencesDraft, baseline: PreferencesSnapshot): boolean {
+  return JSON.stringify(draftToSnapshot(draft)) !== JSON.stringify(baseline);
+}
+
+/** Whether the athlete edited the form after a save sent the draft `sent` (CL68). */
+function editedSinceSave(current: PreferencesDraft, sent: PreferencesDraft | null): boolean {
+  return sent !== null && JSON.stringify(current) !== JSON.stringify(sent);
+}
+
+/** The MAF ceiling the server holds (null when it has none). */
+interface CommittedMaf {
+  readonly mafHr: number | null;
+}
+
+/** What the post-save Undo restores. */
+interface UndoTarget {
+  readonly snapshot: PreferencesSnapshot;
+  /** The ceiling stored before the save; null when it was never read. */
+  readonly committedMaf: CommittedMaf | null;
+}
+
+/**
+ * The save that puts `previous` back. The snapshot holds the MAF age and
+ * category but not the ceiling computed from them, so undoing a save that
+ * moved the ceiling restored the inputs and left the undone ceiling in force
+ * for session grading and MAF compliance. A save that sent mafHr is now
+ * undone with the ceiling stored before it.
+ * CL69 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function undoPayload(previous: UndoTarget, undone: SavePayload): SavePayload {
+  const payload = snapshotToSavePayload(previous.snapshot);
+  if (undone.mafHr === undefined || !previous.committedMaf) return payload;
+  return { ...payload, mafHr: previous.committedMaf.mafHr };
+}
+
 // Owns the Settings preferences form: the draft state behind every
 // controlled field, snapshot-equality dirty tracking, the save mutation
 // with its Undo toast, and MAF validation. The page component renders
@@ -108,9 +186,16 @@ export function usePreferencesForm() {
   // Mirror of `hasChanges` readable from the preferences effect without
   // re-running it on every keystroke.
   const hasChangesRef = useRef(false);
-  // Snapshot of values before the most recent save, used to offer an
-  // "Undo" action on the post-save toast.
-  const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
+  // The live draft, and the one the in-flight save sent, so a save that
+  // lands can tell whether the athlete kept editing meanwhile (CL68).
+  const draftRef = useRef(draft);
+  const savingDraftRef = useRef<PreferencesDraft | null>(null);
+  // The MAF ceiling the server holds: the snapshot does not carry it, and an
+  // Undo has to put it back (CL69).
+  const committedMafRef = useRef<CommittedMaf | null>(null);
+  // Values before the most recent save, used to offer an "Undo" action on
+  // the post-save toast.
+  const undoSnapshotRef = useRef<UndoTarget | null>(null);
   const pendingStyleAuditRef = useRef<StyleAuditEntry | null>(null);
 
   const updateField = useCallback(
@@ -133,6 +218,7 @@ export function usePreferencesForm() {
 
   useEffect(() => {
     if (!preferences) return;
+    committedMafRef.current = { mafHr: preferences.mafHr ?? null };
     // A refetch that lands mid-edit (window focus, another tab's save, the
     // post-save invalidation racing a fresh keystroke) must not wipe what the
     // athlete has typed: while the draft is dirty only the baseline is seeded
@@ -147,8 +233,11 @@ export function usePreferencesForm() {
   }, [preferences]);
 
   useEffect(() => {
-    const baseline = baselineSnapshotRef.current ?? DEFAULT_PREFERENCES_SNAPSHOT;
-    const dirty = JSON.stringify(draftToSnapshot(draft)) !== JSON.stringify(baseline);
+    draftRef.current = draft;
+    const dirty = isDirtyAgainst(
+      draft,
+      baselineSnapshotRef.current ?? DEFAULT_PREFERENCES_SNAPSHOT,
+    );
     hasChangesRef.current = dirty;
     setHasChanges(dirty);
   }, [draft]);
@@ -156,26 +245,20 @@ export function usePreferencesForm() {
   const saveMutation = useMutation({
     mutationFn: (data: SavePayload) => api.preferences.update(data),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-      // Session grades are measured against max/resting HR, age and units:
-      // re-grade everything, closed Weekly Review weeks included.
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sessionGradesPrefix }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/weekly-review"] }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
-      // The bodyweight, heart rates, units and meal schedule saved here size
-      // session fuelling, the day's meal targets and energy balance, and the
-      // training load behind the chips and the Fuelling block: a new weight
-      // left them on the old figures for their staleTime.
-      // CL19 (CODEBASE_ANALYSIS_2026-10-03)
-      for (const queryKey of WORKOUT_DERIVED_NUTRITION_QUERY_KEYS) {
-        queryClient.invalidateQueries({ queryKey }).catch(ignoreResult);
-      }
+      const saved = savePayloadToSnapshot(variables);
+      invalidateAfterPreferencesSave(unitsChanged(baselineSnapshotRef.current, saved));
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
-      baselineSnapshotRef.current = savePayloadToSnapshot(variables);
-      hasChangesRef.current = false;
-      setHasChanges(false);
+      baselineSnapshotRef.current = saved;
+      if (variables.mafHr !== undefined) committedMafRef.current = { mafHr: variables.mafHr };
+      // An edit made while the save was in flight stays dirty: clearing the
+      // flag let the post-save refetch overwrite it and took the Save bar
+      // away with it. CL68 (CODEBASE_ANALYSIS_2026-10-03)
+      const current = draftRef.current;
+      const stillDirty =
+        editedSinceSave(current, savingDraftRef.current) && isDirtyAgainst(current, saved);
+      hasChangesRef.current = stillDirty;
+      setHasChanges(stillDirty);
       if (pendingStyleAuditRef.current) {
         const nextAudit = [pendingStyleAuditRef.current, ...styleAuditEntries].slice(0, 10);
         setStyleAuditEntries(nextAudit);
@@ -198,8 +281,10 @@ export function usePreferencesForm() {
               // Leave undoSnapshotRef in place so a second undo restores
               // again — the mutation onSuccess will replace it after
               // persistence completes.
-              setDraft(snapshotToDraft(previous));
-              saveMutation.mutate(snapshotToSavePayload(previous));
+              const restored = snapshotToDraft(previous.snapshot);
+              setDraft(restored);
+              savingDraftRef.current = restored;
+              saveMutation.mutate(undoPayload(previous, variables));
             }}
           >
             Undo
@@ -250,7 +335,7 @@ export function usePreferencesForm() {
 
     // Capture the pre-save baseline so the post-save toast can offer Undo.
     undoSnapshotRef.current = baselineSnapshotRef.current
-      ? { ...baselineSnapshotRef.current }
+      ? { snapshot: { ...baselineSnapshotRef.current }, committedMaf: committedMafRef.current }
       : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
@@ -268,6 +353,7 @@ export function usePreferencesForm() {
       : null;
     // The recurring field mappings live in snapshotToSavePayload; only the
     // save-time-only style/MAF bookkeeping is added here.
+    savingDraftRef.current = draft;
     saveMutation.mutate({
       ...snapshotToSavePayload(draftToSnapshot(draft)),
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,

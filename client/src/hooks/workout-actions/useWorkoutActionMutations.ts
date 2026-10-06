@@ -3,10 +3,14 @@ import type { ExerciseSet, TimelineEntry, User, WorkoutLog, WorkoutStatus } from
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { runWithOfflineFallback } from "@/lib/offlineMutationFallback";
+import { WORKOUT_CREATE_URL } from "@/lib/pendingWorkouts";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { queryClient } from "@/lib/queryClient";
 import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
-import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
+import {
+  EXERCISE_HISTORY_QUERY_PREFIX,
+  WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+} from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "../useApiMutation";
 import { useUndoDeleteToast } from "../useRecycleBin";
@@ -85,6 +89,25 @@ function patchTimelineEntriesForLoggedWorkout(
   );
 }
 
+// A queued log has no workout yet. The pending-workout overlay already shows
+// it from the queue (usePendingWorkoutEntries), so the planned row it
+// completes comes off the cached timeline rather than staying beside it,
+// flipped to completed with no log behind it and the circle hidden. In-session
+// only, like a queued status change: the post-sync refetch brings the day
+// back, completed and linked. CL55 (CODEBASE_ANALYSIS_2026-10-03)
+function removePlannedEntryForQueuedLog(planDayId: string): void {
+  queryClient.setQueriesData<TimelineCache>({ queryKey: QUERY_KEYS.timeline }, (old) =>
+    mapTimelineCache(old, (entries) => {
+      const kept = entries.filter((entry) => entry.planDayId !== planDayId || Boolean(entry.workoutLogId));
+      return kept.length === entries.length ? entries : kept;
+    }),
+  );
+}
+
+function createWorkoutOptions(idempotencyKey: string | undefined): { idempotencyKey: string } | undefined {
+  return idempotencyKey ? { idempotencyKey } : undefined;
+}
+
 export function useWorkoutActionMutations(selectedPlanId: string | null) {
   const { toast } = useToast();
   // Every delete below lands in the recycle bin; the success toast carries an
@@ -141,6 +164,9 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
         // deletes its log, with the log's load and calories.
         // CL19 (CODEBASE_ANALYSIS_2026-10-03)
         ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+        // Reopening takes the log's sets out of "Last time" too.
+        // CL43 (CODEBASE_ANALYSIS_2026-10-03)
+        queryClient.invalidateQueries({ queryKey: EXERCISE_HISTORY_QUERY_PREFIX }),
       ]);
     },
   });
@@ -155,15 +181,36 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       ),
   );
   const logWorkoutMutation = useApiMutation({
+    // The same queue-backed fallback /log saves through: a connection that
+    // drops mid-request queues the log instead of failing it, under the
+    // idempotency key the live attempt sent. CL55 (CODEBASE_ANALYSIS_2026-10-03)
     mutationFn: (data: LogWorkoutVariables) => {
       const { sourceEntry: _sourceEntry, ...payload } = data;
-      return api.workouts.create(payload);
+      return runWithOfflineFallback({
+        method: "POST",
+        url: WORKOUT_CREATE_URL,
+        body: payload,
+        perform: (idempotencyKey) => api.workouts.create(payload, createWorkoutOptions(idempotencyKey)),
+      });
     },
-    successToast: "Workout logged!",
+    successToast: (result) =>
+      result.status === "queued"
+        ? {
+          title: "Workout queued",
+          description: "We'll sync it automatically when your connection is back.",
+        }
+        : { title: "Workout logged!" },
     errorToast: "Failed to log workout",
     ...logWorkoutHandlers,
-    onSuccess: async (data, variables) => {
+    onSuccess: async (result, variables) => {
       markAutoCoachingActive();
+      // Not on the server yet: nothing to prime or refetch. The post-sync
+      // invalidation covers it after replay.
+      if (result.status === "queued") {
+        removePlannedEntryForQueuedLog(variables.planDayId);
+        return;
+      }
+      const { data } = result;
       // Prime the workout-detail cache so the ReviewSurface (mounted via
       // the URL→state effect after the timeline patch flips the entry to
       // completed + workoutLogId) renders seeded sets / RPE / notes
@@ -186,6 +233,8 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
         // The log takes over the day's meal targets from the planned session
         // and adds to its training load. CL19 (CODEBASE_ANALYSIS_2026-10-03)
         ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+        // Its sets are the newest "Last time". CL43 (CODEBASE_ANALYSIS_2026-10-03)
+        queryClient.invalidateQueries({ queryKey: EXERCISE_HISTORY_QUERY_PREFIX }),
       ]);
       toastPersonalRecordAchievements(toast, data.newPersonalRecords);
     },
@@ -206,6 +255,8 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       // The day loses the workout's load, calories and meal-target anchor.
       // CL19 (CODEBASE_ANALYSIS_2026-10-03)
       ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+      // A deleted session no longer drives "Last time". CL43 (CODEBASE_ANALYSIS_2026-10-03)
+      EXERCISE_HISTORY_QUERY_PREFIX,
     ],
     errorToast: "Failed to delete workout",
     ...deleteWorkoutHandlers,
@@ -255,8 +306,9 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
       QUERY_KEYS.trainingOverview,
-      // CL19 (CODEBASE_ANALYSIS_2026-10-03), as for a single delete.
+      // CL19 and CL43 (CODEBASE_ANALYSIS_2026-10-03), as for a single delete.
       ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+      EXERCISE_HISTORY_QUERY_PREFIX,
     ],
     errorToast: "Failed to delete workouts",
     ...bulkDeleteWorkoutHandlers,

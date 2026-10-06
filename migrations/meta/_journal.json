@@ -855,6 +855,13 @@
       "when": 1791209437499,
       "tag": "0121_pending_proposal_unique_and_constraint_parity",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1791255831147,
+      "tag": "0122_food_servings_unique_and_fk_indexes",
+      "breakpoints": true
     }
   ]
 }

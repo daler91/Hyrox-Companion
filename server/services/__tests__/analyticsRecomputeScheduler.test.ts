@@ -31,11 +31,38 @@ interface FakeData {
   latestWorkoutDate: Record<string, string | null>;
   /** Total workout logs — the other half of the staleness anchor (audit L16). */
   workoutCount?: Record<string, number>;
+  /**
+   * The same two for logs that count as training only (PF10); default to the
+   * all-logs values, i.e. a history with no walks or yoga.
+   */
+  latestTrainingDate?: Record<string, string | null>;
+  trainingCount?: Record<string, number>;
   /** Latest food-log date — the staleness anchor for nutrition_insights. */
   latestNutritionLogDate?: Record<string, string | null>;
   /** Total food-log entries, the nutrition half of the same anchor. */
   nutritionLogCount?: Record<string, number>;
   rows: Record<string, Partial<Record<Feature, StoredRow>>>;
+}
+
+type WorkoutLogFilter = { onlyTraining?: boolean };
+
+function valueFor<T>(byUser: Record<string, T> | undefined, userId: string): T | undefined {
+  return new Map(Object.entries(byUser ?? {})).get(userId);
+}
+
+/** The fake's latest log date; training-only reads fall back to every log (PF10). */
+function latestLogDate(
+  data: FakeData,
+  userId: string,
+  filter?: WorkoutLogFilter,
+): string | null | undefined {
+  const allLogs = valueFor(data.latestWorkoutDate, userId);
+  return filter?.onlyTraining ? (valueFor(data.latestTrainingDate, userId) ?? allLogs) : allLogs;
+}
+
+function logCount(data: FakeData, userId: string, filter?: WorkoutLogFilter): number {
+  const allLogs = valueFor(data.workoutCount, userId) ?? 0;
+  return filter?.onlyTraining ? (valueFor(data.trainingCount, userId) ?? allLogs) : allLogs;
 }
 
 function makeStorage(data: FakeData): IStorage {
@@ -71,11 +98,15 @@ function makeStorage(data: FakeData): IStorage {
       ),
     },
     workouts: {
-      listWorkoutLogs: vi.fn(async (userId: string) => {
-        const date = data.latestWorkoutDate[userId];
-        return date == null ? [] : [{ date }];
-      }),
-      countWorkoutLogs: vi.fn(async (userId: string) => data.workoutCount?.[userId] ?? 0),
+      listWorkoutLogs: vi.fn(
+        (userId: string, _limit?: number, _offset?: number, filter?: WorkoutLogFilter) => {
+          const date = latestLogDate(data, userId, filter);
+          return Promise.resolve(date == null ? [] : [{ date }]);
+        },
+      ),
+      countWorkoutLogs: vi.fn((userId: string, filter?: WorkoutLogFilter) =>
+        Promise.resolve(logCount(data, userId, filter)),
+      ),
     },
     nutrition: {
       getLatestLogDate: vi.fn(
@@ -148,6 +179,65 @@ describe("runAnalyticsRecomputeScan", () => {
       feature: "coach_insights",
       localDate: "2026-06-05",
     });
+  });
+
+  // PF10 (CODEBASE_ANALYSIS_2026-10-03): a walk-only day moved the one shared
+  // workout anchor, so the race prediction and the overview analysis — which
+  // read training logs only — were regenerated overnight on unchanged inputs.
+  it("recomputes only coach insights after a walk-only day", async () => {
+    const generatedOn = { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-03" };
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: "2026-06-04" }, // the walk
+      workoutCount: { u1: 11 },
+      latestTrainingDate: { u1: "2026-06-03" },
+      trainingCount: { u1: 10 },
+      rows: {
+        u1: {
+          coach_insights: { ...generatedOn, entryCountAtGeneration: 10 },
+          race_prediction: { ...generatedOn, entryCountAtGeneration: 10 },
+          overview_analysis: { ...generatedOn, entryCountAtGeneration: 10 },
+        },
+      },
+    });
+
+    const result = await runAnalyticsRecomputeScan(storage, NOW);
+
+    expect(result).toEqual({ usersChecked: 1, enqueued: 1 });
+    expect(sendMock.mock.calls.map(([, payload]) => payload.feature)).toEqual(["coach_insights"]);
+    expect(storage.workouts.countWorkoutLogs).toHaveBeenCalledWith("u1", { onlyTraining: true });
+    // One query pair per anchor kind, shared by race_prediction and overview_analysis.
+    expect(storage.workouts.countWorkoutLogs).toHaveBeenCalledTimes(2);
+  });
+
+  it("still recomputes the training surfaces when a training session lands", async () => {
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: "2026-06-04" },
+      workoutCount: { u1: 12 },
+      latestTrainingDate: { u1: "2026-06-04" },
+      trainingCount: { u1: 11 },
+      rows: {
+        u1: {
+          race_prediction: {
+            recomputedOn: null,
+            lastWorkoutDateAtGeneration: "2026-06-03",
+            entryCountAtGeneration: 10,
+          },
+          overview_analysis: {
+            recomputedOn: null,
+            lastWorkoutDateAtGeneration: "2026-06-03",
+            entryCountAtGeneration: 10,
+          },
+        },
+      },
+    });
+
+    const result = await runAnalyticsRecomputeScan(storage, NOW);
+
+    expect(result.enqueued).toBe(2);
   });
 
   it("leaves a genuinely unchanged history alone", async () => {

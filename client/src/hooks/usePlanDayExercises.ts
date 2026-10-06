@@ -174,13 +174,14 @@ export function usePlanDayExercises(planDayId: string | null) {
     updateSetRequest: (id, setId, data) => api.plans.updateDayExercise(id, setId, data),
     addSetRequest: (id, data) => api.plans.addDayExercise(id, data),
     deleteSetRequest: (id, setId) => api.plans.deleteDayExercise(id, setId),
+    saveSetOrderRequest: (id, setIds) => api.plans.saveDayExerciseOrder(id, setIds),
     deleteInvalidateQueries: (id) => [QUERY_KEYS.planDayExercises(id)],
     // The cell inputs' debounce, lifted to the hook because LogSheet must flush
     // pending cell edits before "log as planned" (createWorkoutInTx copies the
     // persisted plan-day rows) and before it closes.
     cellSaveDebounceMs: EDIT_SAVE_DEBOUNCE_MS,
   });
-  const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, addSet, deleteSet, isSaving, lastSavedAt, lastSaveErrorAt } = exerciseSetOps;
+  const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, saveSetOrder, addSet, deleteSet, isSaving, lastSavedAt, lastSaveErrorAt } = exerciseSetOps;
 
   // Plan-day Parse: POST /reparse -> the AI provider parses mainWorkout/accessory into
   // structured rows, replacing this day's prescription. React Query's server
@@ -389,6 +390,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     updateSet,
     patchSetDebounced,
     flushPendingSetPatches,
+    saveSetOrder,
     addSet,
     deleteSet,
     reparseFreeText,

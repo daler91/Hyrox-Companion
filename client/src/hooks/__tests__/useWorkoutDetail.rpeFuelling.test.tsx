@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { EXERCISE_HISTORY_QUERY_PREFIX } from "@/lib/workoutInvalidation";
 
 // Same isolation as useWorkoutDetail.countsAsTraining.test.tsx: the passthrough
 // hands back the raw config, so onMutate and onSuccess are driven directly
@@ -76,6 +77,22 @@ describe("useWorkoutDetail updateRpe refreshes the fuelling reads built from the
     for (const key of [SESSION, DAY, RANGE, BLOCK]) expect(isInvalidated(key)).toBe(true);
     expect(isInvalidated(MICROS)).toBe(false);
   });
+
+  // CL53 (CODEBASE_ANALYSIS_2026-10-03): the RPE weights the session's load,
+  // which the training overview and the home summary under it chart.
+  it("marks the training overview's load stale", async () => {
+    queryClient.setQueryData(QUERY_KEYS.trainingOverview, {});
+    queryClient.setQueryData(QUERY_KEYS.trainingSummary, {});
+    const { result } = renderHook(() => useWorkoutDetail(WORKOUT_ID), { wrapper });
+    const updateRpe = rpeConfigOf(result.current.updateRpe);
+    const variables = { rpe: 8, forWorkoutId: WORKOUT_ID };
+
+    const context = updateRpe.onMutate(variables);
+    await updateRpe.onSuccess({ id: WORKOUT_ID, rpe: 8 } as WorkoutLog, variables, context);
+
+    expect(isInvalidated(QUERY_KEYS.trainingOverview)).toBe(true);
+    expect(isInvalidated(QUERY_KEYS.trainingSummary)).toBe(true);
+  });
 });
 
 interface TimeOfDayMutationConfig {
@@ -102,6 +119,21 @@ describe("useWorkoutDetail updateTimeOfDay refreshes the day summaries", () => {
 
     expect(isInvalidated(DAY)).toBe(true);
     for (const key of [SESSION, RANGE, BLOCK, MICROS]) expect(isInvalidated(key)).toBe(false);
+  });
+
+  // CL43 (CODEBASE_ANALYSIS_2026-10-03): the time orders two same-day sessions
+  // in the "Last time" history.
+  it("marks every exercise's history stale", async () => {
+    const squatHistory = QUERY_KEYS.exerciseHistory("back_squat", 3);
+    queryClient.setQueryData(squatHistory, []);
+    const { result } = renderHook(() => useWorkoutDetail(WORKOUT_ID), { wrapper });
+    const updateTimeOfDay = (
+      result.current.updateTimeOfDay as unknown as { config: TimeOfDayMutationConfig }
+    ).config;
+
+    await updateTimeOfDay.onSuccess();
+
+    expect(isInvalidated(squatHistory)).toBe(true);
   });
 });
 
@@ -132,6 +164,8 @@ describe("useWorkoutDetail set replacements refresh the load-derived fuelling re
       QUERY_KEYS.nutritionDayPrefix,
       QUERY_KEYS.nutritionRangePrefix,
       QUERY_KEYS.nutritionBlockPrefix,
+      // CL43 (CODEBASE_ANALYSIS_2026-10-03): the replaced sets feed "Last time".
+      EXERCISE_HISTORY_QUERY_PREFIX,
     ]);
   });
 });

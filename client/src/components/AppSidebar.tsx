@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,17 +17,25 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { useSignOut } from "@/hooks/useSignOut";
+import { useConfirmedSignOut } from "@/hooks/useSignOut";
 import { getUserDisplayName } from "@/lib/authUtils";
 import { navTestId, PRIMARY_NAV_ITEMS } from "@/lib/navItems";
 
 import { Logo } from "./brand/Logo";
 import { ThemeToggle } from "./ThemeToggle";
 
+/** What signing out now would lose: the writes still queued on this device (CL61). */
+function unsyncedChangesWarning(count: number): string {
+  const changes = count === 1 ? "1 change you made" : `${count} changes you made`;
+  const reached = count === 1 ? "hasn't reached" : "haven't reached";
+  const them = count === 1 ? "it" : "them";
+  return `${changes} offline ${reached} the server yet. Signing out now deletes ${them} from this device. Stay signed in and the app keeps trying to sync.`;
+}
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const signOut = useSignOut();
+  const { requestSignOut, confirmingSignOut, pendingWrites, confirmSignOut, cancelSignOut } = useConfirmedSignOut();
 
   const userInitials = user
     ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
@@ -83,7 +92,7 @@ export function AppSidebar() {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()}>
+                  <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => requestSignOut()}>
                     <LogOut className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </TooltipTrigger>
@@ -93,6 +102,20 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarFooter>
+      <ConfirmDialog
+        open={confirmingSignOut}
+        onOpenChange={(open) => {
+          if (!open) cancelSignOut();
+        }}
+        title="Sign out with unsynced changes?"
+        description={unsyncedChangesWarning(pendingWrites)}
+        confirmText="Sign out anyway"
+        cancelText="Stay signed in"
+        onConfirm={() => confirmSignOut()}
+        isDestructive
+        cancelTestId="button-cancel-logout"
+        confirmTestId="button-confirm-logout"
+      />
     </Sidebar>
   );
 }

@@ -11,6 +11,7 @@ vi.mock("@/lib/queryClient", () => ({
 import { QUERY_KEYS } from "@/lib/api";
 
 import {
+  EXERCISE_HISTORY_QUERY_PREFIX,
   flushWorkoutWriteInvalidation,
   invalidateWorkoutWriteQueries,
   scheduleWorkoutWriteInvalidation,
@@ -19,10 +20,10 @@ import {
 } from "./workoutInvalidation";
 
 /**
- * The derived-view keys a workout write moves. Eleven invalidations per call is
+ * The derived-view keys a workout write moves. Twelve invalidations per call is
  * the contract the coalescing below is measured against.
  */
-const DERIVED_KEY_COUNT = 11;
+const DERIVED_KEY_COUNT = 12;
 
 describe("workoutInvalidation", () => {
   beforeEach(() => {
@@ -58,6 +59,18 @@ describe("workoutInvalidation", () => {
       QUERY_KEYS.nutritionRangePrefix,
       QUERY_KEYS.nutritionBlockPrefix,
     ]);
+    // CL43 (CODEBASE_ANALYSIS_2026-10-03): a corrected or deleted session
+    // drives every exercise's "Last time" line and its next target. Marked
+    // stale only: the rows on screen leave out the session being edited.
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: EXERCISE_HISTORY_QUERY_PREFIX,
+      refetchType: "none",
+    });
+  });
+
+  it("the history prefix matches every exercise's history key", () => {
+    const key = QUERY_KEYS.exerciseHistory("back_squat", 3);
+    expect(key.slice(0, EXERCISE_HISTORY_QUERY_PREFIX.length)).toEqual([...EXERCISE_HISTORY_QUERY_PREFIX]);
   });
 
   it("coalesces a burst of set saves into ONE trailing invalidation", () => {

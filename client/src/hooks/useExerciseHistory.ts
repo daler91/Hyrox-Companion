@@ -9,7 +9,10 @@ const SESSION_LIMIT = 3;
 
 // History only changes when a session is saved, so it can sit in cache for a
 // long while. Opening a workout fires one query per distinct exercise; a long
-// staleTime is what keeps re-opening the same session free.
+// staleTime is what keeps re-opening the same session free. Every workout and
+// set write marks it stale through EXERCISE_HISTORY_QUERY_PREFIX
+// (lib/workoutInvalidation), so a corrected or deleted session stops driving
+// the line. CL43 (CODEBASE_ANALYSIS_2026-10-03)
 const STALE_TIME_MS = 10 * 60 * 1000;
 const GC_TIME_MS = 30 * 60 * 1000;
 

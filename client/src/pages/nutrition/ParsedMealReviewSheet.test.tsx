@@ -1,10 +1,12 @@
-import type { Food, ParseMealResponse } from "@shared/schema";
+import type { Food, ParseMealResponse, User } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { preferences } from "@/lib/api/user";
+import { mockDeviceTimezone } from "@/test/support/deviceTimezone";
 
 import { ParsedMealReviewSheet } from "./ParsedMealReviewSheet";
 
@@ -16,6 +18,7 @@ vi.mock("@/lib/api", () => ({
     nutritionMicrosPrefix: ["/api/v1/nutrition/micros"],
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
     nutritionSearch: (q: string) => ["/api/v1/nutrition/foods/search", q],
+    authUser: ["/api/v1/auth/user"],
   },
 }));
 
@@ -66,8 +69,9 @@ const RESULT: ParseMealResponse = {
   ],
 };
 
-function renderSheet(onClose = vi.fn(), entryMethod: "nl" | "photo" = "nl") {
+function renderSheet(onClose = vi.fn(), entryMethod: "nl" | "photo" = "nl", storedTimezone?: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (storedTimezone) queryClient.setQueryData(["/api/v1/auth/user"], { userTimezone: storedTimezone });
   render(
     <QueryClientProvider client={queryClient}>
       <ParsedMealReviewSheet result={RESULT} date="2026-06-07" entryMethod={entryMethod} onClose={onClose} />
@@ -137,5 +141,36 @@ describe("ParsedMealReviewSheet", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // CL65 (CODEBASE_ANALYSIS_2026-10-03): the server dates the batch by the
+  // profile's timezone, so a stale one is saved first.
+  describe("a profile timezone left behind by travel", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("saves the device's timezone, then logs the batch", async () => {
+      mockDeviceTimezone("America/New_York");
+      let finishSave: (() => void) | undefined;
+      const update = vi.spyOn(preferences, "update").mockReturnValue(
+        new Promise((resolve) => {
+          finishSave = () => resolve({ userTimezone: "America/New_York" } as User);
+        }),
+      );
+      vi.mocked(api.nutrition.createLogBatch).mockResolvedValue({ created: 1, logDate: "2026-06-07" });
+      const user = userEvent.setup();
+      renderSheet(vi.fn(), "nl", "Europe/London");
+
+      await user.click(screen.getByTestId("button-log-meal-batch"));
+
+      expect(update).toHaveBeenCalledWith({ userTimezone: "America/New_York" });
+      expect(screen.getByTestId("button-log-meal-batch")).toBeDisabled();
+      expect(screen.getByTestId("button-log-meal-batch")).toHaveTextContent("Logging…");
+      expect(api.nutrition.createLogBatch).not.toHaveBeenCalled();
+
+      finishSave?.();
+      await waitFor(() => expect(api.nutrition.createLogBatch).toHaveBeenCalledTimes(1));
+    });
   });
 });

@@ -124,8 +124,19 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   return res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
 };
 
+/**
+ * userId -> when this instance last confirmed the user row (epoch ms). Kept in
+ * last-seen order (see rememberSeenLocally), so the expired entries are always
+ * at the front and the sweep stops at the first fresh one.
+ */
 const userSeenCache = new Map<string, number>();
 const USER_SEEN_TTL_MS = 5 * 60_000; // 5 minutes
+/**
+ * Cap on remembered users per instance, for a burst of distinct users inside
+ * one TTL window; the least recently seen drop first. Every other server cache
+ * is size-capped too. PF9 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const USER_SEEN_CACHE_MAX_ENTRIES = 10_000;
 
 /**
  * How long an erased account's id is refused re-provisioning. Clerk verifies
@@ -150,6 +161,29 @@ function erasedUserCacheKey(userId: string): string {
 export function clearUserSeenCache() {
   userSeenCache.clear();
   erasedUserCache.clear();
+}
+
+// Exported for testing only — how many users the seen-cache holds.
+export function userSeenCacheSize(): number {
+  return userSeenCache.size;
+}
+
+/**
+ * Record a user as seen at `now`, then drop the entries that have expired or
+ * overflow the cap. Expired entries used to stay until the same user came back,
+ * so a long-lived instance kept one for every user it had ever served.
+ * PF9 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function rememberSeenLocally(userId: string, now: number): void {
+  // Delete first: Map.set on an existing key keeps its old position, and the
+  // sweep relies on insertion order being last-seen order.
+  userSeenCache.delete(userId);
+  userSeenCache.set(userId, now);
+  for (const [seenUserId, seenAt] of userSeenCache) {
+    const fresh = now - seenAt < USER_SEEN_TTL_MS;
+    if (fresh && userSeenCache.size <= USER_SEEN_CACHE_MAX_ENTRIES) break;
+    userSeenCache.delete(seenUserId);
+  }
 }
 
 /**
@@ -200,7 +234,7 @@ async function hasUserBeenSeenRecently(userId: string, now: number): Promise<boo
     try {
       const sharedSeen = await getRuntimeCache<{ seen: true }>(userSeenCacheKey(userId));
       if (sharedSeen) {
-        userSeenCache.set(userId, now);
+        rememberSeenLocally(userId, now);
         return true;
       }
     } catch (err) {
@@ -212,7 +246,7 @@ async function hasUserBeenSeenRecently(userId: string, now: number): Promise<boo
 }
 
 function rememberUserSeen(userId: string, now: number): void {
-  userSeenCache.set(userId, now);
+  rememberSeenLocally(userId, now);
   if (env.NODE_ENV !== "test") {
     void setRuntimeCache(userSeenCacheKey(userId), { seen: true }, USER_SEEN_TTL_MS).catch((err: unknown) => {
       logger.warn({ err, userId }, "Failed to write shared auth seen-cache");

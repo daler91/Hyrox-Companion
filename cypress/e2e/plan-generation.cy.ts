@@ -1,4 +1,4 @@
-import { setupAuthIntercepts } from "../support/authIntercepts";
+import { setupAuthIntercepts, skipOnboardingOnLoad } from "../support/authIntercepts";
 
 // E2E coverage for the plan generation dialog. Checks the entry point
 // from the Timeline empty state and the multi-step dialog affordances.
@@ -15,11 +15,7 @@ describe("Plan Generation", () => {
   // Suppress the onboarding wizard so the Timeline empty state (which hosts
   // the Generate AI Plan button) renders unobstructed.
   const visitTimelineWithOnboardingSkipped = () => {
-    cy.visit("/", {
-      onBeforeLoad: (win) => {
-        win.localStorage.setItem("fitai-onboarding-complete", "true");
-      },
-    });
+    cy.visit("/", { onBeforeLoad: skipOnboardingOnLoad });
   };
 
   it("opens the generate dialog from the Timeline empty state", () => {

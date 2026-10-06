@@ -66,12 +66,19 @@ function reviewStaleTime(
  * resolves it again in the athlete's stored timezone and its answer wins — the
  * payload reports the week it actually used, so a mismatch (travelling athlete,
  * stale `userTimezone`) shows the server's week rather than a broken page.
+ *
+ * The key is the week's Monday whatever date inside it was asked for. A
+ * mid-week `?week=` link keyed the cache on that raw date, so the intent save,
+ * which invalidates the Monday key, never refreshed the open page: the saved
+ * line did not come back and Save stayed enabled. The server anchors any date
+ * to the same Monday, so asking for the Monday changes nothing it answers.
+ * CL51 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function useWeeklyReview(week?: string) {
   const queryClient = useQueryClient();
-  const resolvedWeek = week ?? mondayOf(addDays(todayLocalDateStr(), -7));
+  const resolvedWeek = mondayOf(week ?? addDays(todayLocalDateStr(), -7));
   const currentWeekStart = mondayOf(todayLocalDateStr());
-  const isCurrentWeek = mondayOf(resolvedWeek) === currentWeekStart;
+  const isCurrentWeek = resolvedWeek === currentWeekStart;
 
   return useQuery({
     queryKey: QUERY_KEYS.weeklyReview(resolvedWeek),
@@ -86,13 +93,15 @@ export function useWeeklyReview(week?: string) {
  * Save (or clear) the intent for `weekStart`.
  *
  * Invalidates that week's review so the saved line comes back from the server
- * rather than being assumed locally — and so next week's review, which reads
- * this same row as `previousIntent`, is not left holding a stale copy.
+ * rather than being assumed locally — and next week's, which reads this same
+ * row as `previousIntent`, so it is not left holding a stale copy. Both by
+ * their Monday, the key useWeeklyReview uses (CL51).
  */
 export function useSetWeeklyReviewIntent(weekStart: string) {
+  const monday = mondayOf(weekStart);
   return useApiMutation<{ weekStart: string; intent: string | null }, Error, string | null>({
     mutationFn: (intent) => api.analytics.setWeeklyReviewIntent(weekStart, intent),
-    invalidateQueries: [QUERY_KEYS.weeklyReview(weekStart)],
+    invalidateQueries: [QUERY_KEYS.weeklyReview(monday), QUERY_KEYS.weeklyReview(addDays(monday, 7))],
     errorToast: "Couldn't save your note for next week.",
   });
 }

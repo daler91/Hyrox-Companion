@@ -39,7 +39,8 @@ import { useFuellingRange } from "@/hooks/useNutrition";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
-import { fuellingRangeWindow } from "@/pages/timeline/fuellingWindow";
+import { timelineCollisionDetection } from "@/pages/timeline/dropTargets";
+import { renderedFuellingWindow } from "@/pages/timeline/fuellingWindow";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
@@ -206,31 +207,6 @@ export default function Timeline() {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
 
-  // Phase 2: per-day fuelling chips on the home screen. Fetch the whole visible
-  // window once (groups are ascending by date) and look up per-date below — no
-  // per-day fan-out. Gated by the nutrition feature flag; no-ops without data.
-  // A window wider than the server's span cap is narrowed to it around today
-  // (PF1, CODEBASE_ANALYSIS_2026-10-03).
-  const fuellingWindow = useMemo(
-    () =>
-      fuellingRangeWindow(
-        allVisibleGroups[0]?.[0] ?? "",
-        allVisibleGroups[allVisibleGroups.length - 1]?.[0] ?? "",
-        getTodayString(),
-      ),
-    [allVisibleGroups],
-  );
-  const { data: fuellingRange } = useFuellingRange(
-    fuellingWindow.from,
-    fuellingWindow.to,
-    featureFlags.nutritionEnabled,
-  );
-  const fuellingByDate = useMemo(() => {
-    const map = new Map<string, FuellingDayPoint>();
-    for (const day of fuellingRange?.days ?? []) map.set(day.date, day);
-    return map;
-  }, [fuellingRange]);
-
   const {
     bulkDeleteMode,
     bulkDeleteConfirmOpen,
@@ -323,6 +299,28 @@ export default function Timeline() {
     estimateSize: () => 150,
     overscan: 5,
   });
+
+  // Phase 2: per-day fuelling chips on the home screen. One request covers the
+  // rows the virtualizer renders, snapped to fixed blocks, and each row looks
+  // its date up below — no per-day fan-out. It spanned every visible group,
+  // years of them with show-all or "Load older" (PF7,
+  // CODEBASE_ANALYSIS_2026-10-03). Gated by the nutrition feature flag;
+  // no-ops without data.
+  const fuellingWindow = renderedFuellingWindow(
+    allVisibleGroups,
+    rowVirtualizer.getVirtualItems().map(({ index }) => index),
+    getTodayString(),
+  );
+  const { data: fuellingRange } = useFuellingRange(
+    fuellingWindow.from,
+    fuellingWindow.to,
+    featureFlags.nutritionEnabled,
+  );
+  const fuellingByDate = useMemo(() => {
+    const map = new Map<string, FuellingDayPoint>();
+    for (const day of fuellingRange?.days ?? []) map.set(day.date, day);
+    return map;
+  }, [fuellingRange]);
 
   const handleScrollToToday = useCallback(() => {
     const todayStr = getTodayString();
@@ -468,6 +466,8 @@ export default function Timeline() {
 
             <DndContext
               sensors={dragSensors}
+              // Only days the dragged entry can move to are targets (CL70).
+              collisionDetection={timelineCollisionDetection}
               onDragEnd={handleDragEnd}
               accessibility={{
                 announcements: dndAnnouncements,

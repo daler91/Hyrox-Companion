@@ -11,6 +11,11 @@ import {
 
 interface MarkCompleteOptions {
   readonly onSuccess?: (entry: TimelineEntry) => void;
+  /**
+   * The log was queued offline rather than saved, so there is no logged
+   * entry to open yet. CL55 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  readonly onQueued?: () => void;
   readonly onError?: (error: Error) => void;
 }
 
@@ -44,8 +49,9 @@ export function useWorkoutActions(selectedPlanId: string | null) {
         rpe: entry.rpe ?? undefined,
         sourceEntry: entry,
       }, {
-        onSuccess: (workout) => {
-          options?.onSuccess?.(buildLoggedTimelineEntry(workout, entry));
+        onSuccess: (result) => {
+          if (result.status === "queued") options?.onQueued?.();
+          else options?.onSuccess?.(buildLoggedTimelineEntry(result.data, entry));
         },
         onError: (error) => {
           options?.onError?.(error instanceof Error ? error : new Error("Failed to log workout"));

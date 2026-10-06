@@ -127,7 +127,9 @@ describe('useWorkoutActions', () => {
             accessory: 'curls',
             notes: 'good',
             rpe: undefined,
-          }, expect.any(AbortSignal));
+            // Queue-backed like /log (CL55, CODEBASE_ANALYSIS_2026-10-03): the
+            // live attempt carries the key a queued replay would reuse.
+          }, expect.any(AbortSignal), { 'X-Idempotency-Key': expect.any(String) });
         });
       });
 
@@ -156,7 +158,7 @@ describe('useWorkoutActions', () => {
             accessory: 'Mobility',
             notes: undefined,
             rpe: undefined,
-          }, expect.any(AbortSignal));
+          }, expect.any(AbortSignal), { 'X-Idempotency-Key': expect.any(String) });
         });
       });
 

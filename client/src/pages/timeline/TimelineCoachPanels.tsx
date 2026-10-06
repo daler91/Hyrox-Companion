@@ -1,15 +1,38 @@
 import { Content as DialogPrimitiveContent } from "@radix-ui/react-dialog";
-import type { RefObject } from "react";
+import { type ComponentProps, type RefObject, Suspense } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
-import { CoachPanel } from "@/components/CoachPanel";
 import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWrapper";
 import { Dialog, DialogDescription, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { BlockingModalLayerRegistration } from "@/components/ui/modal-layer";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 import { cn } from "@/lib/utils";
 
 type TimelineData = ReturnType<typeof useTimelineState>["data"];
+
+// Loaded the first time the panel opens, not with the Timeline, which starts
+// with it closed. PF8 (CODEBASE_ANALYSIS_2026-10-03). The markdown stack the
+// chat renders with (react-markdown, remark-gfm, rehype-sanitize) still
+// reaches the Timeline chunk through the workout sheets' embedded coach chat
+// (WorkoutCoachSheet -> EmbeddedWorkoutCoachChat -> ChatMessage).
+// lazyWithReload, as for the routes, so a chunk a deploy removed reloads onto
+// the current build.
+const CoachPanel = lazyWithReload(() =>
+  import("@/components/CoachPanel").then((coachModule) => ({ default: coachModule.CoachPanel })),
+);
+
+/** The coach panel, with a spinner holding its place while its chunk loads. */
+function LazyCoachPanel(props: Readonly<ComponentProps<typeof CoachPanel>>) {
+  return (
+    <Suspense
+      fallback={<LoadingSpinner label="Loading the coach" className="h-full w-full py-12" />}
+    >
+      <CoachPanel {...props} />
+    </Suspense>
+  );
+}
 
 /** The id the coach FAB's aria-controls points at, on whichever panel is showing. */
 const COACH_PANEL_ID = "coach-panel";
@@ -42,7 +65,7 @@ export function TimelineCoachPanels({
 }: Readonly<TimelineCoachPanelsProps>) {
   const coachPanel = (
     <FeatureErrorBoundaryWrapper featureName="Coach">
-      <CoachPanel
+      <LazyCoachPanel
         isOpen={coachOpen}
         onClose={onCoachClose}
         timeline={timelineData}

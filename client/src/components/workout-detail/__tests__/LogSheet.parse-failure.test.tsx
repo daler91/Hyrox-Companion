@@ -109,7 +109,7 @@ function makePlanDayExerciseState(overrides = {}) {
     isSaving: false,
     lastSavedAt: null,
     structureBlocks: [],
-    flushPendingSetPatches: vi.fn().mockResolvedValue(undefined),
+    flushPendingSetPatches: vi.fn().mockResolvedValue(true),
     patchSetDebounced: vi.fn(),
     addSet: { mutate: vi.fn() },
     deleteSet: { mutate: vi.fn() },
@@ -125,10 +125,10 @@ function mockPlanDayExerciseState(overrides = {}) {
   mockUsePlanDayExercises.mockReturnValue(makePlanDayExerciseState(overrides));
 }
 
-function createDeferred() {
-  let resolve!: () => void;
+function createDeferred<T = void>() {
+  let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
-  const promise = new Promise<void>((res, rej) => {
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
     reject = rej;
   });
@@ -182,7 +182,7 @@ describe("LogSheet parse failures", () => {
   });
 
   it("locks completion while pending edits flush and the log mutation finishes", async () => {
-    const flush = createDeferred();
+    const flush = createDeferred<boolean>();
     const log = createDeferred();
     const flushPendingSetPatches = vi.fn(() => flush.promise);
     const onLogAsPlanned = vi.fn(() => log.promise);
@@ -204,7 +204,7 @@ describe("LogSheet parse failures", () => {
     expect(onLogAsPlanned).not.toHaveBeenCalled();
 
     await act(async () => {
-      flush.resolve();
+      flush.resolve(true);
       await flush.promise;
     });
 
@@ -220,6 +220,28 @@ describe("LogSheet parse failures", () => {
     });
 
     await waitFor(() => expect(completeButton).toBeEnabled());
+  });
+
+  // CL39 (CODEBASE_ANALYSIS_2026-10-03): the flush swallowed a failed cell
+  // PATCH (409, 400, 429), so the workout was logged with the pre-edit value.
+  it("does not complete the workout when a flushed cell edit fails", async () => {
+    const onLogAsPlanned = vi.fn();
+    const onClose = vi.fn();
+    const flushPendingSetPatches = vi.fn().mockResolvedValue(false);
+    mockPlanDayExerciseState({ flushPendingSetPatches });
+
+    render(<LogSheet entry={baseEntry} onClose={onClose} onLogAsPlanned={onLogAsPlanned} />);
+
+    const user = userEvent.setup();
+    const completeButton = screen.getByTestId("log-as-planned-entry-1");
+    await user.click(completeButton);
+
+    expect(flushPendingSetPatches).toHaveBeenCalledTimes(1);
+    // The sheet stays open with the button back, so the athlete can retry.
+    await waitFor(() => expect(completeButton).toBeEnabled());
+    expect(completeButton).toHaveTextContent("Complete workout");
+    expect(onLogAsPlanned).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("clears warning and enables save after retry succeeds", async () => {

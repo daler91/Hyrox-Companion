@@ -1,5 +1,8 @@
+import { roundMacros, scaleNutrition } from "@shared/nutritionScaling";
 import type { NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { makeFood } from "@/test/factories/foodFactory";
 
 import {
   appendUnique,
@@ -7,9 +10,12 @@ import {
   computeTargetProgress,
   defaultMealForNow,
   macroEnergyShares,
+  pageTimezone,
   previewMicrosScaled,
+  previewNutrition,
   projectGoalContribution,
   removeAt,
+  toLocalDateStr,
   updateAt,
 } from "./utils";
 
@@ -243,5 +249,65 @@ describe("defaultMealForNow", () => {
     expect(defaultMealForNow()).toBe("dinner");
     at(21);
     expect(defaultMealForNow()).toBe("snack");
+  });
+});
+
+// CL66 (CODEBASE_ANALYSIS_2026-10-03): the preview runs the server's scaling,
+// so a food with no energy field previews the calories the server will store.
+describe("previewNutrition", () => {
+  it("scales and rounds a food's per-100g values to the quantity", () => {
+    expect(previewNutrition(makeFood(), 150)).toEqual({
+      calories: 134,
+      protein: 1.7,
+      carb: 34.5,
+      fat: 0.5,
+      fiber: 3.9,
+    });
+  });
+
+  it("derives calories from the macros when the food has no energy value", () => {
+    const noEnergy = makeFood({
+      caloriesPer100g: null,
+      proteinPer100g: 10,
+      carbPer100g: 50,
+      fatPer100g: 20,
+    });
+    // 10 g × 4 + 50 g × 4 + 20 g × 9 = 420 kcal per 100 g, so 840 kcal for 200 g.
+    expect(previewNutrition(noEnergy, 200).calories).toBe(840);
+    expect(previewNutrition(noEnergy, 200)).toEqual(roundMacros(scaleNutrition(noEnergy, 200)));
+  });
+
+  it("previews zero calories when there is nothing to derive them from", () => {
+    const blank = makeFood({
+      caloriesPer100g: null,
+      proteinPer100g: null,
+      carbPer100g: null,
+      fatPer100g: null,
+    });
+    expect(previewNutrition(blank, 200).calories).toBe(0);
+  });
+});
+
+// CL65 (CODEBASE_ANALYSIS_2026-10-03): the profile is synced to the zone the
+// page dates by, which a tab keeps when the OS timezone changes under it.
+describe("pageTimezone", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("names the zone toLocalDateStr dates by, even after the OS timezone changes", () => {
+    const loadedIn = pageTimezone();
+    if (!loadedIn) throw new Error("the page reports no timezone");
+    const flownTo = loadedIn === "Pacific/Auckland" ? "Pacific/Honolulu" : "Pacific/Auckland";
+    vi.stubEnv("TZ", flownTo);
+
+    expect(new Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(flownTo);
+    expect(pageTimezone()).toBe(loadedIn);
+    const inLoadedZone = new Intl.DateTimeFormat("en-CA", {
+      timeZone: loadedIn,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const instant = new Date("2026-10-06T13:30:00Z");
+    expect(toLocalDateStr(instant)).toBe(inLoadedZone.format(instant));
   });
 });

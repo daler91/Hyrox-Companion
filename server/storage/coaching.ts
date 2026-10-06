@@ -2,6 +2,7 @@ import { inChunks, inSequence } from "@shared/inSequence";
 import {
   type CoachingMaterial,
   coachingMaterials,
+  type CoachingMaterialSummary,
   type DocumentChunk,
   type InsertCoachingMaterial,
   type InsertDocumentChunk,
@@ -57,7 +58,29 @@ async function getRetrievalVersion(userId: string): Promise<string> {
   return `${materials?.count ?? 0}:${materials?.stamps ?? "0"}/${chunkRow?.count ?? 0}:${chunkRow?.stamps ?? "0"}`;
 }
 
+/**
+ * The athlete's materials without their text, each with its length counted in
+ * the database, oldest first like listCoachingMaterials. For the Settings list,
+ * which only shows the length. PF4 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+async function listCoachingMaterialSummaries(userId: string): Promise<CoachingMaterialSummary[]> {
+  return await db
+    .select({
+      id: coachingMaterials.id,
+      title: coachingMaterials.title,
+      type: coachingMaterials.type,
+      createdAt: coachingMaterials.createdAt,
+      updatedAt: coachingMaterials.updatedAt,
+      contentLength: sql<number>`char_length(${coachingMaterials.content})::int`,
+    })
+    .from(coachingMaterials)
+    .where(eq(coachingMaterials.userId, userId))
+    .orderBy(coachingMaterials.createdAt);
+}
+
 export class CoachingStorage {
+  readonly listCoachingMaterialSummaries = listCoachingMaterialSummaries;
+
   async listCoachingMaterials(userId: string): Promise<CoachingMaterial[]> {
     return await db
       .select()

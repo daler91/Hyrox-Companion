@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/toaster";
 import { api } from "@/lib/api";
+import { preferences } from "@/lib/api/user";
 import { BANANA } from "@/test/factories/foodFactory";
+import { mockDeviceTimezone } from "@/test/support/deviceTimezone";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 import { renderWithClient } from "@/test/support/renderWithClient";
 
@@ -32,6 +34,7 @@ vi.mock("@/lib/api", () => ({
     nutritionMicros: (date: string) => ["/api/v1/nutrition/micros", date],
     nutritionMicrosPrefix: ["/api/v1/nutrition/micros"],
     nutritionRangePrefix: ["/api/v1/nutrition/range"],
+    authUser: ["/api/v1/auth/user"],
   },
 }));
 vi.mock("@/lib/offlineQueue", () => offlineQueueMocks);
@@ -63,7 +66,10 @@ describe("QuickAddBar", () => {
     setOnline(true);
   });
 
-  afterEach(() => setOnline(true));
+  afterEach(() => {
+    setOnline(true);
+    vi.restoreAllMocks();
+  });
 
   it("renders nothing when there are no recent or favorite foods", () => {
     vi.mocked(api.nutrition.recent).mockResolvedValue([]);
@@ -176,5 +182,29 @@ describe("QuickAddBar", () => {
     // No remembered portion means no amount to log without asking.
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "f1" }));
     expect(api.nutrition.createLog).not.toHaveBeenCalled();
+  });
+
+  // CL65 (CODEBASE_ANALYSIS_2026-10-03): a one-tap log is dated by the
+  // profile's timezone too, so a stale one is saved first.
+  it("saves the device's timezone before a one-tap log", async () => {
+    mockDeviceTimezone("America/New_York");
+    const update = vi
+      .spyOn(preferences, "update")
+      .mockResolvedValue({ userTimezone: "America/New_York" } as never);
+    vi.mocked(api.nutrition.recent).mockResolvedValue([]);
+    vi.mocked(api.nutrition.listFavorites).mockResolvedValue([remembered()]);
+    vi.mocked(api.nutrition.createLog).mockResolvedValue({ id: "entry-1" } as never);
+    const user = userEvent.setup();
+    renderWithClient(<QuickAddBar onSelect={vi.fn()} date={DATE} />, {
+      seed: [[["/api/v1/auth/user"], { userTimezone: "Europe/London" }]],
+    });
+
+    await user.click(await screen.findByTestId("quickadd-favorites-f1"));
+
+    await waitFor(() => expect(api.nutrition.createLog).toHaveBeenCalledTimes(1));
+    expect(update).toHaveBeenCalledWith({ userTimezone: "America/New_York" });
+    const [saved] = update.mock.invocationCallOrder;
+    const [logged] = vi.mocked(api.nutrition.createLog).mock.invocationCallOrder;
+    expect(saved).toBeLessThan(logged);
   });
 });

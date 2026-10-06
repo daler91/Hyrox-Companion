@@ -14,7 +14,7 @@ import {
   seedCustomFood,
   seedUser,
 } from "../../storage/__tests__/integrationDb";
-import { embedMissingFoods } from "./foodEmbeddings";
+import { __resetFoodEmbeddingScanForTests, embedMissingFoods } from "./foodEmbeddings";
 
 /**
  * P14 (CODEBASE_ANALYSIS_2026-10-03): the food-embedding backfill cron runs
@@ -41,6 +41,7 @@ describe("embedMissingFoods candidate scan (real Postgres)", () => {
     vi.mocked(generateEmbeddings).mockImplementation((texts) =>
       Promise.resolve(texts.map(() => [])),
     );
+    __resetFoodEmbeddingScanForTests();
   });
 
   afterAll(async () => {
@@ -68,6 +69,26 @@ describe("embedMissingFoods candidate scan (real Postgres)", () => {
     await embedMissingFoods(5000);
 
     expect(sentTexts()).toContain("Shared granola");
+  });
+
+  // PF12 (CODEBASE_ANALYSIS_2026-10-03): the scan used to read the same
+  // unordered prefix every run, so a food that never got stored (here: the
+  // provider returns no vector at all) was picked again and again while the
+  // rest waited. Each run now carries on in id order from the last.
+  it("moves on through the foods in id order from one run to the next", async () => {
+    await seedCustomFood(CONSENTING, "Third oats", { id: "pf12-c" });
+    await seedCustomFood(CONSENTING, "First oats", { id: "pf12-a" });
+    await seedCustomFood(CONSENTING, "Second oats", { id: "pf12-b" });
+
+    await embedMissingFoods(1);
+    await embedMissingFoods(1);
+    await embedMissingFoods(1);
+
+    expect(vi.mocked(generateEmbeddings).mock.calls).toEqual([
+      [["First oats"]],
+      [["Second oats"]],
+      [["Third oats"]],
+    ]);
   });
 
   it("never sends a private custom food that has no owner left to consent", async () => {

@@ -90,7 +90,7 @@ User accounts and preferences.
 | `created_at` | `timestamp` | default `now()` |
 | `updated_at` | `timestamp` | default `now()` |
 
-No additional indexes (queries are by PK). Six CHECK constraints, one per send-hour column:
+One index besides the PK and the `email` UNIQUE: `idx_users_user_timezone` on (`user_timezone`), for the missed-day sweep's per-timezone read (PF16, migration `0122`). Six CHECK constraints, one per send-hour column:
 `users_notify_hour_check` plus `users_notify_hour_<kind>_check` for each override above.
 
 **Consent columns.** The email and AI boolean columns above default to `false` at the DB layer so new accounts are opted-out of every third-party data flow by default. The application reads them as follows:
@@ -655,6 +655,7 @@ The chat routes save rows under ids the client generates, once each (`saveChatMe
 
 **Indexes:**
 - `idx_chat_messages_user_time` on (`user_id`, `timestamp`) -- composite; also serves `user_id`-only lookups since it's the leading column
+- `idx_chat_messages_proposal_id` on (`proposal_id`) -- partial, `WHERE proposal_id IS NOT NULL`; serves the `ON DELETE SET NULL` when a proposal goes with its plan or the account, which otherwise scanned the whole table once per proposal (PF18, migration `0122`)
 
 ---
 
@@ -715,6 +716,8 @@ OAuth credentials for Strava integration. Tokens are encrypted at rest via `encr
 | `created_at` | `timestamp` | default `now()` |
 
 The `user_id` column has a UNIQUE constraint, enforcing one Strava connection per user. Upserts use `onConflictDoUpdate` targeting this unique constraint.
+
+`idx_strava_connections_strava_athlete_id` on (`strava_athlete_id`) serves the webhook's lookup of an event's owners (PF17, migration `0122`). It is not unique: one Strava athlete can be connected to more than one account.
 
 ---
 
@@ -874,8 +877,8 @@ Durable "last computed result" for the expensive analytics surfaces (Coach Insig
 | `feature` | text | Not null, CHECK `feature IN ('coach_insights', 'race_prediction', 'nutrition_insights', 'overview_analysis')` -- rendered from `ANALYTICS_FEATURES`, pinned by `checkConstraints.test.ts` |
 | `payload` | jsonb | Not null -- the serialized feature result |
 | `generated_at` | timestamp with time zone | Not null, default `now()` |
-| `last_workout_date_at_generation` | date | Nullable -- the athlete's latest logged workout date (YYYY-MM-DD) when this result was generated; the staleness anchor the cron compares against |
-| `entry_count_at_generation` | integer | Nullable -- how many rows the athlete's anchor table (workout logs) held at generation time; catches a change that leaves the date untouched (e.g. a second session on the same day). NULL on rows written before this column existed, read as "no count recorded" |
+| `last_workout_date_at_generation` | date | Nullable -- the athlete's latest logged workout date (YYYY-MM-DD) when this result was generated; the staleness anchor the cron compares against. Race Prediction and the Overview analysis anchor on logs that count as training (`counts_as_training`) only, since a walk changes nothing they read; Coach Insights on every log, since walks feed its load governor; Nutrition Insights on the latest food-log date |
+| `entry_count_at_generation` | integer | Nullable -- how many rows the athlete's anchor table (workout logs, filtered as above, or food-log entries) held at generation time; catches a change that leaves the date untouched (e.g. a second session on the same day). NULL on rows written before this column existed, read as "no count recorded" |
 | `recomputed_on` | date | Nullable -- local calendar date of the last cron recompute; the once-per-day claim guard against duplicate recomputes |
 | `updated_at` | timestamp with time zone | Not null, default `now()` |
 
@@ -910,6 +913,7 @@ A proposed rewrite of the athlete's upcoming plan, raised by the AI coach rather
 **Indexes:**
 - Primary key on `id`
 - `idx_plan_proposals_user_status` on (`user_id`, `status`) -- serves the pending-proposal lookup
+- `idx_plan_adjustment_proposals_plan_id` on (`plan_id`) -- serves the cascade when a plan is deleted (PF18, migration `0122`)
 
 Served by [`GET /api/v1/plan-proposals/pending`](api-reference.md#plan-proposal-routes) and the apply/dismiss routes.
 
@@ -932,6 +936,7 @@ A `moved` correction within 15 minutes (`PLAN_DAY_MOVE_MERGE_MS`) of the same se
 **Indexes:**
 - Primary key on `id`
 - `idx_plan_day_moves_user_moved` on (`user_id`, `moved_at`) -- serves the record's read
+- `idx_plan_day_moves_plan_day_id` on (`plan_day_id`) -- serves the cascade when a plan day is deleted (PF18, migration `0122`)
 
 ### user_consents
 
@@ -1530,6 +1535,7 @@ Notable recent migrations:
 - `0107`: Adds `plan_days.recovery_undo`, the record that lets a fold or shorten be undone. Nullable: sessions moved before it existed simply offer no undo.
 - `0108`: Creates `workout_log_streams`, the compact HR/pace streams session grading reads. A new table only; existing runs are backfilled by the `sessionStreamBackfill` cron, not the migration.
 - `0120`: Adds `workout_logs.auto_link_recording_only` (NOT NULL, default `false`), the durable mark of a plan-day log an auto device link created from the recording alone, which outlives an unlink (D12). No backfill: every existing row is right at `false`, since the auto links made before D12 copied the prescription in and no log of the new shape existed before the column.
+- `0122`: Indexes for lookups and cascades that scanned whole tables (PF11, PF16-PF18): `chat_messages.proposal_id` (partial), `plan_adjustment_proposals.plan_id`, `plan_day_moves.plan_day_id`, `food_favorites.food_id`, `strava_connections.strava_athlete_id` and `users.user_timezone`; and `uq_food_servings_shared`, one copy of each shared serving per (`food_id`, `label`, `grams`), after deleting the duplicates concurrent first opens of a USDA food left. The delete is data, so push-managed production needs it run first ([pending-manual-steps.md](operations/pending-manual-steps.md)).
 
 ### Startup Migration
 
@@ -1632,8 +1638,11 @@ for (const ex of exercises) {
 - Single-column: `exercise_name`
 - Composite: `(workout_log_id, sort_order)` for ordered display, `(workout_log_id, exercise_name)` for per-exercise lookups within a workout, `(plan_day_id, sort_order)` for prescribed-row ordering. These lead with the two owner columns, so there are no standalone `workout_log_id` / `plan_day_id` indexes (dropped in migration 0100)
 
-**chat_messages** (1 index):
+**chat_messages** (2 indexes):
 - Composite: `(user_id, timestamp)` for chronological retrieval per user; it also serves `user_id`-only lookups, which is why the single-column `user_id` index was dropped (migration 0096)
+- Partial: `proposal_id` `WHERE proposal_id IS NOT NULL`, for the FK's `ON DELETE SET NULL` (migration 0122)
+
+Every foreign-key column leads some index, so deleting a parent row never scans the referencing table; `shared/schema/tableIndexes.test.ts` fails on a new FK without one (PF18).
 
 **document_chunks** (3 indexes):
 - Single-column: `material_id`, `user_id`

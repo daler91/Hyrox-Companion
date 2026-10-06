@@ -2,7 +2,7 @@ import type express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getWorkoutAnchor, regenerateAndStoreRacePrediction } from "../../services/analyticsPersistence";
+import { getTrainingAnchor, regenerateAndStoreRacePrediction } from "../../services/analyticsPersistence";
 import { storage } from "../../storage";
 import analyticsRouter from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -31,7 +31,7 @@ vi.mock("../../services/analyticsPersistence", async () => {
   );
   return {
     computeStale: staleness.computeStale,
-    getWorkoutAnchor: vi.fn().mockResolvedValue({ latestDate: null, entryCount: 0 }),
+    getTrainingAnchor: vi.fn().mockResolvedValue({ latestDate: null, entryCount: 0 }),
     regenerateAndStoreRacePrediction: vi.fn(),
   };
 });
@@ -71,7 +71,8 @@ describe("GET /api/v1/race-prediction (stored-first)", () => {
       entryCountAtGeneration: 4,
     } as never);
     // Newer date → stale. The count moves with it; either half alone is enough.
-    vi.mocked(getWorkoutAnchor).mockResolvedValue({ latestDate: "2026-06-03", entryCount: 5 });
+    // The prediction reads training logs only, so its anchor does too (PF10).
+    vi.mocked(getTrainingAnchor).mockResolvedValue({ latestDate: "2026-06-03", entryCount: 5 });
 
     const res = await request(app).get("/api/v1/race-prediction");
 

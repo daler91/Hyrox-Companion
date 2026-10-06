@@ -28,8 +28,8 @@ generation per user) against whatever database you point it at, so the monthly
 restore drill
 ([backup-restore.md §6](./backup-restore.md#6-restore-drill-cadence--verification))
 re-verifies those for free. It does **not** check the older-migration audit, 0074,
-0093, 0094, 0117, 0121 or the C9 backfill — use the verification queries in those
-sections. Note the reverse hazard too: a restored database is as old as its
+0093, 0094, 0117, 0121, 0122 or the C9 backfill — use the verification queries in
+those sections. Note the reverse hazard too: a restored database is as old as its
 backup, so a step ticked _after_ that backup was taken has been rolled back and
 must be run again.
 
@@ -432,6 +432,50 @@ must be run again.
   SELECT conname FROM pg_constraint
   WHERE conname IN ('maf_profile_final_hr_positive_check',
                     'maf_workout_analysis_compliance_pct_range_check'); -- expect 2 rows
+  ```
+
+## [ ] 0122 — one copy of each shared food serving, and six lookup/FK indexes
+
+- **Migration:** `migrations/0122_food_servings_unique_and_fk_indexes.sql`
+- **Shipped:** 2026-10-06 (PF11, PF16, PF17 and PF18,
+  `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** the indexes, among them the partial unique index
+  `uq_food_servings_shared`, are declared in `shared/schema/tables.ts` and reach
+  production through `drizzle-kit push`, but the `DELETE` that makes the unique
+  index creatable is DML, which push never runs. As with 0091 and 0121, **order
+  matters**: if two first opens of a USDA food ever cached its portions twice,
+  push fails to create the index until the `DELETE` has run.
+- **What it does:** deletes every shared serving (`created_by_user_id IS NULL`)
+  that repeats another's `(food_id, label, grams)`, keeping the lowest id. The
+  copies are identical and nothing references a serving row (log entries store
+  grams), so no athlete loses anything. Then it creates `uq_food_servings_shared`
+  and six plain indexes: `chat_messages.proposal_id` (partial),
+  `plan_adjustment_proposals.plan_id`, `plan_day_moves.plan_day_id`,
+  `food_favorites.food_id`, `strava_connections.strava_athlete_id` and
+  `users.user_timezone`.
+- **Safe to re-run:** yes. The `DELETE` matches nothing once it has run, and
+  every index is `IF NOT EXISTS`, so the file can be applied whole before or
+  after the push.
+- **How:** check first (the first query below). Then, **before** the
+  `drizzle-kit push` that ships this schema, apply the file whole with the
+  post-migration workflow (`ledger: push`,
+  `sql_files: 0122_food_servings_unique_and_fk_indexes.sql`) or
+  `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f migrations/0122_food_servings_unique_and_fk_indexes.sql`.
+  The plain indexes are built without `CONCURRENTLY` (the file runs in one
+  transaction), so each briefly blocks writes to its table; `chat_messages` is
+  the largest, so run it outside peak hours.
+- **Verify afterwards:**
+  ```sql
+  SELECT count(*) FROM (
+    SELECT 1 FROM food_servings WHERE created_by_user_id IS NULL
+    GROUP BY food_id, label, grams HAVING count(*) > 1
+  ) d; -- expect 0
+  SELECT count(*) FROM pg_indexes
+  WHERE indexname IN ('uq_food_servings_shared', 'idx_chat_messages_proposal_id',
+                      'idx_plan_adjustment_proposals_plan_id', 'idx_plan_day_moves_plan_day_id',
+                      'idx_food_favorites_food_id', 'idx_strava_connections_strava_athlete_id',
+                      'idx_users_user_timezone'); -- expect 7
   ```
 
 ## [ ] C9 — double the Strava run cadence stored at its one-leg value (**needs review before running**)

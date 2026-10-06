@@ -1,11 +1,12 @@
 import type { ExerciseSet } from "@shared/schema";
 import { restampSetPatch } from "@shared/unitConversion";
 import { useIsMutating } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { EDIT_SAVE_DEBOUNCE_MS } from "@/components/workout-structure/editSaveDebounce";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
+import { type SaveSetOrderRequest, useSetOrderSave } from "@/hooks/useSetOrderSave";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { type AddExerciseSetPayload, type PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
 import { createSetVersionTracker, isSetConflictError } from "@/lib/exerciseSetVersionLock";
@@ -27,6 +28,11 @@ type Params<TSnapshot> = {
   updateSetRequest: (ownerId: string, setId: string, data: PatchExerciseSetPayload) => Promise<ExerciseSet>;
   addSetRequest: (ownerId: string, data: AddExerciseSetPayload) => Promise<ExerciseSet>;
   deleteSetRequest: (ownerId: string, setId: string) => Promise<unknown>;
+  /**
+   * Saves the whole set order in one request when a row is dragged (PF5,
+   * CODEBASE_ANALYSIS_2026-10-03). Without it the hook offers no `saveSetOrder`.
+   */
+  saveSetOrderRequest?: SaveSetOrderRequest;
   addInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
   deleteInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
   /**
@@ -118,6 +124,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
   updateSetRequest,
   addSetRequest,
   deleteSetRequest,
+  saveSetOrderRequest,
   addInvalidateQueries,
   deleteInvalidateQueries,
   onWriteSuccess,
@@ -234,8 +241,33 @@ export function useExerciseSetsForOwner<TSnapshot>({
   // it (CL18). The version tracker is kept across owners for the same reason:
   // set ids are unique across owners, and the flushed PATCH still needs its
   // set's version and must still wait behind that set's in-flight PATCH.
-  const { patchSetDebounced, flushPendingSetPatches, getPendingPatches } =
+  const { patchSetDebounced, flushPendingSetPatches: flushCellPatches, getPendingPatches } =
     useDebouncedSetPatches<PatchExerciseSetPayload>(updateSet.mutateAsync, cellSaveDebounceMs, ownerId);
+
+  // A drag's order save is one of this owner's set writes (PF5): its mutation
+  // key feeds `isSaving` and it marks the save pill like any other write.
+  const { saveSetOrder, settleSetOrderSaves } = useSetOrderSave({
+    ownerId,
+    mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
+    setsQueryKey,
+    patchCachedSets,
+    request: saveSetOrderRequest,
+    onSaved: () => {
+      markSaved();
+      onWriteSuccess?.();
+    },
+    onFailed: markError,
+  });
+
+  // Everything a caller must see landed before it reads the stored rows: the
+  // queued and in-flight cell PATCHes, and a drag's order save. "Complete
+  // workout" used to copy the plan day in its pre-drag order while that save
+  // was still out, and go ahead after it failed. PF5
+  // (CODEBASE_ANALYSIS_2026-10-03)
+  const flushPendingSetPatches = useCallback(async (): Promise<boolean> => {
+    const [cellsLanded, orderLanded] = await Promise.all([flushCellPatches(), settleSetOrderSaves()]);
+    return cellsLanded && orderLanded;
+  }, [flushCellPatches, settleSetOrderSaves]);
 
   if (ownerId !== activeOwnerId) {
     setActiveOwnerId(ownerId);
@@ -297,6 +329,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     patchSetDebounced,
     flushPendingSetPatches,
     getPendingPatches,
+    saveSetOrder,
     addSet,
     deleteSet,
     isSaving: pendingMutationCount > 0,

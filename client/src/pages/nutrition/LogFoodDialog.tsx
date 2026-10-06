@@ -38,6 +38,7 @@ import { FavoriteStarButton } from "./FavoriteStarButton";
 import { GoalContributionRows } from "./GoalContributionRows";
 import { MacroRows } from "./MacroRows";
 import { MicronutrientPreviewPanel } from "./MicronutrientPreviewPanel";
+import { useLogTimezoneSync } from "./useLogTimezoneSync";
 import {
   appendUnique,
   buildPreviewMicroRows,
@@ -180,7 +181,8 @@ export function matchPortionForGrams(
     }
   }
 
-  if (!best) return { unitValue: "g", count: Math.round(quantityG) };
+  // Grams to one decimal, as stored: whole grams showed a 7.5 g entry as 8 g.
+  if (!best) return { unitValue: "g", count: Math.round(quantityG * 10) / 10 };
   return { unitValue: best.unitValue, count: best.count };
 }
 
@@ -247,6 +249,283 @@ function deriveFoodFields(state: LogDialogState): {
 }
 
 /**
+ * The amount being logged, as a count of a unit (grams or a named portion).
+ *
+ * Create mode can seed synchronously: the synthetic "__serving" option is
+ * derivable from the picked food, so there's no flash before the named
+ * servings load. Edit mode cannot — matching the entry's grams back onto
+ * "2 slices" needs the servings, which arrive after first render. So both
+ * fields stay null until the athlete touches them and the seed is *derived*
+ * below. That resolves late without an effect, and without stomping typed
+ * input when useAddServing invalidates the food-detail query.
+ */
+function useLogAmount(
+  state: LogDialogState,
+  unitOptions: readonly UnitOption[],
+  servingSizeG: number | null,
+) {
+  const isCreate = state.mode === "create";
+  const hasServingSize = servingSizeG != null && servingSizeG > 0;
+  const [countInput, setCountInput] = useState<number | null>(() =>
+    isCreate ? initialCount(state, hasServingSize) : null,
+  );
+  const [unitInput, setUnitInput] = useState<string | null>(() =>
+    isCreate ? initialUnitValue(state, hasServingSize) : null,
+  );
+  // Whether the athlete has changed the amount (count or unit). An untouched
+  // edit keeps the entry's stored grams: the seed below re-expresses them as a
+  // friendly portion, and saving that snapped count turned 240 g into 236 g
+  // (and 7.5 g into 8 g) when only the meal was changed.
+  // CL63 (CODEBASE_ANALYSIS_2026-10-03)
+  const [amountEdited, setAmountEdited] = useState(false);
+
+  // Edit mode's seed: the entry's stored grams re-expressed in the friendliest
+  // named portion available, recomputed as servings arrive. Untouched fields
+  // fall back to it; once the athlete edits either, their value wins for good.
+  const editSeed = useMemo(
+    () => (state.mode === "edit" ? matchPortionForGrams(state.entry.quantityG, unitOptions) : null),
+    [state, unitOptions],
+  );
+  const count = countInput ?? editSeed?.count ?? 0;
+  const unitValue = unitInput ?? editSeed?.unitValue ?? "g";
+
+  const selectedUnit = resolveSelectedUnit(unitOptions, unitValue, servingSizeG);
+  const quantityG =
+    state.mode === "edit" && !amountEdited
+      ? state.entry.quantityG
+      : count * (selectedUnit?.grams ?? 1);
+
+  /** Hold the shown amount without counting it as the athlete's change. */
+  const pinAmount = (nextCount: number, nextUnit: string) => {
+    setCountInput(nextCount);
+    setUnitInput(nextUnit);
+  };
+  /** The athlete typed a count; the unit stays as it resolves. */
+  const editCount = (nextCount: number) => {
+    setCountInput(nextCount);
+    setAmountEdited(true);
+  };
+  /** The athlete chose a count and unit together. */
+  const editAmount = (nextCount: number, nextUnit: string) => {
+    pinAmount(nextCount, nextUnit);
+    setAmountEdited(true);
+  };
+
+  return {
+    count,
+    unitValue,
+    selectedUnit,
+    quantityG,
+    amountEdited,
+    pinAmount,
+    editCount,
+    editAmount,
+  };
+}
+
+/** The "+ Add portion…" sub-form: a label and its grams, saved as a named
+ *  serving of the food. Unmounting it (cancel or saved) clears its fields. */
+function AddPortionForm({
+  foodId,
+  onAdded,
+  onCancel,
+}: {
+  readonly foodId: string;
+  readonly onAdded: (created: FoodServing) => void;
+  readonly onCancel: () => void;
+}) {
+  const addServing = useAddServing(foodId);
+  const [label, setLabel] = useState("");
+  const [grams, setGrams] = useState("");
+  const portionGrams = parsePortionGrams(grams);
+  const trimmedLabel = label.trim();
+
+  const handleAdd = () => {
+    if (portionGrams === null || trimmedLabel.length === 0) return;
+    addServing.mutate({ label: trimmedLabel, grams: portionGrams }, { onSuccess: onAdded });
+  };
+
+  return (
+    <div className="space-y-2 rounded-md border p-2">
+      <p className="text-xs text-muted-foreground">New portion</p>
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="e.g. 1 slice"
+          value={label}
+          onChange={(e) => {
+            setLabel(e.target.value);
+          }}
+          aria-label="Portion label"
+          data-testid="input-portion-label"
+        />
+        <Input
+          type="number"
+          min={0}
+          step="any"
+          inputMode="decimal"
+          placeholder="grams"
+          className="w-24"
+          value={grams}
+          onChange={(e) => {
+            setGrams(e.target.value);
+          }}
+          aria-label="Portion size in grams"
+          data-testid="input-portion-grams"
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleAdd}
+          disabled={trimmedLabel.length === 0 || portionGrams === null || addServing.isPending}
+          aria-busy={addServing.isPending}
+          data-testid="button-save-portion"
+        >
+          {addServing.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+          {addServing.isPending ? "Adding…" : "Add"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The athlete's own portions of this food, each removable. */
+function PersonalPortions({
+  servings,
+  disabled,
+  onRemove,
+}: {
+  readonly servings: readonly FoodServing[];
+  readonly disabled: boolean;
+  readonly onRemove: (serving: FoodServing) => void;
+}) {
+  if (servings.length === 0) return null;
+  return (
+    <div className="space-y-1 pt-1">
+      <p className="text-xs text-muted-foreground">Your portions</p>
+      {servings.map((s) => (
+        <div
+          key={s.id}
+          className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-sm"
+        >
+          <span className="min-w-0 truncate">
+            {s.label} · {Math.round(s.grams)} g
+          </span>
+          <RemovePortionButton serving={s} disabled={disabled} onRemove={onRemove} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** One portion's remove button, with a tooltip naming the portion. */
+function RemovePortionButton({
+  serving,
+  disabled,
+  onRemove,
+}: {
+  readonly serving: FoodServing;
+  readonly disabled: boolean;
+  readonly onRemove: (serving: FoodServing) => void;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            aria-label={`Remove ${serving.label}`}
+            disabled={disabled}
+            onClick={() => {
+              onRemove(serving);
+            }}
+            data-testid="button-remove-portion"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Remove {serving.label}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/** Summary + Nutrients tabs: the live serving's macros, its effect on the
+ *  day's goals and its micronutrients (display only). */
+function LogPreviewTabs({
+  state,
+  quantityG,
+  detailFood,
+  microsLoading,
+  todayTotals,
+  effectiveTarget,
+}: {
+  readonly state: LogDialogState;
+  readonly quantityG: number;
+  /** The food as the detail fetch enriched it (USDA micros), once it lands. */
+  readonly detailFood: Food | null;
+  readonly microsLoading: boolean;
+  readonly todayTotals: NutritionMacroTotals | null;
+  readonly effectiveTarget: EffectiveTargetSummary | null;
+}) {
+  const [tab, setTab] = useState<"summary" | "nutrients">("summary");
+
+  const preview =
+    state.mode === "create"
+      ? previewNutrition(state.food, quantityG)
+      : scaleEntryPreview(state.entry, quantityG);
+  const macroShares = macroEnergyShares(preview);
+  const enrichedFood = detailFood ?? (state.mode === "create" ? state.food : null);
+  const microRows = buildPreviewMicroRows(
+    enrichedFood ? previewMicrosScaled(enrichedFood, quantityG) : {},
+  );
+  const goalRows = todayTotals
+    ? projectGoalContribution(todayTotals, preview, effectiveTarget, replacedServing(state))
+    : [];
+
+  return (
+    <Tabs value={tab} onValueChange={(v) => setTab(v as "summary" | "nutrients")}>
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="summary" data-testid="tab-summary">
+          Summary
+        </TabsTrigger>
+        <TabsTrigger value="nutrients" data-testid="tab-nutrients">
+          Nutrients
+          {microRows.length > 0 && (
+            <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+          )}
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="summary" className="space-y-4 pt-2">
+        <div className="rounded-md bg-muted/40 p-3">
+          <CalorieBreakdownRing shares={macroShares} calories={preview.calories} />
+        </div>
+        <MacroRows totals={preview} shares={macroShares} />
+        <GoalContributionRows rows={goalRows} />
+      </TabsContent>
+
+      <TabsContent value="nutrients" className="pt-2">
+        <MicronutrientPreviewPanel rows={microRows} isLoading={microsLoading} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+/** The submit button's label for the mode and whether a save is under way. */
+function submitLabelFor(isCreate: boolean, isPending: boolean): string {
+  if (isCreate) return isPending ? "Logging…" : "Log it";
+  return isPending ? "Saving…" : "Save";
+}
+
+/**
  * Inner form, mounted with a `key` per food/entry so opening a different item
  * remounts it and re-seeds the `useState` initializers — no reset effect needed.
  */
@@ -265,6 +544,7 @@ function LogFoodForm({
 }) {
   const logFood = useLogFood(date);
   const updateLog = useUpdateLog(date);
+  const { runSynced, isSyncing } = useLogTimezoneSync();
   const isCreate = state.mode === "create";
   const { foodId, detailFoodId, servingSizeG: stateServingSizeG, name, brand } = deriveFoodFields(state);
 
@@ -272,37 +552,18 @@ function LogFoodForm({
   // unit selector, and both use the enriched food (USDA micros are filled in on
   // first detail fetch) for the micronutrient preview.
   const servingsQuery = useFoodWithServings(detailFoodId);
-  const addServing = useAddServing(foodId);
   const removeServing = useRemoveServing(foodId);
+  const detailFood = servingsQuery.data?.food ?? null;
 
   // Edit mode has no serving size to seed from up front — it rides in on the
   // food detail alongside the named servings.
-  const servingSizeG = stateServingSizeG ?? servingsQuery.data?.food.servingSizeG ?? null;
-  const hasServingSize = servingSizeG != null && servingSizeG > 0;
+  const servingSizeG = stateServingSizeG ?? detailFood?.servingSizeG ?? null;
 
-  // Both modes drive quantity as a count + a unit (grams / named portion).
-  //
-  // Create mode can seed synchronously: the synthetic "__serving" option is
-  // derivable from the picked food, so there's no flash before the named
-  // servings load. Edit mode cannot — matching the entry's grams back onto
-  // "2 slices" needs the servings, which arrive after first render. So both
-  // fields stay null until the athlete touches them and the seed is *derived*
-  // below. That resolves late without an effect, and without stomping typed
-  // input when useAddServing invalidates the food-detail query.
-  const [countInput, setCountInput] = useState<number | null>(() =>
-    isCreate ? initialCount(state, hasServingSize) : null,
-  );
-  const [unitInput, setUnitInput] = useState<string | null>(() =>
-    isCreate ? initialUnitValue(state, hasServingSize) : null,
-  );
   const [mealType, setMealType] = useState<MealType>(() => initialMealType(state));
-  const [tab, setTab] = useState<"summary" | "nutrients">("summary");
 
   // Add-portion sub-form + the just-added portion held optimistically until the
   // food-detail refetch (triggered by the mutation) surfaces it from the server.
   const [showAddPortion, setShowAddPortion] = useState(false);
-  const [newLabel, setNewLabel] = useState("");
-  const [newGrams, setNewGrams] = useState("");
   const [extraServings, setExtraServings] = useState<FoodServing[]>([]);
 
   // Servings visible to the user (fetched + optimistic), de-duped by id, by grams.
@@ -316,15 +577,9 @@ function LogFoodForm({
     [mergedServings, servingSizeG],
   );
 
-  // Edit mode's seed: the entry's stored grams re-expressed in the friendliest
-  // named portion available, recomputed as servings arrive. Untouched fields
-  // fall back to it; once the athlete edits either, their value wins for good.
-  const editSeed = useMemo(
-    () => (state.mode === "edit" ? matchPortionForGrams(state.entry.quantityG, unitOptions) : null),
-    [state, unitOptions],
-  );
-  const count = countInput ?? editSeed?.count ?? 0;
-  const unitValue = unitInput ?? editSeed?.unitValue ?? "g";
+  // Both modes drive quantity as a count + a unit (grams / named portion).
+  const amount = useLogAmount(state, unitOptions, servingSizeG);
+  const { count, unitValue, selectedUnit, quantityG } = amount;
 
   // The user's own portions (non-null owner) are removable; shared USDA ones aren't.
   const personalServings = useMemo(
@@ -332,29 +587,8 @@ function LogFoodForm({
     [mergedServings],
   );
 
-  const selectedUnit = resolveSelectedUnit(unitOptions, unitValue, servingSizeG);
-  const quantityG = count * (selectedUnit?.grams ?? 1);
-
-  const preview =
-    state.mode === "create"
-      ? previewNutrition(state.food, quantityG)
-      : scaleEntryPreview(state.entry, quantityG);
-  const isPending = logFood.isPending || updateLog.isPending;
+  const isPending = logFood.isPending || updateLog.isPending || isSyncing;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
-  const idleLabel = isCreate ? "Log it" : "Save";
-  const busyLabel = isCreate ? "Logging…" : "Saving…";
-  const submitLabel = isPending ? busyLabel : idleLabel;
-
-  // Rich preview derived from the live serving (display only).
-  const macroShares = macroEnergyShares(preview);
-  const enrichedFood: Food | null =
-    servingsQuery.data?.food ?? (state.mode === "create" ? state.food : null);
-  const microRows = buildPreviewMicroRows(
-    enrichedFood ? previewMicrosScaled(enrichedFood, quantityG) : {},
-  );
-  const goalRows = todayTotals
-    ? projectGoalContribution(todayTotals, preview, effectiveTarget, replacedServing(state))
-    : [];
 
   const handleUnitChange = (value: string) => {
     if (value === "__add") {
@@ -365,28 +599,13 @@ function LogFoodForm({
     // recomputes grams (the long-standing create-mode behaviour); leaving the
     // count derived would let it re-resolve against the new unit and quietly
     // reinterpret "2 slices" as "2 grams".
-    setCountInput(count);
-    setUnitInput(value);
+    amount.editAmount(count, value);
   };
-
-  const portionGrams = parsePortionGrams(newGrams);
-  const canAddPortion = newLabel.trim().length > 0 && portionGrams !== null;
 
   const handlePortionAdded = (created: FoodServing) => {
     setExtraServings((prev) => appendUnique(prev, created, (s) => s.id));
-    setUnitInput(created.id);
-    setCountInput(1);
+    amount.editAmount(1, created.id);
     setShowAddPortion(false);
-    setNewLabel("");
-    setNewGrams("");
-  };
-
-  const handleAddPortion = () => {
-    if (portionGrams === null || newLabel.trim().length === 0) return;
-    addServing.mutate(
-      { label: newLabel.trim(), grams: portionGrams },
-      { onSuccess: handlePortionAdded },
-    );
   };
 
   const handleRemovePortion = (serving: FoodServing) => {
@@ -397,11 +616,9 @@ function LogFoodForm({
     // removed is the selected one, fall back to grams carrying the same
     // quantity rather than reinterpreting the count as grams.
     if (unitValue === serving.id) {
-      setCountInput(Math.round(quantityG));
-      setUnitInput("g");
+      amount.pinAmount(Math.round(quantityG), "g");
     } else {
-      setCountInput(count);
-      setUnitInput(unitValue);
+      amount.pinAmount(count, unitValue);
     }
     removeServing.mutate(serving.id);
   };
@@ -409,19 +626,18 @@ function LogFoodForm({
   const handleSubmit = () => {
     if (!validQuantity) return;
     if (state.mode === "create") {
-      logFood.mutate(
-        {
-          foodId: state.food.id,
-          quantityG,
-          mealType,
-          loggedAt: loggedAtForDate(date),
-          entryMethod: state.entryMethod,
-        },
-        { onSuccess: onClose },
-      );
+      const { food, entryMethod } = state;
+      // The server dates a new entry by the profile's timezone (CL65).
+      runSynced(() => {
+        logFood.mutate(
+          { foodId: food.id, quantityG, mealType, loggedAt: loggedAtForDate(date), entryMethod },
+          { onSuccess: onClose },
+        );
+      });
     } else {
+      // An untouched amount is left out, so the stored grams stand (CL63).
       updateLog.mutate(
-        { id: state.entry.id, data: { quantityG, mealType } },
+        { id: state.entry.id, data: amount.amountEdited ? { quantityG, mealType } : { mealType } },
         { onSuccess: onClose },
       );
     }
@@ -448,7 +664,9 @@ function LogFoodForm({
             inputMode="decimal"
             className="w-24"
             value={Number.isFinite(count) ? count : ""}
-            onChange={(e) => setCountInput(Number(e.target.value))}
+            onChange={(e) => {
+              amount.editCount(Number(e.target.value));
+            }}
             data-testid="input-quantity"
           />
           <Select value={selectedUnit?.value ?? "g"} onValueChange={handleUnitChange}>
@@ -473,92 +691,20 @@ function LogFoodForm({
         )}
 
         {showAddPortion && (
-          <div className="space-y-2 rounded-md border p-2">
-            <p className="text-xs text-muted-foreground">New portion</p>
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="e.g. 1 slice"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                aria-label="Portion label"
-                data-testid="input-portion-label"
-              />
-              <Input
-                type="number"
-                min={0}
-                step="any"
-                inputMode="decimal"
-                placeholder="grams"
-                className="w-24"
-                value={newGrams}
-                onChange={(e) => setNewGrams(e.target.value)}
-                aria-label="Portion size in grams"
-                data-testid="input-portion-grams"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowAddPortion(false);
-                  setNewLabel("");
-                  setNewGrams("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleAddPortion}
-                disabled={!canAddPortion || addServing.isPending}
-                aria-busy={addServing.isPending}
-                data-testid="button-save-portion"
-              >
-                {addServing.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                )}
-                {addServing.isPending ? "Adding…" : "Add"}
-              </Button>
-            </div>
-          </div>
+          <AddPortionForm
+            foodId={foodId}
+            onAdded={handlePortionAdded}
+            onCancel={() => {
+              setShowAddPortion(false);
+            }}
+          />
         )}
 
-        {personalServings.length > 0 && (
-          <div className="space-y-1 pt-1">
-            <p className="text-xs text-muted-foreground">Your portions</p>
-            {personalServings.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-sm"
-              >
-                <span className="min-w-0 truncate">
-                  {s.label} · {Math.round(s.grams)} g
-                </span>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        aria-label={`Remove ${s.label}`}
-                        disabled={removeServing.isPending}
-                        onClick={() => handleRemovePortion(s)}
-                        data-testid="button-remove-portion"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Remove {s.label}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            ))}
-          </div>
-        )}
+        <PersonalPortions
+          servings={personalServings}
+          disabled={removeServing.isPending}
+          onRemove={handleRemovePortion}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -577,31 +723,14 @@ function LogFoodForm({
         </Select>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "summary" | "nutrients")}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="summary" data-testid="tab-summary">
-            Summary
-          </TabsTrigger>
-          <TabsTrigger value="nutrients" data-testid="tab-nutrients">
-            Nutrients
-            {microRows.length > 0 && (
-              <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="summary" className="space-y-4 pt-2">
-          <div className="rounded-md bg-muted/40 p-3">
-            <CalorieBreakdownRing shares={macroShares} calories={preview.calories} />
-          </div>
-          <MacroRows totals={preview} shares={macroShares} />
-          <GoalContributionRows rows={goalRows} />
-        </TabsContent>
-
-        <TabsContent value="nutrients" className="pt-2">
-          <MicronutrientPreviewPanel rows={microRows} isLoading={servingsQuery.isLoading} />
-        </TabsContent>
-      </Tabs>
+      <LogPreviewTabs
+        state={state}
+        quantityG={quantityG}
+        detailFood={detailFood}
+        microsLoading={servingsQuery.isLoading}
+        todayTotals={todayTotals}
+        effectiveTarget={effectiveTarget}
+      />
 
       <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-background pt-3">
         <Button variant="ghost" onClick={onClose} disabled={isPending}>
@@ -614,7 +743,7 @@ function LogFoodForm({
           data-testid="button-submit-log"
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
-          {submitLabel}
+          {submitLabelFor(isCreate, isPending)}
         </Button>
       </div>
     </div>

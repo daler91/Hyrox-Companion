@@ -119,12 +119,16 @@ describe("useCombineWorkouts", () => {
         // there) *and* personalRecords + exerciseAnalytics + trainingOverview
         // (the re-parented exercise sets feed those derived views). Guards against a
         // regression of the analytics-staleness gap flagged on PR #796.
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(5);
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(7);
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/timeline"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/workouts"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/personal-records"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/exercise-analytics"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/training-overview"] });
+        // CL43: the "Last time" history still names the sources' ids.
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/exercises"] });
+        // CL50: a device-imported source lands in the recycle bin.
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/recycle-bin"] });
       }
     });
   });

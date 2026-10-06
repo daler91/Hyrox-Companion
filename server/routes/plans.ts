@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, calendarDateSchema, type CreateSamplePlanInput, createSamplePlanSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, calendarDateSchema, type CreateSamplePlanInput, createSamplePlanSchema, type ExerciseSetOrderBody, exerciseSetOrderBodySchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -521,6 +521,24 @@ protectedPatch(
       return sendNotFound(res, PLAN_DAY_SET_NOT_FOUND);
     }
     res.json(updated);
+  },
+);
+
+// The day's whole set order in one write, so a drag is one request whatever
+// it moves: one PATCH per moved set could use up planDaySet part way and split
+// an exercise between saved and unsaved rows. Its own limiter, so reordering
+// spends nothing from the cell edits'. PF5 (CODEBASE_ANALYSIS_2026-10-03)
+protectedPatch(
+  router,
+  "/api/v1/plans/days/:dayId/set-order",
+  { limiter: rateLimiter("setOrder", 30), middleware: [validateBody(exerciseSetOrderBodySchema)] },
+  async (req: ExpressRequest<{ dayId: string }, Record<string, never>, ExerciseSetOrderBody>, res: Response) => {
+    const sets = await storage.workouts.mutateExerciseSetOrder({ kind: "planDay", ownerId: req.params.dayId }, req.body.setIds, getUserId(req));
+    if (!sets) {
+      sendNotFound(res, PLAN_DAY_NOT_FOUND);
+      return;
+    }
+    res.json(sets);
   },
 );
 

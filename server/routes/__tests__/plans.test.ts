@@ -30,7 +30,7 @@ const { schedulePlan } = vi.hoisted(() => ({ schedulePlan: vi.fn() }));
 
 vi.mock("../../storage", async () => {
   const mocked = (await import("./testUtils")).mockStorageModule({
-    workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
+    workouts: ["getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete", "mutateExerciseSetOrder"],
     plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "deletePlanDay", "hasInFlightPlanGeneration", "updateGenerationStatus", "setPlanRetirement", "findOverlappingActivePlans"],
     users: ["getUser", "getCustomExercises", "updateUserPreferences"],
   });
@@ -773,6 +773,43 @@ describe("plan-day exercise routes", () => {
   });
 
   // Relinks (CL15) are covered in planDayStructure.test.ts.
+
+  // PF5 (CODEBASE_ANALYSIS_2026-10-03): a drag sent one PATCH per moved set.
+  describe("PATCH /api/v1/plans/days/:dayId/set-order", () => {
+    it("saves the day's whole set order in one storage call", async () => {
+      const saved = [{ id: "set-b", sortOrder: 0 }, { id: "set-a", sortOrder: 1 }];
+      vi.mocked(storage.workouts.mutateExerciseSetOrder).mockResolvedValue(saved as never);
+
+      const response = await request(app).patch("/api/v1/plans/days/day-1/set-order").send({ setIds: ["set-b", "set-a"] });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(saved);
+      expect(storage.workouts.mutateExerciseSetOrder).toHaveBeenCalledWith(
+        { kind: "planDay", ownerId: "day-1" },
+        ["set-b", "set-a"],
+        "test_user_id",
+      );
+    });
+
+    it("404s when the plan day is not the athlete's", async () => {
+      // A bare mock resolves to nothing, as storage does for a container that is not theirs.
+      vi.mocked(storage.workouts.mutateExerciseSetOrder).mockReset();
+
+      const response = await request(app).patch("/api/v1/plans/days/day-1/set-order").send({ setIds: ["set-a"] });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toMatchObject({ error: "Plan day not found" });
+    });
+
+    it("rejects a set named twice without writing", async () => {
+      const response = await request(app)
+        .patch("/api/v1/plans/days/day-1/set-order")
+        .send({ setIds: ["set-a", "set-a"] });
+
+      expect(response.status).toBe(400);
+      expect(storage.workouts.mutateExerciseSetOrder).not.toHaveBeenCalled();
+    });
+  });
 
   describe("set writes carry the units they were composed in (D22, CODEBASE_ANALYSIS_2026-10-03)", () => {
     const PLAN_DAY = { kind: "planDay", ownerId: "day-1" };

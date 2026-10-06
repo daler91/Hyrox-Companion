@@ -134,6 +134,34 @@ describe("calculateStats", () => {
       // 1 of 2: the real miss counts, the let-go does not.
       expect(stats.completionRate).toBe(50);
     });
+
+    // CL59 (CODEBASE_ANALYSIS_2026-10-03): the rate scored every loaded past
+    // day, so each "Load older workouts" page moved it. It now scores the
+    // last 4 weeks (Apr 17 – May 14 here), which the first page holds.
+    it("scores only the last 4 weeks, so loading older pages leaves it alone", () => {
+      const firstPage: Partial<TimelineEntry>[] = [
+        { date: "2024-05-14", status: "completed" },
+        { date: "2024-05-01", status: "missed" },
+        { date: "2024-04-17", status: "completed" }, // first day of the window
+      ];
+      const olderPage: Partial<TimelineEntry>[] = [
+        { date: "2024-04-16", status: "missed" }, // the day before the window
+        { date: "2024-03-02", status: "missed" },
+        { date: "2023-11-20", status: "missed" },
+      ];
+
+      expect(calculateStatsFor(firstPage).completionRate).toBe(67);
+      expect(calculateStatsFor([...firstPage, ...olderPage]).completionRate).toBe(67);
+    });
+
+    it("returns null when nothing came due in the last 4 weeks", () => {
+      const timeline: Partial<TimelineEntry>[] = [
+        { date: "2024-04-16", status: "completed" },
+        { date: "2024-05-20", status: "planned" },
+      ];
+
+      expect(calculateStatsFor(timeline).completionRate).toBeNull();
+    });
   });
 
 });

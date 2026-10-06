@@ -1,4 +1,4 @@
-import { setupAuthIntercepts } from "../support/authIntercepts";
+import { setupAuthIntercepts, skipOnboardingOnLoad } from "../support/authIntercepts";
 
 // Local-timezone yyyy-MM-dd, mirroring client/src/lib/dateUtils.ts. Do NOT
 // use toISOString().split("T")[0] here: the app's date strings are local-TZ,
@@ -39,11 +39,7 @@ describe("Timeline Page", () => {
       // Skip onboarding before the app bootstraps so the wizard dialog doesn't
       // scroll-lock the body (pointer-events: none), which would otherwise make
       // the coach FAB un-clickable without forcing the interaction.
-      cy.visit("/", {
-        onBeforeLoad: (win) => {
-          win.localStorage.setItem("fitai-onboarding-complete", "true");
-        },
-      });
+      cy.visit("/", { onBeforeLoad: skipOnboardingOnLoad });
       cy.wait("@authUser");
       cy.wait("@timeline");
       cy.getBySel("button-coach-fab").should("be.visible").click();
@@ -161,11 +157,7 @@ describe("Timeline Page", () => {
     });
 
     it("lands on the injected today row without any user scrolling", () => {
-      cy.visit("/", {
-        onBeforeLoad: (win) => {
-          win.localStorage.setItem("fitai-onboarding-complete", "true");
-        },
-      });
+      cy.visit("/", { onBeforeLoad: skipOnboardingOnLoad });
       cy.wait("@authUser");
       cy.wait("@timeline");
 

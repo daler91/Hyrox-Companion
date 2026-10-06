@@ -127,15 +127,18 @@ async function expectFailedSaveToast({
 describe('useWorkoutForm', () => {
   const mockToast = vi.fn();
   const mockNavigate = vi.fn();
+  // stopListening calls back once dictation has delivered its last words, at
+  // once when nothing is dictating; the save waits on it (CL54).
+  const stopIdleDictation = (onStopped?: () => void) => onStopped?.();
   const mockVoiceInput = {
     isListening: false,
     startListening: vi.fn(),
-    stopListening: vi.fn(),
+    stopListening: vi.fn(stopIdleDictation),
   };
   const mockNotesVoiceInput = {
     isListening: false,
     startListening: vi.fn(),
-    stopListening: vi.fn(),
+    stopListening: vi.fn(stopIdleDictation),
   };
 
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 
@@ -7,6 +7,9 @@ import type { UseWorkoutFormProps } from "./workout-form/types";
 import { useSaveWorkoutMutation } from "./workout-form/useSaveWorkoutMutation";
 import { useWorkoutFormState } from "./workout-form/useWorkoutFormState";
 import { useWorkoutFormVoice } from "./workout-form/useWorkoutFormVoice";
+
+/** The two dictation sessions a save ends: the description's and the notes'. */
+const DICTATION_SESSIONS = 2;
 
 export function useWorkoutForm({
   // Kept in the contract for draft callers; save branches on
@@ -28,10 +31,7 @@ export function useWorkoutForm({
   });
   const saveMutation = useSaveWorkoutMutation(onSaveSuccess);
 
-  const handleSave = useCallback(() => {
-    if (voiceInput.isListening) voiceInput.stopListening();
-    if (notesVoiceInput.isListening) notesVoiceInput.stopListening();
-
+  const saveCurrentForm = () => {
     const result = buildWorkoutSavePayload({
       title: form.title,
       date: form.date,
@@ -71,18 +71,38 @@ export function useWorkoutForm({
     }
 
     saveMutation.mutate(result.payload);
-  }, [
-    voiceInput,
-    notesVoiceInput,
-    form,
-    exerciseBlocks,
-    exerciseData,
-    structureBlocks,
-    weightLabel,
-    distanceUnit,
-    toast,
-    saveMutation,
-  ]);
+  };
+
+  // Save ends any dictation and waits for its last words before it builds the
+  // payload. Built straight away, the phrase still being spoken was shown as
+  // interim text but left out of the saved workout. stopListening calls back
+  // once the recogniser's final result is in the field (at once when nothing
+  // is dictating; cut off after its bound, with the words on screen committed),
+  // and the re-render that asks for carries the text to the effect below, as
+  // "Continue to exercises" does. CL54 (CODEBASE_ANALYSIS_2026-10-03)
+  const saveRef = useRef<"idle" | "waiting" | "ready">("idle");
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+  useLayoutEffect(() => {
+    if (saveRef.current !== "ready") return;
+    saveRef.current = "idle";
+    saveCurrentForm();
+  });
+
+  const { stopListening: stopDescriptionDictation } = voiceInput;
+  const { stopListening: stopNotesDictation } = notesVoiceInput;
+  const handleSave = useCallback(() => {
+    if (saveRef.current !== "idle") return;
+    saveRef.current = "waiting";
+    let running = DICTATION_SESSIONS;
+    const onStopped = () => {
+      running -= 1;
+      if (running > 0) return;
+      saveRef.current = "ready";
+      rerender();
+    };
+    stopDescriptionDictation(onStopped);
+    stopNotesDictation(onStopped);
+  }, [stopDescriptionDictation, stopNotesDictation]);
 
   return {
     ...form,

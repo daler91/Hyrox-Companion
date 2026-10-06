@@ -18,11 +18,13 @@ import {
 vi.mock('@/lib/api', () => ({
   QUERY_KEYS: {
     coachingMaterials: ['coaching-materials'],
+    coachingMaterialSummaries: ['coaching-materials', 'summaries'],
     ragStatus: ['rag-status'],
   },
   api: {
     coaching: {
       list: vi.fn(),
+      listSummaries: vi.fn(),
       create: vi.fn(),
       delete: vi.fn(),
       getRagStatus: vi.fn(),
@@ -73,11 +75,13 @@ describe('useCoachingMaterials hooks', () => {
   );
 
   describe('useCoachingMaterials', () => {
-    it('fetches coaching materials successfully', async () => {
+    // PF4 (CODEBASE_ANALYSIS_2026-10-03): the list downloaded every
+    // material's full text only to show its length.
+    it('fetches the materials without their text', async () => {
       const mockMaterials = [
-        { id: '1', title: 'Test 1', content: 'Content 1', type: 'principles' },
+        { id: '1', title: 'Test 1', type: 'principles', contentLength: 9, createdAt: null, updatedAt: null },
       ];
-      (api.coaching.list as any).mockResolvedValue(mockMaterials);
+      vi.mocked(api.coaching.listSummaries).mockResolvedValue(mockMaterials);
 
       const { result } = renderHook(() => useCoachingMaterials(), { wrapper });
 
@@ -86,7 +90,22 @@ describe('useCoachingMaterials hooks', () => {
       });
 
       expect(result.current.data).toEqual(mockMaterials);
-      expect(api.coaching.list).toHaveBeenCalledTimes(1);
+      expect(api.coaching.listSummaries).toHaveBeenCalledTimes(1);
+      expect(api.coaching.list).not.toHaveBeenCalled();
+    });
+
+    it('is refreshed by the invalidation a create or delete sends', async () => {
+      vi.mocked(api.coaching.listSummaries).mockResolvedValue([]);
+      const { result } = renderHook(() => useCoachingMaterials(), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      await act(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['coaching-materials'] });
+      });
+
+      expect(api.coaching.listSummaries).toHaveBeenCalledTimes(2);
     });
   });
 

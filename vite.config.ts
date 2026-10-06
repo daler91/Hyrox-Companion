@@ -5,7 +5,30 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
 
+import { bundleStatsPlugin } from "./script/bundleStats";
+
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+
+/**
+ * Whether a build asset is a font file. Fonts are never inlined into CSS as
+ * base64: inlined, every small subset rode in the render-blocking entry
+ * stylesheet (about 64 KB) whether or not the page needed its glyphs, where a
+ * file is fetched only when its unicode-range is used.
+ * PF6 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function isFontAsset(filePath: string): boolean {
+  return /\.(?:woff2?|ttf|otf|eot)$/i.test(filePath);
+}
+
+/**
+ * What the service worker precaches. Fonts are limited to the woff2 files of
+ * the latin subset (`<family>-latin-<weight>-…`), which is what an English page
+ * renders with. Every other subset (latin-ext, cyrillic, vietnamese, …) and
+ * every woff fallback used to be precached too: 118 files, 1.48 MB, on each
+ * new service-worker install. They are runtime-cached on first use instead
+ * (the font-cache rule below). PF6 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const PRECACHE_GLOB_PATTERNS = ["**/*.{js,css,html,ico,png,svg}", "**/*-latin-[0-9]*.woff2"];
 
 export default defineConfig({
   plugins: [
@@ -44,7 +67,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+        globPatterns: PRECACHE_GLOB_PATTERNS,
         cleanupOutdatedCaches: true,
         // Pull the push handlers into the generated Workbox service worker
         // instead of registering sw-push.js as a second worker. Both used the
@@ -132,6 +155,8 @@ export default defineConfig({
         ],
       },
     }),
+    // Records the eager-icon count script/bundle-check.ts guards (PF19).
+    bundleStatsPlugin(),
     sentryVitePlugin({
       authToken: sentryAuthToken,
       org: process.env.SENTRY_ORG,
@@ -155,6 +180,8 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
     sourcemap: "hidden",
+    // undefined keeps Vite's own rule (inline below 4 KiB) for everything else.
+    assetsInlineLimit: (filePath: string) => (isFontAsset(filePath) ? false : undefined),
     rollupOptions: {
       output: {
         // Rolldown 1.1+ deprecates `advancedChunks` in favour of `codeSplitting`
@@ -174,7 +201,12 @@ export default defineConfig({
             // routes). Guarded by script/bundle-check.ts.
             { name: "vendor-clsx", test: /[\\/]node_modules[\\/](?:clsx|tailwind-merge)[\\/]/, priority: 10 },
             { name: "vendor-react", test: /[\\/]node_modules[\\/](?:react-dom|react|wouter)[\\/]/ },
-            { name: "vendor-ui", test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+            // No group for lucide-react: each icon is its own module, and a
+            // `vendor-ui` group gathered every icon used anywhere into one
+            // chunk the eager shell imports, so first paint (the signed-out
+            // Landing page too) loaded the ~140 icons of the lazy routes. Left
+            // ungrouped, an icon ships with the chunk that uses it. Guarded by
+            // script/bundle-check.ts. PF19 (CODEBASE_ANALYSIS_2026-10-03)
             { name: "vendor-query", test: /[\\/]node_modules[\\/]@tanstack[\\/]react-query[\\/]/ },
             { name: "vendor-charts", test: /[\\/]node_modules[\\/]recharts[\\/]/ },
             { name: "vendor-dnd", test: /[\\/]node_modules[\\/]@dnd-kit[\\/]/ },

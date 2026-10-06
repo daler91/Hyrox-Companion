@@ -349,6 +349,56 @@ describe("PlanStorage.markMissedPlanDays", () => {
     expect(marked).toBe(2);
     expect(comparedDates()).toEqual(["2026-07-21", "2026-07-20"]);
   });
+
+  // PF16 (CODEBASE_ANALYSIS_2026-10-03): the hourly email tick re-ran one
+  // UPDATE per zone every hour, though a zone's verdicts only change with its date.
+  it("sweeps a zone again only once its local date has moved on", async () => {
+    primeSweep([{ tz: "UTC" }, { tz: "America/Los_Angeles" }]);
+    await storage.markMissedPlanDays();
+    whereClauses = [];
+
+    // An hour later both zones are still on the same local dates.
+    vi.setSystemTime(new Date("2026-07-21T02:00:00Z"));
+    expect(await storage.markMissedPlanDays()).toBe(0);
+    expect(whereClauses).toEqual([]);
+
+    // 07:00Z is midnight in Los Angeles: only that zone's date has changed.
+    vi.setSystemTime(new Date("2026-07-21T07:30:00Z"));
+    expect(await storage.markMissedPlanDays()).toBe(1);
+    expect(comparedDates()).toEqual(["2026-07-21"]);
+  });
+
+  it("sweeps a zone again on the next call when its sweep failed", async () => {
+    primeSweep([{ tz: "UTC" }]);
+    vi.mocked(db.update).mockReturnValueOnce({
+      set: () => ({
+        where: () => ({ returning: () => Promise.reject(new Error("statement timeout")) }),
+      }),
+    } as never);
+
+    await expect(storage.markMissedPlanDays()).rejects.toThrow("statement timeout");
+    expect(await storage.markMissedPlanDays()).toBe(1);
+  });
+
+  it("forgets a zone nobody is in any more, so it is swept if someone joins it", async () => {
+    primeSweep([{ tz: "UTC" }]);
+    await storage.markMissedPlanDays();
+    primeSweep([]);
+    await storage.markMissedPlanDays();
+    whereClauses = [];
+
+    primeSweep([{ tz: "UTC" }]);
+
+    expect(await storage.markMissedPlanDays()).toBe(1);
+    expect(comparedDates()).toEqual(["2026-07-21"]);
+  });
+
+  it("keeps a separate record per storage instance, as each replica does", async () => {
+    primeSweep([{ tz: "UTC" }]);
+    await storage.markMissedPlanDays();
+
+    expect(await new PlanStorage().markMissedPlanDays()).toBe(1);
+  });
 });
 
 // -- getPlanWeeklyDensity (audit L13) -----------------------------------------

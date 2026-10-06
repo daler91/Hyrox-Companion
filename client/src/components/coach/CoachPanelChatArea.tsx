@@ -6,8 +6,10 @@ import { ChatDaySeparator, SessionSummaryNote } from "@/components/coach/ChatTra
 import { FactProposalCard } from "@/components/coach/FactProposalCard";
 import { InlinePlanProposal } from "@/components/coach/InlinePlanProposal";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { FactProposalDecision } from "@/hooks/chat/useFactProposalDecision";
+import type { OlderChatMessages } from "@/hooks/chat/useOlderChatHistory";
 import type { Message } from "@/hooks/useChatSession";
 import type { PlanProposalView, RagInfo, Suggestion } from "@/lib/api";
 import { buildTranscript } from "@/lib/chatTranscript";
@@ -46,6 +48,33 @@ interface CoachPanelChatAreaProps {
   readonly onRateMessage?: (messageId: string, feedback: ChatFeedback | null) => void;
   /** Answer a fact the coach offered for the athlete card (see useChatSession.decideFactProposal). */
   readonly onDecideFactProposal?: (messageId: string, decision: FactProposalDecision) => void;
+  /** Messages older than the newest page (see useChatSession.olderMessages, CL56). */
+  readonly olderMessages?: OlderChatMessages;
+}
+
+function olderMessagesLabel({ isLoading, failed }: OlderChatMessages): string {
+  if (isLoading) return "Loading older messages…";
+  return failed ? "Couldn't load older messages. Try again" : "Load older messages";
+}
+
+/**
+ * Above the oldest message shown while the conversation goes further back
+ * (CL56, CODEBASE_ANALYSIS_2026-10-03).
+ */
+function LoadOlderMessagesButton({ control }: { readonly control: OlderChatMessages }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="mb-3 w-full text-muted-foreground"
+      onClick={control.onLoad}
+      disabled={control.isLoading}
+      aria-busy={control.isLoading}
+      data-testid="button-load-older-messages"
+    >
+      {olderMessagesLabel(control)}
+    </Button>
+  );
 }
 
 export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaProps>(
@@ -72,6 +101,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       onRetryMessage,
       onRateMessage,
       onDecideFactProposal,
+      olderMessages,
     },
     ref
   ) => {
@@ -92,6 +122,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
           viewportRef={ref}
           viewportProps={{ onScroll: onViewportScroll }}
         >
+        {olderMessages?.hasOlder && <LoadOlderMessagesButton control={olderMessages} />}
         <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
           {transcript.map((item) => {
             if (item.type === "day") return <ChatDaySeparator key={item.key} label={item.label} />;

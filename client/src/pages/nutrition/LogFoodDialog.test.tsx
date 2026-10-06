@@ -1,12 +1,20 @@
-import type { Food, FoodLogEntry, FoodLogEntryWithNutrition, FoodServing } from "@shared/schema";
+import type {
+  Food,
+  FoodLogEntry,
+  FoodLogEntryWithNutrition,
+  FoodServing,
+  User,
+} from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { preferences } from "@/lib/api/user";
 import { makeFood } from "@/test/factories/foodFactory";
+import { mockDeviceTimezone } from "@/test/support/deviceTimezone";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { LogFoodDialog, matchPortionForGrams } from "./LogFoodDialog";
@@ -28,6 +36,7 @@ vi.mock("@/lib/api", () => ({
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
     nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
     nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id],
+    authUser: ["/api/v1/auth/user"],
   },
 }));
 
@@ -336,6 +345,102 @@ describe("LogFoodDialog", () => {
       // must not re-seed that back to the entry's original 2 slices.
       await waitFor(() => expect(screen.getByTestId("input-quantity")).toHaveValue(1));
       expect(screen.getByTestId("select-unit")).toHaveTextContent("1 slice");
+    });
+  });
+
+  // CL63 (CODEBASE_ANALYSIS_2026-10-03): the edit seed snaps the stored grams
+  // onto a friendly portion, and a meal-only edit saved that snapped amount.
+  describe("editing only the meal", () => {
+    async function moveToDinner(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByTestId("select-meal-type"));
+      await user.click(await screen.findByRole("option", { name: "Dinner" }));
+      await user.click(screen.getByTestId("button-submit-log"));
+    }
+
+    it("keeps grams that only roughly match a portion", async () => {
+      const user = userEvent.setup();
+      renderEditDialog(entryOf(240));
+
+      // 240 g reads as "2 servings" of the food's 118 g serving, which is 236 g.
+      await waitFor(() => expect(screen.getByTestId("select-unit")).toHaveTextContent("1 serving"));
+      expect(screen.getByTestId("input-quantity")).toHaveValue(2);
+      // The grams line and the preview still describe the stored 240 g.
+      expect(screen.getByText("= 240 g")).toBeInTheDocument();
+      expect(screen.getByTestId("preview-calories")).toHaveTextContent("214");
+
+      await moveToDinner(user);
+
+      await waitFor(() => expect(api.nutrition.updateLog).toHaveBeenCalledTimes(1));
+      expect(api.nutrition.updateLog).toHaveBeenCalledWith("e1", { mealType: "dinner" });
+    });
+
+    it("keeps fractional grams", async () => {
+      vi.mocked(api.nutrition.getFood).mockResolvedValue({
+        food: { ...FOOD, servingSizeG: null },
+        servings: [],
+      });
+      const user = userEvent.setup();
+      renderEditDialog(entryOf(7.5));
+
+      await waitFor(() => expect(screen.getByTestId("select-unit")).toHaveTextContent("grams"));
+      expect(screen.getByTestId("input-quantity")).toHaveValue(7.5);
+
+      await moveToDinner(user);
+
+      await waitFor(() => expect(api.nutrition.updateLog).toHaveBeenCalledTimes(1));
+      expect(api.nutrition.updateLog).toHaveBeenCalledWith("e1", { mealType: "dinner" });
+    });
+
+    it("sends the amount again once the athlete changes it", async () => {
+      const user = userEvent.setup();
+      renderEditDialog(entryOf(240));
+
+      await waitFor(() => expect(screen.getByTestId("input-quantity")).toHaveValue(2));
+      const quantity = screen.getByTestId("input-quantity");
+      await user.clear(quantity);
+      await user.type(quantity, "3");
+      await moveToDinner(user);
+
+      // 3 servings of 118 g.
+      await waitFor(() =>
+        expect(api.nutrition.updateLog).toHaveBeenCalledWith("e1", {
+          quantityG: 354,
+          mealType: "dinner",
+        }),
+      );
+    });
+  });
+
+  // CL65 (CODEBASE_ANALYSIS_2026-10-03): the server dates the entry by the
+  // profile's timezone, which a flight leaves behind the device's.
+  describe("a profile timezone left behind by travel", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("moves the profile to the device's timezone before logging", async () => {
+      mockDeviceTimezone("America/New_York");
+      const update = vi
+        .spyOn(preferences, "update")
+        .mockResolvedValue({ userTimezone: "America/New_York" } as User);
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      queryClient.setQueryData(["/api/v1/auth/user"], { userTimezone: "Europe/London" });
+      const user = userEvent.setup();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />
+        </QueryClientProvider>,
+      );
+
+      await user.click(screen.getByTestId("button-submit-log"));
+
+      await waitFor(() => expect(api.nutrition.createLog).toHaveBeenCalledTimes(1));
+      expect(update).toHaveBeenCalledWith({ userTimezone: "America/New_York" });
+      const [saved] = update.mock.invocationCallOrder;
+      const [logged] = vi.mocked(api.nutrition.createLog).mock.invocationCallOrder;
+      expect(saved).toBeLessThan(logged);
     });
   });
 

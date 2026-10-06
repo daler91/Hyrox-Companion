@@ -16,7 +16,6 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { convertWeight, getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences, type WeightUnit } from "@shared/unitConversion";
-import pLimit from "p-limit";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
@@ -31,6 +30,7 @@ import { describeEngineTargetLines } from "../prompts/workoutEngine";
 import { storage } from "../storage";
 import { planSlotFor } from "../storage/planSlot";
 import { getLocalDateStrSafe } from "../timezone";
+import { mapLimitedUntilFailure } from "../utils/limitedFanOut";
 import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 import { describeLoadAnchorLines } from "./loadAnchors";
 import { describeProgramBlueprintLines, planDeloadWeeks } from "./planBlueprint";
@@ -811,18 +811,21 @@ async function generatePlanDays(
   athlete: GenerationAthlete,
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
-  const ranges = buildWeekRanges(input.totalWeeks);
   // Bounded like the reparse fan-out (AI_PARSE_CONCURRENCY): a 24-week plan
   // at PLAN_GENERATION_CHUNK_WEEKS=2 is 12 ranges, and the queue runs plan
   // jobs two at a time, so an unbounded Promise.all put up to 24 reasoning
   // calls in flight at once — enough to draw provider 429s that trip the
-  // shared circuit breaker for every user, while the other chunks keep
-  // burning tokens on a generation that can no longer succeed.
-  const limit = pLimit(PLAN_CHUNK_CONCURRENCY);
-  const dayChunks = await Promise.all(
-    ranges.map((range) =>
-      limit(() => generatePlanChunk(input, userId, range, unitPreferences, calibration, athlete, signal)),
-    ),
+  // shared circuit breaker for every user. The first chunk to fail also
+  // cancels the calls still running and every chunk not yet started: p-limit
+  // used to go on starting them after Promise.all had rejected, about nine
+  // more billed reasoning calls for a failed 24-week plan, overlapping any
+  // retry. PF15 (CODEBASE_ANALYSIS_2026-10-03)
+  const dayChunks = await mapLimitedUntilFailure(
+    buildWeekRanges(input.totalWeeks),
+    PLAN_CHUNK_CONCURRENCY,
+    (range, chunkSignal) =>
+      generatePlanChunk(input, userId, range, unitPreferences, calibration, athlete, chunkSignal),
+    signal,
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {

@@ -1,19 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// `query`/`selectWhere`/`selectLimit`/`candidateWhere` are referenced inside
-// the hoisted vi.mock factories below, so they must be created via vi.hoisted
-// to exist before the module graph is evaluated. `selectWhere` resolves the
-// main-DB db.select(...).from(...).where(...) chain used by the prune sweep;
-// `candidateWhere` and `selectLimit` resolve the
-// db.select(...).from(...).leftJoin(...).where(...).limit(...) chain used by
-// the embed backfill's candidate scan.
-const { query, selectWhere, selectLimit, candidateWhere } = vi.hoisted(() => {
+// `query`/`selectWhere`/`selectLimit`/`candidateWhere`/`candidateOrderBy` are
+// referenced inside the hoisted vi.mock factories below, so they must be
+// created via vi.hoisted to exist before the module graph is evaluated.
+// `selectWhere` resolves the main-DB db.select(...).from(...).where(...) chain
+// used by the prune sweep; `candidateWhere`, `candidateOrderBy` and
+// `selectLimit` resolve the
+// db.select(...).from(...).leftJoin(...).where(...).orderBy(...).limit(...)
+// chain used by the embed backfill's candidate scan.
+const { query, selectWhere, selectLimit, candidateWhere, candidateOrderBy } = vi.hoisted(() => {
   const limit = vi.fn();
+  const orderBy = vi.fn(() => ({ limit }));
   return {
     query: vi.fn(),
     selectWhere: vi.fn(),
     selectLimit: limit,
-    candidateWhere: vi.fn(() => ({ limit })),
+    candidateOrderBy: orderBy,
+    candidateWhere: vi.fn(() => ({ orderBy })),
   };
 });
 
@@ -34,6 +37,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { generateEmbeddings } from "../../gemini/client";
 import {
+  __resetFoodEmbeddingScanForTests,
   deleteFoodEmbeddingsByFoodIds,
   embedMissingFoods,
   foodEmbeddingText,
@@ -149,8 +153,11 @@ describe("pruneDanglingFoodEmbeddings", () => {
 describe("embedMissingFoods", () => {
   beforeEach(() => {
     query.mockClear();
-    selectLimit.mockClear();
+    selectLimit.mockReset();
+    candidateWhere.mockClear();
+    candidateOrderBy.mockClear();
     vi.mocked(generateEmbeddings).mockReset();
+    __resetFoodEmbeddingScanForTests();
   });
 
   it("is a no-op when there are no candidates pending embedding", async () => {
@@ -241,5 +248,113 @@ describe("embedMissingFoods", () => {
     expect(rendered.sql).toContain('"users"."ai_coach_enabled" = $3');
     expect(rendered.sql).toContain(" or ");
     expect(rendered.params).toEqual(["custom", true, true]);
+  });
+});
+
+describe("embedMissingFoods candidate scan order (PF12)", () => {
+  const dialect = new PgDialect();
+  const PAGE_SIZE = 5000;
+
+  /** A full page of foods named after their ids, in id order. */
+  function fullPage(pageIndex: number): { id: string; name: string; brand: null }[] {
+    return [...Array(PAGE_SIZE).keys()].map((offset) => {
+      const id = `p${pageIndex}-${String(offset).padStart(5, "0")}`;
+      return { id, name: `Food ${id}`, brand: null };
+    });
+  }
+
+  /** The vector DB already holds a current embedding for every food given. */
+  function embeddedAlready(rows: readonly { id: string; name: string }[]) {
+    return { rows: rows.map((row) => ({ food_id: row.id, text_hash: textHash(row.name) })) };
+  }
+
+  /** The candidate predicate of the nth page query, rendered. */
+  function pageQuery(callIndex: number): { sql: string; params: unknown[] } {
+    const [predicate] = candidateWhere.mock.calls.at(callIndex) as unknown as [SQL];
+    return dialect.sqlToQuery(predicate);
+  }
+
+  beforeEach(() => {
+    query.mockReset();
+    selectLimit.mockReset();
+    candidateWhere.mockClear();
+    candidateOrderBy.mockClear();
+    vi.mocked(generateEmbeddings).mockReset();
+    __resetFoodEmbeddingScanForTests();
+  });
+
+  it("reads foods in id order, and the next run resumes after the last food it picked", async () => {
+    const banana = { id: "a", name: "Banana", brand: null };
+    const apple = { id: "b", name: "Apple", brand: null };
+    query.mockResolvedValue({ rows: [] });
+    selectLimit.mockResolvedValueOnce([banana, apple]).mockResolvedValueOnce([apple]);
+    vi.mocked(generateEmbeddings).mockResolvedValue([[1, 2, 3]]);
+
+    await embedMissingFoods(1);
+    await embedMissingFoods(1);
+
+    const [ordering] = candidateOrderBy.mock.calls.at(0) as unknown as [SQL];
+    expect(dialect.sqlToQuery(ordering).sql).toBe('"foods"."id" asc');
+    expect(selectLimit).toHaveBeenCalledWith(PAGE_SIZE);
+    expect(pageQuery(0).sql).not.toContain('"foods"."id" >');
+    // The second run starts after "a" instead of re-reading it.
+    expect(pageQuery(1).sql).toContain('"foods"."id" > $4');
+    expect(pageQuery(1).params).toEqual(["custom", true, true, "a"]);
+    expect(vi.mocked(generateEmbeddings).mock.calls).toEqual([[["Banana"]], [["Apple"]]]);
+  });
+
+  it("pages past foods that are already embedded to reach the ones that are not", async () => {
+    const first = fullPage(1);
+    const late = { id: "q-late", name: "Late cached oats", brand: null };
+    query.mockResolvedValueOnce(embeddedAlready(first)).mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce(first).mockResolvedValueOnce([late]);
+    vi.mocked(generateEmbeddings).mockResolvedValueOnce([[1, 2, 3]]);
+
+    const result = await embedMissingFoods();
+
+    expect(result).toEqual({ embedded: 1 });
+    expect(vi.mocked(generateEmbeddings)).toHaveBeenCalledWith(["Late cached oats"]);
+    expect(pageQuery(1).params.at(-1)).toBe(first.at(-1)?.id);
+  });
+
+  it("reads at most four pages a run, and the next run carries on from there", async () => {
+    const pages = [1, 2, 3, 4].map((pageIndex) => fullPage(pageIndex));
+    query.mockResolvedValue(embeddedAlready(pages.flat()));
+    for (const page of pages) selectLimit.mockResolvedValueOnce(page);
+    selectLimit.mockResolvedValueOnce([]);
+
+    expect(await embedMissingFoods()).toEqual({ embedded: 0 });
+    expect(selectLimit).toHaveBeenCalledTimes(4);
+
+    await embedMissingFoods();
+
+    expect(pageQuery(4).params.at(-1)).toBe(pages.at(-1)?.at(-1)?.id);
+    expect(generateEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("starts again from the lowest id once a run reaches the end of the table", async () => {
+    const banana = { id: "a", name: "Banana", brand: null };
+    query.mockResolvedValue(embeddedAlready([banana]));
+    selectLimit.mockResolvedValue([banana]);
+
+    await embedMissingFoods();
+    await embedMissingFoods();
+
+    expect(pageQuery(1).sql).not.toContain('"foods"."id" >');
+    expect(pageQuery(1).params).toEqual(["custom", true, true]);
+  });
+
+  it("keeps its place when the provider fails, so the same foods are tried next run", async () => {
+    const banana = { id: "a", name: "Banana", brand: null };
+    query.mockResolvedValue({ rows: [] });
+    selectLimit.mockResolvedValue([banana, { id: "b", name: "Apple", brand: null }]);
+    vi.mocked(generateEmbeddings).mockRejectedValueOnce(new Error("provider down"));
+
+    await expect(embedMissingFoods(1)).rejects.toThrow("provider down");
+    vi.mocked(generateEmbeddings).mockResolvedValueOnce([[1, 2, 3]]);
+    await embedMissingFoods(1);
+
+    expect(pageQuery(1).params).toEqual(["custom", true, true]);
+    expect(vi.mocked(generateEmbeddings).mock.calls.at(1)).toEqual([["Banana"]]);
   });
 });

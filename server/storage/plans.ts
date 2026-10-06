@@ -133,6 +133,49 @@ async function getPlanDayIdsWithWorkouts(
   return new Set(rows.flatMap((row) => (row.planDayId ? [row.planDayId] : [])));
 }
 
+/**
+ * Mark missed the past planned days of every athlete whose stored timezone is
+ * `tz`, judged against `today`, that zone's local date. The local date is
+ * computed in JS rather than with `AT TIME ZONE u.user_timezone`: that form
+ * raises `invalid value for parameter TimeZone` on a single unrecognised name
+ * and would abort the sweep for every other athlete with it.
+ */
+async function sweepMissedPlanDaysInZone(tz: string, today: string): Promise<number> {
+  const zonePlanIds = db
+    .select({ id: trainingPlans.id })
+    .from(trainingPlans)
+    .innerJoin(users, eq(users.id, trainingPlans.userId))
+    .where(eq(users.userTimezone, tz));
+
+  const result = await db
+    .update(planDays)
+    // A let-go left behind on a planned day (logged, then the log deleted)
+    // is not a decision about this miss, so the sweep clears it rather
+    // than let the day arrive already "let go". A fold or shorten stays:
+    // it is where the session came from, and the recovery sheet reads it
+    // to stop chasing a session that has already been moved once.
+    .set({ status: "missed", recovery: STALE_LET_GO_CLEARED })
+    .where(
+      and(
+        eq(planDays.status, "planned"),
+        lt(planDays.scheduledDate, today),
+        inArray(planDays.planId, zonePlanIds),
+        // Days from a retired plan's cutoff onward are training the athlete
+        // deliberately walked away from — writing `missed` across them is the
+        // app telling them they failed at something they already decided not
+        // to do, and because `missed → planned` is FORBIDDEN (see enums.ts)
+        // the damage would be permanent. Same reasoning as the declared-absence
+        // guard below. Both guards are built in planRetirement.ts /
+        // absenceGuard.ts so the SQL-rendering test asserts these exact
+        // predicates instead of copies of them.
+        missedSweepRetirementGuard(db),
+        noAbsenceDeclaredForPlanDay(db),
+      ),
+    )
+    .returning({ id: planDays.id });
+  return result.length;
+}
+
 /** The athlete's plan days, and each one's prescribed sets, as locked rows. */
 export interface LockedPlanDays {
   readonly days: PlanDay[];
@@ -178,6 +221,12 @@ async function lockPlanDaysWithSets(
 }
 
 export class PlanStorage {
+  /**
+   * Each timezone's local date when this instance last swept it for missed
+   * days (markMissedPlanDays). PF16 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  private readonly sweptZoneDates = new Map<string, string>();
+
   async createTrainingPlan(plan: InsertTrainingPlan, tx?: DbExecutor): Promise<TrainingPlan> {
     const executor = tx ?? db;
     const [trainingPlan] = await executor.insert(trainingPlans).values(plan).returning();
@@ -869,11 +918,16 @@ export class PlanStorage {
    * status this is a WRITE — it only unwinds if the athlete later logs against
    * that plan day with an explicit planDayId.
    *
-   * Grouped by stored timezone, so the sweep costs one statement per distinct
-   * zone (tens at most, and only ever run at boot or once daily). The local date
-   * is computed in JS rather than with `AT TIME ZONE u.user_timezone`: that form
-   * raises `invalid value for parameter TimeZone` on a single unrecognised name
-   * and would abort the sweep for every other athlete with it.
+   * Grouped by stored timezone, one statement per zone (sweepMissedPlanDaysInZone).
+   * Runs at boot and on every hourly email tick, but a zone's verdicts only
+   * change when its local date does, so a zone is swept only when its date has
+   * moved on since this instance last swept it: in practice the first tick
+   * after each local midnight, rather than every zone on every tick. PF16
+   * (CODEBASE_ANALYSIS_2026-10-03) Each replica keeps its own record, so a
+   * zone may be swept once per replica per day; the UPDATE is idempotent, so
+   * that only costs a repeat. A day that turns `planned` in the past later
+   * the same day (a plan scheduled from a past start) is swept at the zone's
+   * next midnight; the timeline already shows it missed meanwhile.
    *
    * Days inside a declared absence are left alone. An athlete who has written
    * "injured, 12–19 Aug" on their timeline has already accounted for that week;
@@ -884,45 +938,23 @@ export class PlanStorage {
    */
   async markMissedPlanDays(): Promise<number> {
     const zones = await db.selectDistinct({ tz: users.userTimezone }).from(users);
+    const now = new Date();
+    const due = zones
+      .map(({ tz }) => ({ tz, today: getLocalDateStrSafe(now, tz) }))
+      .filter(({ tz, today }) => this.sweptZoneDates.get(tz) !== today);
 
-    let total = 0;
-    await inSequence(zones, async ({ tz }) => {
-      const today = getLocalDateStrSafe(new Date(), tz);
-      const zonePlanIds = db
-        .select({ id: trainingPlans.id })
-        .from(trainingPlans)
-        .innerJoin(users, eq(users.id, trainingPlans.userId))
-        .where(eq(users.userTimezone, tz));
-
-      const result = await db
-        .update(planDays)
-        // A let-go left behind on a planned day (logged, then the log deleted)
-        // is not a decision about this miss, so the sweep clears it rather
-        // than let the day arrive already "let go". A fold or shorten stays:
-        // it is where the session came from, and the recovery sheet reads it
-        // to stop chasing a session that has already been moved once.
-        .set({ status: "missed", recovery: STALE_LET_GO_CLEARED })
-        .where(
-          and(
-            eq(planDays.status, "planned"),
-            lt(planDays.scheduledDate, today),
-            inArray(planDays.planId, zonePlanIds),
-            // Days from a retired plan's cutoff onward are training the athlete
-            // deliberately walked away from — writing `missed` across them is the
-            // app telling them they failed at something they already decided not
-            // to do, and because `missed → planned` is FORBIDDEN (see enums.ts)
-            // the damage would be permanent. Same reasoning as the declared-absence
-            // guard below. Both guards are built in planRetirement.ts /
-            // absenceGuard.ts so the SQL-rendering test asserts these exact
-            // predicates instead of copies of them.
-            missedSweepRetirementGuard(db),
-            noAbsenceDeclaredForPlanDay(db),
-          ),
-        )
-        .returning({ id: planDays.id });
-      total += result.length;
+    const marked = await inSequence(due, async ({ tz, today }) => {
+      const count = await sweepMissedPlanDaysInZone(tz, today);
+      this.sweptZoneDates.set(tz, today);
+      return count;
     });
-    return total;
+    // Zones nobody is in any more are dropped, so the record stays as long as
+    // the zone list. Deleting the entry being visited is safe mid-iteration.
+    const live = new Set(zones.map(({ tz }) => tz));
+    for (const tz of this.sweptZoneDates.keys()) {
+      if (!live.has(tz)) this.sweptZoneDates.delete(tz);
+    }
+    return marked.reduce((total, count) => total + count, 0);
   }
 
   /**

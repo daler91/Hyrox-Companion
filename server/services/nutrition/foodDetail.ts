@@ -1,7 +1,10 @@
 import type { Food, FoodWithServingsResponse } from "@shared/schema";
 
+import { logger } from "../../logger";
+import { getRuntimeCache, runtimeCacheKey, setRuntimeCache } from "../../sharedRuntimeState";
 import { storage } from "../../storage";
-import { fetchUsdaFoodById, fetchUsdaFoodPortions } from "./usdaClient";
+import type { MappedFood } from "./types";
+import { fetchUsdaFoodDetail, type UsdaFoodDetail } from "./usdaClient";
 import { type ProviderDeadline, startProviderDeadline } from "./utils";
 
 /**
@@ -30,49 +33,133 @@ export async function getFoodWithServings(
   ]);
   if (!food) return null;
 
-  // Both USDA lookups share one deadline, retries included: chained with only
-  // their per-attempt timeouts they could outlast the client's request
-  // timeout, and the food could not be opened to log at all. Past it, the food
-  // opens with what is cached. D13 (CODEBASE_ANALYSIS_2026-10-03)
+  // The USDA read runs under one deadline, retries included: with only its
+  // per-attempt timeouts it could outlast the client's request timeout, and
+  // the food could not be opened to log at all. Past it, the food opens with
+  // what is cached. D13 (CODEBASE_ANALYSIS_2026-10-03)
   const deadline = startProviderDeadline();
   return enrichFromUsda(id, food, initialServings, deadline).finally(() => {
     deadline.clear();
   });
 }
 
-/** Backfill a food's named servings and micros from USDA, within `deadline`. */
+/**
+ * How long what a USDA detail read lacked is remembered. USDA data is fixed per
+ * fdcId, so this only bounds the marker's life in server_runtime_cache.
+ */
+const USDA_DETAIL_READ_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const USDA_DETAIL_READ_SCOPE = "usda-detail-read";
+
+/** What a USDA food still lacks that its detail endpoint could fill. */
+interface UsdaGaps {
+  readonly fdcId: string;
+  readonly portions: boolean;
+  readonly micros: boolean;
+}
+
+function hasMicros(micros: Food["micros"] | undefined): boolean {
+  return micros !== null && micros !== undefined && Object.keys(micros).length > 0;
+}
+
+/** The gaps a detail read could fill, or null when it is not a USDA food or lacks nothing. */
+function usdaGaps(food: Food, servings: FoodWithServingsResponse["servings"]): UsdaGaps | null {
+  if (food.source !== "usda" || !food.sourceId) return null;
+  const gaps = {
+    fdcId: food.sourceId,
+    portions: servings.length === 0,
+    micros: !hasMicros(food.micros),
+  };
+  return gaps.portions || gaps.micros ? gaps : null;
+}
+
+/**
+ * What a USDA detail read came back without. The marker stores this, a fact
+ * about the USDA record, rather than what the opening user's food still
+ * lacked: that depends on who opened it (their personal servings count) and on
+ * whether the backfill writes landed, and another user's open must not skip a
+ * read that could fill its own gaps.
+ */
+interface UsdaDetailLacks {
+  readonly noPortions: boolean;
+  readonly noMicros: boolean;
+}
+
+function detailLacks(detail: UsdaFoodDetail): UsdaDetailLacks {
+  return {
+    noPortions: detail.portions.length === 0,
+    noMicros: !hasMicros(detail.food?.micros),
+  };
+}
+
+/** Whether USDA lacks every gap this open has, so reading it again cannot help. */
+function readCannotHelp(gaps: UsdaGaps, lacks: UsdaDetailLacks | undefined): boolean {
+  const portionsSettled = !gaps.portions || lacks?.noPortions === true;
+  const microsSettled = !gaps.micros || lacks?.noMicros === true;
+  return portionsSettled && microsSettled;
+}
+
+/** Remember what a detail read lacked, for every replica. Best-effort: it only saves a repeat read. */
+async function rememberDetailRead(
+  readKey: string,
+  fdcId: string,
+  lacks: UsdaDetailLacks,
+): Promise<void> {
+  try {
+    await setRuntimeCache(readKey, lacks, USDA_DETAIL_READ_TTL_MS);
+  } catch (err) {
+    // fdcId is a public USDA catalogue id, not user data.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err, fdcId }, "Could not remember a USDA detail read");
+  }
+}
+
+/**
+ * Backfill a food's named servings and micros from one USDA detail read,
+ * within `deadline`. A Branded food has no portions and often no extra micros,
+ * so every open used to read its detail again, twice (once for each), and
+ * spend the shared hourly key on an answer that does not change. What a read
+ * comes back without is now remembered, and a later open skips the read only
+ * when USDA is known to lack everything that open is missing. PF11
+ * (CODEBASE_ANALYSIS_2026-10-03)
+ */
 async function enrichFromUsda(
   id: string,
   food: Food,
   initialServings: FoodWithServingsResponse["servings"],
   deadline: ProviderDeadline,
 ): Promise<FoodWithServingsResponse> {
-  let servings = initialServings;
-  if (servings.length === 0 && food.source === "usda" && food.sourceId) {
-    const portions = await deadline
-      .within(fetchUsdaFoodPortions(food.sourceId, { signal: deadline.signal }))
-      .catch(() => []);
-    if (portions.length > 0) {
-      servings = await storage.nutrition.cacheServings(id, portions);
-    }
-  }
-  return { food: await enrichUsdaMicros(food, deadline), servings };
+  const unchanged = { food, servings: initialServings };
+  const gaps = usdaGaps(food, initialServings);
+  if (!gaps) return unchanged;
+
+  const readKey = runtimeCacheKey(USDA_DETAIL_READ_SCOPE, gaps.fdcId);
+  const known = await getRuntimeCache<UsdaDetailLacks>(readKey).catch(() => undefined);
+  if (readCannotHelp(gaps, known)) return unchanged;
+  const detail = await deadline
+    .within(fetchUsdaFoodDetail(gaps.fdcId, { signal: deadline.signal }))
+    .catch(() => null);
+  if (!detail) return unchanged;
+
+  const servings =
+    gaps.portions && detail.portions.length > 0
+      ? await storage.nutrition.cacheServings(id, detail.portions)
+      : initialServings;
+  const enriched = gaps.micros ? await saveUsdaMicros(food, detail.food) : food;
+  const lacks = detailLacks(detail);
+  if (lacks.noPortions || lacks.noMicros) await rememberDetailRead(readKey, gaps.fdcId, lacks);
+  return { food: enriched, servings };
 }
 
 /**
- * Backfill a USDA food's micronutrients from the detail endpoint the first time
- * it's opened — search results carry only a sparse micro set, so most cached USDA
- * foods have null micros until now. Best-effort: returns the original food
- * unchanged on any miss/error so opening a food never fails on enrichment.
+ * Save the micronutrients a USDA detail read carried onto the cached food:
+ * search results carry only a sparse micro set, so most cached USDA foods have
+ * null micros until first opened. Best-effort: returns the original food
+ * unchanged on a miss or a failed write, so opening a food never fails on
+ * enrichment.
  */
-async function enrichUsdaMicros(food: Food, deadline: ProviderDeadline): Promise<Food> {
-  if (food.source !== "usda" || !food.sourceId) return food;
-  if (food.micros && Object.keys(food.micros).length > 0) return food;
+async function saveUsdaMicros(food: Food, detail: MappedFood | null): Promise<Food> {
+  if (!detail || !hasMicros(detail.micros)) return food;
   try {
-    const detail = await deadline.within(
-      fetchUsdaFoodById(food.sourceId, { signal: deadline.signal }),
-    );
-    if (!detail?.micros || Object.keys(detail.micros).length === 0) return food;
     const [updated] = await storage.nutrition.upsertFoods([detail]);
     return updated ?? food;
   } catch {

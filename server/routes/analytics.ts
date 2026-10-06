@@ -10,7 +10,7 @@ import { db } from "../db";
 import { env } from "../env";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
-import { computeStale, getWorkoutAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
+import { computeStale, getTrainingAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { assembleTrainingOverview } from "../services/trainingOverviewLoader";
@@ -206,7 +206,8 @@ router.get("/api/v1/race-prediction", isAuthenticated, rateLimiter("race-predict
       // halving the latency on every returning user's request.
       const [row, anchor] = await Promise.all([
         storage.analyticsResults.get(userId, "race_prediction"),
-        getWorkoutAnchor(userId),
+        // Training logs only, as the prediction reads (PF10).
+        getTrainingAnchor(userId),
       ]);
       if (row) {
         res.json({

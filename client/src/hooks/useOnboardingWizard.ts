@@ -5,6 +5,7 @@ import {
   type NutritionTargetInput,
 } from "@shared/nutritionTargets";
 import type { NutritionTarget, UpsertNutritionTargetInput } from "@shared/schema";
+import { convertWeight } from "@shared/unitConversion";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { useMemo, useRef, useState } from "react";
@@ -37,7 +38,7 @@ import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { defaultPlanStartDate } from "@/lib/planStart";
-import { queryClient } from "@/lib/queryClient";
+import { humanizeApiError, queryClient } from "@/lib/queryClient";
 import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
 
 // The fuelling step only earns its place when the nutrition module is on —
@@ -76,6 +77,30 @@ function validateAge(value: string): string | null {
   return Number.isInteger(parsed) && parsed >= 13 && parsed <= 100
     ? null
     : "Enter a whole number between 13 and 100, or leave it blank.";
+}
+
+/**
+ * A typed bodyweight carried into the other unit when the athlete switches
+ * kg/lbs, so it still means the same weight. It used to be re-read in the new
+ * unit: 80 kg became 80 lbs and saved as 36.3 kg, with targets computed for
+ * that. Anything that is not a positive number stays as typed.
+ * CL46 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function convertTypedBodyweight(typed: string, from: "kg" | "lbs", to: "kg" | "lbs"): string {
+  const value = Number(typed.trim());
+  if (from === to || typed.trim() === "" || !Number.isFinite(value) || value <= 0) return typed;
+  return String(Math.round(convertWeight(value, from, to) * 10) / 10);
+}
+
+/**
+ * Why a fuelling save failed, in the server's words when it gives them (a
+ * validation message rather than only "Could not save"), then where to finish
+ * the job. CL37 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function fuellingSaveErrorDescription(error: unknown): string {
+  const reason = humanizeApiError(error);
+  const sentence = reason.endsWith(".") ? reason : `${reason}.`;
+  return `${sentence} You can set it up later in Nutrition → Targets.`;
 }
 
 /** Whether the resolved fuelling profile matches what is saved, field for field. */
@@ -427,6 +452,13 @@ export function useOnboardingWizard(
   // day one. An incomplete profile just skips ahead — the step is optional and
   // Settings can finish the job later. Nutrition setup never blocks onboarding.
   const handleFuellingNext = async () => {
+    // Age is asked here too, and a decimal one (34.5) passed: the server's
+    // whole-number rule then refused the whole profile and the targets behind a
+    // generic toast. It holds the step with the Units step's inline error.
+    // CL37 (CODEBASE_ANALYSIS_2026-10-03)
+    const ageProblem = validateAge(age);
+    setAgeError(ageProblem);
+    if (ageProblem) return;
     const profile = fuellingProfile;
     if (!profile || (fuellingUnchanged && !applyTargets)) {
       setStep("coach");
@@ -445,10 +477,10 @@ export function useOnboardingWizard(
         });
       }
       if (applyTargets) await saveFuellingTargets(profile);
-    } catch {
+    } catch (error) {
       toast({
         title: "Could not save your fuelling profile",
-        description: "You can set it up later in Nutrition → Targets.",
+        description: fuellingSaveErrorDescription(error),
         variant: "destructive",
       });
     }
@@ -575,7 +607,13 @@ export function useOnboardingWizard(
     idx,
     total,
     weightUnit,
-    setWeightUnit: edit("weightUnit"),
+    setWeightUnit: (unit: OnboardingProfile["weightUnit"]) => {
+      // A bodyweight already typed is converted, not re-read (CL46).
+      if (typedBodyweight !== null) {
+        setTypedBodyweight(convertTypedBodyweight(typedBodyweight, weightUnit, unit));
+      }
+      edit("weightUnit")(unit);
+    },
     distanceUnit,
     setDistanceUnit: edit("distanceUnit"),
     division,

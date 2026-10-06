@@ -14,11 +14,15 @@ export interface CsvPreviewData {
   fileName: string;
   content: string;
   rows: Array<{
+    /** The row's place among the file's data rows: unique, unlike week and day. */
+    rowNumber: number;
     weekNumber: number;
     dayName: string;
     focus: string;
     mainWorkout: string;
   }>;
+  /** Data rows after the previewed ones, blank lines not counted. */
+  remainingRows: number;
 }
 
 interface ImportPreviewDialogProps {
@@ -66,11 +70,10 @@ export default function ImportPreviewDialog({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Two sessions on one day shared a week-day key (CL49,
+                      CODEBASE_ANALYSIS_2026-10-03). */}
                   {preview?.rows.map((row) => (
-                    <tr
-                      key={`${row.weekNumber}-${row.dayName}`}
-                      className="border-t"
-                    >
+                    <tr key={row.rowNumber} className="border-t">
                       <td className="p-2">{row.weekNumber}</td>
                       <td className="p-2">{row.dayName}</td>
                       <td className="p-2">{row.focus}</td>
@@ -86,9 +89,11 @@ export default function ImportPreviewDialog({
               </table>
             </div>
           </div>
-          {preview && preview.content.split("\n").length > 11 && (
+          {/* Counted by the CSV parse, not raw lines: a trailing newline was
+              one more workout (CL49, CODEBASE_ANALYSIS_2026-10-03). */}
+          {preview && preview.remainingRows > 0 && (
             <p className="text-xs text-muted-foreground text-center">
-              ... and {preview.content.split("\n").length - 11} more workouts
+              ... and {preview.remainingRows} more workouts
             </p>
           )}
         </div>

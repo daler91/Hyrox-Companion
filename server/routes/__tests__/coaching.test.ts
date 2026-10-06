@@ -15,7 +15,7 @@ vi.mock("../../middleware/aibudget", async () => (await import("./testUtils")).m
 
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
-    coaching: ["listCoachingMaterials", "createCoachingMaterial", "updateCoachingMaterial", "deleteCoachingMaterial", "deleteChunksByMaterialId"],
+    coaching: ["listCoachingMaterials", "listCoachingMaterialSummaries", "createCoachingMaterial", "updateCoachingMaterial", "deleteCoachingMaterial", "deleteChunksByMaterialId"],
     users: ["getUser"],
   }),
 );
@@ -52,6 +52,23 @@ describe("Coaching materials routes", () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(materials);
       expect(storage.coaching.listCoachingMaterials).toHaveBeenCalledWith("test_user_id");
+    });
+  });
+
+  // PF4 (CODEBASE_ANALYSIS_2026-10-03): the Settings list downloaded every
+  // material's full text only to show its length.
+  describe("GET /api/v1/coaching-materials/summaries", () => {
+    it("lists the materials with their lengths and without their text", async () => {
+      const summaries = [{ id: "m1", title: "Guide", type: "document", contentLength: 1_200_000, createdAt: null, updatedAt: null }];
+      vi.mocked(storage.coaching.listCoachingMaterialSummaries).mockResolvedValue(summaries);
+
+      const response = await request(app).get("/api/v1/coaching-materials/summaries");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(summaries);
+      expect(response.body[0]).not.toHaveProperty("content");
+      expect(storage.coaching.listCoachingMaterialSummaries).toHaveBeenCalledWith("test_user_id");
+      expect(storage.coaching.listCoachingMaterials).not.toHaveBeenCalled();
     });
   });
 

@@ -26,11 +26,13 @@ export { computeStale, type HistoryAnchor } from "./analyticsStaleness";
 
 /**
  * The athlete's workout history as the staleness check sees it: latest logged
- * date plus how many logs there are. Both queries run concurrently — they are
- * independent reads of the same table on an "instant paint" path. A write
- * landing between them can pair a stale date with a fresh count, which reads as
- * stale for that one request and corrects itself on the next; staleness is an
- * advisory flag, so that is the right trade for halving the latency.
+ * date plus how many logs there are. Every log, walks included: coach_insights
+ * uses this one, the other training surfaces getTrainingAnchor below. Both
+ * queries run concurrently — they are independent reads of the same table on
+ * an "instant paint" path. A write landing between them can pair a stale date
+ * with a fresh count, which reads as stale for that one request and corrects
+ * itself on the next; staleness is an advisory flag, so that is the right trade
+ * for halving the latency.
  *
  * The count is what makes a second session on an already-logged day, or a
  * delete of anything but the single latest row, register as a change (audit
@@ -40,6 +42,24 @@ export async function getWorkoutAnchor(userId: string): Promise<HistoryAnchor> {
   const [[latest], entryCount] = await Promise.all([
     storage.workouts.listWorkoutLogs(userId, 1),
     storage.workouts.countWorkoutLogs(userId),
+  ]);
+  return { latestDate: latest?.date ?? null, entryCount };
+}
+
+/**
+ * getWorkoutAnchor over only the logs that count as training, for
+ * race_prediction and overview_analysis: both read training-only history, so a
+ * synced walk or yoga session changes nothing they were built on. With the
+ * all-logs anchor a walk-only day read them as stale and the midnight cron
+ * regenerated them with unchanged inputs. coach_insights keeps the all-logs
+ * anchor, because walks feed its load governor.
+ * PF10 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function getTrainingAnchor(userId: string): Promise<HistoryAnchor> {
+  const onlyTraining = { onlyTraining: true } as const;
+  const [[latest], entryCount] = await Promise.all([
+    storage.workouts.listWorkoutLogs(userId, 1, 0, onlyTraining),
+    storage.workouts.countWorkoutLogs(userId, onlyTraining),
   ]);
   return { latestDate: latest?.date ?? null, entryCount };
 }
@@ -130,7 +150,7 @@ export function persistRacePrediction(
   recomputedOn?: string,
   anchor?: HistoryAnchor,
 ): Promise<void> {
-  return upsertResult(userId, "race_prediction", prediction, getWorkoutAnchor, recomputedOn, anchor);
+  return upsertResult(userId, "race_prediction", prediction, getTrainingAnchor, recomputedOn, anchor);
 }
 
 /** Persist an already-generated Coach Insights result. See persistRacePrediction. */
@@ -150,7 +170,7 @@ export function persistOverviewAnalysis(
   recomputedOn?: string,
   anchor?: HistoryAnchor,
 ): Promise<void> {
-  return upsertResult(userId, "overview_analysis", result, getWorkoutAnchor, recomputedOn, anchor);
+  return upsertResult(userId, "overview_analysis", result, getTrainingAnchor, recomputedOn, anchor);
 }
 
 /**
@@ -174,7 +194,7 @@ export function regenerateAndStoreRacePrediction(
   log: Logger = defaultLogger,
   recomputedOn?: string,
 ): Promise<RacePredictionResponse> {
-  return regenerateAndStore(userId, "race_prediction", getWorkoutAnchor, () => generateRacePrediction(userId, log), recomputedOn);
+  return regenerateAndStore(userId, "race_prediction", getTrainingAnchor, () => generateRacePrediction(userId, log), recomputedOn);
 }
 
 /**
@@ -204,7 +224,7 @@ export function regenerateAndStoreOverviewAnalysis(
   rangeDays: OverviewRangeDays = DEFAULT_OVERVIEW_RANGE_DAYS,
   recomputedOn?: string,
 ): Promise<OverviewAnalysisResult> {
-  return regenerateAndStore(userId, "overview_analysis", getWorkoutAnchor, () => generateOverviewAnalysis(userId, log, rangeDays), recomputedOn);
+  return regenerateAndStore(userId, "overview_analysis", getTrainingAnchor, () => generateOverviewAnalysis(userId, log, rangeDays), recomputedOn);
 }
 
 /** Generate nutrition insights and persist them. Gating is the caller's (route middleware). */

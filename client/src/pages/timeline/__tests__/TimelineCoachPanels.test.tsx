@@ -68,12 +68,12 @@ function holdsFocus(container: Element): boolean {
 }
 
 describe("TimelineCoachPanels mobile overlay (U4)", () => {
-  it("is announced as a modal dialog named for the coach", () => {
+  it("is announced as a modal dialog named for the coach", async () => {
     renderPanels();
 
     const dialog = screen.getByRole("dialog", { name: "AI Coach" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog).toContainElement(screen.getByTestId("coach-panel-body"));
+    expect(dialog).toContainElement(await screen.findByTestId("coach-panel-body"));
     expect(dialog).toHaveAttribute("id", "coach-panel");
   });
 
@@ -138,9 +138,9 @@ describe("TimelineCoachPanels mobile overlay (U4)", () => {
     }
   });
 
-  it("stays mounted but hidden while a workout surface is open, so a chat stream survives", () => {
+  it("stays mounted but hidden while a workout surface is open, so a chat stream survives", async () => {
     const { rerenderWith } = renderPanels();
-    const body = screen.getByTestId("coach-panel-body");
+    const body = await screen.findByTestId("coach-panel-body");
 
     rerenderWith({ isWorkoutSurfaceOpen: true });
 
@@ -148,10 +148,11 @@ describe("TimelineCoachPanels mobile overlay (U4)", () => {
     expect(screen.getByTestId("coach-panel-mobile-sheet")).toHaveClass("hidden");
   });
 
-  it("keeps the desktop side panel a plain landmark-free column", () => {
+  it("keeps the desktop side panel a plain landmark-free column", async () => {
     renderPanels({ isMobile: false });
 
+    expect(await screen.findByTestId("coach-panel-body")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByTestId("coach-panel-body")).toBeInTheDocument();
   });
 });
+

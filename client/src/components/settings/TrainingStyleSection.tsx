@@ -96,7 +96,11 @@ export function TrainingStyleSection({
   styleAuditEntries,
 }: Readonly<TrainingStyleSectionProps>) {
   const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
+  // The style the open "Change training style?" dialog would switch to.
   const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
+  // The style a switch to MAF applies once its setup is saved: only the
+  // dialog the switch opened carries one, never "Edit MAF setup".
+  const [styleAfterMafSetup, setStyleAfterMafSetup] = useState<string | null>(null);
   const [styleTransitionNotice, setStyleTransitionNotice] = useState<string | null>(null);
   const [styleSwitchBlockedMessage, setStyleSwitchBlockedMessage] = useState<string | null>(null);
   const [mafSetupOpen, setMafSetupOpen] = useState(false);
@@ -113,12 +117,27 @@ export function TrainingStyleSection({
     setStyleSwitchBlockedMessage(null);
   };
 
-  const openMafSetup = () => {
+  const openMafSetup = (styleToApply: string | null) => {
     setDraftMafAgeInput(mafAgeInput);
     setDraftMafCategoryInput(mafCategoryInput);
     setDraftMafHrDataAvailableInput(mafHrDataAvailableInput);
     setMafSetupError(null);
+    setStyleAfterMafSetup(styleToApply);
     setMafSetupOpen(true);
+  };
+
+  // Closing either dialog, by Cancel, Escape or its own action, ends the
+  // switch it was part of. A cancelled switch used to stay pending, so a
+  // later "Save MAF setup" applied it and the next Save Settings took the
+  // athlete off MAF. CL38 (CODEBASE_ANALYSIS_2026-10-03)
+  const handleConfirmStyleOpenChange = (open: boolean) => {
+    setConfirmStyleOpen(open);
+    if (!open) setPendingStyleId(null);
+  };
+
+  const handleMafSetupOpenChange = (open: boolean) => {
+    setMafSetupOpen(open);
+    if (!open) setStyleAfterMafSetup(null);
   };
 
   return (
@@ -205,7 +224,7 @@ export function TrainingStyleSection({
               size="sm"
               className="self-start"
               data-testid="button-maf-setup"
-              onClick={openMafSetup}
+              onClick={() => openMafSetup(null)}
             >
               Edit MAF setup
             </Button>
@@ -241,7 +260,7 @@ export function TrainingStyleSection({
         </CardContent>
       </Card>
 
-      <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
+      <AlertDialog open={confirmStyleOpen} onOpenChange={handleConfirmStyleOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Change training style?</AlertDialogTitle>
@@ -259,7 +278,7 @@ export function TrainingStyleSection({
                 }
                 if (pendingStyleId === "maf_method" && !hasRequiredMafInputs) {
                   setStyleSwitchBlockedMessage("Complete MAF setup to switch styles");
-                  openMafSetup();
+                  openMafSetup(pendingStyleId);
                   return;
                 }
                 applyTrainingStyle(pendingStyleId);
@@ -271,7 +290,7 @@ export function TrainingStyleSection({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={mafSetupOpen} onOpenChange={setMafSetupOpen}>
+      <AlertDialog open={mafSetupOpen} onOpenChange={handleMafSetupOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Complete MAF setup</AlertDialogTitle>
@@ -371,10 +390,10 @@ export function TrainingStyleSection({
                 onMafAgeInputChange(String(parsedAge));
                 onMafCategoryInputChange(draftMafCategoryInput);
                 onMafHrDataAvailableInputChange(draftMafHrDataAvailableInput);
-                // Only a style SWITCH has a pending id to apply; editing the
-                // setup of the style already in use just saves the answers.
-                if (pendingStyleId) applyTrainingStyle(pendingStyleId);
-                setMafSetupOpen(false);
+                // Only a style SWITCH has a style to apply; editing the setup
+                // of the style already in use just saves the answers.
+                if (styleAfterMafSetup) applyTrainingStyle(styleAfterMafSetup);
+                handleMafSetupOpenChange(false);
               }}
             >
               Save MAF setup

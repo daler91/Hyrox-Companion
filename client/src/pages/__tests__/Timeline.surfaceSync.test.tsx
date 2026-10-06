@@ -474,6 +474,30 @@ describe("Timeline surface sync", () => {
     expect(setOpenWorkoutId).not.toHaveBeenCalledWith(null);
   });
 
+  // CL55 (CODEBASE_ANALYSIS_2026-10-03): a log queued offline has no workout
+  // to review yet, so the sheet closes instead of waiting on it.
+  it("closes the log sheet without a review surface when the log is queued offline", async () => {
+    const user = userEvent.setup();
+    workoutActionMocks.handleMarkComplete.mockImplementation((
+      _entry: TimelineEntry,
+      options?: { onQueued?: () => void },
+    ) => {
+      options?.onQueued?.();
+    });
+
+    renderTimeline();
+
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("e1:2026-01-01");
+
+    await user.click(screen.getByTestId("mock-log-complete"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("log-sheet")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("review-surface")).not.toBeInTheDocument();
+    expect(setOpenWorkoutId).toHaveBeenCalledWith(null);
+  });
+
   it("does not reopen the workout surface when the log sheet is dismissed mid-mutation", async () => {
     const user = userEvent.setup();
     const completedEntry = makeEntry({

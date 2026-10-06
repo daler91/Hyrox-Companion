@@ -1,7 +1,10 @@
 import { api, QUERY_KEYS } from "@/lib/api";
 import type { StravaSyncResponse } from "@/lib/api/user";
 import { humanizeApiError, queryClient } from "@/lib/queryClient";
-import { WORKOUT_DERIVED_NUTRITION_QUERY_KEYS } from "@/lib/workoutInvalidation";
+import {
+  EXERCISE_HISTORY_QUERY_PREFIX,
+  WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+} from "@/lib/workoutInvalidation";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -67,6 +70,9 @@ export function useStravaMutations() {
       // and calories to ones already logged: the fuelling reads built from
       // them move too. CL19 (CODEBASE_ANALYSIS_2026-10-03)
       ...WORKOUT_DERIVED_NUTRITION_QUERY_KEYS,
+      // Each imported recording is a session in its exercise's "Last time"
+      // history. CL43 (CODEBASE_ANALYSIS_2026-10-03)
+      EXERCISE_HISTORY_QUERY_PREFIX,
     ],
     successToast: (data) => ({
       title: "Sync Complete",

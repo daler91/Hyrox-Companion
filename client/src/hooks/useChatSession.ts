@@ -17,6 +17,7 @@ import { useChatAutoScroll } from "./chat/useChatAutoScroll";
 import { useChatHistory } from "./chat/useChatHistory";
 import { useFactProposalDecision } from "./chat/useFactProposalDecision";
 import { useMessageFeedback } from "./chat/useMessageFeedback";
+import { useOlderChatHistory } from "./chat/useOlderChatHistory";
 
 export type { RagInfo } from "@/lib/api";
 export type { Message } from "@/lib/chatMessage";
@@ -103,6 +104,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     welcomeMessage: welcomeMessageObj,
     setMessages,
     focus: { focusPlanDayId, focusWorkoutLogId },
+  });
+  const olderMessages = useOlderChatHistory({
+    setMessages,
+    focus: { focusPlanDayId, focusWorkoutLogId },
+    ready: !historyLoading,
   });
   const { scrollRef, scrollToBottom, updateAutoScrollMode, scrollToBottomIfPinned, pinAutoScroll } =
     useChatAutoScroll(messages);
@@ -244,6 +250,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     progress,
     streamError,
     historyLoading,
+    olderMessages,
     scrollRef,
     updateAutoScrollMode,
     scrollToBottomIfPinned,

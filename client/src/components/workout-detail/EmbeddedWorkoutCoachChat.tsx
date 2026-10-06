@@ -68,6 +68,7 @@ export function EmbeddedWorkoutCoachChat({
     rateMessage,
     decideFactProposal,
     cancelStream,
+    olderMessages,
   } = useChatSession({
     useStreaming: true,
     // The coach sees the workout being viewed, and "make this day easier"
@@ -153,6 +154,7 @@ export function EmbeddedWorkoutCoachChat({
         onRetryMessage={retryMessage}
         onRateMessage={rateMessage}
         onDecideFactProposal={decideFactProposal}
+        olderMessages={olderMessages}
       />
 
       <div className="shrink-0 border-t border-border p-2">

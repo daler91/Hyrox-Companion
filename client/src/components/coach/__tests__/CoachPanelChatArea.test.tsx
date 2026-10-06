@@ -150,4 +150,53 @@ describe("CoachPanelChatArea", () => {
     expect(onDecide).toHaveBeenCalledWith("reply-1", "save");
     expect(screen.getAllByTestId("fact-proposal")).toHaveLength(1);
   });
+
+  // CL56 (CODEBASE_ANALYSIS_2026-10-03): messages older than the newest page
+  // were out of reach.
+  describe("older messages", () => {
+    function renderWithOlder(olderMessages: { hasOlder: boolean; isLoading: boolean; failed: boolean }) {
+      const onLoad = vi.fn();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <CoachPanelChatArea
+            messages={[message("reply-1")]}
+            pendingSuggestions={[]}
+            applyingId={null}
+            isProcessing={false}
+            onApplySuggestion={vi.fn()}
+            onDismissSuggestion={vi.fn()}
+            olderMessages={{ ...olderMessages, onLoad }}
+          />
+        </QueryClientProvider>,
+      );
+      return onLoad;
+    }
+
+    it("offers to load them while the conversation goes further back", () => {
+      const onLoad = renderWithOlder({ hasOlder: true, isLoading: false, failed: false });
+
+      screen.getByRole("button", { name: "Load older messages" }).click();
+
+      expect(onLoad).toHaveBeenCalledTimes(1);
+      // Outside the live region, so the control itself is never announced as conversation.
+      const log = screen.getByRole("log", { name: "Coach conversation" });
+      expect(within(log).queryByRole("button", { name: "Load older messages" })).toBeNull();
+    });
+
+    it("says it is loading", () => {
+      renderWithOlder({ hasOlder: true, isLoading: true, failed: false });
+      expect(screen.getByRole("button", { name: "Loading older messages…" })).toBeDisabled();
+    });
+
+    it("offers a failed load again", () => {
+      renderWithOlder({ hasOlder: true, isLoading: false, failed: true });
+      expect(screen.getByRole("button", { name: "Couldn't load older messages. Try again" })).toBeEnabled();
+    });
+
+    it("has no control once the first message is shown", () => {
+      renderWithOlder({ hasOlder: false, isLoading: false, failed: false });
+      expect(screen.queryByTestId("button-load-older-messages")).toBeNull();
+    });
+  });
 });

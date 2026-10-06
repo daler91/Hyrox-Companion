@@ -122,7 +122,12 @@ describe("useWorkoutReparseTools", () => {
     });
 
     expect(result.current.parseResults).toEqual({ success: 5, failed: 1 });
-    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledTimes(5);
+    // CL43 (CODEBASE_ANALYSIS_2026-10-03): the parsed sets join every
+    // exercise's "Last time" history.
+    expect(mockQueryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["/api/v1/exercises"],
+    });
     expect(mockToast).toHaveBeenCalledWith({
       title: "Parsing Complete",
       description: "Parsed 5 workouts successfully. 1 could not be parsed.",

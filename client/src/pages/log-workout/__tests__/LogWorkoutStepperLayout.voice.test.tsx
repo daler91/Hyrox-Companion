@@ -3,8 +3,14 @@ import { type ComponentProps, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
-import type { SpeechRecognitionEvent } from "@/hooks/voice/types";
 import { useWorkoutFormVoice } from "@/hooks/workout-form/useWorkoutFormVoice";
+import {
+  FakeRecognition,
+  final,
+  interim,
+  stubMicrophone,
+  unstubMicrophone,
+} from "@/test/support/fakeSpeechRecognition";
 
 import { LogWorkoutStepperLayout } from "../LogWorkoutStepperLayout";
 
@@ -31,49 +37,6 @@ vi.mock("../steps/CaptureStep", () => ({
 vi.mock("../steps/ConfirmStep", () => ({ ConfirmStep: () => <div data-testid="confirm-step" /> }));
 vi.mock("../steps/ReflectStep", () => ({ ReflectStep: () => <div data-testid="reflect-step" /> }));
 vi.mock("@/components/workout/WorkoutHeader", () => ({ WorkoutHeader: () => null }));
-
-interface Heard {
-  readonly transcript: string;
-  readonly isFinal: boolean;
-}
-
-/** A recogniser driven by the test; stop() only asks it to finish, as in a browser. */
-class FakeRecognition {
-  static readonly instances: FakeRecognition[] = [];
-  continuous = false;
-  interimResults = false;
-  lang = "";
-  onresult: ((event: SpeechRecognitionEvent) => void) | null = null;
-  onerror: ((event: { error: string }) => void) | null = null;
-  onend: (() => void) | null = null;
-  onstart: (() => void) | null = null;
-  readonly abort = vi.fn();
-  readonly stop = vi.fn();
-
-  start() {
-    FakeRecognition.instances.push(this);
-    this.onstart?.();
-  }
-
-  /** One result event carrying these results; a no-op once the session detached it. */
-  hear(...heard: Heard[]) {
-    const results = heard.map((h) =>
-      Object.assign([{ transcript: h.transcript }], { isFinal: h.isFinal }),
-    );
-    act(() => {
-      this.onresult?.({ resultIndex: 0, results } as unknown as SpeechRecognitionEvent);
-    });
-  }
-
-  end() {
-    act(() => {
-      this.onend?.();
-    });
-  }
-}
-
-const final = (transcript: string): Heard => ({ transcript, isFinal: true });
-const interim = (transcript: string): Heard => ({ transcript, isFinal: false });
 
 const parseNow = vi.fn<(text: string) => void>();
 
@@ -129,16 +92,13 @@ describe("Continue to exercises while dictating (CL30)", () => {
     parseNow.mockReset();
     FakeRecognition.instances.length = 0;
     vi.stubGlobal("SpeechRecognition", FakeRecognition);
-    Object.defineProperty(globalThis.navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }) },
-    });
+    stubMicrophone();
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
-    Reflect.deleteProperty(globalThis.navigator, "mediaDevices");
+    unstubMicrophone();
   });
 
   it("stops with stop() and parses once the recogniser's final result for the phrase being spoken is in", async () => {

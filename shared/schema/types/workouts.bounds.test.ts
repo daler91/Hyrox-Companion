@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   addExerciseSetBodySchema,
@@ -139,5 +139,35 @@ describe("workout request values the database would refuse (C50)", () => {
     const body = { exerciseName: "back_squat", category: "strength", setNumber: 1 };
     expect(addExerciseSetBodySchema.safeParse({ ...body, reps: 8 }).success).toBe(true);
     expect(addExerciseSetBodySchema.safeParse({ ...body, reps: 8.5 }).success).toBe(false);
+  });
+});
+
+// CL70 (CODEBASE_ANALYSIS_2026-10-03): the bound was UTC's tomorrow, so a
+// UTC+N athlete's tomorrow was refused until N o'clock. It is now tomorrow
+// wherever that is latest (UTC+14); the use cases hold the athlete's own.
+describe("workout date future bound (CL70)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function dateAccepted(date: string): boolean {
+    return updateWorkoutLogSchema.safeParse({ date }).success;
+  }
+
+  it("takes tomorrow in the furthest-ahead timezone and refuses the day after", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // 08:00 on 7 Oct in Kiritimati (UTC+14), so its tomorrow is the 8th.
+    vi.setSystemTime(new Date("2026-10-06T18:00:00Z"));
+
+    expect(dateAccepted("2026-10-08")).toBe(true);
+    expect(dateAccepted("2026-10-09")).toBe(false);
+  });
+
+  it("takes a UTC+10 athlete's tomorrow first thing in their morning", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // 08:00 on 7 Oct in Brisbane: tomorrow is the 8th, two UTC days ahead.
+    vi.setSystemTime(new Date("2026-10-06T22:00:00Z"));
+
+    expect(dateAccepted("2026-10-08")).toBe(true);
   });
 });

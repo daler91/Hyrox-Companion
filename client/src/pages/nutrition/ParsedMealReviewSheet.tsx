@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useLogMealBatch } from "@/hooks/useNutrition";
 
 import { FoodSearch } from "./FoodSearch";
+import { useLogTimezoneSync } from "./useLogTimezoneSync";
 import { defaultMealForNow, loggedAtForDate, MEAL_LABELS, previewNutrition } from "./utils";
 
 // A local, editable copy of a parsed item. `food` starts from the server's
@@ -51,7 +52,7 @@ function toRows(items: ParsedFoodItem[]): ReviewRow[] {
   }));
 }
 
-function isLoggable(row: ReviewRow): boolean {
+function isLoggable(row: ReviewRow): row is ReviewRow & { food: Food } {
   return row.food !== null && Number.isFinite(row.quantityG) && row.quantityG > 0;
 }
 
@@ -72,7 +73,7 @@ function ReviewRowCard({
   readonly onSwapToggle: (open: boolean) => void;
   readonly onSwap: (food: Food) => void;
 }) {
-  const preview = row.food && isLoggable(row) ? previewNutrition(row.food, row.quantityG) : null;
+  const preview = isLoggable(row) ? previewNutrition(row.food, row.quantityG) : null;
 
   return (
     <div className="space-y-2 rounded-md border p-3" data-testid={`meal-review-row-${index}`}>
@@ -177,6 +178,8 @@ function ReviewForm({
   const [rows, setRows] = useState<ReviewRow[]>(() => toRows(result.items));
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const logBatch = useLogMealBatch(date);
+  const { runSynced, isSyncing } = useLogTimezoneSync();
+  const isLogging = logBatch.isPending || isSyncing;
 
   const update = (i: number, patch: Partial<ReviewRow>) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -184,26 +187,24 @@ function ReviewForm({
 
   const loggable = rows.filter(isLoggable);
   const unresolved = rows.length - loggable.length;
-  const canLog = loggable.length > 0 && !logBatch.isPending;
+  const canLog = loggable.length > 0 && !isLogging;
   const logButtonLabel = `Log ${loggable.length} item${loggable.length === 1 ? "" : "s"}`;
 
   const submit = () => {
     if (loggable.length === 0) return;
-    logBatch.mutate(
-      {
-        entryMethod,
-        rawInput: result.rawInput,
-        loggedAt: loggedAtForDate(date),
-        items: loggable.map((r) => ({
-          // food is non-null for loggable rows (isLoggable guards it).
-          foodId: r.food!.id,
-          quantityG: r.quantityG,
-          mealType: r.mealType,
-          parseConfidence: r.confidence,
-        })),
-      },
-      { onSuccess: onClose },
-    );
+    const items = loggable.map((r) => ({
+      foodId: r.food.id,
+      quantityG: r.quantityG,
+      mealType: r.mealType,
+      parseConfidence: r.confidence,
+    }));
+    // The server dates the batch by the profile's timezone (CL65).
+    runSynced(() => {
+      logBatch.mutate(
+        { entryMethod, rawInput: result.rawInput, loggedAt: loggedAtForDate(date), items },
+        { onSuccess: onClose },
+      );
+    });
   };
 
   return (
@@ -255,12 +256,12 @@ function ReviewForm({
           </span>
         )}
         <div className="flex gap-2 sm:ml-auto">
-          <Button variant="ghost" onClick={onClose} disabled={logBatch.isPending}>
+          <Button variant="ghost" onClick={onClose} disabled={isLogging}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!canLog} aria-busy={logBatch.isPending} data-testid="button-log-meal-batch">
-            {logBatch.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {logBatch.isPending ? "Logging…" : logButtonLabel}
+          <Button onClick={submit} disabled={!canLog} aria-busy={isLogging} data-testid="button-log-meal-batch">
+            {isLogging && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {isLogging ? "Logging…" : logButtonLabel}
           </Button>
         </div>
       </DialogFooter>

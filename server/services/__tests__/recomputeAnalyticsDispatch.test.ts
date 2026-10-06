@@ -12,6 +12,8 @@ import { dispatchRecomputeAnalytics } from "../recomputeAnalyticsDispatch";
 
 vi.mock("../analyticsPersistence", () => ({
   getWorkoutAnchor: vi.fn().mockResolvedValue({ latestDate: "2026-09-01", entryCount: 3 }),
+  // Training logs only (PF10): an older date and fewer rows than every log.
+  getTrainingAnchor: vi.fn().mockResolvedValue({ latestDate: "2026-08-30", entryCount: 2 }),
   getNutritionAnchor: vi.fn().mockResolvedValue({ latestDate: "2026-09-01", entryCount: 2 }),
   persistCoachInsights: vi.fn().mockResolvedValue(undefined),
   persistNutritionInsights: vi.fn().mockResolvedValue(undefined),
@@ -116,9 +118,10 @@ describe("dispatchRecomputeAnalytics", () => {
     await dispatchRecomputeAnalytics("overview_analysis", USER, DATE, log);
 
     expect(generateOverviewAnalysisIfAllowed).toHaveBeenCalledWith(USER, log);
+    // Stamped with the training-only anchor its GET compares against (PF10).
     expect(persistOverviewAnalysis).toHaveBeenCalledWith(USER, result, DATE, {
-      latestDate: "2026-09-01",
-      entryCount: 3,
+      latestDate: "2026-08-30",
+      entryCount: 2,
     });
     expect(generateCoachInsightsIfAllowed).not.toHaveBeenCalled();
     expect(generateNutritionInsightsIfAllowed).not.toHaveBeenCalled();

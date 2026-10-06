@@ -734,6 +734,7 @@ function ReviewActualsSection({
         table={
           <ExerciseTable
             workoutId={workoutLogId}
+            onSaveOrder={detail.saveSetOrder}
             exerciseSets={exerciseSets}
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}

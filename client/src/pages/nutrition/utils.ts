@@ -1,4 +1,4 @@
-import { emptyTotals, KCAL_PER_G } from "@shared/nutritionScaling";
+import { emptyTotals, KCAL_PER_G, roundMacros, scaleNutrition } from "@shared/nutritionScaling";
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 import type { MealType } from "@shared/schema/enums";
 import { MICRO_DISPLAY_DEFS } from "@shared/schema/micros";
@@ -12,6 +12,18 @@ const YMD = new Intl.DateTimeFormat("en-CA", {
 /** Local calendar date (YYYY-MM-DD) for an instant — the server's logDate basis. */
 export function toLocalDateStr(date: Date): string {
   return YMD.format(date);
+}
+
+/**
+ * The IANA timezone this page dates entries by: the one `YMD` was built with.
+ * A tab left open while the OS timezone changes (a phone on a flight) keeps
+ * it, so it can differ from a fresh `Intl.DateTimeFormat()`. The profile must
+ * agree with this zone, not the device's, for the server to file an entry on
+ * the day the page shows. Null where the platform cannot say.
+ * CL65 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function pageTimezone(): string | null {
+  return YMD.resolvedOptions().timeZone || null;
 }
 
 export function todayStr(): string {
@@ -54,15 +66,13 @@ function round1(value: number): number {
 /**
  * Client-side per-100g scaling for a live preview while logging. Display only —
  * the numbers that get stored still come from USDA via the server, never the UI.
+ *
+ * Runs the server's own scaling rather than a local copy: the copy lacked the
+ * macro-derived calorie fallback (audit N1), so a product with no energy field
+ * previewed 0 kcal while the server stored 860. CL66 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function previewNutrition(food: Food, quantityG: number): NutritionMacroTotals {
-  return {
-    calories: Math.round(scale(food.caloriesPer100g, quantityG)),
-    protein: round1(scale(food.proteinPer100g, quantityG)),
-    carb: round1(scale(food.carbPer100g, quantityG)),
-    fat: round1(scale(food.fatPer100g, quantityG)),
-    fiber: round1(scale(food.fiberPer100g, quantityG)),
-  };
+  return roundMacros(scaleNutrition(food, quantityG));
 }
 
 /**

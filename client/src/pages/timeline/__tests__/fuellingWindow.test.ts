@@ -2,7 +2,11 @@ import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import { NUTRITION_RANGE_MAX_DAYS, nutritionRangeSchema } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { fuellingRangeWindow } from "../fuellingWindow";
+import {
+  FUELLING_BLOCK_DAYS,
+  fuellingRangeWindow,
+  renderedFuellingWindow,
+} from "../fuellingWindow";
 
 const TODAY = "2026-10-03";
 const days = (from: string, to: string) => dayDiff(from, to) + 1;
@@ -61,5 +65,66 @@ describe("fuellingRangeWindow", () => {
       from: "2026-09-26",
       to: addDaysToISODate("2026-09-26", NUTRITION_RANGE_MAX_DAYS - 1),
     });
+  });
+});
+
+// PF7 (CODEBASE_ANALYSIS_2026-10-03): the range ran from the oldest visible
+// group to the newest, annotation-only rows included, so show-all or "Load
+// older" fetched years of entries for the few chips on screen.
+describe("renderedFuellingWindow", () => {
+  const session = [{ id: "w" }];
+  // Ascending, as the Timeline lays its rows out.
+  const rows: [string, unknown[]][] = [
+    ["2019-05-01", []], // an old note
+    ["2021-03-10", session],
+    ["2021-03-20", session],
+    ["2026-09-29", session],
+    ["2026-10-01", session],
+    [TODAY, []], // a rest day: today's row
+    ["2026-10-05", session],
+    ["2026-10-12", session],
+    ["2029-05-01", []], // a note years ahead
+  ];
+  const everyRow = [...rows.keys()];
+
+  it("covers the rendered session rows, not the annotation-only rows around them", () => {
+    expect(renderedFuellingWindow(rows, everyRow.slice(3), TODAY)).toEqual({
+      from: "2026-09-07",
+      to: "2026-11-01",
+    });
+  });
+
+  it("asks only for the rows the virtualizer renders", () => {
+    expect(renderedFuellingWindow(rows, [1, 2], TODAY)).toEqual({
+      from: "2021-03-01",
+      to: "2021-03-28",
+    });
+  });
+
+  it("snaps to whole Monday-to-Sunday blocks, so scrolling inside one asks for the same range", () => {
+    const range = renderedFuellingWindow(rows, [3, 4], TODAY);
+
+    expect(renderedFuellingWindow(rows, [4, 5], TODAY)).toEqual(range);
+    expect(days(range.from, range.to)).toBe(FUELLING_BLOCK_DAYS);
+    expect(new Date(`${range.from}T00:00:00Z`).getUTCDay()).toBe(1);
+  });
+
+  it("counts today's row though it holds no session", () => {
+    expect(renderedFuellingWindow(rows, [5], TODAY)).toEqual({
+      from: "2026-09-07",
+      to: "2026-10-04",
+    });
+  });
+
+  it("asks for nothing when only annotation rows render, or none do", () => {
+    expect(renderedFuellingWindow(rows, [0, 8], TODAY)).toEqual({ from: "", to: "" });
+    expect(renderedFuellingWindow(rows, [], TODAY)).toEqual({ from: "", to: "" });
+  });
+
+  it("still holds rendered rows years apart to the server's cap", () => {
+    const { from, to } = renderedFuellingWindow(rows, [1, 2, 3], TODAY);
+
+    expect(nutritionRangeSchema.safeParse({ from, to }).success).toBe(true);
+    expect(to).toBe("2026-10-04");
   });
 });

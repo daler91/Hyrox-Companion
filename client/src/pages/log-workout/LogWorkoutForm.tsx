@@ -12,9 +12,11 @@ import {
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutEditor } from "@/hooks/useWorkoutEditor";
 import { useWorkoutForm } from "@/hooks/useWorkoutForm";
+import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
 
 import { LogWorkoutStepperLayout } from "./LogWorkoutStepperLayout";
+import { RestoredDraftNotice } from "./RestoredDraftNotice";
 import { useDuplicateLastWorkout } from "./useDuplicateLastWorkout";
 import {
   useInitialLogWorkoutDraft,
@@ -25,7 +27,22 @@ interface LogWorkoutFormProps {
   userKey: string;
 }
 
+interface LogWorkoutFormBodyProps extends LogWorkoutFormProps {
+  readonly onDiscardDraft: () => void;
+}
+
 export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
+  // Discarding a restored draft clears it and remounts the form, which then
+  // finds no draft and starts blank. CL44 (CODEBASE_ANALYSIS_2026-10-03)
+  const [formGeneration, setFormGeneration] = useState(0);
+  const discardDraft = useCallback(() => {
+    clearLogWorkoutDraft(userKey);
+    setFormGeneration((generation) => generation + 1);
+  }, [userKey]);
+  return <LogWorkoutFormBody key={formGeneration} userKey={userKey} onDiscardDraft={discardDraft} />;
+}
+
+function LogWorkoutFormBody({ userKey, onDiscardDraft }: Readonly<LogWorkoutFormBodyProps>) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const handleCancel = useCallback(() => setLocation("/"), [setLocation]);
@@ -166,6 +183,10 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
 
   const hasWorkoutDetails = exerciseBlocks.length > 0 || structureBlocks.length > 0 || freeText.trim().length > 0;
   const activeEditorMode = featureFlags.emomBuilderEnabled ? "structured-emom" : "legacy-text";
+  const handleDiscardDraft = () => {
+    onDiscardDraft();
+    toast({ title: "Draft discarded" });
+  };
 
   return (
     <>
@@ -174,6 +195,15 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           <Badge variant="outline" data-testid="badge-editor-mode-diagnostics">
             Editor mode: {activeEditorMode}
           </Badge>
+        </PageContainer>
+      )}
+      {initialDraft && (
+        <PageContainer size="form" className="pt-3 pb-0 md:pt-3 md:pb-0">
+          <RestoredDraftNotice
+            date={date}
+            onUseToday={() => setDate(getTodayString())}
+            onDiscard={handleDiscardDraft}
+          />
         </PageContainer>
       )}
       <LogWorkoutStepperLayout

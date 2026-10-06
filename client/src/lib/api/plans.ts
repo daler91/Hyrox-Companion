@@ -99,6 +99,7 @@ export const plans = {
       addDayExercise: (dayId: string, data: AddExerciseSetPayload) => mutations.addSet(dayId, data),
       updateDayExercise: (dayId: string, setId: string, data: PatchExerciseSetPayload) => mutations.updateSet(dayId, setId, data),
       deleteDayExercise: (dayId: string, setId: string) => mutations.deleteSet(dayId, setId),
+      saveDayExerciseOrder: (dayId: string, setIds: readonly string[]) => mutations.saveSetOrder(dayId, setIds),
     };
   })(),
 

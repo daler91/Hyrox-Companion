@@ -445,6 +445,15 @@ Update a single exercise set on a workout log.
 - **Body:** `patchExerciseSetBodySchema`
 - **Response:** Updated exercise set (or 404)
 
+### PATCH /api/v1/workouts/:id/set-order
+
+Save the order of every exercise set on a workout log in one transaction: each set's `sortOrder` becomes its index in `setIds`. Dragging an exercise in the exercise table sends this once, where it used to send one `PATCH /sets/:setId` per moved set (PF5, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+
+- **Auth:** Required (user must own the workout)
+- **Rate limit:** `setOrder` category, 30/min
+- **Body:** `{ setIds: string[] }` (`exerciseSetOrderBodySchema`), every set on the workout exactly once, at most 1000
+- **Response:** The workout's exercise sets in their new order (or 404). `409` (`CONFLICT`) when `setIds` does not name exactly the sets the workout holds, as when another device added or removed one; nothing is written. Set `version`s are unchanged, since a new position overwrites none of a set's values.
+
 ### DELETE /api/v1/workouts/:id/sets/:setId
 
 Delete a single exercise set from a workout log.
@@ -966,6 +975,15 @@ Update a single exercise set on a plan day.
 - **Body:** `patchExerciseSetBodySchema`
 - **Response:** Updated exercise set (or 404)
 
+### PATCH /api/v1/plans/days/:dayId/set-order
+
+Save the order of every exercise set on a plan day in one transaction; behaves as [`PATCH /api/v1/workouts/:id/set-order`](#patch-apiv1workoutsidset-order), scoped to the day's sets.
+
+- **Auth:** Required
+- **Rate limit:** `setOrder` category, 30/min
+- **Body:** `{ setIds: string[] }` (`exerciseSetOrderBodySchema`)
+- **Response:** The day's exercise sets in their new order (or 404); `409` (`CONFLICT`) when `setIds` does not name exactly the day's sets
+
 ### DELETE /api/v1/plans/days/:dayId/sets/:setId
 
 Delete a single exercise set from a plan day.
@@ -1315,7 +1333,7 @@ Predict the athlete's HYROX finish time from their logged history. **Stored-firs
 - **Rate limit:** `race-prediction` category, 12/min
 - **AI gates:** None — the service degrades to a deterministic estimate when AI is disabled, unconsented, or over budget, and only calls the model when consent + budget allow.
 - **Query:** `refresh?` — `refresh=1` forces regeneration and persistence
-- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when a workout was logged after `generatedAt`; a freshly generated prediction returns `stale: false`.
+- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when a training workout was logged after `generatedAt` (a walk or other session that does not count as training leaves it fresh, as the prediction never reads it); a freshly generated prediction returns `stale: false`.
 
 ---
 
@@ -1487,7 +1505,7 @@ Retrieve saved chat messages for the current user, cursor-paginated.
 - **Auth:** Required
 - **Rate limit:** `chatHistory` category, 60/min
 - **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together. `focusPlanDayId?` and `focusWorkoutLogId?` read one workout's own conversation (rows saved with either id); without them, the general conversation (rows saved with neither).
-- **Response:** `ChatMessage[]` (plain array for backward compatibility). When more rows exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back on the next request.
+- **Response:** `ChatMessage[]` (plain array for backward compatibility), oldest first, the newest `limit` rows (default 50) before the cursor. When the page is full, so older rows may exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back as `before` and `beforeId`; a shorter page carries neither. The coach chat reads them through `api.chat.getHistoryPage` and offers "Load older messages" while a cursor comes back (CL56, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
 - **Row fields:** `id, role, content, timestamp`, plus:
   - `kind`: `text`, `proposal` or `summary`. A `summary` row is the note the coach carried into a new session after a break, not something it said to the athlete. `rolling` rows (the note on the start of a long session) are left out of the response.
   - `proposalId`, `safetyNotice`, `ragInfo` (source, excerpt count and material titles), `focusPlanDayId` and `focusWorkoutLogId`.
@@ -1563,7 +1581,7 @@ The last stored "what this means for you" reading for each Overview-tab chart, k
 - **Auth:** Required
 - **Rate limit:** `analytics` category, 60/min
 - **Query:** `range` (optional) — the Analytics page's selected range: a day count from 1 to 366 (the page sends `30`, `90`, `180` or `365`) or `all`. With it, a stored analysis of a different range answers `{ sections: null }`, so a reading never sits beside charts of another range. A result stored before analyses had a range counts as `all`. Without it, the stored result is returned whatever its range. An invalid value is a `400`.
-- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag; `{ sections: null }` when nothing has been generated yet for the range
+- **Response:** the stored `OverviewAnalysisResult` (including `rangeDays`: the day count it covers, or `null` for all time) plus `generatedAt` and a `stale` flag (`true` once a training workout was logged after it was generated; a walk or other session that does not count as training does not mark it stale); `{ sections: null }` when nothing has been generated yet for the range
 
 ### POST /api/v1/overview-analysis
 
@@ -1611,10 +1629,18 @@ Inspect the AI suggestion trace and metadata for a plan day. Debugging aid.
 
 ### GET /api/v1/coaching-materials
 
-List all coaching materials for the current user.
+List all coaching materials for the current user, with their full text.
 
 - **Auth:** Required
 - **Response:** `CoachingMaterial[]`
+
+### GET /api/v1/coaching-materials/summaries
+
+List the current user's coaching materials without their text, oldest first. Settings reads this one: it shows only each material's length, which it used to compute by downloading every material's full text (PF4, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+
+- **Auth:** Required
+- **Rate limit:** `coaching` category, 60/min
+- **Response:** `CoachingMaterialSummary[]`: `{ id, title, type, createdAt, updatedAt, contentLength }`, where `contentLength` is the text's length in characters, counted by Postgres
 
 ### POST /api/v1/coaching-materials
 

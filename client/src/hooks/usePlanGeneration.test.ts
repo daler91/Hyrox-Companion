@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getGeneratePlanErrorToast } from "./usePlanGeneration";
+import {
+  generationPollOutcome,
+  getGeneratePlanErrorToast,
+  MAX_GENERATION_WAIT_MS,
+  MAX_STATUS_OUTAGE_MS,
+} from "./usePlanGeneration";
 
 describe("getGeneratePlanErrorToast", () => {
   it("surfaces a specific message for AI unavailable responses", () => {
@@ -33,5 +38,58 @@ describe("getGeneratePlanErrorToast", () => {
       title: "Failed to generate plan",
       description: "That didn't work — please check your input and try again.",
     });
+  });
+});
+
+// CL47 (CODEBASE_ANALYSIS_2026-10-03): the watch on a generation ends.
+describe("generationPollOutcome", () => {
+  const startedAt = 1_000_000;
+  const poll = {
+    generationStatus: "generating",
+    isError: false,
+    dataUpdatedAt: startedAt + 3_000,
+    errorUpdatedAt: 0,
+    startedAt,
+  };
+
+  it("settles on the server's answer", () => {
+    expect(generationPollOutcome({ ...poll, generationStatus: "ready" })).toBe("ready");
+    expect(generationPollOutcome({ ...poll, generationStatus: "failed" })).toBe("failed");
+  });
+
+  it("keeps waiting while reads succeed within the cap", () => {
+    expect(generationPollOutcome(poll)).toBe("waiting");
+    expect(
+      generationPollOutcome({ ...poll, dataUpdatedAt: startedAt + MAX_GENERATION_WAIT_MS - 1 }),
+    ).toBe("waiting");
+  });
+
+  it("times out once reads go on past the cap", () => {
+    expect(
+      generationPollOutcome({ ...poll, dataUpdatedAt: startedAt + MAX_GENERATION_WAIT_MS }),
+    ).toBe("timed_out");
+  });
+
+  it("gives up on reads that keep failing, counted from the last good one", () => {
+    const lastGood = startedAt + 60_000;
+    const failing = { ...poll, isError: true, dataUpdatedAt: lastGood };
+    expect(
+      generationPollOutcome({ ...failing, errorUpdatedAt: lastGood + MAX_STATUS_OUTAGE_MS - 1 }),
+    ).toBe("waiting");
+    expect(
+      generationPollOutcome({ ...failing, errorUpdatedAt: lastGood + MAX_STATUS_OUTAGE_MS }),
+    ).toBe("unreachable");
+  });
+
+  it("counts a failure before any good read from when the generation started", () => {
+    expect(
+      generationPollOutcome({
+        ...poll,
+        generationStatus: undefined,
+        isError: true,
+        dataUpdatedAt: 0,
+        errorUpdatedAt: startedAt + MAX_STATUS_OUTAGE_MS,
+      }),
+    ).toBe("unreachable");
   });
 });

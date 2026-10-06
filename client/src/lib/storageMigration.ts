@@ -6,7 +6,21 @@ const LEGACY_KEY_MAP: Record<string, string> = {
   "hyrox-privacy-consent-v1": "fitai-privacy-consent-v1",
 };
 
-export function migrateLegacyKeys(storage: Storage | null | undefined = globalThis.localStorage): void {
+/**
+ * The page's localStorage, or null where reading it throws: with site data
+ * blocked the getter itself throws a SecurityError. Read in a default
+ * parameter, outside any try, that threw at module load and left a blank page
+ * instead of the landing page. CL60 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function pageLocalStorage(): Storage | null {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function migrateLegacyKeys(storage: Storage | null | undefined = pageLocalStorage()): void {
   if (!storage) return;
   for (const [oldKey, newKey] of Object.entries(LEGACY_KEY_MAP)) {
     try {

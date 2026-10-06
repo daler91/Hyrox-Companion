@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { env } from "../env";
 import { parseExercisesFromText } from "../gemini";
@@ -116,5 +116,62 @@ describe("updateWorkoutUseCase re-derives what the replaced sets fed", () => {
     await updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { exercises: PARSED } });
 
     expect(refreshDerivedStateAfterLoggedSetChange).not.toHaveBeenCalled();
+  });
+});
+
+// CL70 (CODEBASE_ANALYSIS_2026-10-03): the future check ran in UTC, so "Move
+// to tomorrow" on a logged workout failed for a UTC+N athlete until N o'clock.
+describe("workout dates are held to the athlete's own tomorrow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // 08:00 on Wednesday 7 Oct in Brisbane (UTC+10); 15:00 on the 6th in Los Angeles.
+    vi.setSystemTime(new Date("2026-10-06T22:00:00Z"));
+    vi.mocked(updateWorkout).mockResolvedValue({ id: "w1" } as never);
+    vi.mocked(createWorkoutAndScheduleCoaching).mockResolvedValue({ id: "w1", exerciseSets: [] } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function athleteIn(userTimezone: string | null) {
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: USER_ID, userTimezone } as never);
+  }
+
+  const move = (date: string) => updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { date } });
+
+  it("moves a UTC+10 athlete's workout to their tomorrow first thing in the morning", async () => {
+    athleteIn("Australia/Brisbane");
+
+    await expect(move("2026-10-08")).resolves.toEqual({ id: "w1" });
+    expect(vi.mocked(updateWorkout).mock.lastCall?.slice(0, 2)).toEqual(["w1", { date: "2026-10-08" }]);
+  });
+
+  it.each([
+    ["a UTC+10 athlete", "Australia/Brisbane", "2026-10-09"],
+    ["a UTC-7 athlete", "America/Los_Angeles", "2026-10-08"],
+    ["an athlete with no stored timezone", null, "2026-10-08"],
+  ])("refuses %s a date after their tomorrow", async (_label, timezone, date) => {
+    athleteIn(timezone);
+
+    await expect(move(date)).rejects.toMatchObject({ status: 400, message: "Workout date cannot be in the future" });
+    expect(updateWorkout).not.toHaveBeenCalled();
+  });
+
+  it("applies the same bound to a new log", async () => {
+    athleteIn("America/Los_Angeles");
+
+    await expect(createWorkout({ userId: USER_ID, payload: { ...TEXT_ONLY, exercises: PARSED, date: "2026-10-08" } })).rejects.toMatchObject({ status: 400 });
+    await createWorkout({ userId: USER_ID, payload: { ...TEXT_ONLY, exercises: PARSED, date: "2026-10-07" } });
+
+    expect(createWorkoutAndScheduleCoaching).toHaveBeenCalledOnce();
+  });
+
+  it("leaves a PATCH without a date alone", async () => {
+    await updateWorkoutUseCase({ userId: USER_ID, workoutId: "w1", payload: { notes: "felt good" } });
+
+    expect(storage.users.getUser).not.toHaveBeenCalled();
+    expect(updateWorkout).toHaveBeenCalled();
   });
 });

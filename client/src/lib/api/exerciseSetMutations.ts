@@ -72,6 +72,11 @@ export type ExerciseSetMutationApi = {
   updateSet: (ownerId: string, setId: string, data: PatchExerciseSetPayload) => Promise<ExerciseSet>;
   addSet: (ownerId: string, data: AddExerciseSetPayload) => Promise<ExerciseSet>;
   deleteSet: (ownerId: string, setId: string) => Promise<{ success: boolean }>;
+  /**
+   * Saves the owner's whole set order in one request: every set id, in the
+   * new order. Resolves to the sets as saved (PF5, CODEBASE_ANALYSIS_2026-10-03).
+   */
+  saveSetOrder: (ownerId: string, setIds: readonly string[]) => Promise<ExerciseSet[]>;
 };
 
 export function createExerciseSetMutationApi(basePath: (ownerId: string) => string): ExerciseSetMutationApi {
@@ -82,5 +87,7 @@ export function createExerciseSetMutationApi(basePath: (ownerId: string) => stri
       typedRequest<ExerciseSet>("POST", `${basePath(ownerId)}/sets`, data, { timeoutMs: 10_000 }),
     deleteSet: (ownerId, setId) =>
       typedRequest<{ success: boolean }>("DELETE", `${basePath(ownerId)}/sets/${setId}`, undefined, { timeoutMs: 10_000 }),
+    saveSetOrder: (ownerId, setIds) =>
+      typedRequest<ExerciseSet[]>("PATCH", `${basePath(ownerId)}/set-order`, { setIds }, { timeoutMs: 10_000 }),
   };
 }
