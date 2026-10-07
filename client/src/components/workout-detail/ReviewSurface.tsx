@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EDIT_SAVE_DEBOUNCE_MS, StructureBlocksEditor } from "@/components/workout-structure";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -411,7 +412,9 @@ function ReviewDetailsColumn({
         testId={`review-summary-${entry.id}`}
       />
       {/* Only plan-linked sessions have a purpose to be graded against. */}
-      {entry.planDayId ? <SessionGradeCard workoutLogId={workoutLogId} distanceUnit={distanceUnit} /> : null}
+      {entry.planDayId ? (
+        <SessionGradeCard workoutLogId={workoutLogId} distanceUnit={distanceUnit} />
+      ) : null}
       <ReviewActualsSection
         entry={entry}
         detail={detail}
@@ -882,7 +885,7 @@ function ReviewActionButtons({
             onClick={() => onAskCoach(entry, currentCoachSeedText)}
             data-testid={`review-ask-coach-${entry.id}`}
           >
-            <MessageSquare className="mr-2 h-4 w-4" />
+            <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
             Ask coach
           </Button>
         ) : null}
@@ -894,23 +897,29 @@ function ReviewActionButtons({
             onClick={() => onMarkPlanned(entry)}
             data-testid={`review-mark-planned-${entry.id}`}
           >
-            <RotateCcw className="mr-2 h-4 w-4" />
+            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
             Reopen
           </Button>
         ) : null}
         {onDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-muted-foreground hover:text-destructive"
-            onClick={() => onDeleteConfirmOpenChange(true)}
-            aria-label="Delete workout"
-            title="Delete workout"
-            data-testid={`review-delete-${entry.id}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => onDeleteConfirmOpenChange(true)}
+                  aria-label="Delete workout"
+                  data-testid={`review-delete-${entry.id}`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete workout</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
       </div>
       {onDelete ? (
