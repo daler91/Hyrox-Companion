@@ -231,7 +231,7 @@ Unauthenticated, like the few other routes listed in the [Overview](#overview). 
 
 ### GET /api/v1/health
 
-**Readiness** probe: gates on startup state plus a cached DB / vector-DB probe. A `503` here means "don't route traffic to me right now" and should **not** be wired to a restart policy. `railway.toml` points Railway's deploy healthcheck here: Railway polls it only while a deploy rolls out, so a release whose boot fails never replaces the deployment that is serving (D2, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
+**Readiness** probe: gates on startup state plus a cached DB / vector-DB probe. A `503` here means "don't route traffic to me right now" and should **not** be wired to a restart policy. `.railway/railway.ts` points Railway's deploy healthcheck here: Railway polls it only while a deploy rolls out, so a release whose boot fails never replaces the deployment that is serving (D2, [CODEBASE_ANALYSIS_2026-10-03](CODEBASE_ANALYSIS_2026-10-03.md)).
 
 - **Auth:** None
 - **Response:** `200` `{ status: "ok", vectorSchema, uptimeMs, timestamp }`

@@ -3,7 +3,9 @@ nixPkgs = ["nodejs_22", "pnpm-9_x", "openssl"]
 
 # Replaces nixpacks' default install command, which runs every dependency's
 # lifecycle scripts with the service's secrets in the build environment. Same
-# flag and reasoning as railway.toml's buildCommand (S4, CODEBASE_ANALYSIS_2026-10-03).
+# flag and reasoning as the buildCommand in .railway/railway.ts (S4,
+# CODEBASE_ANALYSIS_2026-10-03), which also pins the builder to nixpacks so this
+# file is read at all.
 # The first command is the default phase's own corepack step (package.json has
 # a packageManager field), kept so pnpm stays the pinned 9.12.0 that CI uses
 # rather than nixpkgs' pnpm-9_x. corepack has no install scripts; the flag

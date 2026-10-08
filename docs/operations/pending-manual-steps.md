@@ -59,89 +59,92 @@ migration newer than it.
 
 ## [ ] Before 2026-12-01 — move Railway's deploy config off `railway.toml`
 
-- **Config:** `railway.toml` (Railway config-as-code); `nixpacks.toml`
-- **Shipped:** identified 2026-10-03 (D4, `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
-- **Deadline:** **2026-12-01, a hard cutoff.** Railway's docs mark config-as-code
-  (`railway.toml` / `railway.json`) deprecated: existing files "stop being read
-  on 2026-12-01". The replacement is Infrastructure as Code, `.railway/railway.ts`.
+- **Config:** `.railway/railway.ts` (Railway Infrastructure as Code), replacing
+  `railway.toml`; `nixpacks.toml` unchanged
+- **Shipped:** identified 2026-10-03 (D4, `docs/CODEBASE_ANALYSIS_2026-10-03.md`);
+  the file and the PR that deletes `railway.toml` prepared 2026-10-08
+- **Deadline:** **2026-12-01, a hard cutoff.** The Railway CLI warns on every
+  command: Config as Code (`railway.toml` / `railway.json`) is deprecated and
+  "existing files keep working until 2026-12-01".
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** it needs the Railway CLI logged in and linked to the production
-  project, which neither the repo nor CI has. **Do not hand-write
-  `.railway/railway.ts`**: `railway config migrate` generates it from the
-  existing files and keeps the linked service's name.
-- **What is at stake:** every deploy setting lives in `railway.toml`: the
-  nixpacks builder, the build command (its `--ignore-scripts`, S4), the start
-  command, the healthcheck on `/api/v1/health` (readiness, D2) with its 120 s
-  timeout, `drainingSeconds = 65` (D3) and the `on_failure` restart policy. The
-  first deploy after the cutoff falls back to whatever the dashboard holds:
-  possibly no healthcheck gate, 0 s of draining and dependency install scripts
-  running with the service's secrets, with no repo change to explain it.
-- **How:** in one sitting, from a checkout of the deploy branch, with nothing
-  merging to that branch until `railway config apply` has run:
+- **Why manual:** it needs the Railway CLI logged in and linked to the
+  production service, which neither the repo nor CI has.
+- **What `railway config migrate` got wrong:** its generated file (dry run,
+  2026-10-08) kept the build and start commands, the healthcheck path and the
+  120 s timeout, but dropped three settings: the builder (left as a comment, so
+  the service would move to Railway's default builder, which ignores
+  `nixpacks.toml` and its `--ignore-scripts` install), `drainingSeconds = 65`
+  (D3; Railway's default is 0 s) and the `on_failure` restart policy with 3
+  retries. `.railway/railway.ts` in the repo is that file with the three
+  restored, checked against the `railway` SDK's own types. Do not keep the file
+  `migrate` writes.
+- **How:** in one sitting, with nothing merging to `main` until the last step.
+  The CLI must be recent enough to have `railway config` (2026-10-08: v5.64.0).
 
-  ```bash
-  railway login
-  railway link                     # the production project and service
-  pnpm add -D railway              # the SDK the CLI needs to evaluate .railway/railway.ts
-  railway config migrate           # preview the generated .railway/railway.ts
-  railway config migrate --apply   # write it and clear the service's Railway Config File setting
-  railway config plan              # review: only the settings moved out of railway.toml
-  railway config apply             # write them to the service
+  ```powershell
+  # 1. From main, which still has railway.toml: link the app service, not Postgres
+  git checkout main; git pull
+  railway link                        # FitAi Coach > production > Hyrox-Companion
+  railway status                      # must name Hyrox-Companion
+  # 2. Stop reading railway.toml. This also writes a generated .railway/railway.ts;
+  #    discard it, the reviewed one is on the PR branch.
+  railway config migrate --apply
+  Remove-Item -Recurse .railway
+  # 3. The reviewed file, with the SDK it needs to evaluate
+  git checkout <PR branch>
+  pnpm install --frozen-lockfile
+  railway config plan
+  railway config apply                # only if the plan passes the check below
   ```
 
-  **`migrate --apply` applies nothing by itself, and neither does committing
-  the file.** It clears the service's Railway Config File setting, so
-  `railway.toml` stops being read at once, and `.railway/railway.ts` is only
-  evaluated by the CLI on `plan` / `apply`. A deploy that starts between
-  `migrate --apply` and `apply` runs on the dashboard values: the exact fallback
-  described above, brought forward. Run `plan` and `apply` straight away.
-  Apply only if the plan lists nothing beyond the settings moved out of
-  `railway.toml`: builder nixpacks, build command
+  `migrate --apply` clears the service's Railway Config File setting, so
+  `railway.toml` stops being read at once, and nothing reads
+  `.railway/railway.ts` until `apply`. A deploy that starts in between runs on
+  the dashboard values: possibly no healthcheck gate, 0 s of draining and
+  install scripts running with the service's secrets. Run steps 2 and 3
+  straight through; Railway deploys only on a push to `main`, so keep `main`
+  still meanwhile.
+
+  Apply only if the plan touches nothing beyond these settings on
+  `Hyrox-Companion`: builder `NIXPACKS`, build command
   `pnpm install --frozen-lockfile --ignore-scripts && pnpm run build`, start
   command `node script/start.js`, healthcheck path `/api/v1/health`,
-  healthcheck timeout 120, draining 65 s, restart policy `on_failure` with 3
-  retries. If it shows anything else (another service, a variable, a destructive
-  change), stop and do not apply.
+  healthcheck timeout 120, draining 65 s, restart policy `ON_FAILURE` with 3
+  retries, and the source, region, domain and private endpoint as they are
+  today. Every variable is `preserve()`, so none should change. If it shows
+  anything else (another service, a variable change or removal, a domain, a
+  deletion), stop and do not apply.
 
-  Then open one PR with `.railway/railway.ts`, `package.json` and
-  `pnpm-lock.yaml` (the production install is `--frozen-lockfile`, so the lock
-  file must carry the new devDependency). In the same PR, delete `railway.toml`,
-  since a service cannot be managed by both systems at once, and add
-  `".railway/**"` to the global `ignores` in `eslint.config.js`: CI's
-  `pnpm eslint .` lints every `.ts` file against `tsconfig.eslint.json`, which
-  does not include it, so it fails with a parsing error. Deleting
-  `railway.toml` also breaks the `Railway deploy config` tests in
-  `server/bootstrap/startup.test.ts`, which read it to pin the healthcheck
-  path (D2), `drainingSeconds` (D3) and `--ignore-scripts` (S4): point them
-  at `.railway/railway.ts` in the same PR rather than deleting them, and
-  update the `railway.toml` mentions in `server/bootstrap/health.ts` and
-  `docs/server.md`. From then on an edit to `.railway/railway.ts` changes
-  nothing until someone runs `plan` and `apply` again, or the repo adopts
-  Railway's `railwayapp/config` GitHub Action (plan comment on a PR that
-  touches `.railway/**`, apply on merge; it needs a project token in the
-  `RAILWAY_TOKEN` secret).
+  Then merge the PR. Merging first would deploy a `main` with no
+  `railway.toml` while the service still pointed at it.
 
-  `nixpacks.toml` is read by the nixpacks builder itself, not by config-as-code,
-  so its install-phase override keeps working only while the builder is nixpacks.
-  That override's `--ignore-scripts` is also what keeps Cypress's ~250 MB
-  binary download out of the build: the build command runs only after the
-  install phase, so a variable or flag set there (the old
-  `CYPRESS_INSTALL_BINARY=0`) came too late (D27). Whatever replaces the
-  install phase must skip install scripts itself.
+- **From then on:** an edit to `.railway/railway.ts` changes nothing until
+  someone runs `plan` and `apply` again, or the repo adopts Railway's
+  `railwayapp/config` GitHub Action (plan comment on a PR that touches
+  `.railway/**`, apply on merge; it needs a project token in the
+  `RAILWAY_TOKEN` secret). The `Railway deploy config` tests in
+  `server/bootstrap/startup.test.ts` evaluate the file with the SDK and pin the
+  healthcheck path (D2), the draining time and restart policy (D3), and the
+  nixpacks builder plus `--ignore-scripts` (S4).
 
-- **Builder:** Railway's docs say Nixpacks "has been replaced by Railpack". If
-  the migrated config (or a later change) moves to Railpack, validate it on a
-  staging service first: Node 22 and pnpm 9.12 resolution, an install that still
-  passes `--ignore-scripts` (nixpacks.toml's override does not apply there), and
-  a boot that passes the `/api/v1/health` healthcheck.
+  `nixpacks.toml` is read by the nixpacks builder itself, so its install-phase
+  override keeps working only while the builder is `NIXPACKS`. That override's
+  `--ignore-scripts` is also what keeps Cypress's ~250 MB binary download out
+  of the build: the build command runs only after the install phase, so a
+  variable or flag set there (the old `CYPRESS_INSTALL_BINARY=0`) came too late
+  (D27). Whatever replaces the install phase must skip install scripts itself.
+
+- **Builder:** the Railway docs say Nixpacks "has been replaced by Railpack".
+  If the builder ever moves to Railpack, validate it on a staging service
+  first: Node 22 and pnpm 9.12 resolution, an install that still passes
+  `--ignore-scripts` (`nixpacks.toml`'s override does not apply there), and a
+  boot that passes the `/api/v1/health` healthcheck.
 - **Verify afterwards:** `railway config plan` shows no pending change (again
-  after the PR merges; if it shows one, review it as above and run
-  `railway config apply` before the next deploy), the service's Railway Config
-  File setting is empty, and its settings show healthcheck path
-  `/api/v1/health`, draining time 65 s and the `--ignore-scripts` build
-  command. On the next deploy, the build log
-  shows the install without lifecycle scripts and the deploy log shows the
-  healthcheck polling `/api/v1/health`.
+  after the PR merges), the service's Railway Config File setting is empty,
+  and its settings show healthcheck path `/api/v1/health`, draining time 65 s,
+  the `--ignore-scripts` build command and the nixpacks builder. On the next
+  deploy, the build log shows the install without lifecycle scripts and the
+  deploy log shows the healthcheck polling `/api/v1/health`.
 
 ---
 
