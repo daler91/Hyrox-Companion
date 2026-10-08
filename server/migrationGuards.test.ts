@@ -134,7 +134,7 @@ describe("assertSchemaColumnsExist (D7)", () => {
     const pool = { query: vi.fn().mockResolvedValue({ rows }) };
     await expect(
       assertSchemaColumnsExist(pool, { skipped: ["0019_add_idempotency_keys"], pending: [] }),
-    ).rejects.toThrow(/idempotency_keys \(table\)\. Unapplied migrations — skipped by the migrator .*: 0019_add_idempotency_keys/);
+    ).rejects.toThrow(/idempotency_keys \(table\)\. Unapplied migrations — skipped by the migrator .*: 0019_add_idempotency_keys/u);
   });
 
   it("throws naming a whole table the database lacks", async () => {
@@ -196,7 +196,7 @@ describe("findUnappliedMigrations", () => {
 
 describe("readMigrationJournal", () => {
   it("reads every entry of the real journal with its tag and when", () => {
-    const entries = readMigrationJournal("migrations");
+    const entries = readMigrationJournal();
     expect(entries.length).toBeGreaterThan(100);
     expect(entries).toContainEqual({ tag: "0019_add_idempotency_keys", when: 1_775_428_793_648 });
   });

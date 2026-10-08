@@ -42,6 +42,25 @@ function submitLabel(isCreating: boolean, isEditing: boolean) {
   return isEditing ? "Save changes" : "Add annotation";
 }
 
+function AnnotationTypeSelect({
+  type,
+  onTypeChange,
+}: Readonly<Pick<AnnotationCreateFormProps, "type" | "onTypeChange">>) {
+  return (
+    <Select value={type} onValueChange={(value) => onTypeChange(value as TimelineAnnotationType)}>
+      <SelectTrigger id="annotation-type" data-testid="select-annotation-type">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="injury">Injury</SelectItem>
+        <SelectItem value="illness">Illness</SelectItem>
+        <SelectItem value="travel">Travel</SelectItem>
+        <SelectItem value="rest">Rest block</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function AnnotationCreateForm({
   type,
   onTypeChange,
@@ -61,20 +80,7 @@ export function AnnotationCreateForm({
       {isEditing && <h3 className="text-sm font-semibold">Edit annotation</h3>}
       <div className="space-y-2">
         <Label htmlFor="annotation-type">Type</Label>
-        <Select
-          value={type}
-          onValueChange={(value) => onTypeChange(value as TimelineAnnotationType)}
-        >
-          <SelectTrigger id="annotation-type" data-testid="select-annotation-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="injury">Injury</SelectItem>
-            <SelectItem value="illness">Illness</SelectItem>
-            <SelectItem value="travel">Travel</SelectItem>
-            <SelectItem value="rest">Rest block</SelectItem>
-          </SelectContent>
-        </Select>
+        <AnnotationTypeSelect type={type} onTypeChange={onTypeChange} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">

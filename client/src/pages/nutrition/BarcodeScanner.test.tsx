@@ -60,13 +60,11 @@ describe("BarcodeScanner", () => {
     const stop = vi.fn();
     const stream = { getTracks: () => [{ stop }] };
     (globalThis as Mutable).BarcodeDetector = class {
-      async detect() {
-        return [];
-      }
+      detect = vi.fn(() => Promise.resolve([]));
     };
     const getUserMedia = vi.fn().mockResolvedValue(stream);
     Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia }, configurable: true });
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
 
     const { unmount } = renderWithClient(<BarcodeScanner open onClose={vi.fn()} onResolved={vi.fn()} />);
     await waitFor(() => expect(getUserMedia).toHaveBeenCalled());
@@ -82,19 +80,18 @@ describe("BarcodeScanner", () => {
     const HIT = "3017620422003";
     let frames = 0;
     (globalThis as Mutable).BarcodeDetector = class {
-      async detect() {
+      detect = vi.fn(() => {
         frames += 1;
-        return [{ rawValue: frames < 5 ? MISS : HIT }];
-      }
+        return Promise.resolve([{ rawValue: frames < 5 ? MISS : HIT }]);
+      });
     };
     const stream = { getTracks: () => [{ stop: vi.fn() }] };
     const getUserMedia = vi.fn().mockResolvedValue(stream);
     Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia }, configurable: true });
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(api.nutrition.lookupBarcode).mockImplementation(async (code: string) => {
-      if (code === MISS) throw new Error("404: not found");
-      return FOOD;
-    });
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+    vi.mocked(api.nutrition.lookupBarcode).mockImplementation((code: string) =>
+      code === MISS ? Promise.reject(new Error("404: not found")) : Promise.resolve(FOOD),
+    );
     const onResolved = vi.fn();
     renderWithClient(<BarcodeScanner open onClose={vi.fn()} onResolved={onResolved} />);
 
@@ -127,9 +124,7 @@ describe("BarcodeScanner", () => {
 
   it("shows the camera again on the next open after a camera error", async () => {
     (globalThis as Mutable).BarcodeDetector = class {
-      async detect() {
-        return [];
-      }
+      detect = vi.fn(() => Promise.resolve([]));
     };
     const stream = { getTracks: () => [{ stop: vi.fn() }] };
     const getUserMedia = vi
@@ -137,7 +132,7 @@ describe("BarcodeScanner", () => {
       .mockRejectedValueOnce(new Error("NotAllowedError"))
       .mockResolvedValue(stream);
     Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia }, configurable: true });
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+    HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
     const onClose = vi.fn();
     const user = userEvent.setup();
     const { rerender } = renderWithClient(

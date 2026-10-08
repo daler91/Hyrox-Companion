@@ -114,7 +114,7 @@ async function runDrizzleMigrations() {
  */
 async function reportUnappliedMigrations(): Promise<UnappliedMigrations | null> {
   try {
-    const unapplied = await findUnappliedMigrations(pool, readMigrationJournal(MIGRATIONS_FOLDER));
+    const unapplied = await findUnappliedMigrations(pool, readMigrationJournal());
     if (unapplied && (unapplied.skipped.length > 0 || unapplied.pending.length > 0)) {
       // Migration file tags from the journal, not user data.
       // bearer:disable javascript_lang_logger_leak

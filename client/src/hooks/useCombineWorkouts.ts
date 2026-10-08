@@ -14,7 +14,7 @@ export function useCombineWorkouts() {
   const [showCombineDialog, setShowCombineDialog] = useState(false);
 
   const combineWorkoutsMutation = useMutation({
-    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
+    mutationFn: ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
       const deleteWorkoutIds = entriesToDelete
         .map((e) => e.workoutLogId)
         .filter((id): id is string => !!id);

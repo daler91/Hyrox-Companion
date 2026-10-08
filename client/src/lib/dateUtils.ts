@@ -30,9 +30,9 @@ export function getTodayString(): string {
  * U19 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function getLatestLoggableDateString(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return toISODateString(d);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return toISODateString(tomorrow);
 }
 
 export function getYesterdayString(): string {

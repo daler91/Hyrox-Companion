@@ -58,7 +58,7 @@ export function useMigrationReview(workoutLogId: string | null) {
   const [flag, setFlag] = useState<MigrationReviewFlag | null>(null);
 
   useEffect(() => {
-    if (!workoutLogId) return;
+    if (!workoutLogId) return undefined;
     let cancelled = false;
     fetchOpenReview(workoutLogId)
       .then((next) => {

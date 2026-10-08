@@ -42,11 +42,11 @@ export function handleUpdateAnnotationSuccess({
   onUpdated,
 }: {
   readonly toast: typeof toastFn;
-  readonly onUpdated: () => void;
+  readonly onUpdated?: () => void;
 }) {
   invalidateTimelineAnnotationQueries();
   toast({ title: "Annotation updated" });
-  onUpdated();
+  onUpdated?.();
 }
 
 export function handleDeleteAnnotationSuccess(toast: typeof toastFn) {

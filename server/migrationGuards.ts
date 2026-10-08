@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
 import * as schema from "@shared/schema";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Pool } from "pg";
+
+import migrationJournal from "../migrations/meta/_journal.json" with { type: "json" };
 
 /**
  * Tables whose absence after boot-time migration means the schema is unusable
@@ -101,10 +100,13 @@ export interface MigrationJournalEntry {
   when: number;
 }
 
-export function readMigrationJournal(migrationsFolder: string): MigrationJournalEntry[] {
-  const journalPath = path.join(migrationsFolder, "meta", "_journal.json");
-  const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: MigrationJournalEntry[] };
-  return journal.entries.map(({ tag, when }) => ({ tag, when }));
+/**
+ * The journal the build shipped with: bundled at build time rather than read
+ * from disk at boot, from the same commit as the migrations folder migrate()
+ * reads, so the two always agree.
+ */
+export function readMigrationJournal(): MigrationJournalEntry[] {
+  return migrationJournal.entries.map(({ tag, when }) => ({ tag, when }));
 }
 
 /**
@@ -130,11 +132,11 @@ export async function findUnappliedMigrations(
   journal: MigrationJournalEntry[],
 ): Promise<UnappliedMigrations | null> {
   const { rows: ledger } = await pool.query<{ present: boolean }>(
-    `SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS present`,
+    "SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS present",
   );
   if (!ledger[0]?.present) return null;
   const { rows } = await pool.query<{ created_at: string | number }>(
-    `SELECT created_at FROM drizzle.__drizzle_migrations`,
+    "SELECT created_at FROM drizzle.__drizzle_migrations",
   );
   if (rows.length === 0) return null;
   const recorded = new Set(rows.map((row) => Number(row.created_at)));

@@ -16,7 +16,7 @@ vi.mock("./logger", () => ({
 vi.mock("./migrationGuards", () => ({
   assertCriticalTablesExist: vi.fn(),
   assertSchemaColumnsExist: vi.fn(),
-  findUnappliedMigrations: vi.fn(async () => null),
+  findUnappliedMigrations: vi.fn(() => Promise.resolve(null)),
   isBenignIdempotencyError: vi.fn(() => false),
   readMigrationJournal: vi.fn(() => []),
 }));

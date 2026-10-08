@@ -62,7 +62,7 @@ describe('ChatMessage', () => {
   });
 
   describe('assistant XSS sanitization (C2)', () => {
-    it('does not render a <script> tag injected into AI markdown', async () => {
+    it('does not render a script element injected into AI markdown', async () => {
       const { container } = render(
         <ChatMessage
           role="assistant"

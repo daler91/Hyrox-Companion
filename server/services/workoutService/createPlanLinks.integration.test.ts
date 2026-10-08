@@ -47,7 +47,7 @@ describe("createWorkoutAndScheduleCoaching plan linking (real Postgres)", () => 
     return { plan, day };
   }
 
-  async function setsOf(workoutLogId: string) {
+  function setsOf(workoutLogId: string) {
     return db
       .select({ exerciseName: exerciseSets.exerciseName })
       .from(exerciseSets)

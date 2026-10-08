@@ -116,25 +116,29 @@ function RetiredFactRow({
         >
           Restore
         </Button>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={`Delete "${fact.fact}"`}
-                onClick={onRequestDelete}
-                disabled={deleteDisabled}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Delete forever</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <DeleteFactButton fact={fact} disabled={deleteDisabled} onClick={onRequestDelete} />
       </div>
     </li>
+  );
+}
+
+interface DeleteFactButtonProps {
+  readonly fact: AthleteFact;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}
+
+function DeleteFactButton({ fact, disabled, onClick }: DeleteFactButtonProps) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button size="icon" variant="ghost" aria-label={`Delete "${fact.fact}"`} onClick={onClick} disabled={disabled}>
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Delete forever</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

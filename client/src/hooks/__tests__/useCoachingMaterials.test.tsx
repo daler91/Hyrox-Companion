@@ -132,7 +132,7 @@ describe('useCoachingMaterials hooks', () => {
     });
 
     it('handles creation errors with the server copy, not the raw status and body', async () => {
-      (api.coaching.create as any).mockRejectedValue(
+      vi.mocked(api.coaching.create).mockRejectedValue(
         new Error('400: {"error":"Content is too long","code":"VALIDATION_ERROR"}'),
       );
 

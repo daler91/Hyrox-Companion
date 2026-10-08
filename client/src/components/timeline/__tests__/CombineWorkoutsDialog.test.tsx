@@ -41,9 +41,9 @@ describe("CombineWorkoutsDialog", () => {
     vi.stubGlobal(
       "ResizeObserver",
       class {
-        observe(): void {}
-        unobserve(): void {}
-        disconnect(): void {}
+        observe = vi.fn();
+        unobserve = vi.fn();
+        disconnect = vi.fn();
       },
     );
   });

@@ -438,7 +438,7 @@ describe("useExerciseSetsForOwner deleting a set just after editing it (U27, COD
       makeExerciseSet({ id: "s1", reps: 8, version: 2 }),
       makeExerciseSet({ id: "s2", reps: 5, version: 1 }),
     ]);
-    harness.params.deleteSetRequest.mockResolvedValue(undefined);
+    harness.params.deleteSetRequest.mockImplementation(() => Promise.resolve());
     harness.updateSetRequest.mockResolvedValue(makeExerciseSet({ id: "s2", reps: 6, version: 2 }));
     const { result } = renderOwnerHook(harness.params);
 
@@ -464,7 +464,7 @@ describe("useExerciseSetsForOwner deleting a set just after editing it (U27, COD
     const harness = createHarness([makeExerciseSet({ id: "s1", reps: 8, version: 2 })]);
     const patch = deferred<ExerciseSet>();
     harness.updateSetRequest.mockReturnValue(patch.promise);
-    harness.params.deleteSetRequest.mockResolvedValue(undefined);
+    harness.params.deleteSetRequest.mockImplementation(() => Promise.resolve());
     const { result } = renderOwnerHook(harness.params);
 
     let edit: Promise<unknown> = Promise.resolve();

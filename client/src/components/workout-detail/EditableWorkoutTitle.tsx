@@ -43,7 +43,7 @@ export function EditableWorkoutTitle({
   // The input's onKeyDown then cancels as usual.
   // U23 (CODEBASE_ANALYSIS_2026-10-03)
   useEffect(() => {
-    if (!isEditing) return;
+    if (!isEditing) return undefined;
     const claimEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape" && event.target === inputRef.current) event.preventDefault();
     };

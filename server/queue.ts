@@ -309,7 +309,7 @@ async function runRecomputeAnalytics(
   job: Job,
   feature: AnalyticsFeature,
   userId: string,
-  recomputedOn: string | undefined,
+  recomputedOn?: string,
 ): Promise<void> {
   // jobId is a UUID and feature an enum value, no PII
   // bearer:disable javascript_lang_logger_leak
@@ -363,7 +363,7 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
   // It takes no daily claim (passing no recomputedOn), so tonight's run still
   // happens if a log lands later. A1 (CODEBASE_ANALYSIS_2026-10-03)
   if (trigger === "training_style_change") {
-    await runRecomputeAnalytics(job, feature, userId, undefined);
+    await runRecomputeAnalytics(job, feature, userId);
     return;
   }
   // Atomic once-per-day claim (W4): if another delivery already recomputed

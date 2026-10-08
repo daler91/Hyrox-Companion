@@ -27,7 +27,7 @@ export function useTimelineAnnotations(open: boolean) {
 export function useTimelineAnnotationMutations({
   type,
   onCreated,
-  onUpdated = () => {},
+  onUpdated,
 }: {
   readonly type: TimelineAnnotationType;
   readonly onCreated: () => void;
