@@ -59,4 +59,18 @@ describe("createJsonStringFieldReader", () => {
     expect(read('{"summaryMessage": "first", ')).toBe("first");
     expect(read('"summaryMessage": "second"}')).toBe("");
   });
+
+  it("decodes \\u escapes, joining a surrogate pair split across chunks", () => {
+    const json = String.raw`{"summaryMessage": "caf\u00e9 \ud83c\udfc3 \u2014 done"}`;
+    for (const size of [1, 2, 5, json.length]) {
+      const { text, pieces } = readInPieces(json, size);
+      expect(text).toBe("café 🏃 — done");
+      for (const piece of pieces) expect(piece).toBe(piece.toWellFormed());
+    }
+  });
+
+  it("reads malformed \\u digits as the replacement character and keeps going", () => {
+    const json = String.raw`{"summaryMessage": "a\uZZZZb"}`;
+    expect(readInPieces(json, 3).text).toBe("a\uFFFDb");
+  });
 });
