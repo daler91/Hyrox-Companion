@@ -8,6 +8,7 @@ vi.mock("./offClient", () => ({ resolveBarcode: vi.fn() }));
 vi.mock("./usdaClient", () => ({ fetchUsdaFoodById: vi.fn() }));
 
 import { storage } from "../../storage";
+import { getEdamamFoodById } from "./edamamClient";
 import { makeFood as food } from "./foodTestFixture";
 import { resolveBarcode } from "./offClient";
 import {
@@ -125,5 +126,70 @@ describe("refreshStaleFoodsInBackground (PF13)", () => {
 
     expect(resolveBarcode).toHaveBeenCalledTimes(1);
     expect(vi.mocked(fetchUsdaFoodById).mock.calls).toEqual([["11"], ["12"], ["13"]]);
+  });
+});
+
+describe("refreshStaleFoodsInBackground: sources and backoff bounds", () => {
+  function settle(): Promise<void> {
+    return new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+  }
+
+  beforeEach(() => {
+    __resetFoodRefreshStateForTests();
+    vi.mocked(resolveBarcode).mockReset();
+    vi.mocked(getEdamamFoodById).mockReset();
+    vi.mocked(storage.nutrition.upsertFoods).mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("re-searches an Edamam food by its source id and name, and re-caches the match", async () => {
+    const mapped = { source: "edamam", sourceId: "food_abc", name: "Oats" } as MappedFood;
+    vi.mocked(getEdamamFoodById).mockResolvedValue(mapped);
+
+    refreshStaleFoodsInBackground([food({ id: "e-1", source: "edamam", sourceId: "food_abc", name: "Oats" })]);
+    await settle();
+
+    expect(getEdamamFoodById).toHaveBeenCalledWith("food_abc", "Oats");
+    expect(storage.nutrition.upsertFoods).toHaveBeenCalledWith([mapped]);
+  });
+
+  it("keeps serving a row whose source has no client, backing it off rather than retrying every response", async () => {
+    const legacy = food({ id: "fs-1", source: "fatsecret", sourceId: "99" });
+
+    refreshStaleFoodsInBackground([legacy]);
+    await settle();
+    refreshStaleFoodsInBackground([legacy]);
+    await settle();
+
+    expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
+    expect(resolveBarcode).not.toHaveBeenCalled();
+    expect(getEdamamFoodById).not.toHaveBeenCalled();
+  });
+
+  it("bounds the backoff table by forgetting the oldest entry first", async () => {
+    vi.mocked(resolveBarcode).mockResolvedValue(null);
+    const start = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(start);
+
+    // MAX_BACKOFF_ENTRIES is 1000: the 1001st failure evicts the first.
+    for (let i = 0; i <= 1000; i += 1) {
+      refreshStaleFoodsInBackground([food({ id: `off-${i}`, source: "off", sourceId: `${i}` })]);
+      await settle();
+    }
+    expect(resolveBarcode).toHaveBeenCalledTimes(1001);
+
+    // The newest is still backing off; the evicted oldest is tried again.
+    refreshStaleFoodsInBackground([food({ id: "off-1000", source: "off", sourceId: "1000" })]);
+    await settle();
+    expect(resolveBarcode).toHaveBeenCalledTimes(1001);
+
+    refreshStaleFoodsInBackground([food({ id: "off-0", source: "off", sourceId: "0" })]);
+    await settle();
+    expect(resolveBarcode).toHaveBeenCalledTimes(1002);
   });
 });
