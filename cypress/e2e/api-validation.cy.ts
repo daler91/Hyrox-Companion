@@ -74,7 +74,8 @@ describe("API Validation", () => {
   it("GET /api/cron/emails returns 401 with wrong secret", () => {
     cy.request({
       url: "/api/v1/cron/emails",
-      headers: { "x-cron-secret": "wrong-secret" },
+      // A random value the server cannot hold, rather than a literal secret.
+      headers: { "x-cron-secret": crypto.randomUUID() },
       failOnStatusCode: false,
     }).then((response) => {
       expect(response.status).to.eq(401);
