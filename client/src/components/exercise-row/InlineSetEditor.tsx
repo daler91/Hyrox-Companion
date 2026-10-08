@@ -240,137 +240,7 @@ function CustomLabelField({ initial, placeholder, onChange }: CustomLabelFieldPr
   );
 }
 
-interface SetRowProps {
-  readonly set: ExerciseSet;
-  readonly fields: readonly FieldKey[];
-  readonly weightUnit: string;
-  readonly distanceUnit: string;
-  readonly canDelete: boolean;
-  readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
-  readonly onDeleteSet: (setId: string) => void;
-  readonly showPlannedDiffs: boolean;
-}
-
-const SetRow = memo(function SetRow({
-  set,
-  fields,
-  weightUnit,
-  distanceUnit,
-  canDelete,
-  onUpdateSet,
-  onDeleteSet,
-  showPlannedDiffs,
-}: SetRowProps) {
-  const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
-  const setId = set.id;
-  const onUpdate = useCallback(
-    (patch: PatchExerciseSetPayload) => onUpdateSet(setId, patch),
-    [onUpdateSet, setId],
-  );
-  const onDelete = useCallback(() => onDeleteSet(setId), [onDeleteSet, setId]);
-  const toggleNotes = useCallback(() => {
-    setNotesOpen((open) => !open);
-  }, []);
-
-  return (
-    <div className="space-y-1" data-testid={`set-row-${set.id}`}>
-      <div className="grid items-center gap-1.5" style={{ gridTemplateColumns: ROW_COLUMNS }}>
-        <span className="text-center text-xs tabular-nums text-muted-foreground">
-          {set.setNumber}
-        </span>
-        <div className="grid items-start gap-1.5" style={{ gridTemplateColumns: FIELD_COLUMNS }}>
-          {fields.map((field) => (
-            <FieldInput
-              key={field}
-              field={field}
-              set={set}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onUpdate={onUpdate}
-              showPlannedDiffs={showPlannedDiffs}
-            />
-          ))}
-        </div>
-        <SetRowActions
-          setId={set.id}
-          setNumber={set.setNumber}
-          notesOpen={notesOpen}
-          onToggleNotes={toggleNotes}
-          canDelete={canDelete}
-          onDelete={onDelete}
-        />
-      </div>
-
-      {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
-    </div>
-  );
-});
-
-interface SetRowActionsProps {
-  readonly setId: string;
-  readonly setNumber: number;
-  readonly notesOpen: boolean;
-  readonly onToggleNotes: () => void;
-  readonly canDelete: boolean;
-  readonly onDelete: () => void;
-}
-
-function SetRowActions({
-  setId,
-  setNumber,
-  notesOpen,
-  onToggleNotes,
-  canDelete,
-  onDelete,
-}: SetRowActionsProps) {
-  const noteLabel = notesOpen ? "Hide note" : "Add note";
-  return (
-    <div className={cn("flex", ACTIONS_WIDTH_CLASS)}>
-      <SetActionButton
-        tooltip={noteLabel}
-        onClick={onToggleNotes}
-        aria-label={noteLabel}
-        aria-pressed={notesOpen}
-        className={cn("text-muted-foreground", notesOpen && "text-foreground")}
-        data-testid={`button-toggle-note-${setId}`}
-      >
-        <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
-      </SetActionButton>
-      <SetActionButton
-        tooltip="Remove set"
-        onClick={(event) => {
-          if (!canDelete) event.preventDefault();
-          else onDelete();
-        }}
-        aria-disabled={!canDelete}
-        aria-label={`Remove set ${String(setNumber)}`}
-        className="text-muted-foreground aria-disabled:opacity-40 aria-disabled:cursor-not-allowed"
-        data-testid={`button-remove-set-${setId}`}
-      >
-        <X className="h-3.5 w-3.5" aria-hidden />
-      </SetActionButton>
-    </div>
-  );
-}
-
-/** Ghost icon button at the primitive's touch-target size, with a tooltip. */
-function SetActionButton({
-  tooltip,
-  ...buttonProps
-}: Readonly<ComponentProps<typeof Button> & { tooltip: string }>) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button type="button" variant="ghost" size="icon" {...buttonProps} />
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{tooltip}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
+const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 interface FieldInputProps {
   readonly field: FieldKey;
@@ -530,6 +400,138 @@ const FieldInput = memo(function FieldInput({
   );
 });
 
+interface SetRowProps {
+  readonly set: ExerciseSet;
+  readonly fields: readonly FieldKey[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  readonly canDelete: boolean;
+  readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly showPlannedDiffs: boolean;
+}
+
+const SetRow = memo(function SetRow({
+  set,
+  fields,
+  weightUnit,
+  distanceUnit,
+  canDelete,
+  onUpdateSet,
+  onDeleteSet,
+  showPlannedDiffs,
+}: SetRowProps) {
+  const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
+  const setId = set.id;
+  const onUpdate = useCallback(
+    (patch: PatchExerciseSetPayload) => onUpdateSet(setId, patch),
+    [onUpdateSet, setId],
+  );
+  const onDelete = useCallback(() => onDeleteSet(setId), [onDeleteSet, setId]);
+  const toggleNotes = useCallback(() => {
+    setNotesOpen((open) => !open);
+  }, []);
+
+  return (
+    <div className="space-y-1" data-testid={`set-row-${set.id}`}>
+      <div className="grid items-center gap-1.5" style={{ gridTemplateColumns: ROW_COLUMNS }}>
+        <span className="text-center text-xs tabular-nums text-muted-foreground">
+          {set.setNumber}
+        </span>
+        <div className="grid items-start gap-1.5" style={{ gridTemplateColumns: FIELD_COLUMNS }}>
+          {fields.map((field) => (
+            <FieldInput
+              key={field}
+              field={field}
+              set={set}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onUpdate={onUpdate}
+              showPlannedDiffs={showPlannedDiffs}
+            />
+          ))}
+        </div>
+        <SetRowActions
+          setId={set.id}
+          setNumber={set.setNumber}
+          notesOpen={notesOpen}
+          onToggleNotes={toggleNotes}
+          canDelete={canDelete}
+          onDelete={onDelete}
+        />
+      </div>
+
+      {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
+    </div>
+  );
+});
+
+interface SetRowActionsProps {
+  readonly setId: string;
+  readonly setNumber: number;
+  readonly notesOpen: boolean;
+  readonly onToggleNotes: () => void;
+  readonly canDelete: boolean;
+  readonly onDelete: () => void;
+}
+
+function SetRowActions({
+  setId,
+  setNumber,
+  notesOpen,
+  onToggleNotes,
+  canDelete,
+  onDelete,
+}: SetRowActionsProps) {
+  const noteLabel = notesOpen ? "Hide note" : "Add note";
+  return (
+    <div className={cn("flex", ACTIONS_WIDTH_CLASS)}>
+      <SetActionButton
+        tooltip={noteLabel}
+        onClick={onToggleNotes}
+        aria-label={noteLabel}
+        aria-pressed={notesOpen}
+        className={cn("text-muted-foreground", notesOpen && "text-foreground")}
+        data-testid={`button-toggle-note-${setId}`}
+      >
+        <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+      </SetActionButton>
+      <SetActionButton
+        tooltip="Remove set"
+        onClick={(event) => {
+          if (!canDelete) event.preventDefault();
+          else onDelete();
+        }}
+        aria-disabled={!canDelete}
+        aria-label={`Remove set ${String(setNumber)}`}
+        className="text-muted-foreground aria-disabled:opacity-40 aria-disabled:cursor-not-allowed"
+        data-testid={`button-remove-set-${setId}`}
+      >
+        <X className="h-3.5 w-3.5" aria-hidden />
+      </SetActionButton>
+    </div>
+  );
+}
+
+/** Ghost icon button at the primitive's touch-target size, with a tooltip. */
+function SetActionButton({
+  tooltip,
+  ...buttonProps
+}: Readonly<ComponentProps<typeof Button> & { tooltip: string }>) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button type="button" variant="ghost" size="icon" {...buttonProps} />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 interface NotesFieldProps {
   readonly set: ExerciseSet;
   readonly onUpdate: (patch: PatchExerciseSetPayload) => void;
@@ -611,8 +613,6 @@ function getStoredFieldValue(
     distanceUnit,
   );
 }
-
-const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 // Digits with at most one decimal separator, which may be "." or "," — the
 // iOS decimal keypad types "," in comma-decimal regions (CL7). Two patterns,

@@ -79,6 +79,6 @@ export function useOverviewAnalysis(range: string = DEFAULT_RANGE) {
     // Generating needs AI consent (off by default); the server would 403 it.
     // U29 (CODEBASE_ANALYSIS_2026-10-03)
     aiCoachOff,
-    canGenerate: !!userId && !aiCoachOff,
+    canGenerate: Boolean(userId) && !aiCoachOff,
   };
 }

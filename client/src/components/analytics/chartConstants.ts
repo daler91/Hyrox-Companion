@@ -30,6 +30,6 @@ export function formatChartDate(d: string): string {
  * range can span more than one year while the axis ticks omit it.
  */
 export function formatChartDateWithYear(d: string): string {
-  const date = new Date(d + "T00:00:00");
+  const date = new Date(`${d}T00:00:00`);
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
