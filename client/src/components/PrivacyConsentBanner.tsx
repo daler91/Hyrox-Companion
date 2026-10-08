@@ -125,7 +125,7 @@ export function PrivacyConsentBanner() {
             aria-label="Dismiss privacy notice"
             className="rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </div>

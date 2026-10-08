@@ -56,7 +56,7 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
             </Badge>
           </div>
           <div className="flex items-center gap-1 mt-1">
-            <Zap className="h-3 w-3 text-primary shrink-0" />
+            <Zap className="h-3 w-3 text-primary shrink-0" aria-hidden="true" />
             <span className="text-xs text-muted-foreground">
               {actionLabel} {fieldLabel}
             </span>

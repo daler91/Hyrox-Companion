@@ -403,7 +403,7 @@ const GroupRow = memo(function GroupRow({
                       aria-label={`Row actions for ${label}`}
                       data-testid="exercise-row-actions"
                     >
-                      <MoreVertical className="size-4" />
+                      <MoreVertical className="size-4" aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>

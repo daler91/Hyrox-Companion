@@ -217,7 +217,7 @@ export function ExerciseSelector({
                   }}
                   data-testid={`button-exercise-${name}`}
                 >
-                  <Icon className="h-3.5 w-3.5 mr-1.5" />
+                  <Icon className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
                   {def.label}
                   {allowDuplicates && count > 0 && (
                     <Badge variant="secondary" className="ml-1.5 h-4 min-w-[1rem] px-1 text-[10px]">

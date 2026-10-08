@@ -67,7 +67,7 @@ export function PlanSelector({
                   data-testid="button-rename-plan"
                   aria-label="Rename plan"
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Rename plan</TooltipContent>

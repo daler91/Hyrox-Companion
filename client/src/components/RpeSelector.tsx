@@ -71,7 +71,7 @@ export function RpeSelector({
     <fieldset className="space-y-2 border-0 m-0 p-0">
       {showLabel && (
         <legend className="flex items-center gap-1 text-sm font-medium">
-          <Gauge className="h-3.5 w-3.5" />
+          <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
           RPE (Rate of Perceived Exertion)
         </legend>
       )}
@@ -117,7 +117,7 @@ export function RpeSelector({
                   className={`${buttonSize} rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
                   data-testid="button-rpe-clear"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>Clear RPE selection</TooltipContent>
