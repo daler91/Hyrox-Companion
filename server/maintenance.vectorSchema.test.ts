@@ -16,7 +16,9 @@ vi.mock("./logger", () => ({
 vi.mock("./migrationGuards", () => ({
   assertCriticalTablesExist: vi.fn(),
   assertSchemaColumnsExist: vi.fn(),
+  findUnappliedMigrations: vi.fn(async () => null),
   isBenignIdempotencyError: vi.fn(() => false),
+  readMigrationJournal: vi.fn(() => []),
 }));
 vi.mock("./services/keyRotation", () => ({ maybeReencryptOnBoot: vi.fn() }));
 
@@ -27,13 +29,14 @@ import * as Sentry from "@sentry/node";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { pool } from "./db";
+import { logger } from "./logger";
 import {
   __resetVectorSchemaStatusForTests,
   ensureVectorSchema,
   getVectorSchemaStatus,
   runStartupMaintenance,
 } from "./maintenance";
-import { assertCriticalTablesExist, assertSchemaColumnsExist } from "./migrationGuards";
+import { assertCriticalTablesExist, assertSchemaColumnsExist, findUnappliedMigrations } from "./migrationGuards";
 import type { IStorage } from "./storage";
 import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
 
@@ -170,9 +173,32 @@ describe("runStartupMaintenance", () => {
 
     // Mocked out of every other test in this file, so this is the one place
     // that fails if the boot call is dropped.
-    expect(assertSchemaColumnsExist).toHaveBeenCalledWith(pool);
+    expect(assertSchemaColumnsExist).toHaveBeenCalledWith(pool, null);
     expect(firstCall(assertCriticalTablesExist)).toBeLessThan(firstCall(assertSchemaColumnsExist));
     expect(firstCall(assertSchemaColumnsExist)).toBeLessThan(firstCall(storage.plans.markMissedPlanDays));
+  });
+
+  it("names a migration the migrator skipped, at boot and in the schema check", async () => {
+    // 0019's journal `when` is older than 0018's, so production never ran it
+    // and the only clue was a missing table in the startup error.
+    const unapplied = { skipped: ["0019_add_idempotency_keys"], pending: [] };
+    vi.mocked(findUnappliedMigrations).mockResolvedValueOnce(unapplied);
+
+    await runStartupMaintenance(storage as unknown as IStorage);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped: ["0019_add_idempotency_keys"] }),
+      expect.stringContaining("Migrations missing from the ledger"),
+    );
+    expect(assertSchemaColumnsExist).toHaveBeenCalledWith(pool, unapplied);
+  });
+
+  it("boots on when the ledger cannot be read, leaving the decision to the schema check", async () => {
+    vi.mocked(findUnappliedMigrations).mockRejectedValueOnce(new Error("permission denied for schema drizzle"));
+
+    await runStartupMaintenance(storage as unknown as IStorage);
+
+    expect(assertSchemaColumnsExist).toHaveBeenCalledWith(pool, null);
   });
 
   it("resets only auto-coach flags past the cron's stale threshold, sparing another replica's live run (D52)", async () => {

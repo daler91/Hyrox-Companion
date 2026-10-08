@@ -10,7 +10,14 @@ import { STALE_PLAN_GENERATION_THRESHOLD_MS } from "./constants";
 import { pool } from "./db";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
-import { assertCriticalTablesExist, assertSchemaColumnsExist, isBenignIdempotencyError } from "./migrationGuards";
+import {
+  assertCriticalTablesExist,
+  assertSchemaColumnsExist,
+  findUnappliedMigrations,
+  isBenignIdempotencyError,
+  readMigrationJournal,
+  type UnappliedMigrations,
+} from "./migrationGuards";
 import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { STALE_AUTO_COACHING_THRESHOLD_MS } from "./storage/users";
@@ -33,10 +40,11 @@ export async function ensurePgvectorExtension() {
 // 42_010_0xx registry is documented above CRON_LOCK_KEYS in server/cron.ts.
 const MIGRATION_ADVISORY_LOCK_KEY = 42_010_010n;
 
+const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, "..", "migrations");
+
 async function runDrizzleMigrations() {
   try {
-    const migrationsFolder = path.resolve(import.meta.dirname, "..", "migrations");
-    logger.info({ context: "db", migrationsFolder }, "Running Drizzle migrations...");
+    logger.info({ context: "db", migrationsFolder: MIGRATIONS_FOLDER }, "Running Drizzle migrations...");
     // Use a local pool-bound client for migrations. We avoid using the app's
     // `db` export here because it's bound to the full schema; the migrator only
     // needs a minimal drizzle client.
@@ -45,11 +53,11 @@ async function runDrizzleMigrations() {
     // APP_INSTANCE_COUNT>1, two boots would otherwise run DDL concurrently and
     // race on duplicate-key / partial-index states. pg_try_advisory_lock is
     // non-blocking — if another instance holds the lock we skip, since it
-    // applies the same idempotent (drizzle-kit push-managed) migrations.
+    // applies the same migrations.
     const result = await withPgAdvisoryLock(
       pool,
       { key: MIGRATION_ADVISORY_LOCK_KEY, name: "drizzleMigrations" },
-      () => migrate(migrator, { migrationsFolder }),
+      () => migrate(migrator, { migrationsFolder: MIGRATIONS_FOLDER }),
     );
     if (result.acquired) {
       logger.info({ context: "db" }, "Drizzle migrations applied successfully");
@@ -60,11 +68,14 @@ async function runDrizzleMigrations() {
       );
     }
   } catch (error) {
-    // The schema source of truth in CI/production is `drizzle-kit push`, not
-    // this in-process migrate(). So when migrate() runs against an already-pushed
-    // schema it is EXPECTED to hit idempotency errors (a table/column/constraint,
-    // or a backfilled row, "already exists"/"duplicate") — those are benign and
-    // logged at info. Anything else is a genuine migration failure and aborts
+    // Production applies its schema here. CI's E2E database is built by
+    // `drizzle-kit push` instead, with an empty ledger, so migrate() there is
+    // EXPECTED to hit idempotency errors (a table/column/constraint, or a
+    // backfilled row, "already exists"/"duplicate"): those are benign and
+    // logged at info. On a migrated database the same error means the batch
+    // rolled back with nothing applied; reportUnappliedMigrations (next) names
+    // what is left, and the schema check fails the boot if a column is
+    // missing. Anything else is a genuine migration failure and aborts
     // startup: the error reaches the catch in server/index.ts, which sets
     // startupState.startupError so liveness and readiness go 503, and the
     // deploy fails Railway's readiness healthcheck while the previous
@@ -72,7 +83,10 @@ async function runDrizzleMigrations() {
     // migration just failed (worst case: an empty database) is strictly worse
     // than a blocked deploy.
     if (isBenignIdempotencyError(error)) {
-      logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
+      logger.info(
+        { context: "db" },
+        "Drizzle migrations rolled back on an \"already exists\" error — expected on a database built by drizzle-kit push; any unapplied migration is reported next",
+      );
     } else {
       // `err` is a DB/migration
       // error describing schema state, not user data; no PII or secrets logged.
@@ -84,6 +98,29 @@ async function runDrizzleMigrations() {
       Sentry.captureException(error);
       throw error;
     }
+  }
+}
+
+/**
+ * Log, by name, any journal entry the ledger lacks. A skipped entry (older
+ * than the newest ledger row) is one boot will never run, as 0019 was until
+ * 2026-10-07; finding it here is what turns a silent gap into a named one.
+ * Diagnostic only: a failure to read the ledger is logged and returns null,
+ * and assertSchemaColumnsExist decides whether the boot goes on.
+ */
+async function reportUnappliedMigrations(): Promise<UnappliedMigrations | null> {
+  try {
+    const unapplied = await findUnappliedMigrations(pool, readMigrationJournal(MIGRATIONS_FOLDER));
+    if (unapplied && (unapplied.skipped.length > 0 || unapplied.pending.length > 0)) {
+      logger.warn(
+        { context: "db", skipped: unapplied.skipped, pending: unapplied.pending },
+        "Migrations missing from the ledger — skipped ones never run at boot; see docs/operations/pending-manual-steps.md",
+      );
+    }
+    return unapplied;
+  } catch (error) {
+    logger.warn({ context: "db", err: error }, "Could not compare the migration ledger with the journal");
+    return null;
   }
 }
 
@@ -324,10 +361,11 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   // not exit), and a redeploy finds the tables in place.
   // On any established database the tables exist regardless of lock outcome.
   await assertCriticalTablesExist(pool);
-  // A release whose columns were never pushed must not go live: its queries on
-  // those tables would all fail while readiness said ok (D7,
+  const unapplied = await reportUnappliedMigrations();
+  // A release whose columns never reached the database must not go live: its
+  // queries on those tables would all fail while readiness said ok (D7,
   // CODEBASE_ANALYSIS_2026-10-03).
-  await assertSchemaColumnsExist(pool);
+  await assertSchemaColumnsExist(pool, unapplied);
   await ensurePgvectorExtension();
   await ensureVectorSchema();
   try {

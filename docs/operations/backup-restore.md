@@ -31,21 +31,31 @@ strictly worse than a blocked deploy. A restore
 whose schema does not match the deployed code therefore blocks the deploy; it
 does not heal.
 
-**Production's schema is managed by `drizzle-kit push`, run by hand.** Nothing
-in `railway.toml`'s deploy step applies schema. On boot, `migrate()` finds the
-objects already present, classifies the resulting "already exists" as a benign
-idempotency error, and skips the entire chain. Drizzle creates
-`drizzle.__drizzle_migrations` *outside* the migration transaction but inserts
-the rows inside it, so production's ledger exists and is **empty** — do not read
-that as a broken restore. Two consequences that bite during recovery:
+**Production applies its migrations at boot.** `migrate()` runs every journal
+entry newer than the newest row in `drizzle.__drizzle_migrations`, schema and
+data statements alike, in one transaction. Production's ledger is populated
+(one row per journal entry; confirmed 2026-10-07). An earlier revision of this
+section said production was managed by a hand-run `drizzle-kit push` with an
+empty ledger; that was never true. **Never run `drizzle-kit push` against
+production**: it drops objects the schema does not declare (0036's
+`data_remediation_log` and its view, 0074's trigram indexes). Consequences
+during recovery:
 
-- A restored database needs its schema **in the dump** (or pushed afterwards).
-  "Restore the data and let the app build the schema" does not work here.
-- Any migration whose payload is a data change (a `DELETE`, a backfill) never
-  executes in production, however cleanly it applies to a fresh database in CI.
-  Those are tracked as run-once checkboxes in
-  [`pending-manual-steps.md`](./pending-manual-steps.md); an unticked box is a
-  live task. The restore drill in §6 checks the known ones.
+- A restore carries its ledger with it, so the first boot applies every
+  migration newer than the backup. A restore with a ledger but **no schema**
+  (a data-only dump into a database whose ledger rows survived) is the one
+  shape boot cannot heal: `migrate()` sees nothing to do. Restore schema and
+  ledger together, from the same dump.
+- An **empty** database (no ledger) is built by the first boot from 0000.
+  Load a data-only dump only after that boot has created the schema.
+- The migrator skips any journal entry whose `when` is older than the newest
+  recorded row. 0019 was skipped that way until 2026-10-07
+  ([`pending-manual-steps.md`](./pending-manual-steps.md)). Boot logs any such
+  entry by name, and the startup check names it in its error.
+- Steps no migration carries (scripts, hand-written SQL) are run-once
+  checkboxes in [`pending-manual-steps.md`](./pending-manual-steps.md). A
+  restore is as old as its backup, so one ticked after the backup was taken
+  must be run again. The restore drill in §6 checks the known data states.
 
 **Vector DB — structure genuinely is self-created.** `ensureVectorSchema()`
 creates `document_chunks` and `food_embeddings`, their btree indexes, and both
@@ -131,8 +141,9 @@ is acceptable to skip backups entirely and rebuild by re-embedding (§5.3).
      enforcement during load and can leave orphaned rows behind. §6's drill
      detects exactly that.
 3. **Confirm the schema is complete before pointing the app at it.** Run the
-   drill (§6) against the restored database. If the dump was data-only, apply
-   the schema now with `drizzle-kit push` — boot will not do it (§1.1).
+   drill (§6) against the restored database. If it reports missing tables
+   alongside a populated ledger, the dump was data-only: restore the schema
+   and ledger from a full dump (§1.1). Do not reach for `drizzle-kit push`.
 4. **Point the app at the restored DB.** Update `DATABASE_URL` on the service.
    Keep `ENCRYPTION_KEY` (and `ENCRYPTION_KEY_V2` if mid-rotation) identical to
    the source, or every stored credential becomes undecryptable.
@@ -179,12 +190,13 @@ RESTORE_DRILL_DATABASE_URL=postgres://... ENCRYPTION_KEY=... pnpm ops:restore-dr
 Automated by that command — exit code 0 only if all of them pass:
 
 - [x] Latest backup restores without error (it connects and answers).
-- [x] Migration ledger matches the Drizzle journal — reported as a `warn` with
-      the reason when the ledger is empty, which is the expected shape of a
-      push-managed production restore (§1.1). A *partially* applied ledger is a
-      genuine failure: the restore predates the deployed code.
-- [x] Every table the deployed code expects exists. This is the check that
-      carries the weight for a push-managed restore.
+- [x] Migration ledger matches the Drizzle journal. A production restore
+      passes. An empty ledger is a `warn` with the reason: the shape of a
+      database built by `drizzle-kit push`, such as a CI copy (§1.1). A
+      *partially* applied ledger is reported as a failure: the restore
+      predates the deployed code, and the first boot will apply the rest.
+- [x] Every table the deployed code expects exists. This holds however the
+      schema was built.
 - [x] Row-count spot checks on `users`, `workout_logs`, `training_plans`. An
       empty `users` fails: schema restored, dump never loaded.
 - [x] FK integrity — a generic orphan sweep over every foreign key in the
@@ -219,6 +231,6 @@ Still manual, and still part of the drill:
   `.env.example` cover `ENCRYPTION_KEY` / `ENCRYPTION_KEY_V2`).
 - `script/restore-drill.ts` — `pnpm ops:restore-drill` (§6).
 - `script/reembed-materials.ts` — `pnpm ops:reembed` (§5.3).
-- [`pending-manual-steps.md`](./pending-manual-steps.md) — data migrations that
-  push-managed production never applies on its own.
+- [`pending-manual-steps.md`](./pending-manual-steps.md) — production steps no
+  migration carries, and the verification queries for the data migrations.
 - `docs/database.md` — schema reference.

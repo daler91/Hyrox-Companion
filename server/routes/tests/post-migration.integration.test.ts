@@ -487,12 +487,12 @@ describe("Post-Migration Verification: Railway + Neon", () => {
     });
 
     it("all migrations are recorded (if journal exists)", async () => {
-      // A push-managed database (production) records no migrations: push
+      // A database built by `drizzle-kit push` records no migrations: push
       // writes no ledger, and a failed boot migrate() leaves an empty table
-      // behind. The workflow's `ledger: push` mode says so (D24,
-      // CODEBASE_ANALYSIS_2026-10-03).
+      // behind. The workflow's `ledger: push` mode says so. Production is not
+      // one: it applies migrations at boot and its ledger is populated.
       if (process.env.POST_MIGRATION_LEDGER === "push") {
-        console.warn("Skipping — push-managed database, no migration ledger expected");
+        console.warn("Skipping — push-built database, no migration ledger expected");
         return;
       }
       // Find the journal table in any schema
