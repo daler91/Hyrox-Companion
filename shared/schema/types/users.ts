@@ -1,4 +1,5 @@
-﻿import { userConsents, users } from "../tables";
+﻿import { type NumberBound, PREFERENCE_NUMBER_BOUNDS as BOUNDS } from "../../preferenceBounds";
+import { userConsents, users } from "../tables";
 import { z } from "../zod";
 // User types and schemas
 export type UpsertUser = typeof users.$inferInsert;
@@ -11,6 +12,13 @@ export type User = typeof users.$inferSelect;
 // in the browser/edge runtime in a portable way.
 const ianaTimezoneSchema = z.string().min(1).max(64).regex(/^[^\s]+$/, "must be a non-whitespace IANA name");
 
+/** A number held to one of the shared preference ranges (shared/preferenceBounds.ts). */
+function boundedNumber(bound: NumberBound) {
+  const base = bound.integer ? z.number().int() : z.number();
+  const floored = bound.minExclusive ? base.gt(bound.min) : base.min(bound.min);
+  return floored.max(bound.max);
+}
+
 // A per-email send-hour override: an hour of day, or null to fall back to the
 // athlete's default send time.
 const notifyHourOverrideSchema = z.number().int().min(0).max(23).nullable().optional();
@@ -21,7 +29,7 @@ export const updateUserPreferencesSchema = z.object({
   userTimezone: ianaTimezoneSchema.optional(),
   // A whole number of sessions: the column is an integer, and Postgres refused
   // 4.5 with a 500 (C50, CODEBASE_ANALYSIS_2026-10-03).
-  weeklyGoal: z.number().int().min(1).max(14).optional(),
+  weeklyGoal: boundedNumber(BOUNDS.weeklyGoal).optional(),
   // Meal-pattern preset: how many eating meals/day the per-meal fuel targets are
   // split across. 3 = breakfast/lunch/dinner, 4 = +snack, 5 = +afternoon snack.
   mealSchedule: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
@@ -65,24 +73,24 @@ export const updateUserPreferencesSchema = z.object({
   division: z.enum(["open", "pro"]).optional(),
   gender: z.enum(["male", "female", "prefer_not_to_say"]).nullable().optional(),
   // General age cohort signal for the Race Predictor (W17), independent of MAF.
-  age: z.number().int().min(13).max(100).nullable().optional(),
+  age: boundedNumber(BOUNDS.age).nullable().optional(),
   // Body-composition inputs for calculated nutrition targets. Canonical units
   // on the wire (kg/cm); the client converts from the user's display unit at the
   // input edge before PATCHing.
-  bodyweightKg: z.number().positive().max(500).nullable().optional(),
-  heightCm: z.number().positive().max(300).nullable().optional(),
+  bodyweightKg: boundedNumber(BOUNDS.bodyweightKg).nullable().optional(),
+  heightCm: boundedNumber(BOUNDS.heightCm).nullable().optional(),
   // Training-load physiological baselines for objective cardio load (hrTSS/TSS).
   // Optional; absent values fall back to age-estimated max HR + a default resting HR.
-  restingHr: z.number().int().min(30).max(120).nullable().optional(),
-  maxHr: z.number().int().min(120).max(230).nullable().optional(),
-  ftp: z.number().int().min(50).max(600).nullable().optional(),
+  restingHr: boundedNumber(BOUNDS.restingHr).nullable().optional(),
+  maxHr: boundedNumber(BOUNDS.maxHr).nullable().optional(),
+  ftp: boundedNumber(BOUNDS.ftp).nullable().optional(),
   activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]).nullable().optional(),
   weightGoalDirection: z.enum(["lose", "maintain", "gain"]).nullable().optional(),
-  weightGoalRateKgPerWeek: z.number().nonnegative().max(2).nullable().optional(),
+  weightGoalRateKgPerWeek: boundedNumber(BOUNDS.weightGoalRateKgPerWeek).nullable().optional(),
   // Durable injuries/limitations, seeded from the plan generator's textarea.
   // Same 500-char bound as generatePlanInputSchema.injuries, which feeds it.
   trainingConstraints: z.string().max(500).nullable().optional(),
-  mafAge: z.number().int().min(16).max(99).nullable().optional(),
+  mafAge: boundedNumber(BOUNDS.mafAge).nullable().optional(),
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),
   mafTrend: z.enum(["improving", "flat", "declining"]).nullable().optional(),

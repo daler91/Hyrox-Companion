@@ -1,4 +1,4 @@
-import { updateUserPreferencesSchema } from "@shared/schema";
+import { type BoundedPreference, type NumberBound, PREFERENCE_NUMBER_BOUNDS } from "@shared/preferenceBounds";
 import { kgToUserWeight } from "@shared/unitConversion";
 
 import { parseApiError } from "@/lib/apiError";
@@ -8,7 +8,8 @@ import { parseApiError } from "@/lib/apiError";
  * PATCH when any one value is out of range: a resting HR of 25 or a weekly
  * rate of 5 lbs left every later save failing with "Please try again" and
  * nothing pointing at the field. The payload is checked here against the same
- * shared schema the server validates with, and the refusal names the field,
+ * ranges the server's schema is built from (shared/preferenceBounds.ts; the
+ * schema itself must not reach the browser), and the refusal names the field,
  * its allowed range in the units the athlete sees, and the tab it is on.
  * U35 (CODEBASE_ANALYSIS_2026-10-03)
  */
@@ -22,7 +23,7 @@ interface FieldCopy {
 }
 
 // Every numeric field the preferences form sends; all sit on the Training tab.
-const FIELD_COPY: ReadonlyMap<string, FieldCopy> = new Map<string, FieldCopy>([
+const FIELD_COPY: ReadonlyMap<BoundedPreference, FieldCopy> = new Map<BoundedPreference, FieldCopy>([
   ["age", { label: "Age" }],
   ["bodyweightKg", { label: "Bodyweight", weight: true }],
   ["heightCm", { label: "Height", unit: "cm" }],
@@ -45,39 +46,31 @@ function formatBound(bound: number, copy: FieldCopy, weightUnit: string): string
   return copy.unit ? `${String(bound)} ${copy.unit}` : String(bound);
 }
 
-interface RangeIssue {
-  readonly code: string;
-  readonly minimum?: unknown;
-  readonly maximum?: unknown;
-  readonly inclusive?: boolean;
-}
-
-/** What is wrong with the value, e.g. "must be at least 30 bpm". */
-function describeRule(issue: RangeIssue, copy: FieldCopy, weightUnit: string): string {
-  if (issue.code === "too_big" && typeof issue.maximum === "number") {
-    return `must be ${formatBound(issue.maximum, copy, weightUnit)} or less`;
+/** What is wrong with a value outside its range, e.g. "must be at least 30 bpm"; null when it is fine. */
+function describeRule(value: unknown, bound: NumberBound, copy: FieldCopy, weightUnit: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) return "has a value Settings can't save";
+  if (bound.integer && !Number.isInteger(value)) return "must be a whole number";
+  if (bound.minExclusive ? value <= bound.min : value < bound.min) {
+    const shown = formatBound(bound.min, copy, weightUnit);
+    return bound.minExclusive ? `must be more than ${shown}` : `must be at least ${shown}`;
   }
-  if (issue.code === "too_small" && typeof issue.minimum === "number") {
-    return issue.inclusive === false
-      ? `must be more than ${formatBound(issue.minimum, copy, weightUnit)}`
-      : `must be at least ${formatBound(issue.minimum, copy, weightUnit)}`;
-  }
-  // zod reports a fraction where `.int()` wants a whole number as invalid_type.
-  if (issue.code === "invalid_type") return "must be a whole number";
-  return "has a value Settings can't save";
+  if (value > bound.max) return `must be ${formatBound(bound.max, copy, weightUnit)} or less`;
+  return null;
 }
 
 /**
  * The athlete-facing reason a preferences save would be refused, or null when
- * the server's schema accepts it. U35 (CODEBASE_ANALYSIS_2026-10-03)
+ * every numeric field is within the server's range. Other fields are left to
+ * the server, whose refusal describePreferencesRejection names.
+ * U35 (CODEBASE_ANALYSIS_2026-10-03)
  */
-export function describeInvalidPreferences(payload: unknown, weightUnit: string): string | null {
-  const result = updateUserPreferencesSchema.safeParse(payload);
-  if (result.success) return null;
-  const issue = result.error.issues[0];
-  const copy = FIELD_COPY.get(String(issue?.path[0] ?? ""));
-  if (!issue || !copy) return `One of your settings has a value Settings can't save. ${WHERE}`;
-  return `${copy.label} ${describeRule(issue, copy, weightUnit)}. ${WHERE}`;
+export function describeInvalidPreferences(payload: Readonly<Record<string, unknown>>, weightUnit: string): string | null {
+  for (const [field, copy] of FIELD_COPY) {
+    const rule = describeRule(payload[field], PREFERENCE_NUMBER_BOUNDS[field], copy, weightUnit);
+    if (rule) return `${copy.label} ${rule}. ${WHERE}`;
+  }
+  return null;
 }
 
 /** The field a server VALIDATION_ERROR names, from its `details.issues`. */
@@ -101,7 +94,8 @@ function rejectedField(error: unknown): string | null {
  */
 export function describePreferencesRejection(error: unknown): string | null {
   if (parseApiError(error)?.code !== "VALIDATION_ERROR") return null;
-  const copy = FIELD_COPY.get(rejectedField(error) ?? "");
+  const field = rejectedField(error);
+  const copy = field && field in PREFERENCE_NUMBER_BOUNDS ? FIELD_COPY.get(field as BoundedPreference) : undefined;
   const subject = copy ? copy.label : "One of your settings";
   return `${subject} has a value Settings can't save. ${WHERE}`;
 }
