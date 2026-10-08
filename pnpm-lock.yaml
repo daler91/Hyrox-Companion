@@ -65,9 +65,6 @@ importers:
       '@fontsource/geist-sans':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource/open-sans':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@fontsource/space-grotesk':
         specifier: ^5.3.0
         version: 5.3.0
@@ -1312,9 +1309,6 @@ packages:
 
   '@fontsource/geist-sans@5.3.0':
     resolution: {integrity: sha512-AmG7cE1AvE4NHROPaOl1sN+a02cB5xy6pA/ZV76HXqWTCsJTV2SCBc9DTFHfJqnVOODm7HhXIYtUIb75NP5QXQ==}
-
-  '@fontsource/open-sans@5.3.0':
-    resolution: {integrity: sha512-V1bdMlGNyZrJwzrdusshMOw2YR0aqYDL7kOo9dkxUEKl8dFv66A9HLckOOXl572sG/7ohhDQrCrTFGSn9LZcSw==}
 
   '@fontsource/space-grotesk@5.3.0':
     resolution: {integrity: sha512-ksnGizDPXIDuvqcTYTSrmZ+evx9sDlS8rp7+42BQ7wU+spt3twEoXfbJz672C+5CLg6VeUQwRy5RXshWb67LcQ==}
@@ -7739,8 +7733,6 @@ snapshots:
   '@fontsource/geist-mono@5.3.0': {}
 
   '@fontsource/geist-sans@5.3.0': {}
-
-  '@fontsource/open-sans@5.3.0': {}
 
   '@fontsource/space-grotesk@5.3.0': {}
 

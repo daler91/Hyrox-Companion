@@ -14,13 +14,27 @@ export interface BundleStats {
   readonly eagerLucideIcons: number;
   /** lucide-react icon modules in the whole bundle, eager or lazy. */
   readonly totalLucideIcons: number;
+  /**
+   * Markdown-stack modules (react-markdown, remark-gfm, rehype-sanitize,
+   * micromark) the Timeline route loads with itself: its chunk and,
+   * transitively, its static imports. Null when no chunk is the Timeline's.
+   */
+  readonly timelineMarkdownModules: number | null;
+  /** Markdown-stack modules in the whole bundle. */
+  readonly totalMarkdownModules: number;
 }
 
 const BUNDLE_STATS_PATH = "dist/bundle-stats.json";
 const LUCIDE_ICON_MODULE = /[\\/]lucide-react[\\/]dist[\\/]esm[\\/]icons[\\/]/;
+const MARKDOWN_MODULE = /[\\/]node_modules[\\/](react-markdown|remark-gfm|rehype-sanitize|micromark)[\\/]/;
+const TIMELINE_ROUTE_MODULE = /[\\/]client[\\/]src[\\/]pages[\\/]Timeline\.tsx$/;
 
-function lucideIconCount(chunk: Rollup.OutputChunk): number {
-  return chunk.moduleIds.filter((moduleId) => LUCIDE_ICON_MODULE.test(moduleId)).length;
+function moduleCount(chunks: Iterable<Rollup.OutputChunk>, pattern: RegExp): number {
+  let count = 0;
+  for (const chunk of chunks) {
+    count += chunk.moduleIds.filter((moduleId) => pattern.test(moduleId)).length;
+  }
+  return count;
 }
 
 function addWithStaticImports(
@@ -36,26 +50,47 @@ function addWithStaticImports(
   }
 }
 
-/** The chunks first paint loads: each entry chunk and, transitively, its static imports. */
-export function eagerChunks(bundle: Rollup.OutputBundle): Rollup.OutputChunk[] {
+/** The chunks matching `isRoot` and, transitively, their static imports. */
+function staticClosure(
+  bundle: Rollup.OutputBundle,
+  isRoot: (chunk: Rollup.OutputChunk) => boolean,
+): Rollup.OutputChunk[] {
   const chunksByFile = new Map<string, Rollup.OutputChunk>();
   for (const output of Object.values(bundle)) {
     if (output.type === "chunk") chunksByFile.set(output.fileName, output);
   }
-  const eager = new Map<string, Rollup.OutputChunk>();
+  const closure = new Map<string, Rollup.OutputChunk>();
   for (const chunk of chunksByFile.values()) {
-    if (chunk.isEntry) addWithStaticImports(chunk, chunksByFile, eager);
+    if (isRoot(chunk)) addWithStaticImports(chunk, chunksByFile, closure);
   }
-  return [...eager.values()];
+  return [...closure.values()];
+}
+
+/** The chunks first paint loads: each entry chunk and, transitively, its static imports. */
+export function eagerChunks(bundle: Rollup.OutputBundle): Rollup.OutputChunk[] {
+  return staticClosure(bundle, (chunk) => chunk.isEntry);
+}
+
+/**
+ * The chunks the Timeline route loads with itself. It is the home page, so
+ * what it carries every athlete pays for on a cold start, though it is a lazy
+ * route and so outside {@link eagerChunks}.
+ */
+export function timelineChunks(bundle: Rollup.OutputBundle): Rollup.OutputChunk[] {
+  return staticClosure(bundle, (chunk) => TIMELINE_ROUTE_MODULE.test(chunk.facadeModuleId ?? ""));
 }
 
 export function collectBundleStats(bundle: Rollup.OutputBundle): BundleStats {
-  const sumIcons = (chunks: Iterable<Rollup.OutputChunk>): number =>
-    [...chunks].reduce((count, chunk) => count + lucideIconCount(chunk), 0);
   const allChunks = Object.values(bundle).filter(
     (output): output is Rollup.OutputChunk => output.type === "chunk",
   );
-  return { eagerLucideIcons: sumIcons(eagerChunks(bundle)), totalLucideIcons: sumIcons(allChunks) };
+  const timeline = timelineChunks(bundle);
+  return {
+    eagerLucideIcons: moduleCount(eagerChunks(bundle), LUCIDE_ICON_MODULE),
+    totalLucideIcons: moduleCount(allChunks, LUCIDE_ICON_MODULE),
+    timelineMarkdownModules: timeline.length > 0 ? moduleCount(timeline, MARKDOWN_MODULE) : null,
+    totalMarkdownModules: moduleCount(allChunks, MARKDOWN_MODULE),
+  };
 }
 
 /**

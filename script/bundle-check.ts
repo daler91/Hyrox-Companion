@@ -25,6 +25,11 @@ import { type BundleStats, readBundleStats } from "./bundleStats";
  *    icon the app uses (~140) instead of the shell's own (~20). Counted by the
  *    build itself (script/bundleStats.ts), which still knows each chunk's
  *    modules.
+ * 4. The markdown stack stays out of the Timeline route's own chunks. The
+ *    Timeline is the home page; the stack (~120KB) renders coach replies and
+ *    loads with the first one (ChatMessage -> ChatMarkdown). Symptom: a static
+ *    import of react-markdown somewhere the Timeline reaches, such as the
+ *    workout sheets' embedded coach chat. PF8 (CODEBASE_ANALYSIS_2026-10-03)
  */
 
 const DIST = "dist/public";
@@ -58,6 +63,27 @@ export function eagerLucideIconFailures(stats: BundleStats | null): string[] {
   return [
     `the eager graph carries ${stats.eagerLucideIcons} lucide-react icons (budget ${MAX_EAGER_LUCIDE_ICONS}) — ` +
       "icons of lazy routes are on first paint; check vite.config.ts codeSplitting for a group that captures lucide-react",
+  ];
+}
+
+/**
+ * Invariant 4. Fails, rather than passing blind, when the build found no
+ * markdown modules or no Timeline route chunk: the patterns in
+ * script/bundleStats.ts no longer fit. A missing stats file is reported by
+ * eagerLucideIconFailures.
+ */
+export function timelineMarkdownFailures(stats: BundleStats | null): string[] {
+  if (stats === null) return [];
+  if (stats.totalMarkdownModules === 0 || stats.timelineMarkdownModules === null) {
+    return [
+      "the build found no markdown modules or no Timeline route chunk — MARKDOWN_MODULE or TIMELINE_ROUTE_MODULE " +
+        "in script/bundleStats.ts no longer fits, so the Timeline markdown guard cannot count",
+    ];
+  }
+  if (stats.timelineMarkdownModules === 0) return [];
+  return [
+    `the Timeline route loads ${stats.timelineMarkdownModules} markdown modules with itself — something it reaches ` +
+      "statically imports react-markdown; render coach text through the lazy ChatMarkdown (client/src/components/chat)",
   ];
 }
 
@@ -100,7 +126,8 @@ export async function collectBundleCheckFailures(): Promise<string[]> {
     );
   }
 
-  failures.push(...eagerLucideIconFailures(await readBundleStats()));
+  const stats = await readBundleStats();
+  failures.push(...eagerLucideIconFailures(stats), ...timelineMarkdownFailures(stats));
 
   return failures;
 }

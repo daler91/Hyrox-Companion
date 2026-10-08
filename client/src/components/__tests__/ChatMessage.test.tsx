@@ -1,10 +1,20 @@
 import '@testing-library/jest-dom';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChatMessage } from '../ChatMessage';
+
+/**
+ * The markdown renderer is a lazy chunk (PF8): a reply shows as plain text
+ * until it loads. Structure and sanitization tests wait for the real render.
+ */
+async function markdownRendered() {
+  await waitFor(() => {
+    expect(screen.queryByTestId('chat-markdown-pending')).not.toBeInTheDocument();
+  });
+}
 
 describe('ChatMessage', () => {
   it('renders a user message correctly', () => {
@@ -52,13 +62,14 @@ describe('ChatMessage', () => {
   });
 
   describe('assistant XSS sanitization (C2)', () => {
-    it('does not render a <script> tag injected into AI markdown', () => {
+    it('does not render a <script> tag injected into AI markdown', async () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
           content={'before<script>window.__xssMarker = true;</script>after'}
         />,
       );
+      await markdownRendered();
       // rehype-sanitize must drop the script element entirely (react-markdown
       // would already refuse to execute it, but the element shouldn't appear
       // in the DOM either).
@@ -66,25 +77,27 @@ describe('ChatMessage', () => {
       expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
     });
 
-    it('strips javascript: URLs from markdown links', () => {
+    it('strips javascript: URLs from markdown links', async () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
           content={'[click me](javascript:alert(1))'}
         />,
       );
+      await markdownRendered();
       // The link element may or may not render; what matters is that no
       // javascript:-scheme href survives in the rendered HTML.
       expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
     });
 
-    it('strips inline event handlers from raw HTML in markdown', () => {
+    it('strips inline event handlers from raw HTML in markdown', async () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
           content={'<img src=x onerror="window.__xssMarker = true">'}
         />,
       );
+      await markdownRendered();
       expect(container.innerHTML).not.toMatch(/onerror=/i);
       expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
     });
@@ -157,8 +170,9 @@ describe('ChatMessage', () => {
       '| 2 km | 4:02 |',
     ].join('\n');
 
-    it('renders a table as a table, in a horizontal scroll wrapper', () => {
+    it('renders a table as a table, in a horizontal scroll wrapper', async () => {
       const { container } = render(<ChatMessage role="assistant" content={table} />);
+      await markdownRendered();
       const rendered = container.querySelector('table');
       expect(rendered).not.toBeNull();
       expect(screen.getByRole('columnheader', { name: 'Pace' })).toBeInTheDocument();
@@ -167,24 +181,27 @@ describe('ChatMessage', () => {
       expect(container.textContent).not.toContain('| ---');
     });
 
-    it('renders strikethrough', () => {
+    it('renders strikethrough', async () => {
       const { container } = render(<ChatMessage role="assistant" content="~~6 x 800 m~~ 5 x 800 m" />);
+      await markdownRendered();
       expect(container.querySelector('del')).toHaveTextContent('6 x 800 m');
     });
 
-    it('still sanitizes raw HTML inside a table cell', () => {
+    it('still sanitizes raw HTML inside a table cell', async () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
           content={'| a | b |\n| --- | --- |\n| <img src=x onerror="window.__xssMarker = true"> | ok |'}
         />,
       );
+      await markdownRendered();
       expect(container.innerHTML).not.toMatch(/onerror=/i);
       expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
     });
 
-    it('does not turn a javascript: autolink into a live link', () => {
+    it('does not turn a javascript: autolink into a live link', async () => {
       const { container } = render(<ChatMessage role="assistant" content="see javascript:alert(1) and www.example.com" />);
+      await markdownRendered();
       expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
     });
   });
