@@ -227,10 +227,13 @@ export async function enqueueTrainingStyleRecompute(
   userId: string,
   localDate: string,
 ): Promise<number> {
-  const rows = await Promise.all(
-    STYLE_AWARE_FEATURES.map((feature) => storage.analyticsResults.get(userId, feature)),
+  const stored = await Promise.all(
+    STYLE_AWARE_FEATURES.map(async (feature) => ({
+      feature,
+      row: await storage.analyticsResults.get(userId, feature),
+    })),
   );
-  const used = STYLE_AWARE_FEATURES.filter((_feature, index) => rows[index] !== undefined);
+  const used = stored.filter(({ row }) => row !== undefined).map(({ feature }) => feature);
   await Promise.all(
     used.map((feature) => {
       const data: RecomputeAnalyticsJobData = { userId, feature, localDate, trigger: "training_style_change" };

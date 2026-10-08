@@ -1,4 +1,4 @@
-import { type BoundedPreference, type NumberBound, PREFERENCE_NUMBER_BOUNDS } from "@shared/preferenceBounds";
+import { type NumberBound, PREFERENCE_NUMBER_BOUNDS } from "@shared/preferenceBounds";
 import { kgToUserWeight } from "@shared/unitConversion";
 
 import { parseApiError } from "@/lib/apiError";
@@ -23,7 +23,7 @@ interface FieldCopy {
 }
 
 // Every numeric field the preferences form sends; all sit on the Training tab.
-const FIELD_COPY: ReadonlyMap<BoundedPreference, FieldCopy> = new Map<BoundedPreference, FieldCopy>([
+const FIELD_COPY: ReadonlyMap<string, FieldCopy> = new Map<string, FieldCopy>([
   ["age", { label: "Age" }],
   ["bodyweightKg", { label: "Bodyweight", weight: true }],
   ["heightCm", { label: "Height", unit: "cm" }],
@@ -34,6 +34,10 @@ const FIELD_COPY: ReadonlyMap<BoundedPreference, FieldCopy> = new Map<BoundedPre
   ["weeklyGoal", { label: "Weekly workout goal" }],
   ["mafAge", { label: "MAF age" }],
 ]);
+
+const BOUNDS: ReadonlyMap<string, NumberBound> = new Map<string, NumberBound>(
+  Object.entries(PREFERENCE_NUMBER_BOUNDS),
+);
 
 const WHERE = "Fix it on the Training tab, then save again.";
 
@@ -66,8 +70,10 @@ function describeRule(value: unknown, bound: NumberBound, copy: FieldCopy, weigh
  * U35 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function describeInvalidPreferences(payload: Readonly<Record<string, unknown>>, weightUnit: string): string | null {
+  const values = new Map(Object.entries(payload));
   for (const [field, copy] of FIELD_COPY) {
-    const rule = describeRule(payload[field], PREFERENCE_NUMBER_BOUNDS[field], copy, weightUnit);
+    const bound = BOUNDS.get(field);
+    const rule = bound ? describeRule(values.get(field), bound, copy, weightUnit) : null;
     if (rule) return `${copy.label} ${rule}. ${WHERE}`;
   }
   return null;
@@ -94,8 +100,7 @@ function rejectedField(error: unknown): string | null {
  */
 export function describePreferencesRejection(error: unknown): string | null {
   if (parseApiError(error)?.code !== "VALIDATION_ERROR") return null;
-  const field = rejectedField(error);
-  const copy = field && field in PREFERENCE_NUMBER_BOUNDS ? FIELD_COPY.get(field as BoundedPreference) : undefined;
+  const copy = FIELD_COPY.get(rejectedField(error) ?? "");
   const subject = copy ? copy.label : "One of your settings";
   return `${subject} has a value Settings can't save. ${WHERE}`;
 }
