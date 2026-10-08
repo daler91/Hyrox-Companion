@@ -50,7 +50,9 @@ export default defineRailway(() => {
       // SSE, stop pg-boss or flush Sentry. 65 s covers its 60 s
       // SHUTDOWN_TIMEOUT_MS, so the app's own force-exit fires first.
       drainingSeconds: 65,
-      restartPolicyType: "ON_FAILURE",
+      // The restart policy is Railway's default, On Failure, which Railway
+      // stores as null: declaring restartPolicyType: "ON_FAILURE" left
+      // `railway config plan` reporting a change after every apply.
       restartPolicyMaxRetries: 3,
     },
     replicas: { "us-east4-eqdc4a": 1 },

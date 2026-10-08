@@ -57,7 +57,7 @@ migration newer than it.
 
 ---
 
-## [ ] Before 2026-12-01 — move Railway's deploy config off `railway.toml`
+## [x] Before 2026-12-01 — move Railway's deploy config off `railway.toml`
 
 - **Config:** `.railway/railway.ts` (Railway Infrastructure as Code), replacing
   `railway.toml`; `nixpacks.toml` unchanged
@@ -69,7 +69,10 @@ migration newer than it.
 - **Run on production:** 2026-10-08, by the owner (CLI 5.64.0, Windows):
   `migrate --apply` from `main`, then `plan` / `apply` from the PR branch. The
   plan matched the check below; after `apply` every setting cleared except
-  `restartPolicyType` (see "Verify afterwards"). Left: merge the PR, then verify.
+  `restartPolicyType` (see "Verify afterwards"). PR #2125 merged the same day;
+  its deploy (`b9fc66cd`) booted on the service's own settings (`startup
+complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
+  log's install line was not checked.
 - **What `railway config migrate` got wrong:** its generated file kept the
   build and start commands, the healthcheck path and the 120 s timeout, but
   dropped three settings: the builder (left as a comment, so the service would
@@ -144,18 +147,18 @@ migration newer than it.
   first: Node 22 and pnpm 9.12 resolution, an install that still passes
   `--ignore-scripts` (`nixpacks.toml`'s override does not apply there), and a
   boot that passes the `/api/v1/health` healthcheck.
-- **Verify afterwards** (after the merge deploy):
+- **Verified 2026-10-08** (after the merge deploy):
   - The dashboard's deploy settings no longer say "set in /railway.toml" and
     show builder nixpacks, the `--ignore-scripts` build command, healthcheck
     `/api/v1/health` (120 s), draining 65 s, restart On Failure with 3 retries.
   - The build log shows the install without lifecycle scripts; the deploy log
     shows the healthcheck polling `/api/v1/health`, then `startup complete`.
-  - `railway config plan` shows no change. After the 2026-10-08 `apply` it
-    still listed `restartPolicyType (null → "ON_FAILURE")` while the retry
-    count had cleared. If it still does, and the dashboard shows On Failure
-    once `railway.toml` is gone, Railway stores its default as `null`: drop
-    `restartPolicyType` from the file (and its assertion in the test) so the
-    plan comes back clean.
+  - `railway config plan` shows no change. After `apply`, and again after the
+    merge with the dashboard showing On Failure, it still listed
+    `restartPolicyType (null → "ON_FAILURE")`: Railway stores its default
+    policy as `null`. The file now leaves `restartPolicyType` unset (the test
+    accepts unset or `ON_FAILURE` and pins the 3 retries), so the plan comes
+    back clean.
 
 ---
 
