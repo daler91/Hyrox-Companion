@@ -70,7 +70,7 @@ function TimelineMockup() {
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent animate-pulse" />
             <div className="relative flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+              <Sparkles className="h-4 w-4 text-primary animate-pulse" aria-hidden="true" />
               <span className="text-sm font-medium">Circuit Simulation</span>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-auto">
                 Key

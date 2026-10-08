@@ -103,7 +103,7 @@ export function NutritionInsightsPanel() {
         className="space-y-3 rounded-lg border border-dashed bg-muted/20 py-8 text-center"
         data-testid="nutrition-insights-empty"
       >
-        <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" />
+        <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
         <p className="px-4 text-sm text-muted-foreground">
           Generate a personalized analysis of your fuelling — how your intake tracks your training,
           where you&rsquo;re falling short, and what to focus on next.
@@ -117,7 +117,7 @@ export function NutritionInsightsPanel() {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
             <CardTitle as="h2">Nutrition Insights</CardTitle>
           </div>
           <div className="ml-auto flex flex-col items-end gap-1">

@@ -87,7 +87,7 @@ export default function SuggestionsPanel({
                         data-testid={`dismiss-suggestion-${suggestion.workoutId}`}
                         aria-label="Dismiss suggestion"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Dismiss suggestion</TooltipContent>

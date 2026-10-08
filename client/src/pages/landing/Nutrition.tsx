@@ -69,7 +69,7 @@ function NutritionMockup() {
           </div>
 
           <div className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-            <Sparkles className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+            <Sparkles className="h-3.5 w-3.5 text-primary flex-shrink-0" aria-hidden="true" />
             <span className="text-xs text-muted-foreground">
               Carbs scaled up for today&apos;s high training load
             </span>

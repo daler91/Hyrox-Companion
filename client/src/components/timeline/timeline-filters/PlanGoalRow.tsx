@@ -15,7 +15,7 @@ export function PlanGoalRow({ plan, onEditClick }: Readonly<PlanGoalRowProps>) {
 
   return (
     <div className="flex items-center gap-2 pt-3 border-t mt-3">
-      <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
       <button
         type="button"
         className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
