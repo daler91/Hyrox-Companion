@@ -22,9 +22,11 @@ interface Row {
 }
 
 function reviewRows(byOwner: Record<string, Row[]>) {
+  const rowsByOwner = new Map(Object.entries(byOwner));
   return vi.fn((url: string) => {
-    const ownerId = new URL(url, "http://localhost").searchParams.get("ownerId") ?? "";
-    const rows = (byOwner[ownerId] ?? []).map((row) => ({ ownerType: "workoutLog", ...row }));
+    // The request URL is relative; any base resolves it for reading the query.
+    const ownerId = new URL(url, "https://app.test").searchParams.get("ownerId") ?? "";
+    const rows = (rowsByOwner.get(ownerId) ?? []).map((row) => ({ ownerType: "workoutLog", ...row }));
     return Promise.resolve(new Response(JSON.stringify(rows), { status: 200 }));
   });
 }
