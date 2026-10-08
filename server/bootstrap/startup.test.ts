@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import express from "express";
+import { createRailwayContext, project } from "railway/iac";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import railwayProgram from "../../.railway/railway";
 import { __resetHealthCacheForTests, registerHealthEndpoint } from "./health";
 import { registerShutdownHandlers, SHUTDOWN_TIMEOUT_MS } from "./lifecycle";
 import { registerProcessErrorHandlers } from "./observability";
@@ -143,19 +145,24 @@ describe("bootstrap startup parity", () => {
 });
 
 /**
- * railway.toml and nixpacks.toml are what production actually runs, and no
- * other test reads them. Both are flat, so a line match stands in for a TOML
- * parser (none is in the dependency tree).
+ * .railway/railway.ts and nixpacks.toml are what production actually runs, and
+ * no other test reads them. The IaC file is evaluated with Railway's own SDK,
+ * so these see the settings `railway config apply` sends. nixpacks.toml is
+ * flat, so a line match stands in for a TOML parser (none is in the
+ * dependency tree).
  */
 describe("Railway deploy config", () => {
-  const readRepoFile = (relative: string) => readFileSync(path.resolve(process.cwd(), relative), "utf8");
-  const tomlValue = (file: string, key: string): string | undefined => {
-    for (const line of readRepoFile(file).split("\n")) {
-      const eq = line.indexOf("=");
-      const value = eq > 0 && line.slice(0, eq).trimEnd() === key ? line.slice(eq + 1).trim() : "";
-      if (value) return value;
-    }
-    return undefined;
+  const readRepoFile = (relative: string) =>
+    readFileSync(path.resolve(process.cwd(), relative), "utf8");
+  const productionService = async () => {
+    const definition = await railwayProgram(
+      createRailwayContext({ environment: "production" }),
+      project,
+    );
+    const node = definition.resources.find((resource) => resource.name === "Hyrox-Companion");
+    if (node?.type !== "service")
+      throw new Error("Hyrox-Companion service missing from .railway/railway.ts");
+    return node;
   };
 
   it("gates the deploy on readiness: the healthcheck path is non-2xx until every route is mounted (D2)", async () => {
@@ -164,7 +171,8 @@ describe("Railway deploy config", () => {
     // liveness route it answered 200 as soon as the port bound — before the DB
     // was reached or any route existed — so a release whose boot then failed
     // replaced the healthy one.
-    const healthcheckPath = JSON.parse(tomlValue("railway.toml", "healthcheckPath") ?? "null") as string;
+    const healthcheckPath = (await productionService()).deploy?.healthcheckPath;
+    expect(healthcheckPath).toBe("/api/v1/health");
     const probe = async (state: { isReady: boolean; startupError: string | null }) => {
       __resetHealthCacheForTests();
       const app = express();
@@ -173,7 +181,7 @@ describe("Railway deploy config", () => {
         probeDatabase: async () => true,
         probeVectorDatabase: async () => true,
       });
-      return (await request(app).get(healthcheckPath)).status;
+      return (await request(app).get(String(healthcheckPath))).status;
     };
 
     expect(await probe({ isReady: false, startupError: null })).toBe(503);
@@ -181,27 +189,34 @@ describe("Railway deploy config", () => {
     expect(await probe({ isReady: true, startupError: null })).toBe(200);
   });
 
-  it("gives the outgoing deployment its whole graceful-shutdown budget before SIGKILL (D3)", () => {
+  it("gives the outgoing deployment its whole graceful-shutdown budget before SIGKILL (D3)", async () => {
     // Railway's default is 0 s between SIGTERM and SIGKILL, which killed the
     // old instance before registerShutdownHandlers could drain anything.
-    // Unquoted: Railway's config schema types it as a number.
-    const drainingSeconds = tomlValue("railway.toml", "drainingSeconds");
-    expect(drainingSeconds).toMatch(/^\d+$/);
-    expect(Number(drainingSeconds) * 1000).toBeGreaterThan(SHUTDOWN_TIMEOUT_MS);
+    // `railway config migrate` dropped this setting, so it is pinned here.
+    const { deploy } = await productionService();
+    expect((deploy?.drainingSeconds ?? 0) * 1000).toBeGreaterThan(SHUTDOWN_TIMEOUT_MS);
+    expect(deploy?.restartPolicyType).toBe("ON_FAILURE");
   });
 
-  it("never runs dependency install scripts in the production build (S4)", () => {
+  it("never runs dependency install scripts in the production build (S4)", async () => {
     // The build environment carries every Railway service variable, and CI
     // installs with --ignore-scripts, so a malicious postinstall would first
     // execute here. nixpacks' default install phase runs scripts too, so it
-    // must be overridden, not just the build command. npm counts as well: the
-    // override keeps the default phase's global corepack install.
-    const installs = ["railway.toml", "nixpacks.toml"].flatMap((file) =>
-      readRepoFile(file)
+    // must be overridden, not just the build command, and the builder must
+    // stay nixpacks for nixpacks.toml to be read at all. npm counts as well:
+    // the override keeps the default phase's global corepack install.
+    const { build } = await productionService();
+    expect(build?.builder).toBe("NIXPACKS");
+    const installCommands = (source: string, text: string) =>
+      [...text.matchAll(/\bp?npm (?:install|i)\b[^"&]*/g)].map((m) => `${source}: ${m[0].trim()}`);
+    const installs = [
+      ...installCommands("buildCommand", build?.buildCommand ?? ""),
+      ...readRepoFile("nixpacks.toml")
         .split("\n")
         .filter((line) => !line.trimStart().startsWith("#"))
-        .flatMap((line) => [...line.matchAll(/\bp?npm (?:install|i)\b[^"&]*/g)].map((m) => `${file}: ${m[0].trim()}`)),
-    );
+        .flatMap((line) => installCommands("nixpacks.toml", line)),
+    ];
+    expect(installs.some((line) => line.startsWith("buildCommand: pnpm"))).toBe(true);
     expect(installs.some((line) => line.startsWith("nixpacks.toml: pnpm"))).toBe(true);
     expect(installs.filter((line) => !line.includes("--ignore-scripts"))).toEqual([]);
   });

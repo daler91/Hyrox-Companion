@@ -3,7 +3,8 @@
     "client/src/**/*",
     "shared/**/*",
     "server/**/*",
-    "script/**/*"
+    "script/**/*",
+    ".railway/**/*"
   ],
   "exclude": [
     "node_modules",

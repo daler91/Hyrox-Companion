@@ -5,6 +5,8 @@
     "shared/**/*",
     "server/**/*",
     "script/**/*",
+    // Railway Infrastructure as Code (the production deploy settings).
+    ".railway/**/*",
     // Root-level test helpers and suites. Previously these were only in the
     // program by accident — `test/factories.ts` is pulled in because server
     // tests import it — so a test file nothing imports (e.g. test/audit/*)
