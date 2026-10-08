@@ -22,9 +22,10 @@ that refuses to boot on a missing table or column no longer suggests it.
 0094), hand-written SQL (C9), platform settings (Railway), and a migration the
 migrator skipped. Drizzle skips any journal entry whose `when` is older than
 the newest recorded one. Three historical entries are out of order (0009, 0011,
-0019), and production skipped 0019 until 2026-10-07 (see its entry below).
-`server/__tests__/migrationChain.test.ts` fails CI on a new out-of-order
-entry (D26), and boot now logs a skipped migration by name.
+0019), and production skipped 0019 until 2026-10-07 and 0016 until 2026-10-08
+(see their entries below). `server/__tests__/migrationChain.test.ts` fails CI
+on a new out-of-order entry (D26), and boot now logs a skipped migration by
+name.
 
 The migration entries below (the older-migration audit, 0074, 0081, 0082, 0091,
 0117, 0121 and 0122) ran at boot when their release first started. Each keeps
@@ -186,6 +187,61 @@ migration newer than it.
             WHERE created_at = 1775428793648) AS ledger_row;
   -- expect t, 1
   ```
+
+---
+
+## [x] 0016 — `hyrox_station` renamed to `functional`, skipped by the migrator
+
+- **Run on production:** 2026-10-08, by the owner, as one statement (fix
+  below). Output checked: 56 `exercise_sets` rows updated, 0
+  `custom_exercises` rows, 1 ledger row; afterwards no rows left on
+  `hyrox_station` and the ledger row present.
+- **Migration:** `migrations/0016_rename_hyrox_station_to_functional.sql`
+  (data only: two `UPDATE`s, no schema change).
+- **How it was found:** the boot warning added in #2123. Its first production
+  boot logged `skipped: ["0016_rename_hyrox_station_to_functional"]`. The
+  startup check still passed: it looks only for missing tables and columns.
+- **What happened:** 0016's `when` (1775334000000, 2026-04-04 20:20 UTC) is in
+  order in the journal, so it is not one of the out-of-order entries. A
+  migration with a later `when` was already in production's ledger when 0016
+  shipped, so `migrate()` took 0016 as applied. Nothing reads or writes
+  `hyrox_station` since the rename, so those 56 sets showed under their own
+  unknown category in analytics instead of under functional work.
+- **The fix:** the migration's two `UPDATE`s plus the ledger row, as a single
+  statement that ends in a `SELECT`. The query tool used appends `LIMIT` to
+  each statement, which breaks `BEGIN`, `UPDATE` and `COMMIT`; one statement is
+  also one transaction. Re-runnable:
+
+  ```sql
+  WITH sets_fixed AS (
+    UPDATE exercise_sets SET category = 'functional'
+    WHERE category = 'hyrox_station' RETURNING 1
+  ), custom_fixed AS (
+    UPDATE custom_exercises SET category = 'functional'
+    WHERE category = 'hyrox_station' RETURNING 1
+  ), ledger AS (
+    INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+    SELECT '4d8053c1ad16fdc89b16f0b1808145235cbed05467793f0ff25925bb56b73864', 1775334000000
+    WHERE NOT EXISTS (SELECT 1 FROM drizzle.__drizzle_migrations WHERE created_at = 1775334000000)
+    RETURNING 1
+  )
+  SELECT (SELECT count(*) FROM sets_fixed)   AS sets_updated,
+         (SELECT count(*) FROM custom_fixed) AS custom_updated,
+         (SELECT count(*) FROM ledger)       AS ledger_rows_added;
+  ```
+
+  Cached analytics pick up the merged category at the nightly recompute.
+
+- **Verify:**
+
+  ```sql
+  SELECT (SELECT count(*) FROM exercise_sets WHERE category = 'hyrox_station') AS remaining,
+         (SELECT count(*) FROM drizzle.__drizzle_migrations
+            WHERE created_at = 1775334000000) AS ledger_row;
+  -- expect 0, 1
+  ```
+
+  The next boot logs no `Migrations missing from the ledger` warning.
 
 ---
 
