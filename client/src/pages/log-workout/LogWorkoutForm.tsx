@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useLocation } from "wouter";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { useToast } from "@/hooks/use-toast";
@@ -182,6 +183,19 @@ function LogWorkoutFormBody({ userKey, onDiscardDraft }: Readonly<LogWorkoutForm
   });
 
   const hasWorkoutDetails = exerciseBlocks.length > 0 || structureBlocks.length > 0 || freeText.trim().length > 0;
+  // Duplicating replaces the exercises, title and notes, and draft persistence
+  // then overwrites the saved draft, so ask before throwing entered work away.
+  // U30 (CODEBASE_ANALYSIS_2026-10-03)
+  const [confirmDuplicateOpen, setConfirmDuplicateOpen] = useState(false);
+  const hasEnteredWork =
+    hasWorkoutDetails || title.trim().length > 0 || notes.trim().length > 0;
+  const requestDuplicateLast = () => {
+    if (hasEnteredWork) {
+      setConfirmDuplicateOpen(true);
+      return;
+    }
+    handleDuplicateLast();
+  };
   const activeEditorMode = featureFlags.emomBuilderEnabled ? "structured-emom" : "legacy-text";
   const handleDiscardDraft = () => {
     onDiscardDraft();
@@ -262,13 +276,23 @@ function LogWorkoutFormBody({ userKey, onDiscardDraft }: Readonly<LogWorkoutForm
       isSaving={saveMutation.isPending}
       handleCancel={handleCancel}
       hasWorkoutDetails={hasWorkoutDetails}
-      handleDuplicateLast={handleDuplicateLast}
+      handleDuplicateLast={requestDuplicateLast}
       isDuplicating={isDuplicating}
       defaultPanelOpen={initialDraft?.useTextMode ? true : undefined}
       toast={toast}
       onParseImage={(payload, opts) => parseImageMutation.mutate(payload, opts)}
       isParsingImage={parseImageMutation.isPending}
     />
+      <ConfirmDialog
+        open={confirmDuplicateOpen}
+        onOpenChange={setConfirmDuplicateOpen}
+        title="Replace this workout?"
+        description="Duplicating your last workout replaces the exercises, title and notes you've entered here. This can't be undone."
+        confirmText="Replace"
+        onConfirm={handleDuplicateLast}
+        isDestructive
+        confirmTestId="button-confirm-duplicate-last"
+      />
     </>
   );
 }

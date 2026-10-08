@@ -664,3 +664,81 @@ describe("usePreferencesForm", () => {
     expect(result.current.draft.mafAgeInput).toBe("40");
   });
 });
+
+// U35 (CODEBASE_ANALYSIS_2026-10-03): an out-of-range value went to a schema
+// that refuses the whole PATCH, and the shared Save bar said only "Please
+// try again", so every later save failed with nothing naming the field.
+describe("usePreferencesForm with an out-of-range value", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    harness.updatePreferences.mockResolvedValue({});
+    harness.invalidateQueries.mockResolvedValue();
+  });
+
+  describe("an out-of-range value", () => {
+    it("is refused before saving, naming the field and its range", async () => {
+      const { result } = await renderHydratedForm();
+
+      act(() => {
+        result.current.updateField("restingHrInput", "25");
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      expect(harness.updatePreferences).not.toHaveBeenCalled();
+      expect(harness.toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Check your settings",
+          description: "Resting heart rate must be at least 30 bpm. Fix it on the Training tab, then save again.",
+        }),
+      );
+    });
+
+    it("states a weight bound in the athlete's unit", async () => {
+      const { result } = renderForm(serverPreferences({ weightUnit: "lbs" }));
+      await waitFor(() => {
+        expect(result.current.draft.weightUnit).toBe("lbs");
+      });
+
+      act(() => {
+        // 5 lbs a week, held canonically in kg.
+        result.current.updateField("weightGoalRateKgPerWeek", 2.27);
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      expect(harness.updatePreferences).not.toHaveBeenCalled();
+      expect(harness.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ description: expect.stringMatching(/^Weekly rate must be 4.4 lbs or less\./) as unknown }),
+      );
+    });
+
+    it("names the field when the server refuses a value", async () => {
+      harness.updatePreferences.mockRejectedValueOnce(
+        new Error(
+          '400: {"code":"VALIDATION_ERROR","message":"Too big","details":{"issues":[{"path":"maxHr","message":"Too big"}]}}',
+        ),
+      );
+      const { result } = await renderHydratedForm();
+
+      act(() => {
+        result.current.updateField("emailWeeklySummary", true);
+      });
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(harness.toast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Check your settings",
+            description: "Max heart rate has a value Settings can't save. Fix it on the Training tab, then save again.",
+          }),
+        );
+      });
+    });
+  });
+});

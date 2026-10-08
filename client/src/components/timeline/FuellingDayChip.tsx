@@ -49,7 +49,7 @@ export function FuellingDayChip({
     >
       <Flame className="h-3.5 w-3.5" aria-hidden="true" />
       <span className="tabular-nums">
-        <span className={cn("font-medium", caloriesOver ? "text-amber-500" : "text-foreground")}>
+        <span className={cn("font-medium", caloriesOver ? "text-warning" : "text-foreground")}>
           {totals.calories}
         </span>
         {calories ? <span>/{calories.target}</span> : null}

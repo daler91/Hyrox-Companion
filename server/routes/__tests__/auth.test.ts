@@ -28,11 +28,11 @@ vi.mock("../../types", () => ({
 }));
 
 // Mock the storage functions
-vi.mock("../../logger", () => ({
-  logger: {
-    error: vi.fn(),
-  },
-}));
+// reqLogger is what the production error handler (setupTestErrorHandler) logs through.
+vi.mock("../../logger", () => {
+  const logger = { error: vi.fn(), warn: vi.fn() };
+  return { logger, reqLogger: () => logger };
+});
 
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({

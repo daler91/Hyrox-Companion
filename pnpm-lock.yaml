@@ -7,17 +7,16 @@ settings:
 overrides:
   esbuild: 0.28.2
   yauzl: ^3.2.1
-  serialize-javascript: '>=7.1.2'
-  hono: '>=4.13.5'
+  serialize-javascript: ^7.1.2
+  hono: ^4.13.5
   '@hono/node-server': ^2.0.10
   protobufjs: ^7.6.3
   ip-address: ^10.7.1
   follow-redirects: ^1.16.0
   '@xmldom/xmldom': ^0.8.15
-  uuid: ^14.0.0
   systeminformation: ^5.31.7
   postcss: ^8.5.23
-  qs: '>=6.16.0'
+  qs: ^6.16.0
   tmp: ^0.2.6
   form-data: ^4.0.6
   '@babel/core': ^7.29.6
@@ -27,7 +26,7 @@ overrides:
   fast-uri: ^3.1.8
   brace-expansion@^5.0.5: ^5.0.12
   nanoid@^3.3.16: ^3.3.18
-  browserslist: '>=4.28.7'
+  browserslist: ^4.28.7
   '@humanfs/node': ^0.16.8
   proxy-addr: ^2.0.8
   source-map-js: ^1.2.2
@@ -63,9 +62,6 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@fontsource/geist-sans':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/open-sans':
         specifier: ^5.3.0
         version: 5.3.0
       '@fontsource/space-grotesk':
@@ -1312,9 +1308,6 @@ packages:
 
   '@fontsource/geist-sans@5.3.0':
     resolution: {integrity: sha512-AmG7cE1AvE4NHROPaOl1sN+a02cB5xy6pA/ZV76HXqWTCsJTV2SCBc9DTFHfJqnVOODm7HhXIYtUIb75NP5QXQ==}
-
-  '@fontsource/open-sans@5.3.0':
-    resolution: {integrity: sha512-V1bdMlGNyZrJwzrdusshMOw2YR0aqYDL7kOo9dkxUEKl8dFv66A9HLckOOXl572sG/7ohhDQrCrTFGSn9LZcSw==}
 
   '@fontsource/space-grotesk@5.3.0':
     resolution: {integrity: sha512-ksnGizDPXIDuvqcTYTSrmZ+evx9sDlS8rp7+42BQ7wU+spt3twEoXfbJz672C+5CLg6VeUQwRy5RXshWb67LcQ==}
@@ -6349,13 +6342,13 @@ packages:
     resolution: {integrity: sha512-UQ+MSxlhRm1bzjhU+DcuXfjFO1FzNtqhK5+9Yvlp90ItDLk5vT932A0rFu619nf7RVS+Y/VeaUW1jaRDqZ8VJw==}
     hasBin: true
     peerDependencies:
-      browserslist: '>=4.28.7'
+      browserslist: ^4.28.7
 
   update-browserslist-db@1.3.3:
     resolution: {integrity: sha512-pJ2sYawQS0R/WI928Gj5GlPhTGzbMelq0+4INtSYNDV9ErKJcX6xjGWkoG/VnB3dpUm00zALaqkrUD77pO5TDQ==}
     hasBin: true
     peerDependencies:
-      browserslist: '>=4.28.7'
+      browserslist: ^4.28.7
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
@@ -7739,8 +7732,6 @@ snapshots:
   '@fontsource/geist-mono@5.3.0': {}
 
   '@fontsource/geist-sans@5.3.0': {}
-
-  '@fontsource/open-sans@5.3.0': {}
 
   '@fontsource/space-grotesk@5.3.0': {}
 

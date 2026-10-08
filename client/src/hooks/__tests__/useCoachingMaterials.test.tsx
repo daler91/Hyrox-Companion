@@ -37,11 +37,14 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: vi.fn(),
 }));
 
-vi.mock('@/lib/queryClient', () => ({
+// The real humanizeApiError: a stand-in returning e.message let the toasts
+// print raw `status: {json}` bodies while the tests passed. U28
+// (CODEBASE_ANALYSIS_2026-10-03)
+vi.mock('@/lib/queryClient', async (importOriginal) => ({
   queryClient: {
     invalidateQueries: vi.fn(),
   },
-  humanizeApiError: vi.fn((e) => e.message),
+  humanizeApiError: (await importOriginal<typeof import('@/lib/queryClient')>()).humanizeApiError,
   AiBudgetExceededError: class AiBudgetExceededError extends Error {},
   RateLimitError: class RateLimitError extends Error { retryAfter?: number },
 }));
@@ -128,8 +131,10 @@ describe('useCoachingMaterials hooks', () => {
       expect(mockToast).toHaveBeenCalledWith({ title: 'Coaching material added' });
     });
 
-    it('handles creation errors', async () => {
-      (api.coaching.create as any).mockRejectedValue(new Error('Creation failed'));
+    it('handles creation errors with the server copy, not the raw status and body', async () => {
+      vi.mocked(api.coaching.create).mockRejectedValue(
+        new Error('400: {"error":"Content is too long","code":"VALIDATION_ERROR"}'),
+      );
 
       const { result } = renderHook(() => useCreateCoachingMaterial(), { wrapper });
 
@@ -143,7 +148,7 @@ describe('useCoachingMaterials hooks', () => {
 
       expect(mockToast).toHaveBeenCalledWith({
         title: 'Failed to add coaching material',
-        description: 'Creation failed',
+        description: 'Content is too long',
         variant: 'destructive',
       });
     });
@@ -224,8 +229,8 @@ describe('useCoachingMaterials hooks', () => {
       });
     });
 
-    it('calls reEmbed and handles network error', async () => {
-      (api.coaching.reEmbed as any).mockRejectedValue(new Error('Network error'));
+    it('calls reEmbed and hides a 5xx body behind friendly copy', async () => {
+      (api.coaching.reEmbed as any).mockRejectedValue(new Error('500: {"error":"Internal Server Error"}'));
 
       const { result } = renderHook(() => useReEmbed(), { wrapper });
 
@@ -239,7 +244,7 @@ describe('useCoachingMaterials hooks', () => {
 
       expect(mockToast).toHaveBeenCalledWith({
         title: 'Failed to re-embed',
-        description: 'Network error',
+        description: 'Something went wrong on our end. Please try again in a moment.',
         variant: 'destructive',
       });
     });

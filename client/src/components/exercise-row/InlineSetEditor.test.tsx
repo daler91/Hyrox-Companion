@@ -506,3 +506,45 @@ describe("InlineSetEditor set notes", () => {
     expect(screen.getByTestId("input-notes-set-1")).toHaveValue("from the phone");
   });
 });
+
+// U13 (CODEBASE_ANALYSIS_2026-10-03): four per-set fields needed 340px+ in one
+// fixed column each, pushing the note and remove buttons off a 260-290px sheet.
+describe("InlineSetEditor narrow layout", () => {
+  function renderFourFields() {
+    render(
+      <InlineSetEditor
+        sets={[{ ...baseSet, exerciseName: "walking_lunges", category: "conditioning" }]}
+        exerciseName="walking_lunges"
+        customLabel={null}
+        category="conditioning"
+        weightUnit="kg"
+        onUpdateSet={vi.fn()}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+  }
+
+  it("puts the fields in one wrapping grid so they flow onto a second line", () => {
+    renderFourFields();
+    const fieldGrid = screen.getByTestId("input-reps-set-1").closest("[style]");
+
+    expect(fieldGrid).toHaveStyle({
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(3.75rem, 100%), 1fr))",
+    });
+    for (const field of ["distance", "reps", "time", "weight"]) {
+      expect(fieldGrid).toContainElement(screen.getByTestId(`input-${field}-set-1`));
+    }
+    expect(fieldGrid).not.toContainElement(screen.getByTestId("button-remove-set-set-1"));
+  });
+
+  it("keeps the note and remove buttons at the 44px mobile touch target", () => {
+    renderFourFields();
+
+    for (const testId of ["button-toggle-note-set-1", "button-remove-set-set-1"]) {
+      const button = screen.getByTestId(testId);
+      expect(button).toHaveClass("h-11", "w-11");
+      expect(button).not.toHaveClass("size-7");
+    }
+  });
+});

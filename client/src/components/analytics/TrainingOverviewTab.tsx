@@ -87,6 +87,7 @@ export function TrainingOverviewTab({ dateParams, range, weeklyGoal }: TrainingO
         stale={analysis.stale}
         error={analysis.error}
         canGenerate={analysis.canGenerate}
+        aiCoachOff={analysis.aiCoachOff}
         onGenerate={analysis.regenerate}
       />
       {stats && <OverviewStatsGrid stats={stats} previousStats={previousStats} />}

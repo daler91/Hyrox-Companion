@@ -22,6 +22,19 @@ export function getTodayString(): string {
   return toISODateString(new Date());
 }
 
+/**
+ * The latest date a workout can be logged on, in the athlete's local time:
+ * tomorrow. The server rejects workout dates more than 24h ahead
+ * (`workoutDateNotFuture` in shared/schema/types/workouts.ts), so any client
+ * path that creates or moves a workout log clamps to this.
+ * U19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function getLatestLoggableDateString(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return toISODateString(tomorrow);
+}
+
 export function getYesterdayString(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);

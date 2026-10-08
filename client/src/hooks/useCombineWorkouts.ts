@@ -14,16 +14,20 @@ export function useCombineWorkouts() {
   const [showCombineDialog, setShowCombineDialog] = useState(false);
 
   const combineWorkoutsMutation = useMutation({
-    mutationFn: async ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
+    mutationFn: ({ newWorkout, entriesToDelete }: { newWorkout: { date: string; focus: string; mainWorkout: string; duration?: number; calories?: number; notes?: string }; entriesToDelete: TimelineEntry[] }) => {
       const deleteWorkoutIds = entriesToDelete
         .map((e) => e.workoutLogId)
         .filter((id): id is string => !!id);
+      // A logged session that completed a plan day hands that day to the
+      // merged workout, so merging it with a duplicate import keeps the day
+      // completed instead of turning it into a skip. A3 (CODEBASE_ANALYSIS_2026-10-03)
+      const keptPlanDayId = entriesToDelete.find((e) => e.workoutLogId && e.planDayId)?.planDayId ?? null;
       const skipPlanDayIds = entriesToDelete
         .map((e) => e.planDayId)
-        .filter((id): id is string => !!id);
+        .filter((id): id is string => !!id && id !== keptPlanDayId);
 
       return api.workouts.combine({
-        newWorkout,
+        newWorkout: keptPlanDayId ? { ...newWorkout, planDayId: keptPlanDayId } : newWorkout,
         deleteWorkoutIds,
         skipPlanDayIds: skipPlanDayIds.length > 0 ? skipPlanDayIds : undefined,
       });
@@ -59,21 +63,37 @@ export function useCombineWorkouts() {
     },
   });
 
+  // Combine mode starts from a logged workout's review sheet ("Combine with
+  // another workout"); every card tap while it is on comes here. Only logged
+  // workouts can be merged: the server deletes the sources by log id.
+  // A3 (CODEBASE_ANALYSIS_2026-10-03)
   const handleCombine = useCallback((entry: TimelineEntry) => {
-    if (combiningEntry) {
-      if (combiningEntry.id === entry.id) {
-        setCombiningEntry(null);
-        toast({ title: "Combine cancelled" });
-      } else if (combiningEntry.date === entry.date) {
-        setCombineSecondEntry(entry);
-        setShowCombineDialog(true);
-      } else {
-        toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
-        setCombiningEntry(null);
+    if (!combiningEntry) {
+      if (!entry.workoutLogId) {
+        toast({ title: "Only logged workouts can be combined", variant: "destructive" });
+        return;
       }
-    } else {
       setCombiningEntry(entry);
-      toast({ title: "Select another workout to combine with", description: "Click on another workout on the same day" });
+      toast({
+        title: "Select another workout to combine with",
+        description: "Tap another logged workout on the same day, or tap this one again to cancel.",
+      });
+      return;
+    }
+    if (combiningEntry.id === entry.id) {
+      setCombiningEntry(null);
+      toast({ title: "Combine cancelled" });
+    } else if (combiningEntry.date !== entry.date) {
+      toast({ title: "Can only combine workouts on the same day", variant: "destructive" });
+      setCombiningEntry(null);
+    } else if (entry.workoutLogId) {
+      setCombineSecondEntry(entry);
+      setShowCombineDialog(true);
+    } else {
+      toast({
+        title: "Only logged workouts can be combined",
+        description: "Pick a completed workout, or tap the first one again to cancel.",
+      });
     }
   }, [combiningEntry, toast]);
 

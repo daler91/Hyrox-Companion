@@ -1,5 +1,5 @@
 import { CHAT_MESSAGE_MAX_LENGTH, CHAT_PHOTO_DEFAULT_MESSAGE, CHAT_PHOTO_MAX_BASE64_CHARS } from "@shared/chat";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -145,9 +145,46 @@ describe("ChatInput", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  it("disables the textarea while loading", () => {
-    render(<ChatInput onSend={vi.fn()} isLoading />);
-    expect(screen.getByTestId("input-chat-message")).toBeDisabled();
+  // U11 (CODEBASE_ANALYSIS_2026-10-03): disabling the box during a reply
+  // dropped focus and closed the phone keyboard after every send.
+  it("keeps the textarea editable while loading but holds the draft instead of sending", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} isLoading />);
+
+    const input = screen.getByTestId("input-chat-message");
+    expect(input).toBeEnabled();
+    await user.type(input, "Next question{Enter}");
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(input).toHaveValue("Next question");
+  });
+
+  it("keeps focus in the textarea after sending with the button", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput onSend={vi.fn()} />);
+
+    const input = screen.getByTestId("input-chat-message");
+    await user.type(input, "How was my week?");
+    await user.click(screen.getByTestId("button-send-message"));
+
+    expect(input).toHaveFocus();
+  });
+
+  // U12 (CODEBASE_ANALYSIS_2026-10-03): the Enter confirming an IME candidate
+  // sent a half-composed message.
+  it("does not send on the Enter that confirms an IME composition", () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} />);
+
+    const input = screen.getByTestId("input-chat-message");
+    fireEvent.change(input, { target: { value: "にほん" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(input).toHaveValue("にほん");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledWith("にほん");
   });
 
   /** The counter the textarea points at, or null while it is hidden. */

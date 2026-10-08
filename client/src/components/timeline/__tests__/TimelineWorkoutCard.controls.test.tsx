@@ -11,12 +11,13 @@ import TimelineWorkoutCard from "../timeline-workout-card";
 
 installRadixPointerMocks();
 
-// A future planned session with a plan day and a move handler, so the card
+// Tomorrow's planned session with a plan day and a move handler, so the card
 // renders every child control it can carry: the complete button, the drag
-// handle and the move menu. The a11y suite's fixture has none of them, which
-// is how a card-level key handler swallowing their keys went unnoticed
-// (U1, CODEBASE_ANALYSIS_2026-10-03).
-const ENTRY_DATE = format(addDays(new Date(), 3), "yyyy-MM-dd");
+// handle and the move menu. The a11y suite's fixture once had none of them,
+// which is how a card-level key handler swallowing their keys went unnoticed
+// (U1, CODEBASE_ANALYSIS_2026-10-03). Tomorrow is the last day a session can
+// still be completed (U19).
+const ENTRY_DATE = format(addDays(new Date(), 1), "yyyy-MM-dd");
 const planned = {
   id: "plan-pd-1",
   date: ENTRY_DATE,
@@ -29,7 +30,7 @@ const planned = {
   planDayId: "pd-1",
 } as TimelineEntry;
 
-function renderCard() {
+function renderCard(entry: TimelineEntry = planned) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -45,7 +46,7 @@ function renderCard() {
   render(
     <QueryClientProvider client={queryClient}>
       <TimelineWorkoutCard
-        entry={planned}
+        entry={entry}
         onClick={onClick}
         onMarkComplete={onMarkComplete}
         onMove={onMove}
@@ -102,14 +103,31 @@ describe("TimelineWorkoutCard child controls (U1)", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it("still opens the card on Enter and Space pressed on the card itself", () => {
-    const { onClick } = renderCard();
-    const card = screen.getByTestId("card-timeline-entry-plan-pd-1");
+  it("still opens the card on Enter and Space pressed on its title button", async () => {
+    const { onClick, user } = renderCard();
 
-    fireEvent.keyDown(card, { key: "Enter" });
-    fireEvent.keyDown(card, { key: " " });
+    screen.getByTestId("button-open-entry-plan-pd-1").focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
 
     expect(onClick).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("TimelineWorkoutCard complete button window (U19)", () => {
+  it("offers no complete button on a session after tomorrow, which the server would refuse", () => {
+    renderCard({ ...planned, date: format(addDays(new Date(), 2), "yyyy-MM-dd") });
+
+    expect(screen.queryByTestId("button-complete-plan-pd-1")).not.toBeInTheDocument();
+    // The session can still be opened and moved.
+    expect(screen.getByTestId("button-open-entry-plan-pd-1")).toBeInTheDocument();
+    expect(screen.getByTestId("move-menu-plan-pd-1")).toBeInTheDocument();
+  });
+
+  it("offers the complete button on today's session", () => {
+    renderCard({ ...planned, date: format(new Date(), "yyyy-MM-dd") });
+
+    expect(screen.getByTestId("button-complete-plan-pd-1")).toBeInTheDocument();
   });
 });
 

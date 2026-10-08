@@ -3,6 +3,8 @@ import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Pool } from "pg";
 
+import migrationJournal from "../migrations/meta/_journal.json" with { type: "json" };
+
 /**
  * Tables whose absence after boot-time migration means the schema is unusable
  * and the instance must not serve traffic. Kept small and stable: these have
@@ -17,15 +19,17 @@ export const CRITICAL_TABLES = [
 ] as const;
 
 /**
- * Errors expected when in-process migrate() runs against a schema that
- * drizzle-kit push already manages (the CI/production source of truth):
- * the first CREATE/ALTER hits an "already exists" and the batch aborts,
- * which is a healthy no-op boot, not a failure.
+ * Errors expected when in-process migrate() runs against a database built by
+ * `drizzle-kit push` (CI's E2E database), whose migration ledger is empty: the
+ * first CREATE/ALTER hits an "already exists" and the batch aborts, which is a
+ * healthy no-op boot there. Production applies its migrations at boot, so on
+ * production the same error means the batch rolled back and nothing in it
+ * applied; findUnappliedMigrations below names what is left.
  *
  * The WHOLE cause chain is inspected: drizzle-orm wraps the postgres error in
  * a DrizzleQueryError whose own message is only "Failed query: <sql>" — the
  * "relation ... already exists" detail lives in error.cause. Matching the
- * top-level message alone silently classified every push-managed boot as a
+ * top-level message alone silently classified every push-built boot as a
  * real failure (harmless while failures were swallowed; fatal once they
  * abort startup).
  */
@@ -90,22 +94,100 @@ export function declaredSchemaColumns(): Map<string, string[]> {
   return declared;
 }
 
+/** One `migrations/meta/_journal.json` entry: the file's tag and its `when`. */
+export interface MigrationJournalEntry {
+  tag: string;
+  when: number;
+}
+
+/**
+ * The journal the build shipped with: bundled at build time rather than read
+ * from disk at boot, from the same commit as the migrations folder migrate()
+ * reads, so the two always agree.
+ */
+export function readMigrationJournal(): MigrationJournalEntry[] {
+  return migrationJournal.entries.map(({ tag, when }) => ({ tag, when }));
+}
+
+/**
+ * Journal entries the ledger does not record. `skipped` are older than the
+ * newest recorded entry: drizzle's migrator only runs entries newer than that
+ * row, so it will never run these (0019 was one until 2026-10-07; its `when`
+ * is older than 0018's). `pending` are newer: a later boot runs them unless the
+ * batch keeps failing.
+ */
+export interface UnappliedMigrations {
+  skipped: string[];
+  pending: string[];
+}
+
+/**
+ * Compare the journal with `drizzle.__drizzle_migrations`, which records each
+ * applied entry under its journal `when` (`created_at`). Returns null when the
+ * ledger is absent or empty: a database built by `drizzle-kit push` records
+ * nothing, so every entry would read as unapplied.
+ */
+export async function findUnappliedMigrations(
+  pool: Pick<Pool, "query">,
+  journal: MigrationJournalEntry[],
+): Promise<UnappliedMigrations | null> {
+  const { rows: ledger } = await pool.query<{ present: boolean }>(
+    "SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS present",
+  );
+  if (!ledger[0]?.present) return null;
+  const { rows } = await pool.query<{ created_at: string | number }>(
+    "SELECT created_at FROM drizzle.__drizzle_migrations",
+  );
+  if (rows.length === 0) return null;
+  const recorded = new Set(rows.map((row) => Number(row.created_at)));
+  const newest = Math.max(...recorded);
+  const unapplied: UnappliedMigrations = { skipped: [], pending: [] };
+  for (const entry of journal) {
+    if (recorded.has(entry.when)) continue;
+    if (entry.when <= newest) unapplied.skipped.push(entry.tag);
+    else unapplied.pending.push(entry.tag);
+  }
+  return unapplied;
+}
+
+function describeUnapplied(unapplied: UnappliedMigrations | null): string {
+  if (!unapplied) {
+    return "Compare drizzle.__drizzle_migrations with migrations/meta/_journal.json to find the migration that did not run";
+  }
+  const parts: string[] = [];
+  if (unapplied.skipped.length > 0) {
+    parts.push(
+      `skipped by the migrator (older than the newest ledger row, so boot never runs them): ${unapplied.skipped.join(", ")}`,
+    );
+  }
+  if (unapplied.pending.length > 0) {
+    parts.push(`not yet applied: ${unapplied.pending.join(", ")}`);
+  }
+  return parts.length > 0
+    ? `Unapplied migrations — ${parts.join("; ")}`
+    : "Every journal entry is recorded in the ledger, so the schema drifted after a migration ran";
+}
+
 /**
  * Throw if the database lacks a table or column the Drizzle schema declares
- * (D7, CODEBASE_ANALYSIS_2026-10-03). Production's schema changes only when
- * someone runs `drizzle-kit push` by hand, and boot-time migrate() no-ops
- * against a pushed schema, so a release that adds a column could go live
- * before the push. Every `db.select().from(table)` names each declared column,
- * so every query on that table then failed while readiness (`SELECT 1`) stayed
- * green. Like assertCriticalTablesExist, the throw reaches the startup catch in
+ * (D7, CODEBASE_ANALYSIS_2026-10-03). Every `db.select().from(table)` names
+ * each declared column, so a missing one fails every query on that table while
+ * readiness (`SELECT 1`) stays green. Production applies migrations at boot,
+ * so a gap means a migration did not run: the migrator skipped it (its journal
+ * `when` is out of order, as 0019's was) or its batch rolled back. `unapplied`
+ * (from findUnappliedMigrations) names it in the error. Like
+ * assertCriticalTablesExist, the throw reaches the startup catch in
  * server/index.ts: readiness answers 503, the deploy fails Railway's
- * healthcheck and the previous deployment keeps serving until the schema is
- * pushed. Derived from the schema rather than a list, so the next migration is
- * covered without anyone remembering to add it. Presence only, not types; a
- * column the database still has but the code no longer declares is fine.
+ * healthcheck and the previous deployment keeps serving. The error does not
+ * suggest `drizzle-kit push`: against production it drops objects the schema
+ * does not declare (docs/operations/pending-manual-steps.md). Derived from the
+ * schema rather than a list, so the next migration is covered without anyone
+ * remembering to add it. Presence only, not types; a column the database still
+ * has but the code no longer declares is fine.
  */
 export async function assertSchemaColumnsExist(
   pool: Pick<Pool, "query">,
+  unapplied: UnappliedMigrations | null = null,
   declared: Map<string, string[]> = declaredSchemaColumns(),
 ): Promise<void> {
   const { rows } = await pool.query<{ table_name: string; column_name: string }>(
@@ -126,7 +208,7 @@ export async function assertSchemaColumnsExist(
   });
   if (missing.length > 0) {
     throw new Error(
-      `Database schema is behind the deployed code — missing: ${missing.join(", ")}. Run \`drizzle-kit push\` against this database, then redeploy — refusing to serve queries that would fail`,
+      `Database schema is behind the deployed code — missing: ${missing.join(", ")}. ${describeUnapplied(unapplied)}. Apply that migration's SQL to this database (see docs/operations/pending-manual-steps.md), then redeploy; do not run drizzle-kit push against production. Refusing to serve queries that would fail`,
     );
   }
 }

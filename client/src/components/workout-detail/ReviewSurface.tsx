@@ -6,26 +6,18 @@ import {
   Gauge,
   Link2,
   ListChecks,
-  Loader2,
-  MessageSquare,
-  RotateCcw,
-  Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EDIT_SAVE_DEBOUNCE_MS, StructureBlocksEditor } from "@/components/workout-structure";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { featureFlags } from "@/lib/featureFlags";
-import { apiRequest } from "@/lib/queryClient";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
@@ -33,6 +25,13 @@ import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";
+import {
+  type MigrationReviewAction,
+  MigrationReviewCallout,
+  type MigrationReviewFlag,
+  useMigrationReview,
+} from "./MigrationReviewCallout";
+import { ReviewActionButtons } from "./ReviewActionButtons";
 import { SessionGradeCard } from "./SessionGradeCard";
 import {
   CoachRationaleSection,
@@ -59,13 +58,13 @@ interface ReviewSurfaceProps extends WorkoutCoachChatProps {
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
+  /** Start combine mode from this workout (merge it with another log that day). */
+  readonly onCombine?: (entry: TimelineEntry) => void;
   readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
   readonly isRenamingTitle?: boolean;
   readonly showCompletionSuccess?: boolean;
 }
 
-type MigrationReviewFlag = { status: string; reason: string | null } | null;
-type MigrationReviewAction = "accept" | "reject" | "edit";
 type WorkoutDetailState = ReturnType<typeof useWorkoutDetail>;
 type WeightUnit = "kg" | "lb";
 type DistanceUnitPreference = ReturnType<typeof useUnitPreferences>["distanceUnit"];
@@ -75,51 +74,6 @@ type DistanceUnitPreference = ReturnType<typeof useUnitPreferences>["distanceUni
 // the useMemo dependency check on `currentCoachSeedText` just as surely as
 // a fresh object would.
 const EMPTY_EXERCISE_SETS: ExerciseSet[] = [];
-
-function useMigrationReview(workoutLogId: string | null) {
-  const [reviewFlag, setReviewFlag] = useState<MigrationReviewFlag>(null);
-
-  useEffect(() => {
-    if (!workoutLogId) return;
-    let cancelled = false;
-
-    fetch(
-      `/api/v1/workouts/migration/reviews?ownerType=workoutLog&ownerId=${encodeURIComponent(workoutLogId)}`,
-      { credentials: "include" },
-    )
-      .then(
-        (r) =>
-          r.json() as Promise<
-            Array<{ ownerType: string; ownerId: string; status: string; reason: string | null }>
-          >,
-      )
-      .then((rows) => {
-        if (cancelled) return;
-        const match = rows.find((r) => r.ownerType === "workoutLog" && r.ownerId === workoutLogId);
-        setReviewFlag(match ? { status: match.status, reason: match.reason } : null);
-      })
-      .catch(ignoreAsyncError);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workoutLogId]);
-
-  const resolveReview = async (action: MigrationReviewAction) => {
-    if (!workoutLogId) return;
-    await apiRequest("POST", "/api/v1/workouts/migration/reviews/resolve", {
-      ownerType: "workoutLog",
-      ownerId: workoutLogId,
-      action,
-    });
-    setReviewFlag((prev) => {
-      if (!prev) return prev;
-      return { ...prev, status: getResolvedReviewStatus(action) };
-    });
-  };
-
-  return { reviewFlag, resolveReview };
-}
 
 /**
  * Sheet-native review surface for already-logged workouts, laid out
@@ -139,6 +93,7 @@ export function ReviewSurface({
   onAskCoach,
   onMarkPlanned,
   onDelete,
+  onCombine,
   onRenameTitle,
   isRenamingTitle = false,
   showCompletionSuccess = false,
@@ -290,6 +245,7 @@ export function ReviewSurface({
         onAskCoach={onAskCoach}
         onMarkPlanned={onMarkPlanned}
         onDelete={onDelete}
+        onCombine={workoutLogId ? onCombine : undefined}
         onDeleteConfirmOpenChange={setDeleteConfirmOpen}
         onDeleteConfirm={handleDeleteConfirm}
         onResolveReview={resolveReview}
@@ -342,7 +298,7 @@ interface ReviewDetailsColumnProps {
   readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnitPreference;
   readonly showPlannedDiffs: boolean;
-  readonly reviewFlag: MigrationReviewFlag;
+  readonly reviewFlag: MigrationReviewFlag | null;
   readonly deleteConfirmOpen: boolean;
   readonly currentCoachSeedText: string;
   readonly timeOfDayMin: number | null;
@@ -354,6 +310,7 @@ interface ReviewDetailsColumnProps {
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
+  readonly onCombine?: (entry: TimelineEntry) => void;
   readonly onDeleteConfirmOpenChange: (open: boolean) => void;
   readonly onDeleteConfirm: () => void;
   readonly onResolveReview: (action: MigrationReviewAction) => Promise<void>;
@@ -385,6 +342,7 @@ function ReviewDetailsColumn({
   onAskCoach,
   onMarkPlanned,
   onDelete,
+  onCombine,
   onDeleteConfirmOpenChange,
   onDeleteConfirm,
   onResolveReview,
@@ -461,7 +419,11 @@ function ReviewDetailsColumn({
           />
         ) : null}
       </DetailGroup>
-      <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
+      <MigrationReviewCallout
+        key={reviewFlag?.ownerId}
+        reviewFlag={reviewFlag}
+        onResolveReview={onResolveReview}
+      />
 
       {/* Pinned to the bottom of the scroll area so Ask coach / Reopen /
           Delete stay reachable on a long review without scrolling to the end.
@@ -475,6 +437,7 @@ function ReviewDetailsColumn({
           onAskCoach={onAskCoach}
           onMarkPlanned={onMarkPlanned}
           onDelete={onDelete}
+          onCombine={onCombine}
           onDeleteConfirmOpenChange={onDeleteConfirmOpenChange}
           onDeleteConfirm={onDeleteConfirm}
         />
@@ -777,179 +740,7 @@ function sourceLabelFor(
   return deviceProvider ? `from ${deviceProvider}` : "from coach text";
 }
 
-interface MigrationReviewCalloutProps {
-  readonly reviewFlag: MigrationReviewFlag;
-  readonly onResolveReview: (action: MigrationReviewAction) => Promise<void>;
-}
-
-function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReviewCalloutProps) {
-  const [resolvingAction, setResolvingAction] = useState<MigrationReviewAction | null>(null);
-
-  if (!reviewFlag) return null;
-
-  const handleResolve = (action: MigrationReviewAction) => {
-    setResolvingAction(action);
-    onResolveReview(action)
-      .catch(ignoreAsyncError)
-      .finally(() => setResolvingAction(null));
-  };
-
-  const isResolving = resolvingAction !== null;
-
-  return (
-    <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
-      <p className="font-medium">Migration review: {reviewFlag.status}</p>
-      {reviewFlag.reason ? <p className="text-muted-foreground">{reviewFlag.reason}</p> : null}
-      <div className="mt-2 flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handleResolve("accept")}
-          disabled={isResolving}
-        >
-          {resolvingAction === "accept" && (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-          )}
-          Accept
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handleResolve("edit")}
-          disabled={isResolving}
-        >
-          {resolvingAction === "edit" && (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-          )}
-          Edited & accept
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => handleResolve("reject")}
-          disabled={isResolving}
-        >
-          {resolvingAction === "reject" && (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
-          )}
-          Reject
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Deleting a completed planned session removes its log and keeps its plan
- * day, which then reads planned again, or missed once its date has passed;
- * the copy said the workout was "permanently removed" as though the session
- * went too. Either way the log goes to the recycle bin, with an Undo, so it
- * isn't permanent. Matches the bulk-delete copy. CL23
- * (CODEBASE_ANALYSIS_2026-10-03)
- */
-function deleteConfirmDescription(entry: TimelineEntry): string {
-  if (entry.planDayId) {
-    return "This removes the logged workout from your timeline. The planned session stays on your plan and shows as planned again, or missed if its date has passed.";
-  }
-  return "This removes the workout and all of its data from your timeline.";
-}
-
-interface ReviewActionButtonsProps {
-  readonly entry: TimelineEntry;
-  readonly deleteConfirmOpen: boolean;
-  readonly currentCoachSeedText: string;
-  readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
-  readonly onMarkPlanned?: (entry: TimelineEntry) => void;
-  readonly onDelete?: (entry: TimelineEntry) => void;
-  readonly onDeleteConfirmOpenChange: (open: boolean) => void;
-  readonly onDeleteConfirm: () => void;
-}
-
-function ReviewActionButtons({
-  entry,
-  deleteConfirmOpen,
-  currentCoachSeedText,
-  onAskCoach,
-  onMarkPlanned,
-  onDelete,
-  onDeleteConfirmOpenChange,
-  onDeleteConfirm,
-}: ReviewActionButtonsProps) {
-  return (
-    <>
-      <div className="flex items-center gap-2">
-        {onAskCoach ? (
-          <Button
-            type="button"
-            className="flex-1"
-            onClick={() => onAskCoach(entry, currentCoachSeedText)}
-            data-testid={`review-ask-coach-${entry.id}`}
-          >
-            <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
-            Ask coach
-          </Button>
-        ) : null}
-        {onMarkPlanned && entry.planDayId ? (
-          <Button
-            type="button"
-            variant="outline"
-            className={onAskCoach ? undefined : "flex-1"}
-            onClick={() => onMarkPlanned(entry)}
-            data-testid={`review-mark-planned-${entry.id}`}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-            Reopen
-          </Button>
-        ) : null}
-        {onDelete ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => onDeleteConfirmOpenChange(true)}
-                  aria-label="Delete workout"
-                  data-testid={`review-delete-${entry.id}`}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete workout</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : null}
-      </div>
-      {onDelete ? (
-        <ConfirmDialog
-          open={deleteConfirmOpen}
-          onOpenChange={onDeleteConfirmOpenChange}
-          title="Delete workout?"
-          description={deleteConfirmDescription(entry)}
-          confirmText="Delete"
-          cancelText="Cancel"
-          onConfirm={onDeleteConfirm}
-          isDestructive
-          cancelTestId={`review-cancel-delete-${entry.id}`}
-          confirmTestId={`review-confirm-delete-${entry.id}`}
-        />
-      ) : null}
-    </>
-  );
-}
-
 function getWeightUnit(prefWeightUnit: "kg" | "lbs"): WeightUnit {
   if (prefWeightUnit === "kg") return "kg";
   return "lb";
-}
-
-function getResolvedReviewStatus(action: MigrationReviewAction): string {
-  if (action === "reject") return "needs_manual_review";
-  return "resolved";
-}
-
-function ignoreAsyncError(): undefined {
-  return undefined;
 }

@@ -3,24 +3,43 @@
 Steps that cannot apply themselves and are therefore easy to lose. A migration
 comment is not a durable record: nobody reads `migrations/*.sql` on deploy day.
 
-**Why these exist.** Production runs a push-managed schema — `drizzle-kit push`
-syncs structure only, and boot-time `migrate()` no-ops against a pushed schema
-(see `server/maintenance.ts`). So any migration whose _point_ is a data change
-(a DELETE, a backfill) never executes in production, however cleanly it applies
-to a fresh database in CI.
+**How production gets its schema.** Production applies migrations at boot.
+`runDrizzleMigrations()` (`server/maintenance.ts`) runs every journal entry
+newer than the newest row in `drizzle.__drizzle_migrations`, schema and data
+statements alike, in one transaction, and a release whose migration fails does
+not go live. This was confirmed on 2026-10-07 from a production deploy log
+("Drizzle migrations applied successfully") and the ledger itself. Earlier
+revisions of this file said production was managed by a hand-run
+`drizzle-kit push` with an empty ledger. That was never true, so the steps
+written on that premise ("apply the file before the push") are moot.
+
+**Never run `drizzle-kit push` against production.** It drops objects the
+schema does not declare (0036's `data_remediation_log` and its view, 0074's
+trigram indexes) and stops on interactive rename prompts. The startup check
+that refuses to boot on a missing table or column no longer suggests it.
+
+**What still needs a hand.** Only work no migration carries: scripts (0093,
+0094), hand-written SQL (C9), platform settings (Railway), and a migration the
+migrator skipped. Drizzle skips any journal entry whose `when` is older than
+the newest recorded one. Three historical entries are out of order (0009, 0011,
+0019), and production skipped 0019 until 2026-10-07 (see its entry below).
+`server/__tests__/migrationChain.test.ts` fails CI on a new out-of-order
+entry (D26), and boot now logs a skipped migration by name.
+
+The migration entries below (the older-migration audit, 0074, 0081, 0082, 0091,
+0117, 0121 and 0122) ran at boot when their release first started. Each keeps
+its verification query: run it once against production, then tick the box.
 
 **How to use this file.** Run the statement against production, then tick the
 box and record the date and who ran it in the same PR. An unticked box is a
 live task, not history.
 
-**Running a migration file whole.** Where a section says its migration file can
-be applied whole, dispatch the **Post-Migration Verification** workflow
-(`.github/workflows/post-migration.yml`) with `ledger: push` and `sql_files`
-set to the file name (several, space-separated, run in order). It applies each
-file with `psql` in its own transaction and then runs the post-migration
-checks. Leave `ledger` at its `migrate` default only for a database built by
-`drizzle-kit migrate`: on production it runs `drizzle-kit migrate` first, which
-fails at 0000 against the pushed schema (D24, `docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+**If a verification query fails.** Every data migration named here is
+idempotent, so apply its file again with
+`psql -X "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f migrations/<file>.sql`.
+Do not use the Post-Migration Verification workflow's `ledger: push` mode on
+production: it is for a database built by `drizzle-kit push`, and production's
+ledger is populated.
 
 **Verifying.** `pnpm ops:restore-drill` probes the 0081, 0082 and 0091 steps (no
 ownerless private rows, no duplicate target versions, at most one in-flight plan
@@ -31,7 +50,9 @@ re-verifies those for free. It does **not** check the older-migration audit, 007
 0093, 0094, 0117, 0121, 0122 or the C9 backfill — use the verification queries in
 those sections. Note the reverse hazard too: a restored database is as old as its
 backup, so a step ticked _after_ that backup was taken has been rolled back and
-must be run again.
+must be run again. That applies to the scripts and hand-written steps; a
+restored ledger is as old as the backup too, so the next boot re-applies any
+migration newer than it.
 
 ---
 
@@ -123,18 +144,61 @@ must be run again.
 
 ---
 
-## [ ] Audit — ten older data-bearing migrations of unknown production status
+## [x] 0019 — `idempotency_keys`, skipped by the migrator
+
+- **Run on production:** 2026-10-07, by the owner, with `psql -X -f` (fix file
+  below). Output checked: table present, 8 columns, primary key, foreign key,
+  index and ledger row each 1.
+- **Migration:** `migrations/0019_add_idempotency_keys.sql`
+- **What happened:** 0019's journal `when` (1775428793648, 2026-04-05 22:39 UTC)
+  is older than 0018's (2026-04-06 16:00 UTC). Once 0018 was in the ledger,
+  `migrate()` compared 0019 against the newest recorded row, took it as already
+  applied and never ran it, so production had no `idempotency_keys` table. The
+  idempotency middleware tolerated that by skipping. #2108 added the startup
+  check `assertSchemaColumnsExist`, which refuses to serve without the table,
+  so every deploy from #2108 to #2117 failed its readiness healthcheck and #2106
+  stayed live. Those deploys did apply 0120 to 0122 first: migrations commit
+  before the check runs.
+- **The fix:** one transaction that does what 0019 does, written to be
+  re-runnable (`CREATE TABLE IF NOT EXISTS`, the foreign key added only if
+  missing, `CREATE INDEX IF NOT EXISTS`, `lock_timeout` 5s), then records 0019
+  in the ledger with the hash drizzle computes for the file:
+
+  ```sql
+  INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+  SELECT '1801767c302fba2f1661546b6d66097255be5f20480c047393ee44a0decaa47b', 1775428793648
+  WHERE NOT EXISTS (SELECT 1 FROM drizzle.__drizzle_migrations WHERE created_at = 1775428793648);
+  ```
+
+  Boot reads only the newest ledger row, so that row changes nothing it runs;
+  it keeps the ledger a complete record.
+
+- **Since then:** `server/__tests__/migrationChain.test.ts` already failed CI
+  when a new journal entry is older than the one before it (D26; 0009, 0011
+  and 0019 are allowlisted), and now also on a future-dated entry or a file
+  missing from the journal. Boot logs any journal entry missing from the ledger and
+  older than its newest row, naming it in the startup check's error.
+- **Verify:**
+
+  ```sql
+  SELECT to_regclass('public.idempotency_keys') IS NOT NULL AS table_exists,
+         (SELECT count(*) FROM drizzle.__drizzle_migrations
+            WHERE created_at = 1775428793648) AS ledger_row;
+  -- expect t, 1
+  ```
+
+---
+
+## [ ] Audit — ten older data-bearing migrations (verify once)
 
 - **Shipped:** identified 2026-09-04 during the mapper-concern verification
   pass (`docs/MAPPER_CONCERNS_VERIFIED_2026-09-04.md`).
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** this file was created alongside 0081 and only ever tracked
-  migrations from that point on. The push-managed hazard described at the top
-  of this file applies identically to every _earlier_ data-bearing migration,
-  and production's `drizzle.__drizzle_migrations` ledger is empty, so none of
-  them can be assumed to have run. They may have been applied by hand at the
-  time; nothing records it either way. **This entry is an audit, not a fix:**
-  check each, then tick it or run it.
+- **Status:** these ran at boot with the rest of the chain (see the top of
+  this file); none of them is one of the three out-of-order journal entries.
+  The audit was written when production was wrongly believed to be
+  push-managed. What remains is a one-time check of the two queries below,
+  then tick it.
 
 | Migration                                    | Data operation                                                                                        | Consequence if it never ran                                                                                                                                                                                                                                                                                                                                                                           |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -144,7 +208,7 @@ must be run again.
 | `0031_user_adherence_visibility_pref`        | `UPDATE users`                                                                                        | Preference default not applied to pre-existing users.                                                                                                                                                                                                                                                                                                                                                 |
 | `0032_unusual_rogue`                         | `UPDATE exercise_sets`                                                                                | See the migration body before ticking.                                                                                                                                                                                                                                                                                                                                                                |
 | `0035_maf_artifacts`                         | `INSERT INTO user_training_style … 'migration_default'` per existing user                             | Users predating 0035 have no training-style row.                                                                                                                                                                                                                                                                                                                                                      |
-| `0036_maf_post_migration_validation`         | Creates `data_remediation_log` + `v_maf_post_migration_validation`, plus remediation DML              | **Neither object is in the Drizzle schema**, so `push` does not create them either — they are absent from production regardless.                                                                                                                                                                                                                                                                      |
+| `0036_maf_post_migration_validation`         | Creates `data_remediation_log` + `v_maf_post_migration_validation`, plus remediation DML              | **Neither object is in the Drizzle schema**, so `drizzle-kit push` would drop them. They exist wherever `migrate()` ran 0036, production included.                                                                                                                                                                                                                                                    |
 | `0044_cloudy_bloodaxe`                       | `UPDATE workout_structure_steps` clearing rest-step targets                                           | Runs _before_ a CHECK and UNIQUE INDEX in the same file. Both ARE in the Drizzle schema, so `push` would have refused them if violating rows existed — verify the constraint is actually present.                                                                                                                                                                                                     |
 | `0047_last_magik`                            | `UPDATE users SET onboarding_completed = true`                                                        | Low. `useOnboarding` also gates on `isNewUser` and a local flag, so existing users are not re-onboarded.                                                                                                                                                                                                                                                                                              |
 | `0049_exercise_load_tags`                    | **Seeds all 39 rows of `exercise_load_tags`**                                                         | **Highest impact.** `server/storage/analytics.ts` is the only code touching this table and it only ever SELECTs, so a migration is the sole way it is populated. `calculateTrainingLoad` defaults `loadTags` to `[]` and degrades **silently** — no error, no log — so AI coach context, nutrition daily load, race prediction and training overview would all be computing with neutral multipliers. |
@@ -162,20 +226,18 @@ must be run again.
   ```sql
   SELECT to_regclass('public.data_remediation_log'),
          to_regclass('public.v_maf_post_migration_validation');
-  -- both NULL = never created, by migrate() or push
+  -- expect both non-NULL (created by 0036 at boot)
   ```
 
 ## [ ] 0074 — `pg_trgm` extension and the trigram indexes for fuzzy food search
 
 - **Migration:** `migrations/0074_food_search_trigram.sql`
 - **Shipped:** PR #1851 (2026-08-26)
-- **Run on production:** _not yet (status unknown, check first) — date / operator:_
-- **Why manual:** `drizzle-kit push` never creates extensions, and the two GIN
-  indexes are deliberately not declared in `shared/schema/tables.ts`, so push
-  neither creates them nor keeps them: push drops indexes the schema does not
-  declare, so a later push removes them if they were created by hand. Boot only
-  creates the `vector` extension. Identified as PF3
-  (`docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+- **Run on production:** _ran at boot; verify once — date / operator:_
+- **Status:** the migration ran at boot. The two GIN indexes are deliberately
+  not declared in `shared/schema/tables.ts`, so a `drizzle-kit push` would
+  drop them, which is one more reason never to push to production. Identified
+  as PF3 (`docs/CODEBASE_ANALYSIS_2026-10-03.md`).
 - **What it does:** enables `pg_trgm` and creates `idx_foods_name_trgm` and
   `idx_foods_brand_trgm`. `NUTRITION_FUZZY_ENABLED` defaults to `true`, so
   `searchLocalFoods` emits `similarity()` and the `%` operator. Without the
@@ -187,8 +249,7 @@ must be run again.
   all three statements from the migration file via `psql "$DATABASE_URL"`.
   `pg_trgm` is a trusted extension (PostgreSQL 13+), so the database owner can
   create it. Until the extension exists, `NUTRITION_FUZZY_ENABLED=false` is the
-  kill switch that keeps food search working without it. **Re-check after every
-  `drizzle-kit push`** until the indexes are declared in `tables.ts`.
+  kill switch that keeps food search working without it.
 - **Verify afterwards:**
   ```sql
   SELECT extname FROM pg_extension WHERE extname = 'pg_trgm';
@@ -203,18 +264,15 @@ must be run again.
 - **Migration:** `migrations/0081_purge_orphaned_private_custom_foods.sql`
 - **Shipped:** PR #1663 (2026-07-19)
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** the migration's payload is a DELETE, which push-managed
-  production never applies.
+- **Status:** the `DELETE` ran at boot with the migration. Verify once.
 - **What it does:** erases custom foods stranded ownerless by accounts deleted
   before the two-phase erasure existed. They are already invisible to users
   (`visibleTo` no longer treats a NULL owner as shared), so this removes the
   at-rest personal data — free-text food names and brands — rather than closing
   an active exposure.
 - **Safe to re-run:** yes, idempotent. Matches nothing once it has run.
-- **How:** copy the `DELETE` statement out of the migration file and run it via
-  `psql "$DATABASE_URL"`, or apply the file whole with the post-migration
-  workflow (`ledger: push`, `sql_files: 0081_purge_orphaned_private_custom_foods.sql`;
-  see "Running a migration file whole" above).
+- **If the check fails:** apply the file again (see "If a verification query
+  fails" above).
 - **Verify afterwards:**
   ```sql
   SELECT count(*) FROM foods
@@ -227,9 +285,7 @@ must be run again.
 - **Migration:** `migrations/0082_hesitant_exiles.sql`
 - **Shipped:** PR #1683 (2026-07-25)
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** same reason as 0081 for its `DELETE`. Note the `ALTER TABLE`
-  half of this migration DOES reach production via `drizzle-kit push`, since
-  that is a schema change — only the row cleanup needs a hand.
+- **Status:** both halves ran at boot with the migration. Verify once.
 - **What it does:** deletes `structured_exercise_backfill_reviews` rows whose
   `user_id` is NULL. Those are orphans from accounts deleted while the FK was
   still `set null`, and `listBackfillReviews` matches
@@ -248,13 +304,8 @@ must be run again.
 - **Migration:** `migrations/0091_lyrical_human_fly.sql`
 - **Shipped:** 2026-09-01 (codebase-analysis remediation, priority item 4)
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** the migration pairs three `CREATE UNIQUE INDEX` statements
-  (which `drizzle-kit push` DOES apply as schema) with the remediation
-  `DELETE`s/`UPDATE` that make them creatable — and it is the remediation half
-  that push never runs. **Order matters here more than for 0081/0082:** if
-  production has duplicates, `push` will fail to create the indexes until the
-  remediation statements are run by hand, so run them _before_ (or immediately
-  after a failed) push.
+- **Status:** the remediation and the three unique indexes ran together at
+  boot, in that order, in one transaction. Verify once.
 - **What it does:** removes duplicate `nutrition_targets` (user, effective_from)
   and `meal_targets` (user, meal, effective_from) versions left by concurrent
   saves (keeps one arbitrary-but-deterministic survivor of the near-identical
@@ -262,9 +313,8 @@ must be run again.
   `training_plans` row per user as `failed` — the same terminal state the
   startup stuck-generation sweep uses.
 - **Safe to re-run:** yes, idempotent. Matches nothing once it has run.
-- **How:** copy the two `DELETE`s and the `UPDATE` out of the migration file and
-  run them via `psql "$DATABASE_URL"`, then re-run `drizzle-kit push` if index
-  creation had failed.
+- **If the check fails:** apply the file again (see "If a verification query
+  fails" above).
 - **Verify afterwards:** `pnpm ops:restore-drill` carries three 0091 probes, or:
   ```sql
   SELECT count(*) FROM (
@@ -312,8 +362,8 @@ must be run again.
 - **Shipped:** 2026-09-12 (alongside migration `0094_counts_as_training.sql`)
 - **Run on production:** _not yet — date / operator:_
 - **Why manual:** the migration added the column with `DEFAULT true`, so it is
-  the column default — not a DML statement — that left the history wrong. Push
-  applies the default; nothing reclassifies the existing rows.
+  the column default — not a DML statement — that left the history wrong.
+  Nothing reclassifies the existing rows.
 - **What it does:** applies the sport-type rule new imports are stamped with
   (`shared/deviceSportTypes.ts`) to the history, so every dog walk, commute and
   yoga class a watch ever synced stops counting toward Total Workouts,
@@ -355,9 +405,8 @@ must be run again.
 - **Migration:** `migrations/0117_plan_day_slot_repair.sql`
 - **Shipped:** 2026-10-02 (commit `f6ec1d6`)
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** the migration is a single `UPDATE`, which push-managed
-  production never applies. It shipped without an entry here; identified as D1
-  (`docs/CODEBASE_ANALYSIS_2026-10-03.md`).
+- **Status:** the `UPDATE` ran at boot with the migration. Identified as D1
+  (`docs/CODEBASE_ANALYSIS_2026-10-03.md`). Verify once.
 - **What it does:** a move used to change a plan day's date alone. This
   recomputes `week_number` and `day_name` from the date (week 1's Monday and the
   plan's first week number, as `planSlotFor` does) for every scheduled day in a
@@ -368,9 +417,8 @@ must be run again.
   those moves back to their old days.
 - **Safe to re-run:** yes. It writes only days out of step with the computed
   slot, and a weekday that differs only in case is left alone.
-- **How:** run the whole `UPDATE` from the migration file via `psql "$DATABASE_URL"`,
-  or apply the file whole with the post-migration workflow (`ledger: push`,
-  `sql_files: 0117_plan_day_slot_repair.sql`).
+- **If the check fails:** apply the file again (see "If a verification query
+  fails" above).
 - **Verify afterwards:**
   ```sql
   SELECT count(*)
@@ -394,30 +442,15 @@ must be run again.
 - **Migration:** `migrations/0121_pending_proposal_unique_and_constraint_parity.sql`
 - **Shipped:** 2026-10-05 (D51 and D25, `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** the schema half (the partial unique index
-  `uq_plan_adjustment_proposals_user_pending` and the two MAF CHECKs, now in
-  `shared/schema/tables.ts`) reaches production through `drizzle-kit push`, but
-  the `UPDATE` that makes the index creatable is DML, which push never runs. As
-  with 0091, **order matters**: if production holds two pending proposals for
-  one athlete, push fails to create the index until the `UPDATE` has run. Push
-  also fails to add a CHECK if a row breaks it, though the app never writes
-  one (MAF ceilings are 71 bpm or more, compliance is clamped to 0-100).
+- **Status:** ran at boot on 2026-10-06, during one of the deploys that then
+  failed the startup check for the unrelated 0019 gap: migrations commit before
+  that check runs. Verify once.
 - **What it does:** marks every pending plan-adjustment proposal but each
   athlete's newest `superseded` (the status a new proposal gives its
   predecessor), creates the unique index, and adds 0036's two CHECKs
   (`maf_profile.final_hr > 0`, `maf_workout_analysis.compliance_pct` 0-100),
-  which until now existed only on databases built by `drizzle-kit migrate`. It
-  also drops 0041's two `exercise_sets` structure FKs where they exist; push
-  never created them, so on production that is a no-op.
-- **Safe to re-run:** yes. Every statement is idempotent, so the file can be
-  applied whole before or after the push.
-- **How:** check first (the queries below). Then, **before** the
-  `drizzle-kit push` that ships this schema, apply the file whole with the
-  post-migration workflow (`ledger: push`,
-  `sql_files: 0121_pending_proposal_unique_and_constraint_parity.sql`) or
-  `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f migrations/0121_pending_proposal_unique_and_constraint_parity.sql`.
-  If either MAF count below is not 0, stop and look at those rows first: the
-  file runs in one transaction, so a failing CHECK rolls back the `UPDATE` too.
+  and drops 0041's two `exercise_sets` structure FKs where they exist.
+- **Safe to re-run:** yes. Every statement is idempotent.
 - **Verify afterwards:**
   ```sql
   SELECT count(*) FROM (
@@ -440,12 +473,7 @@ must be run again.
 - **Shipped:** 2026-10-06 (PF11, PF16, PF17 and PF18,
   `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
 - **Run on production:** _not yet — date / operator:_
-- **Why manual:** the indexes, among them the partial unique index
-  `uq_food_servings_shared`, are declared in `shared/schema/tables.ts` and reach
-  production through `drizzle-kit push`, but the `DELETE` that makes the unique
-  index creatable is DML, which push never runs. As with 0091 and 0121, **order
-  matters**: if two first opens of a USDA food ever cached its portions twice,
-  push fails to create the index until the `DELETE` has run.
+- **Status:** ran at boot on 2026-10-06, like 0121. Verify once.
 - **What it does:** deletes every shared serving (`created_by_user_id IS NULL`)
   that repeats another's `(food_id, label, grams)`, keeping the lowest id. The
   copies are identical and nothing references a serving row (log entries store
@@ -455,16 +483,7 @@ must be run again.
   `food_favorites.food_id`, `strava_connections.strava_athlete_id` and
   `users.user_timezone`.
 - **Safe to re-run:** yes. The `DELETE` matches nothing once it has run, and
-  every index is `IF NOT EXISTS`, so the file can be applied whole before or
-  after the push.
-- **How:** check first (the first query below). Then, **before** the
-  `drizzle-kit push` that ships this schema, apply the file whole with the
-  post-migration workflow (`ledger: push`,
-  `sql_files: 0122_food_servings_unique_and_fk_indexes.sql`) or
-  `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f migrations/0122_food_servings_unique_and_fk_indexes.sql`.
-  The plain indexes are built without `CONCURRENTLY` (the file runs in one
-  transaction), so each briefly blocks writes to its table; `chat_messages` is
-  the largest, so run it outside peak hours.
+  every index is `IF NOT EXISTS`.
 - **Verify afterwards:**
   ```sql
   SELECT count(*) FROM (

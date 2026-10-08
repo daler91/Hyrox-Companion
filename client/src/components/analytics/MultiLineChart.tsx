@@ -15,6 +15,7 @@ import {
   CHART_CARD_CLASS,
   COLOR_GREEN,
   formatChartDate,
+  formatChartDateWithYear,
   getStrokeColor,
   GRID_BORDER,
   GRID_DASH,
@@ -30,23 +31,34 @@ interface ChartSeries {
   label: string;
 }
 
-function MultiLineTooltip({
+function tooltipDateLabel(dateStr: string, xKey: string): string {
+  const formatted = formatChartDateWithYear(dateStr);
+  return xKey === "weekStart" ? `Week of ${formatted}` : formatted;
+}
+
+export function MultiLineTooltip({
   active,
   payload,
   formatValue,
+  xKey = "date",
 }: Readonly<{
   active?: boolean;
   payload?: Array<{ value: number | null; name?: string; color?: string; payload?: Record<string, unknown> }>;
   formatValue?: (value: number) => string;
+  xKey?: string;
 }>) {
   if (!active || !payload?.length) return null;
 
-  const rawDate = payload[0]?.payload?.date;
+  // U7 (CODEBASE_ANALYSIS_2026-10-03): read the chart's own x key (the weekly
+  // charts are keyed on `weekStart`, not `date`) and keep the year, since
+  // all-time charts can span years while the axis ticks omit it.
+  const datum = payload[0]?.payload;
+  const rawDate = datum ? new Map(Object.entries(datum)).get(xKey) : undefined;
   const dateStr = typeof rawDate === "string" ? rawDate : "";
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
-      {dateStr && <p className="font-semibold mb-1">{formatChartDate(dateStr)}</p>}
+      {dateStr && <p className="font-semibold mb-1">{tooltipDateLabel(dateStr, xKey)}</p>}
       {payload.map((entry) => {
         let displayValue: string | number = "N/A";
         if (entry.value != null) {
@@ -120,7 +132,7 @@ export const MultiLineChart = memo(function MultiLineChart({
             />
             <Tooltip
               cursor={{ stroke: MUTED_FG, strokeDasharray: GRID_DASH }}
-              content={<MultiLineTooltip formatValue={valueFormatter} />}
+              content={<MultiLineTooltip formatValue={valueFormatter} xKey={xKey} />}
             />
             {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
             {referenceLine && (

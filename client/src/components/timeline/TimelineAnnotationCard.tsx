@@ -61,13 +61,15 @@ export function TimelineAnnotationCard({
         ) : null}
       </div>
       <TooltipProvider>
+        {/* Edit and Delete keep the 44px phone touch target; the 32px
+            override is desktop-only. U26 (CODEBASE_ANALYSIS_2026-10-03) */}
         <div className="flex items-center gap-1 shrink-0">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="md:h-8 md:w-8"
                 onClick={() => onEdit(annotation)}
                 aria-label={`Edit ${label} annotation`}
                 data-testid={`button-edit-annotation-${annotation.id}`}
@@ -83,7 +85,7 @@ export function TimelineAnnotationCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                className="md:h-8 md:w-8 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                 onClick={(e) => {
                   if (isDeleting) e.preventDefault();
                   else setConfirmOpen(true);

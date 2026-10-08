@@ -97,6 +97,7 @@ interface TimelineWorkoutSurfacesProps {
     | "setCombiningEntry"
     | "combineSecondEntry"
     | "setCombineSecondEntry"
+    | "handleCombine"
     | "handleConfirmCombine"
     | "combineWorkoutsMutation"
   >;
@@ -107,6 +108,8 @@ interface TimelineWorkoutSurfacesProps {
     | "setAnnotationsDialogOpen"
     | "annotationInitialDate"
     | "setAnnotationInitialDate"
+    | "editingAnnotation"
+    | "setEditingAnnotation"
   >;
   /** Reschedule, so the skip dialog can offer moving a session instead of skipping it. */
   readonly onMoveEntry?: (entry: TimelineEntry, newDate: string) => void;
@@ -192,6 +195,7 @@ export function TimelineWorkoutSurfaces({
     setCombiningEntry,
     combineSecondEntry,
     setCombineSecondEntry,
+    handleCombine,
     handleConfirmCombine,
     combineWorkoutsMutation,
   } = combine;
@@ -200,6 +204,8 @@ export function TimelineWorkoutSurfaces({
     setAnnotationsDialogOpen,
     annotationInitialDate,
     setAnnotationInitialDate,
+    editingAnnotation,
+    setEditingAnnotation,
   } = annotations;
   const [completionSuccessEntryId, setCompletionSuccessEntryId] = useState<string | null>(null);
   const logEntryRef = useRef(logEntry);
@@ -377,6 +383,14 @@ export function TimelineWorkoutSurfaces({
           setCompletionSuccessEntryId(null);
           handleDelete(entry);
         }}
+        // The only way into combine mode: the sheet closes so the athlete can
+        // tap the second workout on the timeline. A3 (CODEBASE_ANALYSIS_2026-10-03)
+        onCombine={(entry) => {
+          closeEmbeddedCoach();
+          setReviewEntry(null);
+          setCompletionSuccessEntryId(null);
+          handleCombine(entry);
+        }}
       />
 
       <PreviewSheet
@@ -452,9 +466,11 @@ export function TimelineWorkoutSurfaces({
           setAnnotationsDialogOpen(open);
           if (!open) {
             setAnnotationInitialDate(undefined);
+            setEditingAnnotation(null);
           }
         }}
         initialDate={annotationInitialDate}
+        editingAnnotation={editingAnnotation}
       />
     </>
   );

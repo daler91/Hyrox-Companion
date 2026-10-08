@@ -31,6 +31,11 @@ const BARCODE_RE = /^\d{8,14}$/;
  * (the only path on iOS Safari / Firefox). Both resolve via the server's
  * /foods/barcode → Open Food Facts. The camera is torn down on resolve/close.
  */
+/** tick catches its own detect errors, so a rejection here has nothing left to report. */
+function ignoreTickError(): undefined {
+  return undefined;
+}
+
 export function BarcodeScanner({
   open,
   onClose,
@@ -46,6 +51,10 @@ export function BarcodeScanner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  /** The live-scanned code the server last failed to recognize. */
+  const rejectedCodeRef = useRef<string | null>(null);
+  /** Restarts the detect loop after a live-scan lookup misses; null when no loop is paused. */
+  const resumeScanRef = useRef<(() => void) | null>(null);
   const detectorAvailable = getBarcodeDetector() !== null;
 
   const stopCamera = () => {
@@ -58,36 +67,64 @@ export function BarcodeScanner({
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
+  // A miss and a camera error belong to this visit: the next open starts clean
+  // instead of showing a stale "Barcode not recognized", and with the camera
+  // view rendered so a stream is never left running with no video.
+  // U32 (CODEBASE_ANALYSIS_2026-10-03)
+  const closeScanner = () => {
+    stopCamera();
+    lookup.reset();
+    setScanError(null);
+    rejectedCodeRef.current = null;
+    onClose();
+  };
+
   const resolve = (code: string) => {
     lookup.mutate(code, {
       onSuccess: (food) => {
-        stopCamera();
         onResolved(food);
-        onClose();
+        closeScanner();
+      },
+      onError: () => {
+        // Live scanning paused for this lookup; keep scanning after a miss,
+        // without looking the same unrecognized code up again. U32
+        rejectedCodeRef.current = code;
+        resumeScanRef.current?.();
       },
     });
   };
 
   useEffect(() => {
-    if (!open || !detectorAvailable) return;
+    if (!open || !detectorAvailable) return undefined;
     const Ctor = getBarcodeDetector();
-    if (!Ctor) return;
+    if (!Ctor) return undefined;
     const detector = new Ctor({ formats: FORMATS });
     let cancelled = false;
+    let pausedForLookup = false;
 
-    const tick = async () => {
+    async function tick() {
       if (cancelled || !videoRef.current) return;
       try {
         const codes = await detector.detect(videoRef.current);
         const first = codes[0]?.rawValue;
-        if (first && BARCODE_RE.test(first)) {
+        if (first && BARCODE_RE.test(first) && first !== rejectedCodeRef.current) {
+          pausedForLookup = true;
           resolve(first);
           return;
         }
       } catch {
         // transient detect error (e.g. frame not ready) — keep polling
       }
-      rafRef.current = requestAnimationFrame(() => void tick());
+      rafRef.current = requestAnimationFrame(scheduleNextFrame);
+    }
+    // tick catches its own detect errors; nothing else can reject.
+    function scheduleNextFrame() {
+      tick().catch(ignoreTickError);
+    }
+    resumeScanRef.current = () => {
+      if (cancelled || !pausedForLookup) return;
+      pausedForLookup = false;
+      rafRef.current = requestAnimationFrame(scheduleNextFrame);
     };
 
     const start = async () => {
@@ -101,10 +138,15 @@ export function BarcodeScanner({
         }
         streamRef.current = stream;
         const video = videoRef.current;
-        if (!video) return;
+        if (!video) {
+          // Nothing to show it in: never leave the camera running unseen. U32
+          for (const track of stream.getTracks()) track.stop();
+          streamRef.current = null;
+          return;
+        }
         video.srcObject = stream;
         await video.play();
-        rafRef.current = requestAnimationFrame(() => void tick());
+        rafRef.current = requestAnimationFrame(scheduleNextFrame);
       } catch {
         setScanError("Couldn't access the camera — enter the barcode number instead.");
       }
@@ -113,6 +155,7 @@ export function BarcodeScanner({
 
     return () => {
       cancelled = true;
+      resumeScanRef.current = null;
       stopCamera();
     };
     // resolve/stopCamera are stable enough for this lifecycle; re-running only on open.
@@ -129,10 +172,7 @@ export function BarcodeScanner({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) {
-          stopCamera();
-          onClose();
-        }
+        if (!o) closeScanner();
       }}
     >
       <DialogContent data-testid="dialog-barcode">
@@ -162,32 +202,12 @@ export function BarcodeScanner({
             </p>
           )}
 
-          <form onSubmit={handleManualSubmit} className="space-y-1.5">
-            <Label htmlFor="barcode-input">Barcode number</Label>
-            <div className="flex gap-2">
-              <Input
-                id="barcode-input"
-                inputMode="numeric"
-                pattern="\d*"
-                placeholder="e.g. 3017620422003"
-                enterKeyHint="go"
-                value={manualCode}
-                onChange={(e) => setManualCode(e.target.value)}
-                data-testid="input-barcode"
-              />
-              <Button
-                type="submit"
-                className="shrink-0"
-                disabled={lookup.isPending || !BARCODE_RE.test(manualCode.trim())}
-                data-testid="button-barcode-lookup"
-              >
-                {lookup.isPending && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-                )}
-                {lookup.isPending ? "Looking up…" : "Look up"}
-              </Button>
-            </div>
-          </form>
+          <ManualBarcodeForm
+            code={manualCode}
+            onCodeChange={setManualCode}
+            onSubmit={handleManualSubmit}
+            isPending={lookup.isPending}
+          />
 
           {lookup.isError && (
             <p className="text-sm text-destructive" role="alert" data-testid="text-barcode-error">
@@ -197,5 +217,41 @@ export function BarcodeScanner({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+interface ManualBarcodeFormProps {
+  readonly code: string;
+  readonly onCodeChange: (code: string) => void;
+  readonly onSubmit: (e: FormEvent) => void;
+  readonly isPending: boolean;
+}
+
+function ManualBarcodeForm({ code, onCodeChange, onSubmit, isPending }: ManualBarcodeFormProps) {
+  return (
+    <form onSubmit={onSubmit} className="space-y-1.5">
+      <Label htmlFor="barcode-input">Barcode number</Label>
+      <div className="flex gap-2">
+        <Input
+          id="barcode-input"
+          inputMode="numeric"
+          pattern="\d*"
+          placeholder="e.g. 3017620422003"
+          enterKeyHint="go"
+          value={code}
+          onChange={(e) => onCodeChange(e.target.value)}
+          data-testid="input-barcode"
+        />
+        <Button
+          type="submit"
+          className="shrink-0"
+          disabled={isPending || !BARCODE_RE.test(code.trim())}
+          data-testid="button-barcode-lookup"
+        >
+          {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
+          {isPending ? "Looking up…" : "Look up"}
+        </Button>
+      </div>
+    </form>
   );
 }

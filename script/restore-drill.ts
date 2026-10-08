@@ -55,10 +55,10 @@ export interface Queryable {
 const SPOT_CHECK_TABLES = ["users", "workout_logs", "training_plans"] as const;
 
 /**
- * Data states whose cleanup lives in a migration that push-managed production
- * never applies — see docs/operations/pending-manual-steps.md. Checking them
- * here means the drill doubles as the verification step for those outstanding
- * manual statements. 0081/0082 were live GDPR leaks (NULL-owner rows visible
+ * Data states a migration cleaned up — see docs/operations/pending-manual-steps.md.
+ * Production ran them at boot, but a restore of an older backup, or a database
+ * built by `drizzle-kit push`, can still hold the rows, so the drill doubles as
+ * their verification step. 0081/0082 were live GDPR leaks (NULL-owner rows visible
  * to everyone); 0091's are duplicate-version rows from concurrent-save races,
  * which the unique indexes shipped with 0091 cannot be created over.
  */
@@ -120,14 +120,14 @@ async function checkConnectivity(client: Queryable): Promise<CheckResult> {
 /**
  * §6: "Drizzle journal is at the expected version".
  *
- * Production is drizzle-kit push-managed, so its ledger is EMPTY rather than
- * absent: drizzle's migrator runs `CREATE SCHEMA/TABLE IF NOT EXISTS` for
- * `drizzle.__drizzle_migrations` outside the migration transaction, then aborts
- * the batch itself on the first "already exists" — which rolls back the row
- * inserts but not the table. An empty ledger is therefore the expected shape of
- * a production restore, and reporting it as a failure would train operators to
- * ignore the drill. It is a `warn`, and schema completeness (below) is the
- * check that actually gates a push-managed restore.
+ * Production applies migrations at boot, so a production restore carries a
+ * full ledger and passes. A database built by `drizzle-kit push` (CI, a scratch
+ * copy) has an EMPTY ledger rather than none: drizzle's migrator runs
+ * `CREATE SCHEMA/TABLE IF NOT EXISTS` for `drizzle.__drizzle_migrations` outside
+ * the migration transaction, then aborts the batch itself on the first "already
+ * exists", which rolls back the row inserts but not the table. That is a
+ * `warn`, not a failure: schema completeness (below) still gates such a
+ * restore.
  */
 async function checkMigrationLedger(client: Queryable): Promise<CheckResult> {
   const name = "Migration ledger matches the journal";
@@ -147,7 +147,7 @@ async function checkMigrationLedger(client: Queryable): Promise<CheckResult> {
       return {
         name,
         status: "warn",
-        detail: `${table} exists but is empty (0/${expected}) — the signature of a push-managed database, where boot-time migrate() skips the whole chain. Schema completeness below is what gates this restore.`,
+        detail: `${table} exists but is empty (0/${expected}) — the signature of a database built by drizzle-kit push, where boot-time migrate() skips the whole chain (production's ledger is populated). Schema completeness below is what gates this restore.`,
       };
     }
     return {
@@ -164,7 +164,7 @@ async function checkMigrationLedger(client: Queryable): Promise<CheckResult> {
 }
 
 /**
- * The check that actually matters for a push-managed restore: does the restored
+ * The check that holds however the schema was built: does the restored
  * database have every table the deployed code expects? This is what "the
  * journal is at the right version" is a proxy for, and unlike the journal it
  * works regardless of how the schema got there.

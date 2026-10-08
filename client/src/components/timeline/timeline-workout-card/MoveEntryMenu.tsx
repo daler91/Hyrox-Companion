@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getLatestLoggableDateString } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 
 import type { TimelineWorkoutCardProps } from "./types";
@@ -87,9 +88,10 @@ export function MoveEntryMenu({
   // (see `workoutDateNotFuture` in shared/schema/types/workouts.ts). Clamp the
   // menu to the allowed window so we don't offer taps that would
   // deterministically produce validation-error toasts. Plan-day-only
-  // moves have no such server constraint.
+  // moves have no such server constraint. The drag-and-drop path and the
+  // card's "Mark complete" share the same clamp (U19).
   const isLoggedMove = Boolean(entry.workoutLogId);
-  const maxDate = isLoggedMove ? tomorrowIso : undefined;
+  const maxDate = isLoggedMove ? getLatestLoggableDateString() : undefined;
   const showNextWeek = !isLoggedMove && entry.date !== nextWeekIso;
 
   // Stop mousedown + click on each interactive surface so tapping a

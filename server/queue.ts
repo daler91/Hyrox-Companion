@@ -96,6 +96,13 @@ export interface RecomputeAnalyticsJobData {
   userId: string;
   feature: AnalyticsFeature;
   localDate: string;
+  /**
+   * Set for an out-of-schedule refresh after the athlete switched training
+   * style (enqueueTrainingStyleRecompute). Such a job skips the once-per-day
+   * claim and leaves `recomputedOn` alone, so neither it nor the midnight run
+   * blocks the other. A1 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  trigger?: "training_style_change";
 }
 
 // Reserved job-payload key carrying the originating request's correlation id
@@ -297,14 +304,38 @@ async function registerUserEmailWorker({
   });
 }
 
+/** Run one feature's recompute under the queue timeout, with job-scoped logs. */
+async function runRecomputeAnalytics(
+  job: Job,
+  feature: AnalyticsFeature,
+  userId: string,
+  recomputedOn?: string,
+): Promise<void> {
+  // jobId is a UUID and feature an enum value, no PII
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
+  // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
+  // switch, unit-tested) — nutrition_insights used to fall through to the
+  // coach-insights branch here, running the wrong AI analysis nightly.
+  // jobId is a UUID bound as log context, no PII
+  // bearer:disable javascript_lang_logger_leak
+  await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
+    dispatchRecomputeAnalytics(feature, userId, recomputedOn, logger.child({ jobId: job.id })),
+  );
+  // jobId is a UUID and feature an enum value, no PII
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
+}
+
 /**
- * Midnight analytics recompute — refreshes a user's stored Coach Insights /
- * Race Prediction when a workout was logged after it was generated. Enqueued
- * by the analyticsRecompute cron at each user's local midnight. Exported for
- * unit tests.
+ * Analytics recompute — refreshes a user's stored Coach Insights / Race
+ * Prediction / Overview / Nutrition analysis. Enqueued by the analyticsRecompute
+ * cron at each user's local midnight when a log landed after the stored result,
+ * and right after a training-style switch for the style-aware features
+ * (`trigger: "training_style_change"`). Exported for unit tests.
  */
 export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
-  const { userId, feature, localDate } = job.data as RecomputeAnalyticsJobData;
+  const { userId, feature, localDate, trigger } = job.data as RecomputeAnalyticsJobData;
   if (!userId || !feature || !localDate) {
     // jobId is a UUID and
     // dataKeys are field names (not values); no PII or secrets.
@@ -327,6 +358,14 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
     logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping recompute-analytics job");
     return;
   }
+  // A style switch changes what the stored analysis should say even though no
+  // log moved its anchor, so it refreshes now instead of waiting for midnight.
+  // It takes no daily claim (passing no recomputedOn), so tonight's run still
+  // happens if a log lands later. A1 (CODEBASE_ANALYSIS_2026-10-03)
+  if (trigger === "training_style_change") {
+    await runRecomputeAnalytics(job, feature, userId);
+    return;
+  }
   // Atomic once-per-day claim (W4): if another delivery already recomputed
   // this feature today, skip without spending AI. Also returns false if the
   // stored row was deleted between scan enqueue and now.
@@ -337,21 +376,8 @@ export async function processRecomputeAnalyticsJob(job: Job): Promise<void> {
     logger.info({ jobId: job.id }, "[pg-boss] recompute-analytics already claimed/absent, skipping");
     return;
   }
-  // jobId is a UUID and feature an enum value, no PII
-  // bearer:disable javascript_lang_logger_leak
-  logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
   try {
-    // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
-    // switch, unit-tested) — nutrition_insights used to fall through to the
-    // coach-insights branch here, running the wrong AI analysis nightly.
-    // jobId is a UUID bound as log context, no PII
-    // bearer:disable javascript_lang_logger_leak
-    await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
-      dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
-    );
-    // jobId is a UUID and feature an enum value, no PII
-    // bearer:disable javascript_lang_logger_leak
-    logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
+    await runRecomputeAnalytics(job, feature, userId, localDate);
   } catch (error) {
     // jobId is a UUID, no PII
     // bearer:disable javascript_lang_logger_leak

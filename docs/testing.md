@@ -317,6 +317,8 @@ export function createTestApp(router: express.Router) {
 }
 ```
 
+`setupTestErrorHandler` mounts the production `globalErrorHandler` (`server/middleware/errorHandler.ts`), so a route test sees the same `{ error, code, details }` reply, 4xx message and 413 rewrite an athlete would. A test that mocks `../../logger` must therefore also provide `reqLogger`, which the handler logs through.
+
 **Common mocking targets:**
 
 - `../../clerkAuth` -- Replaces `isAuthenticated` middleware to inject a test user (`req.auth = { userId: "test_user_id" }`)
@@ -588,7 +590,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 - **Name:** Post-Migration Verification
 - **Triggers:** Manual (`workflow_dispatch`)
 - **Steps:** Applies migrations to Neon database via `pnpm run db:migrate`, then runs `post-migration.integration.test.ts` against the real Neon database to verify schema correctness.
-- **Push-managed production:** dispatch with `ledger: push` and `sql_files` naming the migration files to apply (see `docs/operations/pending-manual-steps.md`). It skips `drizzle-kit migrate`, which fails at 0000 on a database built by `drizzle-kit push`, applies each named file with `psql` in its own transaction, and skips the test's migration-ledger count (D24).
+- **A database built by `drizzle-kit push`** (empty ledger): dispatch with `ledger: push` and `sql_files` naming the migration files to apply. It skips `drizzle-kit migrate`, which fails at 0000 on such a database, applies each named file with `psql` in its own transaction, and skips the test's migration-ledger count (D24). Production is not one: it applies its migrations at boot and its ledger is populated, so use the `migrate` default there, and never run `drizzle-kit push` against it (`docs/operations/pending-manual-steps.md`).
 
 ### 5. Build (`build.yml`)
 

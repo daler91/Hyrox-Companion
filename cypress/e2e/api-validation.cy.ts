@@ -68,9 +68,14 @@ describe("API Validation", () => {
     });
   });
 
+  // The route reads only the x-cron-secret header, and the CI server runs with
+  // CRON_SECRET set, so this reaches the timing-safe comparison rather than the
+  // "no secret configured" early return. A4 (CODEBASE_ANALYSIS_2026-10-03)
   it("GET /api/cron/emails returns 401 with wrong secret", () => {
     cy.request({
-      url: "/api/v1/cron/emails?secret=wrong-secret",
+      url: "/api/v1/cron/emails",
+      // A random value the server cannot hold, rather than a literal secret.
+      headers: { "x-cron-secret": crypto.randomUUID() },
       failOnStatusCode: false,
     }).then((response) => {
       expect(response.status).to.eq(401);

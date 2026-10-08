@@ -115,12 +115,12 @@ describe("runRestoreDrill", () => {
     expect(find(results, "deployed schema exists").status).toBe("pass");
   });
 
-  it("treats an EMPTY drizzle ledger as expected, not broken", async () => {
-    // The shape production actually has. drizzle's migrator creates
+  it("treats an EMPTY drizzle ledger as a push-built database, not broken", async () => {
+    // The shape of a database built by drizzle-kit push. drizzle's migrator creates
     // drizzle.__drizzle_migrations outside the migration transaction, then
     // aborts the batch on the first "already exists" — so the table exists with
     // zero rows. If that read as a failure the drill would cry wolf on every
-    // production restore; the check that carries the weight is schema
+    // such restore; the check that carries the weight is schema
     // completeness, which works regardless of how the schema got there.
     const results = await runRestoreDrill(fakeDb({
       ledgerCount: 0,
@@ -129,7 +129,7 @@ describe("runRestoreDrill", () => {
       foreignKeys: [],
     }));
     expect(find(results, "Migration ledger").status).toBe("warn");
-    expect(find(results, "Migration ledger").detail).toContain("push-managed");
+    expect(find(results, "Migration ledger").detail).toContain("drizzle-kit push");
     expect(hasFailure(results.filter((r) => r.name.includes("Migration ledger")))).toBe(false);
   });
 

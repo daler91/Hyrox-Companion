@@ -157,7 +157,6 @@ describe("protected route builder compliance", () => {
     const PARSER_CALLERS: Record<string, readonly string[] | string> = {
       "server/services/assistedMigrationService.ts": ["runAssistedMigrationBackfill"],
       "server/services/workoutService/reparse.ts": [
-        "autoHydrateExerciseSetsFromTextIfNeeded",
         "reparseWorkout",
         "reparsePlanDay",
         "reparseWorkoutFromImage",

@@ -44,6 +44,10 @@ const CONFIDENCE_STYLES: Record<RacePredictionConfidence, { label: string; class
   low: { label: "Low confidence", className: "bg-muted text-muted-foreground" },
 };
 
+// U8 (CODEBASE_ANALYSIS_2026-10-03): the race profile and AI Coach toggle live
+// on the Training tab; bare `/settings` lands on Account.
+const SETTINGS_TRAINING_HREF = "/settings?tab=training";
+
 const BASIS_LABELS: Record<RacePredictionBasis, string> = {
   logged: "From your logs",
   benchmark: "Benchmark",
@@ -75,7 +79,7 @@ function genderLabel(gender: RacePredictionResponse["gender"]): string {
 function aiUnavailableCopy(reason: RacePredictionResponse["aiUnavailableReason"]): string {
   switch (reason) {
     case "ai_consent_off":
-      return "This is a baseline estimate from your logged data. Enable the AI Coach in Settings for a sharper, fatigue-aware prediction.";
+      return "This is a baseline estimate from your logged data. Enable the AI Coach in Settings → Training for a sharper, fatigue-aware prediction.";
     case "ai_budget_exceeded":
       return "You've reached today's AI usage limit, so this is a baseline estimate from your logged data. Try again tomorrow for an AI-refined prediction.";
     case "ai_disabled":
@@ -305,7 +309,7 @@ export function RacePredictorTab() {
           {data.genderAssumed && (
             <p className="text-xs text-muted-foreground">
               Gender not set — using a neutral standard.{" "}
-              <Link href="/settings" className="underline">
+              <Link href={SETTINGS_TRAINING_HREF} className="underline">
                 Set it in Settings
               </Link>{" "}
               for division-correct loads.
@@ -326,7 +330,7 @@ export function RacePredictorTab() {
             <p className="text-muted-foreground">{aiUnavailableCopy(data.aiUnavailableReason)}</p>
             {data.aiUnavailableReason === "ai_consent_off" && (
               <Button asChild variant="outline" size="sm">
-                <Link href="/settings" data-testid="race-prediction-enable-ai">
+                <Link href={SETTINGS_TRAINING_HREF} data-testid="race-prediction-enable-ai">
                   Enable AI Coach
                 </Link>
               </Button>

@@ -14,6 +14,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
@@ -36,6 +37,13 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const { requestSignOut, confirmingSignOut, pendingWrites, confirmSignOut, cancelSignOut } = useConfirmedSignOut();
+  const { setOpenMobile } = useSidebar();
+  // U10 (CODEBASE_ANALYSIS_2026-10-03): below 768px the sidebar is a modal
+  // Sheet with no visible close button, so a nav tap must close it or it keeps
+  // covering the new page and trapping focus. A no-op on desktop.
+  const closeMobileDrawer = () => {
+    setOpenMobile(false);
+  };
 
   const userInitials = user
     ? `${user.firstName?.charAt(0) || ''}${user.lastName?.charAt(0) || ''}`.toUpperCase() || user.email?.charAt(0).toUpperCase() || 'U'
@@ -65,6 +73,7 @@ export function AppSidebar() {
                         <Link
                           href={item.url}
                           aria-current={isActive ? "page" : undefined}
+                          onClick={closeMobileDrawer}
                         >
                           <item.icon className="h-4 w-4" aria-hidden="true" />
                           <span>{item.title}</span>

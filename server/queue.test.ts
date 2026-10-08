@@ -265,6 +265,20 @@ describe("processRecomputeAnalyticsJob (D37)", () => {
     expect(dispatchRecomputeAnalytics).not.toHaveBeenCalled();
     expect(releaseRecomputedOn).not.toHaveBeenCalled();
   });
+
+  it("runs a training-style refresh without taking or stamping the daily claim (A1)", async () => {
+    const styleJob = {
+      id: "job-2",
+      data: { userId: "user-1", feature: "coach_insights", localDate: "2026-10-03", trigger: "training_style_change" },
+    } as unknown as Job;
+    vi.mocked(dispatchRecomputeAnalytics).mockResolvedValue();
+
+    await processRecomputeAnalyticsJob(styleJob);
+
+    expect(markRecomputedOn).not.toHaveBeenCalled();
+    // No recomputedOn: the refresh must not stamp tonight's claim.
+    expect(vi.mocked(dispatchRecomputeAnalytics).mock.calls[0]?.slice(0, 3)).toEqual(["coach_insights", "user-1", undefined]);
+  });
 });
 
 describe("processEmbedCoachingMaterialJob (P14)", () => {

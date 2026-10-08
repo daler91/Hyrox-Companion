@@ -22,7 +22,11 @@ import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { toPreferenceScaleAll } from "@/lib/setDisplay";
 import { buildBlockAssignmentOptions } from "@/lib/workoutStructureAssignments";
 
-import { useExerciseDndHandler } from "./exercise-table/dnd";
+import {
+  exerciseDndScreenReaderInstructions,
+  useExerciseDndAnnouncements,
+  useExerciseDndHandler,
+} from "./exercise-table/dnd";
 import { ExerciseRowRenderer } from "./exercise-table/ExerciseRows";
 import { AddExerciseDialog, EmptyExerciseState } from "./exercise-table/ExerciseTableDialogs";
 import {
@@ -137,6 +141,7 @@ export function ExerciseTable({
   );
 
   const handleDragEnd = useExerciseDndHandler(groups, rowKeys, onUpdateSet, onSaveOrder);
+  const dndAnnouncements = useExerciseDndAnnouncements(groups, rowKeys);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() =>
     defaultExpanded ? new Set(rowKeys) : new Set(),
   );
@@ -268,6 +273,10 @@ export function ExerciseTable({
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
+              accessibility={{
+                announcements: dndAnnouncements,
+                screenReaderInstructions: exerciseDndScreenReaderInstructions,
+              }}
             >
               <SortableContext items={rowKeys} strategy={verticalListSortingStrategy}>
                 <ExerciseRowRenderer

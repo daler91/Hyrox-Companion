@@ -103,7 +103,7 @@ export function ObjectiveLoadTrendCharts({
         >
           <p className="font-semibold text-card-foreground">Objective load needs HR or power</p>
           <p>
-            Add your resting/max HR and FTP in Settings → Health Metrics, and log workouts with
+            Add your resting/max HR and FTP in Settings → Training → Heart rate &amp; power, and log workouts with
             heart-rate or power, to see objective load (hrTSS and Power TSS) next to your
             subjective UTSS.
           </p>

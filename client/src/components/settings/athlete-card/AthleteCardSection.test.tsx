@@ -81,8 +81,27 @@ describe("AthleteCardSection", () => {
     await user.click(screen.getByRole("button", { name: "Retired (1)" }));
     await user.click(screen.getByRole("button", { name: `Restore "${RETIRED.fact}"` }));
     await expectRequest("PATCH", "/api/v1/athlete-facts/f-old", { active: true });
+    // U15 (CODEBASE_ANALYSIS_2026-10-03): 'Delete forever' asks first.
     await user.click(screen.getByRole("button", { name: `Delete "${RETIRED.fact}"` }));
+    const confirm = await screen.findByRole("alertdialog");
+    expect(confirm).toHaveTextContent(`"${RETIRED.fact}" will be permanently deleted`);
+    expect(apiRequest).not.toHaveBeenCalledWith("DELETE", "/api/v1/athlete-facts/f-old", undefined, expect.anything());
+    await user.click(screen.getByTestId("confirm-delete-retired-fact"));
     await expectRequest("DELETE", "/api/v1/athlete-facts/f-old");
+  });
+
+  it("keeps a retired fact when the athlete cancels 'Delete forever'", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(await screen.findByRole("button", { name: "Retired (1)" }));
+    await user.click(screen.getByRole("button", { name: `Delete "${RETIRED.fact}"` }));
+    await user.click(await screen.findByTestId("cancel-delete-retired-fact"));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    expect(apiRequest).not.toHaveBeenCalledWith("DELETE", "/api/v1/athlete-facts/f-old", undefined, expect.anything());
   });
 
   it("rewords a fact, sending only what changed", async () => {

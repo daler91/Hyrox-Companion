@@ -23,6 +23,18 @@ interface DeltaIndicatorProps {
 }
 
 /**
+ * Value + unit for the tooltip and aria text. U9 (CODEBASE_ANALYSIS_2026-10-03):
+ * callers pass converted values (metres to miles gives 3.1068559611866697), so
+ * round to one decimal, and space word units ("3.1 miles", "55 min") while
+ * symbols stay attached ("80%", "30m").
+ */
+function formatValueWithUnit(value: number, unit: string): string {
+  const rounded = String(Math.round(value * 10) / 10);
+  if (unit.length === 0) return rounded;
+  return unit.length > 1 ? `${rounded} ${unit}` : `${rounded}${unit}`;
+}
+
+/**
  * Small arrow + percentage pill that sits beside an Analytics Overview
  * stat. Compares a current-period value against the equivalent
  * previous-period value and shows:
@@ -51,9 +63,11 @@ export function DeltaIndicator({
   testIdSuffix,
 }: DeltaIndicatorProps) {
   if (previous === 0 && current === 0) return null;
+  const currentText = formatValueWithUnit(current, unit);
+  const previousText = formatValueWithUnit(previous, unit);
 
   if (previous === 0) {
-    const tip = `Previous period: 0${unit} → Current: ${current}${unit}`;
+    const tip = `Previous period: ${previousText} → Current: ${currentText}`;
     return (
       <TooltipProvider>
         <Tooltip>
@@ -61,7 +75,7 @@ export function DeltaIndicator({
             type="button"
             className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             data-testid={testIdSuffix ? `delta-new-${testIdSuffix}` : undefined}
-            aria-label={`New metric: ${current}${unit}`}
+            aria-label={`New metric: ${currentText}`}
           >
             new
           </TooltipTrigger>
@@ -79,7 +93,7 @@ export function DeltaIndicator({
   // runs on the unrounded value so that 0.45%–0.49% aren't rounded up to
   // 0.5% and mistakenly shown as regressions/improvements.
   if (absRaw < 0.5) {
-    const tip = `No meaningful change vs previous period (${previous}${unit} → ${current}${unit})`;
+    const tip = `No meaningful change vs previous period (${previousText} → ${currentText})`;
     return (
       <TooltipProvider>
         <Tooltip>
@@ -87,7 +101,7 @@ export function DeltaIndicator({
             type="button"
             className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             data-testid={testIdSuffix ? `delta-flat-${testIdSuffix}` : undefined}
-            aria-label={`Unchanged at ${current}${unit} vs previous period`}
+            aria-label={`Unchanged at ${currentText} vs previous period`}
           >
             <ArrowRight className="h-2.5 w-2.5" aria-hidden="true" />=
           </TooltipTrigger>
@@ -105,7 +119,7 @@ export function DeltaIndicator({
   const Arrow = isIncrease ? ArrowUp : ArrowDown;
   const direction = isImprovement ? "up" : "down";
 
-  const tip = `Previous period: ${previous}${unit} → Current: ${current}${unit}`;
+  const tip = `Previous period: ${previousText} → Current: ${currentText}`;
 
   return (
     <TooltipProvider>

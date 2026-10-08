@@ -65,6 +65,7 @@ export function useOverviewAnalysis(range: string = DEFAULT_RANGE) {
   const data = query.data;
   const sections = data?.sections ?? null;
   const hasAnalysis = sections != null && Object.keys(sections).length > 0;
+  const aiCoachOff = user?.aiCoachEnabled === false;
 
   return {
     sections,
@@ -75,6 +76,9 @@ export function useOverviewAnalysis(range: string = DEFAULT_RANGE) {
     isGenerating: regenerate.isPending,
     isLoading: query.isLoading,
     error: regenerate.error ?? query.error,
-    canGenerate: !!userId,
+    // Generating needs AI consent (off by default); the server would 403 it.
+    // U29 (CODEBASE_ANALYSIS_2026-10-03)
+    aiCoachOff,
+    canGenerate: Boolean(userId) && !aiCoachOff,
   };
 }

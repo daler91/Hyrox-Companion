@@ -38,6 +38,50 @@ function plan(overrides: Partial<TrainingPlan> = {}): TrainingPlan {
   });
 }
 
+// U14 (CODEBASE_ANALYSIS_2026-10-03): clearing the field snapped it back to 5
+// and typing next to the digit clamped "53" to 7, resetting the rest days.
+describe("GeneratePlanScheduleStep days per week", () => {
+  function renderDays() {
+    const onDaysPerWeekChange = vi.fn();
+    render(
+      <GeneratePlanScheduleStep
+        {...baseProps}
+        onDaysPerWeekChange={onDaysPerWeekChange}
+        dateError={null}
+        canProceed
+      />,
+    );
+    return { onDaysPerWeekChange, input: screen.getByLabelText("Days/Week") };
+  }
+
+  it("lets the athlete clear the field and type a new value", async () => {
+    const user = userEvent.setup();
+    const { onDaysPerWeekChange, input } = renderDays();
+
+    await user.clear(input);
+    expect(input).toHaveValue(null);
+    expect(onDaysPerWeekChange).not.toHaveBeenCalled();
+
+    await user.type(input, "3");
+    expect(onDaysPerWeekChange).toHaveBeenCalledTimes(1);
+    expect(onDaysPerWeekChange).toHaveBeenCalledWith(3);
+  });
+
+  it("holds an out-of-range entry without committing it, and restores the value on blur", async () => {
+    const user = userEvent.setup();
+    const { onDaysPerWeekChange, input } = renderDays();
+
+    await user.type(input, "3");
+    expect(input).toHaveValue(53);
+    expect(onDaysPerWeekChange).not.toHaveBeenCalled();
+    expect(screen.getByText("Enter a whole number from 2 to 7.")).toBeInTheDocument();
+
+    await user.tab();
+    expect(input).toHaveValue(5);
+    expect(screen.queryByText("Enter a whole number from 2 to 7.")).not.toBeInTheDocument();
+  });
+});
+
 describe("GeneratePlanScheduleStep", () => {
   it("points aria-describedby at the date error when one is present", () => {
     render(<GeneratePlanScheduleStep {...baseProps} dateError="End date must be after start date" canProceed={false} />);

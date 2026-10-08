@@ -25,6 +25,40 @@ interface AnnotationCreateFormProps {
   readonly onNoteChange: (value: string) => void;
   readonly onCreate: () => void;
   readonly isCreating: boolean;
+  /** Saving changes to an existing annotation rather than adding one (U36). */
+  readonly isEditing?: boolean;
+  readonly onCancelEdit?: () => void;
+}
+
+function submitLabel(isCreating: boolean, isEditing: boolean) {
+  if (isCreating) {
+    return (
+      <>
+        <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+        Saving...
+      </>
+    );
+  }
+  return isEditing ? "Save changes" : "Add annotation";
+}
+
+function AnnotationTypeSelect({
+  type,
+  onTypeChange,
+}: Readonly<Pick<AnnotationCreateFormProps, "type" | "onTypeChange">>) {
+  return (
+    <Select value={type} onValueChange={(value) => onTypeChange(value as TimelineAnnotationType)}>
+      <SelectTrigger id="annotation-type" data-testid="select-annotation-type">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="injury">Injury</SelectItem>
+        <SelectItem value="illness">Illness</SelectItem>
+        <SelectItem value="travel">Travel</SelectItem>
+        <SelectItem value="rest">Rest block</SelectItem>
+      </SelectContent>
+    </Select>
+  );
 }
 
 export function AnnotationCreateForm({
@@ -38,25 +72,15 @@ export function AnnotationCreateForm({
   onNoteChange,
   onCreate,
   isCreating,
+  isEditing = false,
+  onCancelEdit,
 }: AnnotationCreateFormProps) {
   return (
-    <div className="space-y-3 rounded-lg border p-3">
+    <div className="space-y-3 rounded-lg border p-3" data-testid="annotation-form">
+      {isEditing && <h3 className="text-sm font-semibold">Edit annotation</h3>}
       <div className="space-y-2">
         <Label htmlFor="annotation-type">Type</Label>
-        <Select
-          value={type}
-          onValueChange={(value) => onTypeChange(value as TimelineAnnotationType)}
-        >
-          <SelectTrigger id="annotation-type" data-testid="select-annotation-type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="injury">Injury</SelectItem>
-            <SelectItem value="illness">Illness</SelectItem>
-            <SelectItem value="travel">Travel</SelectItem>
-            <SelectItem value="rest">Rest block</SelectItem>
-          </SelectContent>
-        </Select>
+        <AnnotationTypeSelect type={type} onTypeChange={onTypeChange} />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
@@ -100,15 +124,19 @@ export function AnnotationCreateForm({
         className="w-full"
         data-testid="button-create-annotation"
       >
-        {isCreating ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
-            Saving...
-          </>
-        ) : (
-          "Add annotation"
-        )}
+        {submitLabel(isCreating, isEditing)}
       </Button>
+      {isEditing && onCancelEdit && (
+        <Button
+          variant="ghost"
+          onClick={onCancelEdit}
+          disabled={isCreating}
+          className="w-full"
+          data-testid="button-cancel-edit-annotation"
+        >
+          Cancel edit
+        </Button>
+      )}
     </div>
   );
 }

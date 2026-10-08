@@ -235,7 +235,7 @@ Individual workout days within a training plan.
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
 | `plan_id` | `varchar(255)` | NOT NULL, FK -> `training_plans.id` ON DELETE CASCADE |
-| `week_number` | `integer` | NOT NULL — the plan week the session sits in: `schedulePlan` lays week W's sessions out from week 1's Monday (`training_plans.start_date`), and every write that gives a day a new date also sets the week and weekday of that date (`planSlotForMove`, `server/storage/planSlot.ts`). Moves used to change the date alone; migration `0117` repairs the days moved before that. That `UPDATE` runs only where the migration chain runs (a fresh database, CI); push-managed production needs it run by hand, tracked in [pending-manual-steps.md](operations/pending-manual-steps.md) |
+| `week_number` | `integer` | NOT NULL — the plan week the session sits in: `schedulePlan` lays week W's sessions out from week 1's Monday (`training_plans.start_date`), and every write that gives a day a new date also sets the week and weekday of that date (`planSlotForMove`, `server/storage/planSlot.ts`). Moves used to change the date alone; migration `0117` repairs the days moved before that (its verification query is in [pending-manual-steps.md](operations/pending-manual-steps.md)) |
 | `day_name` | `text` | NOT NULL — the weekday of that slot, kept with the date as above |
 | `focus` | `text` | NOT NULL |
 | `main_workout` | `text` | NOT NULL |
@@ -1535,7 +1535,7 @@ Notable recent migrations:
 - `0107`: Adds `plan_days.recovery_undo`, the record that lets a fold or shorten be undone. Nullable: sessions moved before it existed simply offer no undo.
 - `0108`: Creates `workout_log_streams`, the compact HR/pace streams session grading reads. A new table only; existing runs are backfilled by the `sessionStreamBackfill` cron, not the migration.
 - `0120`: Adds `workout_logs.auto_link_recording_only` (NOT NULL, default `false`), the durable mark of a plan-day log an auto device link created from the recording alone, which outlives an unlink (D12). No backfill: every existing row is right at `false`, since the auto links made before D12 copied the prescription in and no log of the new shape existed before the column.
-- `0122`: Indexes for lookups and cascades that scanned whole tables (PF11, PF16-PF18): `chat_messages.proposal_id` (partial), `plan_adjustment_proposals.plan_id`, `plan_day_moves.plan_day_id`, `food_favorites.food_id`, `strava_connections.strava_athlete_id` and `users.user_timezone`; and `uq_food_servings_shared`, one copy of each shared serving per (`food_id`, `label`, `grams`), after deleting the duplicates concurrent first opens of a USDA food left. The delete is data, so push-managed production needs it run first ([pending-manual-steps.md](operations/pending-manual-steps.md)).
+- `0122`: Indexes for lookups and cascades that scanned whole tables (PF11, PF16-PF18): `chat_messages.proposal_id` (partial), `plan_adjustment_proposals.plan_id`, `plan_day_moves.plan_day_id`, `food_favorites.food_id`, `strava_connections.strava_athlete_id` and `users.user_timezone`; and `uq_food_servings_shared`, one copy of each shared serving per (`food_id`, `label`, `grams`), after deleting the duplicates concurrent first opens of a USDA food left, in the same migration ([pending-manual-steps.md](operations/pending-manual-steps.md) has the verification query).
 
 ### Startup Migration
 
@@ -1543,7 +1543,7 @@ In addition to Drizzle Kit migrations, `runStartupMaintenance()` in `server/main
 
 1. Test the database connection (`testDatabaseConnection`)
 2. Execute Drizzle migrations (`runDrizzleMigrations`)
-3. Assert the critical tables exist (`assertCriticalTablesExist` in `server/migrationGuards.ts`: `users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`) — throws rather than serve an empty or partial schema — and that every table and column the Drizzle schema declares is present (`assertSchemaColumnsExist`, same file; `document_chunks` excepted), so a release deployed before its `drizzle-kit push` fails its deploy instead of failing every query on the new columns
+3. Assert the critical tables exist (`assertCriticalTablesExist` in `server/migrationGuards.ts`: `users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`) — throws rather than serve an empty or partial schema — and that every table and column the Drizzle schema declares is present (`assertSchemaColumnsExist`, same file; `document_chunks` excepted), so a release whose migration did not run (skipped by the migrator, as 0019 was, or rolled back) fails its deploy instead of failing every query on the new columns. Before that check, boot compares the ledger with the journal (`findUnappliedMigrations`, same file) and logs any unapplied entry by name; the check's error names it too
 4. Ensure the pgvector extension (`ensurePgvectorExtension`)
 5. Bootstrap the vector schema (`ensureVectorSchema`)
 6. Mark past planned days as missed and reset stale `isAutoCoaching` flags
@@ -1561,10 +1561,14 @@ the build. On small tables this is instant; on large/hot tables (`workout_logs`,
 in-process `runDrizzleMigrations()` applies migrations at startup while the new
 instance boots.
 
-Drizzle Kit cannot emit `CREATE INDEX CONCURRENTLY` — it wraps migrations in a
-transaction, and `CONCURRENTLY` cannot run inside one. So for an index on a
-large table, apply it **out-of-band** as a non-transactional step in a
-low-traffic window rather than letting a generated migration build it inline:
+Production applies its migrations this way too: there is no separate schema
+step, and `drizzle-kit push` must never be run against it
+([pending-manual-steps.md](operations/pending-manual-steps.md)).
+
+Drizzle Kit cannot emit `CREATE INDEX CONCURRENTLY` — the migrator runs every
+pending migration in one transaction, and `CONCURRENTLY` cannot run inside one.
+So for an index on a large table, build it **out-of-band** in a low-traffic
+window, before the release that carries its migration deploys:
 
 ```sql
 -- Run manually (psql / one-off job), NOT inside a drizzle migration:
@@ -1573,11 +1577,17 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_workout_logs_user_date
 ```
 
 Keep the index declared in `shared/schema/tables.ts` so the schema stays the
-source of truth and `db:check` passes. The generated migration's plain
-`CREATE INDEX` is then harmless: the concurrent build already created the index,
-and `runDrizzleMigrations()` treats the resulting "already exists" as a benign,
-non-fatal skip (see `server/maintenance.ts`). Small-table indexes need none of
-this — leave them inline in the normal generated migration.
+source of truth and `db:check` passes, and **edit the generated migration's
+statement to `CREATE INDEX IF NOT EXISTS`** before committing it, so it is a
+no-op where the concurrent build already ran. Do not leave the plain
+`CREATE INDEX`: on a database that already has the index it fails with "already
+exists", which rolls back the whole batch. `runDrizzleMigrations()` classifies
+that error as benign (it is what a push-built CI database produces), so boot
+carries on with nothing applied, and every later boot fails the same way until
+someone notices: the index's migration and every one after it never run. Boot
+logs those as pending by name (`findUnappliedMigrations`), and the schema check
+fails the deploy once one of them adds a column. Small-table indexes need none
+of this — leave them inline in the normal generated migration.
 
 ---
 
@@ -1595,7 +1605,7 @@ await db.transaction(async (tx) => {
 });
 ```
 
-The workout creation flow is a single transaction: `createWorkout()` and `createWorkoutAndScheduleCoaching()` in `server/services/workoutService/workouts.ts` open it with `db.transaction` and run `createWorkoutInTx()` inside it, which:
+The workout creation flow is a single transaction: `createWorkoutAndScheduleCoaching()` in `server/services/workoutService/workouts.ts` opens it with `db.transaction` and runs `createWorkoutInTx()` inside it, which:
 
 1. Inserts the `workoutLogs` record
 2. If linked to a plan day, updates `planDays` status to `"completed"` via JOIN-based update

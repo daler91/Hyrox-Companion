@@ -46,7 +46,7 @@ describe("ExerciseChips", () => {
     expect(screen.queryByTestId("confidence-score-entry-1-0")).not.toBeInTheDocument();
   });
 
-  it("shows a low-confidence score in red below 60", () => {
+  it("shows a low-confidence score in AA-contrast red below 60", () => {
     render(
       <ExerciseChips
         entryId="entry-1"
@@ -59,10 +59,10 @@ describe("ExerciseChips", () => {
 
     const score = screen.getByTestId("confidence-score-entry-1-0");
     expect(score).toHaveTextContent("45%");
-    expect(score.className).toContain("text-red-500");
+    expect(score.className).toContain("text-red-700");
   });
 
-  it("shows a mid-confidence score in yellow between 60 and 79", () => {
+  it("shows a mid-confidence score in the warning tone between 60 and 79", () => {
     render(
       <ExerciseChips
         entryId="entry-1"
@@ -73,10 +73,10 @@ describe("ExerciseChips", () => {
       />,
     );
 
-    expect(screen.getByTestId("confidence-score-entry-1-0").className).toContain("text-yellow-500");
+    expect(screen.getByTestId("confidence-score-entry-1-0").className).toContain("text-warning");
   });
 
-  it("shows a high-but-sub-90 confidence score in green", () => {
+  it("shows a high-but-sub-90 confidence score in the success tone", () => {
     render(
       <ExerciseChips
         entryId="entry-1"
@@ -87,7 +87,7 @@ describe("ExerciseChips", () => {
       />,
     );
 
-    expect(screen.getByTestId("confidence-score-entry-1-0").className).toContain("text-green-500");
+    expect(screen.getByTestId("confidence-score-entry-1-0").className).toContain("text-success");
   });
 
   it("flags a custom exercise with the help icon", () => {

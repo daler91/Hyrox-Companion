@@ -157,6 +157,10 @@ jobs:
           PORT: 5000
           ENCRYPTION_KEY: "01234567890123456789012345678901"
           ALLOW_DEV_AUTH_BYPASS: "true"
+          # Any value will do, so the cron spec's wrong-secret request reaches
+          # the secret comparison instead of the "unset" early return (A4).
+          # Derived per run rather than written out as a literal secret.
+          CRON_SECRET: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Wait for server
         # Replaces `npx wait-on`, which resolved an unpinned package from the

@@ -23,4 +23,16 @@ describe('ImageCaptureButton', () => {
     expect(input).not.toHaveAttribute('capture');
     expect(input).toHaveAttribute('aria-label', 'Choose a photo');
   });
+
+  // U34 (CODEBASE_ANALYSIS_2026-10-03): the hidden file input was a second tab
+  // stop, labelled "Capture workout image" even on the meal scans.
+  it('leaves the hidden file input out of the tab order and the accessibility tree', () => {
+    render(<ImageCaptureButton onImage={vi.fn()} label="Snap a meal" data-testid="button-snap-meal" />);
+
+    const input = screen.getByTestId('button-snap-meal-input');
+    expect(input).toHaveAttribute('tabindex', '-1');
+    expect(input).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByLabelText(/workout image/i)).not.toBeInTheDocument();
+  });
 });

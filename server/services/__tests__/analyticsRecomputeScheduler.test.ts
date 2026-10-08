@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IStorage } from "../../storage";
-import { runAnalyticsRecomputeScan } from "../analyticsRecomputeScheduler";
+import { enqueueTrainingStyleRecompute, runAnalyticsRecomputeScan } from "../analyticsRecomputeScheduler";
 
 // Mock the queue module so importing the scheduler doesn't construct pg-boss and
 // so we can assert what gets enqueued.
-const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }));
+const { sendMock, sendDebouncedMock } = vi.hoisted(() => ({ sendMock: vi.fn(), sendDebouncedMock: vi.fn() }));
 vi.mock("../../queue", () => ({
-  queue: { send: sendMock },
+  queue: { send: sendMock, sendDebounced: sendDebouncedMock },
   DEFAULT_JOB_OPTIONS: { retryLimit: 3, retryBackoff: true, expireInSeconds: 3600 },
   RECOMPUTE_ANALYTICS_QUEUE: "recompute-analytics",
 }));
@@ -424,5 +424,50 @@ describe("runAnalyticsRecomputeScan", () => {
       feature: "nutrition_insights",
       localDate: "2026-06-05",
     });
+  });
+});
+
+describe("enqueueTrainingStyleRecompute (A1)", () => {
+  beforeEach(() => {
+    sendDebouncedMock.mockClear();
+  });
+
+  it("queues a debounced, claim-free refresh of stored Coach Insights only", async () => {
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: "2026-06-05" },
+      rows: {
+        u1: {
+          coach_insights: { recomputedOn: "2026-06-05", lastWorkoutDateAtGeneration: "2026-06-05" },
+          overview_analysis: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-05" },
+          race_prediction: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-05" },
+        },
+      },
+    });
+
+    const enqueued = await enqueueTrainingStyleRecompute(storage, "u1", "2026-06-05");
+
+    expect(enqueued).toBe(1);
+    expect(sendDebouncedMock).toHaveBeenCalledTimes(1);
+    expect(sendDebouncedMock).toHaveBeenCalledWith(
+      "recompute-analytics",
+      { userId: "u1", feature: "coach_insights", localDate: "2026-06-05", trigger: "training_style_change" },
+      expect.any(Object),
+      60,
+      "recompute-style:coach_insights:u1",
+    );
+  });
+
+  it("queues nothing for an athlete with no stored Coach Insights", async () => {
+    const storage = makeStorage({
+      engagedUserIds: [],
+      users: {},
+      latestWorkoutDate: {},
+      rows: {},
+    });
+
+    await expect(enqueueTrainingStyleRecompute(storage, "u1", "2026-06-05")).resolves.toBe(0);
+    expect(sendDebouncedMock).not.toHaveBeenCalled();
   });
 });

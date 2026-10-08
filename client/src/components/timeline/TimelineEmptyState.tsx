@@ -10,14 +10,13 @@ import {
   Wand2,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "wouter";
 
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 import { FilterStatus } from "./types";
 
@@ -47,6 +46,7 @@ function WelcomeEmptyState({
   onLogNote,
 }: Readonly<WelcomeEmptyStateProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="text-center space-y-6">
@@ -97,43 +97,46 @@ function WelcomeEmptyState({
           )}
           Use 8-Week Template
         </Button>
-        <div>
-          <Label htmlFor="csv-upload-empty" className="cursor-pointer">
-            <Button
-              size="lg"
-              variant="outline"
-              disabled={importMutation.isPending}
-              data-testid="button-import-plan-empty"
-              asChild
-            >
-              <span>
-                {importMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-                ) : (
-                  <FileText className="h-4 w-4 mr-2" />
-                )}
-                Import Your Own
-              </span>
-            </Button>
-          </Label>
-          <Input
-            id="csv-upload-empty"
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={handleFileUpload}
-            data-testid="input-csv-upload-empty"
-          />
-        </div>
+        {/* A real button that opens the hidden picker: a span inside a label
+            for a display:none input could not be reached by keyboard, and its
+            disabled state did nothing while an import was running.
+            U22 (CODEBASE_ANALYSIS_2026-10-03) */}
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={() => {
+            fileInputRef.current?.click();
+          }}
+          disabled={importMutation.isPending}
+          data-testid="button-import-plan-empty"
+        >
+          {importMutation.isPending ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+          ) : (
+            <FileText className="h-4 w-4 mr-2" />
+          )}
+          Import Your Own
+        </Button>
+        <Input
+          ref={fileInputRef}
+          id="csv-upload-empty"
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleFileUpload}
+          aria-label="Import CSV training plan"
+          data-testid="input-csv-upload-empty"
+        />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
-        <Link href="/log">
-          <Button variant="ghost" data-testid="button-log-workout-empty">
+        {/* One link styled as a button, not a button nested in a link (U22). */}
+        <Button asChild variant="ghost" data-testid="button-log-workout-empty">
+          <Link href="/log">
             <Dumbbell className="h-4 w-4 mr-2" />
             Or just log a workout
-          </Button>
-        </Link>
+          </Link>
+        </Button>
         {onLogNote ? (
           <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
             <StickyNote className="h-4 w-4 mr-2" />

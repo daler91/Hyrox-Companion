@@ -81,7 +81,7 @@ export function AccountDangerZone() {
                     credentials. This action cannot be undone.
                   </p>
                   <p className="text-sm">
-                    We recommend exporting your data first from the Data Tools section above.
+                    We recommend exporting your data first from Export Data on the Data &amp; Privacy tab.
                   </p>
                   <div>
                     <label htmlFor="delete-confirm" className="text-sm font-medium">

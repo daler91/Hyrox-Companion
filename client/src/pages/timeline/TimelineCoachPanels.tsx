@@ -14,9 +14,9 @@ type TimelineData = ReturnType<typeof useTimelineState>["data"];
 
 // Loaded the first time the panel opens, not with the Timeline, which starts
 // with it closed. PF8 (CODEBASE_ANALYSIS_2026-10-03). The markdown stack the
-// chat renders with (react-markdown, remark-gfm, rehype-sanitize) still
-// reaches the Timeline chunk through the workout sheets' embedded coach chat
-// (WorkoutCoachSheet -> EmbeddedWorkoutCoachChat -> ChatMessage).
+// chat renders with (react-markdown, remark-gfm, rehype-sanitize) is a lazy
+// chunk of its own (ChatMessage -> ChatMarkdown), so the workout sheets'
+// embedded coach chat no longer pulls it into the Timeline chunk either.
 // lazyWithReload, as for the routes, so a chunk a deploy removed reloads onto
 // the current build.
 const CoachPanel = lazyWithReload(() =>

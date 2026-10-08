@@ -5,7 +5,10 @@ import {
   assertSchemaColumnsExist,
   CRITICAL_TABLES,
   declaredSchemaColumns,
+  findUnappliedMigrations,
   isBenignIdempotencyError,
+  type MigrationJournalEntry,
+  readMigrationJournal,
 } from "./migrationGuards";
 
 describe("isBenignIdempotencyError", () => {
@@ -36,8 +39,8 @@ describe("isBenignIdempotencyError", () => {
 
   it("finds the benign message in the error CAUSE chain (DrizzleQueryError wrapping)", () => {
     // drizzle-orm wraps the pg error: the outer message carries only the SQL,
-    // the "already exists" detail lives in .cause — the exact shape a
-    // push-managed CI/production boot produces.
+    // the "already exists" detail lives in .cause — the exact shape a boot
+    // against CI's push-built database produces.
     const wrapped = new Error('Failed query: CREATE TABLE "chat_messages" (...);\nparams: ');
     (wrapped as Error & { cause: unknown }).cause = new Error(
       'relation "chat_messages" already exists',
@@ -108,14 +111,30 @@ describe("assertSchemaColumnsExist (D7)", () => {
     ]);
   });
 
-  it("throws naming a column the release reads that the database lacks (code deployed before the push)", async () => {
+  it("throws naming a column the release reads that the database lacks, without suggesting drizzle-kit push", async () => {
     // 0119 shipped chat_messages.attachment: every db.select().from(chatMessages)
-    // names it, so until the push each chat query 500'd while readiness said ok.
+    // names it, so without it each chat query 500s while readiness says ok.
+    // Push would drop objects production holds outside the schema, so the
+    // error must not send an operator to it.
     const rows = rowsFor(declaredSchemaColumns()).filter(
       (r) => !(r.table_name === "chat_messages" && r.column_name === "attachment"),
     );
     const pool = { query: vi.fn().mockResolvedValue({ rows }) };
-    await expect(assertSchemaColumnsExist(pool)).rejects.toThrow(/missing: chat_messages\.attachment\b.*drizzle-kit push/);
+    const error = await assertSchemaColumnsExist(pool).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(Error);
+    const { message } = error as Error;
+    expect(message).toMatch(/missing: chat_messages\.attachment\b/);
+    expect(message).toContain("Compare drizzle.__drizzle_migrations with migrations/meta/_journal.json");
+    expect(message).toContain("do not run drizzle-kit push against production");
+    expect(message).not.toContain("Run `drizzle-kit push`");
+  });
+
+  it("names the skipped migration when the ledger says one was skipped (the 0019 case)", async () => {
+    const rows = rowsFor(declaredSchemaColumns()).filter((r) => r.table_name !== "idempotency_keys");
+    const pool = { query: vi.fn().mockResolvedValue({ rows }) };
+    await expect(
+      assertSchemaColumnsExist(pool, { skipped: ["0019_add_idempotency_keys"], pending: [] }),
+    ).rejects.toThrow(/idempotency_keys \(table\)\. Unapplied migrations — skipped by the migrator .*: 0019_add_idempotency_keys/u);
   });
 
   it("throws naming a whole table the database lacks", async () => {
@@ -133,5 +152,52 @@ describe("assertSchemaColumnsExist (D7)", () => {
   it("propagates query errors (fails closed)", async () => {
     const pool = { query: vi.fn().mockRejectedValue(new Error("connection refused")) };
     await expect(assertSchemaColumnsExist(pool)).rejects.toThrow("connection refused");
+  });
+});
+
+describe("findUnappliedMigrations", () => {
+  const journal: MigrationJournalEntry[] = [
+    { tag: "0017_a", when: 1_000 },
+    { tag: "0018_b", when: 3_000 },
+    { tag: "0019_c", when: 2_000 }, // older than 0018: the migrator skips it
+    { tag: "0020_d", when: 4_000 },
+  ];
+  const ledgerPool = (present: boolean, createdAt: (string | number)[]) => ({
+    query: vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ present }] })
+      .mockResolvedValueOnce({ rows: createdAt.map((value) => ({ created_at: value })) }),
+  });
+
+  it("splits unrecorded entries into skipped (older than the newest row) and pending (newer)", async () => {
+    // pg returns bigint as a string; the ledger stores each entry's journal `when`.
+    const pool = ledgerPool(true, ["1000", "3000"]);
+    await expect(findUnappliedMigrations(pool, journal)).resolves.toEqual({
+      skipped: ["0019_c"],
+      pending: ["0020_d"],
+    });
+  });
+
+  it("reports nothing when every entry is recorded", async () => {
+    const pool = ledgerPool(true, [1_000, 2_000, 3_000, 4_000]);
+    await expect(findUnappliedMigrations(pool, journal)).resolves.toEqual({ skipped: [], pending: [] });
+  });
+
+  it("returns null for an empty ledger (a push-built database records nothing)", async () => {
+    await expect(findUnappliedMigrations(ledgerPool(true, []), journal)).resolves.toBeNull();
+  });
+
+  it("returns null without querying the ledger when it does not exist", async () => {
+    const pool = ledgerPool(false, []);
+    await expect(findUnappliedMigrations(pool, journal)).resolves.toBeNull();
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readMigrationJournal", () => {
+  it("reads every entry of the real journal with its tag and when", () => {
+    const entries = readMigrationJournal();
+    expect(entries.length).toBeGreaterThan(100);
+    expect(entries).toContainEqual({ tag: "0019_add_idempotency_keys", when: 1_775_428_793_648 });
   });
 });

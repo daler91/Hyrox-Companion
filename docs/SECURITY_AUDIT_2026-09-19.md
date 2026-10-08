@@ -8,11 +8,24 @@ Scope: full codebase (Express 5 server, React/Vite client, shared schema, script
 
 ## Remediation status (updated 2026-09-19)
 
-All 7 Medium and 13 of the 15 Low findings are fixed on `claude/app-security-audit-sskexj`.
+5 of the 7 Medium findings are fully fixed, 1 is partly fixed and 1 is left open by
+decision; 13 of the 15 Low findings are fixed, on `claude/app-security-audit-sskexj`.
 The full suite (5134 tests) and `npx eslint .` pass, `pnpm audit` reports 0 vulnerabilities,
 and a production build was run to verify the service-worker and sourcemap changes.
 
-**Fixed:** every Medium finding; sourcemaps, device-provenance and plan-day write surfaces,
+**Still open (Medium):**
+
+- **Garmin reversible password storage** — unchanged, a product decision (see below).
+- **AI cost controls** — partly fixed. A global daily cap exists, but it is off unless
+  `AI_GLOBAL_DAILY_LIMIT_CENTS` is set, and the per-user check is still check-then-act
+  with no atomic reservation (see below).
+
+(Corrected 2026-10-08: this header used to say every Medium finding was fixed, which the
+section below contradicted. A6, CODEBASE_ANALYSIS_2026-10-03.)
+
+**Fixed:** the other five Medium findings (unowned plan links on workout PATCH, AI consent
+on planned-session-estimate, service-worker API caching, client Sentry scrubbing, Node 20);
+sourcemaps, device-provenance and plan-day write surfaces,
 chat role, generation-error leak, the six unlimited routes, SSRF ranges and provider
 redirects, prompt escaping, the unbounded auto-coach output, image magic-byte validation,
 the push subscription cap and worker URL handling, the duplicate service-worker
@@ -28,7 +41,8 @@ production when Strava is configured).
   a code fix, so it is left for the owner to choose. The existing mitigations (AES-256-GCM
   at rest, credential wipe on failure, strict limiter, per-user mutex) remain.
 - **AI budget check-then-act race and streaming/timeout under-counting.** The global cap
-  closes the unbounded-scale gap. Making the check atomic needs a reservation written
+  closes the unbounded-scale gap once an operator sets `AI_GLOBAL_DAILY_LIMIT_CENTS`; with
+  it unset (the default) there is no application-wide cap. Making the check atomic needs a reservation written
   before the provider call and reconciled after, which is a restructure of the provider
   layer; the per-route rate limits bound the overshoot meanwhile. Documented in
   `checkAiBudget`'s doc comment.

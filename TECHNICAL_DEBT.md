@@ -1,7 +1,9 @@
 # Technical Debt Registry
 
-> Living document cataloging known technical debt in the Hyrox-Companion codebase.
-> Resolved items are struck through rather than deleted, and each carries the date and
+> Register of the technical-debt items opened in this file. It is **not** the complete list
+> of open debt: later audits keep their own open findings, and the ones an owner planning
+> work most needs are indexed under [Open items tracked in other documents](#open-items-tracked-in-other-documents)
+> below. Resolved items are struck through rather than deleted, and each carries the date and
 > evidence of its own resolution, so the register doubles as a record of what was fixed
 > and when. Read those per-entry dates rather than looking for a single "last audited"
 > stamp at the top — this file carried one for months after it stopped being true, while
@@ -81,7 +83,40 @@
 
 ---
 
+## Open items tracked in other documents
+
+Later reviews verified these and left them open. They live in their source documents,
+which hold the evidence, file references and current status; this index exists so that
+planning from this file does not miss them. Listed as of 2026-10-08 (A15,
+CODEBASE_ANALYSIS_2026-10-03); check the source before acting.
+
+**[Refactoring review, 2026-09-23](docs/REFACTORING_REVIEW_2026-09-23.md)**
+
+- *Deferred refactors worth doing next* (R1-R6). R1 is a live trap: `server/emailScheduler.ts`
+  repeats `void sendPushToUser(…).catch(…)` six times, so a new email kind that copies the
+  call without `.catch` brings back the C1 process crash. R2: seven claim-ledger methods
+  that differ only by column. R3: a hand-copied absence `NOT EXISTS` behind the adherence
+  denominator. R4: advisory-lock keys spread over three files. R5: four copies of the AI
+  consent/budget gate (only the race-prediction one is tested). R6: hand-written retryable
+  status branches and five copies of the constant-time secret compare.
+- *Needs an owner decision* (D1-D11): unit-less max weight/distance in the chat prompt,
+  two plan-day PATCH routes that differ on auto-coach, stale `trainingOverview` after a
+  device sync, block-type labels, a raw `fetch` in `useMigrationReview`, offline saves from
+  the ad-hoc log sheet, a UTC "today" in `trainingOverviewLoader`, throwing timezone calls in
+  the nutrition routes, substring station matching, RPE-trend flags the prompt never shows,
+  and whether a Garmin 429 should end the connection.
+
+**[Calculation audit, 2026-08-20](docs/CALCULATION_AUDIT_2026-08-20.md)** (left open on purpose)
+
+- M11: logged nutrition joins live to `foods`, so editing a recipe or custom food rewrites
+  past days.
+- H20: a session's UTSS differs by about 2x depending on whether its sets were typed in.
+- L5: `mafHrDataAvailable` is collected and stored but read by no calculation.
+
 ## Summary
+
+The counts below cover this file's own numbered entries only; the items indexed above are
+not in them.
 
 | Priority | Resolved | Remaining | Notes |
 |----------|----------|-----------|-------|

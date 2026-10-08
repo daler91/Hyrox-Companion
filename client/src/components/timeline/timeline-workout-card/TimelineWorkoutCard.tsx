@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
+import { getLatestLoggableDateString } from "@/lib/dateUtils";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { isPendingTimelineEntry } from "@/lib/pendingWorkouts";
@@ -105,17 +106,22 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
       entry,
       isBulkSelectMode,
       canToggleBulkSelect,
-      canBeCombinedWith,
+      isCombining,
       onBulkSelectToggle,
       onCombineSelect,
       onClick,
     });
   };
 
-  const handleCardClick = (_e: React.MouseEvent) => handleCardActivation();
+  const handleCardClick = () => {
+    handleCardActivation();
+  };
 
-  const handleCardKeyDown = (e: React.KeyboardEvent) => {
-    handleCardKeyActivation(e, handleCardActivation);
+  // The title button is the card's keyboard and screen-reader way in; its
+  // click must not bubble on to the card's own pointer handler and fire twice.
+  const handleOpenClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleCardActivation();
   };
 
   const handleCompleteClick = (e: React.MouseEvent) => {
@@ -153,21 +159,21 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     handleMoveSelectActivation(newDate, entry, onMove);
   };
 
-  const interactionProps = getTimelineCardInteractionProps({
-    entry,
-    isPending,
-    isBulkSelectMode,
-    canBulkSelect,
-    isBulkSelected,
-    onClick: handleCardClick,
-    onKeyDown: handleCardKeyDown,
-  });
+  // The card itself is a plain container: tapping anywhere on it still opens
+  // it, but keyboard and screen-reader users reach it through the title
+  // button (or, in bulk mode, the select button). As a role="button" it held
+  // the complete button, drag handle, move menu and recovery actions, which
+  // screen readers can drop from swipe navigation (axe nested-interactive).
+  // U20 (CODEBASE_ANALYSIS_2026-10-03)
+  const onOpen = isPending || isBulkSelectMode ? undefined : handleOpenClick;
+  // While combining, the title button names what a tap does (A3).
+  const openLabel = getCardOpenLabel(entry, getCombineRole(isCombining, isBeingCombined, canBeCombinedWith));
 
   return (
     <Card
       ref={setDragNodeRef}
       className={cn(
-        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "transition-colors",
         !isPending && "cursor-pointer hover-elevate",
         baseCardClasses,
         aiCoachClasses,
@@ -175,7 +181,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
         getBulkSelectCardClasses({ isBulkSelectMode, canBulkSelect, isBulkSelected }),
         isPending && "opacity-70",
       )}
-      {...interactionProps}
+      onClick={isPending ? undefined : handleCardClick}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       <FloatingAiCoachBadge entryId={entry.id} isTargetedByCoach={isTargetedByCoach} />
@@ -196,7 +202,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           <TimelineCardLeadingAction
             entry={entry}
             isBulkSelectMode={isBulkSelectMode}
-            isPlanned={Boolean(isPlanned)}
+            canComplete={canCompletePlannedEntry(entry)}
             canBulkSelect={canBulkSelect}
             canToggleBulkSelect={canToggleBulkSelect}
             isBulkSelected={Boolean(isBulkSelected)}
@@ -212,6 +218,8 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               isPending={isPending}
               dayEntries={dayEntries}
               missedDetail={missedDetail}
+              onOpen={onOpen}
+              openLabel={openLabel}
             />
             <TimelineCardWorkoutBody
               entry={entry}
@@ -252,10 +260,25 @@ function getTimelineCardCombineState({
 >): TimelineCardCombineState {
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
+  // Only logged workouts can be merged (the server deletes sources by log id).
+  const isLogged = Boolean(entry.workoutLogId);
   return {
     isBeingCombined,
-    canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate),
+    canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate && isLogged),
   };
+}
+
+/** What tapping this card does while combine mode is on, for its accessible name. */
+type CombineRole = "source" | "candidate" | "other" | null;
+
+function getCombineRole(
+  isCombining: boolean | undefined,
+  isBeingCombined: boolean,
+  canBeCombinedWith: boolean,
+): CombineRole {
+  if (!isCombining) return null;
+  if (isBeingCombined) return "source";
+  return canBeCombinedWith ? "candidate" : "other";
 }
 
 /** A missed day's decision, whether it was a rest day (nothing to miss), and whether it still asks. */
@@ -269,6 +292,17 @@ function getMissedDetail(entry: TimelineWorkoutEntry): MissedDetail {
 
 function isPlannedTimelineEntry(entry: TimelineWorkoutEntry): boolean {
   return entry.status === "planned" && Boolean(entry.planDayId);
+}
+
+/**
+ * Whether ticking the session off can succeed. Completing logs a workout on
+ * the session's date, and the server refuses a workout dated after the
+ * athlete's tomorrow, so a later session offers no complete button rather
+ * than one that flips the card and reverts with "Failed to log workout".
+ * MoveEntryMenu clamps to the same day. U19 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function canCompletePlannedEntry(entry: TimelineWorkoutEntry): boolean {
+  return isPlannedTimelineEntry(entry) && entry.date <= getLatestLoggableDateString();
 }
 
 function canToggleBulkSelection({
@@ -329,60 +363,6 @@ function getBulkSelectCardClasses({
   );
 }
 
-interface TimelineCardInteractionOptions {
-  readonly entry: TimelineWorkoutEntry;
-  readonly isPending: boolean;
-  readonly isBulkSelectMode: boolean | undefined;
-  readonly canBulkSelect: boolean | undefined;
-  readonly isBulkSelected: boolean | undefined;
-  readonly onClick: (e: React.MouseEvent) => void;
-  readonly onKeyDown: (e: React.KeyboardEvent) => void;
-}
-
-/**
- * Activation handlers plus the checkbox-vs-button a11y contract. A pending
- * (offline-queued) entry has no server row to open, so it gets neither — only
- * the bulk-select ARIA state, which describes the row rather than acting on it.
- */
-function getTimelineCardInteractionProps({
-  entry,
-  isPending,
-  isBulkSelectMode,
-  canBulkSelect,
-  isBulkSelected,
-  onClick,
-  onKeyDown,
-}: TimelineCardInteractionOptions): React.HTMLAttributes<HTMLDivElement> {
-  const isBulkCheckbox = Boolean(isBulkSelectMode && canBulkSelect);
-  const bulkAria: React.HTMLAttributes<HTMLDivElement> = {
-    "aria-checked": isBulkCheckbox ? Boolean(isBulkSelected) : undefined,
-    "aria-disabled": isBulkSelectMode && !canBulkSelect ? true : undefined,
-  };
-  if (isPending) return bulkAria;
-  return {
-    ...bulkAria,
-    onClick,
-    onKeyDown,
-    role: isBulkCheckbox ? "checkbox" : "button",
-    tabIndex: 0,
-    // Label uses only the visible focus + status badge text (date sits in
-    // the parent date-group heading) so the accessible name matches what
-    // the user can read on screen — WCAG 2.5.3 Label in Name.
-    "aria-label": getCardAriaLabel(entry, isBulkSelectMode, isBulkSelected),
-  };
-}
-
-function handleCardKeyActivation(e: React.KeyboardEvent, onActivate: () => void) {
-  // Keydowns bubble up from the card's own controls (complete button, drag
-  // handle, move menu, portalled menu and dialog content). Those keys belong
-  // to the control: claiming them here opened the card instead of completing
-  // the session and broke the keyboard reschedule. U1 (CODEBASE_ANALYSIS_2026-10-03)
-  if (e.target !== e.currentTarget) return;
-  if (!isCardActivationKey(e.key)) return;
-  e.preventDefault();
-  onActivate();
-}
-
 function handleBulkSelectActivation(
   e: React.MouseEvent,
   entry: TimelineWorkoutEntry,
@@ -406,7 +386,7 @@ interface CardActivationOptions {
   readonly entry: TimelineWorkoutEntry;
   readonly isBulkSelectMode: boolean | undefined;
   readonly canToggleBulkSelect: boolean;
-  readonly canBeCombinedWith: boolean | undefined;
+  readonly isCombining: boolean | undefined;
   readonly onBulkSelectToggle: TimelineWorkoutCardProps["onBulkSelectToggle"];
   readonly onCombineSelect: TimelineWorkoutCardProps["onCombineSelect"];
   readonly onClick: TimelineWorkoutCardProps["onClick"];
@@ -416,7 +396,7 @@ function activateTimelineCard({
   entry,
   isBulkSelectMode,
   canToggleBulkSelect,
-  canBeCombinedWith,
+  isCombining,
   onBulkSelectToggle,
   onCombineSelect,
   onClick,
@@ -425,29 +405,29 @@ function activateTimelineCard({
     if (canToggleBulkSelect) onBulkSelectToggle?.(entry);
     return;
   }
-  if (canBeCombinedWith) {
-    onCombineSelect?.(entry);
+  // While combining, every tap is a combine decision: the second workout,
+  // the source again (cancel), or one that cannot be merged (explained by
+  // useCombineWorkouts). A3 (CODEBASE_ANALYSIS_2026-10-03)
+  if (isCombining && onCombineSelect) {
+    onCombineSelect(entry);
     return;
   }
   onClick(entry);
-}
-
-function isCardActivationKey(key: string): boolean {
-  return key === "Enter" || key === " ";
 }
 
 function groupTimelineExerciseSets(exerciseSets: TimelineWorkoutEntry["exerciseSets"]) {
   return exerciseSets?.length ? groupExerciseSets(exerciseSets) : [];
 }
 
-function getCardAriaLabel(
-  entry: TimelineWorkoutEntry,
-  isBulkSelectMode: boolean | undefined,
-  isBulkSelected: boolean | undefined,
-): string {
+// Label uses only the visible focus + status badge text (date sits in the
+// parent date-group heading) so the accessible name matches what the user can
+// read on screen — WCAG 2.5.3 Label in Name. While combining, it says what a
+// tap does instead (A3).
+function getCardOpenLabel(entry: TimelineWorkoutEntry, combineRole: CombineRole): string {
   const focus = entry.focus || "Workout";
-  if (!isBulkSelectMode) return `${focus}, ${entry.status}`;
-  return `${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}, ${entry.status}`;
+  if (combineRole === "source") return `Cancel combining ${focus}, ${entry.status}`;
+  if (combineRole === "candidate") return `Combine with ${focus}, ${entry.status}`;
+  return `${focus}, ${entry.status}`;
 }
 
 function FloatingAiCoachBadge({
@@ -470,7 +450,7 @@ function FloatingAiCoachBadge({
 interface TimelineCardLeadingActionProps {
   readonly entry: TimelineWorkoutEntry;
   readonly isBulkSelectMode: boolean | undefined;
-  readonly isPlanned: boolean;
+  readonly canComplete: boolean;
   readonly canBulkSelect: boolean | undefined;
   readonly canToggleBulkSelect: boolean;
   readonly isBulkSelected: boolean;
@@ -481,7 +461,7 @@ interface TimelineCardLeadingActionProps {
 function TimelineCardLeadingAction({
   entry,
   isBulkSelectMode,
-  isPlanned,
+  canComplete,
   canBulkSelect,
   canToggleBulkSelect,
   isBulkSelected,
@@ -508,7 +488,7 @@ function TimelineCardLeadingAction({
     );
   }
 
-  if (isPlanned) {
+  if (canComplete) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -547,6 +527,10 @@ interface TimelineCardHeaderProps {
   readonly isPending?: boolean;
   readonly dayEntries: TimelineWorkoutCardProps["dayEntries"];
   readonly missedDetail: MissedDetail;
+  /** Opens the card; absent while it cannot be opened (pending, bulk mode). */
+  readonly onOpen?: (e: React.MouseEvent) => void;
+  /** The title button's accessible name: the card, or what a tap does while combining. */
+  readonly openLabel: string;
 }
 
 function TimelineCardHeader({
@@ -556,6 +540,8 @@ function TimelineCardHeader({
   isPending,
   dayEntries,
   missedDetail,
+  onOpen,
+  openLabel,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div
@@ -567,7 +553,7 @@ function TimelineCardHeader({
       {isPending && (
         <Badge
           variant="outline"
-          className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950"
+          className="text-warning border-warning/30 bg-warning/10"
           data-testid={`badge-pending-sync-${entry.id}`}
         >
           <Loader2 className="h-3 w-3 mr-1 animate-spin" aria-hidden="true" />
@@ -612,7 +598,7 @@ function TimelineCardHeader({
       {entry.aiSource === "rag" && (
         <Badge
           variant="outline"
-          className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]"
+          className="text-success border-success/30 bg-success/10 text-[10px]"
         >
           <Database className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
           RAG
@@ -621,7 +607,7 @@ function TimelineCardHeader({
       {entry.aiSource === "legacy" && (
         <Badge
           variant="outline"
-          className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]"
+          className="text-warning border-warning/30 bg-warning/10 text-[10px]"
         >
           <FileText className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
           Legacy
@@ -629,10 +615,36 @@ function TimelineCardHeader({
       )}
       {/* On phones the badges already fill a line, so the title gets its own
           and a heavier weight: a card should read title-first when skimmed. */}
-      <span className="basis-full font-semibold leading-snug md:basis-auto md:font-medium">
-        {entry.focus}
-      </span>
+      <TimelineCardTitle entry={entry} onOpen={onOpen} openLabel={openLabel} />
     </div>
+  );
+}
+
+const TITLE_CLASSES = "basis-full font-semibold leading-snug md:basis-auto md:font-medium";
+
+/**
+ * The session title, and while the card can be opened the button that opens
+ * it: the card's one keyboard and screen-reader entry point (U20).
+ */
+function TimelineCardTitle({
+  entry,
+  onOpen,
+  openLabel,
+}: Readonly<{ entry: TimelineWorkoutEntry; onOpen?: (e: React.MouseEvent) => void; openLabel: string }>) {
+  if (!onOpen) return <span className={TITLE_CLASSES}>{entry.focus}</span>;
+  return (
+    <button
+      type="button"
+      className={cn(
+        TITLE_CLASSES,
+        "rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      )}
+      onClick={onOpen}
+      aria-label={openLabel}
+      data-testid={`button-open-entry-${entry.id}`}
+    >
+      {entry.focus}
+    </button>
   );
 }
 

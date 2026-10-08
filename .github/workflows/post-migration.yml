@@ -2,14 +2,15 @@ name: Post-Migration Verification
 
 on:
   workflow_dispatch:
-    # Production is push-managed (D24, CODEBASE_ANALYSIS_2026-10-03): its
-    # schema comes from `drizzle-kit push`, so its migration ledger is empty
-    # and `drizzle-kit migrate` fails there at 0000. Dispatch with `ledger:
-    # push` to apply only the data steps docs/operations/pending-manual-steps.md
-    # names instead. `migrate` is for a database built by `drizzle-kit migrate`.
+    # `migrate` (the default) is for a database whose ledger is populated:
+    # production, which applies migrations at boot, and anything built by
+    # `drizzle-kit migrate`. `push` is only for a database built by
+    # `drizzle-kit push`, whose ledger is empty, so `drizzle-kit migrate` fails
+    # there at 0000; it applies the named migration files instead. Never push
+    # to production (docs/operations/pending-manual-steps.md).
     inputs:
       ledger:
-        description: "How the database's schema is managed: migrate (drizzle-kit migrate ledger) or push (production)"
+        description: "How the database's schema was built: migrate (populated ledger, production included) or push (drizzle-kit push, empty ledger)"
         type: choice
         options:
           - migrate
@@ -58,12 +59,12 @@ jobs:
           ENCRYPTION_KEY: "01234567890123456789012345678901"
         run: pnpm run db:migrate
 
-      - name: Apply the named migration files (push-managed database)
+      - name: Apply the named migration files (push-built database)
         if: inputs.ledger == 'push'
         # Each file runs whole, in its own transaction, and stops the job on
-        # its first error. Only name a file pending-manual-steps.md says can be
-        # applied whole: a file with schema statements push has already
-        # applied fails on them, and its transaction rolls back. The input
+        # its first error. Only name an idempotent file: a file whose schema
+        # statements push has already applied fails on them, and its
+        # transaction rolls back. The input
         # reaches the script through env, and each name must be a file in
         # migrations/.
         env:

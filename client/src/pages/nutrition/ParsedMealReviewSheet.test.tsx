@@ -92,6 +92,16 @@ describe("ParsedMealReviewSheet", () => {
     expect(screen.getByTestId("button-log-meal-batch")).toHaveTextContent("Log 1 item");
   });
 
+  // U34 (CODEBASE_ANALYSIS_2026-10-03): every row's controls had the same
+  // name, so a screen reader heard "Quantity in grams" with no food.
+  it("names each row's quantity and meal controls after its item", () => {
+    renderSheet();
+    expect(screen.getByRole("spinbutton", { name: "Quantity in grams for 2 eggs" })).toHaveValue(100);
+    expect(screen.getByRole("spinbutton", { name: "Quantity in grams for a plate" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Meal for 2 eggs" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Meal for a plate" })).toBeInTheDocument();
+  });
+
   it("logs only the matched items with the right payload, then closes", async () => {
     const user = userEvent.setup();
     vi.mocked(api.nutrition.createLogBatch).mockResolvedValue({ created: 1, logDate: "2026-06-07" });

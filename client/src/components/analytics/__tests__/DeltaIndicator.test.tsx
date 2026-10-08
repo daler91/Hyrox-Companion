@@ -60,13 +60,23 @@ describe("DeltaIndicator", () => {
   it("provides aria-label on the 'new' state", () => {
     render(<DeltaIndicator current={5} previous={0} unit="km" testIdSuffix="a11y" />);
     const el = screen.getByTestId("delta-new-a11y");
-    expect(el).toHaveAttribute("aria-label", expect.stringContaining("5km"));
+    expect(el).toHaveAttribute("aria-label", expect.stringContaining("5 km"));
   });
 
   it("provides aria-label on the 'flat' state", () => {
     render(<DeltaIndicator current={100.3} previous={100} unit="bpm" testIdSuffix="a11y" />);
     const el = screen.getByTestId("delta-flat-a11y");
     expect(el).toHaveAttribute("aria-label", expect.stringContaining("Unchanged"));
+  });
+
+  it("rounds converted values and spaces word units in the 'new' aria text (U9)", () => {
+    render(<DeltaIndicator current={3.1068559611866697} previous={0} unit="miles" testIdSuffix="miles" />);
+    expect(screen.getByTestId("delta-new-miles")).toHaveAttribute("aria-label", "New metric: 3.1 miles");
+  });
+
+  it("rounds converted values in the flat aria text and keeps symbols attached (U9)", () => {
+    render(<DeltaIndicator current={80.04} previous={80} unit="%" testIdSuffix="pct" />);
+    expect(screen.getByTestId("delta-flat-pct")).toHaveAttribute("aria-label", "Unchanged at 80% vs previous period");
   });
 
   it("rounds percentages to one decimal place", () => {

@@ -32,6 +32,8 @@ export interface SetVersionTracker {
   markConflict(setId: string): void;
   /** Run `task` once every earlier task for the same set has settled. */
   enqueue<T>(setId: string, task: () => Promise<T>): Promise<T>;
+  /** Resolves once every task already queued for the set has settled, whatever its outcome. */
+  whenSettled(setId: string): Promise<void>;
   reset(): void;
 }
 
@@ -96,6 +98,9 @@ export function createSetVersionTracker(): SetVersionTracker {
         if (chains.get(setId) === next) chains.delete(setId);
       });
       return next;
+    },
+    whenSettled(setId) {
+      return (chains.get(setId) ?? Promise.resolve()).then(noop, noop);
     },
     reset() {
       versions.clear();

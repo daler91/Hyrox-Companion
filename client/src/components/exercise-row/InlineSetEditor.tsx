@@ -6,7 +6,7 @@ import {
   type WorkoutDistanceDisplayUnit,
 } from "@shared/unitConversion";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useEffect, useId, useMemo, useState } from "react";
+import { type ComponentProps, memo, useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,17 +73,6 @@ export const InlineSetEditor = memo(function InlineSetEditor({
   );
   const lastSet = orderedSets.at(-1);
 
-  // Grid: # | field-1 | field-2 ... | note-toggle | remove
-  // Each field column shares width; note/remove are fixed-width icons.
-  // Memoised so sibling `SetRow` components (wrapped in React.memo) skip
-  // re-render when an unrelated field keystroke flushes through.
-  const colTemplate = useMemo(
-    // 3.25rem floor (was 80px): three metric columns plus the two icon
-    // columns must fit a 360px phone inside the sheet's padding, or the note
-    // and remove buttons get pushed past the edge and can't be tapped.
-    () => `28px ${fields.map(() => "minmax(3.25rem, 1fr)").join(" ")} 28px 28px`,
-    [fields],
-  );
   const canDelete = orderedSets.length > 1;
 
   const handleAddSet = () => {
@@ -132,12 +121,7 @@ export const InlineSetEditor = memo(function InlineSetEditor({
       />
 
       <div className="space-y-1">
-        <HeaderRow
-          fields={fields}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          colTemplate={colTemplate}
-        />
+        <HeaderRow fields={fields} weightUnit={weightUnit} distanceUnit={distanceUnit} />
         {orderedSets.map((set) => (
           <SetRow
             key={set.id}
@@ -146,7 +130,6 @@ export const InlineSetEditor = memo(function InlineSetEditor({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             canDelete={canDelete}
-            colTemplate={colTemplate}
             onUpdateSet={onUpdateSet}
             onDeleteSet={onDeleteSet}
             showPlannedDiffs={showPlannedDiffs}
@@ -169,25 +152,43 @@ export const InlineSetEditor = memo(function InlineSetEditor({
   );
 });
 
+// Layout: # | fields | note + remove. U13 (CODEBASE_ANALYSIS_2026-10-03): one
+// fixed column per field needed 340px+ for four-field exercises while the
+// mobile sheet gives 260-290px, so the buttons went off screen and the sheet
+// scrolled sideways. The fields now sit in their own auto-fit grid that wraps
+// onto a second line when they don't fit; the header uses the same grid at the
+// same width, so its labels wrap identically and stay above their inputs. The
+// two buttons keep the 44px mobile touch target (36px from md up).
+const ROW_COLUMNS = "1.5rem minmax(0, 1fr) auto";
+const FIELD_COLUMNS = "repeat(auto-fit, minmax(min(3.75rem, 100%), 1fr))";
+/** Width of the note + remove pair, so the header's spacer matches it. */
+const ACTIONS_WIDTH_CLASS = "w-22 md:w-18";
+
 interface HeaderRowProps {
   readonly fields: readonly FieldKey[];
   readonly weightUnit: string;
   readonly distanceUnit: string;
-  readonly colTemplate: string;
 }
 
-function HeaderRow({ fields, weightUnit, distanceUnit, colTemplate }: HeaderRowProps) {
+function HeaderRow({ fields, weightUnit, distanceUnit }: HeaderRowProps) {
   return (
     <div
-      className="grid items-end gap-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-      style={{ gridTemplateColumns: colTemplate }}
+      className="grid items-end gap-1.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+      style={{ gridTemplateColumns: ROW_COLUMNS }}
     >
       <span className="text-center">#</span>
-      {fields.map((field) => (
-        <span key={field}>{getHeaderLabel(field, weightUnit, distanceUnit)}</span>
-      ))}
-      <span className="sr-only">Note</span>
-      <span className="sr-only">Remove</span>
+      <div className="grid items-end gap-1.5" style={{ gridTemplateColumns: FIELD_COLUMNS }}>
+        {fields.map((field) => (
+          <span key={field} className="min-w-0 break-words leading-tight">
+            {getHeaderLabel(field, weightUnit, distanceUnit)}
+          </span>
+        ))}
+      </div>
+      {/* A real (not sr-only) spacer, so the header's middle column is exactly
+          as wide as the rows' and the labels wrap the same way. */}
+      <span className={ACTIONS_WIDTH_CLASS}>
+        <span className="sr-only">Note and remove</span>
+      </span>
     </div>
   );
 }
@@ -239,105 +240,7 @@ function CustomLabelField({ initial, placeholder, onChange }: CustomLabelFieldPr
   );
 }
 
-interface SetRowProps {
-  readonly set: ExerciseSet;
-  readonly fields: readonly FieldKey[];
-  readonly weightUnit: string;
-  readonly distanceUnit: string;
-  readonly canDelete: boolean;
-  readonly colTemplate: string;
-  readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
-  readonly onDeleteSet: (setId: string) => void;
-  readonly showPlannedDiffs: boolean;
-}
-
-const SetRow = memo(function SetRow({
-  set,
-  fields,
-  weightUnit,
-  distanceUnit,
-  canDelete,
-  colTemplate,
-  onUpdateSet,
-  onDeleteSet,
-  showPlannedDiffs,
-}: SetRowProps) {
-  const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
-  const setId = set.id;
-  const onUpdate = useCallback(
-    (patch: PatchExerciseSetPayload) => onUpdateSet(setId, patch),
-    [onUpdateSet, setId],
-  );
-  const onDelete = useCallback(() => onDeleteSet(setId), [onDeleteSet, setId]);
-
-  return (
-    <div className="space-y-1" data-testid={`set-row-${set.id}`}>
-      <div className="grid items-center gap-2" style={{ gridTemplateColumns: colTemplate }}>
-        <span className="text-center text-xs tabular-nums text-muted-foreground">
-          {set.setNumber}
-        </span>
-        {fields.map((field) => (
-          <FieldInput
-            key={field}
-            field={field}
-            set={set}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            onUpdate={onUpdate}
-            showPlannedDiffs={showPlannedDiffs}
-          />
-        ))}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setNotesOpen((v) => !v)}
-                aria-label={notesOpen ? "Hide note" : "Add note"}
-                aria-pressed={notesOpen}
-                className={cn("size-7 text-muted-foreground", notesOpen && "text-foreground")}
-                data-testid={`button-toggle-note-${set.id}`}
-              >
-                <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{notesOpen ? "Hide note" : "Add note"}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  if (!canDelete) e.preventDefault();
-                  else onDelete();
-                }}
-                aria-disabled={!canDelete}
-                aria-label={`Remove set ${set.setNumber}`}
-                className="size-7 text-muted-foreground aria-disabled:opacity-40 aria-disabled:cursor-not-allowed"
-                data-testid={`button-remove-set-${set.id}`}
-              >
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Remove set</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
-    </div>
-  );
-});
+const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 interface FieldInputProps {
   readonly field: FieldKey;
@@ -472,7 +375,7 @@ const FieldInput = memo(function FieldInput({
             }
           }}
           placeholder={hasPlannedValue ? formatInitial(plannedDisplay) : "--"}
-          className={cn("h-10 text-center text-sm tabular-nums", displayUnit && "pr-9")}
+          className={cn("h-10 px-2 text-center text-sm tabular-nums", displayUnit && "pr-5")}
           aria-label={`${label} for set ${set.setNumber}`}
           data-testid={`input-${field}-${set.id}`}
         />
@@ -496,6 +399,138 @@ const FieldInput = memo(function FieldInput({
     </div>
   );
 });
+
+interface SetRowProps {
+  readonly set: ExerciseSet;
+  readonly fields: readonly FieldKey[];
+  readonly weightUnit: string;
+  readonly distanceUnit: string;
+  readonly canDelete: boolean;
+  readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
+  readonly onDeleteSet: (setId: string) => void;
+  readonly showPlannedDiffs: boolean;
+}
+
+const SetRow = memo(function SetRow({
+  set,
+  fields,
+  weightUnit,
+  distanceUnit,
+  canDelete,
+  onUpdateSet,
+  onDeleteSet,
+  showPlannedDiffs,
+}: SetRowProps) {
+  const [notesOpen, setNotesOpen] = useState(() => (set.notes ?? "").length > 0);
+  const setId = set.id;
+  const onUpdate = useCallback(
+    (patch: PatchExerciseSetPayload) => onUpdateSet(setId, patch),
+    [onUpdateSet, setId],
+  );
+  const onDelete = useCallback(() => onDeleteSet(setId), [onDeleteSet, setId]);
+  const toggleNotes = useCallback(() => {
+    setNotesOpen((open) => !open);
+  }, []);
+
+  return (
+    <div className="space-y-1" data-testid={`set-row-${set.id}`}>
+      <div className="grid items-center gap-1.5" style={{ gridTemplateColumns: ROW_COLUMNS }}>
+        <span className="text-center text-xs tabular-nums text-muted-foreground">
+          {set.setNumber}
+        </span>
+        <div className="grid items-start gap-1.5" style={{ gridTemplateColumns: FIELD_COLUMNS }}>
+          {fields.map((field) => (
+            <FieldInput
+              key={field}
+              field={field}
+              set={set}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onUpdate={onUpdate}
+              showPlannedDiffs={showPlannedDiffs}
+            />
+          ))}
+        </div>
+        <SetRowActions
+          setId={set.id}
+          setNumber={set.setNumber}
+          notesOpen={notesOpen}
+          onToggleNotes={toggleNotes}
+          canDelete={canDelete}
+          onDelete={onDelete}
+        />
+      </div>
+
+      {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
+    </div>
+  );
+});
+
+interface SetRowActionsProps {
+  readonly setId: string;
+  readonly setNumber: number;
+  readonly notesOpen: boolean;
+  readonly onToggleNotes: () => void;
+  readonly canDelete: boolean;
+  readonly onDelete: () => void;
+}
+
+function SetRowActions({
+  setId,
+  setNumber,
+  notesOpen,
+  onToggleNotes,
+  canDelete,
+  onDelete,
+}: SetRowActionsProps) {
+  const noteLabel = notesOpen ? "Hide note" : "Add note";
+  return (
+    <div className={cn("flex", ACTIONS_WIDTH_CLASS)}>
+      <SetActionButton
+        tooltip={noteLabel}
+        onClick={onToggleNotes}
+        aria-label={noteLabel}
+        aria-pressed={notesOpen}
+        className={cn("text-muted-foreground", notesOpen && "text-foreground")}
+        data-testid={`button-toggle-note-${setId}`}
+      >
+        <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+      </SetActionButton>
+      <SetActionButton
+        tooltip="Remove set"
+        onClick={(event) => {
+          if (!canDelete) event.preventDefault();
+          else onDelete();
+        }}
+        aria-disabled={!canDelete}
+        aria-label={`Remove set ${String(setNumber)}`}
+        className="text-muted-foreground aria-disabled:opacity-40 aria-disabled:cursor-not-allowed"
+        data-testid={`button-remove-set-${setId}`}
+      >
+        <X className="h-3.5 w-3.5" aria-hidden />
+      </SetActionButton>
+    </div>
+  );
+}
+
+/** Ghost icon button at the primitive's touch-target size, with a tooltip. */
+function SetActionButton({
+  tooltip,
+  ...buttonProps
+}: Readonly<ComponentProps<typeof Button> & { tooltip: string }>) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button type="button" variant="ghost" size="icon" {...buttonProps} />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 interface NotesFieldProps {
   readonly set: ExerciseSet;
@@ -578,8 +613,6 @@ function getStoredFieldValue(
     distanceUnit,
   );
 }
-
-const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 // Digits with at most one decimal separator, which may be "." or "," — the
 // iOS decimal keypad types "," in comma-decimal regions (CL7). Two patterns,

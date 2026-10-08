@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+
 import { EditableWorkoutTitle } from "../EditableWorkoutTitle";
 
 function renderTitle(overrides: Partial<ComponentProps<typeof EditableWorkoutTitle>> = {}) {
@@ -53,6 +55,37 @@ describe("EditableWorkoutTitle", () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByTestId("title-text")).toHaveTextContent("Strength");
+  });
+
+  it("cancels with Escape inside a sheet without closing the sheet (U23)", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const onSave = vi.fn();
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogTitle>Log workout</DialogTitle>
+          <DialogDescription>Sheet around the title editor</DialogDescription>
+          <EditableWorkoutTitle
+            title="Strength"
+            fallbackTitle="Workout"
+            onSave={onSave}
+            testIdPrefix="title"
+          />
+        </DialogContent>
+      </Dialog>,
+    );
+
+    await user.click(screen.getByTestId("title-edit"));
+    await user.type(screen.getByTestId("title-input"), "Changed{Escape}");
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByTestId("title-text")).toHaveTextContent("Strength");
+
+    // Once the edit is closed, Escape dismisses the sheet as before.
+    await user.keyboard("{Escape}");
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("disables save for blank titles", async () => {

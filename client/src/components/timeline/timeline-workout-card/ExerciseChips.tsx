@@ -7,6 +7,19 @@ import { categoryChipColors, formatExerciseSummary } from "@/lib/exerciseUtils";
 import type { ExerciseChipsProps } from "./types";
 import { hasPRInWorkout } from "./utils";
 
+/**
+ * The parse-confidence colour. Raw green/yellow/red-500 read at about 1.9:1
+ * to 3.5:1 on the chip in light mode, which hid the low-confidence signal
+ * on AI-parsed exercises; success and warning are the tuned AA tokens, and
+ * red-700 / red-400 clear AA where the destructive token does not.
+ * U21 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function confidenceColor(conf: number): string {
+  if (conf >= 80) return "text-success";
+  if (conf >= 60) return "text-warning";
+  return "text-red-700 dark:text-red-400";
+}
+
 export function ExerciseChips({
   entryId,
   groupedExercises,
@@ -23,16 +36,7 @@ export function ExerciseChips({
           const isPR = hasPRInWorkout(group, workoutLogId, personalRecords);
           const conf = group.confidence;
           const showConfidence = conf != null && conf < 90;
-          let confColor = "";
-          if (conf != null) {
-            if (conf >= 80) {
-              confColor = "text-green-500";
-            } else if (conf >= 60) {
-              confColor = "text-yellow-500";
-            } else {
-              confColor = "text-red-500";
-            }
-          }
+          const confColor = conf == null ? "" : confidenceColor(conf);
           const summaryText = formatExerciseSummary(group, weightLabel, distanceUnit);
           return (
             <Tooltip key={`${group.exerciseName}-${idx}`}>

@@ -29,6 +29,7 @@ import {
   snapshotToDraft,
   snapshotToSavePayload,
 } from "./preferencesSnapshot";
+import { describeInvalidPreferences, describePreferencesRejection } from "./preferencesValidation";
 
 const STYLE_AUDIT_STORAGE_KEY = "fitai-settings-style-audit";
 
@@ -298,9 +299,12 @@ export function usePreferencesForm() {
         toast(MAF_SETUP_TOAST);
         return;
       }
+      // A refusal names the field rather than asking for a retry that fails
+      // the same way. U35 (CODEBASE_ANALYSIS_2026-10-03)
+      const rejection = describePreferencesRejection(saveError);
       toast({
-        title: "Error",
-        description: "Failed to save settings. Please try again.",
+        title: rejection ? "Check your settings" : "Error",
+        description: rejection ?? "Failed to save settings. Please try again.",
         variant: "destructive",
       });
     },
@@ -333,28 +337,15 @@ export function usePreferencesForm() {
       return;
     }
 
-    // Capture the pre-save baseline so the post-save toast can offer Undo.
-    undoSnapshotRef.current = baselineSnapshotRef.current
-      ? { snapshot: { ...baselineSnapshotRef.current }, committedMaf: committedMafRef.current }
-      : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
     const maf =
       recomputeMaf && hasValidMafInputs
         ? calculateMafHr({ age: mafAge, category: mafCategory })
         : null;
-    pendingStyleAuditRef.current = styleChanged
-      ? {
-          changedAtIso: new Date().toISOString(),
-          fromStyleId: committedStyleId,
-          toStyleId: draft.trainingStyleId,
-          recalculations: buildRecalculationSummary(draft.trainingStyleId),
-        }
-      : null;
     // The recurring field mappings live in snapshotToSavePayload; only the
     // save-time-only style/MAF bookkeeping is added here.
-    savingDraftRef.current = draft;
-    saveMutation.mutate({
+    const payload: SavePayload = {
       ...snapshotToSavePayload(draftToSnapshot(draft)),
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
@@ -364,7 +355,29 @@ export function usePreferencesForm() {
         styleChanged && draft.trainingStyleId === "maf_method"
           ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
           : undefined,
-    });
+    };
+    // Refuse here, naming the field, what the server's schema would refuse
+    // as a whole. U35 (CODEBASE_ANALYSIS_2026-10-03)
+    const invalid = describeInvalidPreferences(payload, draft.weightUnit);
+    if (invalid) {
+      toast({ title: "Check your settings", description: invalid, variant: "destructive" });
+      return;
+    }
+
+    // Capture the pre-save baseline so the post-save toast can offer Undo.
+    undoSnapshotRef.current = baselineSnapshotRef.current
+      ? { snapshot: { ...baselineSnapshotRef.current }, committedMaf: committedMafRef.current }
+      : null;
+    pendingStyleAuditRef.current = styleChanged
+      ? {
+          changedAtIso: new Date().toISOString(),
+          fromStyleId: committedStyleId,
+          toStyleId: draft.trainingStyleId,
+          recalculations: buildRecalculationSummary(draft.trainingStyleId),
+        }
+      : null;
+    savingDraftRef.current = draft;
+    saveMutation.mutate(payload);
   }, [saveMutation, draft, preferences, toast]);
 
   const mafAgeValue = ageInputToSnapshot(draft.mafAgeInput);

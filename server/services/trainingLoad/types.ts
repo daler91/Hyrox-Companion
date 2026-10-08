@@ -125,7 +125,7 @@ export interface DailyTrainingLoad {
   // fresh/rested, negative ⇒ fatigued. Null before the first log and until the
   // same 14-day history gate as ACWR opens (audit C3).
   tsb: number | null;
-  // Foster monotony (mean ÷ population SD of the trailing 7-day UTSS) and strain
+  // Foster monotony (mean ÷ sample SD of the trailing 7-day UTSS, audit M26) and strain
   // (weekly UTSS × monotony). Null only when the week carried no load at all, or
   // before the athlete has 7 days of history; uniform load reports at the
   // MONOTONY_CEILING rather than as null.

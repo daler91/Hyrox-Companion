@@ -362,19 +362,6 @@ export async function createWorkoutInTx(
   return log;
 }
 
-export async function createWorkout(
-  workoutData: InsertWorkoutLog,
-  exercises: ParsedExercise[] | undefined,
-  userId: string,
-  structureBlocks?: StructureBlockInput[],
-): Promise<CreateWorkoutResult> {
-  // Resolve plan linkage before creating the workout
-  const planLinks = await resolveActivePlanLinks(workoutData, userId);
-  const enrichedData = applyResolvedPlanLinks(workoutData, planLinks);
-
-  return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId));
-}
-
 /**
  * Atomically creates a workout and flips the user's isAutoCoaching flag when
  * AI coaching is enabled, then enqueues the auto-coach job post-commit.

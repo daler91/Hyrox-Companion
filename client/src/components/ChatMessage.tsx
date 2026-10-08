@@ -1,9 +1,6 @@
 import type { ChatFeedback, ChatSafetyNotice } from "@shared/schema";
 import { AlertCircle, Bot, HeartPulse, ImageIcon, RotateCcw, ShieldAlert, ThumbsDown, ThumbsUp, User } from "lucide-react";
-import { memo } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
+import { lazy, memo, Suspense } from "react";
 
 import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,19 +32,24 @@ interface ChatMessageProps {
   readonly attachment?: MessageAttachment;
 }
 
+/** A reply as plain text: while the markdown chunk loads, and if it cannot. */
+function PlainReply({ content }: { readonly content: string }) {
+  return (
+    <p className="whitespace-pre-wrap" data-testid="chat-markdown-pending">
+      {content}
+    </p>
+  );
+}
+
 /**
- * GFM gives the coach tables (pacing splits, a week's sessions), strikethrough
- * and task lists, which plain CommonMark printed as pipes and tildes. A table
- * wider than the bubble scrolls instead of squashing its columns on a phone.
+ * The markdown stack loads with the first coach reply shown, not with the page
+ * (PF8, CODEBASE_ANALYSIS_2026-10-03). A chunk that fails to load (a tab left
+ * open across a deploy) shows the reply as plain text rather than reloading
+ * the page, which would cut off a reply still streaming in.
  */
-const MARKDOWN_PLUGINS = [remarkGfm];
-const MARKDOWN_COMPONENTS: Components = {
-  table: ({ node: _node, ...props }) => (
-    <div className="my-2 max-w-full overflow-x-auto">
-      <table {...props} />
-    </div>
-  ),
-};
+const ChatMarkdown = lazy(() =>
+  import("@/components/chat/ChatMarkdown").catch(() => ({ default: PlainReply })),
+);
 
 /**
  * The urgent escalation is an alert, so it is announced as soon as it lands
@@ -233,17 +235,10 @@ export const ChatMessage = memo(function ChatMessage({
                   aria-live={streaming ? "off" : undefined}
                   className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2"
                 >
-                  {/* AI output is rendered as markdown; rehype-sanitize strips
-                      script tags, event handlers, and javascript:/data: URLs so a
-                      compromised provider or prompt-injection attempt can't run
-                      arbitrary JS in the user's session (C2). */}
-                  <ReactMarkdown
-                    remarkPlugins={MARKDOWN_PLUGINS}
-                    rehypePlugins={[rehypeSanitize]}
-                    components={MARKDOWN_COMPONENTS}
-                  >
-                    {content}
-                  </ReactMarkdown>
+                  {/* Sanitized markdown (C2): see ChatMarkdown. */}
+                  <Suspense fallback={<PlainReply content={content} />}>
+                    <ChatMarkdown content={content} />
+                  </Suspense>
                 </div>
               )}
               {failure && (

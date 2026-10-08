@@ -109,7 +109,7 @@ describe("SessionGradeCard", () => {
     await waitFor(() => {
       expect(
         screen.getByRole("link", { name: "Add your max heart rate in Settings" }),
-      ).toHaveAttribute("href", "/settings");
+      ).toHaveAttribute("href", "/settings?tab=training");
     });
   });
 

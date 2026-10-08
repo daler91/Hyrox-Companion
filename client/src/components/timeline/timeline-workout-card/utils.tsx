@@ -117,8 +117,10 @@ export function getStatusBadge(
         </Badge>
       );
     case "skipped":
+      // The tuned warning token, not raw yellow-600 (about 2.4:1 on its tint
+      // in light mode). U21 (CODEBASE_ANALYSIS_2026-10-03)
       return (
-        <Badge className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+        <Badge className="bg-warning/10 text-warning" data-testid="badge-skipped">
           <SkipForward className="h-3 w-3 mr-1" aria-hidden="true" />
           Skipped
         </Badge>
@@ -140,6 +142,6 @@ export function getCardClasses(
   if (isRaceDayEntry(focus)) return "border-amber-500/40 bg-amber-500/10";
   if (status === "completed") return "border-success/20 bg-success/5";
   if (status === "missed") return detail.open ? "border-warning/30 bg-warning/5" : "";
-  if (status === "skipped") return "border-yellow-500/20 bg-yellow-500/5";
+  if (status === "skipped") return "border-warning/20 bg-warning/5";
   return "";
 }

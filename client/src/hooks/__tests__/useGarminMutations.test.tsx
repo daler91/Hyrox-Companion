@@ -76,8 +76,14 @@ describe("useGarminMutations", () => {
       );
     });
 
-    it("triggers error toast with error message on failure", async () => {
-      apiMocks.connect.mockRejectedValue(new Error("Invalid credentials"));
+    it("shows the server's own copy, not the raw status and JSON body, on failure (U28)", async () => {
+      // The shape apiRequest throws: `${status}: ${body}`. The old test threw a
+      // plain Error, so printing error.message passed while athletes read JSON.
+      apiMocks.connect.mockRejectedValue(
+        new Error(
+          '401: {"error":"Garmin rejected your email or password. Check them and try again.","code":"GARMIN_AUTH_FAILED"}',
+        ),
+      );
       await runMutation((m) => m.connectGarminMutation, {
         email: "test@example.com",
         password: "password123",
@@ -86,7 +92,7 @@ describe("useGarminMutations", () => {
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Garmin Connection Failed",
-          description: "Invalid credentials",
+          description: "Garmin rejected your email or password. Check them and try again.",
           variant: "destructive",
         })
       );
@@ -102,7 +108,7 @@ describe("useGarminMutations", () => {
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Garmin Connection Failed",
-          description: "An error occurred",
+          description: "Something went wrong. Please try again.",
           variant: "destructive",
         })
       );
@@ -164,6 +170,19 @@ describe("useGarminMutations", () => {
       );
     });
 
+    it("never prints a 5xx body on sync failure (U28)", async () => {
+      apiMocks.sync.mockRejectedValue(new Error('502: {"error":"upstream garmin-connect TypeError at line 42"}'));
+      await runMutation((m) => m.syncGarminMutation);
+
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Garmin Sync Failed",
+          description: "Something went wrong on our end. Please try again in a moment.",
+          variant: "destructive",
+        })
+      );
+    });
+
     it("triggers error toast with fallback generic message on failure when not an Error", async () => {
       apiMocks.sync.mockRejectedValue("String error");
       await runMutation((m) => m.syncGarminMutation);
@@ -171,7 +190,7 @@ describe("useGarminMutations", () => {
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Garmin Sync Failed",
-          description: "An error occurred",
+          description: "Something went wrong. Please try again.",
           variant: "destructive",
         })
       );

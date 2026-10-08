@@ -39,8 +39,11 @@ export default function FloatingActionButton({
         className="rounded-full shadow-lg gap-2"
         onClick={onCoachToggle}
         data-testid="button-coach-fab"
-        aria-expanded={coachPanelOpen}
-        aria-controls="coach-panel"
+        aria-expanded={Boolean(coachPanelOpen)}
+        // U18 (CODEBASE_ANALYSIS_2026-10-03): TimelineCoachPanels renders
+        // id="coach-panel" only while the panel is open, so point at it only
+        // then rather than at an id that does not exist.
+        aria-controls={coachPanelOpen ? "coach-panel" : undefined}
       >
         <MessageSquare className="h-4 w-4" aria-hidden />
         <span>AI Coach</span>

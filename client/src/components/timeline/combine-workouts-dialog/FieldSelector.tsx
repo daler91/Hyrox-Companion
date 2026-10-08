@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,12 +17,18 @@ export function FieldSelector({
   isTextArea = false,
 }: Readonly<FieldSelectorProps>) {
   const labelId = label.toLowerCase().replaceAll(/\s+/g, "-");
+  // The three groups share their option labels ("Workout 1", "Workout 2"...),
+  // so each group is named by its field heading; otherwise a screen reader
+  // hears identical radios for Focus, Main Workout and Notes.
+  // U17 (CODEBASE_ANALYSIS_2026-10-03)
+  const headingId = useId();
 
   return (
     <div className="rounded-md border p-3 space-y-2">
-      <Label className="text-sm font-medium">{label}</Label>
+      <Label id={headingId} className="text-sm font-medium">{label}</Label>
 
       <RadioGroup
+        aria-labelledby={headingId}
         value={source}
         onValueChange={(val) => onSourceChange(val as FieldSource)}
         className="flex flex-wrap gap-4"
