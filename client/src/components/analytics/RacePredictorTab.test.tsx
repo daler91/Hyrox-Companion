@@ -71,3 +71,24 @@ describe("RacePredictorTab — race readiness", () => {
     expect(screen.queryByTestId("race-readiness-card")).not.toBeInTheDocument();
   });
 });
+
+describe("RacePredictorTab — settings links (U8)", () => {
+  it("sends the gender prompt to the Settings Training tab", () => {
+    renderWith(baseData({ genderAssumed: true }));
+    expect(screen.getByRole("link", { name: "Set it in Settings" })).toHaveAttribute(
+      "href",
+      "/settings?tab=training",
+    );
+  });
+
+  it("sends 'Enable AI Coach' to the Settings Training tab", () => {
+    renderWith(baseData({ aiUsed: false, aiUnavailableReason: "ai_consent_off" }));
+    expect(screen.getByTestId("race-prediction-enable-ai")).toHaveAttribute(
+      "href",
+      "/settings?tab=training",
+    );
+    expect(screen.getByTestId("race-prediction-ai-notice")).toHaveTextContent(
+      "Settings → Training",
+    );
+  });
+});

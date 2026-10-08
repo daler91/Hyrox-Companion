@@ -127,7 +127,7 @@ describe("useCoachingUpload", () => {
         variant: "destructive",
       });
       expect(mockToast).toHaveBeenCalledWith({
-        title: "Upload failed",
+        title: "Couldn't read some files",
         description: "Failed to read: bad.pdf",
         variant: "destructive",
       });
@@ -150,13 +150,45 @@ describe("useCoachingUpload", () => {
 
       expect(mockMutateAsync).toHaveBeenCalledTimes(2);
 
+      // U16 (CODEBASE_ANALYSIS_2026-10-03): a server rejection is not a read
+      // failure; the file was readable.
       expect(mockToast).toHaveBeenCalledWith({
         title: "Upload failed",
-        description: "Failed to read: file1.txt",
+        description: "file1.txt: Mutation failed",
         variant: "destructive",
       });
+      expect(mockToast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ description: expect.stringContaining("Failed to read") }),
+      );
       expect(mockToast).toHaveBeenCalledWith({
         title: "Uploaded 1 document",
+      });
+    });
+
+    it("reports server rejections with the server's reason, grouped per reason (U16)", async () => {
+      const { result } = renderHook(() => useCoachingUpload());
+
+      const files = ["a.txt", "b.txt", "c.txt"].map((name) => new File(["readable"], name));
+      const rateLimited = new Error(
+        '429: {"error":"Too many requests. Please wait 60 seconds before trying again.","code":"RATE_LIMITED"}',
+      );
+      mockMutateAsync
+        .mockRejectedValueOnce(rateLimited)
+        .mockRejectedValueOnce(rateLimited)
+        .mockRejectedValueOnce(new Error("413: Payload Too Large"));
+
+      await act(async () => {
+        await result.current.handleFileUpload({
+          target: { files },
+        } as unknown as React.ChangeEvent<HTMLInputElement>);
+      });
+
+      expect(mockToast).toHaveBeenCalledTimes(1);
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Upload failed",
+        description:
+          "a.txt, b.txt: Too many requests. Please wait 60 seconds before trying again. · c.txt: That upload is too large. Try a smaller file or split it up.",
+        variant: "destructive",
       });
     });
   });

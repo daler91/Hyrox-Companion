@@ -1,5 +1,6 @@
 import type { TrainingPlan } from "@shared/schema";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,6 @@ import { aiWeekOneStartNote } from "@/lib/planStart";
 
 import {
   DAY_NAMES,
-  DEFAULT_DAYS_PER_WEEK,
   type ExperienceLevel,
   MAX_DAYS_PER_WEEK,
   MIN_DAYS_PER_WEEK,
@@ -84,19 +84,7 @@ export function GeneratePlanScheduleStep({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="days">Days/Week</Label>
-        <Input
-          id="days"
-          type="number"
-          min={MIN_DAYS_PER_WEEK}
-          max={MAX_DAYS_PER_WEEK}
-          value={daysPerWeek}
-          onChange={(event) =>
-            onDaysPerWeekChange(Number.parseInt(event.target.value) || DEFAULT_DAYS_PER_WEEK)
-          }
-        />
-      </div>
+      <DaysPerWeekField value={daysPerWeek} onChange={onDaysPerWeekChange} />
 
       {daysPerWeek < 7 && (
         <fieldset className="space-y-2 border-0 m-0 p-0">
@@ -235,6 +223,64 @@ export function GeneratePlanScheduleStep({
           Next <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** The typed text as a days-per-week count, or null when it isn't one yet. */
+function parseDaysPerWeek(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const days = Number(raw);
+  if (!Number.isInteger(days) || days < MIN_DAYS_PER_WEEK || days > MAX_DAYS_PER_WEEK) {
+    return null;
+  }
+  return days;
+}
+
+/**
+ * U14 (CODEBASE_ANALYSIS_2026-10-03): the field used to commit every keystroke,
+ * so clearing it snapped back to 5 and typing next to the digit ("53") clamped
+ * to 7, resetting the rest days each time. The text is now a local draft and
+ * only a whole number in range is committed; anything else waits, and blur
+ * restores the last committed value.
+ */
+function DaysPerWeekField({
+  value,
+  onChange,
+}: Readonly<{ value: number; onChange: (value: number) => void }>) {
+  const [draft, setDraft] = useState(String(value));
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(String(value));
+  }
+  const draftInvalid = draft.trim() !== "" && parseDaysPerWeek(draft) === null;
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="days">Days/Week</Label>
+      <Input
+        id="days"
+        type="number"
+        inputMode="numeric"
+        min={MIN_DAYS_PER_WEEK}
+        max={MAX_DAYS_PER_WEEK}
+        value={draft}
+        onChange={(event) => {
+          const raw = event.target.value;
+          setDraft(raw);
+          const days = parseDaysPerWeek(raw);
+          if (days !== null && days !== value) onChange(days);
+        }}
+        onBlur={() => {
+          setDraft(String(value));
+        }}
+        errorMessage={
+          draftInvalid
+            ? `Enter a whole number from ${String(MIN_DAYS_PER_WEEK)} to ${String(MAX_DAYS_PER_WEEK)}.`
+            : undefined
+        }
+      />
     </div>
   );
 }

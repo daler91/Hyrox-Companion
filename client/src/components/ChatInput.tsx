@@ -1,7 +1,7 @@
 import { CHAT_MESSAGE_MAX_LENGTH, CHAT_PHOTO_DEFAULT_MESSAGE, CHAT_PHOTO_MAX_BASE64_CHARS } from "@shared/chat";
 import type { ChatPhoto } from "@shared/schema";
 import { Loader2, Send, Square, X } from "lucide-react";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,7 @@ export function ChatInput({
   allowPhoto = true,
 }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   // A photo waiting to go with the next message, shrunk already (I20).
   const [photo, setPhoto] = useState<CompressedImage | null>(null);
   const { toast } = useToast();
@@ -147,9 +148,15 @@ export function ChatInput({
     else onSend(text);
     setMessage("");
     setPhoto(null);
+    // U11: a tap on Send moves focus to the button, which then swaps for Stop
+    // and drops focus to body; keep the athlete in the box to draft the next one.
+    textareaRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // U12 (CODEBASE_ANALYSIS_2026-10-03): the Enter that confirms an IME
+    // candidate (CJK input) arrives while composing; it must not send.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -189,8 +196,11 @@ export function ChatInput({
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholderFor(isListening, photo !== null, placeholder)}
+          ref={textareaRef}
           className="min-h-[44px] max-h-32 resize-none"
-          disabled={isLoading}
+          // U11 (CODEBASE_ANALYSIS_2026-10-03): not disabled while the coach
+          // replies, so focus and the phone keyboard stay put and the next
+          // message can be drafted; `cannotSend` already blocks a second send.
           enterKeyHint="send"
           aria-label="Chat message"
           aria-invalid={tooLong || undefined}

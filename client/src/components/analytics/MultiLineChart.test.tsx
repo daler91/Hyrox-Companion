@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MultiLineChart } from "./MultiLineChart";
+import { MultiLineChart, MultiLineTooltip } from "./MultiLineChart";
 
 const data = [
   { date: "2026-05-01", a: 1, b: 2 },
@@ -36,5 +36,26 @@ describe("MultiLineChart", () => {
       <MultiLineChart data={data} series={[]} label="Load overlay" testId="multi-line-chart-test" />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("MultiLineTooltip", () => {
+  it("labels a weekStart-keyed point with its week and year (U7)", () => {
+    render(
+      <MultiLineTooltip
+        active
+        xKey="weekStart"
+        payload={[{ value: 6.5, name: "Avg RPE", payload: { weekStart: "2025-03-03", avgRpe: 6.5 } }]}
+      />,
+    );
+    expect(screen.getByText("Week of Mar 3, 2025")).toBeInTheDocument();
+    expect(screen.getByText("6.5")).toBeInTheDocument();
+  });
+
+  it("labels a date-keyed point with its full date", () => {
+    render(
+      <MultiLineTooltip active payload={[{ value: 3, name: "A", payload: { date: "2026-05-01", a: 3 } }]} />,
+    );
+    expect(screen.getByText("May 1, 2026")).toBeInTheDocument();
   });
 });

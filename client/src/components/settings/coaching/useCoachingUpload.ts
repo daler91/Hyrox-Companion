@@ -3,6 +3,7 @@ import { useRef,useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { useCreateCoachingMaterial } from "@/hooks/useCoachingMaterials";
+import { humanizeApiError } from "@/lib/queryClient";
 
 // ⚡ Perf: pdfjs-dist (~2.5 MB) + mammoth (~300 KB) are lazy-loaded inside
 // the extractors so the hook itself stays lightweight for users who never
@@ -109,6 +110,11 @@ async function extractFileText(file: File): Promise<string> {
   return sanitizeText(await file.text());
 }
 
+/** "a.pdf, b.pdf: <reason>", one entry per distinct server reason. */
+function describeRejections(rejected: ReadonlyMap<string, readonly string[]>): string {
+  return Array.from(rejected, ([reason, names]) => `${names.join(", ")}: ${reason}`).join(" · ");
+}
+
 export function useCoachingUpload() {
   const { toast } = useToast();
   const createMutation = useCreateCoachingMaterial();
@@ -144,7 +150,11 @@ export function useCoachingUpload() {
 
   const processBatchFiles = async (files: File[]) => {
     const tooLarge: string[] = [];
-    const failed: string[] = [];
+    const unreadable: string[] = [];
+    // U16 (CODEBASE_ANALYSIS_2026-10-03): a file the server turned away (rate
+    // limit, AI consent off, 413) was reported as unreadable. Those keep the
+    // server's reason now, grouped so twelve 429s read as one line.
+    const rejected = new Map<string, string[]>();
     let uploaded = 0;
 
     // One file at a time: the upload route is rate-limited, and each upload
@@ -154,16 +164,23 @@ export function useCoachingUpload() {
         tooLarge.push(file.name);
         return;
       }
+      let text: string;
       try {
-        const text = await extractFileText(file);
+        text = await extractFileText(file);
+      } catch {
+        unreadable.push(file.name);
+        return;
+      }
+      try {
         await createMutation.mutateAsync({
           title: file.name.replace(/\.[^/.]+$/, ""),
           content: text.slice(0, 1500000),
           type: "document",
         });
         uploaded++;
-      } catch {
-        failed.push(file.name);
+      } catch (error) {
+        const reason = humanizeApiError(error);
+        rejected.set(reason, [...(rejected.get(reason) ?? []), file.name]);
       }
     });
 
@@ -177,10 +194,17 @@ export function useCoachingUpload() {
         variant: "destructive",
       });
     }
-    if (failed.length > 0) {
+    if (unreadable.length > 0) {
+      toast({
+        title: "Couldn't read some files",
+        description: `Failed to read: ${unreadable.join(", ")}`,
+        variant: "destructive",
+      });
+    }
+    if (rejected.size > 0) {
       toast({
         title: "Upload failed",
-        description: `Failed to read: ${failed.join(", ")}`,
+        description: describeRejections(rejected),
         variant: "destructive",
       });
     }
