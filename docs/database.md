@@ -1605,7 +1605,7 @@ await db.transaction(async (tx) => {
 });
 ```
 
-The workout creation flow is a single transaction: `createWorkout()` and `createWorkoutAndScheduleCoaching()` in `server/services/workoutService/workouts.ts` open it with `db.transaction` and run `createWorkoutInTx()` inside it, which:
+The workout creation flow is a single transaction: `createWorkoutAndScheduleCoaching()` in `server/services/workoutService/workouts.ts` opens it with `db.transaction` and runs `createWorkoutInTx()` inside it, which:
 
 1. Inserts the `workoutLogs` record
 2. If linked to a plan day, updates `planDays` status to `"completed"` via JOIN-based update
