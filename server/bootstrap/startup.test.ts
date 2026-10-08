@@ -195,7 +195,11 @@ describe("Railway deploy config", () => {
     // `railway config migrate` dropped this setting, so it is pinned here.
     const { deploy } = await productionService();
     expect((deploy?.drainingSeconds ?? 0) * 1000).toBeGreaterThan(SHUTDOWN_TIMEOUT_MS);
-    expect(deploy?.restartPolicyType).toBe("ON_FAILURE");
+    // Unset means Railway's default, On Failure; the file leaves it unset
+    // because Railway stores that default as null (an explicit "ON_FAILURE"
+    // shows as a pending change on every plan).
+    expect([undefined, "ON_FAILURE"]).toContain(deploy?.restartPolicyType);
+    expect(deploy?.restartPolicyMaxRetries).toBe(3);
   });
 
   it("never runs dependency install scripts in the production build (S4)", async () => {
