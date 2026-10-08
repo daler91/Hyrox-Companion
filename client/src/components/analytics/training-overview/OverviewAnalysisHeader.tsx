@@ -40,7 +40,7 @@ export function OverviewAnalysisHeader({
     <div className="space-y-2 rounded-lg border bg-card p-4 text-card-foreground shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+          <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
           <div>
             <p className="text-sm font-semibold">AI Chart Analysis</p>
             <p className="text-xs text-muted-foreground">

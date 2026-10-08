@@ -196,3 +196,81 @@ describe("getCoachWelcome", () => {
     expect(welcome.greeting).toContain("Hi Sam! Race day is 3 days away.");
   });
 });
+
+describe("buildCoachWelcome: session kinds and status lines", () => {
+  it("treats a session with a running exercise as a run even when its name says strength", () => {
+    const welcome = buildCoachWelcome({
+      firstName: "Sam",
+      daysToRace: null,
+      context: context({
+        upcomingWorkouts: [
+          session(TODAY, "Sled day", { exerciseDetails: [{ exerciseName: "easy_run", category: "running" }] }),
+        ],
+      }),
+    });
+
+    expect(welcome.quickActions[0]).toEqual({
+      id: "today-session",
+      label: "Pacing for today's Sled day",
+      message: "How should I pace today's Sled day?",
+    });
+  });
+
+  it("offers a neutral chip for a session that is neither a run nor strength", () => {
+    const welcome = buildCoachWelcome({
+      firstName: "Sam",
+      daysToRace: null,
+      context: context({ upcomingWorkouts: [session(TODAY, "Mobility", { mainWorkout: "Hip openers and stretching" })] }),
+    });
+
+    expect(welcome.quickActions[0]).toEqual({
+      id: "today-session",
+      label: "Today's Mobility",
+      message: "How should I approach today's Mobility?",
+    });
+  });
+
+  it("says it is race day, or that it is tomorrow, instead of counting days", () => {
+    const raceDay = buildCoachWelcome({ firstName: "Sam", daysToRace: 0, context: context() });
+    const eve = buildCoachWelcome({ firstName: "Sam", daysToRace: 1, context: context() });
+
+    expect(raceDay.greeting).toContain("It's race day. Good luck out there.");
+    expect(eve.greeting).toContain("Race day is tomorrow.");
+    expect(ids(raceDay)[0]).toBe("race-prep");
+  });
+
+  it("notes hard recent sessions and offers to ease off when the load is not flagged", () => {
+    const welcome = buildCoachWelcome({
+      firstName: "Sam",
+      daysToRace: null,
+      context: context({ coachingInsights: insights({ fatigueFlag: true }) }),
+    });
+
+    expect(welcome.greeting).toBe("Hi Sam! Your last few sessions have felt hard. What would you like to work on?");
+    expect(ids(welcome)[0]).toBe("ease-off");
+  });
+
+  it("reports a yellow load zone ahead of fatigue and personal bests", () => {
+    const welcome = buildCoachWelcome({
+      firstName: "Sam",
+      daysToRace: null,
+      context: context({
+        coachingInsights: insights({ loadGovernor: { zone: "yellow" } as never, fatigueFlag: true, prsThisWeek: 1 }),
+      }),
+    });
+
+    expect(welcome.greeting).toContain("Your load is climbing faster than usual.");
+    expect(welcome.greeting).not.toContain("felt hard");
+    expect(welcome.greeting).not.toContain("personal best");
+  });
+
+  it("uses the singular for one personal best", () => {
+    const welcome = buildCoachWelcome({
+      firstName: "Sam",
+      daysToRace: null,
+      context: context({ coachingInsights: insights({ prsThisWeek: 1 }) }),
+    });
+
+    expect(welcome.greeting).toContain("You've set 1 personal best this week.");
+  });
+});

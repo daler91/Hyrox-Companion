@@ -197,6 +197,21 @@ describe("get_personal_records", () => {
     expect(records[0].best).toMatch(/^e1RM 140kg$/);
     expect(records[1]).toMatchObject({ exercise: "rowing", date: "2026-09-01" });
   });
+
+  it("falls back to max weight for a load logged without reps, and max distance (in its stored unit, metres) for a distance without a time", async () => {
+    vi.mocked(storage.analytics).getExerciseSetsForPersonalRecords.mockResolvedValue([
+      set({ exerciseName: "sled_push", category: "functional", reps: null, weight: 150, date: "2026-08-10" }),
+      set({ exerciseName: "skierg", category: "functional", reps: null, weight: null, time: null, distance: 2000, date: "2026-09-05" }),
+    ] as never);
+
+    const result = await run("get_personal_records");
+
+    const records = result.records as Array<{ exercise: string; best: string; date: string }>;
+    expect(records).toEqual([
+      { exercise: "sled push", best: "max weight 150kg", date: "2026-08-10" },
+      { exercise: "skierg", best: "max distance 2000m", date: "2026-09-05" },
+    ]);
+  });
 });
 
 describe("search_coaching_materials", () => {
@@ -210,6 +225,27 @@ describe("search_coaching_materials", () => {
 
     expect(retrieveCoachingContext).toHaveBeenCalledWith("user-1", "pacing the first run", CTX.log);
     expect(result.excerpts).toEqual(['[Hyrox pacing notes] Run the first km at &lt;90% &amp; "easy".']);
+  });
+
+  it("falls back to the whole coaching materials when no chunks were retrieved", async () => {
+    vi.mocked(retrieveCoachingContext).mockResolvedValue({
+      coachingMaterials: [{ title: "Race plan", content: "Negative split <5k" }],
+      ragInfo: { source: "full", chunkCount: 0 },
+    } as never);
+
+    const result = await run("search_coaching_materials", { query: "race" });
+
+    expect(result.excerpts).toEqual(["Race plan\nNegative split &lt;5k"]);
+    expect(result).not.toHaveProperty("note");
+  });
+
+  it("says nothing matched when the athlete has no relevant notes", async () => {
+    vi.mocked(retrieveCoachingContext).mockResolvedValue({ ragInfo: { source: "none", chunkCount: 0 } } as never);
+
+    const result = await run("search_coaching_materials", { query: "anything" });
+
+    expect(result.excerpts).toEqual([]);
+    expect(result.note).toBe("Nothing in the athlete's coaching notes matched.");
   });
 });
 

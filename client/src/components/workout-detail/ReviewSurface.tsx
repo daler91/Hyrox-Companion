@@ -370,7 +370,9 @@ function ReviewDetailsColumn({
         testId={`review-summary-${entry.id}`}
       />
       {/* Only plan-linked sessions have a purpose to be graded against. */}
-      {entry.planDayId ? <SessionGradeCard workoutLogId={workoutLogId} distanceUnit={distanceUnit} /> : null}
+      {entry.planDayId ? (
+        <SessionGradeCard workoutLogId={workoutLogId} distanceUnit={distanceUnit} />
+      ) : null}
       <ReviewActualsSection
         entry={entry}
         detail={detail}

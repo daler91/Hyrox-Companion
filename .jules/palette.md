@@ -1,15 +1,28 @@
 ## 2024-03-24 - Accessibility issue with disabled tooltips
+
 **Learning:** While wrapping disabled buttons with a <span> and a tabIndex fixes visual tooltips on hover, it creates accessibility flaws because the <span> receives focus but lacks semantic meaning or disabled state, confusing screen readers. Additionally, Radix UI's TooltipTrigger merges ARIA attributes onto the immediate child, so breaking the DOM hierarchy with a span breaks ARIA associations for the inner button.
 **Action:** When making tooltips accessible for disabled buttons, use aria-disabled instead of the native disabled attribute on the button itself. This allows the button to remain focusable and keeps the DOM structure correct for Radix UI, while screen readers correctly announce it as disabled.
+
 ## 2024-05-24 - Accessibility fix for native disabled buttons triggering tooltips
+
 **Learning:** React Testing Library's `.toBeDisabled()` assertion only checks for the native `disabled` HTML attribute. When converting UI buttons to use `aria-disabled="true"` for better tooltip support and screen reader accessibility, tests that rely on `.toBeDisabled()` will fail.
 **Action:** When updating a component to use `aria-disabled`, you must also update the corresponding tests to check for the attribute using `.toHaveAttribute('aria-disabled', 'true')` instead of `.toBeDisabled()`.
+
 ## 2024-05-15 - Improve MultiSetTable button disabled state accessibility
+
 **Learning:** Found an accessibility issue in `MultiSetTable` where the "Remove set" button is wrapped in a focusable `<span>` when it is disabled to allow Tooltips to trigger. This breaks semantic meaning and ARIA associations because the `<button>` is natively `disabled`.
 **Action:** Changed the `<button>` native `disabled` to `aria-disabled` combined with Tailwind classes (`aria-disabled:opacity-50 aria-disabled:cursor-not-allowed`) to manage visual states while allowing the button to remain focusable and maintain tooltips without wrappers.
+
 ## 2024-05-24 - Accessible tooltips on disabled buttons
+
 **Learning:** Using the native `disabled` attribute prevents elements from receiving focus, rendering attached tooltips inaccessible to keyboard users. Wrapping them in a `<span tabIndex={0}>` restores focus but breaks semantic meaning and ARIA associations.
 **Action:** Use `aria-disabled` instead of `disabled` on interactive elements that have tooltips, and handle the visual disabled state via CSS (e.g. `aria-disabled:opacity-50 aria-disabled:cursor-not-allowed`) while preventing clicks in the event handler.
+
 ## 2024-05-24 - Improve tooltip accessibility for disabled buttons
+
 **Learning:** To make tooltips accessible on disabled buttons, avoid wrapping them in a focusable <span> which breaks semantic meaning and ARIA associations. Instead, replace native disabled with aria-disabled, manage visual state with Tailwind (aria-disabled:opacity-50 aria-disabled:cursor-not-allowed), and prevent default on click.
 **Action:** Always use this pattern for tooltips on disabled interactive elements.
+
+## 2026-10-07 - Codebase has excellent a11y baseline; watch for title vs Tooltip
+**Learning:** This codebase has best-in-class accessibility: WCAG-referenced comments, dedicated a11y test files (jest-axe), consistent use of aria-labels on icon-only buttons, Radix UI primitives for headless a11y, reduced-motion support, skip-to-content links, sr-only live regions, and proper label associations. The main pattern to watch for is the occasional decorative icon missing `aria-hidden` inside text-labeled buttons, and rare cases where `title` is used instead of the Tooltip component on icon-only buttons (title doesn't render on touch devices in this mobile-first PWA).
+**Action:** When reviewing new components, check that decorative icons inside buttons have `aria-hidden="true"` and that icon-only buttons use the Tooltip wrapper pattern rather than the `title` attribute.

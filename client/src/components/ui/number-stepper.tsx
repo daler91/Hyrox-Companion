@@ -93,7 +93,7 @@ export function NumberStepper({
               className={cn("h-11 w-11 shrink-0", extraClass)}
               data-testid={testId ? `${testId}-${dir}` : undefined}
             >
-              <IconCmp className="h-4 w-4" />
+              <IconCmp className="h-4 w-4" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

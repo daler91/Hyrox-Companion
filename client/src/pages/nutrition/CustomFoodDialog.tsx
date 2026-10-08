@@ -300,7 +300,7 @@ function CustomFoodForm({
                         aria-label="Remove serving"
                         onClick={() => removeServing(i)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>

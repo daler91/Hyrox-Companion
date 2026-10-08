@@ -3,6 +3,7 @@ import { Merge, MessageSquare, RotateCcw, Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
  * Deleting a completed planned session removes its log and keeps its plan
@@ -53,7 +54,7 @@ export function ReviewActionButtons({
             onClick={() => onAskCoach(entry, currentCoachSeedText)}
             data-testid={`review-ask-coach-${entry.id}`}
           >
-            <MessageSquare className="mr-2 h-4 w-4" />
+            <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
             Ask coach
           </Button>
         ) : null}
@@ -65,39 +66,51 @@ export function ReviewActionButtons({
             onClick={() => onMarkPlanned(entry)}
             data-testid={`review-mark-planned-${entry.id}`}
           >
-            <RotateCcw className="mr-2 h-4 w-4" />
+            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
             Reopen
           </Button>
         ) : null}
         {onCombine ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-muted-foreground"
-            onClick={() => {
-              onCombine(entry);
-            }}
-            aria-label="Combine with another workout"
-            title="Combine with another workout"
-            data-testid={`review-combine-${entry.id}`}
-          >
-            <Merge className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground"
+                  onClick={() => {
+                    onCombine(entry);
+                  }}
+                  aria-label="Combine with another workout"
+                  data-testid={`review-combine-${entry.id}`}
+                >
+                  <Merge className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Combine with another workout</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
         {onDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-muted-foreground hover:text-destructive"
-            onClick={() => onDeleteConfirmOpenChange(true)}
-            aria-label="Delete workout"
-            title="Delete workout"
-            data-testid={`review-delete-${entry.id}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => onDeleteConfirmOpenChange(true)}
+                  aria-label="Delete workout"
+                  data-testid={`review-delete-${entry.id}`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete workout</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
       </div>
       {onDelete ? (
