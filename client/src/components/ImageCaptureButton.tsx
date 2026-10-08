@@ -107,7 +107,12 @@ export function ImageCaptureButton({
         capture={attach ? undefined : "environment"}
         className="sr-only"
         onChange={handleChange}
-        aria-label={attach ? "Choose a photo" : "Capture workout image"}
+        // The visible button opens this input; as its own tab stop it was a
+        // second, mislabelled control ("Capture workout image" on the meal
+        // and label scans). U34 (CODEBASE_ANALYSIS_2026-10-03)
+        tabIndex={-1}
+        aria-hidden="true"
+        aria-label={attach ? "Choose a photo" : "Capture image"}
         data-testid={`${dataTestId ?? "button-image-capture"}-input`}
       />
       <TooltipProvider>

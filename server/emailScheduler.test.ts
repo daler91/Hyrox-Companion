@@ -144,6 +144,41 @@ describe('runEmailCronJob', () => {
     expect(sendJobNoRetry).toHaveBeenCalledWith('send-maf-test-reminder', { userId: 7 });
   });
 
+  // U37 (CODEBASE_ANALYSIS_2026-10-03): the reminder went out on the first
+  // tick after it fell due, whatever the athlete's local time.
+  describe('MAF test reminder timing', () => {
+    async function mafJobsAt(instant: string, user: Record<string, unknown>) {
+      const { sendJobNoRetry } = await import('./queue');
+      vi.setSystemTime(new Date(instant));
+      mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
+      mockStorage.users.getUsersWithDueMafBaselineTest = vi
+        .fn()
+        .mockResolvedValue([makeMockUser({ id: 7, email: 'maf@example.com', ...user })]);
+      await runEmailCronJob(mockStorage);
+      return vi.mocked(sendJobNoRetry).mock.calls.filter(([name]) => name === 'send-maf-test-reminder');
+    }
+
+    it('waits for the notify hour instead of sending in the night', async () => {
+      // 03:00 in New York (07:00 UTC); notify hour 7.
+      const calls = await mafJobsAt('2023-10-16T07:00:00Z', { userTimezone: 'America/New_York' });
+      expect(calls).toHaveLength(0);
+    });
+
+    it("sends at the athlete's notify hour in their timezone", async () => {
+      // 18:00 in New York (22:00 UTC).
+      const calls = await mafJobsAt('2023-10-16T22:00:00Z', {
+        userTimezone: 'America/New_York',
+        notifyHour: 18,
+      });
+      expect(calls).toEqual([['send-maf-test-reminder', { userId: 7 }]]);
+    });
+
+    it('skips an athlete whose stored timezone is unusable without aborting the scan', async () => {
+      const calls = await mafJobsAt('2023-10-16T07:00:00Z', { userTimezone: 'Not/AZone' });
+      expect(calls).toHaveLength(0);
+    });
+  });
+
   it('should enqueue jobs for multiple users independently', async () => {
     const { sendJobNoRetry } = await import('./queue');
 

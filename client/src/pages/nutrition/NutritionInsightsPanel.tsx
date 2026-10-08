@@ -3,9 +3,11 @@ import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 
 import { LastUpdatedNote } from "@/components/analytics/LastUpdatedNote";
+import { AiCoachOffNotice } from "@/components/coach/AiCoachOffNotice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useAuth } from "@/hooks/useAuth";
 import { useNutritionInsights, useRegenerateNutritionInsights } from "@/hooks/useNutrition";
 import { describeAiError } from "@/lib/describeAiError";
 
@@ -32,6 +34,9 @@ export function NutritionInsightsPanel() {
   const showInitialSpinner = (query.isLoading || isGenerating) && !hasInsights;
   const activeError = regenerate.error ?? query.error;
   const errorMessage = activeError ? describeError(activeError) : null;
+  // Generating needs AI consent (off by default); the server would 403 it.
+  // U29 (CODEBASE_ANALYSIS_2026-10-03)
+  const aiCoachOff = useAuth().user?.aiCoachEnabled === false;
 
   const buttonLabel = () => {
     if (isGenerating)
@@ -98,6 +103,8 @@ export function NutritionInsightsPanel() {
         </div>
       );
     }
+    // The consent notice already says what to do.
+    if (aiCoachOff) return null;
     return (
       <div
         className="space-y-3 rounded-lg border border-dashed bg-muted/20 py-8 text-center"
@@ -125,7 +132,7 @@ export function NutritionInsightsPanel() {
               variant={hasInsights ? "outline" : "default"}
               size="sm"
               onClick={() => regenerate.mutate()}
-              disabled={isGenerating}
+              disabled={isGenerating || aiCoachOff}
               aria-busy={isGenerating}
               data-testid="button-generate-nutrition-insights"
             >
@@ -138,7 +145,13 @@ export function NutritionInsightsPanel() {
           AI analysis of your recent fuelling against your training load and targets.
         </CardDescription>
       </CardHeader>
-      <CardContent aria-live="polite" aria-atomic="false">
+      <CardContent aria-live="polite" aria-atomic="false" className="space-y-4">
+        {aiCoachOff && (
+          <AiCoachOffNotice
+            feature="personalized nutrition insights"
+            testId="nutrition-insights-ai-off"
+          />
+        )}
         {body()}
       </CardContent>
     </Card>

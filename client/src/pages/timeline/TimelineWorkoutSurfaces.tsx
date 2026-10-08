@@ -107,6 +107,8 @@ interface TimelineWorkoutSurfacesProps {
     | "setAnnotationsDialogOpen"
     | "annotationInitialDate"
     | "setAnnotationInitialDate"
+    | "editingAnnotation"
+    | "setEditingAnnotation"
   >;
   /** Reschedule, so the skip dialog can offer moving a session instead of skipping it. */
   readonly onMoveEntry?: (entry: TimelineEntry, newDate: string) => void;
@@ -200,6 +202,8 @@ export function TimelineWorkoutSurfaces({
     setAnnotationsDialogOpen,
     annotationInitialDate,
     setAnnotationInitialDate,
+    editingAnnotation,
+    setEditingAnnotation,
   } = annotations;
   const [completionSuccessEntryId, setCompletionSuccessEntryId] = useState<string | null>(null);
   const logEntryRef = useRef(logEntry);
@@ -452,9 +456,11 @@ export function TimelineWorkoutSurfaces({
           setAnnotationsDialogOpen(open);
           if (!open) {
             setAnnotationInitialDate(undefined);
+            setEditingAnnotation(null);
           }
         }}
         initialDate={annotationInitialDate}
+        editingAnnotation={editingAnnotation}
       />
     </>
   );

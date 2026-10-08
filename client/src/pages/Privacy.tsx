@@ -10,12 +10,14 @@ export default function Privacy() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         <div className="mb-8">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-1">
+          {/* One link styled as a button, not a button nested in a link: two
+              focus stops for one action. U34 (CODEBASE_ANALYSIS_2026-10-03) */}
+          <Button asChild variant="ghost" size="sm" className="gap-1">
+            <Link href="/">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         <article className="prose prose-neutral dark:prose-invert max-w-none">

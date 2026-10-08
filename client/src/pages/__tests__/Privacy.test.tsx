@@ -54,4 +54,13 @@ describe("Privacy policy", () => {
       expect(access).toHaveTextContent(section);
     }
   });
+
+  // U34 (CODEBASE_ANALYSIS_2026-10-03): Back was a button nested in a link.
+  it("offers Back as a single link with no button inside", () => {
+    render(<Privacy />);
+
+    const back = screen.getByRole("link", { name: "Back" });
+    expect(back).toHaveAttribute("href", "/");
+    expect(within(back).queryByRole("button")).not.toBeInTheDocument();
+  });
 });

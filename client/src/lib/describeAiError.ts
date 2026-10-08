@@ -1,4 +1,13 @@
+import { parseApiError } from "@/lib/apiError";
 import { AiBudgetExceededError, RateLimitError } from "@/lib/queryClient";
+
+/**
+ * Shown for the server's 403 AI_COACH_DISABLED: AI processing is opt-in, so
+ * retrying cannot help until the athlete turns the AI Coach on.
+ * U29 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export const AI_COACH_OFF_MESSAGE =
+  "The AI Coach is turned off. Enable it in Settings (Training tab) to use this feature.";
 
 export interface AiErrorCopy {
   /** Fills "You're <activity> too quickly…" in the rate-limit copy,
@@ -16,6 +25,10 @@ export interface AiErrorCopy {
  * the same failures the same way, with per-surface copy where it differs.
  */
 export function describeAiError(error: unknown, copy: AiErrorCopy): string {
+  const http = parseApiError(error);
+  if (http?.status === 403 && http.code === "AI_COACH_DISABLED") {
+    return AI_COACH_OFF_MESSAGE;
+  }
   if (error instanceof AiBudgetExceededError) {
     return "You've reached your daily AI usage limit. Please try again later.";
   }

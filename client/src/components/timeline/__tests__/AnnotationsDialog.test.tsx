@@ -121,6 +121,78 @@ describe("AnnotationsDialog", () => {
     });
   });
 
+  // U36 (CODEBASE_ANALYSIS_2026-10-03): the card's Edit opened the create
+  // form, so extending an injury added a second, overlapping annotation.
+  describe("opened on an annotation to edit", () => {
+    const INJURY: TimelineAnnotation = {
+      id: "a1",
+      userId: "user-1",
+      startDate: "2026-03-01",
+      endDate: "2026-03-07",
+      type: "illness",
+      note: "Flu",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    function renderEditing(editingAnnotation: TimelineAnnotation | null = INJURY) {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      const view = (editing: TimelineAnnotation | null) => (
+        <QueryClientProvider client={queryClient}>
+          <AnnotationsDialog open onOpenChange={vi.fn()} editingAnnotation={editing} />
+        </QueryClientProvider>
+      );
+      const result = render(view(editingAnnotation));
+      return { ...result, rerenderWith: (editing: TimelineAnnotation | null) => { result.rerender(view(editing)); } };
+    }
+
+    it("loads the annotation and saves changes to it instead of adding one", async () => {
+      mockApi.list.mockResolvedValue([INJURY]);
+      mockApi.update.mockResolvedValue({ ...INJURY, endDate: "2026-03-14" });
+      renderEditing();
+      await screen.findByTestId("annotation-item-a1");
+
+      expect(screen.getByText("Edit annotation")).toBeInTheDocument();
+      expect(screen.getByTestId("input-annotation-start")).toHaveValue("2026-03-01");
+      expect(screen.getByTestId("input-annotation-end")).toHaveValue("2026-03-07");
+      expect(screen.getByTestId("input-annotation-note")).toHaveValue("Flu");
+      expect(screen.getByTestId("select-annotation-type")).toHaveTextContent(/illness/i);
+
+      const user = userEvent.setup();
+      const endInput = screen.getByTestId("input-annotation-end");
+      await user.clear(endInput);
+      await user.type(endInput, "2026-03-14");
+      await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() => {
+        expect(mockApi.update).toHaveBeenCalledWith("a1", {
+          type: "illness",
+          startDate: "2026-03-01",
+          endDate: "2026-03-14",
+          note: "Flu",
+        });
+      });
+      expect(mockApi.create).not.toHaveBeenCalled();
+      // Back to a fresh create form once the change is saved.
+      expect(await screen.findByRole("button", { name: "Add annotation" })).toBeInTheDocument();
+      expect(screen.getByTestId("input-annotation-note")).toHaveValue("");
+    });
+
+    it("starts a fresh create form once the edit is closed", async () => {
+      mockApi.list.mockResolvedValue([INJURY]);
+      const { rerenderWith } = renderEditing();
+      await screen.findByTestId("annotation-item-a1");
+
+      rerenderWith(null);
+
+      expect(screen.getByRole("button", { name: "Add annotation" })).toBeInTheDocument();
+      expect(screen.getByTestId("input-annotation-note")).toHaveValue("");
+      expect(screen.getByTestId("select-annotation-type")).toHaveTextContent(/injury/i);
+    });
+  });
+
   it("calls delete() when the user clicks a trash button", async () => {
     const annotations: TimelineAnnotation[] = [
       {

@@ -1,5 +1,11 @@
 import { formatSecondsToClock } from "@shared/formatClock";
-import { BRIEF_TOMORROW_FROM_HOUR, type EmailNotifyKind, resolveNotifyHour } from "@shared/notifyHours";
+import {
+  BRIEF_TOMORROW_FROM_HOUR,
+  DEFAULT_NOTIFY_HOUR,
+  type EmailNotifyKind,
+  isValidNotifyHour,
+  resolveNotifyHour,
+} from "@shared/notifyHours";
 import { isRestLikePlanDay } from "@shared/planDayKind";
 import { pooledPercentage, roundOrNull } from "@shared/ratio";
 import type { AnalyticsResult, RacePredictionResponse, User } from "@shared/schema";
@@ -338,6 +344,35 @@ export function planEmailJobsForUser(user: User, now: Date): EmailJobName[] {
 }
 
 /**
+ * Whether this hourly tick should send a due MAF baseline-test reminder: at
+ * the athlete's default send time (`notifyHour`) on their wall clock, like
+ * every other scheduled email. It went out on the first tick after it fell
+ * due, seven days to the minute after the MAF switch was saved, so the email
+ * and push could land in the middle of the night. A due reminder is rescanned
+ * every tick until it is claimed, so the gate only delays it to the next
+ * notify hour. Throws on an unusable `userTimezone`, like
+ * planEmailJobsForUser. U37 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export function isMafReminderHour(user: User, now: Date): boolean {
+  const hour = isValidNotifyHour(user.notifyHour) ? user.notifyHour : DEFAULT_NOTIFY_HOUR;
+  return isLocalHourDue(now, user.userTimezone, hour);
+}
+
+/** The due-MAF users whose reminder this tick sends, skipping an unusable zone (U37). */
+function mafReminderUsersForTick(dueMafUsers: readonly User[], now: Date): User[] {
+  return dueMafUsers.filter((user) => {
+    try {
+      return isMafReminderHour(user, now);
+    } catch (err) {
+      // An unrecognised stored timezone. userId is an opaque id.
+      // bearer:disable javascript_lang_logger_leak
+      logger.error({ context: "email", userId: user.id, err }, "Could not plan MAF test reminder for user");
+      return false;
+    }
+  });
+}
+
+/**
  * Sunday-evening nudge to write the weekly review, with the week so far.
  *
  * Skipped without burning the week's claim when the athlete already has a
@@ -636,8 +671,9 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     }
 
     // MAF baseline-test reminders — a separate scan since due users may be
-    // push-only (not in the email-notifications set above).
-    for (const user of dueMafUsers) {
+    // push-only (not in the email-notifications set above) — sent at the
+    // athlete's notify hour, not on the first tick after they fall due (U37).
+    for (const user of mafReminderUsersForTick(dueMafUsers, now)) {
       ops.push(sendJobNoRetry("send-maf-test-reminder", { userId: user.id }));
       meta.push({ userId: user.id, jobName: "send-maf-test-reminder" });
     }

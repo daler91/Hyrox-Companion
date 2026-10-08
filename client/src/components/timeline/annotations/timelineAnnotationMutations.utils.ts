@@ -37,6 +37,18 @@ export function handleCreateAnnotationSuccess({
   onCreated();
 }
 
+export function handleUpdateAnnotationSuccess({
+  toast,
+  onUpdated,
+}: {
+  readonly toast: typeof toastFn;
+  readonly onUpdated: () => void;
+}) {
+  invalidateTimelineAnnotationQueries();
+  toast({ title: "Annotation updated" });
+  onUpdated();
+}
+
 export function handleDeleteAnnotationSuccess(toast: typeof toastFn) {
   invalidateTimelineAnnotationQueries();
   toast({ title: "Annotation removed" });

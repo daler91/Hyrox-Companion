@@ -1,5 +1,6 @@
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 
+import { AiCoachOffNotice } from "@/components/coach/AiCoachOffNotice";
 import { Button } from "@/components/ui/button";
 
 import { describeAnalyticsAiError } from "../describeAnalyticsAiError";
@@ -12,6 +13,8 @@ interface OverviewAnalysisHeaderProps {
   readonly stale?: boolean;
   readonly error: unknown;
   readonly canGenerate: boolean;
+  /** The athlete has not opted in to AI processing. U29 (CODEBASE_ANALYSIS_2026-10-03) */
+  readonly aiCoachOff?: boolean;
   readonly onGenerate: () => void;
 }
 
@@ -28,6 +31,7 @@ export function OverviewAnalysisHeader({
   stale,
   error,
   canGenerate,
+  aiCoachOff = false,
   onGenerate,
 }: OverviewAnalysisHeaderProps) {
   const errorMessage = error ? describeAnalyticsAiError(error) : null;
@@ -81,6 +85,12 @@ export function OverviewAnalysisHeader({
           <LastUpdatedNote value={generatedAt} stale={stale} className="text-right" />
         </div>
       </div>
+      {aiCoachOff && (
+        <AiCoachOffNotice
+          feature="a plain-language read of your charts"
+          testId="overview-analysis-ai-off"
+        />
+      )}
       {errorMessage && (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"

@@ -119,12 +119,14 @@ function ReviewRowCard({
           className="w-20"
           value={Number.isFinite(row.quantityG) ? row.quantityG : ""}
           onChange={(e) => onUpdate({ quantityG: Number(e.target.value) })}
-          aria-label="Quantity in grams"
+          // Named for the item: four rows all read "Quantity in grams" to a
+          // screen reader. U34 (CODEBASE_ANALYSIS_2026-10-03)
+          aria-label={`Quantity in grams for ${row.displayAmount}`}
           data-testid={`meal-review-grams-${index}`}
         />
         <span className="text-xs text-muted-foreground">g</span>
         <Select value={row.mealType} onValueChange={(v) => onUpdate({ mealType: v as MealType })}>
-          <SelectTrigger className="flex-1" aria-label="Meal" data-testid={`meal-review-meal-${index}`}>
+          <SelectTrigger className="flex-1" aria-label={`Meal for ${row.displayAmount}`} data-testid={`meal-review-meal-${index}`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

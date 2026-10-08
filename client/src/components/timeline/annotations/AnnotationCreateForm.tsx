@@ -25,6 +25,21 @@ interface AnnotationCreateFormProps {
   readonly onNoteChange: (value: string) => void;
   readonly onCreate: () => void;
   readonly isCreating: boolean;
+  /** Saving changes to an existing annotation rather than adding one (U36). */
+  readonly isEditing?: boolean;
+  readonly onCancelEdit?: () => void;
+}
+
+function submitLabel(isCreating: boolean, isEditing: boolean) {
+  if (isCreating) {
+    return (
+      <>
+        <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+        Saving...
+      </>
+    );
+  }
+  return isEditing ? "Save changes" : "Add annotation";
 }
 
 export function AnnotationCreateForm({
@@ -38,9 +53,12 @@ export function AnnotationCreateForm({
   onNoteChange,
   onCreate,
   isCreating,
+  isEditing = false,
+  onCancelEdit,
 }: AnnotationCreateFormProps) {
   return (
-    <div className="space-y-3 rounded-lg border p-3">
+    <div className="space-y-3 rounded-lg border p-3" data-testid="annotation-form">
+      {isEditing && <h3 className="text-sm font-semibold">Edit annotation</h3>}
       <div className="space-y-2">
         <Label htmlFor="annotation-type">Type</Label>
         <Select
@@ -100,15 +118,19 @@ export function AnnotationCreateForm({
         className="w-full"
         data-testid="button-create-annotation"
       >
-        {isCreating ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
-            Saving...
-          </>
-        ) : (
-          "Add annotation"
-        )}
+        {submitLabel(isCreating, isEditing)}
       </Button>
+      {isEditing && onCancelEdit && (
+        <Button
+          variant="ghost"
+          onClick={onCancelEdit}
+          disabled={isCreating}
+          className="w-full"
+          data-testid="button-cancel-edit-annotation"
+        >
+          Cancel edit
+        </Button>
+      )}
     </div>
   );
 }

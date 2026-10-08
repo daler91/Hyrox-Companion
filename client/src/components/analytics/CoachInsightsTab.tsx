@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 
+import { AiCoachOffNotice } from "@/components/coach/AiCoachOffNotice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -81,6 +82,10 @@ export function CoachInsightsTab() {
   const activeError = regenerate.error ?? query.error;
   const errorMessage = activeError ? describeError(activeError) : null;
 
+  // Generating needs AI consent (off by default); the server would 403 it.
+  // U29 (CODEBASE_ANALYSIS_2026-10-03)
+  const aiCoachOff = user?.aiCoachEnabled === false;
+
   const handleGenerateInsights = () => {
     regenerate.mutate();
   };
@@ -97,7 +102,7 @@ export function CoachInsightsTab() {
             <Button
               variant={hasInsights ? "outline" : "default"}
               onClick={handleGenerateInsights}
-              disabled={isGenerating || !userId}
+              disabled={isGenerating || !userId || aiCoachOff}
               aria-busy={isGenerating}
               data-testid="button-generate-coach-insights"
             >
@@ -134,7 +139,13 @@ export function CoachInsightsTab() {
           goal.
         </CardDescription>
       </CardHeader>
-      <CardContent aria-live="polite" aria-atomic="false">
+      <CardContent aria-live="polite" aria-atomic="false" className="space-y-4">
+        {aiCoachOff && (
+          <AiCoachOffNotice
+            feature="personalized coach insights"
+            testId="coach-insights-ai-off"
+          />
+        )}
         {(() => {
           if (showInitialSpinner) {
             return (
@@ -156,6 +167,9 @@ export function CoachInsightsTab() {
               </div>
             );
           }
+
+          // The consent notice above already says what to do.
+          if (!hasInsights && aiCoachOff) return null;
 
           if (!hasInsights) {
             return (
