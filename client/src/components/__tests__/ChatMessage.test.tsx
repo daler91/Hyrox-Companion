@@ -10,6 +10,8 @@ import { ChatMessage } from '../ChatMessage';
 // calls themselves.
 const SCRIPT_PAYLOAD = 'before<script>window.__xssMarker = true;</script>after';
 const IMG_ONERROR_PAYLOAD = '<img src=x onerror="window.__xssMarker = true">';
+const JS_LINK_PAYLOAD = '[click me](javascript:alert(1))';
+const JS_AUTOLINK_PAYLOAD = 'see javascript:alert(1) and www.example.com';
 
 /**
  * The markdown renderer is a lazy chunk (PF8): a reply shows as plain text
@@ -86,7 +88,7 @@ describe('ChatMessage', () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
-          content={'[click me](javascript:alert(1))'}
+          content={JS_LINK_PAYLOAD}
         />,
       );
       await markdownRendered();
@@ -205,7 +207,7 @@ describe('ChatMessage', () => {
     });
 
     it('does not turn a javascript: autolink into a live link', async () => {
-      const { container } = render(<ChatMessage role="assistant" content="see javascript:alert(1) and www.example.com" />);
+      const { container } = render(<ChatMessage role="assistant" content={JS_AUTOLINK_PAYLOAD} />);
       await markdownRendered();
       expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
     });
