@@ -44,6 +44,8 @@ const MIGRATIONS_FOLDER = path.resolve(import.meta.dirname, "..", "migrations");
 
 async function runDrizzleMigrations() {
   try {
+    // A path inside the deployed build, not user data.
+    // bearer:disable javascript_lang_logger_leak
     logger.info({ context: "db", migrationsFolder: MIGRATIONS_FOLDER }, "Running Drizzle migrations...");
     // Use a local pool-bound client for migrations. We avoid using the app's
     // `db` export here because it's bound to the full schema; the migrator only
@@ -83,6 +85,8 @@ async function runDrizzleMigrations() {
     // migration just failed (worst case: an empty database) is strictly worse
     // than a blocked deploy.
     if (isBenignIdempotencyError(error)) {
+      // A fixed message; the error itself is not logged.
+      // bearer:disable javascript_lang_logger_leak
       logger.info(
         { context: "db" },
         "Drizzle migrations rolled back on an \"already exists\" error — expected on a database built by drizzle-kit push; any unapplied migration is reported next",
@@ -112,6 +116,8 @@ async function reportUnappliedMigrations(): Promise<UnappliedMigrations | null> 
   try {
     const unapplied = await findUnappliedMigrations(pool, readMigrationJournal(MIGRATIONS_FOLDER));
     if (unapplied && (unapplied.skipped.length > 0 || unapplied.pending.length > 0)) {
+      // Migration file tags from the journal, not user data.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         { context: "db", skipped: unapplied.skipped, pending: unapplied.pending },
         "Migrations missing from the ledger — skipped ones never run at boot; see docs/operations/pending-manual-steps.md",
@@ -119,6 +125,8 @@ async function reportUnappliedMigrations(): Promise<UnappliedMigrations | null> 
     }
     return unapplied;
   } catch (error) {
+    // A database or file-read error about the migration ledger, not user data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "db", err: error }, "Could not compare the migration ledger with the journal");
     return null;
   }
