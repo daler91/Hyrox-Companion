@@ -1,8 +1,7 @@
 export { classifyWorkoutCompliance, summarizeSetAdherence } from "./workoutService/adherence";
-export { saveParsedWorkout, saveParsedWorkoutsBatch } from "./workoutService/persistence";
+export { saveParsedWorkoutsBatch } from "./workoutService/persistence";
 export type { ReparseFromImageInput } from "./workoutService/reparse";
 export {
-  autoHydrateExerciseSetsFromTextIfNeeded,
   batchReparseWorkouts,
   processBatchChunk,
   reparsePlanDay,
@@ -28,7 +27,6 @@ export type { CreateWorkoutResult, UpdateWorkoutResult, WorkoutTx } from "./work
 export type { CreateWorkoutInTxPayload } from "./workoutService/workouts";
 export {
   assignWorkoutPlanDay,
-  createWorkout,
   createWorkoutAndScheduleCoaching,
   createWorkoutInTx,
   isDateWithinPlanWindow,

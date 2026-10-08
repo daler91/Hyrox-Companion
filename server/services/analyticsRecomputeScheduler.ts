@@ -199,3 +199,49 @@ export async function runAnalyticsRecomputeScan(
 
   return { usersChecked, enqueued };
 }
+
+/**
+ * Stored analyses whose generation reads the athlete's training style. Coach
+ * Insights builds on the training context, which carries the MAF test trend
+ * for MAF athletes only (services/ai buildTrainingContext). The Overview
+ * analysis, Race Prediction and nutrition insights read no style input, so a
+ * switch leaves them correct and they are not refreshed for it.
+ */
+export const STYLE_AWARE_FEATURES = ["coach_insights"] as const satisfies readonly AnalyticsFeature[];
+
+/** Repeat switches inside this window collapse into one refresh per feature. */
+const STYLE_RECOMPUTE_DEBOUNCE_SECONDS = 60;
+
+/**
+ * Refresh the athlete's stored style-aware analyses right after a training
+ * style switch, instead of leaving the old style's advice up until the next
+ * logged workout makes the midnight scan pick it up. Only features the athlete
+ * has a stored result for are refreshed (the scan's rule); the worker re-checks
+ * AI consent and budget before spending anything. Debounced rather than
+ * throttled, so a switch made while an earlier refresh is running still gets
+ * its own pass (see AI12 in autoCoachQueue.ts). Returns the jobs enqueued.
+ * A1 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+export async function enqueueTrainingStyleRecompute(
+  storage: IStorage,
+  userId: string,
+  localDate: string,
+): Promise<number> {
+  const rows = await Promise.all(
+    STYLE_AWARE_FEATURES.map((feature) => storage.analyticsResults.get(userId, feature)),
+  );
+  const used = STYLE_AWARE_FEATURES.filter((_feature, index) => rows[index] !== undefined);
+  await Promise.all(
+    used.map((feature) => {
+      const data: RecomputeAnalyticsJobData = { userId, feature, localDate, trigger: "training_style_change" };
+      return queue.sendDebounced(
+        RECOMPUTE_ANALYTICS_QUEUE,
+        data,
+        DEFAULT_JOB_OPTIONS,
+        STYLE_RECOMPUTE_DEBOUNCE_SECONDS,
+        `recompute-style:${feature}:${userId}`,
+      );
+    }),
+  );
+  return used.length;
+}

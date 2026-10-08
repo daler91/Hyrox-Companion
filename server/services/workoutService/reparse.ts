@@ -1,10 +1,8 @@
 import { inChunks, inSequence } from "@shared/inSequence";
-import { exerciseSets, type InsertExerciseSet, type ParsedExercise, type StructureBlockInput, workoutLogs } from "@shared/schema";
+import { type InsertExerciseSet, type ParsedExercise, type StructureBlockInput } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
-import { eq, sql } from "drizzle-orm";
 import pLimit from "p-limit";
 
-import { db } from "../../db";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { incrementStructuredExerciseCounter } from "../structuredExerciseHealth";
@@ -18,12 +16,6 @@ type ReparseTarget = { id: string; mainWorkout?: string | null; accessory?: stri
 type CounterSource = "manual" | "voice" | "photo" | "import";
 type ReparseWriteThroughResult = { exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[]; fallbackUsed: boolean };
 
-const hydrationLocks = new Map<string, Promise<ReparseWriteThroughResult | null>>();
-
-function buildHydrationLockKey(owner: SetOwner): string {
-  return "workoutLogId" in owner ? `workout:${owner.workoutLogId}` : `planDay:${owner.planDayId}`;
-}
-
 function ownerCounterType(owner: SetOwner): "workout_log" | "plan_day" {
   return "workoutLogId" in owner ? "workout_log" : "plan_day";
 }
@@ -32,101 +24,6 @@ function trackManualFixCompleted(owner: SetOwner, source: CounterSource): void {
   void incrementStructuredExerciseCounter(ownerCounterType(owner), source, "manual_fix_completed").catch((err: unknown) => {
     logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
   });
-}
-
-function resolveHydrationQualityState(
-  acceptedRowCount: number,
-  rejectedRowCount: number,
-): "ok" | "degraded" | "failed" {
-  if (acceptedRowCount === 0) return "failed";
-  if (rejectedRowCount > acceptedRowCount) return "degraded";
-  return "ok";
-}
-
-async function resolveCounterSource(owner: SetOwner, fallback: CounterSource = "manual"): Promise<CounterSource> {
-  if ("planDayId" in owner) return fallback;
-
-  const [row] = await db
-    .select({ source: workoutLogs.source })
-    .from(workoutLogs)
-    .where(eq(workoutLogs.id, owner.workoutLogId))
-    .limit(1);
-
-  const rawSource = String(row?.source ?? fallback);
-  if (rawSource === "strava" || rawSource === "garmin" || rawSource === "import") return "import";
-  if (rawSource === "voice") return "voice";
-  if (rawSource === "photo") return "photo";
-  return "manual";
-}
-
-export async function autoHydrateExerciseSetsFromTextIfNeeded(
-  target: ReparseTarget,
-  owner: SetOwner,
-  unitPreferences: UnitPreferences,
-  context: "workout" | "plan",
-  userId: string,
-): Promise<{ exercises: ParsedExercise[]; setCount: number; saved: true; rejectedCount: number; rejectionReasons: string[] } | null> {
-  const existingCount = await db
-    .select({ count: sql<number>`cast(count(*) as int)` })
-    .from(exerciseSets)
-    .where("workoutLogId" in owner ? eq(exerciseSets.workoutLogId, owner.workoutLogId) : eq(exerciseSets.planDayId, owner.planDayId));
-  if ((existingCount[0]?.count ?? 0) > 0) return null;
-
-  const textToParse = [target.mainWorkout, target.accessory].filter(Boolean).join("\n").trim();
-  if (!textToParse) return null;
-
-  const lockKey = buildHydrationLockKey(owner);
-  const existingLock = hydrationLocks.get(lockKey);
-  if (existingLock) return existingLock;
-
-  const lockPromise = (async () => {
-    logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_attempt", lockKey }, "Auto hydration attempt");
-    let source: CounterSource = "manual";
-    try {
-      source = await resolveCounterSource(owner);
-    } catch (err) {
-      logger.warn({ context: "health-metrics", event: "auto_hydration_source_resolution_failed", lockKey, err }, "Auto hydration source resolution failed; defaulting to manual source");
-    }
-    void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_attempted")
-      .catch((err: unknown) => {
-        logger.warn({ context: "health-metrics", event: "auto_hydration_attempt_counter_failed", lockKey, err }, "Auto hydration attempt telemetry increment failed");
-      });
-    try {
-      const result = await reparseFromText(target, owner, unitPreferences, userId, context, source);
-      const acceptedRowCount = result?.exercises.length ?? 0;
-      const rejectedRowCount = result?.rejectedCount ?? 0;
-      const fallbackUsed = result?.fallbackUsed ?? false;
-      const qualityState = resolveHydrationQualityState(acceptedRowCount, rejectedRowCount);
-
-      // Telemetry: the lock key (owner ids), counts and the error; no workout text.
-      if (qualityState === "ok") {
-        // bearer:disable javascript_lang_logger_leak
-        logger.info({ context: "health-metrics", event: "exercise_set_auto_hydration_success", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration success");
-      } else {
-        // bearer:disable javascript_lang_logger_leak
-        logger.warn({ context: "health-metrics", event: "exercise_set_auto_hydration_success_degraded", lockKey, setCount: result?.setCount ?? 0, acceptedRowCount, rejectedRowCount, fallbackUsed, qualityState }, "Auto hydration completed with degraded parse quality");
-      }
-
-      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_succeeded")
-        .catch((err: unknown) => {
-          // bearer:disable javascript_lang_logger_leak
-          logger.warn({ context: "health-metrics", event: "auto_hydration_success_counter_failed", lockKey, err }, "Auto hydration success telemetry increment failed");
-        });
-      return result;
-    } catch (err: unknown) {
-      // Telemetry: the lock key (owner ids) and the error; no workout text.
-      // bearer:disable javascript_lang_logger_leak
-      logger.error({ context: "health-metrics", event: "exercise_set_auto_hydration_failure", lockKey, err }, "Auto hydration failed");
-      void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "auto_hydration_failed")
-        .catch((counterErr: unknown) => {
-          // bearer:disable javascript_lang_logger_leak
-          logger.warn({ context: "health-metrics", event: "auto_hydration_failure_counter_failed", lockKey, err: counterErr }, "Auto hydration failure telemetry increment failed");
-        });
-      throw err;
-    }
-  })().finally(() => hydrationLocks.delete(lockKey));
-  hydrationLocks.set(lockKey, lockPromise);
-  return lockPromise;
 }
 
 // Parse the target's free text with the configured text provider and REPLACE its structured

@@ -6,15 +6,10 @@ import {
   Gauge,
   Link2,
   ListChecks,
-  MessageSquare,
-  RotateCcw,
-  Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +31,7 @@ import {
   type MigrationReviewFlag,
   useMigrationReview,
 } from "./MigrationReviewCallout";
+import { ReviewActionButtons } from "./ReviewActionButtons";
 import { SessionGradeCard } from "./SessionGradeCard";
 import {
   CoachRationaleSection,
@@ -62,6 +58,8 @@ interface ReviewSurfaceProps extends WorkoutCoachChatProps {
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
+  /** Start combine mode from this workout (merge it with another log that day). */
+  readonly onCombine?: (entry: TimelineEntry) => void;
   readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
   readonly isRenamingTitle?: boolean;
   readonly showCompletionSuccess?: boolean;
@@ -95,6 +93,7 @@ export function ReviewSurface({
   onAskCoach,
   onMarkPlanned,
   onDelete,
+  onCombine,
   onRenameTitle,
   isRenamingTitle = false,
   showCompletionSuccess = false,
@@ -246,6 +245,7 @@ export function ReviewSurface({
         onAskCoach={onAskCoach}
         onMarkPlanned={onMarkPlanned}
         onDelete={onDelete}
+        onCombine={workoutLogId ? onCombine : undefined}
         onDeleteConfirmOpenChange={setDeleteConfirmOpen}
         onDeleteConfirm={handleDeleteConfirm}
         onResolveReview={resolveReview}
@@ -310,6 +310,7 @@ interface ReviewDetailsColumnProps {
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
+  readonly onCombine?: (entry: TimelineEntry) => void;
   readonly onDeleteConfirmOpenChange: (open: boolean) => void;
   readonly onDeleteConfirm: () => void;
   readonly onResolveReview: (action: MigrationReviewAction) => Promise<void>;
@@ -341,6 +342,7 @@ function ReviewDetailsColumn({
   onAskCoach,
   onMarkPlanned,
   onDelete,
+  onCombine,
   onDeleteConfirmOpenChange,
   onDeleteConfirm,
   onResolveReview,
@@ -433,6 +435,7 @@ function ReviewDetailsColumn({
           onAskCoach={onAskCoach}
           onMarkPlanned={onMarkPlanned}
           onDelete={onDelete}
+          onCombine={onCombine}
           onDeleteConfirmOpenChange={onDeleteConfirmOpenChange}
           onDeleteConfirm={onDeleteConfirm}
         />
@@ -733,101 +736,6 @@ function sourceLabelFor(
 ): string | null {
   if (!hasReferenceText) return null;
   return deviceProvider ? `from ${deviceProvider}` : "from coach text";
-}
-
-/**
- * Deleting a completed planned session removes its log and keeps its plan
- * day, which then reads planned again, or missed once its date has passed;
- * the copy said the workout was "permanently removed" as though the session
- * went too. Either way the log goes to the recycle bin, with an Undo, so it
- * isn't permanent. Matches the bulk-delete copy. CL23
- * (CODEBASE_ANALYSIS_2026-10-03)
- */
-function deleteConfirmDescription(entry: TimelineEntry): string {
-  if (entry.planDayId) {
-    return "This removes the logged workout from your timeline. The planned session stays on your plan and shows as planned again, or missed if its date has passed.";
-  }
-  return "This removes the workout and all of its data from your timeline.";
-}
-
-interface ReviewActionButtonsProps {
-  readonly entry: TimelineEntry;
-  readonly deleteConfirmOpen: boolean;
-  readonly currentCoachSeedText: string;
-  readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
-  readonly onMarkPlanned?: (entry: TimelineEntry) => void;
-  readonly onDelete?: (entry: TimelineEntry) => void;
-  readonly onDeleteConfirmOpenChange: (open: boolean) => void;
-  readonly onDeleteConfirm: () => void;
-}
-
-function ReviewActionButtons({
-  entry,
-  deleteConfirmOpen,
-  currentCoachSeedText,
-  onAskCoach,
-  onMarkPlanned,
-  onDelete,
-  onDeleteConfirmOpenChange,
-  onDeleteConfirm,
-}: ReviewActionButtonsProps) {
-  return (
-    <>
-      <div className="flex items-center gap-2">
-        {onAskCoach ? (
-          <Button
-            type="button"
-            className="flex-1"
-            onClick={() => onAskCoach(entry, currentCoachSeedText)}
-            data-testid={`review-ask-coach-${entry.id}`}
-          >
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Ask coach
-          </Button>
-        ) : null}
-        {onMarkPlanned && entry.planDayId ? (
-          <Button
-            type="button"
-            variant="outline"
-            className={onAskCoach ? undefined : "flex-1"}
-            onClick={() => onMarkPlanned(entry)}
-            data-testid={`review-mark-planned-${entry.id}`}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reopen
-          </Button>
-        ) : null}
-        {onDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-muted-foreground hover:text-destructive"
-            onClick={() => onDeleteConfirmOpenChange(true)}
-            aria-label="Delete workout"
-            title="Delete workout"
-            data-testid={`review-delete-${entry.id}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        ) : null}
-      </div>
-      {onDelete ? (
-        <ConfirmDialog
-          open={deleteConfirmOpen}
-          onOpenChange={onDeleteConfirmOpenChange}
-          title="Delete workout?"
-          description={deleteConfirmDescription(entry)}
-          confirmText="Delete"
-          cancelText="Cancel"
-          onConfirm={onDeleteConfirm}
-          isDestructive
-          cancelTestId={`review-cancel-delete-${entry.id}`}
-          confirmTestId={`review-confirm-delete-${entry.id}`}
-        />
-      ) : null}
-    </>
-  );
 }
 
 function getWeightUnit(prefWeightUnit: "kg" | "lbs"): WeightUnit {

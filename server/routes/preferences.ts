@@ -3,13 +3,17 @@ import { type UpdateUserPreferences,updateUserPreferencesSchema } from "@shared/
 import { type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
+import { logger } from "../logger";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
+import { enqueueTrainingStyleRecompute } from "../services/analyticsRecomputeScheduler";
 import { storage } from "../storage";
 import { getLocalDateStrSafe, isValidTimezone } from "../timezone";
 import { getUserId } from "../types";
 import { protectedPatch } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
+
+const DEFAULT_TRAINING_STYLE_ID = "balanced_default";
 
 function hasOwn<T extends object>(obj: T, key: keyof T): boolean {
   return Object.hasOwn(obj, key);
@@ -115,7 +119,7 @@ function serializePreferences(user: {
     showAdherenceInsights: user.showAdherenceInsights ?? true,
     aiCoachEnabled: user.aiCoachEnabled ?? false,
     coachAutoApplyPlanChanges: user.coachAutoApplyPlanChanges ?? false,
-    trainingStyleId: user.trainingStyleId ?? "balanced_default",
+    trainingStyleId: user.trainingStyleId ?? DEFAULT_TRAINING_STYLE_ID,
     trainingStylePreviousId: user.trainingStylePreviousId ?? null,
     trainingStyleChangedAt: user.trainingStyleChangedAt ?? null,
     trainingStyleRecomputeNow: user.trainingStyleRecomputeNow ?? false,
@@ -140,6 +144,32 @@ function serializePreferences(user: {
     mafHr: user.mafHr ?? null,
     mafBaselineTestScheduledAt: user.mafBaselineTestScheduledAt ?? null,
   };
+}
+
+/**
+ * Act on a training-style switch: refresh the stored style-aware analyses now
+ * rather than leaving the old style's advice up until the next logged workout.
+ * `trainingStyleRecomputeNow` is the client's request for this; a switch the
+ * server sees itself counts too, so an older client is covered. Fire-and-forget:
+ * the settings save has committed, and a failed enqueue costs a stale analysis
+ * until the next refresh, not a failed request.
+ * A1 (CODEBASE_ANALYSIS_2026-10-03)
+ */
+function refreshStyleAwareAnalyses(
+  userId: string,
+  recomputeRequested: boolean,
+  before: { trainingStyleId: string | null } | undefined,
+  user: { trainingStyleId: string | null; userTimezone: string },
+): void {
+  const styleChanged =
+    before !== undefined &&
+    (before.trainingStyleId ?? DEFAULT_TRAINING_STYLE_ID) !== (user.trainingStyleId ?? DEFAULT_TRAINING_STYLE_ID);
+  if (!recomputeRequested && !styleChanged) return;
+  const localDate = getLocalDateStrSafe(new Date(), user.userTimezone);
+  enqueueTrainingStyleRecompute(storage, userId, localDate).catch((err: unknown) => {
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err }, "Failed to queue training-style analytics refresh");
+  });
 }
 
 router.get('/api/v1/preferences', isAuthenticated, rateLimiter("preferencesRead", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
@@ -205,10 +235,17 @@ protectedPatch(router, '/api/v1/preferences', { limiter: rateLimiter("preference
       return res.status(400).json(mafValidationError);
     }
 
-    const user = await storage.users.updateUserPreferences(userId, req.body);
+    // The recompute flag is a request acted on below, not state to keep: the
+    // column stays false so it never reads as a refresh still pending (A1).
+    const { trainingStyleRecomputeNow, ...preferences } = req.body;
+    const user = await storage.users.updateUserPreferences(
+      userId,
+      trainingStyleRecomputeNow === undefined ? preferences : { ...preferences, trainingStyleRecomputeNow: false },
+    );
     if (!user) {
       return sendNotFound(res, "User not found");
     }
+    refreshStyleAwareAnalyses(userId, trainingStyleRecomputeNow === true, current, user);
     res.json(serializePreferences(user));
   });
 

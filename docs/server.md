@@ -164,9 +164,13 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 
 ### Body Size Limits
 
+The larger limits below are not applied at app level. The app-wide JSON parser skips these paths, and the protected route stack parses their bodies after the auth guard and the route's rate limiter (`largeJsonBodyParser`, `server/largeBodyParsers.ts`), so an anonymous client cannot make the instance buffer a multi-MB body.
+
 - `/api/v1/coaching-materials`: 2 MB JSON (coaching documents can be large)
+- `POST /api/v1/plans/import`: 1 MB JSON (up to 100,000 CSV characters, JSON-escaped)
+- Coach chat sends, `POST /api/v1/chat` and `POST /api/v1/chat/stream`: 5 MB JSON, for a message's optional photo. Matched by `isChatSendPath()` in `server/imageParsePaths.ts`
 - Image-parse routes: 10 MB JSON, for base64 image payloads. The paths are matched by `isImageParsePath()` in `server/imageParsePaths.ts`: the stateless `parse-exercises-from-image` and `parse-workout-structure-from-image` parsers, the workout and plan-day `reparse-from-image` routes, and `nutrition/parse/photo` and `nutrition/parse/label`
-- All other routes: 100 KB JSON
+- All other routes: 100 KB JSON, parsed at app level
 - URL-encoded bodies: 100 KB on every route
 
 ### Request ID Validation

@@ -10,6 +10,7 @@ import type { Rollup } from "vite";
 import { describe, expect, it } from "vitest";
 
 import {
+  drizzleChunkFailures,
   eagerLucideIconFailures,
   MAX_EAGER_LUCIDE_ICONS,
   timelineMarkdownFailures,
@@ -76,7 +77,7 @@ describe("eagerChunks", () => {
 
 describe("collectBundleStats", () => {
   it("counts the lazy routes' icons out of the eager graph", () => {
-    expect(collectBundleStats(SPLIT_BUNDLE)).toMatchObject({ eagerLucideIcons: 3, totalLucideIcons: 7 });
+    expect(collectBundleStats(SPLIT_BUNDLE)).toMatchObject({ eagerLucideIcons: 3, totalLucideIcons: 7, drizzleChunks: [] });
   });
 
   it("counts them in when a shared icon chunk is statically imported", () => {
@@ -94,21 +95,21 @@ describe("collectBundleStats", () => {
 });
 
 describe("eagerLucideIconFailures", () => {
-  const markdown = { timelineMarkdownModules: 0, totalMarkdownModules: 12 };
+  const otherStats = { timelineMarkdownModules: 0, totalMarkdownModules: 12, drizzleChunks: [] };
 
   it("passes within the shell's budget", () => {
-    expect(eagerLucideIconFailures({ eagerLucideIcons: 20, totalLucideIcons: 139 , ...markdown })).toEqual([]);
+    expect(eagerLucideIconFailures({ eagerLucideIcons: 20, totalLucideIcons: 139, ...otherStats })).toEqual([]);
   });
 
   it("fails when the lazy routes' icons are on first paint", () => {
-    const failures = eagerLucideIconFailures({ eagerLucideIcons: 139, totalLucideIcons: 139 , ...markdown });
+    const failures = eagerLucideIconFailures({ eagerLucideIcons: 139, totalLucideIcons: 139, ...otherStats });
     expect(failures).toHaveLength(1);
     expect(failures.at(0)).toContain(`139 lucide-react icons (budget ${MAX_EAGER_LUCIDE_ICONS})`);
   });
 
   it("fails rather than passing blind", () => {
     expect(eagerLucideIconFailures(null).at(0)).toContain("bundle-stats.json is missing");
-    expect(eagerLucideIconFailures({ eagerLucideIcons: 0, totalLucideIcons: 0 , ...markdown }).at(0)).toContain(
+    expect(eagerLucideIconFailures({ eagerLucideIcons: 0, totalLucideIcons: 0, ...otherStats }).at(0)).toContain(
       "no longer matches",
     );
   });
@@ -162,6 +163,7 @@ describe("timelineMarkdownFailures", () => {
     totalLucideIcons: 139,
     timelineMarkdownModules,
     totalMarkdownModules,
+    drizzleChunks: [],
   });
 
   it("passes when the Timeline carries no markdown", () => {
@@ -179,5 +181,39 @@ describe("timelineMarkdownFailures", () => {
 
   it("leaves a missing stats file to the icon guard's message", () => {
     expect(timelineMarkdownFailures(null)).toEqual([]);
+  });
+});
+
+// A9 (CODEBASE_ANALYSIS_2026-10-03): the drizzle guard reads the recorded chunk
+// graph, since the build deletes the sourcemaps it used to read before any
+// check runs.
+describe("drizzle guard", () => {
+  const PNPM = "/repo/node_modules/.pnpm";
+
+  it("records every chunk carrying the schema graph, including zod-to-openapi alone", () => {
+    const leaky = bundleOf({
+      "assets/index.js": { isEntry: true, moduleIds: ["/repo/client/src/main.tsx"] },
+      "assets/Plans.js": {
+        moduleIds: [`${PNPM}/drizzle-orm@0.45.3/node_modules/drizzle-orm/pg-core/table.js`],
+      },
+      "assets/Docs.js": {
+        moduleIds: [`${PNPM}/@asteasolutions+zod-to-openapi@9.1.0/node_modules/@asteasolutions/zod-to-openapi/dist/index.mjs`],
+      },
+    });
+
+    expect(collectBundleStats(leaky).drizzleChunks).toEqual(["assets/Plans.js", "assets/Docs.js"]);
+  });
+
+  it("fails once per leaking chunk and passes a clean bundle", () => {
+    const stats = { eagerLucideIcons: 20, totalLucideIcons: 139, timelineMarkdownModules: 0, totalMarkdownModules: 12 };
+    expect(drizzleChunkFailures({ ...stats, drizzleChunks: [] })).toEqual([]);
+    const failures = drizzleChunkFailures({ ...stats, drizzleChunks: ["assets/Docs.js"] });
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)).toContain("assets/Docs.js contains drizzle-orm/drizzle-zod/zod-to-openapi");
+  });
+
+  it("fails rather than passing blind on stats from an older build", () => {
+    const legacy = JSON.parse('{"eagerLucideIcons":20,"totalLucideIcons":139}') as Parameters<typeof drizzleChunkFailures>[0];
+    expect(drizzleChunkFailures(legacy).at(0)).toContain("has no drizzleChunks");
   });
 });

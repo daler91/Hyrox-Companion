@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { type BundleStats, readBundleStats } from "./bundleStats";
@@ -16,9 +16,10 @@ import { type BundleStats, readBundleStats } from "./bundleStats";
  *    entry statically imports it. Symptom: index.html modulepreloads
  *    vendor-charts-*.js and every first paint pays ~390KB.
  * 2. The drizzle graph never ships to the browser. Symptom: a client chunk
- *    contains drizzle-orm/drizzle-zod modules because some client file
- *    value-imports the @shared/schema barrel instead of a pure deep module
- *    (@shared/schema/exercises, /structureLint, /enums, /micros).
+ *    contains drizzle-orm/drizzle-zod (or zod-to-openapi) modules because some
+ *    client file value-imports the @shared/schema barrel instead of a pure deep
+ *    module (@shared/schema/exercises, /structureLint, /enums, /micros).
+ *    Read from the build's recorded chunk graph (script/bundleStats.ts).
  * 3. lucide-react icons of the lazy routes stay off first paint. Symptom: a
  *    code-splitting group gathers icons into one shared chunk (the old
  *    `vendor-ui`) that the entry imports, and the eager graph carries every
@@ -88,18 +89,21 @@ export function timelineMarkdownFailures(stats: BundleStats | null): string[] {
 }
 
 /**
- * Whether a built chunk carries drizzle runtime code. Prefers its sourcemap's
- * sources (exact). When the Sentry plugin deleted the maps (SENTRY_AUTH_TOKEN
- * set), falls back to drizzle's Symbol.for("drizzle:*") registry keys, which
- * survive minification.
+ * Invariant 2, from the chunk graph the build recorded (script/bundleStats.ts).
+ * It used to read each chunk's sourcemap, but script/build.ts deletes the maps
+ * before any check runs, so only a `drizzle:` text fallback ever ran and a
+ * chunk carrying zod-to-openapi without drizzle would have passed.
+ * A9 (CODEBASE_ANALYSIS_2026-10-03)
  */
-function shipsDrizzle(assets: string, file: string): Promise<boolean> {
-  return readFile(path.join(assets, `${file}.map`), "utf8").then(
-    (m) =>
-      ((JSON.parse(m) as { sources?: string[] }).sources ?? []).some((s) =>
-        /drizzle-orm|drizzle-zod|zod-to-openapi/.test(s),
-      ),
-    async () => (await readFile(path.join(assets, file), "utf8")).includes("drizzle:"),
+export function drizzleChunkFailures(stats: BundleStats | null): string[] {
+  // A missing stats file is reported once, by eagerLucideIconFailures.
+  if (stats === null) return [];
+  if (!Array.isArray(stats.drizzleChunks)) {
+    return ["dist/bundle-stats.json has no drizzleChunks — rebuild with the current script/bundleStats.ts"];
+  }
+  return stats.drizzleChunks.map(
+    (file) =>
+      `${file} contains drizzle-orm/drizzle-zod/zod-to-openapi modules — a client file value-imports the @shared/schema barrel`,
   );
 }
 
@@ -115,19 +119,12 @@ export async function collectBundleCheckFailures(): Promise<string[]> {
     );
   }
 
-  const assets = path.join(DIST, "assets");
-  const scripts = (await readdir(assets)).filter((file) => file.endsWith(".js"));
-  const checked = await Promise.all(
-    scripts.map(async (file) => ({ file, bad: await shipsDrizzle(assets, file) })),
-  );
-  for (const { file } of checked.filter(({ bad }) => bad)) {
-    failures.push(
-      `${file} contains drizzle-orm/drizzle-zod runtime code — a client file value-imports the @shared/schema barrel`,
-    );
-  }
-
   const stats = await readBundleStats();
-  failures.push(...eagerLucideIconFailures(stats), ...timelineMarkdownFailures(stats));
+  failures.push(
+    ...drizzleChunkFailures(stats),
+    ...eagerLucideIconFailures(stats),
+    ...timelineMarkdownFailures(stats),
+  );
 
   return failures;
 }

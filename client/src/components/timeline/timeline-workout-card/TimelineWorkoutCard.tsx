@@ -106,7 +106,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
       entry,
       isBulkSelectMode,
       canToggleBulkSelect,
-      canBeCombinedWith,
+      isCombining,
       onBulkSelectToggle,
       onCombineSelect,
       onClick,
@@ -166,6 +166,8 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   // screen readers can drop from swipe navigation (axe nested-interactive).
   // U20 (CODEBASE_ANALYSIS_2026-10-03)
   const onOpen = isPending || isBulkSelectMode ? undefined : handleOpenClick;
+  // While combining, the title button names what a tap does (A3).
+  const openLabel = getCardOpenLabel(entry, getCombineRole(isCombining, isBeingCombined, canBeCombinedWith));
 
   return (
     <Card
@@ -217,6 +219,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               dayEntries={dayEntries}
               missedDetail={missedDetail}
               onOpen={onOpen}
+              openLabel={openLabel}
             />
             <TimelineCardWorkoutBody
               entry={entry}
@@ -257,10 +260,25 @@ function getTimelineCardCombineState({
 >): TimelineCardCombineState {
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
+  // Only logged workouts can be merged (the server deletes sources by log id).
+  const isLogged = Boolean(entry.workoutLogId);
   return {
     isBeingCombined,
-    canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate),
+    canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate && isLogged),
   };
+}
+
+/** What tapping this card does while combine mode is on, for its accessible name. */
+type CombineRole = "source" | "candidate" | "other" | null;
+
+function getCombineRole(
+  isCombining: boolean | undefined,
+  isBeingCombined: boolean,
+  canBeCombinedWith: boolean,
+): CombineRole {
+  if (!isCombining) return null;
+  if (isBeingCombined) return "source";
+  return canBeCombinedWith ? "candidate" : "other";
 }
 
 /** A missed day's decision, whether it was a rest day (nothing to miss), and whether it still asks. */
@@ -368,7 +386,7 @@ interface CardActivationOptions {
   readonly entry: TimelineWorkoutEntry;
   readonly isBulkSelectMode: boolean | undefined;
   readonly canToggleBulkSelect: boolean;
-  readonly canBeCombinedWith: boolean | undefined;
+  readonly isCombining: boolean | undefined;
   readonly onBulkSelectToggle: TimelineWorkoutCardProps["onBulkSelectToggle"];
   readonly onCombineSelect: TimelineWorkoutCardProps["onCombineSelect"];
   readonly onClick: TimelineWorkoutCardProps["onClick"];
@@ -378,7 +396,7 @@ function activateTimelineCard({
   entry,
   isBulkSelectMode,
   canToggleBulkSelect,
-  canBeCombinedWith,
+  isCombining,
   onBulkSelectToggle,
   onCombineSelect,
   onClick,
@@ -387,8 +405,11 @@ function activateTimelineCard({
     if (canToggleBulkSelect) onBulkSelectToggle?.(entry);
     return;
   }
-  if (canBeCombinedWith) {
-    onCombineSelect?.(entry);
+  // While combining, every tap is a combine decision: the second workout,
+  // the source again (cancel), or one that cannot be merged (explained by
+  // useCombineWorkouts). A3 (CODEBASE_ANALYSIS_2026-10-03)
+  if (isCombining && onCombineSelect) {
+    onCombineSelect(entry);
     return;
   }
   onClick(entry);
@@ -400,9 +421,13 @@ function groupTimelineExerciseSets(exerciseSets: TimelineWorkoutEntry["exerciseS
 
 // Label uses only the visible focus + status badge text (date sits in the
 // parent date-group heading) so the accessible name matches what the user can
-// read on screen — WCAG 2.5.3 Label in Name.
-function getCardOpenLabel(entry: TimelineWorkoutEntry): string {
-  return `${entry.focus || "Workout"}, ${entry.status}`;
+// read on screen — WCAG 2.5.3 Label in Name. While combining, it says what a
+// tap does instead (A3).
+function getCardOpenLabel(entry: TimelineWorkoutEntry, combineRole: CombineRole): string {
+  const focus = entry.focus || "Workout";
+  if (combineRole === "source") return `Cancel combining ${focus}, ${entry.status}`;
+  if (combineRole === "candidate") return `Combine with ${focus}, ${entry.status}`;
+  return `${focus}, ${entry.status}`;
 }
 
 function FloatingAiCoachBadge({
@@ -504,6 +529,8 @@ interface TimelineCardHeaderProps {
   readonly missedDetail: MissedDetail;
   /** Opens the card; absent while it cannot be opened (pending, bulk mode). */
   readonly onOpen?: (e: React.MouseEvent) => void;
+  /** The title button's accessible name: the card, or what a tap does while combining. */
+  readonly openLabel: string;
 }
 
 function TimelineCardHeader({
@@ -514,6 +541,7 @@ function TimelineCardHeader({
   dayEntries,
   missedDetail,
   onOpen,
+  openLabel,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div
@@ -587,7 +615,7 @@ function TimelineCardHeader({
       )}
       {/* On phones the badges already fill a line, so the title gets its own
           and a heavier weight: a card should read title-first when skimmed. */}
-      <TimelineCardTitle entry={entry} onOpen={onOpen} />
+      <TimelineCardTitle entry={entry} onOpen={onOpen} openLabel={openLabel} />
     </div>
   );
 }
@@ -601,7 +629,8 @@ const TITLE_CLASSES = "basis-full font-semibold leading-snug md:basis-auto md:fo
 function TimelineCardTitle({
   entry,
   onOpen,
-}: Readonly<{ entry: TimelineWorkoutEntry; onOpen?: (e: React.MouseEvent) => void }>) {
+  openLabel,
+}: Readonly<{ entry: TimelineWorkoutEntry; onOpen?: (e: React.MouseEvent) => void; openLabel: string }>) {
   if (!onOpen) return <span className={TITLE_CLASSES}>{entry.focus}</span>;
   return (
     <button
@@ -611,7 +640,7 @@ function TimelineCardTitle({
         "rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       )}
       onClick={onOpen}
-      aria-label={getCardOpenLabel(entry)}
+      aria-label={openLabel}
       data-testid={`button-open-entry-${entry.id}`}
     >
       {entry.focus}

@@ -22,12 +22,22 @@ export interface BundleStats {
   readonly timelineMarkdownModules: number | null;
   /** Markdown-stack modules in the whole bundle. */
   readonly totalMarkdownModules: number;
+  /**
+   * Client chunks (bundle file names, e.g. assets/index-*.js) that carry drizzle-orm,
+   * drizzle-zod or zod-to-openapi modules. Read from the chunk graph because
+   * the sourcemaps that used to answer this are deleted before any check runs
+   * (script/build.ts), which left only a minified-text heuristic.
+   * A9 (CODEBASE_ANALYSIS_2026-10-03)
+   */
+  readonly drizzleChunks: readonly string[];
 }
 
 const BUNDLE_STATS_PATH = "dist/bundle-stats.json";
 const LUCIDE_ICON_MODULE = /[\\/]lucide-react[\\/]dist[\\/]esm[\\/]icons[\\/]/;
 const MARKDOWN_MODULE = /[\\/]node_modules[\\/](react-markdown|remark-gfm|rehype-sanitize|micromark)[\\/]/;
 const TIMELINE_ROUTE_MODULE = /[\\/]client[\\/]src[\\/]pages[\\/]Timeline\.tsx$/;
+/** The server-only schema graph: none of it may reach a browser chunk. */
+const DRIZZLE_GRAPH_MODULE = /drizzle-orm|drizzle-zod|zod-to-openapi/;
 
 function moduleCount(chunks: Iterable<Rollup.OutputChunk>, pattern: RegExp): number {
   let count = 0;
@@ -90,6 +100,9 @@ export function collectBundleStats(bundle: Rollup.OutputBundle): BundleStats {
     totalLucideIcons: moduleCount(allChunks, LUCIDE_ICON_MODULE),
     timelineMarkdownModules: timeline.length > 0 ? moduleCount(timeline, MARKDOWN_MODULE) : null,
     totalMarkdownModules: moduleCount(allChunks, MARKDOWN_MODULE),
+    drizzleChunks: allChunks
+      .filter((chunk) => chunk.moduleIds.some((moduleId) => DRIZZLE_GRAPH_MODULE.test(moduleId)))
+      .map((chunk) => chunk.fileName),
   };
 }
 

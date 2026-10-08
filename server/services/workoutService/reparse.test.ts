@@ -1,5 +1,4 @@
 import {
-  exerciseSets,
   type InsertExerciseSet,
   type ParsedExercise,
   type StructureBlockInput,
@@ -7,7 +6,6 @@ import {
 import type { UnitPreferences } from "@shared/unitConversion";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { db } from "../../db";
 import {
   parseWorkoutStructureFromImageWithDiagnostics,
   parseWorkoutStructureFromTextWithDiagnostics,
@@ -17,7 +15,6 @@ import { storage } from "../../storage";
 import { incrementStructuredExerciseCounter } from "../structuredExerciseHealth";
 import { replaceExerciseSetsAndStructureByOwner, saveParsedWorkoutsBatch } from "./persistence";
 import {
-  autoHydrateExerciseSetsFromTextIfNeeded,
   batchReparseWorkouts,
   processBatchChunk,
   reparsePlanDay,
@@ -27,7 +24,6 @@ import {
 } from "./reparse";
 import { expandExercisesToRows, prepareParsedWorkout } from "./setRows";
 
-vi.mock("../../db", () => ({ db: { select: vi.fn() } }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock("../../storage", () => ({
   storage: {
@@ -49,9 +45,6 @@ vi.mock("../../gemini", () => ({
 const UNITS: UnitPreferences = { weightUnit: "kg", distanceUnit: "km" };
 const USER_ID = "user1";
 const MANUAL_FIX = "manual_fix_completed";
-const ATTEMPTED = "auto_hydration_attempted";
-const SUCCEEDED = "auto_hydration_succeeded";
-const FAILED = "auto_hydration_failed";
 
 type DiagnosticsResult = Awaited<ReturnType<typeof parseWorkoutStructureFromTextWithDiagnostics>>;
 type WriteResult = {
@@ -61,14 +54,6 @@ type WriteResult = {
   rejectedCount: number;
   rejectionReasons: string[];
   fallbackUsed?: boolean;
-};
-
-const dbState = {
-  count: 0,
-  source: "manual" as string | null,
-  sourceThrows: false,
-  countMissing: false,
-  sourceMissing: false,
 };
 
 function ex(exerciseName: string): ParsedExercise {
@@ -91,17 +76,6 @@ function parseResult(overrides: Partial<DiagnosticsResult> = {}): DiagnosticsRes
   };
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-const tick = () => Promise.resolve();
 
 const textMock = vi.mocked(parseWorkoutStructureFromTextWithDiagnostics);
 const imageMock = vi.mocked(parseWorkoutStructureFromImageWithDiagnostics);
@@ -113,28 +87,6 @@ const saveBatchMock = vi.mocked(saveParsedWorkoutsBatch);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  dbState.count = 0;
-  dbState.source = "manual";
-  dbState.sourceThrows = false;
-  dbState.countMissing = false;
-  dbState.sourceMissing = false;
-
-  vi.mocked(db.select).mockImplementation(
-    () =>
-      ({
-        from: (table: unknown) => {
-          const isCount = table === exerciseSets;
-          const countRows = dbState.countMissing ? [] : [{ count: dbState.count }];
-          const sourceRows = dbState.sourceMissing ? [] : [{ source: dbState.source }];
-          const rows = isCount ? countRows : sourceRows;
-          const limit = () =>
-            !isCount && dbState.sourceThrows
-              ? Promise.reject(new Error("source lookup failed"))
-              : Promise.resolve(rows);
-          return { where: () => Object.assign(Promise.resolve(rows), { limit }) };
-        },
-      }) as unknown as ReturnType<typeof db.select>,
-  );
 
   counterMock.mockResolvedValue(undefined);
   replaceMock.mockResolvedValue(0);
@@ -405,269 +357,5 @@ describe("batchReparseWorkouts", () => {
       { weightUnit: "lbs", distanceUnit: "miles" },
       "user1",
     );
-  });
-});
-
-describe("autoHydrateExerciseSetsFromTextIfNeeded", () => {
-  const workoutOwner = { workoutLogId: "w1" } as const;
-  const target = { id: "w1", mainWorkout: "10 squats" };
-
-  it("returns null when structured sets already exist", async () => {
-    dbState.count = 3;
-    const result = await autoHydrateExerciseSetsFromTextIfNeeded(
-      target,
-      workoutOwner,
-      UNITS,
-      "workout",
-      USER_ID,
-    );
-    expect(result).toBeNull();
-    expect(textMock).not.toHaveBeenCalled();
-  });
-
-  it("returns null when there is no free text to parse", async () => {
-    const result = await autoHydrateExerciseSetsFromTextIfNeeded(
-      { id: "w1", mainWorkout: null, accessory: null },
-      workoutOwner,
-      UNITS,
-      "workout",
-      USER_ID,
-    );
-    expect(result).toBeNull();
-    expect(textMock).not.toHaveBeenCalled();
-  });
-
-  it("hydrates, persists, and records success telemetry", async () => {
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-    replaceMock.mockResolvedValue(1);
-
-    const result = await autoHydrateExerciseSetsFromTextIfNeeded(
-      target,
-      workoutOwner,
-      UNITS,
-      "workout",
-      USER_ID,
-    );
-
-    expect(result).toMatchObject({ setCount: 1, saved: true, rejectedCount: 0 });
-    expect(textMock).toHaveBeenCalledWith("10 squats", UNITS, undefined, USER_ID);
-    expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", ATTEMPTED);
-    expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", SUCCEEDED);
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "exercise_set_auto_hydration_success" }),
-      expect.any(String),
-    );
-  });
-
-  it.each([
-    ["strava", "import"],
-    ["garmin", "import"],
-    ["import", "import"],
-    ["voice", "voice"],
-    ["photo", "photo"],
-    ["other", "manual"],
-  ])("maps workout-log source %s to telemetry source %s", async (raw, expected) => {
-    dbState.source = raw;
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    expect(counterMock).toHaveBeenCalledWith("workout_log", expected, ATTEMPTED);
-  });
-
-  it("uses the manual fallback source for plan-day owners (no source lookup)", async () => {
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-    await autoHydrateExerciseSetsFromTextIfNeeded(
-      { id: "p1", mainWorkout: "x" },
-      { planDayId: "p1" },
-      UNITS,
-      "plan",
-      USER_ID,
-    );
-    expect(counterMock).toHaveBeenCalledWith("plan_day", "manual", ATTEMPTED);
-  });
-
-  it("logs degraded quality when rejections exceed accepted rows", async () => {
-    textMock.mockResolvedValue(
-      parseResult({ acceptedRows: [ex("squat")], rejectedRows: [{}, {}] as never }),
-    );
-    replaceMock.mockResolvedValue(1);
-
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: "exercise_set_auto_hydration_success_degraded",
-        qualityState: "degraded",
-      }),
-      expect.any(String),
-    );
-  });
-
-  it("treats zero accepted rows (blocks only) as failed quality", async () => {
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [], structureBlocks: [block()] }));
-    replaceMock.mockResolvedValue(0);
-
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ qualityState: "failed" }),
-      expect.any(String),
-    );
-  });
-
-  it("dedupes concurrent calls through the hydration lock", async () => {
-    const gate = deferred<DiagnosticsResult>();
-    textMock.mockReturnValue(gate.promise);
-
-    const first = autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-    await tick(); // let the first call install the lock before the second checks
-    const second = autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    gate.resolve(parseResult({ acceptedRows: [ex("squat")] }));
-    const [a, b] = await Promise.all([first, second]);
-
-    expect(b).toBe(a);
-    expect(textMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("records failure telemetry and rethrows when parsing fails", async () => {
-    textMock.mockRejectedValue(new Error("provider exploded"));
-
-    await expect(
-      autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID),
-    ).rejects.toThrow("provider exploded");
-    expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", FAILED);
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "exercise_set_auto_hydration_failure" }),
-      expect.any(String),
-    );
-  });
-
-  it("clears the lock so a subsequent call re-parses", async () => {
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    expect(textMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("defaults to the manual source and warns when source resolution fails", async () => {
-    dbState.sourceThrows = true;
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "auto_hydration_source_resolution_failed" }),
-      expect.any(String),
-    );
-    expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", ATTEMPTED);
-  });
-
-  it("swallows and logs telemetry-increment failures during successful hydration", async () => {
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-    counterMock.mockRejectedValue(new Error("telemetry down"));
-
-    const result = await autoHydrateExerciseSetsFromTextIfNeeded(
-      target,
-      workoutOwner,
-      UNITS,
-      "workout",
-      USER_ID,
-    );
-    await tick();
-    await tick();
-
-    // Hydration still succeeds even though every telemetry counter rejected.
-    expect(result).toMatchObject({ saved: true });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "auto_hydration_attempt_counter_failed" }),
-      expect.any(String),
-    );
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "manual_fix_counter_failed" }),
-      expect.any(String),
-    );
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "auto_hydration_success_counter_failed" }),
-      expect.any(String),
-    );
-  });
-
-  it("logs when the failure-telemetry increment itself fails", async () => {
-    textMock.mockRejectedValue(new Error("provider exploded"));
-    counterMock.mockRejectedValue(new Error("telemetry down"));
-
-    await expect(
-      autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID),
-    ).rejects.toThrow("provider exploded");
-    await tick();
-    await tick();
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "auto_hydration_failure_counter_failed" }),
-      expect.any(String),
-    );
-  });
-
-  it("returns null and logs failed quality when the provider yields nothing despite text", async () => {
-    textMock.mockResolvedValue(parseResult()); // no accepted rows and no structure blocks
-
-    const result = await autoHydrateExerciseSetsFromTextIfNeeded(
-      target,
-      workoutOwner,
-      UNITS,
-      "workout",
-      USER_ID,
-    );
-
-    expect(result).toBeNull();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ qualityState: "failed" }),
-      expect.any(String),
-    );
-    expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", SUCCEEDED);
-  });
-
-  it("treats a missing count row as zero existing sets and proceeds", async () => {
-    dbState.countMissing = true;
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-
-    const result = await autoHydrateExerciseSetsFromTextIfNeeded(
-      target,
-      workoutOwner,
-      UNITS,
-      "workout",
-      USER_ID,
-    );
-
-    expect(result).toMatchObject({ saved: true });
-  });
-
-  it("falls back to the manual source when the workout-log source row is missing", async () => {
-    dbState.sourceMissing = true;
-    textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
-
-    await autoHydrateExerciseSetsFromTextIfNeeded(target, workoutOwner, UNITS, "workout", USER_ID);
-
-    expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", ATTEMPTED);
-  });
-
-  it("records failure telemetry for plan-day owners", async () => {
-    textMock.mockRejectedValue(new Error("boom"));
-
-    await expect(
-      autoHydrateExerciseSetsFromTextIfNeeded(
-        { id: "p1", mainWorkout: "x" },
-        { planDayId: "p1" },
-        UNITS,
-        "plan",
-        USER_ID,
-      ),
-    ).rejects.toThrow("boom");
-
-    expect(counterMock).toHaveBeenCalledWith("plan_day", "manual", FAILED);
   });
 });

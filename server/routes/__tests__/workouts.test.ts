@@ -33,7 +33,6 @@ vi.mock("../../services/workoutService", () => ({
   reparseWorkout: vi.fn(),
   reparseWorkoutFromImage: vi.fn(),
   batchReparseWorkouts: vi.fn(),
-  autoHydrateExerciseSetsFromTextIfNeeded: vi.fn(),
   updateWorkoutStructureBlockScore: vi.fn(),
 }));
 
@@ -335,8 +334,8 @@ describe("Workouts Routes", () => {
     expect(reparseWorkout).not.toHaveBeenCalled();
   });
 
-  it("does not auto-hydrate text-only workout reads", async () => {
-    const [{ storage }, { autoHydrateExerciseSetsFromTextIfNeeded }] = await Promise.all([
+  it("does not parse text-only workout reads", async () => {
+    const [{ storage }, { reparseWorkout }] = await Promise.all([
       import("../../storage"),
       import("../../services/workoutService"),
     ]);
@@ -348,7 +347,7 @@ describe("Workouts Routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.exerciseSets).toEqual([]);
-    expect(autoHydrateExerciseSetsFromTextIfNeeded).not.toHaveBeenCalled();
+    expect(reparseWorkout).not.toHaveBeenCalled();
     expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledTimes(1);
   });
   

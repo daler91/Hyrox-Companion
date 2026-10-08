@@ -163,7 +163,6 @@ Timeline annotation queries and mutations are composed directly from the `client
 |------|------|---------|
 | `useWorkoutEditor` | `useWorkoutEditor.ts` | Manages exercise blocks for the LogWorkout page. Handles adding/removing/reordering exercises (dnd-kit integration), parsing text into exercises, and tracking block state. |
 | `useWorkoutForm` | `useWorkoutForm.tsx` | Manages workout form state (date, focus, RPE, notes, duration). Handles submission with exercise data. |
-| `useWorkoutVoiceForm` | `useWorkoutVoiceForm.ts` | Voice dictation (via `useVoiceInput`) into an `EditFormState` (focus / main workout / accessory / notes). Standalone — it does not wrap `useWorkoutForm`. |
 
 ### Chat and Coaching
 
@@ -225,7 +224,6 @@ flowchart TD
     UWF --> USWM[useSaveWorkoutMutation]
     UWFV --> UVI[useVoiceInput]
     USWM --> |offline fallback| API6["/api/v1/workouts"]
-    UWVF[useWorkoutVoiceForm] --> UVI
     
     UCS[useChatSession] --> UCH[useChatHistory]
     UCH --> UCM[useChatMutations]

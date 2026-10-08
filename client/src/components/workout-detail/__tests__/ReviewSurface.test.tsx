@@ -521,6 +521,27 @@ describe("ReviewSurface", () => {
     expect(screen.queryByTestId("review-delete-entry-1")).not.toBeInTheDocument();
   });
 
+  // A3 (CODEBASE_ANALYSIS_2026-10-03): the sheet is the way into combine mode.
+  it("starts combining from a logged workout", async () => {
+    const user = userEvent.setup();
+    const onCombine = vi.fn();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} onCombine={onCombine} />);
+
+    await user.click(screen.getByRole("button", { name: "Combine with another workout" }));
+
+    expect(onCombine).toHaveBeenCalledWith(expect.objectContaining({ id: "entry-1" }));
+  });
+
+  it("offers no combine action without a logged workout", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry({ workoutLogId: null })} onClose={vi.fn()} onCombine={vi.fn()} />);
+
+    expect(screen.queryByTestId("review-combine-entry-1")).not.toBeInTheDocument();
+  });
+
   it("asks for confirmation before deleting, and deletes on confirm", async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn();

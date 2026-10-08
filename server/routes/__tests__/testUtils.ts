@@ -1,17 +1,9 @@
 import express from "express";
 import { type Mock, vi } from "vitest";
 
-export const TEST_USER_ID = "test_user_id";
+import { globalErrorHandler } from "../../middleware/errorHandler";
 
-/**
- * The error shape `asyncHandler` forwards via next(err): an Error decorated
- * with the optional status/code/details fields the API error contract carries.
- */
-type TestHttpError = Error & {
-  status?: number;
-  code?: string;
-  details?: unknown;
-};
+export const TEST_USER_ID = "test_user_id";
 
 /**
  * Module factories for the vi.mock() preamble every route test repeats.
@@ -49,16 +41,14 @@ export function mockStorageModule(shape: Record<string, readonly string[]>) {
 }
 
 /**
- * Creates a mocked express error handler to accurately verify that
- * asyncHandler bubbles errors correctly via next(err) without breaking tests.
+ * Mounts the production error handler, so route tests see exactly the error
+ * replies athletes get. A test-only stand-in used to send "Internal Server
+ * Error" for every status, which meant a regression that masked the 4xx
+ * messages the client shows (validation copy, the food-in-use delete message,
+ * Strava reauth copy) passed every route test. A10 (CODEBASE_ANALYSIS_2026-10-03)
  */
 export function setupTestErrorHandler(app: express.Express) {
-  const errorHandler: express.ErrorRequestHandler = (err: TestHttpError, _req, res, _next) => {
-    // Intentionally left with only status sending logic to mock error handler behavior
-    const status = err.status || 500;
-    res.status(status).json({ error: "Internal Server Error", code: err.code || "INTERNAL_SERVER_ERROR", ...(status < 500 && err.details ? { details: err.details } : {}) });
-  };
-  app.use(errorHandler);
+  app.use(globalErrorHandler);
 }
 
 /**

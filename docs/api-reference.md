@@ -1787,6 +1787,7 @@ Update user preferences.
 - **Validation:** `updateUserPreferencesSchema`
 - **Timezone validation:** a `userTimezone` the server runtime does not recognise returns `400 { code: "INVALID_TIMEZONE" }`.
 - **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge` plus either `mafCategory`, or the legacy `mafConsistency`/`mafTrend` pair, to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.
+- **Training-style refresh:** `trainingStyleRecomputeNow: true`, or a `trainingStyleId` that differs from the stored one, queues an immediate background refresh of the athlete's stored Coach Insights (only if one exists; the job still checks AI consent and budget). The flag is a request: the stored value is written back as `false`.
 - **Response:** Updated serialized preferences object (without the two derived fields)
 - **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary`, `emailMissedReminder`, `emailWeeklyReviewReminder`, `emailTodaySession` and `emailAnalysisDigest` gate the individual categories and take effect only when the master is on. All six default to `false` at the database level for new users (GDPR-compliant opt-in).
 - **Auto-apply semantics:** `coachAutoApplyPlanChanges` (default `false`) makes the coach chat try to apply its [plan proposals](#plan-proposal-routes) as soon as they are raised instead of waiting for an explicit apply.

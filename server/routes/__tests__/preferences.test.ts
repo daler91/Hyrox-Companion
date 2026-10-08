@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
+import { enqueueTrainingStyleRecompute } from "../../services/analyticsRecomputeScheduler";
 import { storage } from "../../storage";
 import preferencesRouter from "../preferences";
 import { createTestApp } from "./testUtils";
@@ -16,6 +17,10 @@ vi.mock("../../storage", async () =>
     plans: ["getActivePlan", "getPlanWeeklyDensity"],
   }),
 );
+
+vi.mock("../../services/analyticsRecomputeScheduler", () => ({
+  enqueueTrainingStyleRecompute: vi.fn().mockResolvedValue(1),
+}));
 
 describe("GET /api/preferences", () => {
   let app: express.Express;
@@ -275,6 +280,68 @@ describe("PATCH /api/v1/preferences", () => {
       restingHr: null,
       maxHr: null,
       ftp: null,
+    });
+  });
+
+  describe("training-style refresh (A1)", () => {
+    function storedStyle(trainingStyleId: string) {
+      vi.mocked(storage.users.getUser).mockResolvedValue({
+        id: "test_user_id",
+        trainingStyleId,
+        mafAge: 39,
+        mafConsistency: "moderate",
+        mafTrend: "flat",
+        mafCategory: null,
+      });
+    }
+
+    it("queues a Coach Insights refresh when the client asks for a recompute and stores the flag as false", async () => {
+      storedStyle("balanced_default");
+
+      const response = await request(app)
+        .patch("/api/v1/preferences")
+        .send({ trainingStyleId: "maf_method", trainingStyleRecomputeNow: true });
+
+      expect(response.status).toBe(200);
+      expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+        trainingStyleId: "maf_method",
+        trainingStyleRecomputeNow: false,
+      });
+      expect(vi.mocked(enqueueTrainingStyleRecompute)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(enqueueTrainingStyleRecompute)).toHaveBeenCalledWith(
+        storage,
+        "test_user_id",
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      );
+    });
+
+    it("queues the refresh for a style switch even without the flag", async () => {
+      storedStyle("balanced_default");
+
+      const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "maf_method" });
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(enqueueTrainingStyleRecompute)).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not queue a refresh when the style is unchanged", async () => {
+      storedStyle("maf_method");
+
+      const response = await request(app).patch("/api/v1/preferences").send({ weeklyGoal: 6 });
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(enqueueTrainingStyleRecompute)).not.toHaveBeenCalled();
+    });
+
+    it("still saves when queueing the refresh fails", async () => {
+      storedStyle("balanced_default");
+      vi.mocked(enqueueTrainingStyleRecompute).mockRejectedValueOnce(new Error("queue down"));
+
+      const response = await request(app)
+        .patch("/api/v1/preferences")
+        .send({ trainingStyleId: "maf_method", trainingStyleRecomputeNow: true });
+
+      expect(response.status).toBe(200);
     });
   });
 });

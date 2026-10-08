@@ -317,6 +317,8 @@ export function createTestApp(router: express.Router) {
 }
 ```
 
+`setupTestErrorHandler` mounts the production `globalErrorHandler` (`server/middleware/errorHandler.ts`), so a route test sees the same `{ error, code, details }` reply, 4xx message and 413 rewrite an athlete would. A test that mocks `../../logger` must therefore also provide `reqLogger`, which the handler logs through.
+
 **Common mocking targets:**
 
 - `../../clerkAuth` -- Replaces `isAuthenticated` middleware to inject a test user (`req.auth = { userId: "test_user_id" }`)

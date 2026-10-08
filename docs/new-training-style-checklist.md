@@ -50,8 +50,12 @@ Use this checklist whenever adding a new training methodology so implementation 
   - `training_style_id` — the active style, default `'balanced_default'`,
   - `training_style_previous_id`,
   - `training_style_changed_at`,
-  - `training_style_recompute_now` — the flag that forces a fresh style-aware recompute
-    after a switch.
+  - `training_style_recompute_now` — sent as `trainingStyleRecomputeNow: true` on the
+    switch's `PATCH /api/v1/preferences`. The handler treats it as a request, not state:
+    it queues an immediate refresh of the stored style-aware analyses (the features in
+    `STYLE_AWARE_FEATURES`, `server/services/analyticsRecomputeScheduler.ts`; today
+    Coach Insights) and leaves the column `false`. A new style whose rules reach another
+    stored analysis must add that feature to the list.
 - Append a row to the `user_training_style` history table (`style`, `effective_date`,
   `source`) so the selection timeline survives later switches.
 

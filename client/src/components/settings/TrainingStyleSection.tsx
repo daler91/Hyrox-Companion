@@ -48,7 +48,9 @@ export function buildRecalculationSummary(styleId: string): string[] {
   const summary = [
     "Coach recommendation prompt context switched to the selected style.",
     "Future plan generation uses the updated style constraints.",
-    "Training-style recompute flag set for downstream AI calculations.",
+    // The save's recompute request queues this refresh on the server (A1,
+    // CODEBASE_ANALYSIS_2026-10-03); it runs only when AI coaching is allowed.
+    "Saved Coach Insights refresh in the background for the new style.",
   ];
   if (styleId === "maf_method") {
     summary.push("MAF heart-rate ceiling recomputed and baseline test reminder scheduled.");

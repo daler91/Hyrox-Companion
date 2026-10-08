@@ -51,14 +51,17 @@ describe("useCombineWorkouts", () => {
   });
 
   describe("handleCombine selections", () => {
-    const entry1 = createMockEntry("e1", "2024-05-01");
-    const entryDiffDate = createMockEntry("e2", "2024-05-02");
-    const entry2 = createMockEntry("e3", "2024-05-01");
+    // Only logged workouts can be combined (A3): the server deletes sources by log id.
+    const entry1 = createMockEntry("e1", "2024-05-01", "completed", { workoutLogId: "log-1" });
+    const entryDiffDate = createMockEntry("e2", "2024-05-02", "completed", { workoutLogId: "log-2" });
+    const entry2 = createMockEntry("e3", "2024-05-01", "completed", { workoutLogId: "log-3" });
+    const plannedSameDay = createMockEntry("e4", "2024-05-01", "planned", { planDayId: "plan-4" });
 
     it.each([
       [entry1, true, null, "Combine cancelled", null, false], // Same entry cancels
       [entryDiffDate, false, null, "Can only combine workouts on the same day", null, false], // Diff date errors
       [entry2, false, entry2, "", entry1, true], // Valid second entry
+      [plannedSameDay, false, null, "Only logged workouts can be combined", entry1, false], // Not logged: keeps waiting
     ])("combines sequences %s -> expects %s", (testEntry, isSameEntry, expectComb2, expectedToastTitle, expectComb1, expectDialog) => {
       const { result } = renderHook(() => useCombineWorkouts(), { wrapper });
 
@@ -75,6 +78,15 @@ describe("useCombineWorkouts", () => {
         expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: expectedToastTitle }));
       }
       expectState(result.current, expectComb1, expectComb2, expectDialog);
+    });
+
+    it("refuses to start combine mode from a workout that is not logged", () => {
+      const { result } = renderHook(() => useCombineWorkouts(), { wrapper });
+
+      act(() => { result.current.handleCombine(plannedSameDay); });
+
+      expectState(result.current, null, null, false);
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Only logged workouts can be combined" }));
     });
   });
 
@@ -130,6 +142,26 @@ describe("useCombineWorkouts", () => {
         // CL50: a device-imported source lands in the recycle bin.
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/recycle-bin"] });
       }
+    });
+
+    it("hands a logged source's plan day to the merged workout instead of skipping it (A3)", async () => {
+      const planLinkedLog = createMockEntry("e1", "2024-05-01", "completed", { workoutLogId: "log-1", planDayId: "plan-1" });
+      const stravaImport = createMockEntry("e2", "2024-05-01", "completed", { workoutLogId: "log-2" });
+      const { result } = renderHook(() => useCombineWorkouts(), { wrapper });
+      act(() => {
+        result.current.setCombiningEntry(stravaImport);
+        result.current.setCombineSecondEntry(planLinkedLog);
+      });
+
+      act(() => { result.current.handleConfirmCombine(combinedWorkout); });
+
+      await waitFor(() => {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith("POST", "/api/v1/workouts/combine", {
+          newWorkout: { ...combinedWorkout, planDayId: "plan-1" },
+          deleteWorkoutIds: ["log-2", "log-1"],
+          skipPlanDayIds: undefined,
+        }, expect.any(AbortSignal));
+      });
     });
   });
 });

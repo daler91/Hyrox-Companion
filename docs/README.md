@@ -86,7 +86,7 @@ Living lists, updated in place rather than superseded.
 | Document                                          | Tracks                                                              |
 | ------------------------------------------------- | ------------------------------------------------------------------- |
 | [Product Opportunities](PRODUCT_OPPORTUNITIES.md) | Prioritised new features and improvements, with code-level evidence |
-| [Technical Debt](../TECHNICAL_DEBT.md)            | Known debt, with resolved items struck through rather than deleted  |
+| [Technical Debt](../TECHNICAL_DEBT.md)            | Debt opened in that file (resolved items struck through), plus an index of open items later audits keep |
 
 ## Point-in-time reports
 

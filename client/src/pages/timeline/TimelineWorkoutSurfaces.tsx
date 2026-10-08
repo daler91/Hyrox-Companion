@@ -97,6 +97,7 @@ interface TimelineWorkoutSurfacesProps {
     | "setCombiningEntry"
     | "combineSecondEntry"
     | "setCombineSecondEntry"
+    | "handleCombine"
     | "handleConfirmCombine"
     | "combineWorkoutsMutation"
   >;
@@ -194,6 +195,7 @@ export function TimelineWorkoutSurfaces({
     setCombiningEntry,
     combineSecondEntry,
     setCombineSecondEntry,
+    handleCombine,
     handleConfirmCombine,
     combineWorkoutsMutation,
   } = combine;
@@ -380,6 +382,14 @@ export function TimelineWorkoutSurfaces({
           setReviewEntry(null);
           setCompletionSuccessEntryId(null);
           handleDelete(entry);
+        }}
+        // The only way into combine mode: the sheet closes so the athlete can
+        // tap the second workout on the timeline. A3 (CODEBASE_ANALYSIS_2026-10-03)
+        onCombine={(entry) => {
+          closeEmbeddedCoach();
+          setReviewEntry(null);
+          setCompletionSuccessEntryId(null);
+          handleCombine(entry);
         }}
       />
 

@@ -13,13 +13,6 @@ import { exerciseSetOwnerCondition, structureBlockOwnerCondition } from "./owner
 import { replaceStructureForOwner, structureReplacementOptions } from "./structure";
 import type { SetOwner } from "./types";
 
-export async function saveParsedWorkout(
-  workoutId: string,
-  setRows: InsertExerciseSet[],
-): Promise<number> {
-  return replaceExerciseSetsByOwner({ workoutLogId: workoutId }, setRows);
-}
-
 /**
  * Batch write parsed exercise sets for several workouts at once, so a chunked
  * reparse pays one INSERT rather than one per workout.
@@ -101,19 +94,6 @@ export async function saveParsedWorkoutsBatch(
 // Replace-all semantics for an owner (either a logged workout or a plan day):
 // drop the existing rows inside a single tx and insert the new ones, so repeat
 // Parse calls don't accumulate duplicates. Shared by every reparse path.
-async function replaceExerciseSetsByOwner(
-  owner: SetOwner,
-  setRows: InsertExerciseSet[],
-): Promise<number> {
-  await db.transaction(async (tx) => {
-    await tx.delete(exerciseSets).where(exerciseSetOwnerCondition(owner));
-    if (setRows.length > 0) {
-      await tx.insert(exerciseSets).values(setRows);
-    }
-  });
-  return setRows.length;
-}
-
 export async function replaceExerciseSetsAndStructureByOwner(
   owner: SetOwner,
   setRows: InsertExerciseSet[],
