@@ -438,7 +438,9 @@ function RemovePortionButton({
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 shrink-0"
+            // 44px on phones, like every icon button: deleting a saved
+            // portion should not be a thumb slip. U26 (CODEBASE_ANALYSIS_2026-10-03)
+            className="shrink-0 md:h-7 md:w-7"
             aria-label={`Remove ${serving.label}`}
             disabled={disabled}
             onClick={() => {

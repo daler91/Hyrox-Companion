@@ -220,17 +220,14 @@ describe("TimelineWorkoutCard — device link affordances", () => {
   });
 
   it("has no automated WCAG violations with the prompt and the badge menu rendered", async () => {
-    // The card is itself role="button" and already nests its mark-complete
-    // button, coach-note toggle and move menu inside it, each stopping
-    // propagation (the a11y test's fixture renders none of them, which is
-    // why it passes the rule). These controls follow that same contract, so
-    // nested-interactive is the one rule set aside here.
-    const options = { rules: { "nested-interactive": { enabled: false } } };
+    // The card is a plain container opened from its title button, so its
+    // controls are no longer nested in a role="button" and the full rule set
+    // applies, nested-interactive included. U20 (CODEBASE_ANALYSIS_2026-10-03)
     const { container } = renderCard(stravaImport, [plannedSibling, stravaImport]);
-    expect(await axe(container, options)).toHaveNoViolations();
+    expect(await axe(container)).toHaveNoViolations();
 
     const linked = renderCard(enrichedManualLog, [enrichedManualLog]);
-    expect(await axe(linked.container, options)).toHaveNoViolations();
+    expect(await axe(linked.container)).toHaveNoViolations();
   });
 
   it("renders a plain badge when there is nothing to link to", () => {

@@ -451,7 +451,10 @@ const MovementRow = memo(function MovementRow({
       className="space-y-2 rounded-md border border-border bg-background p-2.5"
       data-testid="structure-block-step"
     >
-      <div className="flex items-center gap-2">
+      {/* Wraps so the step controls keep the 44px phone touch target from S9
+          (CODEBASE_REVIEW_2026-05-31): at 28px, Remove sat 2px from
+          Move later. U26 (CODEBASE_ANALYSIS_2026-10-03) */}
+      <div className="flex flex-wrap items-center gap-2">
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
           {positionLabel}
         </span>
@@ -475,7 +478,7 @@ const MovementRow = memo(function MovementRow({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-7 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                  className="md:size-7 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                   onClick={(e) => {
                     if (isFirst) e.preventDefault();
                     else onMove(index, -1);
@@ -496,7 +499,7 @@ const MovementRow = memo(function MovementRow({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-7 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                  className="md:size-7 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                   onClick={(e) => {
                     if (isLast) e.preventDefault();
                     else onMove(index, 1);
@@ -517,7 +520,7 @@ const MovementRow = memo(function MovementRow({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-7"
+                  className="md:size-7"
                   onClick={() => onRemove(index)}
                   aria-label={`Remove ${positionLabel}`}
                 >

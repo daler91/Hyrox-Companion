@@ -39,6 +39,7 @@ interface RenderProps {
   readonly plans?: TrainingPlan[];
   readonly onLogNote?: () => void;
   readonly setSchedulingPlanId?: (id: string) => void;
+  readonly importPending?: boolean;
 }
 
 function renderEmptyState({
@@ -47,6 +48,7 @@ function renderEmptyState({
   plans = [],
   onLogNote,
   setSchedulingPlanId = vi.fn(),
+  importPending = false,
 }: RenderProps = {}) {
   // The welcome variant eagerly mounts GeneratePlanDialog, which uses
   // react-query hooks internally — so this test needs a provider.
@@ -60,7 +62,7 @@ function renderEmptyState({
         selectedPlanId={selectedPlanId}
         plans={plans}
         samplePlanMutation={{ mutate: vi.fn(), isPending: false }}
-        importMutation={{ isPending: false }}
+        importMutation={{ isPending: importPending }}
         handleFileUpload={vi.fn()}
         setSchedulingPlanId={setSchedulingPlanId}
         setFilterStatus={vi.fn()}
@@ -96,6 +98,39 @@ describe("TimelineEmptyState", () => {
         "Generate AI Plan (recommended)",
       );
       expect(screen.getByText(/Add Coaching Knowledge in Settings/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("welcome variant controls (U22)", () => {
+    it("opens the CSV picker from a keyboard-reachable Import Your Own button", async () => {
+      renderEmptyState();
+      const input = screen.getByTestId("input-csv-upload-empty");
+      const pickerClick = vi.spyOn(input, "click");
+      const user = userEvent.setup();
+
+      const button = screen.getByRole("button", { name: "Import Your Own" });
+      button.focus();
+      await user.keyboard("{Enter}");
+
+      expect(pickerClick).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables Import Your Own while an import is running", async () => {
+      renderEmptyState({ importPending: true });
+      const pickerClick = vi.spyOn(screen.getByTestId("input-csv-upload-empty"), "click");
+
+      const button = screen.getByTestId("button-import-plan-empty");
+      expect(button).toBeDisabled();
+      await userEvent.setup().click(button);
+      expect(pickerClick).not.toHaveBeenCalled();
+    });
+
+    it("renders 'Or just log a workout' as one link with no button inside it", () => {
+      renderEmptyState();
+
+      const link = screen.getByRole("link", { name: "Or just log a workout" });
+      expect(link).toHaveAttribute("href", "/log");
+      expect(link.querySelector("button")).toBeNull();
     });
   });
 

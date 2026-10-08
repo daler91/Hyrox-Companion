@@ -36,6 +36,23 @@ export function EditableWorkoutTitle({
     inputRef.current?.select();
   }, [isEditing]);
 
+  // Escape here cancels the edit, not the Log or Review sheet around it.
+  // Radix dismisses its dialog from a document-level capture listener, which
+  // runs before the input's own handler; a window-level capture listener runs
+  // earlier still, and a default-prevented Escape is one Radix leaves alone.
+  // The input's onKeyDown then cancels as usual.
+  // U23 (CODEBASE_ANALYSIS_2026-10-03)
+  useEffect(() => {
+    if (!isEditing) return;
+    const claimEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape" && event.target === inputRef.current) event.preventDefault();
+    };
+    window.addEventListener("keydown", claimEscape, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", claimEscape, { capture: true });
+    };
+  }, [isEditing]);
+
   const startEditing = () => {
     if (isSaving) return;
     setDraft(displayTitle);
@@ -80,6 +97,8 @@ export function EditableWorkoutTitle({
   if (isEditing) {
     return (
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        {/* Save and Cancel sit side by side, so they keep the 44px phone
+            touch target. U26 (CODEBASE_ANALYSIS_2026-10-03) */}
         <Input
           ref={inputRef}
           value={draft}
@@ -97,7 +116,7 @@ export function EditableWorkoutTitle({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                className="shrink-0 md:h-8 md:w-8 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                 onClick={saveDraft}
                 aria-disabled={isSaving || draft.trim().length === 0}
                 aria-label="Save workout title"
@@ -118,7 +137,7 @@ export function EditableWorkoutTitle({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                className="shrink-0 md:h-8 md:w-8 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                 onClick={cancelEditing}
                 aria-disabled={isSaving}
                 aria-label="Cancel title edit"

@@ -18,14 +18,12 @@ export function useGarminMutations() {
       title: "Garmin Connected",
       description: "Your Garmin account has been successfully connected.",
     }),
-    // Use the message from the server response (translated by translateGarminError)
-    // rather than a generic toast — Garmin errors are highly varied (rate-limit,
-    // 2-step verification, bad password) and the server already produced the
-    // user-facing copy.
-    errorToast: (error) => ({
-      title: "Garmin Connection Failed",
-      description: error instanceof Error ? error.message : "An error occurred",
-    }),
+    // The string form describes the error with humanizeApiError, which shows
+    // the server's own copy (translated by translateGarminError: rate-limit,
+    // 2-step verification, bad password). Printing error.message showed the
+    // raw `401: {"error":...,"code":"GARMIN_AUTH_FAILED"}`.
+    // U28 (CODEBASE_ANALYSIS_2026-10-03)
+    errorToast: "Garmin Connection Failed",
   });
 
   const disconnectGarminMutation = useApiMutation({
@@ -58,10 +56,7 @@ export function useGarminMutations() {
       title: "Sync Complete",
       description: `Imported ${data.imported} new activities. ${data.skipped} already existed.`,
     }),
-    errorToast: (error) => ({
-      title: "Garmin Sync Failed",
-      description: error instanceof Error ? error.message : "An error occurred",
-    }),
+    errorToast: "Garmin Sync Failed",
   });
 
   return {

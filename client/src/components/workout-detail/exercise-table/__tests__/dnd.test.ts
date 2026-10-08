@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
 import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 
-import { useExerciseDndHandler } from "../dnd";
+import { buildExerciseDndAnnouncements, useExerciseDndHandler } from "../dnd";
 import { orderedSetIds } from "../state";
 
 function group(
@@ -76,6 +76,35 @@ describe("useExerciseDndHandler", () => {
 
     expect(onSaveOrder).not.toHaveBeenCalled();
     expect(onUpdateSet).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildExerciseDndAnnouncements (U24)", () => {
+  type AnnouncementArgs = Parameters<ReturnType<typeof buildExerciseDndAnnouncements>["onDragOver"]>[0];
+  const args = (activeId: string, overId: string | null) =>
+    ({ active: { id: activeId }, over: overId ? { id: overId } : null }) as unknown as AnnouncementArgs;
+  const announcements = buildExerciseDndAnnouncements(GROUPS, ROW_KEYS);
+
+  it("names the exercise and its position instead of the row id", () => {
+    const pickedUp = announcements.onDragStart(args("bench-1", null));
+
+    expect(pickedUp).toContain("Picked up Bench Press at position 3 of 3");
+    expect(pickedUp).not.toContain("bench-1");
+  });
+
+  it("reads the target position while moving and on the drop", () => {
+    expect(announcements.onDragOver(args("bench-1", "squat-1"))).toBe(
+      "Bench Press is over position 1 of 3.",
+    );
+    expect(announcements.onDragEnd(args("bench-1", "squat-1"))).toBe(
+      "Dropped Bench Press at position 1 of 3.",
+    );
+  });
+
+  it("says where the exercise stayed on a cancel", () => {
+    expect(announcements.onDragCancel(args("dead-1", null))).toBe(
+      "Cancelled. Deadlift stayed at position 2 of 3.",
+    );
   });
 });
 

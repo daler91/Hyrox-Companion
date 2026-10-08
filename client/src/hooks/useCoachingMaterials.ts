@@ -27,10 +27,9 @@ export function useCreateCoachingMaterial() {
       api.coaching.create(data),
     invalidateQueries: [QUERY_KEYS.coachingMaterials],
     successToast: "Coaching material added",
-    errorToast: (error: Error) => ({
-      title: "Failed to add coaching material",
-      description: error.message
-    }),
+    // The string form runs the error through humanizeApiError instead of
+    // printing the raw `status: {json}` message. U28 (CODEBASE_ANALYSIS_2026-10-03)
+    errorToast: "Failed to add coaching material",
   });
 }
 
@@ -58,10 +57,7 @@ export function useReEmbed() {
         toast({ title: `Successfully embedded ${data.materialsProcessed} material(s)` });
       }
     },
-    errorToast: (error: Error) => ({
-      title: "Failed to re-embed",
-      description: error.message
-    }),
+    errorToast: "Failed to re-embed",
   });
 }
 

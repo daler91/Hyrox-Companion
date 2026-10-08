@@ -39,7 +39,7 @@ import { useFuellingRange } from "@/hooks/useNutrition";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
-import { timelineCollisionDetection } from "@/pages/timeline/dropTargets";
+import { canMoveEntryTo, timelineCollisionDetection } from "@/pages/timeline/dropTargets";
 import { renderedFuellingWindow } from "@/pages/timeline/fuellingWindow";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
@@ -279,6 +279,10 @@ export default function Timeline() {
       const entry = (active.data.current as { entry?: TimelineEntry } | undefined)?.entry;
       const newDate = (over.data.current as { date?: string } | undefined)?.date;
       if (!entry || !newDate || entry.date === newDate) return;
+      // Collision detection already hides days a logged workout cannot land
+      // on; this re-checks the drop so no path sends a date the server
+      // refuses. U19 (CODEBASE_ANALYSIS_2026-10-03)
+      if (!canMoveEntryTo(entry, newDate, getTodayString())) return;
       moveEntry(entry, newDate);
     },
     [moveEntry],

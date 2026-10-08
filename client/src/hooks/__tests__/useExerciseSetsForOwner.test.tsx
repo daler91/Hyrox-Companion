@@ -421,3 +421,69 @@ describe("useExerciseSetsForOwner owner changes (CL18, CODEBASE_ANALYSIS_2026-10
     expect(harness.getSets("log-2")).toEqual([makeExerciseSet({ id: "b1", version: 1 })]);
   });
 });
+
+describe("useExerciseSetsForOwner deleting a set just after editing it (U27, CODEBASE_ANALYSIS_2026-10-03)", () => {
+  beforeEach(() => {
+    mocks.toast.mockClear();
+    mocks.preferences = { weightUnit: "kg", distanceUnit: "km" };
+  });
+
+  const pastDebounce = () =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 40);
+    });
+
+  it("drops the set's queued edit instead of PATCHing the deleted row", async () => {
+    const harness = createHarness([
+      makeExerciseSet({ id: "s1", reps: 8, version: 2 }),
+      makeExerciseSet({ id: "s2", reps: 5, version: 1 }),
+    ]);
+    harness.params.deleteSetRequest.mockResolvedValue(undefined);
+    harness.updateSetRequest.mockResolvedValue(makeExerciseSet({ id: "s2", reps: 6, version: 2 }));
+    const { result } = renderOwnerHook(harness.params);
+
+    // The cell blur queues the edit; the X tap lands inside the debounce window.
+    act(() => {
+      result.current.patchSetDebounced("s1", { reps: 9 });
+      result.current.patchSetDebounced("s2", { reps: 6 });
+    });
+    await act(async () => {
+      await result.current.deleteSet.mutateAsync("s1");
+      await pastDebounce();
+    });
+
+    expect(harness.params.deleteSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1");
+    // Only the other set's edit went out.
+    expect(harness.updateSetRequest).toHaveBeenCalledTimes(1);
+    expect(harness.updateSetRequest).toHaveBeenCalledWith(OWNER_ID, "s2", expect.objectContaining({ reps: 6 }));
+    expect(mocks.toast).not.toHaveBeenCalled();
+    expect(result.current.lastSaveErrorAt).toBeNull();
+  });
+
+  it("sends the DELETE only after a PATCH already in flight for the set has landed", async () => {
+    const harness = createHarness([makeExerciseSet({ id: "s1", reps: 8, version: 2 })]);
+    const patch = deferred<ExerciseSet>();
+    harness.updateSetRequest.mockReturnValue(patch.promise);
+    harness.params.deleteSetRequest.mockResolvedValue(undefined);
+    const { result } = renderOwnerHook(harness.params);
+
+    let edit: Promise<unknown> = Promise.resolve();
+    act(() => {
+      edit = result.current.updateSet.mutateAsync({ setId: "s1", data: { reps: 9 } });
+    });
+    await waitFor(() => expect(harness.updateSetRequest).toHaveBeenCalledTimes(1));
+    act(() => {
+      result.current.deleteSet.mutate("s1");
+    });
+    await act(pastDebounce);
+    expect(harness.params.deleteSetRequest).not.toHaveBeenCalled();
+
+    await act(async () => {
+      patch.resolve(makeExerciseSet({ id: "s1", reps: 9, version: 3 }));
+      await edit;
+    });
+
+    await waitFor(() => expect(harness.params.deleteSetRequest).toHaveBeenCalledWith(OWNER_ID, "s1"));
+    expect(mocks.toast).not.toHaveBeenCalled();
+  });
+});

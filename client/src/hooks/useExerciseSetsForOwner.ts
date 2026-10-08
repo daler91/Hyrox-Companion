@@ -241,8 +241,12 @@ export function useExerciseSetsForOwner<TSnapshot>({
   // it (CL18). The version tracker is kept across owners for the same reason:
   // set ids are unique across owners, and the flushed PATCH still needs its
   // set's version and must still wait behind that set's in-flight PATCH.
-  const { patchSetDebounced, flushPendingSetPatches: flushCellPatches, getPendingPatches } =
-    useDebouncedSetPatches<PatchExerciseSetPayload>(updateSet.mutateAsync, cellSaveDebounceMs, ownerId);
+  const {
+    patchSetDebounced,
+    flushPendingSetPatches: flushCellPatches,
+    cancelPendingSetPatch,
+    getPendingPatches,
+  } = useDebouncedSetPatches<PatchExerciseSetPayload>(updateSet.mutateAsync, cellSaveDebounceMs, ownerId);
 
   // A drag's order save is one of this owner's set writes (PF5): its mutation
   // key feeds `isSaving` and it marks the save pill like any other write.
@@ -298,8 +302,20 @@ export function useExerciseSetsForOwner<TSnapshot>({
 
   const deleteSet = useApiMutation({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: (setId: string) => deleteSetRequest(requireOwnerId(ownerId), setId).then(() => setId),
+    // A PATCH already sent for this set lands first, so it never reaches a
+    // row the DELETE has removed (U27).
+    mutationFn: async (setId: string) => {
+      const target = requireOwnerId(ownerId);
+      await versionTracker.whenSettled(setId);
+      await deleteSetRequest(target, setId);
+      return setId;
+    },
     onMutate: async (setId: string) => {
+      // Tapping a set's X right after editing it blurs the cell, which queues
+      // its debounced PATCH; sent after the DELETE, it hit a missing row and
+      // showed "Couldn't save that change" when nothing had failed. The edit
+      // dies with the set. U27 (CODEBASE_ANALYSIS_2026-10-03)
+      cancelPendingSetPatch(setId);
       if (!ownerId) return undefined;
       await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });
       const prev = getSnapshot(ownerId);

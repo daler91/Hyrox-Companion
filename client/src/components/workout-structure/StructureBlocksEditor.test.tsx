@@ -1,5 +1,5 @@
 import type { StructureBlockInput } from "@shared/schema";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -370,6 +370,34 @@ describe("StructureBlocksEditor", () => {
 
     expect(screen.getByText("Min 1: Transition")).toBeInTheDocument();
     expect(screen.queryByText("Min 1: Movement")).not.toBeInTheDocument();
+  });
+
+  it("keeps the 44px phone touch target on each step's move and remove buttons (U26)", () => {
+    render(
+      <Harness
+        initial={[{
+          sectionType: "main",
+          formatType: "rounds",
+          roundCount: 3,
+          steps: [
+            { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
+            { stepNumber: 2, stepType: "work", exerciseName: "Sled Pull" },
+          ],
+        }]}
+      />,
+    );
+
+    const steps = screen.getAllByTestId("structure-block-step");
+    expect(steps).toHaveLength(2);
+    for (const step of steps) {
+      const controls = within(step).getAllByRole("button", { name: /^(Move .* (earlier|later)|Remove .*)$/ });
+      expect(controls).toHaveLength(3);
+      for (const control of controls) {
+        // The icon variant's h-11 w-11 holds below md; the compact size is md-only.
+        expect(control).toHaveClass("h-11", "w-11", "md:size-7");
+        expect(control).not.toHaveClass("size-7");
+      }
+    }
   });
 
   it("removes a block when the remove button is clicked", () => {

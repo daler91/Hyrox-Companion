@@ -122,6 +122,16 @@ export function useDebouncedSetPatches<TPatch extends object>(
     return outcomes.every(Boolean);
   }, []);
 
+  // Drops a set's queued edit without sending it: the set is being deleted,
+  // and a PATCH fired after the DELETE hit a missing row and reported a
+  // failed save. U27 (CODEBASE_ANALYSIS_2026-10-03)
+  const cancelPendingSetPatch = useCallback((setId: string) => {
+    const entry = pendingRef.current.get(setId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingRef.current.delete(setId);
+  }, []);
+
   const getPendingPatches = useCallback(() => {
     return Array.from(pendingRef.current, ([setId, entry]) => ({
       setId,
@@ -149,6 +159,7 @@ export function useDebouncedSetPatches<TPatch extends object>(
   return {
     patchSetDebounced,
     flushPendingSetPatches,
+    cancelPendingSetPatch,
     getPendingPatches,
   };
 }
