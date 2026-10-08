@@ -6,6 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ChatMessage } from '../ChatMessage';
 
+// Injection payloads the sanitizer must neutralise (C2), kept out of the test
+// calls themselves.
+const SCRIPT_PAYLOAD = 'before<script>window.__xssMarker = true;</script>after';
+const IMG_ONERROR_PAYLOAD = '<img src=x onerror="window.__xssMarker = true">';
+
 /**
  * The markdown renderer is a lazy chunk (PF8): a reply shows as plain text
  * until it loads. Structure and sanitization tests wait for the real render.
@@ -66,7 +71,7 @@ describe('ChatMessage', () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
-          content={'before<script>window.__xssMarker = true;</script>after'}
+          content={SCRIPT_PAYLOAD}
         />,
       );
       await markdownRendered();
@@ -94,7 +99,7 @@ describe('ChatMessage', () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
-          content={'<img src=x onerror="window.__xssMarker = true">'}
+          content={IMG_ONERROR_PAYLOAD}
         />,
       );
       await markdownRendered();
@@ -191,7 +196,7 @@ describe('ChatMessage', () => {
       const { container } = render(
         <ChatMessage
           role="assistant"
-          content={'| a | b |\n| --- | --- |\n| <img src=x onerror="window.__xssMarker = true"> | ok |'}
+          content={`| a | b |\n| --- | --- |\n| ${IMG_ONERROR_PAYLOAD} | ok |`}
         />,
       );
       await markdownRendered();
