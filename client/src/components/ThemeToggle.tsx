@@ -20,7 +20,7 @@ export function ThemeToggle() {
             data-testid="button-theme-toggle"
             aria-label={label}
           >
-            {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+            {theme === "light" ? <Moon className="h-5 w-5" aria-hidden="true" /> : <Sun className="h-5 w-5" aria-hidden="true" />}
           </Button>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>

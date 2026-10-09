@@ -161,7 +161,7 @@ export function LandingHeader() {
                   aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
                   data-testid="button-mobile-nav-toggle"
                 >
-                  {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                  {mobileNavOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Toggle menu</TooltipContent>

@@ -67,7 +67,7 @@ export function CoachingMaterialList({
                       className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                       aria-label={`Delete ${material.title}`}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>

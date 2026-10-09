@@ -360,7 +360,7 @@ export default function Nutrition() {
                     onClick={() => setDate((d) => addDays(d, -1))}
                     data-testid="button-prev-day"
                   >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -387,7 +387,7 @@ export default function Nutrition() {
                     onClick={() => setDate((d) => addDays(d, 1))}
                     data-testid="button-next-day"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
