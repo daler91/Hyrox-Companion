@@ -27,7 +27,7 @@ export function WorkoutHeader({ onDuplicateLast, isDuplicating }: Readonly<Worko
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon" asChild data-testid="button-back" aria-label="Back to timeline">
               <Link href="/">
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
           </TooltipTrigger>
