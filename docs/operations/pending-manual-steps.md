@@ -570,14 +570,48 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
                       'idx_users_user_timezone'); -- expect 7
   ```
 
-## [ ] C9 — double the Strava run cadence stored at its one-leg value (**needs review before running**)
+## [x] C9 — double the Strava run cadence stored at its one-leg value
 
-- **Script:** none; the SQL below. **Not reviewed and not run.** Have a second
-  person check it against the current `stravaMapper.ts` and
-  `deviceActivityLink.ts`, and take a backup of `workout_logs`, before running it.
+- **Script:** none; the SQL below.
+- **Reviewed:** 2026-10-09 against `stravaMapper.ts` (`stravaCadenceToStored`,
+  `isRunSportType`) and `deviceActivityLink.ts`. The predicate doubles exactly
+  the sport types the mapper doubles, with the same name normalisation, and
+  skips doubled and zero-cadence rows. Unlink rebuilds the released row from
+  the snapshot's raw (one-leg) value through the mapper, so it lands doubled
+  too. Links only record the values they wrote (`filledValues`, D40) since
+  2026-10-05, after the mapper fix (2026-10-04), and production took both in
+  the same deploy, so no recorded value disagrees with the update.
 - **Shipped:** the mapper fix, commit `0f868e4` (2026-10-04). C9 in
   `docs/CODEBASE_ANALYSIS_2026-10-03.md`.
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** 2026-10-09, by the owner: 16 rows. Run as two
+  statements: a backup, then an update joined to it.
+
+  ```sql
+  CREATE TABLE c9_cadence_backup AS
+  SELECT id, avg_cadence AS old_avg_cadence, now() AS backed_up_at
+  FROM workout_logs
+  WHERE <the predicate under "How" below>;
+
+  WITH fixed AS (
+    UPDATE workout_logs w SET avg_cadence = b.old_avg_cadence * 2
+    FROM c9_cadence_backup b
+    WHERE w.id = b.id AND w.avg_cadence = b.old_avg_cadence
+    RETURNING w.id
+  ) SELECT count(*) AS fixed FROM fixed;  -- returned 16
+  ```
+
+  `c9_cadence_backup` is still in the database. To undo, run the same update
+  with `SET avg_cadence = b.old_avg_cadence` and
+  `w.avg_cadence = b.old_avg_cadence * 2`; drop the table once nobody needs it.
+
+- **Left as is (known limitation):** 137 Strava runs with a cadence and no
+  snapshot (`device_activity IS NULL AND source = 'strava'`, 376 Strava rows
+  in all, counted 2026-10-09). Runs imported before the snapshot column
+  (2026-09-12) still show half their cadence. Fixing them needs a migration
+  and a change to `legacyRawFromLog` in the same release (see the first
+  caveat), plus a decision on older manual logs a recording enriched, whose
+  stored cadence may be the athlete's own. Scope it as its own PR if it is
+  wanted.
 - **Why manual:** the mapper now doubles Strava's run `average_cadence` (Strava
   reports one leg, so a 172 steps/min run read 86) for new imports only. Runs
   imported before it still hold the one-leg value, and no migration touches them.
