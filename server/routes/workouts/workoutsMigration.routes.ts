@@ -24,6 +24,11 @@ const resolveSchema = z.object({
 });
 
 export function registerWorkoutMigrationRoutes(router: Router): void {
+  // No client code calls this, so review rows exist only for an athlete it was
+  // run for, and the review callout only ever shows to them. Left unexposed on
+  // purpose (U25, CODEBASE_ANALYSIS_2026-10-03; decided 2026-10-09): production
+  // had no review rows, its text-only logs were one athlete's imports, and a
+  // button would spend AI budget re-parsing them for little gain.
   // Each call sends up to 50 workout and plan-day texts to the AI parser, so it
   // takes the same consent and budget gates as batch-reparse — P6
   // (CODEBASE_ANALYSIS_2026-10-03).

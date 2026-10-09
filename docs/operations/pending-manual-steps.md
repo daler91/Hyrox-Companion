@@ -27,6 +27,9 @@ the newest recorded one. Three historical entries are out of order (0009, 0011,
 on a new out-of-order entry (D26), and boot now logs a skipped migration by
 name.
 
+As of 2026-10-09 every entry below is ticked. Add a new one, unticked, when a
+release ships a step that cannot apply itself.
+
 The migration entries below (the older-migration audit, 0074, 0081, 0082, 0091,
 0117, 0121 and 0122) ran at boot when their release first started. Each keeps
 its verification query: run it once against production, then tick the box.
@@ -402,11 +405,14 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   ) d; -- expect 0
   ```
 
-## [ ] 0093 — backfill exercise sets for standalone device imports
+## [x] 0093 — backfill exercise sets for standalone device imports
 
 - **Script:** `script/backfill-device-activity-sets.ts`
 - **Shipped:** 2026-09-12 (alongside migration `0093_device_activity_links.sql`)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** 2026-10-09, by the owner, with `--apply` after a
+  matching dry run: 156 sets written for 1 of 12 athletes, from 405 standalone
+  imports (249 skipped as `WeightTraining`/`Workout`). Nothing to undo by
+  design: it only adds a set to a log that had none.
 - **Why manual:** it is a script, not a migration — nothing runs it on deploy.
   The sync now writes the set at import time
   (`server/services/deviceActivitySets.ts`); only the history imported before
@@ -429,11 +435,16 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   ```
   `--user-id <id>` restricts to one athlete; `--quiet` prints the summary only.
 
-## [ ] 0094 — backfill `counts_as_training` for non-training device imports
+## [x] 0094 — backfill `counts_as_training` for non-training device imports
 
 - **Script:** `script/backfill-counts-as-training.ts`
 - **Shipped:** 2026-09-12 (alongside migration `0094_counts_as_training.sql`)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** dry run 2026-10-09, by the owner: 0 of 414 unadopted
+  device imports to demote, so `--apply` was not run and no record file
+  exists. None of the imports from before sync-time stamping is a deny-list
+  sport (the sport is read from `focus` when there is no snapshot, so older
+  imports were classified too). The verification query below can therefore
+  show no `false` bucket; that is expected here.
 - **Why manual:** the migration added the column with `DEFAULT true`, so it is
   the column default — not a DML statement — that left the history wrong.
   Nothing reclassifies the existing rows.
