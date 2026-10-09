@@ -46,25 +46,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    services:
-      postgres:
-        image: timescale/timescaledb-ha:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     strategy:
       fail-fast: false
       matrix:
         containers: ${{ fromJSON(needs.plan.outputs.containers) }}
     steps:
+      - name: Install PostgreSQL and pgvector
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16-pgvector
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
