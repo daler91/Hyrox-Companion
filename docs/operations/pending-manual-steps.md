@@ -262,11 +262,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
 
 ---
 
-## [ ] Audit — ten older data-bearing migrations (verify once)
+## [x] Audit — ten older data-bearing migrations (verify once)
 
 - **Shipped:** identified 2026-09-04 during the mapper-concern verification
   pass (`docs/MAPPER_CONCERNS_VERIFIED_2026-09-04.md`).
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** these ran at boot with the rest of the chain (see the top of
   this file); none of them is one of the three out-of-order journal entries.
   The audit was written when production was wrongly believed to be
@@ -302,11 +302,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect both non-NULL (created by 0036 at boot)
   ```
 
-## [ ] 0074 — `pg_trgm` extension and the trigram indexes for fuzzy food search
+## [x] 0074 — `pg_trgm` extension and the trigram indexes for fuzzy food search
 
 - **Migration:** `migrations/0074_food_search_trigram.sql`
 - **Shipped:** PR #1851 (2026-08-26)
-- **Run on production:** _ran at boot; verify once — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** the migration ran at boot. The two GIN indexes are deliberately
   not declared in `shared/schema/tables.ts`, so a `drizzle-kit push` would
   drop them, which is one more reason never to push to production. Identified
@@ -332,11 +332,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect 2 rows
   ```
 
-## [ ] 0081 — purge orphaned private custom foods
+## [x] 0081 — purge orphaned private custom foods
 
 - **Migration:** `migrations/0081_purge_orphaned_private_custom_foods.sql`
 - **Shipped:** PR #1663 (2026-07-19)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** the `DELETE` ran at boot with the migration. Verify once.
 - **What it does:** erases custom foods stranded ownerless by accounts deleted
   before the two-phase erasure existed. They are already invisible to users
@@ -353,11 +353,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect 0
   ```
 
-## [ ] 0082 — purge orphaned backfill-review rows
+## [x] 0082 — purge orphaned backfill-review rows
 
 - **Migration:** `migrations/0082_hesitant_exiles.sql`
 - **Shipped:** PR #1683 (2026-07-25)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** both halves ran at boot with the migration. Verify once.
 - **What it does:** deletes `structured_exercise_backfill_reviews` rows whose
   `user_id` is NULL. Those are orphans from accounts deleted while the FK was
@@ -372,11 +372,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect 0
   ```
 
-## [ ] 0091 — dedupe versioned targets and in-flight plan generations
+## [x] 0091 — dedupe versioned targets and in-flight plan generations
 
 - **Migration:** `migrations/0091_lyrical_human_fly.sql`
 - **Shipped:** 2026-09-01 (codebase-analysis remediation, priority item 4)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** the remediation and the three unique indexes ran together at
   boot, in that order, in one transaction. Verify once.
 - **What it does:** removes duplicate `nutrition_targets` (user, effective_from)
@@ -473,11 +473,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect a non-zero `false` bucket once walks/commutes/yoga are reclassified
   ```
 
-## [ ] 0117 — put plan days moved before 2026-10-02 back in their week and weekday
+## [x] 0117 — put plan days moved before 2026-10-02 back in their week and weekday
 
 - **Migration:** `migrations/0117_plan_day_slot_repair.sql`
 - **Shipped:** 2026-10-02 (commit `f6ec1d6`)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** the `UPDATE` ran at boot with the migration. Identified as D1
   (`docs/CODEBASE_ANALYSIS_2026-10-03.md`). Verify once.
 - **What it does:** a move used to change a plan day's date alone. This
@@ -510,11 +510,11 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
   -- expect 0
   ```
 
-## [ ] 0121 — one pending plan proposal per athlete, and the MAF CHECKs
+## [x] 0121 — one pending plan proposal per athlete, and the MAF CHECKs
 
 - **Migration:** `migrations/0121_pending_proposal_unique_and_constraint_parity.sql`
 - **Shipped:** 2026-10-05 (D51 and D25, `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** ran at boot on 2026-10-06, during one of the deploys that then
   failed the startup check for the unrelated 0019 gap: migrations commit before
   that check runs. Verify once.
@@ -540,12 +540,12 @@ complete` in 1.1 s). The dashboard and `plan` checks below passed; the build
                     'maf_workout_analysis_compliance_pct_range_check'); -- expect 2 rows
   ```
 
-## [ ] 0122 — one copy of each shared food serving, and six lookup/FK indexes
+## [x] 0122 — one copy of each shared food serving, and six lookup/FK indexes
 
 - **Migration:** `migrations/0122_food_servings_unique_and_fk_indexes.sql`
 - **Shipped:** 2026-10-06 (PF11, PF16, PF17 and PF18,
   `docs/CODEBASE_ANALYSIS_2026-10-03.md`)
-- **Run on production:** _not yet — date / operator:_
+- **Run on production:** verified 2026-10-09, by the owner, with the combined verification query (every check returned its expected value).
 - **Status:** ran at boot on 2026-10-06, like 0121. Verify once.
 - **What it does:** deletes every shared serving (`created_by_user_id IS NULL`)
   that repeats another's `(food_id, label, grams)`, keeping the lowest id. The
