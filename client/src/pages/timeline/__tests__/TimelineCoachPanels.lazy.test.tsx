@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { TimelineCoachPanels } from "../TimelineCoachPanels";
 
 // The coach module arrives only when the test opens this gate, so the loading
-// state can be seen. The tests share one module load and run in order.
+// state can be seen. The tests share one module load and run in order, so the
+// suite opts out of shuffling: the closed-panel test must run before any test
+// that opens the panel and loads the module.
 const gate = vi.hoisted(() => {
   const handlers: { release?: () => void } = {};
   const released = new Promise<void>((resolve) => {
@@ -47,7 +49,7 @@ function renderPanels(coachOpen: boolean) {
 
 // PF8 (CODEBASE_ANALYSIS_2026-10-03): the Timeline chunk loaded CoachPanel,
 // and the markdown stack with it, although the panel starts closed.
-describe("TimelineCoachPanels lazy coach panel (PF8)", () => {
+describe("TimelineCoachPanels lazy coach panel (PF8)", { shuffle: false }, () => {
   it("loads no coach code while the panel is closed", () => {
     renderPanels(false);
 

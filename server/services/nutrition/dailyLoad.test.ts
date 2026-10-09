@@ -31,6 +31,10 @@ const DATE = "2026-06-22";
 describe("fetchTrainingLoadWindow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps implementations, so undo the logs and sets the
+    // fetchTrainingLoadWindows suite below installs (it may run first).
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
     vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" } as never);
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
     vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);

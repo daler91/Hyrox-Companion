@@ -84,8 +84,14 @@ describe("POST /api/plans/import Rate Limiting", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
 
+    clearRateLimitBuckets();
     app = createTestApp(plansRouter);
+  });
 
+  // Without this the 2025-01-01 clock leaks into later suites, where it turns
+  // the "past" race date 2025-11-15 into a future one.
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("should rate limit requests to /api/plans/import after 5 requests", async () => {
