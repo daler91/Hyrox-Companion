@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: timescale/timescaledb-ha:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_DB: postgres
