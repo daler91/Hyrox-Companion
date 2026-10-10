@@ -10,6 +10,8 @@ import { lazyWithReload } from "@/lib/lazyWithReload";
 // until their respective tabs are activated. This reduces the initial JS bundle
 // footprint, speeding up the time-to-interactive for the primary 'Account' tab.
 // Impact: Reduced initial load by separating ~14 lazy-loaded chunks for hidden tabs.
+// Only the hidden tabs: the Account tab has no Suspense of its own, so a lazy
+// section there would suspend the whole page to the route-level spinner.
 const CoachingSection = lazyWithReload(() => import("@/components/settings/CoachingSection").then((m) => ({ default: m.CoachingSection })));
 const RecycleBinCard = lazyWithReload(() => import("@/components/settings/data-tools/RecycleBinCard").then((m) => ({ default: m.RecycleBinCard })));
 const DataToolsSection = lazyWithReload(() => import("@/components/settings/DataToolsSection").then((m) => ({ default: m.DataToolsSection })));
@@ -21,13 +23,13 @@ const EmailNotificationsCard = lazyWithReload(() => import("@/components/setting
 const HealthMetricsCard = lazyWithReload(() => import("@/components/settings/preferences/HealthMetricsCard").then((m) => ({ default: m.HealthMetricsCard })));
 const NutritionPreferencesCard = lazyWithReload(() => import("@/components/settings/preferences/NutritionPreferencesCard").then((m) => ({ default: m.NutritionPreferencesCard })));
 const TrainingGoalsCard = lazyWithReload(() => import("@/components/settings/preferences/TrainingGoalsCard").then((m) => ({ default: m.TrainingGoalsCard })));
-const UnitsPreferencesCard = lazyWithReload(() => import("@/components/settings/preferences/UnitsPreferencesCard").then((m) => ({ default: m.UnitsPreferencesCard })));
 const WorkoutReviewCard = lazyWithReload(() => import("@/components/settings/preferences/WorkoutReviewCard").then((m) => ({ default: m.WorkoutReviewCard })));
 const PushNotificationSection = lazyWithReload(() => import("@/components/settings/PushNotificationSection").then((m) => ({ default: m.PushNotificationSection })));
 const StravaSection = lazyWithReload(() => import("@/components/settings/StravaSection").then((m) => ({ default: m.StravaSection })));
 const TrainingStyleSection = lazyWithReload(() => import("@/components/settings/TrainingStyleSection").then((m) => ({ default: m.TrainingStyleSection })));
 
 import { AthleteCardSection } from "@/components/settings/athlete-card/AthleteCardSection";
+import { UnitsPreferencesCard } from "@/components/settings/preferences/UnitsPreferencesCard";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import {
   AlertDialog,
