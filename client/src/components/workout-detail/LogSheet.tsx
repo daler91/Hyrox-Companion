@@ -363,7 +363,7 @@ function LogCompletionControls({
           {isSaving || isLogging ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
           ) : (
-            <Check className="mr-2 h-4 w-4" />
+            <Check className="mr-2 h-4 w-4" aria-hidden />
           )}
           {getLogButtonLabel(isSaving, isLogging)}
         </Button>
@@ -438,7 +438,7 @@ function EditSecondaryActions({ entry, onDone, onAskCoach, onSkip }: EditSeconda
           onClick={onDone}
           data-testid={`edit-done-${entry.id}`}
         >
-          <Check className="mr-2 h-4 w-4" />
+          <Check className="mr-2 h-4 w-4" aria-hidden />
           Done
         </Button>
         {onAskCoach || onSkip ? (

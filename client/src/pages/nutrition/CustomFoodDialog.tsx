@@ -269,7 +269,7 @@ function CustomFoodForm({
                 onClick={addServingRow}
                 data-testid="button-add-serving"
               >
-                <Plus className="mr-1 h-3 w-3" /> Add
+                <Plus className="mr-1 h-3 w-3" aria-hidden /> Add
               </Button>
             </div>
             {servings.map((s, i) => (

@@ -91,7 +91,7 @@ export function GeneratePlanDetailsStep({
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>
-          <ChevronLeft className="mr-1 h-4 w-4" /> Back
+          <ChevronLeft className="mr-1 h-4 w-4" aria-hidden /> Back
         </Button>
         <Button onClick={onGenerate} disabled={!canGenerate || isGenerating}>
           {isGenerating ? (
@@ -101,7 +101,7 @@ export function GeneratePlanDetailsStep({
             </>
           ) : (
             <>
-              <Sparkles className="mr-2 h-4 w-4" />
+              <Sparkles className="mr-2 h-4 w-4" aria-hidden />
               Generate Plan
             </>
           )}

@@ -44,7 +44,7 @@ export function GeneratePlanGoalStep({
           disabled={!canProceed}
           aria-describedby={!canProceed ? "goal-step-hint" : undefined}
         >
-          Next <ChevronRight className="ml-1 h-4 w-4" />
+          Next <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
         </Button>
       </div>
     </div>

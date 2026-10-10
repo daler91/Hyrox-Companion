@@ -79,7 +79,7 @@ function NutritionMockup() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Breakfast</span>
               <Badge className="text-[10px] px-1.5 py-0 bg-accent/20 text-accent-foreground border-0 ml-auto">
-                <Sparkles className="h-2.5 w-2.5 mr-0.5" /> AI parsed
+                <Sparkles className="h-2.5 w-2.5 mr-0.5" aria-hidden /> AI parsed
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">

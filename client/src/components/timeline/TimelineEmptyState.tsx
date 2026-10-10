@@ -52,13 +52,13 @@ function WelcomeEmptyState({
     <div className="text-center space-y-6">
       <div className="flex justify-center gap-3 mb-2">
         <div className="p-3 rounded-full bg-primary/10">
-          <Target className="h-6 w-6 text-primary" />
+          <Target className="h-6 w-6 text-primary" aria-hidden />
         </div>
         <div className="p-3 rounded-full bg-primary/10">
-          <Dumbbell className="h-6 w-6 text-primary" />
+          <Dumbbell className="h-6 w-6 text-primary" aria-hidden />
         </div>
         <div className="p-3 rounded-full bg-primary/10">
-          <Zap className="h-6 w-6 text-primary" />
+          <Zap className="h-6 w-6 text-primary" aria-hidden />
         </div>
       </div>
 
@@ -80,7 +80,7 @@ function WelcomeEmptyState({
           onClick={() => setShowGenerateDialog(true)}
           data-testid="button-generate-ai-plan"
         >
-          <Wand2 className="h-4 w-4 mr-2" />
+          <Wand2 className="h-4 w-4 mr-2" aria-hidden />
           Generate AI Plan (recommended)
         </Button>
         <Button
@@ -93,7 +93,7 @@ function WelcomeEmptyState({
           {samplePlanMutation.isPending ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
-            <Sparkles className="h-4 w-4 mr-2" />
+            <Sparkles className="h-4 w-4 mr-2" aria-hidden />
           )}
           Use 8-Week Template
         </Button>
@@ -113,7 +113,7 @@ function WelcomeEmptyState({
           {importMutation.isPending ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
-            <FileText className="h-4 w-4 mr-2" />
+            <FileText className="h-4 w-4 mr-2" aria-hidden />
           )}
           Import Your Own
         </Button>
@@ -133,13 +133,13 @@ function WelcomeEmptyState({
         {/* One link styled as a button, not a button nested in a link (U22). */}
         <Button asChild variant="ghost" data-testid="button-log-workout-empty">
           <Link href="/log">
-            <Dumbbell className="h-4 w-4 mr-2" />
+            <Dumbbell className="h-4 w-4 mr-2" aria-hidden />
             Or just log a workout
           </Link>
         </Button>
         {onLogNote ? (
           <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
-            <StickyNote className="h-4 w-4 mr-2" />
+            <StickyNote className="h-4 w-4 mr-2" aria-hidden />
             Log a note
           </Button>
         ) : null}
@@ -167,7 +167,7 @@ function ReadyEmptyState({
 }: Readonly<ReadyEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
-      <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+      <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" aria-hidden />
       <div>
         <h3 className="font-semibold mb-2">Ready to Start Training</h3>
         <p className="text-muted-foreground text-sm max-w-md mx-auto">
@@ -179,12 +179,12 @@ function ReadyEmptyState({
           onClick={() => setSchedulingPlanId(selectedPlanId)}
           data-testid="button-set-start-date"
         >
-          <Calendar className="h-4 w-4 mr-2" />
+          <Calendar className="h-4 w-4 mr-2" aria-hidden />
           Set Start Date
         </Button>
         {onLogNote ? (
           <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
-            <StickyNote className="h-4 w-4 mr-2" />
+            <StickyNote className="h-4 w-4 mr-2" aria-hidden />
             Log a note
           </Button>
         ) : null}
@@ -206,7 +206,7 @@ function NoWorkoutsEmptyState({
 }: Readonly<NoWorkoutsEmptyStateProps>) {
   return (
     <div className="text-center space-y-4">
-      <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+      <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" aria-hidden />
       <div>
         <h3 className="font-semibold mb-2">No {filterStatus} workouts</h3>
         <p className="text-muted-foreground text-sm">
@@ -223,7 +223,7 @@ function NoWorkoutsEmptyState({
         </Button>
         {onLogNote ? (
           <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
-            <StickyNote className="h-4 w-4 mr-2" />
+            <StickyNote className="h-4 w-4 mr-2" aria-hidden />
             Log a note
           </Button>
         ) : null}

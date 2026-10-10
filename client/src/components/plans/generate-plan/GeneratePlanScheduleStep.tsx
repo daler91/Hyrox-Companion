@@ -217,10 +217,10 @@ export function GeneratePlanScheduleStep({
       )}
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>
-          <ChevronLeft className="mr-1 h-4 w-4" /> Back
+          <ChevronLeft className="mr-1 h-4 w-4" aria-hidden /> Back
         </Button>
         <Button onClick={onNext} disabled={!canProceed} aria-describedby={nextBlockedHintId}>
-          Next <ChevronRight className="ml-1 h-4 w-4" />
+          Next <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
         </Button>
       </div>
     </div>
