@@ -87,6 +87,7 @@ export function renderSettings(qc: QueryClient, sibling?: ReactNode) {
 }
 
 export async function chooseSelectOption(label: string, option: string) {
+  await screen.findByLabelText(label);
   fireEvent.click(screen.getByLabelText(label));
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
