@@ -331,7 +331,7 @@ export function createTestApp(router: express.Router) {
 
 ### Full integration tests (`server/routes/tests/`)
 
-Integration tests run against a **real PostgreSQL database** (pgvector/pgvector:pg16 in CI) with the full Express route tree registered.
+Integration tests run against a **real PostgreSQL database** (PostgreSQL 16 with pgvector, installed on the runner in CI) with the full Express route tree registered.
 
 **Helper setup** (`server/routes/tests/helpers.ts`):
 
@@ -563,7 +563,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Cypress Tests
 - **Triggers:** Every push **and** every pull request, so a fork/PR branch gets the same end-to-end gate as a push to a branch in this repository. Secrets are unavailable on fork PRs, so every secret-backed value has an inert fallback the suite can run against.
-- **Services:** PostgreSQL (pgvector/pgvector:pg16) on port 5432
+- **Database:** PostgreSQL 16 with pgvector on port 5432, installed on the runner by the job's first step (`apt-get install postgresql-16-pgvector`, start the service, set the `postgres` password) rather than pulled as a `pgvector/pgvector:pg16` service container, whose unauthenticated Docker Hub pulls were failing runs with `toomanyrequests`
 - **Parallelism:** Decided once by a `plan` job: with a `CYPRESS_RECORD_KEY`, two containers split the specs; without it, a single container runs everything (two unrecorded containers would each run the full suite).
 - **Steps:**
   1. Install dependencies and Cypress binary (cached), then patch the Cypress bundled dependencies
@@ -583,7 +583,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 - **Triggers:** Push to `main`, pull request
 - **Jobs:**
   - `check-migrations` -- runs `pnpm run db:check` for internal consistency, then `pnpm run db:generate` followed by `git diff --exit-code migrations/` to verify migrations are up to date with the schema.
-  - `fresh-db-migrate` -- applies the **real** migration SQL to a fresh PostgreSQL (`pgvector/pgvector:pg16` service), so a migration that fails at apply time on a fresh database is caught: the job above never applies SQL, and `cypress.yml` provisions its database with `drizzle-kit push`. It runs `pnpm run db:migrate` twice (the second run must be an idempotent no-op), checks that the applied count in `__drizzle_migrations` equals the entries in `migrations/meta/_journal.json`, and probes the critical tables (`users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`, `user_training_style`, `maf_profile`, `maf_test_results`, `maf_workout_analysis`).
+  - `fresh-db-migrate` -- applies the **real** migration SQL to a fresh PostgreSQL (16 with pgvector, installed on the runner the same way as in `cypress.yml`), so a migration that fails at apply time on a fresh database is caught: the job above never applies SQL, and `cypress.yml` provisions its database with `drizzle-kit push`. It runs `pnpm run db:migrate` twice (the second run must be an idempotent no-op), checks that the applied count in `__drizzle_migrations` equals the entries in `migrations/meta/_journal.json`, and probes the critical tables (`users`, `workout_logs`, `plan_days`, `foods`, `analytics_results`, `user_training_style`, `maf_profile`, `maf_test_results`, `maf_workout_analysis`).
 
 ### 4. Post-Migration Verification (`post-migration.yml`)
 
