@@ -1440,7 +1440,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **121 migrations**, `0000` through `0120`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **123 migrations**, `0000` through `0122`:
 
 ```
 migrations/
