@@ -1,0 +1,3 @@
+## 2026-10-12 - Decorative icon aria-hidden consistency
+**Learning:** The codebase has excellent a11y coverage overall, but decorative Lucide icons next to button text sometimes miss `aria-hidden="true"` while their loading-state counterparts (Loader2 spinners) consistently have it. This causes screen readers to announce the SVG icon name alongside the visible label text, creating redundant announcements.
+**Action:** When adding a Lucide icon next to text in a button or menu item, always include `aria-hidden="true"`. Check that both the normal and loading states of the same slot are consistent.

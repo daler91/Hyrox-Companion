@@ -154,11 +154,11 @@ export function PlanToolsMenu({
         ) : null}
         <DropdownMenuLabel className="text-xs">Plan setup</DropdownMenuLabel>
         <DropdownMenuItem onClick={onGenerateClick} data-testid="button-generate-ai-plan">
-          <Sparkles className="h-4 w-4 mr-2" />
+          <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
           AI plan
         </DropdownMenuItem>
         <DropdownMenuItem onClick={downloadTemplate} data-testid="button-download-template">
-          <Download className="h-4 w-4 mr-2" />
+          <Download className="h-4 w-4 mr-2" aria-hidden="true" />
           Download template
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -172,7 +172,7 @@ export function PlanToolsMenu({
           {isImporting ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
-            <Upload className="h-4 w-4 mr-2" />
+            <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
           )}
           Import plan
         </DropdownMenuItem>

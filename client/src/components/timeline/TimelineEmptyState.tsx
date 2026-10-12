@@ -93,7 +93,7 @@ function WelcomeEmptyState({
           {samplePlanMutation.isPending ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
-            <Sparkles className="h-4 w-4 mr-2" />
+            <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
           )}
           Use 8-Week Template
         </Button>
@@ -113,7 +113,7 @@ function WelcomeEmptyState({
           {importMutation.isPending ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
-            <FileText className="h-4 w-4 mr-2" />
+            <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
           )}
           Import Your Own
         </Button>

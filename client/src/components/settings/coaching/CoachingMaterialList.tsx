@@ -43,7 +43,7 @@ export function CoachingMaterialList({
                 className="flex items-center justify-between p-3 rounded-lg border bg-card"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{material.title}</p>
                     <p className="text-xs text-muted-foreground">
@@ -86,11 +86,11 @@ export function CoachingMaterialList({
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={openPrinciplesDialog}>
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
           Add Principles
         </Button>
         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-          <Upload className="h-4 w-4 mr-1" />
+          <Upload className="h-4 w-4 mr-1" aria-hidden="true" />
           Upload Document
         </Button>
         <input
