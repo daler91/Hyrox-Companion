@@ -5,6 +5,12 @@ import { lazy, memo, Suspense } from "react";
 import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { RagInfo } from "@/hooks/useChatSession";
 import type { MessageAttachment, MessageFailure } from "@/lib/chatMessage";
 import { cn } from "@/lib/utils";
@@ -150,26 +156,34 @@ interface ReplyFeedbackProps {
 function ReplyFeedback({ messageId, feedback, onFeedback }: ReplyFeedbackProps) {
   return (
     <div className="flex items-center" data-testid="message-feedback">
-      {FEEDBACK_OPTIONS.map(({ value, label, Icon }) => {
-        const selected = feedback === value;
-        return (
-          <Button
-            key={value}
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn("h-11 w-11 text-muted-foreground md:h-7 md:w-7", selected && "text-foreground")}
-            aria-label={label}
-            aria-pressed={selected}
-            onClick={() => {
-              onFeedback(messageId, selected ? null : value);
-            }}
-            data-testid={`button-feedback-${value}`}
-          >
-            <Icon className={cn("h-3.5 w-3.5", selected && "fill-current")} aria-hidden="true" />
-          </Button>
-        );
-      })}
+      <TooltipProvider>
+        {FEEDBACK_OPTIONS.map(({ value, label, Icon }) => {
+          const selected = feedback === value;
+          return (
+            <Tooltip key={value}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-11 w-11 text-muted-foreground md:h-7 md:w-7", selected && "text-foreground")}
+                  aria-label={label}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    onFeedback(messageId, selected ? null : value);
+                  }}
+                  data-testid={`button-feedback-${value}`}
+                >
+                  <Icon className={cn("h-3.5 w-3.5", selected && "fill-current")} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{label}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </TooltipProvider>
     </div>
   );
 }
