@@ -96,6 +96,9 @@ async function parseDateParams(
 
 function secretsMatch(provided: string | undefined, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
+  // 🛡️ Sentinel: Hash both sides to prevent timing attacks.
+  // timingSafeEqual requires equal length buffers. By hashing both, we guarantee
+  // they are the same length (32 bytes for sha256) before comparison.
   const providedHash = crypto.createHash("sha256").update(provided).digest();
   const expectedHash = crypto.createHash("sha256").update(expected).digest();
   return crypto.timingSafeEqual(providedHash, expectedHash);
