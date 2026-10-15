@@ -139,8 +139,18 @@ export async function gradeWorkoutLogs(
   // Runs that need the pace history share its one lazily started load.
   const grades = await Promise.all(context.runs.map((run) => gradeOne(run, context)));
 
-  markRollupLogs(grades, new Map(context.runs.map((run) => [run.log.id, run.log.duration ?? 0])));
-  return new Map(grades.map((grade) => [grade.workoutLogId, grade]));
+  // ⚡ Bolt Optimization: Replace chained array maps with a single loop to avoid intermediate allocations.
+  const rollupsMap = new Map<string, number>();
+  const gradesMap = new Map<string, SessionGrade>();
+  for (let i = 0; i < grades.length; i++) {
+    const run = context.runs[i];
+    const grade = grades[i];
+    rollupsMap.set(run.log.id, run.log.duration ?? 0);
+    gradesMap.set(grade.workoutLogId, grade);
+  }
+
+  markRollupLogs(grades, rollupsMap);
+  return gradesMap;
 }
 
 const EMPTY_RESPONSE: SessionGradesResponse = {
