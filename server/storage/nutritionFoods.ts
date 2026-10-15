@@ -18,18 +18,7 @@ import {
   type ServingInput,
   type UpdateCustomFoodInput,
 } from "@shared/schema";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  ne,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { env } from "../env";
@@ -38,7 +27,15 @@ import { computeRecipeFood } from "../services/nutrition/recipe";
 import { expandQuery } from "../services/nutrition/relevance";
 import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
-import { buildVariantMatch, DEFAULT_SEARCH_LIMIT, escapeLike, getLastPortions, type LocalFood, visibleTo, withPortionMemory } from "./nutritionShared";
+import {
+  buildVariantMatch,
+  DEFAULT_SEARCH_LIMIT,
+  escapeLike,
+  getLastPortions,
+  type LocalFood,
+  visibleTo,
+  withPortionMemory,
+} from "./nutritionShared";
 
 // --- foods (shared cache + per-user custom) -------------------------------
 
@@ -102,9 +99,11 @@ export async function searchLocalFoods(
     .limit(limit);
 }
 
-
 /** Cache USDA/OFF results into `foods`, upserting on (source, source_id). */
-export async function upsertFoods(mapped: MappedFood[], executor: DbExecutor = db): Promise<Food[]> {
+export async function upsertFoods(
+  mapped: MappedFood[],
+  executor: DbExecutor = db,
+): Promise<Food[]> {
   if (mapped.length === 0) return [];
   // Sanity-clamp every external food at this single cache boundary so a NaN /
   // negative / absurd upstream value can never poison a cached row (and thus
@@ -170,7 +169,6 @@ export async function upsertFoods(mapped: MappedFood[], executor: DbExecutor = d
     .returning();
 }
 
-
 /** Resolve a food by id, but only if it's visible to the user (shared or owned). */
 export async function getVisibleFoodById(userId: string, id: string): Promise<Food | undefined> {
   const [row] = await db
@@ -180,9 +178,11 @@ export async function getVisibleFoodById(userId: string, id: string): Promise<Fo
   return row;
 }
 
-
 /** Resolve a cached external food by (source, source_id) — e.g. an OFF barcode. */
-export async function getFoodBySourceId(source: string, sourceId: string): Promise<Food | undefined> {
+export async function getFoodBySourceId(
+  source: string,
+  sourceId: string,
+): Promise<Food | undefined> {
   const [row] = await db
     .select()
     .from(foods)
@@ -190,18 +190,21 @@ export async function getFoodBySourceId(source: string, sourceId: string): Promi
   return row;
 }
 
-
 /** Map of visible foods by id, for resolving recipe ingredients in one query. */
-export async function getVisibleFoodsByIds(userId: string, ids: string[]): Promise<Map<string, Food>> {
+export async function getVisibleFoodsByIds(
+  userId: string,
+  ids: string[],
+): Promise<Map<string, Food>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   const rows = await db
     .select()
     .from(foods)
     .where(and(inArray(foods.id, unique), visibleTo(userId)));
-  return new Map(rows.map((f) => [f.id, f]));
+  const map = new Map<string, Food>();
+  for (const f of rows) map.set(f.id, f);
+  return map;
 }
-
 
 /** Distinct foods from the user's log entries, staples first (FR-1.4).
  *
@@ -229,14 +232,17 @@ export async function getRecentFoods(userId: string, limit = 20): Promise<FoodWi
   if (recent.length === 0) return [];
   const ids = recent.map((r) => r.foodId);
   const [rows, portions] = await Promise.all([
-    db.select().from(foods).where(and(inArray(foods.id, ids), visibleTo(userId))),
+    db
+      .select()
+      .from(foods)
+      .where(and(inArray(foods.id, ids), visibleTo(userId))),
     getLastPortions(userId, ids),
   ]);
-  const byId = new Map(rows.map((f) => [f.id, f]));
+  const byId = new Map<string, Food>();
+  for (const f of rows) byId.set(f.id, f);
   const ordered = ids.map((id) => byId.get(id)).filter((f): f is Food => Boolean(f));
   return withPortionMemory(ordered, portions);
 }
-
 
 // --- custom foods (FR-2.2) ------------------------------------------------
 
@@ -269,7 +275,6 @@ export async function createCustomFood(userId: string, data: CreateCustomFoodInp
     return food;
   });
 }
-
 
 /**
  * The per-100g columns a logged entry's nutrition is computed from, each as
@@ -379,13 +384,19 @@ export async function updateCustomFood(
   patch: UpdateCustomFoodInput,
 ): Promise<Food | undefined> {
   return await db.transaction(async (tx) => {
-    const ownCustomFood = and(eq(foods.id, id), eq(foods.createdByUserId, userId), eq(foods.source, "custom"));
+    const ownCustomFood = and(
+      eq(foods.id, id),
+      eq(foods.createdByUserId, userId),
+      eq(foods.source, "custom"),
+    );
     // A recipe's backing food is also source='custom', but it is edited only
     // through its recipe, which recomputes it (listCustomFoods hides it too).
     // Matching it here let this PATCH share it, and the recipe edit then
     // rewrote it in place around the freeze below (D18).
     const notARecipe = sql`NOT EXISTS (SELECT 1 FROM ${recipes} WHERE ${recipes.foodId} = ${foods.id})`;
-    const current = (await tx.select().from(foods).where(and(ownCustomFood, notARecipe)).for("update")).at(0);
+    const current = (
+      await tx.select().from(foods).where(and(ownCustomFood, notARecipe)).for("update")
+    ).at(0);
     if (!current) return undefined;
 
     await assertLoggedHistoryKept(tx, current, patch, userId);
@@ -589,7 +600,6 @@ async function refreshInOrder(
   await refreshInOrder(tx, userId, order, index + 1);
 }
 
-
 export const RECIPE_FOOD_DELETE_CONFLICT = "This food is a recipe. Delete the recipe instead.";
 
 /**
@@ -607,7 +617,10 @@ export async function deleteCustomFood(userId: string, id: string): Promise<bool
     .where(and(eq(foods.id, id), eq(foods.createdByUserId, userId), eq(foods.source, "custom")));
   if (!food) return false;
 
-  const backedRecipes = await db.select({ id: recipes.id }).from(recipes).where(eq(recipes.foodId, id));
+  const backedRecipes = await db
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(eq(recipes.foodId, id));
   if (backedRecipes.length > 0) {
     throw new AppError(ErrorCode.CONFLICT, RECIPE_FOOD_DELETE_CONFLICT, 409);
   }
@@ -632,7 +645,6 @@ export async function deleteCustomFood(userId: string, id: string): Promise<bool
   return true;
 }
 
-
 /**
  * Ids of the user's PRIVATE custom foods — including recipe-backing foods —
  * i.e. the set that must be erased with the account (public shares survive by
@@ -650,7 +662,6 @@ export async function listPrivateCustomFoodIds(userId: string): Promise<string[]
   return rows.map((r) => r.id);
 }
 
-
 /** A user's custom foods, EXCLUDING recipe-backing foods (those surface via /recipes). */
 export async function listCustomFoods(userId: string): Promise<Food[]> {
   const rows = await db
@@ -661,7 +672,6 @@ export async function listCustomFoods(userId: string): Promise<Food[]> {
     .orderBy(asc(foods.name));
   return rows.map((r) => r.food);
 }
-
 
 // --- named servings (FR-2.4) ----------------------------------------------
 
@@ -679,7 +689,6 @@ export async function getServings(foodId: string, userId: string): Promise<FoodS
     )
     .orderBy(asc(foodServings.grams));
 }
-
 
 /**
  * Cache enrichment servings (e.g. USDA portions) for a food, as shared rows.
@@ -705,7 +714,6 @@ export async function cacheServings(
     .where(and(eq(foodServings.foodId, foodId), isNull(foodServings.createdByUserId)))
     .orderBy(asc(foodServings.grams));
 }
-
 
 /**
  * Add a PERSONAL named portion to any food visible to the user (a USDA/OFF food
@@ -737,7 +745,6 @@ export async function createServing(
     .returning();
   return row;
 }
-
 
 /** Delete a serving the user owns — either a personal portion they created or a
  *  serving on a food they own. A shared USDA portion (both owners NULL) never

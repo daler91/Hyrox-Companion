@@ -24,7 +24,9 @@ export class WeeklyReviewsStorage {
       .from(weeklyReviews)
       .where(and(eq(weeklyReviews.userId, userId), inArray(weeklyReviews.weekStart, weekStarts)));
 
-    return new Map(rows.map((row) => [row.weekStart, row.intent]));
+    const map = new Map<string, string>();
+    for (const row of rows) map.set(row.weekStart, row.intent);
+    return map;
   }
 
   /**
@@ -38,7 +40,11 @@ export class WeeklyReviewsStorage {
    * "I wrote nothing this week" and "I cleared what I wrote" are the same
    * thing to the athlete, and keeping the row keeps `updatedAt` meaningful.
    */
-  async setIntent(userId: string, weekStart: string, intent: string | null): Promise<WeeklyReviewRow> {
+  async setIntent(
+    userId: string,
+    weekStart: string,
+    intent: string | null,
+  ): Promise<WeeklyReviewRow> {
     const [row] = await db
       .insert(weeklyReviews)
       .values({ userId, weekStart, intent })

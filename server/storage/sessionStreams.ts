@@ -59,7 +59,10 @@ export interface SessionStreamResult {
  * Strava read budget and the backfill scan.
  */
 export class SessionStreamStorage {
-  async getForLogs(userId: string, workoutLogIds: readonly string[]): Promise<Map<string, WorkoutLogStream>> {
+  async getForLogs(
+    userId: string,
+    workoutLogIds: readonly string[],
+  ): Promise<Map<string, WorkoutLogStream>> {
     if (workoutLogIds.length === 0) return new Map();
     const rows = await db
       .select()
@@ -70,7 +73,9 @@ export class SessionStreamStorage {
           inArray(workoutLogStreams.workoutLogId, [...workoutLogIds]),
         ),
       );
-    return new Map(rows.map((row) => [row.workoutLogId, row]));
+    const map = new Map<string, WorkoutLogStream>();
+    for (const row of rows) map.set(row.workoutLogId, row);
+    return map;
   }
 
   /**
@@ -105,12 +110,17 @@ export class SessionStreamStorage {
     const [row] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(workoutLogStreams)
-      .where(and(gt(workoutLogStreams.lastAttemptAt, since), ne(workoutLogStreams.status, "skipped")));
+      .where(
+        and(gt(workoutLogStreams.lastAttemptAt, since), ne(workoutLogStreams.status, "skipped")),
+      );
     return row?.count ?? 0;
   }
 
   /** Newest first, so the runs the athlete is most likely to open are fetched first. */
-  async listPendingForUser(userId: string, window: PendingStreamWindow): Promise<PendingStreamCandidate[]> {
+  async listPendingForUser(
+    userId: string,
+    window: PendingStreamWindow,
+  ): Promise<PendingStreamCandidate[]> {
     const rows = await db
       .select({
         workoutLogId: workoutLogs.id,
@@ -161,7 +171,10 @@ export class SessionStreamStorage {
       .innerJoin(planDays, eq(planDays.id, workoutLogs.planDayId))
       .innerJoin(
         stravaConnections,
-        and(eq(stravaConnections.userId, workoutLogs.userId), eq(stravaConnections.requiresReauth, false)),
+        and(
+          eq(stravaConnections.userId, workoutLogs.userId),
+          eq(stravaConnections.requiresReauth, false),
+        ),
       )
       .leftJoin(workoutLogStreams, eq(workoutLogStreams.workoutLogId, workoutLogs.id))
       .where(pendingStreamPredicate(window))
@@ -177,10 +190,16 @@ export class SessionStreamStorage {
   }
 
   /** Unlink: the recording is no longer this log's, so neither is its stream. */
-  async deleteForLog(workoutLogId: string, userId: string, executor: DbExecutor = db): Promise<void> {
+  async deleteForLog(
+    workoutLogId: string,
+    userId: string,
+    executor: DbExecutor = db,
+  ): Promise<void> {
     await executor
       .delete(workoutLogStreams)
-      .where(and(eq(workoutLogStreams.workoutLogId, workoutLogId), eq(workoutLogStreams.userId, userId)));
+      .where(
+        and(eq(workoutLogStreams.workoutLogId, workoutLogId), eq(workoutLogStreams.userId, userId)),
+      );
   }
 
   /**
