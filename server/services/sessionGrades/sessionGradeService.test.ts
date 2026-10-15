@@ -184,6 +184,23 @@ describe("gradeWorkoutLogs", () => {
     expect(grades.get("summary-only")?.countsInRollup).toBe(false);
   });
 
+  it("breaks a tie between equally well-recorded logs on a plan day by the longer duration", async () => {
+    const { storage } = makeStorage();
+    const grades = await gradeWorkoutLogs(
+      storage,
+      USER,
+      [
+        stravaRun({ id: "short", stravaActivityId: "1", duration: 20 }),
+        stravaRun({ id: "long", stravaActivityId: "2", duration: 45 }),
+        stravaRun({ id: "medium", stravaActivityId: "3", duration: 30 }),
+      ],
+      { now: NOW },
+    );
+    expect(grades.get("long")?.countsInRollup).toBe(true);
+    expect(grades.get("short")?.countsInRollup).toBe(false);
+    expect(grades.get("medium")?.countsInRollup).toBe(false);
+  });
+
   it("only reads run history when the plan gives no pace", async () => {
     const withPace = makeStorage();
     await gradeWorkoutLogs(withPace.storage, USER, [stravaRun()], { now: NOW });
