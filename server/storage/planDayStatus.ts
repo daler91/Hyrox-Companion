@@ -152,7 +152,7 @@ async function syncManyInTransaction(
       ),
     )
     .groupBy(workoutLogs.planDayId);
-  const countByPlanDayId = new Map<string, number>();
+  const countByPlanDayId = new Map<string | null, number>();
   for (const row of counts) countByPlanDayId.set(row.planDayId, row.count);
 
   const toComplete: string[] = [];

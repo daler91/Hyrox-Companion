@@ -24,7 +24,7 @@ export class WeeklyReviewsStorage {
       .from(weeklyReviews)
       .where(and(eq(weeklyReviews.userId, userId), inArray(weeklyReviews.weekStart, weekStarts)));
 
-    const map = new Map<string, string>();
+    const map = new Map<string, string | null>();
     for (const row of rows) map.set(row.weekStart, row.intent);
     return map;
   }
