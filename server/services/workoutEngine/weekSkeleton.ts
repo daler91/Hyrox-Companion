@@ -22,7 +22,7 @@
  *    and the least-penalised one wins. At most 7! arrangements, so it is
  *    searched exhaustively rather than by heuristic.
  */
-import { PLAN_WEEKDAYS } from "@shared/dateUtils";
+import {  PLAN_WEEKDAYS } from "@shared/dateUtils";
 import type { TrainingPhase } from "@shared/nutritionTargets";
 import type { PlanDayPriority } from "@shared/schema";
 import type { ExerciseName } from "@shared/schema/exercises";
@@ -281,7 +281,10 @@ function splitLifts(
   primaries: readonly PrimaryInput[],
 ): { label: string; lifts: SkeletonLift[] }[] {
   const splits = SPLITS[Math.min(4, Math.max(1, count))] ?? [];
-  const bySlot = new Map(primaries.map((lift) => [lift.slot, lift]));
+  const bySlot = new Map<number, PrimaryInput>();
+  for (const lift of primaries) {
+    bySlot.set(lift.slot, lift);
+  }
   const sessions = splits.map((split) => ({
     label: split.label,
     lifts: split.slots.flatMap(([slot, exposure]): SkeletonLift[] => {
@@ -464,7 +467,10 @@ export function buildWeekSkeleton(input: WeekSkeletonInput): WeekSkeleton {
   let bestScore = Number.POSITIVE_INFINITY;
   for (const days of combinations(available, count)) {
     for (const order of orderings(sessions)) {
-      const byDay = new Map(days.map((day, index) => [day, order.at(index) ?? null]));
+      const byDay = new Map<number, string | null>();
+      for (let index = 0; index < days.length; index++) {
+        byDay.set(days[index], order.at(index) ?? null);
+      }
       const week = Array.from({ length: 7 }, (_, day) => byDay.get(day) ?? null);
       const score = scoreWeek(week, weekendAvailable);
       if (score < bestScore) {

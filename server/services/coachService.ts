@@ -623,7 +623,10 @@ async function applyAutoCoachChanges({
       }
       return result;
     });
-    const workoutById = new Map(upcomingWorkouts.map((workout) => [workout.id, workout]));
+    const workoutById = new Map<string, UpcomingWorkout>();
+    for (const workout of upcomingWorkouts) {
+      workoutById.set(workout.id, workout);
+    }
     const noteResults = await Promise.all(
       reviewNotes.filter((note) => isCurrent(note.workoutId)).map((note) =>
         applyReviewNote(
@@ -842,7 +845,10 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       failures,
     );
     const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
-    const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
+    const workoutMap = new Map<string, UpcomingWorkout>();
+    for (const w of upcomingWorkouts) {
+      workoutMap.set(w.id, w);
+    }
     const coachSignals = buildSignalsFromTrainingContext(trainingContext);
     // The model never rewrites a day a rule-based stage already changed: the
     // governor's fatigue edits and the engine's log-driven loads come from the

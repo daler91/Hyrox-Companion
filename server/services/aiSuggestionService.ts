@@ -386,7 +386,10 @@ export async function generateTimelineAiSuggestions(
   );
 
   const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
-  const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
+  const workoutMap = new Map<string, UpcomingWorkout>();
+  for (const w of upcomingWorkouts) {
+    workoutMap.set(w.id, w);
+  }
   const coachSignals = buildSignalsFromTrainingContext(aiContext.trainingContext);
   const prescribedSuggestions = resolvedStyle.strategy.prescribeNext({
     suggestions: safetyAdjustedSuggestions,

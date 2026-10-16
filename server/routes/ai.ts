@@ -907,7 +907,10 @@ async function withProposals(userId: string, messages: ChatMessage[]) {
   const ids = messages.flatMap((message) => (message.proposalId ? [message.proposalId] : []));
   if (ids.length === 0) return messages;
   const proposals = await storage.planProposals.getByIds(ids, userId);
-  const views = new Map(proposals.map((proposal) => [proposal.id, serializePlanProposal(proposal)]));
+  const views = new Map<string, ReturnType<typeof serializePlanProposal>>();
+  for (const proposal of proposals) {
+    views.set(proposal.id, serializePlanProposal(proposal));
+  }
   return messages.map((message) => {
     const proposal = message.proposalId ? views.get(message.proposalId) : undefined;
     return proposal ? { ...message, proposal } : message;

@@ -112,7 +112,11 @@ function stepMovesForDraft(draft: DraftBlock, next: StructureBlockInput): StepLi
   const source = draft.source;
   if (!draft.edited || !source?.id) return [];
   const blockId = source.id;
-  const positions = new Map(draft.config.steps.map((step, idx) => [step.id, idx + 1]));
+  const positions = new Map<string, number>();
+  for (let idx = 0; idx < draft.config.steps.length; idx++) {
+    const step = draft.config.steps[idx];
+    positions.set(step.id, idx + 1);
+  }
   const fromPatternLength = emomPatternLength(source);
   const toPatternLength = emomPatternLength(next);
   const moves: StepLinkMove[] = [];

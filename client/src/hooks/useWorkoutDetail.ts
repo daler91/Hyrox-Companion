@@ -66,7 +66,10 @@ export function restoreSetRows(
   current: readonly ExerciseSet[],
   snapshot: readonly ExerciseSet[],
 ): ExerciseSet[] {
-  const currentById = new Map(current.map((row) => [row.id, row]));
+  const currentById = new Map<string, ExerciseSet>();
+  for (const row of current) {
+    currentById.set(row.id, row);
+  }
   const restored = snapshot.map((before) => {
     const now = currentById.get(before.id);
     return now && now.version > before.version ? now : before;

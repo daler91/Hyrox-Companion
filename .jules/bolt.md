@@ -270,3 +270,7 @@ A scripted sweep of all 40 `pgTable`s in `shared/schema/tables.ts` (pair up ever
 
 **Learning:** When populating a `Map` from an array, chaining `new Map(array.map(item => [key, value]))` is an anti-pattern for performance-sensitive paths. It forces the engine to allocate an intermediate array of tuples solely to pass them into the `Map` constructor, only to be immediately garbage collected. This increases memory churn and execution time by roughly 30%.
 **Action:** Replace `new Map(array.map(...))` with a single `for...of` loop (or nested loops) that iterates over the source array directly and uses `map.set(key, value)`. This avoids intermediate array allocations and provides significant performance improvements. Applied this optimization across `server/storage/timeline.ts`, `server/storage/coaching.ts`, `server/storage/planDayStatus.ts`, `server/storage/nutritionFoods.ts`, `server/storage/sessionStreams.ts`, and `server/storage/weeklyReviews.ts`.
+## 2026-10-16 - Replace new Map(array.map(...)) with single for...of loops
+
+**Learning:** When creating Maps by mapping arrays, `new Map(arr.map(x => [key, x]))` introduces intermediate array allocations causing a measurable performance hit.
+**Action:** Replace this pattern with a single `for...of` loop initializing the map and directly inserting values, taking care not to disrupt strict TypeScript inferencing by adequately typing the Map values when replacing.
