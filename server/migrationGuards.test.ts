@@ -137,6 +137,33 @@ describe("assertSchemaColumnsExist (D7)", () => {
     ).rejects.toThrow(/idempotency_keys \(table\)\. Unapplied migrations — skipped by the migrator .*: 0019_add_idempotency_keys/u);
   });
 
+  it("names a pending migration as not yet applied rather than skipped", async () => {
+    const rows = rowsFor(declaredSchemaColumns()).filter((r) => r.table_name !== "idempotency_keys");
+    const pool = { query: vi.fn().mockResolvedValue({ rows }) };
+    const message = ((await assertSchemaColumnsExist(pool, { skipped: [], pending: ["0020_d", "0021_e"] }).catch(
+      (thrown: unknown) => thrown,
+    )) as Error).message;
+    expect(message).toContain("Unapplied migrations — not yet applied: 0020_d, 0021_e");
+    expect(message).not.toContain("skipped by the migrator");
+  });
+
+  it("reports skipped and pending migrations together, separated by a semicolon", async () => {
+    const rows = rowsFor(declaredSchemaColumns()).filter((r) => r.table_name !== "idempotency_keys");
+    const pool = { query: vi.fn().mockResolvedValue({ rows }) };
+    const message = ((await assertSchemaColumnsExist(pool, { skipped: ["0019_c"], pending: ["0020_d"] }).catch(
+      (thrown: unknown) => thrown,
+    )) as Error).message;
+    expect(message).toMatch(/skipped by the migrator .*: 0019_c; not yet applied: 0020_d/u);
+  });
+
+  it("says the schema drifted when the ledger records every journal entry", async () => {
+    const rows = rowsFor(declaredSchemaColumns()).filter((r) => r.table_name !== "idempotency_keys");
+    const pool = { query: vi.fn().mockResolvedValue({ rows }) };
+    await expect(assertSchemaColumnsExist(pool, { skipped: [], pending: [] })).rejects.toThrow(
+      /Every journal entry is recorded in the ledger, so the schema drifted after a migration ran/u,
+    );
+  });
+
   it("throws naming a whole table the database lacks", async () => {
     const rows = rowsFor(declaredSchemaColumns()).filter((r) => r.table_name !== "athlete_facts");
     const pool = { query: vi.fn().mockResolvedValue({ rows }) };

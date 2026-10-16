@@ -99,6 +99,44 @@ describe("dispatchRecomputeAnalytics", () => {
     expect(persistNutritionInsights).not.toHaveBeenCalled();
   });
 
+  it("persists coach insights without a nightly stamp for a training-style refresh (A1)", async () => {
+    const result = { insights: "build base", generatedAt: "2026-07-19T00:00:00Z" };
+    vi.mocked(generateCoachInsightsIfAllowed).mockResolvedValue({ ok: true, result: result as never });
+
+    await dispatchRecomputeAnalytics("coach_insights", USER, undefined, log);
+
+    expect(persistCoachInsights).toHaveBeenCalledWith(USER, result, undefined, {
+      latestDate: "2026-09-01",
+      entryCount: 3,
+    });
+  });
+
+  it("does not persist coach insights when generation is gated, and logs the reason", async () => {
+    vi.mocked(generateCoachInsightsIfAllowed).mockResolvedValue({ ok: false, reason: "budget_exceeded" } as never);
+
+    await dispatchRecomputeAnalytics("coach_insights", USER, DATE, log);
+
+    expect(persistCoachInsights).not.toHaveBeenCalled();
+    expect(log.info).toHaveBeenCalledWith({ reason: "budget_exceeded" }, expect.stringContaining("Coach insights"));
+  });
+
+  it("does not persist the overview analysis when generation is gated, and logs the reason", async () => {
+    vi.mocked(generateOverviewAnalysisIfAllowed).mockResolvedValue({ ok: false, reason: "no_consent" } as never);
+
+    await dispatchRecomputeAnalytics("overview_analysis", USER, DATE, log);
+
+    expect(persistOverviewAnalysis).not.toHaveBeenCalled();
+    expect(log.info).toHaveBeenCalledWith({ reason: "no_consent" }, expect.stringContaining("Overview analysis"));
+  });
+
+  it("logs and does nothing for a feature it does not know", async () => {
+    await dispatchRecomputeAnalytics("mystery" as never, USER, DATE, log);
+
+    expect(log.error).toHaveBeenCalledWith({ feature: "mystery" }, expect.stringContaining("Unknown"));
+    expect(persistCoachInsights).not.toHaveBeenCalled();
+    expect(regenerateAndStoreRacePrediction).not.toHaveBeenCalled();
+  });
+
   it("routes race_prediction to the deterministic regenerate path", async () => {
     await dispatchRecomputeAnalytics("race_prediction", USER, DATE, log);
 
