@@ -281,7 +281,7 @@ function splitLifts(
   primaries: readonly PrimaryInput[],
 ): { label: string; lifts: SkeletonLift[] }[] {
   const splits = SPLITS[Math.min(4, Math.max(1, count))] ?? [];
-  const bySlot = new Map<number, PrimaryInput>();
+  const bySlot = new Map<string, PrimaryInput>();
   for (const lift of primaries) {
     bySlot.set(lift.slot, lift);
   }
@@ -467,7 +467,7 @@ export function buildWeekSkeleton(input: WeekSkeletonInput): WeekSkeleton {
   let bestScore = Number.POSITIVE_INFINITY;
   for (const days of combinations(available, count)) {
     for (const order of orderings(sessions)) {
-      const byDay = new Map<number, string | null>();
+      const byDay = new Map<number, PlannedSession | null>();
       for (let index = 0; index < days.length; index++) {
         byDay.set(days[index], order.at(index) ?? null);
       }

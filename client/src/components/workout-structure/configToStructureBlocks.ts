@@ -262,7 +262,7 @@ export function applyConfigToStructureBlock(
     const id = baseStepIds.at(stepIdx);
     if (id) baseSteps.set(id, step);
   });
-  const baseViewSteps = new Map<string, StructureStep>();
+  const baseViewSteps = new Map<string, WorkoutStep>();
   for (const step of baseView.steps) {
     baseViewSteps.set(step.id, step);
   }
