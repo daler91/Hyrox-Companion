@@ -24,13 +24,32 @@ import {
   type WorkoutStatus,
 } from "@shared/schema";
 import { resolveSessionPriority } from "@shared/sessionPriority";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notExists, notInArray, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 import { db } from "../db";
 import { getLocalDateStrSafe } from "../timezone";
 import { planDaysPastRetirement, planDaysWithinLifetimes } from "./planRetirement";
 import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
-import { sortAndWindowTimelineEntries, type TimelinePageWindow, windowTimelinePage } from "./timelineWindow";
+import {
+  sortAndWindowTimelineEntries,
+  type TimelinePageWindow,
+  windowTimelinePage,
+} from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
@@ -187,7 +206,10 @@ function isUndoableMove(
   const undo = day.recoveryUndo;
   if (!undo || status !== "planned" || scheduledDate < today) return false;
   if (day.recovery !== "folded" && day.recovery !== "shortened") return false;
-  return (retiredOn === null || undo.scheduledDate < retiredOn) && dayDiff(undo.scheduledDate, today) <= RECOVERABLE_WITHIN_DAYS;
+  return (
+    (retiredOn === null || undo.scheduledDate < retiredOn) &&
+    dayDiff(undo.scheduledDate, today) <= RECOVERABLE_WITHIN_DAYS
+  );
 }
 
 function createLinkedWorkoutEntry(
@@ -255,7 +277,8 @@ function createPlannedDayEntry(
     // ill/injured skip from a schedule one. Omitted when never set.
     skipReason: (day.skipReason as TimelineEntry["skipReason"]) ?? undefined,
     ...tier,
-    recoverable: isRecoverableMiss(scheduledDate, today, status, tier, shown, row.retiredOn) || undefined,
+    recoverable:
+      isRecoverableMiss(scheduledDate, today, status, tier, shown, row.retiredOn) || undefined,
     recoveryUndoable: isUndoableMove(day, scheduledDate, today, status, row.retiredOn) || undefined,
     raceDerived: shown.overridden || undefined,
     focus: shown.focus,
@@ -558,7 +581,12 @@ export class TimelineStorage {
     hydrateTimelineStructureBlocks(entries, blocksByWorkoutId, blocksByPlanDayId);
   }
 
-  private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number, before?: string) {
+  private async fetchScheduledDays(
+    userId: string,
+    planId?: string,
+    sqlLimit?: number,
+    before?: string,
+  ) {
     // Two-step relational query. First, resolve the user's plan metadata
     // (cheap — a user has ≪10 plans). Then query planDays filtered by those
     // plan IDs using the relational API. This replaces the prior manual
@@ -572,13 +600,18 @@ export class TimelineStorage {
     // W7: build the plan-name map once and return it so getTimeline can reuse it
     // for standalone-workout plan names instead of issuing a second identical
     // trainingPlans query (the old fetchUserPlanNameMap).
-    const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
-    if (userPlans.length === 0) return { scheduledDays: [], planNameById, retiredDayScope: undefined };
+    const planNameById = new Map<string, string>();
+    for (const p of userPlans) planNameById.set(p.id, p.name);
+    if (userPlans.length === 0)
+      return { scheduledDays: [], planNameById, retiredDayScope: undefined };
 
     const planIds = userPlans.map((p) => p.id);
-    if (planIds.length === 0) return { scheduledDays: [], planNameById, retiredDayScope: undefined };
-    const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
-    const retiredOnById = new Map(userPlans.map((p) => [p.id, p.retiredOn]));
+    if (planIds.length === 0)
+      return { scheduledDays: [], planNameById, retiredDayScope: undefined };
+    const raceDateById = new Map<string, string | null>();
+    for (const p of userPlans) raceDateById.set(p.id, p.raceDate);
+    const retiredOnById = new Map<string, string | null>();
+    for (const p of userPlans) retiredOnById.set(p.id, p.retiredOn);
 
     // Asking for ONE plan shows all of it, retired or not — that is the athlete
     // inspecting their own history, and hiding half of it would be a lie. The
@@ -846,7 +879,11 @@ export class TimelineStorage {
     offset?: number,
   ): Promise<TimelineEntry[]> {
     const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
-    const { entries, suppressedPlanDayIds } = await this.loadMergedEntries(userId, planId, sqlOverFetch);
+    const { entries, suppressedPlanDayIds } = await this.loadMergedEntries(
+      userId,
+      planId,
+      sqlOverFetch,
+    );
     // Window BEFORE hydrating: attachExerciseSets fans out four batch reads keyed
     // by entry ids, so hydrating the full over-fetched merge (offset + 3x limit
     // PER SOURCE — ~3000 entries for the production limit=500 call) did
@@ -937,7 +974,9 @@ export class TimelineStorage {
                   db
                     .select({ one: sql`1` })
                     .from(workoutLogs)
-                    .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.planDayId, planDays.id))),
+                    .where(
+                      and(eq(workoutLogs.userId, userId), eq(workoutLogs.planDayId, planDays.id)),
+                    ),
                 ),
               ),
             )
@@ -963,7 +1002,8 @@ export class TimelineStorage {
       columns: { id: true, raceDate: true, retiredOn: true },
     });
     if (userPlans.length === 0) return [];
-    const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
+    const raceDateById = new Map<string, string | null>();
+    for (const p of userPlans) raceDateById.set(p.id, p.raceDate);
 
     // Never propose sessions from a plan the athlete has retired — this feeds the
     // coach's "next sessions", so a stale suggestion here is the app actively
