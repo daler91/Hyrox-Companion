@@ -262,7 +262,10 @@ export function applyConfigToStructureBlock(
     const id = baseStepIds.at(stepIdx);
     if (id) baseSteps.set(id, step);
   });
-  const baseViewSteps = new Map(baseView.steps.map((step) => [step.id, step]));
+  const baseViewSteps = new Map<string, WorkoutStep>();
+  for (const step of baseView.steps) {
+    baseViewSteps.set(step.id, step);
+  }
   const merged = view.steps.map((step, stepIdx) =>
     mergeStep(baseSteps.get(step.id), baseViewSteps.get(step.id), step, stepIdx, view.blockType),
   );

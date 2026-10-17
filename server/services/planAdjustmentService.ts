@@ -306,7 +306,11 @@ async function batchReadChangePlanDays(
     storage.plans.getPlanDaysByIds(dayIds, userId),
     storage.workouts.getExerciseSetsByPlanDays(dayIds, userId),
   ]);
-  return { dayById: new Map(days.map((d) => [d.id, d])), setsByDay };
+  const dayById = new Map<string, PlanDay>();
+  for (const d of days) {
+    dayById.set(d.id, d);
+  }
+  return { dayById, setsByDay };
 }
 
 /**
@@ -842,7 +846,10 @@ async function commitProposalApply({
   return await db.transaction(async (tx) => {
     const dayIds = changes.map((change) => change.planDayId);
     const { days, setsByDay } = await storage.plans.lockPlanDaysWithSets(dayIds, userId, tx);
-    const dayById = new Map(days.map((day) => [day.id, day]));
+    const dayById = new Map();
+    for (const day of days) {
+      dayById.set(day.id, day);
+    }
     const { liveDays, staleChanges } = revalidateProposalChanges(changes, { dayById, setsByDay }, today);
     if (staleChanges.length > 0) {
       // resolve() only moves a pending proposal. Nothing back means another
@@ -1040,7 +1047,10 @@ export async function undoPlanAdjustmentProposal(
   }
 
   invalidateTrainingContext(userId);
-  const labels = new Map(proposal.payload.changes.map((change) => [change.planDayId, change.dayLabel]));
+  const labels = new Map<string, string>();
+  for (const change of proposal.payload.changes) {
+    labels.set(change.planDayId, change.dayLabel);
+  }
   const keptDays = restores
     .filter((restore) => restore.kept)
     .map((restore) => ({ planDayId: restore.planDayId, dayLabel: labels.get(restore.planDayId) ?? "" }));
