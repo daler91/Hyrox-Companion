@@ -54,7 +54,11 @@ const UNLINKED: LinkFields = {
 };
 
 function movesByStep(moves: readonly StepLinkMove[]): Map<string, StepLinkMove> {
-  return new Map(moves.map((move) => [blockStepValue(move.blockId, move.fromStepNumber), move]));
+  const map = new Map<string, StepLinkMove>();
+  for (const move of moves) {
+    map.set(blockStepValue(move.blockId, move.fromStepNumber), move);
+  }
+  return map;
 }
 
 function moveFor(
@@ -150,7 +154,8 @@ export function relinksForSets(
 /** The rows as the server leaves them once `relinks` land: the optimistic copy of the save. */
 export function applySetRelinks(sets: ExerciseSet[], relinks: readonly SetRelink[]): ExerciseSet[] {
   if (relinks.length === 0) return sets;
-  const byId = new Map(relinks.map((relink) => [relink.setId, relink]));
+  const byId = new Map<string, SetRelink>();
+  for (const relink of relinks) byId.set(relink.setId, relink);
   return sets.map((set) => {
     const relink = byId.get(set.id);
     if (!relink || set.blockId !== relink.fromBlockId || set.stepNumber !== relink.fromStepNumber)
@@ -180,8 +185,10 @@ export function revertSetRelinks(
   before: readonly ExerciseSet[],
 ): ExerciseSet[] {
   if (relinks.length === 0) return sets;
-  const byId = new Map(relinks.map((relink) => [relink.setId, relink]));
-  const beforeById = new Map(before.map((set) => [set.id, set]));
+  const byId = new Map<string, SetRelink>();
+  for (const relink of relinks) byId.set(relink.setId, relink);
+  const beforeById = new Map<string, ExerciseSet>();
+  for (const set of before) beforeById.set(set.id, set);
   return sets.map((set) => {
     const relink = byId.get(set.id);
     const prior = beforeById.get(set.id);
