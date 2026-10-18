@@ -272,7 +272,12 @@ export function projectGoalContribution(
     fat: todayTotals.fat + (serving.fat - old.fat),
     fiber: todayTotals.fiber + (serving.fiber - old.fiber),
   };
-  const currentByKey = new Map(computeTargetProgress(todayTotals, target).map((r) => [r.key, r]));
+  // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for...of loop
+  // to avoid intermediate array allocation and reduce memory churn.
+  const currentByKey = new Map<string, TargetProgressRow>();
+  for (const r of computeTargetProgress(todayTotals, target)) {
+    currentByKey.set(r.key, r);
+  }
   const rows: GoalContributionRow[] = [];
   for (const projected of computeTargetProgress(projectedTotals, target)) {
     const current = currentByKey.get(projected.key);
