@@ -371,8 +371,8 @@ describe("buildRacePredictionFeatures", () => {
       const features = buildRacePredictionFeatures(sets, profile, NOW);
       return {
         load: features.stationFeatures.sled_push.loggedLoadUserUnit,
-        seconds: features.baselineSegments.find((s) => s.exerciseName === "sled_push")!
-          .estimatedSeconds,
+        seconds: features.baselineSegments.find((s) => s.exerciseName === "sled_push")
+          ?.estimatedSeconds,
       };
     };
     const alone = sledSplit([timed]);

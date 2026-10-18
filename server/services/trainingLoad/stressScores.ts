@@ -54,6 +54,9 @@ function rpeFactor(rpe: number | null | undefined): number {
   return round(Math.pow(1.18, Math.max(0, rpe - 6)), 3);
 }
 
+// Per-metre tonnage for a distance set with no reps: a carry, a sled push.
+const DISTANCE_LOAD_PER_METRE = 0.08;
+
 export function calculateStrengthStressScore(
   set: Pick<
     TrainingLoadSet,
@@ -133,9 +136,6 @@ export function calculateStrengthStressScore(
 // work and is not invented here.
 const BODYWEIGHT_REP_LOAD_KG = 20;
 const BODYWEIGHT_REP_REFERENCE_KG = 75;
-
-// Per-metre tonnage for a distance set with no reps: a carry, a sled push.
-const DISTANCE_LOAD_PER_METRE = 0.08;
 
 // How much more a metre costs with a load in hand than without one.
 //
