@@ -82,12 +82,18 @@ const TREND_DAYS = 42;
 const ABSOLUTE_VECTOR_LOAD_THRESHOLD = 45;
 const ELASTIC_SEVEN_DAY_THRESHOLD = 80;
 
+// A weighted distance set (a sled push, a farmers carry, sandbag lunges) has a
+// load and no reps, and the catalogue files every one as `functional`, so none
+// of them reached the strength path and their load counted for nothing.
+// M-NEW-1 (MATHEMATICAL_AUDIT_2026-10-18)
 function isStrengthSet(set: TrainingLoadSet): boolean {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
   const weight = Number(set.weight ?? set.plannedWeight ?? 0);
+  const distance = Number(set.distance ?? set.plannedDistance ?? 0);
   return (
     set.category === "strength" ||
     (reps > 0 && weight > 0) ||
+    (distance > 0 && weight > 0) ||
     (reps > 0 && (set.category === "conditioning" || set.category === "functional"))
   );
 }

@@ -882,4 +882,43 @@ describe("calculateStrengthStressScore distance tonnage (C4)", () => {
     const metres = calculateStrengthStressScore({ ...base, distance: 100, distanceUnit: "m" }, tag, 7);
     expect(bare).toBe(metres);
   });
+
+  // M-NEW-1 (MATHEMATICAL_AUDIT_2026-10-18): the distance branch read the
+  // distance alone, so the load in hand counted for nothing.
+  it("prices a load as the extra mass moved, leaving an unweighted carry where it was", () => {
+    const score = (weight: number | null) =>
+      calculateStrengthStressScore({ ...base, distance: 1000, distanceUnit: "m", weight, weightUnit: "kg" }, tag, 6);
+    const modifier = Math.max(0.4, tag.axialLoadModifier) * Math.max(0.6, tag.eccentricRiskModifier);
+    // 1000 m x 0.08 = 80 kg-equivalent, unchanged without a load.
+    expect(score(null)).toBeCloseTo(0.8 * modifier, 2);
+    // A 75 kg load doubles the mass moved, so it doubles the score.
+    expect(score(75)).toBeCloseTo(2 * score(null), 2);
+    expect(score(150)).toBeGreaterThan(score(75));
+  });
+});
+
+describe("weighted distance sets reach the strength load (M-NEW-1)", () => {
+  const DATE = "2026-05-22";
+  const sledDay = (weight: number | null) =>
+    calculateTrainingLoad(
+      [log({ id: "log-1", date: DATE, duration: 30, rpe: 8 })],
+      [1, 2, 3, 4].map((setNumber) =>
+        set({ exerciseName: "sled_push", category: "functional", setNumber, distance: 50, distanceUnit: "m", weight, weightUnit: "kg" }),
+      ),
+      DEFAULT_EXERCISE_LOAD_TAGS,
+      { currentDate: DATE, weightUnit: "kg" },
+    ).dailyLoads.find((d) => d.date === DATE);
+
+  it("scores a loaded sled push on the strength path, heavier for more load", () => {
+    // `functional` with no reps, so isStrengthSet used to skip every set.
+    expect(sledDay(200)?.strengthStressScore).toBeGreaterThan(0);
+    expect(sledDay(200)?.strengthStressScore).toBeGreaterThan(sledDay(100)?.strengthStressScore ?? 0);
+    // The session's duration still scores as cardio, as before.
+    expect(sledDay(200)?.cardioStressScore).toBe(sledDay(null)?.cardioStressScore);
+  });
+
+  it("leaves an unweighted distance set off the strength path, as before", () => {
+    // A device-synthesised erg or run row has a distance and no load.
+    expect(sledDay(null)?.strengthStressScore).toBe(0);
+  });
 });

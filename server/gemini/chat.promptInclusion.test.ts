@@ -134,7 +134,11 @@ describe("chat system prompt — parity with the auto-coach prompt", () => {
         aiInputsUsed: { lastModification },
       },
     ],
-    structuredExerciseStats: { back_squat: { count: 6, maxWeight: 225 }, farmers_carry: { count: 3, maxDistance: 600 } },
+    structuredExerciseStats: {
+      back_squat: { count: 6, maxWeight: 225 },
+      farmers_carry: { count: 3, maxDistance: 600 },
+      "custom:Hip Thrust <3": { count: 2, maxWeight: 330 },
+    },
   });
   const chat = buildSystemPrompt(ctx);
 
@@ -161,6 +165,12 @@ describe("chat system prompt — parity with the auto-coach prompt", () => {
     expect(chat).toContain("farmers_carry: trained 3x, max distance: 600ft");
     const suggestions = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "Sub-90 half");
     expect(suggestions).toContain("max weight: 225 lbs");
+  });
+
+  it("names a custom exercise by its label, sanitized, in both prompts (M-NEW-2)", () => {
+    expect(chat).toContain("- Hip Thrust &lt;3: trained 2x, max weight: 330 lbs");
+    const suggestions = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "Sub-90 half");
+    expect(suggestions).toContain("- Hip Thrust &lt;3: trained 2x, max weight: 330 lbs");
   });
 
   it("states the athlete's units outright, with or without logged workouts", () => {

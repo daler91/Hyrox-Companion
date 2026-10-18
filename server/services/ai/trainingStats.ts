@@ -1,11 +1,10 @@
-import {
-  storedDistanceToDisplay,
-  storedWeightToDisplay,
-  type UnitPreferences,
-} from "@shared/unitConversion";
+import { pooledRatio } from "@shared/ratio";
+import type { UnitPreferences } from "@shared/unitConversion";
 
 import type { TrainingContext } from "../../gemini/index";
 import { FUNCTIONAL_EXERCISES } from "../../prompts";
+import type { SlimLoggedExerciseSet } from "../../storage/shared";
+import { getExerciseKey, tallyPersonalRecords } from "../analyticsService";
 import type { TimelineEntry } from "./types";
 
 export function calculateTrainingStats(timeline: TimelineEntry[]) {
@@ -190,58 +189,55 @@ export function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContex
   return recent;
 }
 
-function updateExerciseStat(
-  stat: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number },
-  es: { weight: number | null; distance: number | null; time: number | null; reps: number | null }
-) {
-  stat.count++;
-  if (es.weight) {
-    if (!stat.maxWeight || es.weight > stat.maxWeight) stat.maxWeight = es.weight;
-  }
-  if (es.distance) {
-    if (!stat.maxDistance || es.distance > stat.maxDistance) stat.maxDistance = es.distance;
-  }
-  if (es.time) {
-    if (!stat.bestTime || es.time < stat.bestTime) stat.bestTime = es.time;
-  }
-  if (es.reps) {
-    stat.avgReps = stat.avgReps
-      ? Math.round((stat.avgReps * (stat.count - 1) + es.reps) / stat.count)
-      : es.reps;
-  }
-}
-
-/** The set with its weight and distance read through its own L4 stamp (AI9). */
-function setInDisplayUnits(
-  es: NonNullable<TimelineEntry["exerciseSets"]>[number],
-  preferences: UnitPreferences,
-) {
-  return {
-    ...es,
-    weight: es.weight == null ? null : storedWeightToDisplay(es.weight, es, preferences),
-    distance: es.distance == null ? null : storedDistanceToDisplay(es.distance, es, preferences),
-  };
-}
+type ExerciseStat = NonNullable<TrainingContext["structuredExerciseStats"]>[string];
 
 /**
  * Per-exercise bests for the coach, in the athlete's CURRENT units (the prompt
  * labels them so). Each row is converted through its L4 stamp before the max:
  * comparing raw values across a kg/lbs switch both picked the wrong row and
  * labelled a kg max as lbs — AI9 (CODEBASE_ANALYSIS_2026-10-03).
+ *
+ * The bests are the PR tracker's own (tallyPersonalRecords), so the coach is
+ * told what the athlete's PR page shows. This kept a second copy that took the
+ * shortest time on every exercise: a plank's 20 s hold beat its 60 s one, and
+ * a 50 m piece's time beat a 1000 m one. It also bucketed every custom
+ * exercise as one "custom", and kept a running average rounded at every step,
+ * which froze from the third set on (10, 10, then 11 forever read 10) and
+ * counted sets that had no reps. M-NEW-2 (MATHEMATICAL_AUDIT_2026-10-18)
  */
 export function getStructuredExerciseStats(timeline: TimelineEntry[], preferences: UnitPreferences) {
-  const stats: Record<string, { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }> = {};
-  let hasStats = false;
-
+  const sets: SlimLoggedExerciseSet[] = [];
   for (const entry of timeline) {
-    if (entry.status === "completed" && entry.exerciseSets) {
-      for (const es of entry.exerciseSets) {
-        hasStats = true;
-        if (!stats[es.exerciseName]) stats[es.exerciseName] = { count: 0 };
-        updateExerciseStat(stats[es.exerciseName], setInDisplayUnits(es, preferences));
-      }
+    if (entry.status !== "completed" || !entry.exerciseSets) continue;
+    for (const es of entry.exerciseSets) {
+      sets.push({ ...es, workoutLogId: es.workoutLogId ?? entry.workoutLogId ?? entry.date, date: entry.date });
     }
   }
+  if (sets.length === 0) return undefined;
 
-  return hasStats ? stats : undefined;
+  const tallies = new Map<string, { count: number; repTotal: number; repSets: number }>();
+  for (const set of sets) {
+    const key = getExerciseKey(set);
+    const tally = tallies.get(key) ?? { count: 0, repTotal: 0, repSets: 0 };
+    tally.count++;
+    if (set.reps) {
+      tally.repTotal += set.reps;
+      tally.repSets++;
+    }
+    tallies.set(key, tally);
+  }
+
+  const { records } = tallyPersonalRecords(sets, preferences);
+  const stats: Record<string, ExerciseStat> = {};
+  for (const [key, { count, repTotal, repSets }] of tallies) {
+    const record = records[key];
+    const stat: ExerciseStat = { count };
+    if (record?.maxWeight) stat.maxWeight = record.maxWeight.value;
+    if (record?.maxDistance) stat.maxDistance = record.maxDistance.value;
+    if (record?.bestTime) stat.bestTime = record.bestTime.value;
+    const avgReps = pooledRatio(repTotal, repSets);
+    if (avgReps != null) stat.avgReps = Math.round(avgReps);
+    stats[key] = stat;
+  }
+  return stats;
 }

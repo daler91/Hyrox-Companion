@@ -503,7 +503,13 @@ export function effectiveTargetWindowed(
     // at zero with no transparency code emitted at all.
     reasonCodes.push(calorieFloorBound >= zeroCarbBound ? "effective_calorie_floor_applied" : "carbs_floored");
   }
-  const scale = rawSum !== 0 ? appliedDelta / rawSum : 0;
+  // A zero sum is components that cancel exactly (a light-day cut met by an
+  // equal recovery + fuel-ahead top-up), never a bound: both bounds sit at or
+  // below zero and the cap at or above it, so the applied delta is 0 = rawSum.
+  // Nothing was scaled, so each component keeps its own value. Scaling by 0
+  // here zeroed all three and reported the day as flat, unperiodised.
+  // M-NEW-3 (MATHEMATICAL_AUDIT_2026-10-18)
+  const scale = rawSum !== 0 ? appliedDelta / rawSum : 1;
 
   const baseLoadDeltaG = round1(baseLoad.raw * scale);
   const recoveryDeltaG = round1(recovery.raw * scale);

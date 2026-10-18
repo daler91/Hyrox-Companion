@@ -356,6 +356,45 @@ describe("buildRacePredictionFeatures", () => {
     expect(features.stationFeatures.farmers_carry.loggedLoadUserUnit).toBeCloseTo(100, 0);
   });
 
+  // M-NEW-5 (MATHEMATICAL_AUDIT_2026-10-18): the load ratio adjusts the timed
+  // splits, so it must come from the sets that produced them.
+  it("reads the load only from the sets whose time counted", () => {
+    const profile = { division: "open", gender: "male", weightUnit: "kg" } as const;
+    const timed = set("sled_push", {
+      time: 2.75,
+      weight: 102,
+      distance: 50,
+      distanceUnit: "m",
+      date: "2026-05-20",
+    });
+    const sledSplit = (sets: LoggedExerciseSetWithDate[]) => {
+      const features = buildRacePredictionFeatures(sets, profile, NOW);
+      return {
+        load: features.stationFeatures.sled_push.loggedLoadUserUnit,
+        seconds: features.baselineSegments.find((s) => s.exerciseName === "sled_push")!
+          .estimatedSeconds,
+      };
+    };
+    const alone = sledSplit([timed]);
+    const withHeavyWork = sledSplit([
+      timed,
+      // Untimed heavy work, and a timed 15 m push outside the 0.5-2x trust band.
+      set("sled_push", { weight: 220, distance: 15, distanceUnit: "m", date: "2026-05-22" }),
+      set("sled_push", {
+        time: 0.5,
+        weight: 220,
+        distance: 15,
+        distanceUnit: "m",
+        date: "2026-05-24",
+      }),
+    ]);
+
+    expect(alone.load).toBe(102);
+    // 165 s x (1 + 0.25 x (1 - 102/152)) x 1.10, lighter than standard.
+    expect(alone.seconds).toBe(196);
+    expect(withHeavyWork).toEqual(alone);
+  });
+
   it("bounds an impossibly fast logged split to the field-anchored floor", () => {
     // A 0:48 SkiErg logged without a distance must not surface as a 1000 m split.
     const features = buildRacePredictionFeatures(

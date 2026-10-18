@@ -146,4 +146,47 @@ describe("estimateStrength", () => {
     );
     expect(estimates.get("back_squat")?.basis.weight).toBe(102);
   });
+
+  // M-NEW-4 (MATHEMATICAL_AUDIT_2026-10-18): every custom lift is named
+  // "custom", so by name two different ones were pooled into one lift.
+  it("keeps each custom lift apart, by its label", () => {
+    const hipThrust = { exerciseName: "custom", customLabel: "Hip Thrust", weight: 150, reps: 5 };
+    const lateralRaise = {
+      exerciseName: "custom",
+      customLabel: "Lateral Raise",
+      weight: 12,
+      reps: 10,
+    };
+    const once = estimateStrength(
+      [set({ date: "2026-10-01", ...hipThrust }), set({ date: "2026-10-03", ...lateralRaise })],
+      "kg",
+    );
+    // One session of each is not two sessions of anything.
+    expect([...once.keys()]).toEqual([]);
+
+    const twice = estimateStrength(
+      [
+        set({ date: "2026-09-24", ...hipThrust }),
+        set({ date: "2026-10-01", ...hipThrust }),
+        set({ date: "2026-09-26", ...lateralRaise }),
+        set({ date: "2026-10-03", ...lateralRaise }),
+      ],
+      "kg",
+    );
+    // 150 * (1 + 7/30) and 12 * (1 + 12/30): neither is the other's outlier.
+    expect(twice.get("custom:Hip Thrust")?.e1rm).toBe(185);
+    expect(twice.get("custom:Lateral Raise")?.e1rm).toBe(16.8);
+    expect(twice.has("custom")).toBe(false);
+  });
+
+  it("counts a custom set with no label towards no lift", () => {
+    const estimates = estimateStrength(
+      [
+        set({ date: "2026-09-24", exerciseName: "custom", customLabel: null }),
+        set({ date: "2026-10-01", exerciseName: "custom", customLabel: null }),
+      ],
+      "kg",
+    );
+    expect([...estimates.keys()]).toEqual([]);
+  });
 });

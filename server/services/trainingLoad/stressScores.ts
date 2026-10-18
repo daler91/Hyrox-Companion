@@ -104,7 +104,7 @@ export function calculateStrengthStressScore(
   } else if (reps > 0) {
     weightedTonnage = reps * bodyweightRepLoadKg(athleteBodyweightKg);
   } else if (distance > 0) {
-    weightedTonnage = distance * 0.08;
+    weightedTonnage = distance * DISTANCE_LOAD_PER_METRE * distanceLoadMultiplier(weight);
   }
   if (weightedTonnage <= 0) return 0;
   const modifier = Math.max(0.4, tag.axialLoadModifier) * Math.max(0.6, tag.eccentricRiskModifier);
@@ -133,6 +133,24 @@ export function calculateStrengthStressScore(
 // work and is not invented here.
 const BODYWEIGHT_REP_LOAD_KG = 20;
 const BODYWEIGHT_REP_REFERENCE_KG = 75;
+
+// Per-metre tonnage for a distance set with no reps: a carry, a sled push.
+const DISTANCE_LOAD_PER_METRE = 0.08;
+
+// How much more a metre costs with a load in hand than without one.
+//
+// The distance branch used to read the distance alone, so 50 m of sled push at
+// 200 kg scored exactly what 50 m at 0 kg did (M-NEW-1,
+// MATHEMATICAL_AUDIT_2026-10-18). The per-metre figure is read as the cost of
+// moving the reference body, so a load is priced as the extra mass moved with
+// it: (75 + load) / 75. Same constraint as bodyweightRepLoadKg: an unweighted
+// distance set keeps exactly the score it had, so nothing calibrated against
+// the current UTSS scale moves for it. Still one figure for every movement and
+// still uncited (CALCULATION_AUDIT_2026-08-20); calibrating per movement (a
+// sled's load is mostly friction, a carry's is all lifted) is follow-up work.
+function distanceLoadMultiplier(weightKg: number): number {
+  return weightKg > 0 ? 1 + weightKg / BODYWEIGHT_REP_REFERENCE_KG : 1;
+}
 
 export function bodyweightRepLoadKg(bodyweightKg?: number | null): number {
   if (bodyweightKg == null || !Number.isFinite(bodyweightKg) || bodyweightKg <= 0) {

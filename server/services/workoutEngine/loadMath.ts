@@ -21,6 +21,8 @@ export { implementFor, loadIncrement };
 /** The fields of a logged set the engine reads; `LoggedExerciseSetWithDate` satisfies it. */
 export interface EngineSet {
   readonly exerciseName: string;
+  /** The athlete's own name for a custom lift; see liftKey. */
+  readonly customLabel?: string | null;
   readonly workoutLogId?: string | null;
   readonly date: string;
   readonly reps?: number | null;
@@ -144,10 +146,17 @@ function collectSessionBests(
     );
     const e1rm = setEstimate(set, weight);
     if (e1rm == null) continue;
-    let sessions = byExercise.get(set.exerciseName);
+    // By lift, not by name: by name every custom lift was one "custom" lift, so
+    // two different ones logged once each met the two-session minimum, and a
+    // 150 kg hip thrust was dropped as an outlier against a 12 kg lateral raise.
+    // A custom set with no label is no particular lift and counts for none, as
+    // in adaptation's loggedLift. M-NEW-4 (MATHEMATICAL_AUDIT_2026-10-18)
+    const lift = liftKey(set);
+    if (lift === "custom") continue;
+    let sessions = byExercise.get(lift);
     if (!sessions) {
       sessions = new Map();
-      byExercise.set(set.exerciseName, sessions);
+      byExercise.set(lift, sessions);
     }
     const sessionId = `${set.workoutLogId ?? ""}|${set.date}`;
     const best = sessions.get(sessionId);

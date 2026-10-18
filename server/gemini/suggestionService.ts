@@ -207,7 +207,8 @@ function formatExerciseStatLine(
     avgReps?: number;
   },
 ): string {
-  const parts = [`- ${exercise}: trained ${stats.count}x`];
+  // A custom exercise is keyed `custom:<label>`, the athlete's own text.
+  const parts = [`- ${sanitizeUserInput(exercise.replace(/^custom:/, ""))}: trained ${stats.count}x`];
   // Stored weight and distance follow the athlete's preference, not kg and
   // metres (docs/adr-units.md; audit H16, M8).
   if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight} ${units.weightUnit}`);
