@@ -1,7 +1,14 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
-import { ChevronDown, GripVertical, MoreVertical, Repeat, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  GripVertical,
+  MoreVertical,
+  Repeat,
+  Trash2,
+} from "lucide-react";
 import { type CSSProperties, memo, useCallback, useMemo, useState } from "react";
 
 import {
@@ -357,10 +364,19 @@ const GroupRow = memo(function GroupRow({
               "min-w-0 flex-1 truncate font-medium",
               lowConfidence && "text-muted-foreground",
             )}
-            title={lowConfidence ? "Low-confidence parse — expand to review" : label}
+            title={label}
           >
             {label}
           </span>
+          {lowConfidence && (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+              data-testid="exercise-row-low-confidence"
+            >
+              <AlertTriangle className="size-2.5" aria-hidden="true" />
+              Unsure
+            </span>
+          )}
           <BlockAssignmentBadge
             label={label}
             value={blockAssignmentValue}
