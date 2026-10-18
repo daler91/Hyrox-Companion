@@ -29,6 +29,7 @@ import {
 } from "../services/workoutEngine/strength";
 import type { TrainingTargets } from "../services/workoutEngine/trainingTargets";
 import type { SkeletonLift, SkeletonSession } from "../services/workoutEngine/weekSkeleton";
+import { sanitizeUserInput } from "../utils/sanitize";
 
 export interface EngineChunk {
   readonly startWeek: number;
@@ -253,9 +254,10 @@ export function formatTrainingTargets(targets: TrainingTargets | null | undefine
     "TRAINING TARGETS (computed from the athlete's logs by the same engine that builds and adapts their plan — prescribe loads and paces from these numbers):",
   ];
   const unit = targets.weightUnit;
+  // A custom lift is named by the athlete's own label, which is user text.
   for (const lift of targets.lifts) {
     lines.push(
-      `- ${selectionExerciseLabel(lift.exercise)}: est. 1RM ${lift.e1rm} ${unit} (from ${lift.basis.weight} ${unit} x ${lift.basis.reps} on ${lift.basis.date}) → 5 reps @ RPE 8 ≈ ${lift.fiveAtRpe8} ${unit} · 8 reps @ RPE 8 ≈ ${lift.eightAtRpe8} ${unit}`,
+      `- ${sanitizeUserInput(selectionExerciseLabel(lift.exercise))}: est. 1RM ${lift.e1rm} ${unit} (from ${lift.basis.weight} ${unit} x ${lift.basis.reps} on ${lift.basis.date}) → 5 reps @ RPE 8 ≈ ${lift.fiveAtRpe8} ${unit} · 8 reps @ RPE 8 ≈ ${lift.eightAtRpe8} ${unit}`,
     );
   }
   if (targets.paces) {

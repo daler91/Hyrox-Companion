@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createMockTrainingContext, createMockUpcomingWorkout } from "../../test/factories";
 import { buildSystemPrompt, SUGGESTIONS_PROMPT } from "../prompts";
+import { formatTrainingTargets } from "../prompts/workoutEngine";
 import { buildTrainingTargets } from "../services/workoutEngine/trainingTargets";
 import { buildSuggestionsPrompt } from "./suggestionService";
 
@@ -48,6 +49,24 @@ describe("training targets — reach the prompts that prescribe loads", () => {
   it("tells the coach to prescribe from them and to keep auto-progressed loads", () => {
     expect(SUGGESTIONS_PROMPT).toContain("Anchor loads on TRAINING TARGETS when given");
     expect(SUGGESTIONS_PROMPT).toContain('carry an "Auto-progression" note');
+  });
+
+  it("names a custom lift by the athlete's label, sanitized like any user text", () => {
+    const custom = buildTrainingTargets({
+      sets: ["2026-09-02", "2026-09-09"].map((date) => ({
+        exerciseName: "custom",
+        customLabel: "Hip Thrust <b>",
+        workoutLogId: `log-${date}`,
+        date,
+        reps: 5,
+        weight: 150,
+        weightUnit: "kg",
+      })),
+      logs: [],
+      weightUnit: "kg",
+      distanceUnit: "km",
+    });
+    expect(formatTrainingTargets(custom)).toContain("- Hip Thrust &lt;b&gt;: est. 1RM 185 kg");
   });
 
   it("stays out of the prompt when there are no targets", () => {

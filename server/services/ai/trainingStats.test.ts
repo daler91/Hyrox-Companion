@@ -337,11 +337,11 @@ describe("getStructuredExerciseStats", () => {
     ).toBeUndefined();
   });
 
-  it("aggregates count, max weight, max distance, best (min) time and average reps", () => {
+  it("aggregates count, max weight, max distance, best time and average reps", () => {
     const stats = structuredStats([
       makeEntry({
         exerciseSets: [
-          makeSet({ reps: 10, weight: 100, distance: 50, time: 40 }),
+          makeSet({ reps: 10, weight: 100, distance: 200, time: 40 }),
           makeSet({ reps: 20, weight: 120, distance: 200, time: 30 }),
         ],
       }),
@@ -378,7 +378,7 @@ describe("getStructuredExerciseStats", () => {
       makeEntry({
         exerciseSets: [
           makeSet({ reps: 10, weight: 120, distance: 200, time: 30 }),
-          makeSet({ reps: 10, weight: 100, distance: 50, time: 40 }),
+          makeSet({ reps: 10, weight: 100, distance: 200, time: 40 }),
         ],
       }),
     ]);
@@ -404,16 +404,67 @@ describe("getStructuredExerciseStats", () => {
     expect(stats?.deadlift?.count).toBe(1);
   });
 
-  it("inflates count for measurement-less sets, which skews the running avgReps", () => {
-    // count++ runs before the reps guard, so the null-rep set still bumps the
-    // denominator: avg = round((10*2 + 20) / 3) = 13, not the true mean of 15.
+  // M-NEW-2 (MATHEMATICAL_AUDIT_2026-10-18): the stats kept their own copy of
+  // the bests and a running average, and each went wrong in its own way.
+  it("averages reps over the sets that have reps, while counting every set", () => {
+    // The null-rep set used to bump the denominator: round((10*2 + 20) / 3) = 13.
     const stats = structuredStats([
       makeEntry({
         exerciseSets: [makeSet({ reps: 10 }), makeSet({ reps: null }), makeSet({ reps: 20 })],
       }),
     ]);
     expect(stats?.[BACK_SQUAT]?.count).toBe(3);
-    expect(stats?.[BACK_SQUAT]?.avgReps).toBe(13);
+    expect(stats?.[BACK_SQUAT]?.avgReps).toBe(15);
+  });
+
+  it("averages reps once, so a later improvement still moves it", () => {
+    // Rounded at every step, the average froze at 10 from the third set on.
+    const stats = structuredStats([
+      makeEntry({ exerciseSets: [10, 10, 11, 11, 11, 11, 11].map((reps) => makeSet({ reps })) }),
+    ]);
+    expect(stats?.[BACK_SQUAT]?.avgReps).toBe(11); // 75 / 7 = 10.71
+  });
+
+  it("takes a hold's longest time as its best", () => {
+    const stats = structuredStats([
+      makeEntry({
+        exerciseSets: [0.5, 1, 0.33].map((time) =>
+          makeSet({ exerciseName: "plank", category: "strength", time }),
+        ),
+      }),
+    ]);
+    expect(stats?.plank?.bestTime).toBe(1);
+  });
+
+  it("compares a time only with times for the same distance", () => {
+    const row = (workoutLogId: string, date: string, distance: number, time: number) =>
+      makeEntry({
+        date,
+        exerciseSets: [makeSet({ workoutLogId, exerciseName: ROWING, category: "functional", distance, time, distanceUnit: "m" })],
+      });
+    const stats = structuredStats([
+      row("wl-1", "2026-01-01", 1000, 4),
+      row("wl-2", "2026-01-08", 1000, 3.9),
+      // A 250 m piece is not a faster row than 1000 m in 3:54.
+      row("wl-3", "2026-01-15", 250, 0.9),
+    ]);
+    expect(stats?.[ROWING]?.bestTime).toBe(3.9);
+    expect(stats?.[ROWING]?.maxDistance).toBe(1000);
+  });
+
+  it("keeps each custom exercise apart, by its label", () => {
+    const stats = structuredStats([
+      makeEntry({
+        exerciseSets: [
+          makeSet({ exerciseName: "custom", customLabel: "Hip Thrust", reps: 5, weight: 150 }),
+          makeSet({ exerciseName: "custom", customLabel: "Lateral Raise", reps: 10, weight: 12 }),
+        ],
+      }),
+    ]);
+    expect(stats).toEqual({
+      "custom:Hip Thrust": { count: 1, maxWeight: 150, avgReps: 5 },
+      "custom:Lateral Raise": { count: 1, maxWeight: 12, avgReps: 10 },
+    });
   });
   // AI9 (CODEBASE_ANALYSIS_2026-10-03): each row is converted through its L4
   // stamp into the athlete's current units BEFORE the max, so the best is

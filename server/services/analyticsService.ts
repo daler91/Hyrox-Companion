@@ -42,7 +42,7 @@ import { getMondayWeekBoundaries } from "./weeklyProgress";
 // storage layer rather than the base ExerciseSet which allows null owners.
 export type ExerciseSetWithDate = LoggedExerciseSetWithDate;
 
-function getExerciseKey(set: SlimLoggedExerciseSet): string {
+export function getExerciseKey(set: Pick<SlimLoggedExerciseSet, "exerciseName" | "customLabel">): string {
   return set.exerciseName === "custom" && set.customLabel
     ? `custom:${set.customLabel}`
     : set.exerciseName;

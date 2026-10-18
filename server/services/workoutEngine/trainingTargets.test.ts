@@ -48,6 +48,29 @@ describe("buildTrainingTargets", () => {
     expect(targets?.paces?.basis.date).toBe("2026-09-04");
   });
 
+  it("lists each custom lift under its own label (M-NEW-4)", () => {
+    const custom = (label: string, date: string, weight: number, reps: number) => ({
+      ...lift("custom", date, weight, reps),
+      customLabel: label,
+      workoutLogId: `${label}-${date}`,
+    });
+    const targets = buildTrainingTargets({
+      sets: [
+        custom("Hip Thrust", "2026-09-24", 150, 5),
+        custom("Hip Thrust", "2026-10-01", 150, 5),
+        custom("Lateral Raise", "2026-09-26", 12, 10),
+        custom("Lateral Raise", "2026-10-03", 12, 10),
+      ],
+      logs: [],
+      weightUnit: "kg",
+      distanceUnit: "km",
+    });
+    expect(targets?.lifts.map((entry) => [entry.exercise, entry.e1rm])).toEqual([
+      ["custom:Hip Thrust", 185],
+      ["custom:Lateral Raise", 16.8],
+    ]);
+  });
+
   it("is null with nothing to report", () => {
     expect(
       buildTrainingTargets({ sets: [], logs: [], weightUnit: "kg", distanceUnit: "km" }),

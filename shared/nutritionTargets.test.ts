@@ -339,6 +339,29 @@ describe("effectiveTargetWindowed (past + future training)", () => {
     expect(r.reasonCodes).toContain("carb_delta_capped");
   });
 
+  // M-NEW-3 (MATHEMATICAL_AUDIT_2026-10-18): a zero sum was scaled by 0, so
+  // components that exactly cancel were all reported as 0 g.
+  it("keeps each component when they cancel exactly", () => {
+    const window: TrainingLoadWindow = {
+      ...emptyWindow(20), // (20 − 50) × 2 = −60
+      recentLoads: [50], // (50 − 20) × 2 × 0.5 = +30
+      upcoming: [{ daysAhead: 1, plannedUtss: 65 }], // (65 − 50) × 2 = +30
+    };
+    const r = effectiveTargetWindowed(base, window, {
+      ...loadCfg,
+      recoveryEnabled: true,
+      preloadCarbGramsPerUtss: 2,
+      preloadDaysAhead: 1,
+    });
+    expect(r.baseLoadDeltaG).toBe(-60);
+    expect(r.recoveryDeltaG).toBe(30);
+    expect(r.preloadDeltaG).toBe(30);
+    expect(r.carbDeltaG).toBe(0);
+    expect(r.carbG).toBe(200);
+    expect(r.explanation).toContain("-60g");
+    expect(r.explanation).toContain("recovery +30g");
+  });
+
   // C47 (CODEBASE_ANALYSIS_2026-10-03): the calorie floor only limits a cut. A
   // manual baseline already under it is the athlete's number: it must not be
   // reported as floored when nothing moved, nor inflated up to the floor.

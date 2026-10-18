@@ -135,7 +135,8 @@ export function buildStructuredPerformance(trainingContext: TrainingContext): st
   const distanceUnit = getStoredDistanceUnit(trainingContext.distanceUnit);
   let section = `\n\nStructured Exercise Performance:`;
   for (const [exercise, stats] of Object.entries(trainingContext.structuredExerciseStats)) {
-    let line = `\n- ${exercise}: trained ${stats.count}x`;
+    // A custom exercise is keyed `custom:<label>`, the athlete's own text.
+    let line = `\n- ${sanitizeUserInput(exercise.replace(/^custom:/, ""))}: trained ${stats.count}x`;
     if (stats.maxWeight) line += `, max weight: ${stats.maxWeight} ${weightUnit}`;
     if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}${distanceUnit}`;
     if (stats.bestTime) line += `, best time: ${formatMinutes(minutes(stats.bestTime))}`;

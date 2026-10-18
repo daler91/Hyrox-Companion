@@ -35,7 +35,7 @@
  *     load; nothing reaches the set-derived panels).
  *
  * Training load is unaffected by design. A synthesised row is never a strength
- * set (`isStrengthSet` needs reps, which it has none of), so no tonnage appears
+ * set (`isStrengthSet` needs reps or a load, and it has neither), so no tonnage appears
  * from nowhere; it IS a cardio set, which only moves the workout's existing
  * duration-based stress from `inferredWorkoutTag`'s text-inferred profile onto
  * the catalogue's real tag for the exercise — same magnitude, same 0.25 damping

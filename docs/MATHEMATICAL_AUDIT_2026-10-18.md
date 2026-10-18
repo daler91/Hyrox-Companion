@@ -32,6 +32,20 @@ However, our audit identified **5 remaining mathematical and logical flaws** (2 
 | **M-NEW-4** | **Medium** | `EXECUTED` | [`server/services/workoutEngine/loadMath.ts`](../server/services/workoutEngine/loadMath.ts)<br>[`server/services/workoutEngine/trainingTargets.ts`](../server/services/workoutEngine/trainingTargets.ts) | `EngineSet` omits `customLabel` and `collectSessionBests` keys on `set.exerciseName` (`"custom"`) rather than `liftKey(set)` (`"custom:<label>"`), pooling distinct custom lifts together and discarding heavy custom lifts as "+10% outliers" above light custom lifts. |
 | **M-NEW-5** | **Medium** | `EXECUTED` | [`server/services/racePrediction/featureBuilder.ts`](../server/services/racePrediction/featureBuilder.ts) | `accumulateSetMetrics` computes `maxLoad` across *all* sets of a station (including untimed sets and short-distance heavy sets rejected by `projectedSplitSeconds`), decoupling `loadRatio` from the timed sets that produced `medianSeconds` and lacks an upper plausibility bound. |
 
+### Resolution
+
+All five findings were re-verified against the shipping modules and are fixed, each with a regression test that fails on the pre-fix code.
+
+| ID | Fix |
+| :--- | :--- |
+| **M-NEW-1** | `isStrengthSet` admits `distance > 0 && weight > 0`. The distance branch prices a load as the extra mass moved, `distance × 0.08 × (75 + load) / 75`, so an unweighted distance set (including every device-synthesised row) scores exactly as before and nothing calibrated against the UTSS scale moves for it. The `0.08` figure is still the uncited constant noted in the 2026-08-20 audit; a per-movement calibration (sled friction vs. a lifted carry) remains follow-up work, so a loaded sled session's strength component is real but small next to its duration-based cardio score. |
+| **M-NEW-2** | `getStructuredExerciseStats` takes its bests from the PR tracker's `tallyPersonalRecords` (direction-aware for holds, compared only at the same distance/reps, keyed `custom:<label>`, unit-stamped) and averages reps once over the sets that have reps. Both prompt formatters render a custom key as its sanitized label. |
+| **M-NEW-3** | `scale` is `1` when the components sum to zero: the cap is non-negative and both lower bounds are non-positive, so a zero sum is never a clipped one. |
+| **M-NEW-4** | `EngineSet` carries `customLabel`, `collectSessionBests` keys by `liftKey` and skips unlabelled custom sets (as `loggedLift` does), and the training-targets prompt line sanitizes the label it now prints. |
+| **M-NEW-5** | `maxLoad` is read only from the sets whose projected split counted. No separate plausibility gate was added: the factor is already clamped to `[0.85, 1.25]`. |
+
+**Correction to the M-NEW-3 example below.** `RECOVERY_CARB_FACTOR` is `0.5`, so `pastUtss = [120]` against `dayUtss = 30` gives `recovery.raw = 90 × 1.5 × 0.5 = +67.5 g`, not `+27 g`, and that example does not sum to zero. The defect is real: `recentLoads = [66]` gives `+27 g` and an exact zero sum. The "Flat baseline target" explanation appears only when there is no recovery protein bump; with one, the explanation reported today's `−45 g` cut as `+0g` and dropped the recovery and fuel-ahead top-ups.
+
 ---
 
 ### Detailed Breakdown of Findings

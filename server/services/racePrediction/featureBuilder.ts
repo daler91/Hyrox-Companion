@@ -265,6 +265,7 @@ interface SegmentSetMetrics {
   sessionTimesSeconds: number[];
   /** Fastest single projected split across all sessions, or null. */
   bestSeconds: number | null;
+  /** Heaviest load among the sets that produced a split, or null. */
   maxLoad: number | null;
   mostRecent: string | null;
 }
@@ -323,7 +324,12 @@ function accumulateSetMetrics(
       pushToBucket(sessionSplits, set.workoutLogId, seconds);
       if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
     }
-    if (set.weight != null && Number.isFinite(set.weight)) {
+    // The load is read only from the sets whose time counted, because the
+    // load ratio adjusts THOSE times. Read from every set, an untimed 15 m push
+    // at 220 kg turned a 102 kg split's +8% (lighter than standard) into an 11%
+    // discount: 35 s faster from a set with no clock on it.
+    // M-NEW-5 (MATHEMATICAL_AUDIT_2026-10-18)
+    if (seconds != null && set.weight != null && Number.isFinite(set.weight)) {
       // Stamp-aware: rows logged under different weight units compare in ONE
       // unit (the athlete's current one), so a kg-era 100 isn't outbid by a
       // lbs-era 180 (≈ 81.6 kg). Legacy rows pass through unchanged, as before.
