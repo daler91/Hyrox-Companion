@@ -1,0 +1,1 @@
+DROP INDEX "idx_nutrition_targets_user_effective";
