@@ -2006,13 +2006,15 @@ export const nutritionTargets = pgTable(
     effectiveFrom: date("effective_from").notNull(),
   },
   (table) => [
-    index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),
     // createTarget's delete-then-insert keeps one version per (user, day) only
     // for serialized writers; two concurrent saves both delete zero rows and
     // both insert, leaving getCurrentTarget's ORDER BY … LIMIT 1 nondeterministic.
     // This constraint makes the second insert fail with 23505 instead, which
     // createTarget retries once (its delete then sees the committed winner) —
     // last writer wins, matching the method's contract.
+    // This unique index also serves (user_id, effective_from) lookups/ordering;
+    // a separate plain index on the same columns was a pure duplicate (extra
+    // write cost on every target save, no read benefit) and was dropped.
     uniqueIndex("uq_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),
   ],
 );

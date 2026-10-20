@@ -274,3 +274,8 @@ A scripted sweep of all 40 `pgTable`s in `shared/schema/tables.ts` (pair up ever
 
 **Learning:** When creating Maps by mapping arrays, `new Map(arr.map(x => [key, x]))` introduces intermediate array allocations causing a measurable performance hit.
 **Action:** Replace this pattern with a single `for...of` loop initializing the map and directly inserting values, taking care not to disrupt strict TypeScript inferencing by adequately typing the Map values when replacing.
+
+## 2026-10-19 - Exact-duplicate index on `nutrition_targets` (not just a shadowed prefix)
+
+**Learning:** The 2026-09-22 queue is fully closed (`food_favorites` is already done), but the sweep only looked for single-column indexes shadowed by composites. `nutrition_targets` had a plain `idx_nutrition_targets_user_effective (user_id, effective_from)` sitting beside `uq_nutrition_targets_user_effective` on the *identical* columns, added later by the 2026-09-01 concurrency fix, which made the plain index a pure duplicate (double B-tree maintenance on every target save). Not in any caller or test; only the unique name is referenced.
+**Action:** Sweep for same-column-list duplicates (plain vs unique), not only prefix-shadowing. `meal_targets` has the same shape (`idx_meal_targets_user_effective` vs `uq_meal_targets_user_meal_effective` — check columns first, the unique one includes meal type so it may only be prefix-shadowing). Also `push_subscriptions.idx_push_subscriptions_user_id` is shadowed by `(user_id, endpoint)` unique. One table per PR.

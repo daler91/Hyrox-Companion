@@ -862,6 +862,13 @@
       "when": 1791255831147,
       "tag": "0122_food_servings_unique_and_fk_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1792418740013,
+      "tag": "0123_nutrition_targets_drop_duplicate_index",
+      "breakpoints": true
     }
   ]
 }
