@@ -220,9 +220,14 @@ async function selectGradeableRuns(
   options: GradeLogsOptions,
 ): Promise<GradeableRun[]> {
   const dayIds = [...new Set(linked.map((log) => log.planDayId as string))];
-  const days =
-    options.planDays ??
-    new Map((await storage.plans.getPlanDaysByIds(dayIds, userId)).map((day) => [day.id, day]));
+  let days = options.planDays;
+  if (!days) {
+    // ⚡ Bolt Optimization: Replace chained mapping array allocation with a single loop
+    days = new Map<string, PlanDay>();
+    for (const day of await storage.plans.getPlanDaysByIds(dayIds, userId)) {
+      days.set(day.id, day);
+    }
+  }
   const exerciseNames = await exerciseNamesFor(storage, userId, dayIds, options.exerciseNamesByDay);
 
   const runs: GradeableRun[] = [];

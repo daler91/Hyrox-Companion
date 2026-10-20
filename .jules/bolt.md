@@ -274,3 +274,6 @@ A scripted sweep of all 40 `pgTable`s in `shared/schema/tables.ts` (pair up ever
 
 **Learning:** When creating Maps by mapping arrays, `new Map(arr.map(x => [key, x]))` introduces intermediate array allocations causing a measurable performance hit.
 **Action:** Replace this pattern with a single `for...of` loop initializing the map and directly inserting values, taking care not to disrupt strict TypeScript inferencing by adequately typing the Map values when replacing.
+## 2026-10-20 - Replace `new Map(array.map(...))` with single pass loop insertions
+**Learning:** Initializing Maps using chained mappings (e.g. `new Map(array.map(...))`) creates a temporary array of tuples that causes unnecessary allocations.
+**Action:** Always populate Maps directly within a `for...of` loop to eliminate array reallocation and reduce garbage collection overhead for large datasets.
