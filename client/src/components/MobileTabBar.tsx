@@ -40,6 +40,13 @@ export function MobileTabBar() {
           >
             <item.icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} aria-hidden="true" />
             <span className="max-w-full truncate">{item.shortTitle}</span>
+            <span
+              className={cn(
+                "h-0.5 w-4 rounded-full transition-colors",
+                active ? "bg-primary" : "bg-transparent",
+              )}
+              aria-hidden="true"
+            />
           </Link>
         );
       })}
