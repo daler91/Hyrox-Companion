@@ -1645,7 +1645,6 @@ export const pushSubscriptions = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
-    index("idx_push_subscriptions_user_id").on(table.userId),
     uniqueIndex("idx_push_subscriptions_user_endpoint").on(table.userId, table.endpoint),
   ],
 );

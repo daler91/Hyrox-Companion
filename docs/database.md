@@ -601,7 +601,6 @@ Web Push API subscription objects so the server can deliver push notifications t
 | `created_at` | `timestamp` | default `now()` |
 
 **Indexes:**
-- `idx_push_subscriptions_user_id` on (`user_id`)
 - `idx_push_subscriptions_user_endpoint` -- UNIQUE on (`user_id`, `endpoint`)
 
 Rows per user are capped at `MAX_PUSH_SUBSCRIPTIONS_PER_USER` (10) in
