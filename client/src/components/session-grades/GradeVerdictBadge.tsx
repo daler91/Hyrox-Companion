@@ -1,8 +1,16 @@
 import type { SessionGradeVerdict } from "@shared/schema";
 import type { SessionGradeIntent } from "@shared/sessionIntent";
-import { AlertTriangle, CheckCircle2, CircleHelp, CircleMinus, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleHelp,
+  CircleMinus,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getGradeLabel, getGradeToneClassName } from "@/lib/sessionGradeFormat";
 import { cn } from "@/lib/utils";
 
@@ -28,23 +36,42 @@ function VerdictIcon({ verdict }: Readonly<{ verdict: SessionGradeVerdict }>) {
 
 /**
  * A session grade's verdict as a chip: tone, icon and words together, so the
- * colour is never the only signal. The headline rides along as the tooltip.
+ * colour is never the only signal. When a headline is provided, a Radix
+ * Tooltip surfaces it on hover, focus and long-press — unlike `title`, which
+ * is invisible on touch devices.
  */
 export function GradeVerdictBadge({
   intent,
   verdict,
   headline,
   testId,
-}: Readonly<{ intent: SessionGradeIntent; verdict: SessionGradeVerdict; headline?: string; testId?: string }>) {
-  return (
+}: Readonly<{
+  intent: SessionGradeIntent;
+  verdict: SessionGradeVerdict;
+  headline?: string;
+  testId?: string;
+}>) {
+  const badge = (
     <Badge
       variant="outline"
       className={cn("gap-1", getGradeToneClassName(verdict))}
-      title={headline}
       data-testid={testId}
     >
       <VerdictIcon verdict={verdict} />
       {getGradeLabel(intent, verdict)}
     </Badge>
+  );
+
+  if (!headline) return badge;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>{headline}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
