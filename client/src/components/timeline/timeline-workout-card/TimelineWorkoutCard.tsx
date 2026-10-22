@@ -501,7 +501,7 @@ function TimelineCardLeadingAction({
               data-testid={`button-complete-${entry.id}`}
               aria-label={`Mark ${entry.focus} as complete`}
             >
-              <Circle className="h-5 w-5" />
+              <Circle className="h-5 w-5" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
