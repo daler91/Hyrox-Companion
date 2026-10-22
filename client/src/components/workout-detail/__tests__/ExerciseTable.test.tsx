@@ -409,4 +409,23 @@ describe("ExerciseTable unit stamps (finding D2)", () => {
 
     expect(screen.getByLabelText("Edit Back Squat: 1 set of 5 reps at 225 lb")).toBeInTheDocument();
   });
+
+  it("flags a row parsed below 60 confidence with an Unsure badge, keeping the plain label as its title", () => {
+    const sets: ExerciseSet[] = [
+      makeSet({ id: "unsure-row", exerciseName: "back_squat", confidence: 59 }),
+    ];
+
+    render(<ExerciseTable workoutId="log-1" exerciseSets={sets} weightUnit="kg" {...noop} />);
+
+    expect(screen.getByTestId("exercise-row-low-confidence")).toHaveTextContent("Unsure");
+    expect(screen.getByTitle("Back Squat")).toBeInTheDocument();
+  });
+
+  it.each([60, 95, null])("shows no Unsure badge for a row with confidence %s", (confidence) => {
+    const sets: ExerciseSet[] = [makeSet({ id: "sure-row", confidence })];
+
+    render(<ExerciseTable workoutId="log-1" exerciseSets={sets} weightUnit="kg" {...noop} />);
+
+    expect(screen.queryByTestId("exercise-row-low-confidence")).not.toBeInTheDocument();
+  });
 });
