@@ -18,7 +18,7 @@ const reviewsQuerySchema = z.object({
 
 const resolveSchema = z.object({
   ownerType: z.enum(["workoutLog", "planDay"]),
-  ownerId: z.string().min(1),
+  ownerId: z.string().min(1).max(128),
   action: z.enum(["accept", "reject", "edit"]),
   reason: z.string().max(500).optional().nullable(),
 });
