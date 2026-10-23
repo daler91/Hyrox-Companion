@@ -41,12 +41,28 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
     weeklyGoal: 4,
     hasPlan: true,
     current: {
-      sessionsLogged: 3, sessionsPlanned: 4, plannedCompleted: 3,
-      missed: 1, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 180, avgRpe: 7,
+      sessionsLogged: 3,
+      sessionsPlanned: 4,
+      plannedCompleted: 3,
+      missed: 1,
+      skipped: 0,
+      outstanding: 0,
+      excused: 0,
+      letGo: 0,
+      totalDurationMin: 180,
+      avgRpe: 7,
     },
     previous: {
-      sessionsLogged: 2, sessionsPlanned: 4, plannedCompleted: 2,
-      missed: 2, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 120, avgRpe: 6,
+      sessionsLogged: 2,
+      sessionsPlanned: 4,
+      plannedCompleted: 2,
+      missed: 2,
+      skipped: 0,
+      outstanding: 0,
+      excused: 0,
+      letGo: 0,
+      totalDurationMin: 120,
+      avgRpe: 6,
     },
     deltas: { sessionsLogged: 1, totalDurationMin: 60, avgRpe: 1 },
     sessions: [],
@@ -90,13 +106,18 @@ describe("Review page", () => {
     vi.clearAllMocks();
     mocks.week = "2026-06-08";
     mocks.getWeeklyReview.mockResolvedValue(review());
-    mocks.setWeeklyReviewIntent.mockResolvedValue({ weekStart: "2026-06-08", intent: "three runs" });
+    mocks.setWeeklyReviewIntent.mockResolvedValue({
+      weekStart: "2026-06-08",
+      intent: "three runs",
+    });
   });
 
   it("shows the week it renders, not the week that was requested", async () => {
     // The server resolves the week in the athlete's stored timezone, which can
     // differ from the browser's by a day.
-    mocks.getWeeklyReview.mockResolvedValue(review({ weekStart: "2026-06-01", weekEnd: "2026-06-07" }));
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({ weekStart: "2026-06-01", weekEnd: "2026-06-07" }),
+    );
     renderPage();
 
     await waitFor(() => {
@@ -117,8 +138,16 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         current: {
-          sessionsLogged: 4, sessionsPlanned: 1, plannedCompleted: 1,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 240, avgRpe: 6,
+          sessionsLogged: 4,
+          sessionsPlanned: 1,
+          plannedCompleted: 1,
+          missed: 0,
+          skipped: 0,
+          outstanding: 0,
+          excused: 0,
+          letGo: 0,
+          totalDurationMin: 240,
+          avgRpe: 6,
         },
       }),
     );
@@ -134,8 +163,16 @@ describe("Review page", () => {
       review({
         hasPlan: false,
         current: {
-          sessionsLogged: 2, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 90, avgRpe: 6,
+          sessionsLogged: 2,
+          sessionsPlanned: 0,
+          plannedCompleted: 0,
+          missed: 0,
+          skipped: 0,
+          outstanding: 0,
+          excused: 0,
+          letGo: 0,
+          totalDurationMin: 90,
+          avgRpe: 6,
         },
       }),
     );
@@ -150,16 +187,34 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         annotations: [
-          { id: "a1", type: "injury", startDate: "2026-05-25", endDate: "2026-06-20", note: "Achilles" },
+          {
+            id: "a1",
+            type: "injury",
+            startDate: "2026-05-25",
+            endDate: "2026-06-20",
+            note: "Achilles",
+          },
         ],
         plannedDays: [
-          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, priority: "key", recovery: null, planName: "Plan", excused: false },
+          {
+            planDayId: "pd-9",
+            date: "2026-06-10",
+            focus: "Long Run",
+            status: "missed",
+            skipReason: null,
+            priority: "key",
+            recovery: null,
+            planName: "Plan",
+            excused: false,
+          },
         ],
       }),
     );
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-annotations")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-review-annotations")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("weekly-review-annotations")).toHaveTextContent("Achilles");
     expect(screen.getByText(/aren't a shortfall/i)).toBeInTheDocument();
   });
@@ -170,17 +225,37 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         current: {
-          sessionsLogged: 1, sessionsPlanned: 3, plannedCompleted: 1,
-          missed: 0, skipped: 0, outstanding: 0, excused: 2, letGo: 0, totalDurationMin: 60, avgRpe: 6,
+          sessionsLogged: 1,
+          sessionsPlanned: 3,
+          plannedCompleted: 1,
+          missed: 0,
+          skipped: 0,
+          outstanding: 0,
+          excused: 2,
+          letGo: 0,
+          totalDurationMin: 60,
+          avgRpe: 6,
         },
         plannedDays: [
-          { planDayId: "pd-e", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, priority: "key", recovery: null, planName: "Plan", excused: true },
+          {
+            planDayId: "pd-e",
+            date: "2026-06-10",
+            focus: "Long Run",
+            status: "missed",
+            skipReason: null,
+            priority: "key",
+            recovery: null,
+            planName: "Plan",
+            excused: true,
+          },
         ],
       }),
     );
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-excused-pd-e")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-review-excused-pd-e")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("weekly-review-excused-pd-e")).toHaveTextContent("Not counted");
     expect(screen.getByTestId("weekly-review-planned-pd-e")).not.toHaveTextContent("Missed");
     // The adherence tile splits them out rather than folding them into missed.
@@ -191,8 +266,16 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         current: {
-          sessionsLogged: 2, sessionsPlanned: 4, plannedCompleted: 2,
-          missed: 1, skipped: 0, outstanding: 0, excused: 0, letGo: 1, totalDurationMin: 90, avgRpe: 6,
+          sessionsLogged: 2,
+          sessionsPlanned: 4,
+          plannedCompleted: 2,
+          missed: 1,
+          skipped: 0,
+          outstanding: 0,
+          excused: 0,
+          letGo: 1,
+          totalDurationMin: 90,
+          avgRpe: 6,
         },
       }),
     );
@@ -208,13 +291,25 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         plannedDays: [
-          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", priority: "supporting", recovery: null, planName: "Plan", excused: false },
+          {
+            planDayId: "pd-2",
+            date: "2026-06-11",
+            focus: "Sled Push",
+            status: "skipped",
+            skipReason: "injured",
+            priority: "supporting",
+            recovery: null,
+            planName: "Plan",
+            excused: false,
+          },
         ],
       }),
     );
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-planned-pd-2")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-review-planned-pd-2")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("weekly-review-skip-reason-pd-2")).toHaveTextContent("Injured");
   });
 
@@ -222,14 +317,36 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         plannedDays: [
-          { planDayId: "pd-lg", date: "2026-06-09", focus: "Threshold run", status: "missed", skipReason: null, priority: "key", recovery: "let_go", planName: "Plan", excused: false },
-          { planDayId: "pd-m", date: "2026-06-10", focus: "Strength", status: "missed", skipReason: null, priority: "supporting", recovery: null, planName: "Plan", excused: false },
+          {
+            planDayId: "pd-lg",
+            date: "2026-06-09",
+            focus: "Threshold run",
+            status: "missed",
+            skipReason: null,
+            priority: "key",
+            recovery: "let_go",
+            planName: "Plan",
+            excused: false,
+          },
+          {
+            planDayId: "pd-m",
+            date: "2026-06-10",
+            focus: "Strength",
+            status: "missed",
+            skipReason: null,
+            priority: "supporting",
+            recovery: null,
+            planName: "Plan",
+            excused: false,
+          },
         ],
       }),
     );
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-planned-pd-lg")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-review-planned-pd-lg")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("weekly-review-status-pd-lg")).toHaveTextContent("Let go");
     expect(screen.getByTestId("weekly-review-key-pd-lg")).toHaveTextContent("Key");
     expect(screen.getByTestId("weekly-review-status-pd-m")).toHaveTextContent("Missed");
@@ -242,8 +359,12 @@ describe("Review page", () => {
     );
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-session-wl-1")).toBeInTheDocument());
-    expect(screen.getByTestId("weekly-review-session-changes-wl-1")).toHaveTextContent("+2 / −1 sets");
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-review-session-wl-1")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("weekly-review-session-changes-wl-1")).toHaveTextContent(
+      "+2 / −1 sets",
+    );
   });
 
   it("marks whether each run did its job, and sums the week in one line", async () => {
@@ -272,7 +393,7 @@ describe("Review page", () => {
     });
     const chip = screen.getByTestId("weekly-review-session-grade-wl-1");
     expect(chip).toHaveTextContent("Drifted harder");
-    expect(chip).toHaveAttribute("title", "Drifted harder than threshold");
+    expect(chip).toHaveAttribute("tabindex", "0");
     expect(screen.queryByTestId("weekly-review-session-grade-wl-2")).toBeNull();
     expect(screen.getByTestId("weekly-review-grade-summary")).toHaveTextContent(
       "Runs that did their job: 2 of 3 · 1 threshold run drifted harder",
@@ -284,12 +405,28 @@ describe("Review page", () => {
       review({
         hasPlan: false,
         current: {
-          sessionsLogged: 0, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 0, avgRpe: null,
+          sessionsLogged: 0,
+          sessionsPlanned: 0,
+          plannedCompleted: 0,
+          missed: 0,
+          skipped: 0,
+          outstanding: 0,
+          excused: 0,
+          letGo: 0,
+          totalDurationMin: 0,
+          avgRpe: null,
         },
         previous: {
-          sessionsLogged: 0, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, excused: 0, letGo: 0, totalDurationMin: 0, avgRpe: null,
+          sessionsLogged: 0,
+          sessionsPlanned: 0,
+          plannedCompleted: 0,
+          missed: 0,
+          skipped: 0,
+          outstanding: 0,
+          excused: 0,
+          letGo: 0,
+          totalDurationMin: 0,
+          avgRpe: null,
         },
         deltas: { sessionsLogged: 0, totalDurationMin: 0, avgRpe: null },
       }),
@@ -305,7 +442,9 @@ describe("Review page", () => {
     mocks.getWeeklyReview.mockResolvedValue(review({ isCurrentWeek: true }));
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("weekly-review-in-progress")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("weekly-review-in-progress")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("weekly-review-sessions")).toHaveTextContent("Sessions so far");
     // Nothing to review in a week that has not started.
     expect(screen.getByTestId("weekly-review-next")).toHaveAttribute("aria-disabled", "true");
@@ -313,7 +452,9 @@ describe("Review page", () => {
 
   it("pages back a week from the week the server resolved", async () => {
     const user = userEvent.setup();
-    mocks.getWeeklyReview.mockResolvedValue(review({ weekStart: "2026-06-01", weekEnd: "2026-06-07" }));
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({ weekStart: "2026-06-01", weekEnd: "2026-06-07" }),
+    );
     renderPage();
 
     await waitFor(() => expect(screen.getByTestId("weekly-review")).toBeInTheDocument());
@@ -364,8 +505,12 @@ describe("Review page", () => {
       );
       renderPage();
 
-      await waitFor(() => expect(screen.getByTestId("weekly-review-previous-intent")).toBeInTheDocument());
-      expect(screen.getByTestId("weekly-review-previous-intent")).toHaveTextContent("get the sled work in");
+      await waitFor(() =>
+        expect(screen.getByTestId("weekly-review-previous-intent")).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId("weekly-review-previous-intent")).toHaveTextContent(
+        "get the sled work in",
+      );
       // Recall is the whole feature; there is no verdict on whether they did it.
       expect(screen.queryByText(/you (did|didn't|failed)/i)).not.toBeInTheDocument();
     });
@@ -381,7 +526,9 @@ describe("Review page", () => {
       const user = userEvent.setup();
       renderPage();
 
-      await waitFor(() => expect(screen.getByTestId("weekly-review-intent-input")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByTestId("weekly-review-intent-input")).toBeInTheDocument(),
+      );
       await user.type(screen.getByTestId("weekly-review-intent-input"), "three runs");
       await user.click(screen.getByTestId("weekly-review-intent-save"));
 
@@ -393,7 +540,9 @@ describe("Review page", () => {
       mocks.getWeeklyReview.mockResolvedValue(review({ intent: "three runs" }));
       renderPage();
 
-      await waitFor(() => expect(screen.getByTestId("weekly-review-intent-save")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByTestId("weekly-review-intent-save")).toBeInTheDocument(),
+      );
       expect(screen.getByTestId("weekly-review-intent-save")).toBeDisabled();
 
       await user.type(screen.getByTestId("weekly-review-intent-input"), " and a swim");
@@ -405,7 +554,9 @@ describe("Review page", () => {
       mocks.getWeeklyReview.mockResolvedValue(review({ intent: "three runs" }));
       renderPage();
 
-      await waitFor(() => expect(screen.getByTestId("weekly-review-intent-input")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.getByTestId("weekly-review-intent-input")).toBeInTheDocument(),
+      );
       await user.clear(screen.getByTestId("weekly-review-intent-input"));
       // Emptying a saved line is a real edit, so Save has to stay live for it.
       await user.click(screen.getByTestId("weekly-review-intent-save"));
