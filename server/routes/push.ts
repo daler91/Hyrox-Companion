@@ -16,6 +16,8 @@ const subscribeSchema = z.object({
   // 🛡️ Sentinel: Enforce HTTPS to prevent SSRF against internal/local services
   endpoint: z
     .string()
+    // 🛡️ Sentinel: bound attacker-controlled strings that are persisted (DoS / DB bloat)
+    .max(2048)
     .url()
     .refine((url) => url.startsWith("https://") && checkSafeOutboundUrl(url).ok, {
       message: "Push endpoint must be an HTTPS URL and must not point to a local/private address",
@@ -25,8 +27,8 @@ const subscribeSchema = z.object({
     // S2 (CODEBASE_ANALYSIS_2026-10-03)
     .refine(isAllowedPushEndpoint, { message: "Push endpoint must belong to a known browser push service" }),
   keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
+    p256dh: z.string().min(1).max(512),
+    auth: z.string().min(1).max(512),
   }),
 });
 

@@ -44,7 +44,7 @@ import { serializePlanProposal } from "./planProposals";
 const router = Router();
 
 const applyTimelineSuggestionSchema = z.object({
-  workoutId: z.string().min(1),
+  workoutId: z.string().min(1).max(128),
   targetField: z.enum(["notes", "mainWorkout", "accessory"]),
   action: z.enum(["replace", "append"]),
   recommendation: z.string().min(1).max(10_000),
