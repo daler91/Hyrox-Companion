@@ -83,10 +83,17 @@ export function planDayWithinPlanLifetime(plan: typeof trainingPlans = trainingP
 export function planDaysWithinLifetimes(
   plans: readonly { id: string; retiredOn: string | null }[],
 ): SQL | undefined {
-  const liveIds = plans.filter((p) => p.retiredOn == null).map((p) => p.id);
-  const retired = plans.filter(
-    (p): p is { id: string; retiredOn: string } => p.retiredOn != null,
-  );
+  // Replaced chained `.filter().map()` and `.filter()` with a single `for...of` loop
+  // to avoid intermediate array allocations.
+  const liveIds: string[] = [];
+  const retired: { id: string; retiredOn: string }[] = [];
+  for (const p of plans) {
+    if (p.retiredOn == null) {
+      liveIds.push(p.id);
+    } else {
+      retired.push(p as { id: string; retiredOn: string });
+    }
+  }
 
   const clauses: SQL[] = [];
   if (liveIds.length > 0) clauses.push(inArray(planDays.planId, liveIds));
@@ -114,12 +121,14 @@ export function planDaysWithinLifetimes(
 export function planDaysPastRetirement(
   plans: readonly { id: string; retiredOn: string | null }[],
 ): SQL | undefined {
-  const clauses = plans
-    .filter((p): p is { id: string; retiredOn: string } => p.retiredOn != null)
-    .map(
-      (plan) =>
-        and(eq(planDays.planId, plan.id), gte(planDays.scheduledDate, plan.retiredOn)) as SQL,
-    );
+  // Replaced chained `.filter().map()` with a single `for...of` loop
+  // to avoid intermediate array allocations.
+  const clauses: SQL[] = [];
+  for (const plan of plans) {
+    if (plan.retiredOn != null) {
+      clauses.push(and(eq(planDays.planId, plan.id), gte(planDays.scheduledDate, plan.retiredOn)) as SQL);
+    }
+  }
 
   if (clauses.length === 0) return undefined;
   return clauses.length === 1 ? clauses[0] : or(...clauses);

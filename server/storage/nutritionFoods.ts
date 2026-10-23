@@ -240,7 +240,13 @@ export async function getRecentFoods(userId: string, limit = 20): Promise<FoodWi
   ]);
   const byId = new Map<string, Food>();
   for (const f of rows) byId.set(f.id, f);
-  const ordered = ids.map((id) => byId.get(id)).filter((f): f is Food => Boolean(f));
+  // Replaced chained `.map().filter()` with a single `for...of` loop
+  // to avoid intermediate array allocations.
+  const ordered: Food[] = [];
+  for (const id of ids) {
+    const f = byId.get(id);
+    if (f) ordered.push(f);
+  }
   return withPortionMemory(ordered, portions);
 }
 
