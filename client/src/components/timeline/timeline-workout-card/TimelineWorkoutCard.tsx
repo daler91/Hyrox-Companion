@@ -2,18 +2,14 @@ import { useDraggable } from "@dnd-kit/core";
 import { isRestLikePlanDay } from "@shared/planDayKind";
 import type { DistanceUnit } from "@shared/unitConversion";
 import { format } from "date-fns";
-import {
-  BookOpen,
-  CheckCircle2,
-  Circle,
-  Database,
-  FileText,
-  Loader2,
-  Square,
-} from "lucide-react";
+import { BookOpen, CheckCircle2, Circle, Database, FileText, Loader2, Square } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
-import { isRecoverableEntry, MissedRecoveryPrompt, type RecoverEntryHandler } from "@/components/timeline/missed-recovery";
+import {
+  isRecoverableEntry,
+  MissedRecoveryPrompt,
+  type RecoverEntryHandler,
+} from "@/components/timeline/missed-recovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -167,7 +163,10 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   // U20 (CODEBASE_ANALYSIS_2026-10-03)
   const onOpen = isPending || isBulkSelectMode ? undefined : handleOpenClick;
   // While combining, the title button names what a tap does (A3).
-  const openLabel = getCardOpenLabel(entry, getCombineRole(isCombining, isBeingCombined, canBeCombinedWith));
+  const openLabel = getCardOpenLabel(
+    entry,
+    getCombineRole(isCombining, isBeingCombined, canBeCombinedWith),
+  );
 
   return (
     <Card
@@ -264,7 +263,9 @@ function getTimelineCardCombineState({
   const isLogged = Boolean(entry.workoutLogId);
   return {
     isBeingCombined,
-    canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate && isLogged),
+    canBeCombinedWith: Boolean(
+      isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate && isLogged,
+    ),
   };
 }
 
@@ -285,7 +286,8 @@ function getCombineRole(
 function getMissedDetail(entry: TimelineWorkoutEntry): MissedDetail {
   return {
     recovery: entry.recovery,
-    restDay: entry.type === "planned" && isRestLikePlanDay(entry.focus ?? "", entry.mainWorkout ?? ""),
+    restDay:
+      entry.type === "planned" && isRestLikePlanDay(entry.focus ?? "", entry.mainWorkout ?? ""),
     open: isRecoverableEntry(entry),
   };
 }
@@ -572,18 +574,25 @@ function TimelineCardHeader({
       {/* Plan names are free text (an AI plan carries the athlete's whole
           goal sentence), and Badge never wraps, so without a width cap the
           chip ran straight past the card edge on phones. Cap it to the row
-          and let the name ellipsize; the full name is in the title tooltip
-          and in the plan selector above the timeline. */}
+          and let the name ellipsize; the full name is in the Tooltip (not a
+          `title` attr, which doesn't render on touch devices in this
+          mobile-first PWA). */}
       {entry.planName && (
-        <Badge
-          variant="outline"
-          className="min-w-0 max-w-full text-muted-foreground"
-          title={entry.planName}
-          data-testid={`badge-plan-${entry.id}`}
-        >
-          <BookOpen className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
-          <span className="truncate">{entry.planName}</span>
-        </Badge>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="min-w-0 max-w-full text-muted-foreground"
+                data-testid={`badge-plan-${entry.id}`}
+              >
+                <BookOpen className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
+                <span className="truncate">{entry.planName}</span>
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>{entry.planName}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
       {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
       {adherenceBadge && (
@@ -630,7 +639,11 @@ function TimelineCardTitle({
   entry,
   onOpen,
   openLabel,
-}: Readonly<{ entry: TimelineWorkoutEntry; onOpen?: (e: React.MouseEvent) => void; openLabel: string }>) {
+}: Readonly<{
+  entry: TimelineWorkoutEntry;
+  onOpen?: (e: React.MouseEvent) => void;
+  openLabel: string;
+}>) {
   if (!onOpen) return <span className={TITLE_CLASSES}>{entry.focus}</span>;
   return (
     <button

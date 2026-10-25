@@ -58,9 +58,13 @@ describe("TimelineWorkoutCard plan badge", () => {
     expect(text).toHaveTextContent(LONG_PLAN_NAME);
   });
 
-  it("keeps the full plan name available as a tooltip once it is clipped", () => {
+  it("wraps the badge in a Tooltip so the full plan name is reachable on touch devices", () => {
     renderCard();
-    expect(screen.getByTestId("badge-plan-entry-1")).toHaveAttribute("title", LONG_PLAN_NAME);
+    const badge = screen.getByTestId("badge-plan-entry-1");
+    // The badge should NOT use a `title` attribute (invisible on touch); it
+    // should sit inside a Radix TooltipTrigger instead.
+    expect(badge).not.toHaveAttribute("title");
+    expect(badge.closest("[data-radix-tooltip-trigger]") ?? badge.closest("[data-state]")).toBeTruthy();
   });
 
   it("reserves room in the header for the move controls on touch widths", () => {
