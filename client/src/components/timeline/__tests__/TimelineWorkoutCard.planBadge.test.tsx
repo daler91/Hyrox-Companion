@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import TimelineWorkoutCard from "../timeline-workout-card";
 
 // An AI-generated plan carries the athlete's whole goal sentence as its name.
@@ -34,12 +36,14 @@ function renderCard(overrides: Partial<TimelineEntry> = {}) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <TimelineWorkoutCard
-        entry={{ ...entry, ...overrides }}
-        onClick={vi.fn()}
-        onMarkComplete={vi.fn()}
-        onMove={vi.fn()}
-      />
+      <TooltipProvider>
+        <TimelineWorkoutCard
+          entry={{ ...entry, ...overrides }}
+          onClick={vi.fn()}
+          onMarkComplete={vi.fn()}
+          onMove={vi.fn()}
+        />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -58,9 +62,11 @@ describe("TimelineWorkoutCard plan badge", () => {
     expect(text).toHaveTextContent(LONG_PLAN_NAME);
   });
 
-  it("keeps the full plan name available as a tooltip once it is clipped", () => {
+  it("wraps the plan badge in a Radix Tooltip so the full name is reachable on touch devices", () => {
     renderCard();
-    expect(screen.getByTestId("badge-plan-entry-1")).toHaveAttribute("title", LONG_PLAN_NAME);
+    const badge = screen.getByTestId("badge-plan-entry-1");
+    expect(badge).not.toHaveAttribute("title");
+    expect(badge.closest("[data-state]")).not.toBeNull();
   });
 
   it("reserves room in the header for the move controls on touch widths", () => {

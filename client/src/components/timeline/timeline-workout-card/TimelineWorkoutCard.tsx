@@ -569,21 +569,20 @@ function TimelineCardHeader({
       {(entry.source === "strava" || Boolean(entry.stravaActivityId)) && (
         <StravaLinkBadge entry={entry} dayEntries={dayEntries} />
       )}
-      {/* Plan names are free text (an AI plan carries the athlete's whole
-          goal sentence), and Badge never wraps, so without a width cap the
-          chip ran straight past the card edge on phones. Cap it to the row
-          and let the name ellipsize; the full name is in the title tooltip
-          and in the plan selector above the timeline. */}
       {entry.planName && (
-        <Badge
-          variant="outline"
-          className="min-w-0 max-w-full text-muted-foreground"
-          title={entry.planName}
-          data-testid={`badge-plan-${entry.id}`}
-        >
-          <BookOpen className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
-          <span className="truncate">{entry.planName}</span>
-        </Badge>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="outline"
+              className="min-w-0 max-w-full text-muted-foreground"
+              data-testid={`badge-plan-${entry.id}`}
+            >
+              <BookOpen className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
+              <span className="truncate">{entry.planName}</span>
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>{entry.planName}</TooltipContent>
+        </Tooltip>
       )}
       {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
       {adherenceBadge && (
