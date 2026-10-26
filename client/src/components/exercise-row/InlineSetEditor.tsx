@@ -497,7 +497,7 @@ function SetRowActions({
         <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
       </SetActionButton>
       <SetActionButton
-        tooltip="Remove set"
+        tooltip={canDelete ? "Remove set" : "Cannot remove the only set"}
         onClick={(event) => {
           if (!canDelete) event.preventDefault();
           else onDelete();
