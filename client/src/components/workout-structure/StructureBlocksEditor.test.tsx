@@ -15,7 +15,11 @@ function Harness({ initial = [] as StructureBlockInput[], showScoreControls = fa
   const [value, setValue] = useState<StructureBlockInput[]>(initial);
   return (
     <>
-      <StructureBlocksEditor value={value} onChange={setValue} showScoreControls={showScoreControls} />
+      <StructureBlocksEditor
+        value={value}
+        onChange={setValue}
+        showScoreControls={showScoreControls}
+      />
       <pre data-testid="harness-snapshot">{JSON.stringify(value)}</pre>
     </>
   );
@@ -39,7 +43,9 @@ describe("StructureBlocksEditor", () => {
   it("keeps the titled section and default add label without headerless", () => {
     render(<StructureBlocksEditor onChange={vi.fn()} />);
     expect(screen.getByText("Workout blocks")).toBeInTheDocument();
-    expect(screen.getByTestId("structure-blocks-add-toggle")).toHaveTextContent("Add workout block");
+    expect(screen.getByTestId("structure-blocks-add-toggle")).toHaveTextContent(
+      "Add workout block",
+    );
   });
 
   it("hides the section header and relabels the add button in headerless mode", () => {
@@ -126,13 +132,22 @@ describe("StructureBlocksEditor", () => {
     const onUpdateSet = vi.fn();
     render(
       <StructureBlocksEditor
-        value={[{
-          id: "block-emom",
-          sectionType: "main",
-          formatType: "emom",
-          durationMinutes: 10,
-          steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Unassigned exercise" }],
-        }]}
+        value={[
+          {
+            id: "block-emom",
+            sectionType: "main",
+            formatType: "emom",
+            durationMinutes: 10,
+            steps: [
+              {
+                stepNumber: 1,
+                stepType: "work",
+                minuteIndex: 1,
+                exerciseName: "Unassigned exercise",
+              },
+            ],
+          },
+        ]}
         onChange={vi.fn()}
         exerciseSets={[
           makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 }),
@@ -142,7 +157,9 @@ describe("StructureBlocksEditor", () => {
       />,
     );
 
-    expect(screen.getByTestId("structure-block-missing-link")).toHaveTextContent("No exercise row linked.");
+    expect(screen.getByTestId("structure-block-missing-link")).toHaveTextContent(
+      "No exercise row linked.",
+    );
     await user.click(screen.getByRole("combobox", { name: /Assign row to Min 1/i }));
     await user.click(await screen.findByRole("option", { name: /Back Squat/i }));
 
@@ -171,16 +188,26 @@ describe("StructureBlocksEditor", () => {
     const onAddSet = vi.fn();
     render(
       <StructureBlocksEditor
-        value={[{
-          id: "block-emom",
-          sectionType: "main",
-          formatType: "emom",
-          durationMinutes: 10,
-          steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Back Squat" }],
-        }]}
+        value={[
+          {
+            id: "block-emom",
+            sectionType: "main",
+            formatType: "emom",
+            durationMinutes: 10,
+            steps: [
+              { stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Back Squat" },
+            ],
+          },
+        ]}
         onChange={vi.fn()}
         exerciseSets={[
-          makeSet({ id: "linked-1", sortOrder: 0, blockId: "block-emom", stepNumber: 1, intervalMinute: 1 }),
+          makeSet({
+            id: "linked-1",
+            sortOrder: 0,
+            blockId: "block-emom",
+            stepNumber: 1,
+            intervalMinute: 1,
+          }),
           makeSet({
             id: "extra-1",
             exerciseName: "wall_balls",
@@ -214,27 +241,31 @@ describe("StructureBlocksEditor", () => {
 
     fireEvent.click(screen.getByTestId("structure-block-add-linked-row"));
 
-    expect(onAddSet).toHaveBeenCalledWith(expect.objectContaining({
-      exerciseName: "back_squat",
-      customLabel: null,
-      category: "strength",
-      blockId: "block-emom",
-      stepNumber: 1,
-      stepRole: "work",
-    }));
+    expect(onAddSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exerciseName: "back_squat",
+        customLabel: null,
+        category: "strength",
+        blockId: "block-emom",
+        stepNumber: 1,
+        stepRole: "work",
+      }),
+    );
   });
 
   it("adds a linked row from an empty block step", () => {
     const onAddSet = vi.fn();
     render(
       <StructureBlocksEditor
-        value={[{
-          id: "block-rounds",
-          sectionType: "main",
-          formatType: "rounds",
-          roundCount: 3,
-          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
-        }]}
+        value={[
+          {
+            id: "block-rounds",
+            sectionType: "main",
+            formatType: "rounds",
+            roundCount: 3,
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+          },
+        ]}
         onChange={vi.fn()}
         onAddSet={onAddSet}
       />,
@@ -242,28 +273,32 @@ describe("StructureBlocksEditor", () => {
 
     fireEvent.click(screen.getByTestId("structure-block-add-linked-row"));
 
-    expect(onAddSet).toHaveBeenCalledWith(expect.objectContaining({
-      exerciseName: "custom",
-      customLabel: "Rounds step 1",
-      category: "conditioning",
-      blockId: "block-rounds",
-      stepNumber: 1,
-      stepRole: "work",
-    }));
+    expect(onAddSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exerciseName: "custom",
+        customLabel: "Rounds step 1",
+        category: "conditioning",
+        blockId: "block-rounds",
+        stepNumber: 1,
+        stepRole: "work",
+      }),
+    );
   });
 
   it("hydrates score controls for logged AMRAP blocks", () => {
     render(
       <Harness
         showScoreControls
-        initial={[{
-          id: "block-1",
-          sectionType: "main",
-          formatType: "amrap",
-          timeCapMinutes: 10,
-          score: { type: "amrap", rounds: 3, reps: 8 },
-          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
-        }]}
+        initial={[
+          {
+            id: "block-1",
+            sectionType: "main",
+            formatType: "amrap",
+            timeCapMinutes: 10,
+            score: { type: "amrap", rounds: 3, reps: 8 },
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+          },
+        ]}
       />,
     );
 
@@ -275,18 +310,22 @@ describe("StructureBlocksEditor", () => {
     render(
       <Harness
         showScoreControls
-        initial={[{
-          id: "block-1",
-          sectionType: "main",
-          formatType: "amrap",
-          timeCapMinutes: 10,
-          score: { type: "amrap", rounds: 3, reps: 8 },
-          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
-        }]}
+        initial={[
+          {
+            id: "block-1",
+            sectionType: "main",
+            formatType: "amrap",
+            timeCapMinutes: 10,
+            score: { type: "amrap", rounds: 3, reps: 8 },
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+          },
+        ]}
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Result notes"), { target: { value: "Strong finish" } });
+    fireEvent.change(screen.getByPlaceholderText("Result notes"), {
+      target: { value: "Strong finish" },
+    });
 
     expect(readSnapshot()[0].score).toEqual({
       type: "amrap",
@@ -301,21 +340,25 @@ describe("StructureBlocksEditor", () => {
     const onScoreChange = vi.fn();
     render(
       <StructureBlocksEditor
-        value={[{
-          id: "block-1",
-          sectionType: "main",
-          formatType: "amrap",
-          timeCapMinutes: 10,
-          score: { type: "amrap", rounds: 3, reps: 8 },
-          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
-        }]}
+        value={[
+          {
+            id: "block-1",
+            sectionType: "main",
+            formatType: "amrap",
+            timeCapMinutes: 10,
+            score: { type: "amrap", rounds: 3, reps: 8 },
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+          },
+        ]}
         onChange={onChange}
         showScoreControls
         onScoreChange={onScoreChange}
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Result notes"), { target: { value: "Strong finish" } });
+    fireEvent.change(screen.getByPlaceholderText("Result notes"), {
+      target: { value: "Strong finish" },
+    });
 
     expect(onScoreChange).toHaveBeenCalledWith("block-1", {
       type: "amrap",
@@ -329,15 +372,21 @@ describe("StructureBlocksEditor", () => {
   it("round-trips transition step duration targets", () => {
     render(
       <Harness
-        initial={[{
-          sectionType: "main",
-          formatType: "rounds",
-          roundCount: 3,
-          steps: [
-            { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
-            { stepNumber: 2, stepType: "transition", targets: { instructions: "Change stations", durationSeconds: 30 } },
-          ],
-        }]}
+        initial={[
+          {
+            sectionType: "main",
+            formatType: "rounds",
+            roundCount: 3,
+            steps: [
+              { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
+              {
+                stepNumber: 2,
+                stepType: "transition",
+                targets: { instructions: "Change stations", durationSeconds: 30 },
+              },
+            ],
+          },
+        ]}
       />,
     );
 
@@ -354,17 +403,21 @@ describe("StructureBlocksEditor", () => {
   it("labels transition steps as transitions in the EMOM minute preview", () => {
     render(
       <Harness
-        initial={[{
-          sectionType: "main",
-          formatType: "emom",
-          durationMinutes: 1,
-          steps: [{
-            stepNumber: 1,
-            stepType: "transition",
-            minuteIndex: 1,
-            targets: { instructions: "Change stations" },
-          }],
-        }]}
+        initial={[
+          {
+            sectionType: "main",
+            formatType: "emom",
+            durationMinutes: 1,
+            steps: [
+              {
+                stepNumber: 1,
+                stepType: "transition",
+                minuteIndex: 1,
+                targets: { instructions: "Change stations" },
+              },
+            ],
+          },
+        ]}
       />,
     );
 
@@ -375,22 +428,26 @@ describe("StructureBlocksEditor", () => {
   it("keeps the 44px phone touch target on each step's move and remove buttons (U26)", () => {
     render(
       <Harness
-        initial={[{
-          sectionType: "main",
-          formatType: "rounds",
-          roundCount: 3,
-          steps: [
-            { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
-            { stepNumber: 2, stepType: "work", exerciseName: "Sled Pull" },
-          ],
-        }]}
+        initial={[
+          {
+            sectionType: "main",
+            formatType: "rounds",
+            roundCount: 3,
+            steps: [
+              { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
+              { stepNumber: 2, stepType: "work", exerciseName: "Sled Pull" },
+            ],
+          },
+        ]}
       />,
     );
 
     const steps = screen.getAllByTestId("structure-block-step");
     expect(steps).toHaveLength(2);
     for (const step of steps) {
-      const controls = within(step).getAllByRole("button", { name: /^(Move .* (earlier|later)|Remove .*)$/ });
+      const controls = within(step).getAllByRole("button", {
+        name: /^(Move .* (earlier|later)|Remove .*)$/,
+      });
       expect(controls).toHaveLength(3);
       for (const control of controls) {
         // The icon variant's h-11 w-11 holds below md; the compact size is md-only.
@@ -418,6 +475,9 @@ describe("StructureBlocksEditor", () => {
 
     expect(screen.getByTestId("structure-block-0")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("structure-block-remove-0"));
+
+    // Confirm the destructive action in the confirmation dialog
+    fireEvent.click(screen.getByTestId("structure-block-remove-confirm-0"));
 
     expect(readSnapshot()).toHaveLength(0);
   });
