@@ -257,7 +257,10 @@ export async function fetchTrainingLoadWindows(
   for (const [start, group] of groupByHistoryStart(sorted)) {
     const end = group.at(-1) ?? start;
     const loads = scoreDailyLoads(historyBetween(history, start, end), end, start);
-    const loadsByDate = new Map(loads.map((load) => [load.date, load]));
+    const loadsByDate = new Map<string, typeof loads[0]>();
+    for (const load of loads) {
+      loadsByDate.set(load.date, load);
+    }
     for (const date of group) {
       windows.set(date, buildWindow(date, loadsByDate, future, distanceUnit));
     }

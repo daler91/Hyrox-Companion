@@ -179,7 +179,10 @@ export async function runNutritionReminderCron(
   // so an opt-out between scan and processing is still respected (the same W4
   // race the email scheduler guards against) without an O(N) fetch per tick.
   const freshUsers = await storage.users.getUsers(usersToCheck.map((stale) => stale.id));
-  const freshById = new Map(freshUsers.map((user) => [user.id, user]));
+  const freshById = new Map<string, typeof freshUsers[0]>();
+  for (const user of freshUsers) {
+    freshById.set(user.id, user);
+  }
 
   await inSequence(usersToCheck, async (stale) => {
     try {
