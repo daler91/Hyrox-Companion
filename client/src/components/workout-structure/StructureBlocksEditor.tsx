@@ -3,6 +3,7 @@ import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exer
 import { Plus, Trash2 } from "lucide-react";
 import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ignoreResult } from "@/hooks/chat/chatSessionModel";
@@ -18,7 +19,12 @@ import {
   type StructureChangeHandler,
   useStructureDrafts,
 } from "./useStructureDrafts";
-import { FORMAT_GUIDE, isGuidedFormat, type StepLinking, WorkoutStructureEditor } from "./WorkoutStructureEditor";
+import {
+  FORMAT_GUIDE,
+  isGuidedFormat,
+  type StepLinking,
+  WorkoutStructureEditor,
+} from "./WorkoutStructureEditor";
 
 type StructureStep = StructureBlockInput["steps"][number];
 type AssignGroupHandler = (
@@ -118,15 +124,14 @@ function formatBlockType(type: StructureBlockInput["formatType"]): string {
   return type === "amrap" || type === "emom" ? type.toUpperCase() : "Rounds";
 }
 
-function addPayloadForStep(
-  block: StructureBlockInput,
-  step: StructureStep,
-): AddExerciseSetPayload {
+function addPayloadForStep(block: StructureBlockInput, step: StructureStep): AddExerciseSetPayload {
   const rawName = typeof step.exerciseName === "string" ? step.exerciseName.trim() : "";
   const hasNamedExercise = rawName.length > 0 && rawName !== UNASSIGNED_WORK_STEP_LABEL;
   const normalizedName = hasNamedExercise ? normalizeExerciseName(rawName) : null;
   const knownDefinition = normalizedName ? EXERCISE_DEFINITIONS[normalizedName] : undefined;
-  const fallbackLabel = hasNamedExercise ? rawName : `${formatBlockType(block.formatType)} step ${step.stepNumber}`;
+  const fallbackLabel = hasNamedExercise
+    ? rawName
+    : `${formatBlockType(block.formatType)} step ${step.stepNumber}`;
   return {
     exerciseName: normalizedName ?? "custom",
     customLabel: knownDefinition ? null : fallbackLabel,
@@ -183,7 +188,11 @@ export function StructureBlocksEditor({
 
   const handleUpdateBlock = useCallback(
     (id: string, next: WorkoutStructureConfig) => {
-      commit((current) => current.map((draft) => (draft.id === id ? { ...draft, config: next, edited: true } : draft)));
+      commit((current) =>
+        current.map((draft) =>
+          draft.id === id ? { ...draft, config: next, edited: true } : draft,
+        ),
+      );
     },
     [commit],
   );
@@ -247,15 +256,19 @@ export function StructureBlocksEditor({
   const hasBlocks = drafts.length > 0;
 
   return (
-    <section className="space-y-3" data-testid="structure-blocks-editor" aria-label="Workout blocks">
+    <section
+      className="space-y-3"
+      data-testid="structure-blocks-editor"
+      aria-label="Workout blocks"
+    >
       {!headerless && (
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Workout blocks
           </p>
           <p className="text-xs text-muted-foreground">
-            Add an EMOM, AMRAP, or fixed-round block. Each one explains itself, and you build it
-            top to bottom.
+            Add an EMOM, AMRAP, or fixed-round block. Each one explains itself, and you build it top
+            to bottom.
           </p>
         </div>
       )}
@@ -357,6 +370,7 @@ function StructureBlockCard({
   // one block re-rendered every MovementRow across every block. Now unrelated
   // blocks keep the same `linking` reference and their MovementRows correctly
   // bail out.
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const block = useMemo(() => blockFromDraft(draft, index), [draft, index]);
   const linking: StepLinking = useMemo(
     () => ({
@@ -374,7 +388,10 @@ function StructureBlockCard({
   const guide = isGuidedFormat(block.formatType) ? FORMAT_GUIDE[block.formatType] : null;
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-background p-3" data-testid={`structure-block-${index}`}>
+    <div
+      className="space-y-3 rounded-lg border border-border bg-background p-3"
+      data-testid={`structure-block-${index}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
@@ -396,7 +413,7 @@ function StructureBlockCard({
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={onRemove}
+                onClick={() => setConfirmRemoveOpen(true)}
                 aria-label={`Remove block ${index + 1}`}
                 data-testid={`structure-block-remove-${index}`}
               >
@@ -417,6 +434,17 @@ function StructureBlockCard({
         showScoreControls={showScoreControls}
         onScoreChange={onScoreChange}
         linking={linking}
+      />
+
+      <ConfirmDialog
+        open={confirmRemoveOpen}
+        onOpenChange={setConfirmRemoveOpen}
+        title={`Remove ${formatBlockType(block.formatType)} block ${index + 1}?`}
+        description={`This block and its ${config.steps.length} step${config.steps.length === 1 ? "" : "s"} will be removed. This can't be undone.`}
+        confirmText="Remove"
+        onConfirm={onRemove}
+        isDestructive
+        confirmTestId={`structure-block-remove-confirm-${index}`}
       />
     </div>
   );
