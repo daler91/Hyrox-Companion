@@ -192,9 +192,12 @@ export async function exerciseNamesFor(
 ): Promise<ReadonlyMap<string, readonly string[]>> {
   if (known) return known;
   const sets = await storage.workouts.getExerciseSetsByPlanDays(dayIds, userId);
-  return new Map(
-    [...sets.entries()].map(([dayId, rows]) => [dayId, rows.map((row) => row.exerciseName)]),
-  );
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const map = new Map<string, readonly string[]>();
+  for (const [dayId, rows] of sets.entries()) {
+    map.set(dayId, rows.map((row) => row.exerciseName));
+  }
+  return map;
 }
 
 /** The plan day's purpose, when it is one we grade. */
@@ -220,9 +223,14 @@ async function selectGradeableRuns(
   options: GradeLogsOptions,
 ): Promise<GradeableRun[]> {
   const dayIds = [...new Set(linked.map((log) => log.planDayId as string))];
-  const days =
-    options.planDays ??
-    new Map((await storage.plans.getPlanDaysByIds(dayIds, userId)).map((day) => [day.id, day]));
+  let days = options.planDays;
+  if (!days) {
+    const fetchedDays = await storage.plans.getPlanDaysByIds(dayIds, userId);
+    // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+    const daysMap = new Map<string, typeof fetchedDays[0]>();
+    for (const day of fetchedDays) daysMap.set(day.id, day);
+    days = daysMap;
+  }
   const exerciseNames = await exerciseNamesFor(storage, userId, dayIds, options.exerciseNamesByDay);
 
   const runs: GradeableRun[] = [];
@@ -260,13 +268,20 @@ export async function loadGradeContext(
   ]);
   const { athlete, mafCeilingHr, distanceUnit } = athleteOf(user);
   const today = getLocalDateStrSafe(options.now ?? new Date(), user?.userTimezone);
+
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const vdotByPlan = new Map<string, number | null>();
+  for (const plan of plans) {
+    vdotByPlan.set(plan.id, plan.engineState?.runVdot ?? null);
+  }
+
   return {
     runs,
     streams,
     athlete,
     mafCeilingHr,
     distanceUnit,
-    vdotByPlan: new Map(plans.map((plan) => [plan.id, plan.engineState?.runVdot ?? null])),
+    vdotByPlan,
     historyZones: historyZonesLoader(storage, userId, runs, distanceUnit),
     backfillSince: addDaysToISODate(today, -SESSION_STREAM_BACKFILL_DAYS),
   };

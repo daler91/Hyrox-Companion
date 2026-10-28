@@ -96,7 +96,9 @@ export async function processRefuelReminder(
     ),
     storage.nutrition.listEntriesWithFoodForDate(user.id, workout.date),
   ]);
-  const byId = new Map<string, LogEntryWithFood>(windowEntries.map((e) => [e.id, e]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const byId = new Map<string, LogEntryWithFood>();
+  for (const e of windowEntries) byId.set(e.id, e);
   for (const e of dayEntries) if (!byId.has(e.id)) byId.set(e.id, e);
 
   const fuelling = computeSessionFuelling(workout, [...byId.values()]);

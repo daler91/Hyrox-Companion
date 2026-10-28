@@ -373,7 +373,9 @@ export function registerNutritionSummaryRoutes(router: Router): void {
               ),
               storage.nutrition.listEntriesWithFoodForDate(userId, workout.date),
             ]).then(([windowEntries, dayEntries]) => {
-              const byId = new Map(windowEntries.map((e) => [e.id, e]));
+              // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+              const byId = new Map<string, typeof windowEntries[0]>();
+              for (const e of windowEntries) byId.set(e.id, e);
               for (const e of dayEntries) if (!byId.has(e.id)) byId.set(e.id, e);
               return [...byId.values()];
             })

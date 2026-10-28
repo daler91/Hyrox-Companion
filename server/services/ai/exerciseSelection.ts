@@ -832,7 +832,9 @@ function buildUpcomingShape(
   const structured = upcoming.filter((day) => day.sets.length > 0);
   if (structured.length < 2) return null;
 
-  const setsByGroup: GroupCounts = new Map(PATTERN_GROUPS.map((group) => [group, 0]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const setsByGroup: GroupCounts = new Map();
+  for (const group of PATTERN_GROUPS) setsByGroup.set(group, 0);
   const heavyLowerDates = structured
     .filter((day) => tallyDay(day, setsByGroup) >= HEAVY_LOWER_BODY_SETS)
     .map((day) => day.date);

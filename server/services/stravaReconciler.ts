@@ -147,10 +147,16 @@ export async function loadMatchCandidates(
   };
   for (const log of logs) push(log.date, candidateFromLog(log));
   for (const day of days) if (day.scheduledDate) push(day.scheduledDate, candidateFromPlanDay(day));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const logsMap = new Map<string, typeof logs[0]>();
+  for (const l of logs) logsMap.set(l.id, l);
+  const daysMap = new Map<string, typeof days[0]>();
+  for (const d of days) daysMap.set(d.id, d);
+
   return {
     byDate,
-    logs: new Map(logs.map((l) => [l.id, l])),
-    planDays: new Map(days.map((d) => [d.id, d])),
+    logs: logsMap,
+    planDays: daysMap,
   };
 }
 

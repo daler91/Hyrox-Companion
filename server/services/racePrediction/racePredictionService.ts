@@ -350,7 +350,9 @@ function buildAiResponse(
   ai: z.infer<typeof racePredictionAiSchema>,
   readiness: RaceReadiness,
 ): RacePredictionResponse {
-  const aiByIndex = new Map(ai.segments.map((s) => [s.index, s]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const aiByIndex = new Map<number, typeof ai.segments[0]>();
+  for (const s of ai.segments) aiByIndex.set(s.index, s);
 
   let segmentSum = 0;
   const segments: RaceSegmentPrediction[] = features.baselineSegments.map((baseline) => {

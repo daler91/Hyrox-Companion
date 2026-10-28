@@ -185,8 +185,12 @@ export async function buildPlanSessionGrades(
     storage.users.getUser(userId),
     exerciseNamesFor(storage, userId, dayIds),
   ]);
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const planDays = new Map<string, typeof plan.days[0]>();
+  for (const day of plan.days) planDays.set(day.id, day);
+
   const grades = await gradeWorkoutLogs(storage, userId, logs, {
-    planDays: new Map(plan.days.map((day) => [day.id, day])),
+    planDays,
     exerciseNamesByDay: exerciseNames,
     plans: [plan],
     user,

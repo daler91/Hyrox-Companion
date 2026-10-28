@@ -58,7 +58,9 @@ function clampServingSizeG(value: number | null | undefined): number | null {
  * A key outside the curated set has no known unit and gets the mg (physical) cap.
  */
 const MICRO_PER_100G_MAX: Record<MicroUnit, number> = { mg: 100_000, mcg: 1_000_000 };
-const MICRO_UNIT_BY_KEY = new Map(MICRO_DISPLAY_DEFS.map((def) => [def.key, def.unit]));
+// ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+const MICRO_UNIT_BY_KEY = new Map<string, MicroUnit>();
+for (const def of MICRO_DISPLAY_DEFS) MICRO_UNIT_BY_KEY.set(def.key, def.unit);
 
 /** Drop non-finite / negative / implausible micro entries; null when nothing usable remains. */
 function clampMicros(

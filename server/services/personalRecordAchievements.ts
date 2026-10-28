@@ -105,7 +105,9 @@ export function findPersonalRecordAchievements(
   // 100 kg (220 lb) history it actually has to beat — not celebrated as a PR.
   const prior = tallyPersonalRecords(priorSets, preferences);
   const created = tallyPersonalRecords(createdSets, preferences);
-  const createdSetByKey = new Map(createdSets.map((set) => [getExerciseKey(set), set]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const createdSetByKey = new Map<string, typeof createdSets[0]>();
+  for (const set of createdSets) createdSetByKey.set(getExerciseKey(set), set);
   const achievements: PersonalRecordAchievement[] = [];
 
   for (const exerciseKey of Object.keys(created.records)) {

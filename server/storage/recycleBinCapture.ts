@@ -157,7 +157,10 @@ async function insertItems(
       },
     })
     .returning({ id: recycleBinItems.id, entityId: recycleBinItems.entityId });
-  return new Map(inserted.map((row) => [row.entityId, row.id]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const map = new Map<string, string>();
+  for (const row of inserted) map.set(row.entityId, row.id);
+  return map;
 }
 
 function baseItem(
