@@ -204,7 +204,10 @@ export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: 
   const existing = await vectorPool.query<{ food_id: string; text_hash: string }>(
     `SELECT food_id, text_hash FROM food_embeddings`,
   );
-  const existingHash = new Map(existing.rows.map((row) => [row.food_id, row.text_hash]));
+  const existingHash = new Map<string, string>();
+  for (const row of existing.rows) {
+    existingHash.set(row.food_id, row.text_hash);
+  }
 
   const { pending, cursor } = await scanForPending(existingHash, limit, scanCursor, MAX_SCAN_PAGES);
   if (pending.length === 0) {

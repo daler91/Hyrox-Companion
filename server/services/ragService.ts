@@ -161,7 +161,10 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
     // otherwise each hit the provider. Usage tracking reflects the deduped count.
     const uniqueTexts = [...new Set(textsToEmbed)];
     const uniqueEmbeddings = await generateEmbeddings(uniqueTexts);
-    const embeddingByText = new Map(uniqueTexts.map((text, i) => [text, uniqueEmbeddings[i]]));
+    const embeddingByText = new Map<string, number[]>();
+    for (let i = 0; i < uniqueTexts.length; i++) {
+      embeddingByText.set(uniqueTexts[i], uniqueEmbeddings[i]);
+    }
     trackEmbeddingUsage(material.userId, uniqueTexts.length);
 
     const embeddings = textsToEmbed.map((text) => embeddingByText.get(text)!);
@@ -474,7 +477,10 @@ export async function getRagStatus(userId: string) {
       return null;
     }),
   ]);
-  const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
+  const chunkMap = new Map<string, typeof chunkCounts[0]>();
+  for (const c of chunkCounts) {
+    chunkMap.set(c.materialId, c);
+  }
 
   const hasApiKey = Boolean(env.GEMINI_API_KEY);
 
