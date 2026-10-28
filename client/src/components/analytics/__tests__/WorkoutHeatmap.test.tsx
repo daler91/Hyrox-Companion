@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkoutHeatmap } from "../WorkoutHeatmap";
@@ -18,11 +18,13 @@ describe("WorkoutHeatmap", () => {
 
     const monthLabelRow = screen.getByTestId("workout-heatmap-month-label-row");
     expect(monthLabelRow).toHaveClass("gap-x-2");
-    expect(screen.getAllByTestId("workout-heatmap-month-label").map((label) => label.textContent))
-      .toEqual(["Feb", "Mar", "Apr", "May"]);
+    expect(
+      screen.getAllByTestId("workout-heatmap-month-label").map((label) => label.textContent),
+    ).toEqual(["Feb", "Mar", "Apr", "May"]);
     expect(screen.getAllByText("May")).toHaveLength(1);
-    expect(screen.getAllByTestId("workout-heatmap-day-label").map((label) => label.textContent))
-      .toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+    expect(
+      screen.getAllByTestId("workout-heatmap-day-label").map((label) => label.textContent),
+    ).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
     const grid = screen.getByTestId("workout-heatmap-grid");
     expect(grid.getAttribute("style")).toContain("repeat(16, minmax(2rem, 1fr))");
@@ -33,7 +35,7 @@ describe("WorkoutHeatmap", () => {
   function cellFor(date: string): HTMLElement {
     const cell = screen
       .getAllByTestId("workout-heatmap-cell")
-      .find((el) => el.getAttribute("title")?.startsWith(date));
+      .find((el) => el.getAttribute("data-date") === date);
     if (!cell) throw new Error(`no heatmap cell for ${date}`);
     return cell;
   }
@@ -44,20 +46,18 @@ describe("WorkoutHeatmap", () => {
     render(<WorkoutHeatmap workoutDates={["2026-05-18"]} rangeStart="2026-04-25" />);
 
     const beforeRange = cellFor("2026-04-24");
-    expect(beforeRange).toHaveAttribute("title", "2026-04-24 - Outside selected range");
     expect(beforeRange).toHaveClass("border-dashed");
     expect(beforeRange).not.toHaveClass("bg-muted/60");
-    expect(cellFor("2026-02-02")).toHaveAttribute("title", "2026-02-02 - Outside selected range");
+    expect(cellFor("2026-02-02")).toHaveClass("border-dashed");
 
     // In-range days keep their rest/workout meaning.
     const firstInRange = cellFor("2026-04-25");
-    expect(firstInRange).toHaveAttribute("title", "2026-04-25");
     expect(firstInRange).toHaveClass("bg-muted/60");
     expect(cellFor("2026-05-18")).toHaveClass("bg-primary");
 
     const outOfRangeCells = screen
       .getAllByTestId("workout-heatmap-cell")
-      .filter((el) => el.getAttribute("title")?.endsWith("Outside selected range"));
+      .filter((el) => el.classList.contains("border-dashed"));
     // 2026-02-02 .. 2026-04-24 inclusive.
     expect(outOfRangeCells).toHaveLength(82);
     expect(screen.getByTestId("workout-heatmap-out-of-range-legend")).toHaveTextContent(
@@ -68,8 +68,23 @@ describe("WorkoutHeatmap", () => {
   it("treats every past day as in range when no range start is given (All time)", () => {
     render(<WorkoutHeatmap workoutDates={["2026-05-18"]} />);
 
-    expect(cellFor("2026-02-02")).toHaveAttribute("title", "2026-02-02");
     expect(cellFor("2026-02-02")).toHaveClass("bg-muted/60");
     expect(screen.queryByTestId("workout-heatmap-out-of-range-legend")).not.toBeInTheDocument();
+  });
+
+  it("shows date and status when a cell is hovered or clicked", () => {
+    render(<WorkoutHeatmap workoutDates={["2026-05-18"]} />);
+
+    const activeLabel = screen.getByTestId("workout-heatmap-active-label");
+    expect(activeLabel).toHaveStyle({ opacity: "0" });
+
+    // Click a workout cell — the label should appear with date info.
+    fireEvent.click(cellFor("2026-05-18"));
+    expect(activeLabel).toHaveStyle({ opacity: "1" });
+    expect(activeLabel.textContent).toContain("Workout logged");
+
+    // Click a rest day cell.
+    fireEvent.click(cellFor("2026-05-17"));
+    expect(activeLabel.textContent).toContain("Rest day");
   });
 });

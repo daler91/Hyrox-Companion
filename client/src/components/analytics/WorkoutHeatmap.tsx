@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { toISODateString } from "@/lib/dateUtils";
 
@@ -48,11 +48,6 @@ function getHeatmapCellColor(cell: HeatmapCell): string {
   return "bg-muted/60";
 }
 
-function getHeatmapCellTitle(cell: HeatmapCell): string {
-  if (cell.isOutOfRange) return `${cell.date} - Outside selected range`;
-  return `${cell.date}${cell.hasWorkout ? " - Workout logged" : ""}`;
-}
-
 interface WorkoutHeatmapProps {
   readonly workoutDates: string[];
   /**
@@ -64,7 +59,22 @@ interface WorkoutHeatmapProps {
   readonly explanation?: string;
 }
 
+function formatCellLabel(cell: HeatmapCell): string {
+  const d = new Date(cell.date + "T00:00:00");
+  const formatted = d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  if (cell.isOutOfRange) return `${formatted} — Outside selected range`;
+  if (cell.isFuture) return `${formatted} — Upcoming`;
+  return cell.hasWorkout ? `${formatted} — Workout logged` : `${formatted} — Rest day`;
+}
+
 export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: WorkoutHeatmapProps) {
+  const [activeCell, setActiveCell] = useState<HeatmapCell | null>(null);
+  const clearActiveCell = useCallback(() => setActiveCell(null), []);
+
   const { grid, monthLabels, hasOutOfRange } = useMemo(() => {
     const dateSet = new Set(workoutDates);
     const today = new Date();
@@ -158,6 +168,7 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
               data-testid="workout-heatmap-grid"
               role="img"
               aria-label="Workout activity heatmap: each square is a day, shaded when a workout was logged, arranged by week."
+              onPointerLeave={clearActiveCell}
             >
               {grid.map((week) => (
                 <div
@@ -169,7 +180,9 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
                     <div
                       key={cell.date}
                       className={`aspect-square w-full max-w-7 rounded-sm ${getHeatmapCellColor(cell)}`}
-                      title={getHeatmapCellTitle(cell)}
+                      onPointerEnter={() => setActiveCell(cell)}
+                      onClick={() => setActiveCell(cell)}
+                      data-date={cell.date}
                       data-testid="workout-heatmap-cell"
                     />
                   ))}
@@ -178,7 +191,16 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
+          <p
+            className="mt-2 h-5 text-xs text-muted-foreground transition-opacity"
+            style={{ opacity: activeCell ? 1 : 0 }}
+            aria-live="polite"
+            data-testid="workout-heatmap-active-label"
+          >
+            {activeCell ? formatCellLabel(activeCell) : " "}
+          </p>
+
+          <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <span className="h-[10px] w-[10px] rounded-sm bg-muted/60" aria-hidden="true" />
               <span>Rest day</span>
@@ -188,8 +210,14 @@ export function WorkoutHeatmap({ workoutDates, rangeStart, explanation }: Workou
               <span>Workout logged</span>
             </span>
             {hasOutOfRange && (
-              <span className="inline-flex items-center gap-1" data-testid="workout-heatmap-out-of-range-legend">
-                <span className={`h-[10px] w-[10px] rounded-sm ${OUT_OF_RANGE_CELL_CLASS}`} aria-hidden="true" />
+              <span
+                className="inline-flex items-center gap-1"
+                data-testid="workout-heatmap-out-of-range-legend"
+              >
+                <span
+                  className={`h-[10px] w-[10px] rounded-sm ${OUT_OF_RANGE_CELL_CLASS}`}
+                  aria-hidden="true"
+                />
                 <span>Outside selected range</span>
               </span>
             )}
