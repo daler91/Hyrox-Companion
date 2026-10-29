@@ -345,7 +345,10 @@ export function annotateSession(
 async function proposalsIn(userId: string, rows: ChatMessage[]): Promise<Map<string, PlanAdjustmentProposal>> {
   const ids = rows.flatMap((row) => (row.proposalId ? [row.proposalId] : []));
   const proposals = await storage.planProposals.getByIds(ids, userId);
-  return new Map(proposals.map((proposal) => [proposal.id, proposal]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const map = new Map<string, PlanAdjustmentProposal>();
+  for (const proposal of proposals) map.set(proposal.id, proposal);
+  return map;
 }
 
 function focusColumns(focus: TurnFocus) {

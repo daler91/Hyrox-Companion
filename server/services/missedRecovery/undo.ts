@@ -77,7 +77,11 @@ function scaledSet(set: ExerciseSet, update: PlanDayRecoverySetUpdate): Recovery
  * session moved twice goes back one move at a time.
  */
 export function captureMove(day: PlanDay, edits?: MoveEdits): PlanDayRecoveryUndo {
-  const byId = new Map((edits?.sets ?? []).map((set) => [set.id, set]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const byId = new Map<string, ExerciseSet>();
+  if (edits?.sets) {
+    for (const set of edits.sets) byId.set(set.id, set);
+  }
   const deleted = new Set(edits?.deleteSetIds ?? []);
   const scaledSets = (edits?.setUpdates ?? []).flatMap((update) => {
     const set = byId.get(update.id);
@@ -138,7 +142,9 @@ export type UndoWrite = Omit<PlanDayRecoveryWrite, "guard">;
  * them since.
  */
 export function planUndo(day: PlanDay, undo: PlanDayRecoveryUndo, currentSets: readonly ExerciseSet[]): UndoWrite {
-  const present = new Map(currentSets.map((set) => [set.id, set]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const present = new Map<string, ExerciseSet>();
+  for (const set of currentSets) present.set(set.id, set);
   const notes = undo.notes ? restoredNotes(day.notes, undo.notes) : undefined;
   const duration = undo.expectedDurationMin;
   const restoreDuration = duration !== undefined && day.expectedDurationMin === duration.after;
