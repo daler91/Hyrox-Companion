@@ -6,6 +6,7 @@ import React, { forwardRef } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getBulkDeleteSelectionKey, isTimelineEntryBulkDeletable } from "@/hooks/workout-actions/bulkDelete";
 import { cn } from "@/lib/utils";
 
@@ -103,24 +104,31 @@ function TimelineDateHeader({
         {fuelling ? <FuellingDayChip date={date} fuelling={fuelling} /> : null}
         {weekNumber ? <Badge variant="outline">Week {weekNumber}</Badge> : null}
         {onAddAnnotation ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "h-8 text-xs text-muted-foreground hover:text-foreground md:h-7",
-              // Past/future rows drop the label on phones so the date, the
-              // fuelling chip and the week badge share one line; today
-              // keeps it, being the entry point new users learn from.
-              isTodayDate ? "px-2" : "w-8 px-0 sm:w-auto sm:px-2",
-              addNoteClassName,
-            )}
-            onClick={() => onAddAnnotation(date)}
-            aria-label={`Log a note for ${label}`}
-            data-testid={`button-add-annotation-${date}`}
-          >
-            <StickyNote className={cn("h-3.5 w-3.5", isTodayDate ? "mr-1" : "sm:mr-1")} aria-hidden="true" />
-            <span className={isTodayDate ? undefined : "hidden sm:inline"}>Note</span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "h-8 text-xs text-muted-foreground hover:text-foreground md:h-7",
+                    // Past/future rows drop the label on phones so the date, the
+                    // fuelling chip and the week badge share one line; today
+                    // keeps it, being the entry point new users learn from.
+                    isTodayDate ? "px-2" : "w-8 px-0 sm:w-auto sm:px-2",
+                    addNoteClassName,
+                  )}
+                  onClick={() => onAddAnnotation(date)}
+                  aria-label={`Log a note for ${label}`}
+                  data-testid={`button-add-annotation-${date}`}
+                >
+                  <StickyNote className={cn("h-3.5 w-3.5", isTodayDate ? "mr-1" : "sm:mr-1")} aria-hidden="true" />
+                  <span className={isTodayDate ? undefined : "hidden sm:inline"}>Note</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Log a note</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
       </div>
     </div>
