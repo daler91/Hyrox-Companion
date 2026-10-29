@@ -239,3 +239,60 @@ describe("plan-retirement guards", () => {
     );
   });
 });
+
+/**
+ * planDaysWithinLifetimes / planDaysPastRetirement across the plan mixes the
+ * single combined test above does not reach: no plans, only live plans, only
+ * retired plans, and several retired plans at once.
+ */
+describe("plan-lifetime predicates across plan mixes", () => {
+  const renderDays = (where: ReturnType<typeof planDaysWithinLifetimes>) =>
+    render(db.select({ id: planDays.id }).from(planDays).where(where) as never);
+
+  it("builds no predicate for either side when there are no plans", () => {
+    expect(planDaysWithinLifetimes([])).toBeUndefined();
+    expect(planDaysPastRetirement([])).toBeUndefined();
+  });
+
+  it("keeps every day of live plans by id alone, with no cutoff comparison and nothing to add back", () => {
+    const plans = [
+      { id: "plan-a", retiredOn: null },
+      { id: "plan-b", retiredOn: null },
+    ];
+
+    const kept = renderDays(planDaysWithinLifetimes(plans));
+
+    expect(kept).toContain(`"plan_days"."plan_id" in`);
+    expect(kept).not.toContain(`"plan_days"."scheduled_date"`);
+    expect(planDaysPastRetirement(plans)).toBeUndefined();
+  });
+
+  it("limits a lone retired plan to its pre-cutoff days with no live-id clause", () => {
+    const kept = renderDays(planDaysWithinLifetimes([{ id: "plan-old", retiredOn: "2026-07-20" }]));
+
+    expect(kept).toContain(`"plan_days"."scheduled_date" < $`);
+    expect(kept).not.toContain(`"plan_days"."plan_id" in`);
+  });
+
+  it("applies each retired plan's own cutoff, on both sides, when several are retired", () => {
+    const plans = [
+      { id: "plan-live", retiredOn: null },
+      { id: "plan-old-1", retiredOn: "2026-06-01" },
+      { id: "plan-old-2", retiredOn: "2026-07-20" },
+    ];
+    const compile = (where: ReturnType<typeof planDaysWithinLifetimes>) =>
+      dialect.sqlToQuery(
+        (db.select({ id: planDays.id }).from(planDays).where(where) as unknown as { getSQL: () => never }).getSQL(),
+      );
+
+    const kept = compile(planDaysWithinLifetimes(plans));
+    const dropped = compile(planDaysPastRetirement(plans));
+
+    // One cutoff comparison per retired plan, each bound to that plan's own date.
+    expect(kept.sql.match(/"plan_days"\."scheduled_date" < \$/g)).toHaveLength(2);
+    expect(kept.params).toEqual(expect.arrayContaining(["plan-old-1", "2026-06-01", "plan-old-2", "2026-07-20"]));
+    expect(dropped.sql.match(/"plan_days"\."scheduled_date" >= \$/g)).toHaveLength(2);
+    expect(dropped.params).toEqual(["plan-old-1", "2026-06-01", "plan-old-2", "2026-07-20"]);
+    expect(dropped.params).not.toContain("plan-live");
+  });
+});

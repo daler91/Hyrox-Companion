@@ -69,3 +69,55 @@ describe("POST /api/v1/push/subscribe (S2 CODEBASE_ANALYSIS_2026-10-03: push-ser
     expect(storage.push.saveSubscription).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/v1/push/subscribe (persisted-string length bounds)", () => {
+  let app: express.Express;
+  const ENDPOINT_PREFIX = "https://fcm.googleapis.com/fcm/send/";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(pushRouter);
+  });
+
+  it("accepts an endpoint of exactly 2048 characters", async () => {
+    vi.mocked(storage.push.saveSubscription).mockResolvedValue(undefined);
+    const endpoint = ENDPOINT_PREFIX + "a".repeat(2048 - ENDPOINT_PREFIX.length);
+
+    const response = await request(app).post("/api/v1/push/subscribe").send({ endpoint, keys: KEYS });
+
+    expect(response.status).toBe(200);
+    expect(storage.push.saveSubscription).toHaveBeenCalledWith(TEST_USER_ID, { endpoint, ...KEYS });
+  });
+
+  it("rejects an endpoint longer than 2048 characters", async () => {
+    const endpoint = ENDPOINT_PREFIX + "a".repeat(2049 - ENDPOINT_PREFIX.length);
+
+    const response = await request(app).post("/api/v1/push/subscribe").send({ endpoint, keys: KEYS });
+
+    expect(response.status).toBe(400);
+    expect(storage.push.saveSubscription).not.toHaveBeenCalled();
+  });
+
+  it.each(["p256dh", "auth"] as const)("accepts a %s key of exactly 512 characters", async (field) => {
+    vi.mocked(storage.push.saveSubscription).mockResolvedValue(undefined);
+    const keys = { ...KEYS, [field]: "k".repeat(512) };
+    const endpoint = `${ENDPOINT_PREFIX}abc`;
+
+    const response = await request(app).post("/api/v1/push/subscribe").send({ endpoint, keys });
+
+    expect(response.status).toBe(200);
+    expect(storage.push.saveSubscription).toHaveBeenCalledWith(TEST_USER_ID, { endpoint, ...keys });
+  });
+
+  it.each(["p256dh", "auth"] as const)("rejects a %s key longer than 512 characters", async (field) => {
+    const keys = { ...KEYS, [field]: "k".repeat(513) };
+
+    const response = await request(app)
+      .post("/api/v1/push/subscribe")
+      .send({ endpoint: `${ENDPOINT_PREFIX}abc`, keys });
+
+    expect(response.status).toBe(400);
+    expect(storage.push.saveSubscription).not.toHaveBeenCalled();
+  });
+});
