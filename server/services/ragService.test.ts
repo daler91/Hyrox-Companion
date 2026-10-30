@@ -8,6 +8,7 @@ import {
   EMBEDDING_UNAVAILABLE_MESSAGE,
   getRagStatus,
   purgeRagCacheForUser,
+  reembedAllMaterials,
   retrieveRelevantChunks,
 } from "./ragService";
 
@@ -617,5 +618,144 @@ describe("getRagStatus (S6, CODEBASE_ANALYSIS_2026-10-03)", () => {
     expect(status.hasApiKey).toBe(false);
     expect(status.embeddingApi).toEqual({ ok: false, error: EMBEDDING_UNAVAILABLE_MESSAGE });
     expect(JSON.stringify(status)).not.toContain("GEMINI");
+  });
+
+  describe("per-material status", () => {
+    const material = (id: string, content: string) =>
+      ({ id, userId: "user-1", title: `Title ${id}`, content, type: "document" }) as CoachingMaterial;
+
+    beforeEach(() => {
+      env.GEMINI_API_KEY = undefined;
+    });
+
+    it("joins chunk counts onto materials by id and defaults materials with no chunks to 0 / false", async () => {
+      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([
+        material("m1", "abcde"),
+        material("m2", "xy"),
+      ]);
+      vi.mocked(storage.coaching.getChunkCountsByMaterial).mockResolvedValue([
+        { materialId: "m1", chunkCount: 3, hasEmbeddings: true },
+      ]);
+
+      const status = await getRagStatus("user-1");
+
+      expect(status.materials).toEqual([
+        { id: "m1", title: "Title m1", type: "document", contentLength: 5, chunkCount: 3, hasEmbeddings: true },
+        { id: "m2", title: "Title m2", type: "document", contentLength: 2, chunkCount: 0, hasEmbeddings: false },
+      ]);
+      expect(status.totalMaterials).toBe(2);
+      expect(status.totalChunks).toBe(3);
+      expect(status.allEmbedded).toBe(false);
+    });
+
+    it("reports allEmbedded only when every material has embeddings", async () => {
+      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([
+        material("m1", "a"),
+        material("m2", "b"),
+      ]);
+      vi.mocked(storage.coaching.getChunkCountsByMaterial).mockResolvedValue([
+        { materialId: "m1", chunkCount: 1, hasEmbeddings: true },
+        { materialId: "m2", chunkCount: 2, hasEmbeddings: true },
+      ]);
+
+      const status = await getRagStatus("user-1");
+
+      expect(status.allEmbedded).toBe(true);
+      expect(status.totalChunks).toBe(3);
+    });
+
+    it("does not report allEmbedded when there are no materials", async () => {
+      const status = await getRagStatus("user-1");
+
+      expect(status.allEmbedded).toBe(false);
+      expect(status.totalChunks).toBe(0);
+    });
+
+    it("flags a dimension mismatch only when a stored dimension differs from the expected one", async () => {
+      vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(768);
+      const mismatched = await getRagStatus("user-1");
+      expect(mismatched.storedDimension).toBe(768);
+      expect(mismatched.dimensionMismatch).toBe(true);
+
+      vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(3072);
+      const matching = await getRagStatus("user-1");
+      expect(matching.dimensionMismatch).toBe(false);
+
+      vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(null);
+      const none = await getRagStatus("user-1");
+      expect(none.dimensionMismatch).toBe(false);
+    });
+
+    it("degrades to a null stored dimension and logs when the dimension read fails", async () => {
+      vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockRejectedValue(new Error("vector db down"));
+
+      const status = await getRagStatus("user-1");
+
+      expect(status.storedDimension).toBeNull();
+      expect(status.dimensionMismatch).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "user-1" }),
+        expect.stringContaining("stored embedding dimension"),
+      );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reembedAllMaterials
+// ---------------------------------------------------------------------------
+
+describe("reembedAllMaterials", () => {
+  const material = (id: string, content = "Some content.") =>
+    ({ id, userId: "user-1", title: `Title ${id}`, content, type: "document" }) as CoachingMaterial;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("returns success with zero processed when the user has no materials", async () => {
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
+
+    await expect(reembedAllMaterials("user-1")).resolves.toEqual({
+      success: true,
+      materialsProcessed: 0,
+      errors: [],
+    });
+    expect(generateEmbeddings).not.toHaveBeenCalled();
+  });
+
+  it("counts every material that embeds successfully", async () => {
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([material("m1"), material("m2")]);
+    vi.mocked(storage.coaching.getCoachingMaterial).mockImplementation(
+      async (id: string) => material(id) as never,
+    );
+    vi.mocked(generateEmbeddings).mockResolvedValue([[0.1]]);
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
+
+    const result = await reembedAllMaterials("user-1");
+
+    expect(result).toEqual({ success: true, materialsProcessed: 2, errors: [] });
+    expect(storage.coaching.replaceChunks).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a failed material by id without stopping the others", async () => {
+    vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([
+      material("m1"),
+      material("m2"),
+      material("m3"),
+    ]);
+    vi.mocked(storage.coaching.getCoachingMaterial).mockImplementation(
+      async (id: string) => material(id) as never,
+    );
+    vi.mocked(generateEmbeddings).mockResolvedValue([[0.1]]);
+    vi.mocked(storage.coaching.replaceChunks).mockImplementation(async (id: string) => {
+      if (id === "m2") throw new Error("write failed");
+      return [];
+    });
+
+    const result = await reembedAllMaterials("user-1");
+
+    expect(result.materialsProcessed).toBe(2);
+    expect(result.errors).toEqual(["m2: write failed"]);
   });
 });
