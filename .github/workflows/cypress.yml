@@ -188,7 +188,7 @@ jobs:
           echo "id=${{ github.run_id }}-${{ github.run_attempt }}-ubuntu-${VERSION%% *}" >> "$GITHUB_OUTPUT"
 
       - name: Cypress run
-        uses: cypress-io/github-action@c541a95ea92d9239347a2355f2e895cd4b3f8060 # v7.4.6
+        uses: cypress-io/github-action@4ce68f262a3888d22cf3175d62010a145ba737ee # v7.4.8
         with:
           record: ${{ needs.plan.outputs.record == 'true' }}
           parallel: ${{ needs.plan.outputs.record == 'true' }}
