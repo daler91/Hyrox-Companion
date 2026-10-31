@@ -679,15 +679,13 @@ export function MuscleHeatMapCard({
             ))}
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <span>Less</span>
           {HEAT_TONES.map((tone) => (
-            <span
-              key={tone.label}
-              className={cn("h-3 w-3 rounded-sm", tone.swatchClass)}
-              title={tone.label}
-              aria-label={tone.label}
-            />
+            <span key={tone.label} className="inline-flex items-center gap-1">
+              <span className={cn("h-3 w-3 rounded-sm", tone.swatchClass)} aria-hidden="true" />
+              <span>{tone.label}</span>
+            </span>
           ))}
           <span>More</span>
         </div>
