@@ -141,6 +141,59 @@ describe("CustomFoodDialog label prefill", () => {
   });
 });
 
+describe("CustomFoodDialog name validation", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function renderCreateDialog() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CustomFoodDialog state={{ mode: "create" }} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+    return { onClose };
+  }
+
+  it("marks the name field as aria-required", () => {
+    renderCreateDialog();
+    expect(screen.getByTestId("input-custom-name")).toHaveAttribute("aria-required", "true");
+  });
+
+  it("shows an inline error when the name field is blurred while empty", async () => {
+    const user = userEvent.setup();
+    renderCreateDialog();
+
+    const nameInput = screen.getByTestId("input-custom-name");
+    await user.click(nameInput);
+    await user.tab();
+
+    expect(nameInput).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("A name is required to save this food.");
+  });
+
+  it("does not show the error before the field is touched", () => {
+    renderCreateDialog();
+    expect(screen.getByTestId("input-custom-name")).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("clears the error when the user types a name", async () => {
+    const user = userEvent.setup();
+    renderCreateDialog();
+
+    const nameInput = screen.getByTestId("input-custom-name");
+    await user.click(nameInput);
+    await user.tab();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    await user.click(nameInput);
+    await user.type(nameInput, "Protein Bar");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(nameInput).not.toHaveAttribute("aria-invalid", "true");
+  });
+});
+
 describe("CustomFoodDialog public sharing", () => {
   beforeEach(() => vi.clearAllMocks());
 
