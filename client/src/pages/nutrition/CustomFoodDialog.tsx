@@ -89,6 +89,8 @@ function CustomFoodForm({
 
   const isPending = createFood.isPending || updateFood.isPending;
   const valid = name.trim().length > 0;
+  const [nameTouched, setNameTouched] = useState(false);
+  const nameError = nameTouched && !valid ? "A name is required to save this food." : undefined;
 
   // A per-serving-only label with no gram weight can't be normalized to
   // per-100g, so the suggestion arrives empty — show the printed per-serving
@@ -109,7 +111,10 @@ function CustomFoodForm({
   else if (isCreate) saveLabel = "Save food";
 
   const submit = (logAfter = false) => {
-    if (!valid) return;
+    if (!valid) {
+      setNameTouched(true);
+      return;
+    }
     const fields = {
       name: name.trim(),
       brand: brand.trim() || null,
@@ -193,6 +198,9 @@ function CustomFoodForm({
             id="cf-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onBlur={() => setNameTouched(true)}
+            aria-required="true"
+            errorMessage={nameError}
             data-testid="input-custom-name"
           />
         </div>
