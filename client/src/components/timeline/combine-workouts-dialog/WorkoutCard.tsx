@@ -22,13 +22,13 @@ export function WorkoutCard({ label, entry, variant }: Readonly<WorkoutCardProps
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {entry.duration && (
             <span className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               {entry.duration}m
             </span>
           )}
           {entry.calories && (
             <span className="flex items-center gap-1">
-              <Flame className="h-3.5 w-3.5" />
+              <Flame className="h-3.5 w-3.5" aria-hidden="true" />
               {entry.calories}
             </span>
           )}

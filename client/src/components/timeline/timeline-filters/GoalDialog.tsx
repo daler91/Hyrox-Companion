@@ -34,7 +34,7 @@ export function GoalDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
+            <Target className="h-4 w-4" aria-hidden="true" />
             Plan Goal
           </DialogTitle>
           <DialogDescription className="sr-only">
