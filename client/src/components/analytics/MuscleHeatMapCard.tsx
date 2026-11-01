@@ -603,10 +603,15 @@ export function MuscleHeatMapCard({
     }
   }
   const analysis = useMemo(() => buildMuscleHeatMapAnalysis(muscles), [muscles]);
-  const coverageByMuscle = useMemo(
-    () => new Map(muscles.map((muscle) => [muscle.muscle, muscle])),
-    [muscles],
-  );
+  const coverageByMuscle = useMemo(() => {
+    // ⚡ Bolt: Replace intermediate map allocation with a single loop
+    // to prevent intermediate array creation and reduce garbage collection overhead.
+    const map = new Map<typeof muscles[0]["muscle"], typeof muscles[0]>();
+    for (const muscle of muscles) {
+      map.set(muscle.muscle, muscle);
+    }
+    return map;
+  }, [muscles]);
   const musclesByRegion = useMemo(() => {
     const grouped = {
       upper: [] as MuscleCoverage[],
