@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { type DeviceLinkTarget, useDeviceLinkMutations } from "@/hooks/useDeviceLinkMutations";
 
 export interface DeviceLinkOption {
@@ -196,16 +197,32 @@ export function StravaLinkBadge({ entry, dayEntries }: Readonly<DeviceLinkContro
   const hasMenu = Boolean(workoutLogId) && (isLinked || candidates.length > 0);
 
   if (!hasMenu || !workoutLogId) {
-    return (
+    const badge = (
       <Badge
         className={STRAVA_BADGE_CLASS}
-        title={entry.deviceActivityName ?? undefined}
         data-testid={`badge-strava-${entry.id}`}
       >
         <StravaIcon className="h-3 w-3 mr-1" aria-hidden="true" />
         Strava
       </Badge>
     );
+
+    if (entry.deviceActivityName) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {badge}
+            </TooltipTrigger>
+            <TooltipContent>
+              {entry.deviceActivityName}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return badge;
   }
 
   const busy = linkMutation.isPending || unlinkMutation.isPending;
