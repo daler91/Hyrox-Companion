@@ -142,7 +142,7 @@ export function GeneratePlanDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
             Generate AI Training Plan
           </DialogTitle>
           <DialogDescription>

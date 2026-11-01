@@ -22,19 +22,19 @@ export function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStra
     <div className="flex flex-wrap gap-3 mt-2 pt-2 border-t border-border/50">
       {entry.calories && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-calories-${entry.id}`}>
-          <Flame className="h-3 w-3 text-orange-500" />
+          <Flame className="h-3 w-3 text-orange-500" aria-hidden="true" />
           <span>{entry.calories} cal</span>
         </div>
       )}
       {entry.avgWatts && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-power-${entry.id}`}>
-          <Zap className="h-3 w-3 text-yellow-500" />
+          <Zap className="h-3 w-3 text-yellow-500" aria-hidden="true" />
           <span>{entry.avgWatts}W</span>
         </div>
       )}
       {entry.avgCadence && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-cadence-${entry.id}`}>
-          <Activity className="h-3 w-3 text-blue-500" />
+          <Activity className="h-3 w-3 text-blue-500" aria-hidden="true" />
           <span>
             {Math.round(entry.avgCadence)} {cadenceUnitFor(entry.deviceSportType)}
           </span>
@@ -42,13 +42,13 @@ export function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStra
       )}
       {entry.avgSpeed && entry.avgSpeed > 0 && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-speed-${entry.id}`}>
-          <TrendingUp className="h-3 w-3 text-green-500" />
+          <TrendingUp className="h-3 w-3 text-green-500" aria-hidden="true" />
           <span>{formatSpeed(entry.avgSpeed, distanceUnit)}</span>
         </div>
       )}
       {entry.sufferScore && (
         <div className="flex items-center gap-1 text-xs text-muted-foreground" data-testid={`text-effort-${entry.id}`}>
-          <TrendingUp className="h-3 w-3 text-purple-500" />
+          <TrendingUp className="h-3 w-3 text-purple-500" aria-hidden="true" />
           <span>Effort: {entry.sufferScore}</span>
         </div>
       )}
