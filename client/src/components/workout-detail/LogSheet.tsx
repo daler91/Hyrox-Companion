@@ -294,7 +294,7 @@ function SecondaryLogActions({ entry, onAskCoach, onSkip }: SecondaryLogActionsP
           onClick={() => onAskCoach(entry)}
           data-testid={`log-ask-coach-${entry.id}`}
         >
-          <MessageSquare className="mr-2 h-4 w-4" />
+          <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
           Ask coach
         </Button>
       ) : null}
@@ -305,7 +305,7 @@ function SecondaryLogActions({ entry, onAskCoach, onSkip }: SecondaryLogActionsP
           onClick={() => onSkip(entry)}
           data-testid={`log-skip-${entry.id}`}
         >
-          <SkipForward className="mr-2 h-4 w-4" />
+          <SkipForward className="mr-2 h-4 w-4" aria-hidden="true" />
           Skip
         </Button>
       ) : null}
@@ -363,7 +363,7 @@ function LogCompletionControls({
           {isSaving || isLogging ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
           ) : (
-            <Check className="mr-2 h-4 w-4" />
+            <Check className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
           {getLogButtonLabel(isSaving, isLogging)}
         </Button>
@@ -438,7 +438,7 @@ function EditSecondaryActions({ entry, onDone, onAskCoach, onSkip }: EditSeconda
           onClick={onDone}
           data-testid={`edit-done-${entry.id}`}
         >
-          <Check className="mr-2 h-4 w-4" />
+          <Check className="mr-2 h-4 w-4" aria-hidden="true" />
           Done
         </Button>
         {onAskCoach || onSkip ? (

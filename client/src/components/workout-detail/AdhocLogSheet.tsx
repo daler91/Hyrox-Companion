@@ -605,7 +605,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
             onClick={openFullEditor}
             data-testid="adhoc-open-full-editor"
           >
-            <ExternalLink className="mr-2 h-4 w-4" />
+            <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
             Open full editor (voice, draft saving)
           </Button>
         </div>
