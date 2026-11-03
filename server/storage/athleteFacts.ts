@@ -114,10 +114,13 @@ async function seedAthleteFacts(
   inputs: readonly NewAthleteFact[],
   reviewOn: string,
 ): Promise<{ added: number; skipped: number }> {
-  const rows = [...new Map(inputs.map((input) => {
+  // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for...of loop
+  const rowsMap = new Map<string, typeof athleteFacts.$inferInsert>();
+  for (const input of inputs) {
     const row = prepare(input, userId, reviewOn);
-    return [row.dedupeKey, row] as const;
-  })).values()];
+    rowsMap.set(row.dedupeKey, row);
+  }
+  const rows = [...rowsMap.values()];
   if (rows.length === 0) return { added: 0, skipped: 0 };
   return await db.transaction(async (tx) => {
     await lockAthleteFacts(tx, userId);

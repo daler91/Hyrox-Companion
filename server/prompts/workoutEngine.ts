@@ -224,7 +224,11 @@ export function describeEngineTargetLines(
   chunk: EngineChunk,
 ): string[] {
   if (!engine) return [];
-  const programs = new Map(engine.lifts.map((program) => [program.exercise, program]));
+  // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for...of loop
+  const programs = new Map<ExerciseName, EngineLiftProgram>();
+  for (const program of engine.lifts) {
+    programs.set(program.exercise, program);
+  }
   const lines = [
     "",
     "WORKOUT ENGINE TARGETS (computed from the athlete's own logs and this plan's blueprint, identical in every chunk — write these sessions on these days with these numbers; your job is the session write-up, the warm-ups and the accessories around them):",
