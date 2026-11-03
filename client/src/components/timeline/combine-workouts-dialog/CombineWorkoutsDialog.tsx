@@ -168,7 +168,7 @@ export function CombineWorkoutsDialog({
             ) : (
               <>
                 Combine Workouts
-                <ArrowRight className="h-4 w-4 ml-2" />
+                <ArrowRight className="h-4 w-4 ml-2" aria-hidden="true" />
               </>
             )}
           </Button>

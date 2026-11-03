@@ -82,10 +82,10 @@ function RagBadgeView({ config }: Readonly<RagBadgeViewProps>) {
         data-testid={testId}
         className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium ${color} hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       >
-        <Icon className="h-2.5 w-2.5" />
+        <Icon className="h-2.5 w-2.5" aria-hidden="true" />
         {label}
-        {hasExpandableChunks && expanded ? <ChevronDown className="h-2.5 w-2.5" /> : null}
-        {hasExpandableChunks && !expanded ? <ChevronRight className="h-2.5 w-2.5" /> : null}
+        {hasExpandableChunks && expanded ? <ChevronDown className="h-2.5 w-2.5" aria-hidden="true" /> : null}
+        {hasExpandableChunks && !expanded ? <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" /> : null}
       </button>
       {expanded && hasExpandableChunks ? (
         <div className="mt-1 space-y-1 max-h-48 overflow-y-auto">
