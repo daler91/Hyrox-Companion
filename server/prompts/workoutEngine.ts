@@ -225,7 +225,7 @@ export function describeEngineTargetLines(
 ): string[] {
   if (!engine) return [];
   // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for...of loop
-  const programs = new Map<ExerciseName, EngineLiftProgram>();
+  const programs = new Map<NonNullable<typeof engine.lifts>[0]["exercise"], NonNullable<typeof engine.lifts>[0]>();
   for (const program of engine.lifts) {
     programs.set(program.exercise, program);
   }
