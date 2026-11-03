@@ -188,11 +188,15 @@ function CustomFoodForm({
           </div>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor="cf-name">Name</Label>
+          <Label htmlFor="cf-name">
+            Name <span className="text-destructive">*</span>
+          </Label>
           <Input
             id="cf-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            required
+            aria-required="true"
             data-testid="input-custom-name"
           />
         </div>
