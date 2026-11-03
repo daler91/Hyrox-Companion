@@ -28,7 +28,10 @@ export function GarminConnectForm({
     <div className="space-y-3 pt-2">
       <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
         <div className="flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-600" aria-hidden="true" />
+          <AlertTriangle
+            className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-600"
+            aria-hidden="true"
+          />
           <div className="text-amber-900 dark:text-amber-200">
             <p className="font-medium">Garmin doesn&apos;t offer OAuth for end users.</p>
             <p className="mt-1">
@@ -51,6 +54,8 @@ export function GarminConnectForm({
           value={email}
           onChange={(event) => onEmailChange(event.target.value)}
           disabled={isConnecting || garminLoading}
+          required
+          aria-required="true"
           data-testid="input-garmin-email"
         />
       </div>
@@ -64,6 +69,8 @@ export function GarminConnectForm({
           value={password}
           onChange={(event) => onPasswordChange(event.target.value)}
           disabled={isConnecting || garminLoading}
+          required
+          aria-required="true"
           data-testid="input-garmin-password"
         />
       </div>
