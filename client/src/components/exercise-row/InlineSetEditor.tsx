@@ -522,7 +522,7 @@ function SetActionButton({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button type="button" variant="ghost" size="icon" {...buttonProps} />
+          <Button type="button" variant="ghost" size="icon" aria-label={tooltip} {...buttonProps} />
         </TooltipTrigger>
         <TooltipContent>
           <p>{tooltip}</p>
