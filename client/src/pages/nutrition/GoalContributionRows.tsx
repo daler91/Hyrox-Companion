@@ -43,7 +43,7 @@ export function GoalContributionRows({
                   </span>
                 </span>
               </div>
-              <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
                 <div className="h-full bg-primary" style={{ width: `${basePct}%` }} />
                 <div
                   className={`h-full ${over ? "bg-amber-500" : "bg-emerald-500"}`}
