@@ -310,6 +310,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
             data-slot="sidebar-trigger"
             variant="ghost"
             size="icon"
+            aria-label="Toggle Sidebar"
             // 44x44 on touch (WCAG 2.5.5 / Apple HIG); the trigger sits in the
             // mobile sticky header where mis-taps are common. Compact on >=md only
             // because the desktop sidebar is persistent and the trigger is hidden.
