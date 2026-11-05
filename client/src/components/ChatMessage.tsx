@@ -97,7 +97,7 @@ function PhotoAttachmentNote({ attachment }: { readonly attachment: MessageAttac
   }
   return (
     <details className="mt-2 text-xs opacity-90" data-testid="message-photo">
-      <summary className="cursor-pointer">
+      <summary className="cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ImageIcon className="mr-1 inline h-3.5 w-3.5 align-text-bottom" aria-hidden="true" />
         Photo attached: what the coach read
       </summary>
