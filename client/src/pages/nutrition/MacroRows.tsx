@@ -47,7 +47,7 @@ export function MacroRows({
                   g<span className="ml-2 text-xs text-muted-foreground">{share.pct}% energy</span>
                 </span>
               </div>
-              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${Math.min(share.pct, 100)}%`, backgroundColor: m.color }}
@@ -68,7 +68,7 @@ export function MacroRows({
               g<span className="ml-2 text-xs text-muted-foreground">of {FIBER_DV_G} g</span>
             </span>
           </div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
             <div
               className="h-full rounded-full bg-primary"
               style={{ width: `${Math.min((totals.fiber / FIBER_DV_G) * 100, 100)}%` }}
