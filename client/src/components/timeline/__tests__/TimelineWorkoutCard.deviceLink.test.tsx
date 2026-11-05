@@ -243,6 +243,32 @@ describe("TimelineWorkoutCard — device link affordances", () => {
     expect(screen.queryByTestId("device-link-suggestion-log-s1")).toBeNull();
   });
 
+  it("reveals the activity name in a tooltip on a plain badge when hovered", async () => {
+    const unsuggested = {
+      ...stravaImport,
+      suggestedPlanDayId: null,
+      suggestedLinkConfidence: null,
+    } as TimelineEntry;
+    renderCard(unsuggested, [unsuggested]);
+
+    await userEvent.hover(screen.getByTestId("badge-strava-log-s1"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Morning Run");
+  });
+
+  it("adds no tooltip to a plain badge when the activity has no name", async () => {
+    const unnamed = {
+      ...stravaImport,
+      deviceActivityName: null,
+      suggestedPlanDayId: null,
+      suggestedLinkConfidence: null,
+    } as TimelineEntry;
+    renderCard(unnamed, [unnamed]);
+
+    await userEvent.hover(screen.getByTestId("badge-strava-log-s1"));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.getByTestId("badge-strava-log-s1")).not.toHaveAttribute("title");
+  });
+
   it("shows an athlete-set RPE on a Strava import, and nothing when unset", () => {
     const unsuggested = {
       ...stravaImport,
