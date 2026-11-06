@@ -196,8 +196,8 @@ export function ExerciseSelector({
 
       {filteredExercisesByCategory.map(({ category, label, exercises }) => (
         <div key={category}>
-          <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-xs font-medium text-muted-foreground mb-2" id={`exercise-group-${category}`}>{label}</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-labelledby={`exercise-group-${category}`}>
             {exercises.map(([name, def]) => {
               const count = countOf(name);
               const isSelected = count > 0;
@@ -208,6 +208,7 @@ export function ExerciseSelector({
                   variant={isSelected ? "default" : "outline"}
                   size="sm"
                   aria-pressed={allowDuplicates ? undefined : isSelected}
+                  aria-label={allowDuplicates && count > 0 ? `${def.label}, added ${count} ${count === 1 ? "time" : "times"}` : undefined}
                   onClick={() => {
                     if (allowDuplicates && onAdd) {
                       onAdd(name);
