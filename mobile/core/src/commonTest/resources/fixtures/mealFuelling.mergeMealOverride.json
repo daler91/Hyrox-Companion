@@ -1,0 +1,9316 @@
+{
+  "suite": "mealFuelling.mergeMealOverride",
+  "description": "A meal's figures under an override of its split: macros round1'd, calories by the precedence in mergeMealOverride.",
+  "cases": [
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 899.6
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80.05
+        }
+      },
+      "output": {
+        "carbG": 80.1,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 37.5,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 770,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 37.5,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 37.5,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 37.5,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 37.5,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 37.5,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 800,
+          "proteinG": 40,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 800,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 300,
+          "proteinG": 10,
+          "carbG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 40,
+        "proteinG": 10,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": null,
+          "carbG": null,
+          "proteinG": null,
+          "fatG": null
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": null,
+          "carbG": null,
+          "proteinG": null,
+          "fatG": null
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 800,
+          "proteinG": null,
+          "carbG": null,
+          "fatG": null
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 800,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": null,
+          "proteinG": 50,
+          "carbG": null,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "carbG": 80,
+          "fatG": null
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": null,
+          "proteinG": 50,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 899.5
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 899.4999999999999
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 899,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": -899.5
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": -899,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": -0.5
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 0.4
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 1e+21
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 1e+21,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 899.5,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80.04
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 40.05
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40.1,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 0.05
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0.1,
+        "calories": 481,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 1.005
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 1,
+        "calories": 489,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 2.675
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 2.7,
+        "calories": 504,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 43.04
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 43.05
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43.1,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0.04
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": -0.04,
+          "fatG": -0.05,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0.05,
+          "fatG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0.1,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": -10,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": -10,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": -10,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": -10,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 340,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 1e+300,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 1e+300,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 4e+300,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 200
+        }
+      },
+      "output": {
+        "carbG": 200,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 972,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 200,
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 200,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 100,
+          "carbG": 100
+        }
+      },
+      "output": {
+        "carbG": 100,
+        "proteinG": 100,
+        "fatG": 0,
+        "calories": 800,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 300,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 300,
+        "fatG": 0,
+        "calories": 1200,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 940,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 30
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 30,
+        "calories": 990,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 30
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 30,
+        "calories": 1030,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 30
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 30,
+        "calories": 790,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 950,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 950,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 30
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 30,
+        "calories": 1030,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 800,
+          "proteinG": 40,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 800,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 700,
+          "carbG": 80.05,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 80.1,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 700,
+          "carbG": 80.05,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 80.1,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 700,
+          "carbG": 80.05,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80.05,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80.1,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 700,
+          "carbG": 80.04,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0.04,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 740,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 785,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 660,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 785,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 740,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 785,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 785,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 33.7,
+        "fatG": 18.2,
+        "calories": 612,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 33.7,
+        "fatG": 18.2,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 33.7,
+        "fatG": 18.2,
+        "calories": 619,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 33.7,
+        "fatG": 18.2,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 50,
+        "fatG": 18.2,
+        "calories": 645,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 50,
+        "fatG": 18.2,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 18.2,
+        "calories": 684,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 18.2,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 33.7,
+        "fatG": 20,
+        "calories": 596,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 33.7,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 33.7,
+        "fatG": 20,
+        "calories": 635,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 33.7,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 661,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 500,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "carbG": 70.25,
+          "proteinG": 33.75
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 33.8,
+        "fatG": 18.2,
+        "calories": 580,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 612,
+          "carbG": 70.3,
+          "proteinG": 33.7,
+          "fatG": 18.2
+        },
+        "override": {
+          "calories": 611.5,
+          "fatG": 18.15
+        }
+      },
+      "output": {
+        "carbG": 70.3,
+        "proteinG": 33.7,
+        "fatG": 18.2,
+        "calories": 612,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 40,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 40,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 740,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 740,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 785,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 40,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 705,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 40,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 40,
+        "fatG": 25,
+        "calories": 745,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 740,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 90,
+          "proteinG": 50,
+          "fatG": 25
+        }
+      },
+      "output": {
+        "carbG": 90,
+        "proteinG": 50,
+        "fatG": 25,
+        "calories": 785,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 43
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 43,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 43,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 43
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 672,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 43
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 43,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 720,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 43,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 672,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 548,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 748,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 43
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 43,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 43,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 43
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 43
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 43,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 43,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 43,
+        "fatG": 20,
+        "calories": 672,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 720,
+          "carbG": 0,
+          "proteinG": 43,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 340,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 340,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 180,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 380,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 340,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 160,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 340,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 180,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 380,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 480,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 480,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 480,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 480,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 520,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 520,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 340,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 180,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 380,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 40
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 0,
+        "calories": 480,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 40,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 40,
+        "fatG": 20,
+        "calories": 660,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 520,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 160,
+          "carbG": 0,
+          "proteinG": 40,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 750,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 750,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {}
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 300,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 300,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 300,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 120,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 300,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 30,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 180,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 180,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 380,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 520,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 520,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 300,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 30,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 30,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 0,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 180,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 200,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 0,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 0,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 380,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 0,
+        "calories": 320,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 0,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 0,
+        "fatG": 20,
+        "calories": 500,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 900,
+        "caloriesFromMacros": false
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 0
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 0,
+        "calories": 520,
+        "caloriesFromMacros": true
+      }
+    },
+    {
+      "input": {
+        "split": {
+          "calories": 120,
+          "carbG": 30,
+          "proteinG": 0,
+          "fatG": 0
+        },
+        "override": {
+          "calories": 900,
+          "carbG": 80,
+          "proteinG": 50,
+          "fatG": 20
+        }
+      },
+      "output": {
+        "carbG": 80,
+        "proteinG": 50,
+        "fatG": 20,
+        "calories": 700,
+        "caloriesFromMacros": true
+      }
+    }
+  ]
+}

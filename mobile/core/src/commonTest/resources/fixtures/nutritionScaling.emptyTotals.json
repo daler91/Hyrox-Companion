@@ -1,0 +1,16 @@
+{
+  "suite": "nutritionScaling.emptyTotals",
+  "description": "All five totals at 0.",
+  "cases": [
+    {
+      "input": null,
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    }
+  ]
+}
