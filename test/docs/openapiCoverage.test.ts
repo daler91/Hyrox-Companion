@@ -46,6 +46,9 @@ const NOT_CLIENT_ENDPOINTS: Record<string, string> = {
   "POST /api/v1/emails/unsubscribe": "RFC 8058 one-click unsubscribe from mail clients, not by the app",
   "GET /api/v1/analytics/internal/structured-exercise-health":
     "operator endpoint behind INTERNAL_ANALYTICS_SECRET, not part of the client API",
+  "GET /api/v1/cron/emails": "scheduler endpoint behind CRON_SECRET (x-cron-secret), not part of the client API",
+  "GET /api/v1/health": "readiness probe for the deploy gate (server/bootstrap/health.ts), not a client endpoint",
+  "GET /api/v1/health/live": "liveness probe for the platform, not a client endpoint",
 };
 
 function serverSources(): string[] {

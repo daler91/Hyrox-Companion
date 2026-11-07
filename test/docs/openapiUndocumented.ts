@@ -37,8 +37,6 @@ export const OPENAPI_UNDOCUMENTED: readonly string[] = [
   "GET /api/v1/coaching-materials/summaries",
   "DELETE /api/v1/coaching-materials/{id}",
   "PATCH /api/v1/coaching-materials/{id}",
-  // cron
-  "GET /api/v1/cron/emails",
   // custom-exercises
   "GET /api/v1/custom-exercises",
   "POST /api/v1/custom-exercises",
@@ -55,9 +53,6 @@ export const OPENAPI_UNDOCUMENTED: readonly string[] = [
   "DELETE /api/v1/garmin/disconnect",
   "GET /api/v1/garmin/status",
   "POST /api/v1/garmin/sync",
-  // health
-  "GET /api/v1/health",
-  "GET /api/v1/health/live",
   // maf-tests
   "GET /api/v1/maf-tests",
   // nutrition
