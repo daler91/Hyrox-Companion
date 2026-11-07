@@ -1,5 +1,6 @@
 import cookieParser from "cookie-parser";
 import express, { type NextFunction, type Request, type Response } from "express";
+import rateLimit from "express-rate-limit";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,6 +20,9 @@ const CLERK_NOT_INSTALLED = () => {
 
 function buildApp() {
   const app = express();
+  // Production rate-limits every /api/v1 route (routeUtils.rateLimiter); the
+  // test app mirrors that with an in-memory limiter no test comes near.
+  app.use(rateLimit({ windowMs: 60_000, limit: 1_000 }));
   app.use(cookieParser());
   app.use(express.json());
   app.get("/api/v1/csrf-token", csrfTokenHandler);

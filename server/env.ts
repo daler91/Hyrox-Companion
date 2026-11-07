@@ -219,7 +219,7 @@ const envSchema = z
     message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
     path: ["ALLOW_DEV_AUTH_BYPASS"],
   })
-  .refine((data) => !data.ANDROID_APP_PACKAGE === !data.ANDROID_APP_CERT_SHA256, {
+  .refine((data) => Boolean(data.ANDROID_APP_PACKAGE) === Boolean(data.ANDROID_APP_CERT_SHA256), {
     // Half a Digital Asset Links config would silently serve a 404, and App
     // Links verification would fail on every device with no error anywhere.
     message: "❌ FATAL: ANDROID_APP_PACKAGE and ANDROID_APP_CERT_SHA256 must be set together",

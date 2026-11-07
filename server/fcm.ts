@@ -77,6 +77,8 @@ async function fetchAccessToken(account: FcmServiceAccount): Promise<string> {
     throw new Error(`FCM access token request failed with ${response.status}: ${detail.slice(0, 200)}`);
   }
   const body = (await response.json()) as { access_token?: unknown; expires_in?: unknown };
+  // A typeof check on the response shape, not a comparison against a secret.
+  // bearer:disable javascript_lang_observable_timing
   if (typeof body.access_token !== "string") throw new Error("FCM access token response had no access_token");
   const lifetimeMs = (typeof body.expires_in === "number" ? body.expires_in : 3600) * 1000;
   cachedAccessToken = { value: body.access_token, expiresAt: Date.now() + lifetimeMs - ACCESS_TOKEN_REFRESH_MARGIN_MS };
@@ -167,6 +169,8 @@ export async function sendFcmMessage(
   try {
     accessToken = await getAccessToken(account);
   } catch (err) {
+    // The error carries the token endpoint's status and reason, never the assertion or a token.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err }, "[push] Could not get an FCM access token");
     return "failed";
   }
@@ -180,6 +184,8 @@ export async function sendFcmMessage(
       signal: AbortSignal.timeout(PUSH_SEND_TIMEOUT_MS),
     });
   } catch (err) {
+    // deviceTokenId is the row's uuid, logged in place of the device token.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err, deviceTokenId }, "[push] FCM send failed");
     return "failed";
   }
@@ -192,6 +198,8 @@ export async function sendFcmMessage(
     // The cached access token was revoked or expired early; the next send fetches a fresh one.
     resetFcmAccessToken();
   }
+  // The row's uuid and FCM's status codes: no device token, no message content.
+  // bearer:disable javascript_lang_logger_leak
   logger.error(
     { deviceTokenId, status: response.status, fcmStatus: body?.error?.status },
     "[push] FCM rejected the notification",

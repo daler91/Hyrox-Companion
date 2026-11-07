@@ -155,6 +155,8 @@ async function sendToSubscription(
 async function sendToDevice(device: { id: string; token: string }, payload: PushPayload): Promise<boolean> {
   const result = await sendFcmMessage(device.id, device.token, payload);
   if (result === "stale") {
+    // deviceTokenId is the row's uuid, no secrets.
+    // bearer:disable javascript_lang_logger_leak
     logger.info({ deviceTokenId: device.id }, "[push] Removing stale device token");
     await storage.push.removeDeviceTokenById(device.id);
     return false;

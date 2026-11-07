@@ -16,6 +16,15 @@ Needs JDK 21. From this directory:
 
 CI runs the same in `.github/workflows/mobile.yml`.
 
+Gradle checks every dependency and plugin it downloads against the SHA-256
+sums in `gradle/verification-metadata.xml`, and fails the build on an artifact
+that is missing from the file or does not match. After adding or upgrading a
+dependency, plugin or target, regenerate it and review the diff:
+
+```sh
+./gradlew --write-verification-metadata sha256 :core:jvmTest
+```
+
 ## API models
 
 `core/src/commonMain/kotlin/com/fitai/coach/core/api/generated/` is generated

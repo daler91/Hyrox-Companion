@@ -16,7 +16,7 @@
  * round trip through Double compares equal; integers are whole.
  */
 import type { OpenApiDocument } from "./generate";
-import { operationName } from "./generate";
+import { byCodeUnit, operationName } from "./generate";
 
 type Schema = Record<string, unknown>;
 type Variant = "min" | "max" | "future";
@@ -144,7 +144,7 @@ export interface OperationSamples {
 export function buildSamples(doc: OpenApiDocument): Map<string, OperationSamples> {
   const builder = new SampleBuilder(doc.components?.schemas ?? {});
   const samples = new Map<string, OperationSamples>();
-  for (const routePath of Object.keys(doc.paths ?? {}).sort()) {
+  for (const routePath of Object.keys(doc.paths ?? {}).sort(byCodeUnit)) {
     for (const method of METHODS) {
       const op = doc.paths?.[routePath]?.[method];
       if (!isObject(op)) continue;
@@ -154,7 +154,7 @@ export function buildSamples(doc: OpenApiDocument): Map<string, OperationSamples
         entry.request = { min: builder.sample(body.schema, "min"), max: builder.sample(body.schema, "max") };
       }
       const responses = isObject(op.responses) ? op.responses : {};
-      for (const status of Object.keys(responses).filter((s) => s.startsWith("2")).sort()) {
+      for (const status of Object.keys(responses).filter((s) => s.startsWith("2")).sort(byCodeUnit)) {
         const content = isObject(responses[status]) ? (responses[status] as Schema).content : undefined;
         if (!isObject(content)) continue;
         const chosen = isObject(content["application/json"]) ? content["application/json"] : content["text/event-stream"];
