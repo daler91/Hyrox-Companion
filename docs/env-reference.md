@@ -46,6 +46,10 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
 | `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/bootstrap/appConfig.ts`. |
 | `ALLOWED_ORIGINS` | Optional | — | Comma-separated extra CORS origins (`server/index.ts`), added to `APP_URL` and `https://fitai.coach`. `http://localhost:5000` and `http://localhost:5173` are allowed only when `NODE_ENV` is not `production`. |
+| `MIN_APP_VERSION_ANDROID` | Optional | — | Oldest Android app build the API still serves, as `MAJOR.MINOR.PATCH` (`server/middleware/appVersion.ts`). Requests sending `X-App-Platform: android` with an older or missing `X-App-Version` get `426 APP_UPDATE_REQUIRED`. Unset serves every build. Web requests are never affected. |
+| `MIN_APP_VERSION_IOS` | Optional | — | Same as `MIN_APP_VERSION_ANDROID`, for `X-App-Platform: ios`. |
+| `ANDROID_APP_PACKAGE` | Optional | — | Android application ID (e.g. `com.fitai.coach`) served in `/.well-known/assetlinks.json` for App Links verification (`server/bootstrap/wellKnown.ts`). Must be set together with `ANDROID_APP_CERT_SHA256`; both unset makes the path a 404. |
+| `ANDROID_APP_CERT_SHA256` | Optional | — | Comma-separated SHA-256 certificate fingerprints (`AB:CD:…`, 32 bytes) for the app: list both the Play app-signing key and the upload key from Play Console → App integrity. Startup fails if only one of the pair is set. |
 
 ### Safety invariants (enforced at startup in `server/env.ts`)
 
@@ -180,6 +184,7 @@ npx web-push generate-vapid-keys
 |---|---|---|---|
 | `VAPID_PUBLIC_KEY` | Optional (required for push) | — | Sent to the client via `GET /api/v1/push/vapid-key`. |
 | `VAPID_PRIVATE_KEY` | Optional (required for push) | — | Server-only. Do not expose. |
+| `FCM_SERVICE_ACCOUNT_JSON` | Optional (required for native app push) | — | Firebase service account key file, pasted whole as JSON (Firebase console → Project settings → Service accounts). `server/fcm.ts` signs access-token requests with it to send through FCM HTTP v1, which also reaches iOS once an APNs key is uploaded to the project. Validated at startup (`project_id`, `client_email`, `private_key`). Server-only secret; do not expose. Unset disables native push and makes `POST /api/v1/push/devices` answer `404 PUSH_NOT_CONFIGURED`; web push is unaffected. |
 | `VAPID_EMAIL` | Optional (required for push) | — | Bare contact email address; `server/pushNotifications.ts` prepends `mailto:` when registering VAPID details with push services. |
 
 ---

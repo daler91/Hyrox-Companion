@@ -1,6 +1,10 @@
-import { type InsertCoachingMaterial,insertCoachingMaterialSchema } from "@shared/schema";
+import {
+  type CreateCoachingMaterial,
+  createCoachingMaterialSchema,
+  type UpdateCoachingMaterial,
+  updateCoachingMaterialSchema,
+} from "@shared/schema/types/coachRequests";
 import { type Request as ExpressRequest, type Response,Router } from "express";
-import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
@@ -13,14 +17,10 @@ import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/prote
 
 const router = Router();
 
-const updateCoachingMaterialSchema = z.object({
-  title: z.string().trim().min(1).max(255).optional(),
-  content: z.string().trim().min(1).max(1500000).optional(),
-  type: z.enum(["principles", "document"]).optional(),
-});
-
-type CreateMaterialBody = Omit<InsertCoachingMaterial, "userId">;
-type UpdateMaterialBody = z.infer<typeof updateCoachingMaterialSchema>;
+// The request schemas live in shared/ so the OpenAPI document
+// (shared/openapiRoutes/coach.ts) validates with the same objects.
+type CreateMaterialBody = CreateCoachingMaterial;
+type UpdateMaterialBody = UpdateCoachingMaterial;
 
 // 🛡️ Sentinel: Added rate limit to GET /api/v1/coaching-materials to prevent enumeration/abuse
 router.get("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
@@ -37,8 +37,7 @@ router.get("/api/v1/coaching-materials/summaries", isAuthenticated, rateLimiter(
     res.json(await storage.coaching.listCoachingMaterialSummaries(userId));
   }));
 
-const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
-protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(createMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(createCoachingMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as CreateMaterialBody;
     const material = await storage.coaching.createCoachingMaterial({ ...body, userId });

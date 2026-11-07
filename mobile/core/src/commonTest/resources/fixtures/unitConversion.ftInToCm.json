@@ -1,0 +1,90 @@
+{
+  "suite": "unitConversion.ftInToCm",
+  "description": "Feet and inches to centimetres, unrounded.",
+  "cases": [
+    {
+      "input": [
+        5,
+        11
+      ],
+      "output": 180.34
+    },
+    {
+      "input": [
+        6,
+        0
+      ],
+      "output": 182.88
+    },
+    {
+      "input": [
+        0,
+        0
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        5,
+        12
+      ],
+      "output": 182.88
+    },
+    {
+      "input": [
+        5,
+        11.5
+      ],
+      "output": 181.61
+    },
+    {
+      "input": [
+        5.5,
+        0
+      ],
+      "output": 167.64000000000001
+    },
+    {
+      "input": [
+        -1,
+        -1
+      ],
+      "output": -33.02
+    },
+    {
+      "input": [
+        0,
+        -3
+      ],
+      "output": -7.62
+    },
+    {
+      "input": [
+        "NaN",
+        0
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        0,
+        "Infinity"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        0
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "Infinity",
+        "-Infinity"
+      ],
+      "output": "NaN"
+    }
+  ]
+}

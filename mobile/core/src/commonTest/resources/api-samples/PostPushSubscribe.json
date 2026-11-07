@@ -1,0 +1,32 @@
+{
+  "request": {
+    "min": {
+      "endpoint": "https://fitai.coach/x",
+      "keys": {
+        "p256dh": "a",
+        "auth": "a"
+      }
+    },
+    "max": {
+      "endpoint": "https://fitai.coach/x",
+      "keys": {
+        "p256dh": "sample text",
+        "auth": "sample text"
+      }
+    }
+  },
+  "response": {
+    "min": {
+      "success": true
+    },
+    "max": {
+      "success": true
+    },
+    "future": {
+      "success": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

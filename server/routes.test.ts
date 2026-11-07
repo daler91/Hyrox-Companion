@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setupAuth } from "./clerkAuth";
 import { registerGarminRoutes } from "./garmin";
+import { appVersionGate } from "./middleware/appVersion";
 import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
 import { registerRoutes } from "./routes";
 import accountRoutes from "./routes/account";
@@ -38,6 +39,7 @@ vi.mock("./middleware/csrf", () => ({
   csrfProtection: vi.fn(),
   csrfTokenHandler: vi.fn()
 }));
+vi.mock("./middleware/appVersion", () => ({ appVersionGate: vi.fn() }));
 
 // Mock routers
 vi.mock("./routes/account", () => ({ default: { name: "accountRoutes" } }));
@@ -95,6 +97,22 @@ describe("registerRoutes", () => {
     expect(registerGarminRoutes).toHaveBeenCalledWith(app);
     expect(registerStravaWebhookRoutes).toHaveBeenCalledWith(app);
     expect(registerEmailUnsubscribeRoutes).toHaveBeenCalledWith(app);
+  });
+
+  it("mounts the app version gate on /api/v1 ahead of the CSRF guard", async () => {
+    await registerRoutes(httpServer, app);
+
+    // An outdated native build must see 426 APP_UPDATE_REQUIRED, not a CSRF
+    // or auth error it may not know how to handle.
+    const useMock = app.use as unknown as ReturnType<typeof vi.fn>;
+    const gateIndex = useMock.mock.calls.findIndex(
+      (call: unknown[]) => call[0] === "/api/v1" && call[1] === appVersionGate,
+    );
+    const csrfIndex = useMock.mock.calls.findIndex(
+      (call: unknown[]) => call[0] === "/api/v1" && call[1] === csrfProtection,
+    );
+    expect(gateIndex).toBeGreaterThanOrEqual(0);
+    expect(gateIndex).toBeLessThan(csrfIndex);
   });
 
   it("mounts the Strava webhook receiver before the CSRF guard", async () => {

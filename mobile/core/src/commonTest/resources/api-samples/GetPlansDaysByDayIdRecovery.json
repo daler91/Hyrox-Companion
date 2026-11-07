@@ -1,0 +1,417 @@
+{
+  "response": {
+    "min": {
+      "planDayId": "a",
+      "missedDate": "a",
+      "focus": "a",
+      "priority": "key",
+      "recovery": null,
+      "today": "a",
+      "session": {
+        "durationMin": 1.5,
+        "estimated": true,
+        "rpe": 1.5,
+        "hard": true
+      },
+      "recommendation": {
+        "action": "fold",
+        "targetDate": null,
+        "reason": "a"
+      },
+      "fold": {
+        "available": true,
+        "unavailableReason": null,
+        "suggestedDate": null,
+        "targets": []
+      },
+      "shorten": {
+        "available": true,
+        "unavailableReason": null,
+        "suggestedDate": null,
+        "targets": [],
+        "durationMin": 1.5,
+        "keptFraction": 1.5,
+        "changes": []
+      },
+      "letGo": {
+        "impact": {
+          "summary": "a",
+          "keptFraction": 1.5,
+          "keptMinutes": 1.5,
+          "day": null,
+          "weeks": [],
+          "notes": []
+        }
+      }
+    },
+    "max": {
+      "planDayId": "sample text",
+      "missedDate": "sample text",
+      "focus": "sample text",
+      "priority": "optional",
+      "recovery": "let_go",
+      "today": "sample text",
+      "session": {
+        "durationMin": 1.5,
+        "estimated": true,
+        "rpe": 1.5,
+        "hard": true
+      },
+      "recommendation": {
+        "action": "let_go",
+        "targetDate": "sample text",
+        "reason": "sample text"
+      },
+      "fold": {
+        "available": true,
+        "unavailableReason": "sample text",
+        "suggestedDate": "sample text",
+        "targets": [
+          {
+            "date": "sample text",
+            "sessions": [
+              {
+                "focus": "sample text",
+                "priority": "optional",
+                "durationMin": 1.5,
+                "status": "completed"
+              }
+            ],
+            "impact": {
+              "summary": "sample text",
+              "keptFraction": 1.5,
+              "keptMinutes": 1.5,
+              "day": {
+                "date": "sample text",
+                "minutesAfter": 1.5
+              },
+              "weeks": [
+                {
+                  "weekStart": "sample text",
+                  "minutesBefore": 1.5,
+                  "minutesAfter": 1.5,
+                  "loadBefore": 1.5,
+                  "loadAfter": 1.5,
+                  "keyBefore": 1,
+                  "keyAfter": 1,
+                  "keyScheduled": 1
+                }
+              ],
+              "notes": [
+                {
+                  "code": "not_trimmable",
+                  "tone": "info",
+                  "message": "sample text"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "shorten": {
+        "available": true,
+        "unavailableReason": "sample text",
+        "suggestedDate": "sample text",
+        "targets": [
+          {
+            "date": "sample text",
+            "sessions": [
+              {
+                "focus": "sample text",
+                "priority": "optional",
+                "durationMin": 1.5,
+                "status": "completed"
+              }
+            ],
+            "impact": {
+              "summary": "sample text",
+              "keptFraction": 1.5,
+              "keptMinutes": 1.5,
+              "day": {
+                "date": "sample text",
+                "minutesAfter": 1.5
+              },
+              "weeks": [
+                {
+                  "weekStart": "sample text",
+                  "minutesBefore": 1.5,
+                  "minutesAfter": 1.5,
+                  "loadBefore": 1.5,
+                  "loadAfter": 1.5,
+                  "keyBefore": 1,
+                  "keyAfter": 1,
+                  "keyScheduled": 1
+                }
+              ],
+              "notes": [
+                {
+                  "code": "not_trimmable",
+                  "tone": "info",
+                  "message": "sample text"
+                }
+              ]
+            }
+          }
+        ],
+        "durationMin": 1.5,
+        "keptFraction": 1.5,
+        "changes": [
+          {
+            "label": "sample text",
+            "from": "sample text",
+            "to": "sample text"
+          }
+        ]
+      },
+      "letGo": {
+        "impact": {
+          "summary": "sample text",
+          "keptFraction": 1.5,
+          "keptMinutes": 1.5,
+          "day": {
+            "date": "sample text",
+            "minutesAfter": 1.5
+          },
+          "weeks": [
+            {
+              "weekStart": "sample text",
+              "minutesBefore": 1.5,
+              "minutesAfter": 1.5,
+              "loadBefore": 1.5,
+              "loadAfter": 1.5,
+              "keyBefore": 1,
+              "keyAfter": 1,
+              "keyScheduled": 1
+            }
+          ],
+          "notes": [
+            {
+              "code": "not_trimmable",
+              "tone": "info",
+              "message": "sample text"
+            }
+          ]
+        }
+      }
+    },
+    "future": {
+      "planDayId": "sample text",
+      "missedDate": "sample text",
+      "focus": "sample text",
+      "priority": "zz_value_from_a_newer_server",
+      "recovery": "zz_value_from_a_newer_server",
+      "today": "sample text",
+      "session": {
+        "durationMin": 1.5,
+        "estimated": true,
+        "rpe": 1.5,
+        "hard": true,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "recommendation": {
+        "action": "zz_value_from_a_newer_server",
+        "targetDate": "sample text",
+        "reason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "fold": {
+        "available": true,
+        "unavailableReason": "sample text",
+        "suggestedDate": "sample text",
+        "targets": [
+          {
+            "date": "sample text",
+            "sessions": [
+              {
+                "focus": "sample text",
+                "priority": "zz_value_from_a_newer_server",
+                "durationMin": 1.5,
+                "status": "zz_value_from_a_newer_server",
+                "zzPropertyFromANewerServer": {
+                  "added": true
+                }
+              }
+            ],
+            "impact": {
+              "summary": "sample text",
+              "keptFraction": 1.5,
+              "keptMinutes": 1.5,
+              "day": {
+                "date": "sample text",
+                "minutesAfter": 1.5,
+                "zzPropertyFromANewerServer": {
+                  "added": true
+                }
+              },
+              "weeks": [
+                {
+                  "weekStart": "sample text",
+                  "minutesBefore": 1.5,
+                  "minutesAfter": 1.5,
+                  "loadBefore": 1.5,
+                  "loadAfter": 1.5,
+                  "keyBefore": 1,
+                  "keyAfter": 1,
+                  "keyScheduled": 1,
+                  "zzPropertyFromANewerServer": {
+                    "added": true
+                  }
+                }
+              ],
+              "notes": [
+                {
+                  "code": "zz_value_from_a_newer_server",
+                  "tone": "zz_value_from_a_newer_server",
+                  "message": "sample text",
+                  "zzPropertyFromANewerServer": {
+                    "added": true
+                  }
+                }
+              ],
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "shorten": {
+        "available": true,
+        "unavailableReason": "sample text",
+        "suggestedDate": "sample text",
+        "targets": [
+          {
+            "date": "sample text",
+            "sessions": [
+              {
+                "focus": "sample text",
+                "priority": "zz_value_from_a_newer_server",
+                "durationMin": 1.5,
+                "status": "zz_value_from_a_newer_server",
+                "zzPropertyFromANewerServer": {
+                  "added": true
+                }
+              }
+            ],
+            "impact": {
+              "summary": "sample text",
+              "keptFraction": 1.5,
+              "keptMinutes": 1.5,
+              "day": {
+                "date": "sample text",
+                "minutesAfter": 1.5,
+                "zzPropertyFromANewerServer": {
+                  "added": true
+                }
+              },
+              "weeks": [
+                {
+                  "weekStart": "sample text",
+                  "minutesBefore": 1.5,
+                  "minutesAfter": 1.5,
+                  "loadBefore": 1.5,
+                  "loadAfter": 1.5,
+                  "keyBefore": 1,
+                  "keyAfter": 1,
+                  "keyScheduled": 1,
+                  "zzPropertyFromANewerServer": {
+                    "added": true
+                  }
+                }
+              ],
+              "notes": [
+                {
+                  "code": "zz_value_from_a_newer_server",
+                  "tone": "zz_value_from_a_newer_server",
+                  "message": "sample text",
+                  "zzPropertyFromANewerServer": {
+                    "added": true
+                  }
+                }
+              ],
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "durationMin": 1.5,
+        "keptFraction": 1.5,
+        "changes": [
+          {
+            "label": "sample text",
+            "from": "sample text",
+            "to": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "letGo": {
+        "impact": {
+          "summary": "sample text",
+          "keptFraction": 1.5,
+          "keptMinutes": 1.5,
+          "day": {
+            "date": "sample text",
+            "minutesAfter": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "weeks": [
+            {
+              "weekStart": "sample text",
+              "minutesBefore": 1.5,
+              "minutesAfter": 1.5,
+              "loadBefore": 1.5,
+              "loadAfter": 1.5,
+              "keyBefore": 1,
+              "keyAfter": 1,
+              "keyScheduled": 1,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "notes": [
+            {
+              "code": "zz_value_from_a_newer_server",
+              "tone": "zz_value_from_a_newer_server",
+              "message": "sample text",
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

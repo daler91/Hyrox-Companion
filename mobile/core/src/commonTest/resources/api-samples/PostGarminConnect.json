@@ -1,0 +1,29 @@
+{
+  "request": {
+    "min": {
+      "email": "a",
+      "password": "a"
+    },
+    "max": {
+      "email": "sample text",
+      "password": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "success": true,
+      "garminDisplayName": null
+    },
+    "max": {
+      "success": true,
+      "garminDisplayName": "sample text"
+    },
+    "future": {
+      "success": true,
+      "garminDisplayName": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

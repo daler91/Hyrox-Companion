@@ -1,0 +1,1436 @@
+{
+  "suite": "notifyHours.resolveNotifyHour",
+  "description": "A kind's own valid hour, else its fallback.",
+  "cases": [
+    {
+      "input": {
+        "prefs": {},
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 24
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6.5
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": null
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null,
+          "notifyHour": 13
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 13
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 0
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 23
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": -1
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 11
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 12
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "NaN"
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "Infinity"
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 0
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 0,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 11
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 11,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 12
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 12,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 23
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 23,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 24
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 24,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": -1
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": -1,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 23.5
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": 23.5,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": null
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklySummary": null,
+          "notifyHour": 9
+        },
+        "kind": "weeklySummary"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {},
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6
+        },
+        "kind": "missedReminder"
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 24
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6.5
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": null
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null,
+          "notifyHour": 13
+        },
+        "kind": "missedReminder"
+      },
+      "output": 13
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 0
+        },
+        "kind": "missedReminder"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 23
+        },
+        "kind": "missedReminder"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": -1
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 11
+        },
+        "kind": "missedReminder"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 12
+        },
+        "kind": "missedReminder"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "NaN"
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "Infinity"
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 0
+        },
+        "kind": "missedReminder"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 0,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 11
+        },
+        "kind": "missedReminder"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 11,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 12
+        },
+        "kind": "missedReminder"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 12,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 23
+        },
+        "kind": "missedReminder"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 23,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 24
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 24,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": -1
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": -1,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 23.5
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": 23.5,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": null
+        },
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourMissedReminder": null,
+          "notifyHour": 9
+        },
+        "kind": "missedReminder"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {},
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 24
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6.5
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": null
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null,
+          "notifyHour": 13
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 0
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 23
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": -1
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 11
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 12
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "NaN"
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "Infinity"
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 0
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 0,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 11
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 11,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 12
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 12,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 23
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 23,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 24
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 24,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": -1
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": -1,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 23.5
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 23.5,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": null
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": null,
+          "notifyHour": 9
+        },
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "prefs": {},
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6
+        },
+        "kind": "todaySession"
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 24
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6.5
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": null
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0
+        },
+        "kind": "todaySession"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null,
+          "notifyHour": 13
+        },
+        "kind": "todaySession"
+      },
+      "output": 13
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 0
+        },
+        "kind": "todaySession"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 23
+        },
+        "kind": "todaySession"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": -1
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 11
+        },
+        "kind": "todaySession"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 12
+        },
+        "kind": "todaySession"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "NaN"
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "Infinity"
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0
+        },
+        "kind": "todaySession"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 11
+        },
+        "kind": "todaySession"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 11,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 12
+        },
+        "kind": "todaySession"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 12,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 23
+        },
+        "kind": "todaySession"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 23,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 24
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 24,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": -1
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": -1,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 23.5
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 23.5,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null
+        },
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null,
+          "notifyHour": 9
+        },
+        "kind": "todaySession"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {},
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 24
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 6.5
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": null
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": 0
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourTodaySession": null,
+          "notifyHour": 13
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 13
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourWeeklyReviewReminder": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 0
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 23
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": -1
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 11
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": 12
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "NaN"
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHour": "Infinity"
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 0
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 0,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 11
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 11,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 11
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 12
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 12,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 23
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 23,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 24
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 24,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": -1
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": -1,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 23.5
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": 23.5,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 9
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": null
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "prefs": {
+          "notifyHourAnalysisDigest": null,
+          "notifyHour": 9
+        },
+        "kind": "analysisDigest"
+      },
+      "output": 9
+    }
+  ]
+}

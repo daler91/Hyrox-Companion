@@ -54,6 +54,7 @@ export function buildRefuelPush(
     title: "Refuel window open",
     body: `About ${parts.join(" + ")} to go for today's recovery — log it in one tap.`,
     url: `/nutrition?date=${date}&meal=post_workout`,
+    category: "nutrition",
   };
 }
 
@@ -159,6 +160,7 @@ export async function processLoggingReminder(
     title: "Log today's fuelling",
     body: "Nothing logged yet today — describing a meal takes about 20 seconds.",
     url: "/nutrition",
+    category: "nutrition",
   });
   return delivered > 0;
 }

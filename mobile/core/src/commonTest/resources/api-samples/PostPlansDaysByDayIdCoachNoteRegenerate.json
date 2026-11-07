@@ -1,0 +1,22 @@
+{
+  "response": {
+    "min": {
+      "planDayId": "a",
+      "aiRationale": "a",
+      "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z"
+    },
+    "max": {
+      "planDayId": "sample text",
+      "aiRationale": "sample text",
+      "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z"
+    },
+    "future": {
+      "planDayId": "sample text",
+      "aiRationale": "sample text",
+      "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

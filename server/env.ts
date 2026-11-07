@@ -7,16 +7,18 @@ process.stderr.write(
 
 import { z } from "zod";
 
+import { parseFcmServiceAccount } from "./fcmServiceAccount";
 import { checkSafeOutboundUrl } from "./ssrfGuard";
 
 // Reject deterministic strings that appear in docs, CI, or tests. If a real
 // secret ever matches one of these it would be compromised anyway — they
-// leak in public CI logs and example configs (W10).
+// leak in public CI logs and example configs (W10). They are a blocklist of
+// known-weak placeholders, not secrets, hence the DevSkim suppressions.
 const WEAK_ENCRYPTION_KEYS = new Set<string>([
-  "01234567890123456789012345678901",
-  "0123456789abcdef0123456789abcdef",
-  "00000000000000000000000000000000",
-  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "01234567890123456789012345678901", // DevSkim: ignore DS173237
+  "0123456789abcdef0123456789abcdef", // DevSkim: ignore DS173237
+  "00000000000000000000000000000000", // DevSkim: ignore DS173237
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // DevSkim: ignore DS173237
   "changeme_changeme_changeme_change",
 ]);
 
@@ -105,6 +107,31 @@ const envSchema = z
     APP_URL: z.url().optional(),
     VECTOR_DATABASE_URL: z.url().optional(),
     ALLOWED_ORIGINS: z.string().optional(),
+    // Oldest native app build the API still serves, per platform, as
+    // MAJOR.MINOR.PATCH (server/middleware/appVersion.ts). Older builds get
+    // 426 APP_UPDATE_REQUIRED. Unset means every build is served.
+    MIN_APP_VERSION_ANDROID: z
+      .string()
+      .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_ANDROID must look like 1.4.0" })
+      .optional(),
+    // Android App Links (server/bootstrap/wellKnown.ts): the app's package
+    // name and the SHA-256 fingerprints (comma-separated, AA:BB:… form) of
+    // its Play app-signing and upload certificates. Both unset means
+    // /.well-known/assetlinks.json is a 404.
+    ANDROID_APP_PACKAGE: z
+      .string()
+      .regex(/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/, { error: "ANDROID_APP_PACKAGE must be a package name like com.fitai.coach" })
+      .optional(),
+    ANDROID_APP_CERT_SHA256: z
+      .string()
+      .regex(/^\s*[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}\s*(,\s*[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}\s*)*$/, {
+        error: "ANDROID_APP_CERT_SHA256 must be comma-separated SHA-256 fingerprints like AB:CD:…",
+      })
+      .optional(),
+    MIN_APP_VERSION_IOS: z
+      .string()
+      .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_IOS must look like 1.4.0" })
+      .optional(),
     ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
     APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
     // Enum-validated so a typo (e.g. "warning") fails here with a message naming
@@ -133,6 +160,17 @@ const envSchema = z
     VAPID_PUBLIC_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_EMAIL: z.email().optional(),
+    // Firebase service account key file (JSON, pasted whole) for native app
+    // push through FCM HTTP v1 (server/fcm.ts). Server-only secret: it signs
+    // the access-token requests. Unset disables native push; web push is
+    // unaffected.
+    FCM_SERVICE_ACCOUNT_JSON: z
+      .string()
+      .refine((value) => parseFcmServiceAccount(value) !== null, {
+        error:
+          "FCM_SERVICE_ACCOUNT_JSON must be a Firebase service account key file with project_id, client_email and private_key",
+      })
+      .optional(),
     // Runtime kill-switch for all AI routes (chat, parsing, plan generation,
     // RAG, coach suggestions). Lets operators disable AI provider traffic
     // without redeploying or rotating provider keys. Defaults to "true" so
@@ -180,6 +218,12 @@ const envSchema = z
   .refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
     message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
     path: ["ALLOW_DEV_AUTH_BYPASS"],
+  })
+  .refine((data) => Boolean(data.ANDROID_APP_PACKAGE) === Boolean(data.ANDROID_APP_CERT_SHA256), {
+    // Half a Digital Asset Links config would silently serve a 404, and App
+    // Links verification would fail on every device with no error anywhere.
+    message: "❌ FATAL: ANDROID_APP_PACKAGE and ANDROID_APP_CERT_SHA256 must be set together",
+    path: ["ANDROID_APP_CERT_SHA256"],
   })
   .refine((data) => data.NODE_ENV !== "production" || !!data.CSRF_SECRET, {
     message: "❌ FATAL: CSRF_SECRET is required in production",

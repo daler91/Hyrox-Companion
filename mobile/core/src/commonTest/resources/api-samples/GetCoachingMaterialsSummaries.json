@@ -1,0 +1,28 @@
+{
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "title": "sample text",
+        "type": "document",
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z",
+        "contentLength": 1
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "title": "sample text",
+        "type": "zz_value_from_a_newer_server",
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z",
+        "contentLength": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

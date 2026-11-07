@@ -1,6 +1,6 @@
 import type { SessionGradesResponse, WorkoutSessionGradeResponse } from "@shared/schema";
+import { type SessionGradesQuery, sessionGradesQuerySchema } from "@shared/schema/types/analyticsRequests";
 import { type Request, type Response, Router } from "express";
-import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateQuery } from "../routeUtils";
@@ -10,9 +10,6 @@ import { storage } from "../storage";
 import { getUserId } from "../types";
 
 const router = Router();
-
-const sessionGradesQuerySchema = z.object({ planId: z.string().min(1).max(255).optional() }).strict();
-type SessionGradesQuery = z.infer<typeof sessionGradesQuerySchema>;
 
 /**
  * "Did the session do its job?" for one plan: every graded run with its

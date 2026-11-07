@@ -1,0 +1,414 @@
+{
+  "suite": "dateUtils.isIsoCalendarDate",
+  "description": "True only for a real day written YYYY-MM-DD with a year from 0100 to 9999.",
+  "cases": [
+    {
+      "input": "2026-11-09",
+      "output": true
+    },
+    {
+      "input": "2026-11-10",
+      "output": true
+    },
+    {
+      "input": "2026-11-11",
+      "output": true
+    },
+    {
+      "input": "2026-11-12",
+      "output": true
+    },
+    {
+      "input": "2026-11-13",
+      "output": true
+    },
+    {
+      "input": "2026-11-14",
+      "output": true
+    },
+    {
+      "input": "2026-11-15",
+      "output": true
+    },
+    {
+      "input": "2026-01-31",
+      "output": true
+    },
+    {
+      "input": "2026-02-01",
+      "output": true
+    },
+    {
+      "input": "2026-02-28",
+      "output": true
+    },
+    {
+      "input": "2026-03-01",
+      "output": true
+    },
+    {
+      "input": "2026-04-30",
+      "output": true
+    },
+    {
+      "input": "2026-06-30",
+      "output": true
+    },
+    {
+      "input": "2026-09-30",
+      "output": true
+    },
+    {
+      "input": "2026-11-30",
+      "output": true
+    },
+    {
+      "input": "2026-12-28",
+      "output": true
+    },
+    {
+      "input": "2026-12-30",
+      "output": true
+    },
+    {
+      "input": "2026-12-31",
+      "output": true
+    },
+    {
+      "input": "2027-01-01",
+      "output": true
+    },
+    {
+      "input": "2027-01-03",
+      "output": true
+    },
+    {
+      "input": "2027-01-04",
+      "output": true
+    },
+    {
+      "input": "2024-02-28",
+      "output": true
+    },
+    {
+      "input": "2024-02-29",
+      "output": true
+    },
+    {
+      "input": "2024-03-01",
+      "output": true
+    },
+    {
+      "input": "2025-02-28",
+      "output": true
+    },
+    {
+      "input": "2025-03-01",
+      "output": true
+    },
+    {
+      "input": "2000-02-29",
+      "output": true
+    },
+    {
+      "input": "1900-02-28",
+      "output": true
+    },
+    {
+      "input": "1900-03-01",
+      "output": true
+    },
+    {
+      "input": "2100-02-28",
+      "output": true
+    },
+    {
+      "input": "2100-03-01",
+      "output": true
+    },
+    {
+      "input": "1970-01-01",
+      "output": true
+    },
+    {
+      "input": "1969-12-31",
+      "output": true
+    },
+    {
+      "input": "0100-01-01",
+      "output": true
+    },
+    {
+      "input": "0100-03-01",
+      "output": true
+    },
+    {
+      "input": "0999-12-31",
+      "output": true
+    },
+    {
+      "input": "1000-01-01",
+      "output": true
+    },
+    {
+      "input": "9999-12-31",
+      "output": true
+    },
+    {
+      "input": "10000-01-01",
+      "output": false
+    },
+    {
+      "input": "275760-09-13",
+      "output": false
+    },
+    {
+      "input": "2025-02-29",
+      "output": false
+    },
+    {
+      "input": "2026-02-30",
+      "output": false
+    },
+    {
+      "input": "2026-04-31",
+      "output": false
+    },
+    {
+      "input": "2026-13-01",
+      "output": false
+    },
+    {
+      "input": "2026-00-10",
+      "output": false
+    },
+    {
+      "input": "2026-11-00",
+      "output": false
+    },
+    {
+      "input": "2026-12-32",
+      "output": false
+    },
+    {
+      "input": "0000-01-01",
+      "output": false
+    },
+    {
+      "input": "0050-01-01",
+      "output": false
+    },
+    {
+      "input": "0099-12-31",
+      "output": false
+    },
+    {
+      "input": "2026-1-5",
+      "output": false
+    },
+    {
+      "input": "2026-011-05",
+      "output": false
+    },
+    {
+      "input": "20266-11-15",
+      "output": false
+    },
+    {
+      "input": "+2026-11-15",
+      "output": false
+    },
+    {
+      "input": "2026-+11-+15",
+      "output": false
+    },
+    {
+      "input": " 2026-11-15",
+      "output": false
+    },
+    {
+      "input": "2026-11-15 ",
+      "output": false
+    },
+    {
+      "input": "\t2026-11-15\n",
+      "output": false
+    },
+    {
+      "input": " 2026-11-15",
+      "output": false
+    },
+    {
+      "input": "﻿2026-11-15",
+      "output": false
+    },
+    {
+      "input": "　2026-11-15",
+      "output": false
+    },
+    {
+      "input": "2026-11-15-01",
+      "output": false
+    },
+    {
+      "input": "2026-11-09-garbage",
+      "output": false
+    },
+    {
+      "input": "2026--01",
+      "output": false
+    },
+    {
+      "input": "2026-11-",
+      "output": false
+    },
+    {
+      "input": "-2026-01-01",
+      "output": false
+    },
+    {
+      "input": "2026.9-11-15",
+      "output": false
+    },
+    {
+      "input": "2026-11.9-15",
+      "output": false
+    },
+    {
+      "input": "2026-11-15.9",
+      "output": false
+    },
+    {
+      "input": "2026-11-15.",
+      "output": false
+    },
+    {
+      "input": "2026-0.5-10",
+      "output": false
+    },
+    {
+      "input": "1e3-01-01",
+      "output": false
+    },
+    {
+      "input": ".5e4-01-01",
+      "output": false
+    },
+    {
+      "input": "2026-11-1e1",
+      "output": false
+    },
+    {
+      "input": "0x7EA-11-15",
+      "output": false
+    },
+    {
+      "input": "0o3752-11-15",
+      "output": false
+    },
+    {
+      "input": "0b11111101010-11-15",
+      "output": false
+    },
+    {
+      "input": "",
+      "output": false
+    },
+    {
+      "input": "abcd-ef-gh",
+      "output": false
+    },
+    {
+      "input": "aaaa",
+      "output": false
+    },
+    {
+      "input": "last-week",
+      "output": false
+    },
+    {
+      "input": "15/11/2026",
+      "output": false
+    },
+    {
+      "input": "2026",
+      "output": false
+    },
+    {
+      "input": "2026-11",
+      "output": false
+    },
+    {
+      "input": "2026-11-15T00:00",
+      "output": false
+    },
+    {
+      "input": "2026-01-05T00:00:00Z",
+      "output": false
+    },
+    {
+      "input": "2026-aa-01",
+      "output": false
+    },
+    {
+      "input": "2026-11-15e",
+      "output": false
+    },
+    {
+      "input": "2026-11-1 5",
+      "output": false
+    },
+    {
+      "input": "2026-11-0x",
+      "output": false
+    },
+    {
+      "input": "0x-01-01",
+      "output": false
+    },
+    {
+      "input": "1_000-01-01",
+      "output": false
+    },
+    {
+      "input": "Infinity-01-01",
+      "output": false
+    },
+    {
+      "input": "᠎2026-11-15",
+      "output": false
+    },
+    {
+      "input": "275760-09-14",
+      "output": false
+    },
+    {
+      "input": "300000-01-01",
+      "output": false
+    },
+    {
+      "input": "2026-10-04",
+      "output": true
+    },
+    {
+      "input": "0999-01-01",
+      "output": true
+    },
+    {
+      "input": "1900-02-29",
+      "output": false
+    },
+    {
+      "input": "2026-13-45",
+      "output": false
+    },
+    {
+      "input": "2026-01-05-01",
+      "output": false
+    },
+    {
+      "input": "+2026-01-01",
+      "output": false
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { exercisesPayloadSchema, insertCustomExerciseSchema, insertWorkoutLogRouteSchema, MAX_WORKOUT_TEXT_LEN, structureBlocksPayloadSchema, updateWorkoutLogRouteSchema } from "@shared/schema";
+import { createWorkoutPayloadSchema, updateWorkoutPayloadSchema } from "@shared/schema";
 import { z } from "zod";
 
 /**
@@ -25,16 +25,11 @@ function enforceHeartRateConsistency(
   }
 }
 
-// The client-facing write surface lives in shared/schema/types/workouts.ts so the
-// route validator and the published OpenAPI contract cannot drift apart; these
-// only add the payload extensions and the cross-field HR check.
-export const createWorkoutRouteSchema = insertWorkoutLogRouteSchema
-  .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
-  .superRefine(enforceHeartRateConsistency);
-export const updateWorkoutRouteSchema = updateWorkoutLogRouteSchema
-  .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
-  .superRefine(enforceHeartRateConsistency);
-export const assignWorkoutPlanDaySchema = z.object({ planDayId: z.string().min(1).nullable() });
-export const reparseWorkoutParamsSchema = z.object({ id: z.string().min(1) });
-export const reparseWorkoutRouteSchema = z.object({ prescribedMainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(), prescribedAccessory: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional() }).strict();
-export const createCustomExerciseSchema = insertCustomExerciseSchema.omit({ userId: true });
+// The request bodies live in shared/schema/types/workouts.ts and the OpenAPI
+// document registers the same objects, so the route validator and the
+// published contract cannot drift apart; these only add the cross-field HR check.
+export const createWorkoutRouteSchema = createWorkoutPayloadSchema.superRefine(enforceHeartRateConsistency);
+export const updateWorkoutRouteSchema = updateWorkoutPayloadSchema.superRefine(enforceHeartRateConsistency);
+// The other workout request schemas (plan-day assignment, reparse, custom
+// exercises, bulk delete, combine, device links, MAF tags, migration reviews)
+// live in shared/schema/types/workoutsRequests.ts, beside their OpenAPI paths.

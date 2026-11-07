@@ -1,0 +1,244 @@
+{
+  "response": {
+    "min": {
+      "workoutId": "a",
+      "date": "2026-11-07",
+      "usedStartTime": true,
+      "pre": [],
+      "post": [],
+      "preTotals": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5
+      },
+      "postTotals": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5
+      },
+      "target": {
+        "preCarbG": 1.5,
+        "postCarbG": 1.5,
+        "postProteinG": 1.5,
+        "reasonCodes": [],
+        "explanation": "a"
+      },
+      "gap": {
+        "preCarbG": 1.5,
+        "postCarbG": 1.5,
+        "postProteinG": 1.5
+      }
+    },
+    "max": {
+      "workoutId": "sample text",
+      "date": "2026-11-07",
+      "usedStartTime": true,
+      "pre": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "name": "sample text",
+          "brand": "sample text",
+          "loggedAt": "2026-11-07T10:15:30.000Z",
+          "logDate": "2026-11-07",
+          "quantityG": 1.5,
+          "mealType": "post_workout",
+          "entryMethod": "photo",
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5
+          },
+          "per100g": {
+            "caloriesPer100g": 1.5,
+            "proteinPer100g": 1.5,
+            "carbPer100g": 1.5,
+            "fatPer100g": 1.5,
+            "fiberPer100g": 1.5
+          }
+        }
+      ],
+      "post": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "name": "sample text",
+          "brand": "sample text",
+          "loggedAt": "2026-11-07T10:15:30.000Z",
+          "logDate": "2026-11-07",
+          "quantityG": 1.5,
+          "mealType": "post_workout",
+          "entryMethod": "photo",
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5
+          },
+          "per100g": {
+            "caloriesPer100g": 1.5,
+            "proteinPer100g": 1.5,
+            "carbPer100g": 1.5,
+            "fatPer100g": 1.5,
+            "fiberPer100g": 1.5
+          }
+        }
+      ],
+      "preTotals": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5
+      },
+      "postTotals": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5
+      },
+      "target": {
+        "preCarbG": 1.5,
+        "postCarbG": 1.5,
+        "postProteinG": 1.5,
+        "reasonCodes": [
+          "sample text"
+        ],
+        "explanation": "sample text"
+      },
+      "gap": {
+        "preCarbG": 1.5,
+        "postCarbG": 1.5,
+        "postProteinG": 1.5
+      }
+    },
+    "future": {
+      "workoutId": "sample text",
+      "date": "2026-11-07",
+      "usedStartTime": true,
+      "pre": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "name": "sample text",
+          "brand": "sample text",
+          "loggedAt": "2026-11-07T10:15:30.000Z",
+          "logDate": "2026-11-07",
+          "quantityG": 1.5,
+          "mealType": "zz_value_from_a_newer_server",
+          "entryMethod": "zz_value_from_a_newer_server",
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "per100g": {
+            "caloriesPer100g": 1.5,
+            "proteinPer100g": 1.5,
+            "carbPer100g": 1.5,
+            "fatPer100g": 1.5,
+            "fiberPer100g": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "post": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "name": "sample text",
+          "brand": "sample text",
+          "loggedAt": "2026-11-07T10:15:30.000Z",
+          "logDate": "2026-11-07",
+          "quantityG": 1.5,
+          "mealType": "zz_value_from_a_newer_server",
+          "entryMethod": "zz_value_from_a_newer_server",
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "per100g": {
+            "caloriesPer100g": 1.5,
+            "proteinPer100g": 1.5,
+            "carbPer100g": 1.5,
+            "fatPer100g": 1.5,
+            "fiberPer100g": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "preTotals": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "postTotals": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "target": {
+        "preCarbG": 1.5,
+        "postCarbG": 1.5,
+        "postProteinG": 1.5,
+        "reasonCodes": [
+          "sample text"
+        ],
+        "explanation": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "gap": {
+        "preCarbG": 1.5,
+        "postCarbG": 1.5,
+        "postProteinG": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

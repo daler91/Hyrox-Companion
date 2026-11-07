@@ -1,5 +1,7 @@
 # Native Mobile App Investigation: Capacitor vs React Native
 
+> **Superseded (2026-11-07):** the app will be native, built with Compose Multiplatform (Android first, then iOS), not Capacitor. See [mobile-app-plan.md](mobile-app-plan.md). This page stays as the original comparison.
+
 ## Recommendation: Capacitor
 
 Capacitor is the recommended path for wrapping fitai.coach as a native mobile app. It avoids a full UI rewrite while enabling native features.

@@ -1,9 +1,21 @@
+import {
+  type RegisterDeviceTokenInput,
+  registerDeviceTokenSchema,
+  type UnregisterDeviceTokenInput,
+  unregisterDeviceTokenSchema,
+} from "@shared/schema";
 import { type Request as ExpressRequest, type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
-import { isAllowedPushEndpoint, isPushEnabled, sendPushToUser } from "../pushNotifications";
+import { readAppClient } from "../middleware/appVersion";
+import {
+  isAllowedPushEndpoint,
+  isNativePushEnabled,
+  isWebPushEnabled,
+  sendPushToUser,
+} from "../pushNotifications";
 import { rateLimiter, validateBody } from "../routeUtils";
 import { checkSafeOutboundUrl } from "../ssrfGuard";
 import { storage } from "../storage";
@@ -34,7 +46,7 @@ const subscribeSchema = z.object({
 
 // 🛡️ Sentinel: Added rate limit to GET /api/v1/push/vapid-key to prevent enumeration/abuse
 router.get("/api/v1/push/vapid-key", isAuthenticated, rateLimiter("push", 60), (_req: ExpressRequest, res: Response) => {
-  if (!isPushEnabled()) {
+  if (!isWebPushEnabled()) {
     res.status(404).json({ error: "Push notifications not configured", code: "PUSH_NOT_CONFIGURED" });
     return;
   }
@@ -56,6 +68,30 @@ protectedDelete(router, "/api/v1/push/unsubscribe", { limiter: rateLimiter("push
   const userId = getUserId(req);
   const { endpoint } = req.body as { endpoint: string };
   await storage.push.removeSubscription(userId, endpoint);
+  res.json({ success: true });
+});
+
+
+// Native app installs. The app registers on every launch and whenever FCM
+// rotates its token, which also refreshes last_seen_at; it unregisters on
+// sign-out. Refused when native push is not configured, so the app can tell
+// the athlete notifications are unavailable instead of silently never
+// delivering any.
+protectedPost(router, "/api/v1/push/devices", { limiter: rateLimiter("push", 10), middleware: [validateBody(registerDeviceTokenSchema)] }, async (req: ExpressRequest, res: Response) => {
+  if (!isNativePushEnabled()) {
+    res.status(404).json({ error: "Push notifications not configured", code: "PUSH_NOT_CONFIGURED" });
+    return;
+  }
+  const userId = getUserId(req);
+  const { token, platform } = req.body as RegisterDeviceTokenInput;
+  await storage.push.saveDeviceToken(userId, { token, platform, appVersion: readAppClient(req)?.version ?? null });
+  res.json({ success: true });
+});
+
+protectedDelete(router, "/api/v1/push/devices", { limiter: rateLimiter("push", 10), middleware: [validateBody(unregisterDeviceTokenSchema)] }, async (req: ExpressRequest, res: Response) => {
+  const userId = getUserId(req);
+  const { token } = req.body as UnregisterDeviceTokenInput;
+  await storage.push.removeDeviceToken(userId, token);
   res.json({ success: true });
 });
 

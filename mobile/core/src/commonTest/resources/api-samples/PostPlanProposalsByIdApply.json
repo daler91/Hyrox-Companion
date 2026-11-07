@@ -1,0 +1,30 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "planDayIds": [
+        "sample text"
+      ]
+    }
+  },
+  "response": {
+    "min": {
+      "applied": true
+    },
+    "max": {
+      "applied": true,
+      "changeCount": 1,
+      "reason": "ai_disabled",
+      "message": "sample text"
+    },
+    "future": {
+      "applied": true,
+      "changeCount": 1,
+      "reason": "zz_value_from_a_newer_server",
+      "message": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

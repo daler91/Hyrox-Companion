@@ -1,0 +1,66 @@
+{
+  "request": {
+    "min": {
+      "decision": "save"
+    },
+    "max": {
+      "decision": "dismiss"
+    }
+  },
+  "response": {
+    "min": {
+      "factProposal": {
+        "fact": "a",
+        "category": "constraint",
+        "status": "pending"
+      }
+    },
+    "max": {
+      "factProposal": {
+        "fact": "sample text",
+        "category": "other",
+        "status": "dismissed"
+      },
+      "fact": {
+        "id": "sample text",
+        "userId": "sample text",
+        "fact": "sample text",
+        "dedupeKey": "sample text",
+        "category": "other",
+        "source": "chat",
+        "active": true,
+        "reviewOn": "sample text",
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z"
+      }
+    },
+    "future": {
+      "factProposal": {
+        "fact": "sample text",
+        "category": "zz_value_from_a_newer_server",
+        "status": "zz_value_from_a_newer_server",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "fact": {
+        "id": "sample text",
+        "userId": "sample text",
+        "fact": "sample text",
+        "dedupeKey": "sample text",
+        "category": "zz_value_from_a_newer_server",
+        "source": "zz_value_from_a_newer_server",
+        "active": true,
+        "reviewOn": "sample text",
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

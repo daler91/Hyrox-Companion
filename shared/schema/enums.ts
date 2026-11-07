@@ -173,3 +173,11 @@ export type AthleteFactSource = (typeof athleteFactSourceEnum)[number];
  */
 export const planDayMoveKindEnum = ["moved", "folded", "shortened", "recovery_undone"] as const;
 export type PlanDayMoveKind = (typeof planDayMoveKindEnum)[number];
+
+/**
+ * The native app platforms: the `X-App-Platform` values the API recognises
+ * (server/middleware/appVersion.ts) and the platform a device push token
+ * belongs to (device_push_tokens.platform).
+ */
+export const devicePlatformEnum = ["android", "ios"] as const;
+export type DevicePlatform = (typeof devicePlatformEnum)[number];

@@ -1,0 +1,22 @@
+{
+  "response": {
+    "min": {
+      "connected": true
+    },
+    "max": {
+      "connected": true,
+      "garminDisplayName": "sample text",
+      "lastSyncedAt": "2026-11-07T10:15:30.000Z",
+      "lastError": "sample text"
+    },
+    "future": {
+      "connected": true,
+      "garminDisplayName": "sample text",
+      "lastSyncedAt": "2026-11-07T10:15:30.000Z",
+      "lastError": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

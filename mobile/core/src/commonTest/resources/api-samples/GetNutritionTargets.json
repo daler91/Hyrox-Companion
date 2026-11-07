@@ -1,0 +1,97 @@
+{
+  "response": {
+    "min": {
+      "current": null,
+      "history": []
+    },
+    "max": {
+      "current": {
+        "id": "sample text",
+        "userId": "sample text",
+        "calories": 1.5,
+        "proteinG": 1.5,
+        "carbG": 1.5,
+        "fatG": 1.5,
+        "periodizationEnabled": true,
+        "referenceUtss": 1.5,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 1.5,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 1.5,
+        "effectiveFrom": "2026-11-07"
+      },
+      "history": [
+        {
+          "id": "sample text",
+          "userId": "sample text",
+          "calories": 1.5,
+          "proteinG": 1.5,
+          "carbG": 1.5,
+          "fatG": 1.5,
+          "periodizationEnabled": true,
+          "referenceUtss": 1.5,
+          "carbGramsPerUtss": 1.5,
+          "recoveryEnabled": true,
+          "recoveryProteinBumpFrac": 1.5,
+          "preloadCarbGramsPerUtss": 1.5,
+          "preloadDaysAhead": 1,
+          "phaseAware": true,
+          "maxCarbDeltaG": 1.5,
+          "effectiveFrom": "2026-11-07"
+        }
+      ]
+    },
+    "future": {
+      "current": {
+        "id": "sample text",
+        "userId": "sample text",
+        "calories": 1.5,
+        "proteinG": 1.5,
+        "carbG": 1.5,
+        "fatG": 1.5,
+        "periodizationEnabled": true,
+        "referenceUtss": 1.5,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 1.5,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 1.5,
+        "effectiveFrom": "2026-11-07",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "history": [
+        {
+          "id": "sample text",
+          "userId": "sample text",
+          "calories": 1.5,
+          "proteinG": 1.5,
+          "carbG": 1.5,
+          "fatG": 1.5,
+          "periodizationEnabled": true,
+          "referenceUtss": 1.5,
+          "carbGramsPerUtss": 1.5,
+          "recoveryEnabled": true,
+          "recoveryProteinBumpFrac": 1.5,
+          "preloadCarbGramsPerUtss": 1.5,
+          "preloadDaysAhead": 1,
+          "phaseAware": true,
+          "maxCarbDeltaG": 1.5,
+          "effectiveFrom": "2026-11-07",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

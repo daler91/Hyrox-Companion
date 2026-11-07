@@ -1,0 +1,34 @@
+{
+  "response": {
+    "min": {
+      "exportFormatVersion": 1,
+      "exportedAt": "2026-11-07T10:15:30.000Z",
+      "unitPreferences": {
+        "weightUnit": "a",
+        "distanceUnit": "a"
+      }
+    },
+    "max": {
+      "exportFormatVersion": 1,
+      "exportedAt": "2026-11-07T10:15:30.000Z",
+      "unitPreferences": {
+        "weightUnit": "sample text",
+        "distanceUnit": "sample text"
+      }
+    },
+    "future": {
+      "exportFormatVersion": 1,
+      "exportedAt": "2026-11-07T10:15:30.000Z",
+      "unitPreferences": {
+        "weightUnit": "sample text",
+        "distanceUnit": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

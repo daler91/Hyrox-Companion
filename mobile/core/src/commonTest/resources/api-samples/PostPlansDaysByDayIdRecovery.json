@@ -1,0 +1,250 @@
+{
+  "request": {
+    "min": {
+      "action": "fold",
+      "targetDate": "a"
+    },
+    "max": {
+      "action": "fold",
+      "targetDate": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "day": {
+        "id": "a",
+        "planId": "a",
+        "weekNumber": 1,
+        "dayName": "a",
+        "focus": "a",
+        "mainWorkout": "a",
+        "accessory": null,
+        "notes": null,
+        "scheduledDate": null,
+        "status": null,
+        "aiSource": null,
+        "aiRationale": null,
+        "aiNoteUpdatedAt": null,
+        "aiInputsUsed": null,
+        "expectedDurationMin": null,
+        "expectedRpe": null,
+        "plannedTimeOfDayMin": null,
+        "skipReason": null,
+        "priority": null,
+        "recovery": null,
+        "missedOn": null,
+        "recoveryUndo": null
+      }
+    },
+    "max": {
+      "day": {
+        "id": "sample text",
+        "planId": "sample text",
+        "weekNumber": 1,
+        "dayName": "sample text",
+        "focus": "sample text",
+        "mainWorkout": "sample text",
+        "accessory": "sample text",
+        "notes": "sample text",
+        "scheduledDate": "sample text",
+        "status": "skipped",
+        "aiSource": "sample text",
+        "aiRationale": "sample text",
+        "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z",
+        "aiInputsUsed": {
+          "rpeTrend": "insufficient_data",
+          "fatigueFlag": true,
+          "planPhase": "race_week",
+          "weeklyVolumeTrend": "decreasing",
+          "loadGovernorAcwrZone": "danger",
+          "loadGovernorAcwr": 1.5,
+          "loadGovernorFlaggedVectors": [
+            "elastic_tendon"
+          ],
+          "loadGovernorRestrictions": [
+            "sample text"
+          ],
+          "stationGaps": [
+            "sample text"
+          ],
+          "progressionFlags": [
+            "sample text"
+          ],
+          "ragUsed": true,
+          "recentWorkoutCount": 1,
+          "completedWorkoutCount": 1,
+          "planGoalPresent": true,
+          "recommendationTrace": {
+            "trainingStyleId": "sample text",
+            "phase": "sample text",
+            "strategyRuleVersion": "sample text",
+            "promptBundleVersion": "sample text",
+            "rationaleCodes": [
+              "sample text"
+            ]
+          },
+          "lastModification": {
+            "kind": "auto_progression",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "insufficient_data",
+            "prescriptionFingerprint": "sample text"
+          },
+          "progressionChanges": [
+            {
+              "exercise": "sample text",
+              "kind": "pace",
+              "from": 1.5,
+              "to": 1.5,
+              "unit": "sample text"
+            }
+          ],
+          "lastFatigueReduction": {
+            "kind": "fatigue_volume_reduction",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "insufficient_data",
+            "prescriptionFingerprint": "sample text"
+          },
+          "replacedPrescription": {
+            "focus": "sample text",
+            "mainWorkout": "sample text",
+            "accessory": "sample text",
+            "notes": "sample text"
+          }
+        },
+        "expectedDurationMin": 1,
+        "expectedRpe": 1,
+        "plannedTimeOfDayMin": 1,
+        "skipReason": "low_energy",
+        "priority": "optional",
+        "recovery": "let_go",
+        "missedOn": "sample text",
+        "recoveryUndo": {
+          "key": "any"
+        }
+      }
+    },
+    "future": {
+      "day": {
+        "id": "sample text",
+        "planId": "sample text",
+        "weekNumber": 1,
+        "dayName": "sample text",
+        "focus": "sample text",
+        "mainWorkout": "sample text",
+        "accessory": "sample text",
+        "notes": "sample text",
+        "scheduledDate": "sample text",
+        "status": "zz_value_from_a_newer_server",
+        "aiSource": "sample text",
+        "aiRationale": "sample text",
+        "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z",
+        "aiInputsUsed": {
+          "rpeTrend": "zz_value_from_a_newer_server",
+          "fatigueFlag": true,
+          "planPhase": "zz_value_from_a_newer_server",
+          "weeklyVolumeTrend": "zz_value_from_a_newer_server",
+          "loadGovernorAcwrZone": "zz_value_from_a_newer_server",
+          "loadGovernorAcwr": 1.5,
+          "loadGovernorFlaggedVectors": [
+            "zz_value_from_a_newer_server"
+          ],
+          "loadGovernorRestrictions": [
+            "sample text"
+          ],
+          "stationGaps": [
+            "sample text"
+          ],
+          "progressionFlags": [
+            "sample text"
+          ],
+          "ragUsed": true,
+          "recentWorkoutCount": 1,
+          "completedWorkoutCount": 1,
+          "planGoalPresent": true,
+          "recommendationTrace": {
+            "trainingStyleId": "sample text",
+            "phase": "sample text",
+            "strategyRuleVersion": "sample text",
+            "promptBundleVersion": "sample text",
+            "rationaleCodes": [
+              "sample text"
+            ],
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "lastModification": {
+            "kind": "zz_value_from_a_newer_server",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "zz_value_from_a_newer_server",
+            "prescriptionFingerprint": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "progressionChanges": [
+            {
+              "exercise": "sample text",
+              "kind": "zz_value_from_a_newer_server",
+              "from": 1.5,
+              "to": 1.5,
+              "unit": "sample text",
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "lastFatigueReduction": {
+            "kind": "fatigue_volume_reduction",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "zz_value_from_a_newer_server",
+            "prescriptionFingerprint": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "replacedPrescription": {
+            "focus": "sample text",
+            "mainWorkout": "sample text",
+            "accessory": "sample text",
+            "notes": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "expectedDurationMin": 1,
+        "expectedRpe": 1,
+        "plannedTimeOfDayMin": 1,
+        "skipReason": "zz_value_from_a_newer_server",
+        "priority": "zz_value_from_a_newer_server",
+        "recovery": "zz_value_from_a_newer_server",
+        "missedOn": "sample text",
+        "recoveryUndo": {
+          "key": "any"
+        },
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -26,6 +26,7 @@ import {
   chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
+  devicePlatformEnum,
   MEAL_TYPES,
   type PlanDayMoveKind,
   planDayMoveKindEnum,
@@ -1649,6 +1650,37 @@ export const pushSubscriptions = pgTable(
   ],
 );
 
+// Native app push tokens (FCM registration tokens; APNs reaches iOS through
+// FCM too), one row per app install. A token identifies an install, not an
+// athlete, so it is unique on its own: when a second athlete signs in on the
+// same phone the row moves to them (server/storage/push.ts), the same handover
+// push_subscriptions does for a shared browser. Capped per user like
+// push_subscriptions, evicting the least recently seen.
+export const devicePushTokens = pgTable(
+  "device_push_tokens",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    platform: varchar("platform", { length: 16 }).notNull(),
+    token: text("token").notNull(),
+    // The app build that last registered the token (X-App-Version), so a
+    // delivery problem can be traced to a release. Null when not sent.
+    appVersion: varchar("app_version", { length: 32 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Refreshed on every registration; eviction drops the oldest first.
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_device_push_tokens_token").on(table.token),
+    index("idx_device_push_tokens_user_id").on(table.userId),
+    check("device_push_tokens_platform_check", sql`platform IN (${inValues(devicePlatformEnum)})`),
+  ],
+);
+
 // Auditable consent records (GDPR Art. 7(1)/5(2), CCPA). Until now privacy-
 // notice acknowledgement and Sentry opt-in lived only in the browser's
 // localStorage with no server-side trail (review W4). One row per
@@ -2159,6 +2191,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   documentChunks: many(documentChunks),
   aiUsageLogs: many(aiUsageLogs),
   pushSubscriptions: many(pushSubscriptions),
+  devicePushTokens: many(devicePushTokens),
   trainingStyles: many(userTrainingStyle),
   mafProfiles: many(mafProfile),
   mafTestResults: many(mafTestResults),
@@ -2283,6 +2316,13 @@ export const aiUsageLogsRelations = relations(aiUsageLogs, ({ one }) => ({
 export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
   user: one(users, {
     fields: [pushSubscriptions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const devicePushTokensRelations = relations(devicePushTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [devicePushTokens.userId],
     references: [users.id],
   }),
 }));

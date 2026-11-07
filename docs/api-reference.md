@@ -10,7 +10,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 **Content-Type:** `application/json` (requests and responses)
 **Authentication:** Clerk JWT via `credentials: "include"` (cookie-based)
 
-**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Endpoints marked below that are not yet registered with the registry are **not** in the snapshot; coverage is being broadened as routes are migrated.
+**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Every client endpoint below is registered; `test/docs/openapiCoverage.test.ts` fails CI when a new route is not, and lists the routes deliberately left out (webhooks, unsubscribe links, health probes, operator and debug endpoints) with the reason for each. Entities several areas return — `ExerciseSetRow`, `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal` — are registered once in `shared/openapiRoutes/entities.ts`. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
 
 ---
 
@@ -168,6 +168,18 @@ Retrieve a CSRF token for use in subsequent mutating requests.
 - **Side effects:** Sets a signed `__Host-fitai.x-csrf` cookie (production) or `fitai.x-csrf` (development)
 
 The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in `403 { "error": "invalid csrf token", "code": "EBADCSRFTOKEN" }` — csrf-csrf's error, rendered by the global error handler.
+
+Requests authenticated with a Clerk session token in an `Authorization: Bearer` header and no Clerk session cookie (the native app) need no CSRF token; a mutating bearer request whose token Clerk rejects gets `401 UNAUTHORIZED`. See [Authentication -- Bearer-Token Clients](authentication.md#bearer-token-clients-native-app).
+
+### Native app headers
+
+The native app sends `X-App-Platform` (`android` or `ios`) and `X-App-Version` (`MAJOR.MINOR.PATCH`) on every request. Both are logged on the access line (validated values only). When the operator sets `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`, an older build — or one with a missing or malformed version — gets, on any `/api/v1` route and ahead of auth and CSRF:
+
+```json
+426 { "error": "This version of the app is no longer supported. Update it to keep going.", "code": "APP_UPDATE_REQUIRED", "minimumVersion": "1.4.0" }
+```
+
+Requests without a recognised `X-App-Platform` (the web app) are never affected. Implementation: `server/middleware/appVersion.ts`.
 
 ---
 
@@ -1030,7 +1042,7 @@ Manually refresh the AI coach note (`ai_rationale`) for a planned day. The servi
 - **Auth:** Required
 - **Rate limit:** `coachNoteRegenerate` category, 10/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** The updated plan day, or `429 COOLDOWN` (with `Retry-After` header) when called inside the cooldown window
+- **Response:** `{ planDayId, aiRationale, aiNoteUpdatedAt }` — the new note, not the whole plan day — or `429 COOLDOWN` with `retryAfterMs` (and a `Retry-After` header) when called inside the cooldown window
 
 ---
 
@@ -1850,7 +1862,7 @@ Internal structured exercise health rollup endpoint. Defined in `server/routes/a
 
 **File:** `server/routes/push.ts`
 
-Web Push (VAPID) endpoints used by the PWA to deliver missed-workout nudges and weekly summary notifications. Push counts as configured only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set (`isPushEnabled()` in `server/pushNotifications.ts`). Only `GET /api/v1/push/vapid-key` checks this up front; the other routes still run, and `POST /api/v1/push/test` then reports `sent: 0`.
+Push registration for two channels. **Web push** (VAPID) serves the PWA and counts as configured only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set (`isWebPushEnabled()`). **Native push** (FCM) serves the mobile app and needs `FCM_SERVICE_ACCOUNT_JSON` (`isNativePushEnabled()`). `sendPushToUser` delivers to every browser subscription and app install over whichever channels are configured. `GET /api/v1/push/vapid-key` and `POST /api/v1/push/devices` check their channel up front; the other routes still run, and `POST /api/v1/push/test` then reports `sent: 0`.
 
 ### GET /api/v1/push/vapid-key
 
@@ -1884,9 +1896,29 @@ Remove a specific subscription endpoint for the authenticated user.
 - **Body:** `{ endpoint: string }`
 - **Response:** `{ success: true }`
 
+### POST /api/v1/push/devices
+
+Register (or refresh) a native app install's FCM registration token for the authenticated user. The app calls it on every launch and whenever FCM rotates the token. The token is unique across users: registering a token another athlete held moves it to the caller, so a shared phone notifies whoever is signed in. Capped at **10** installs per user, evicting the least recently seen (`MAX_DEVICE_PUSH_TOKENS_PER_USER`).
+
+- **Auth:** Required (bearer token from the app; no CSRF token needed)
+- **Rate limit:** `push` category, 10/min
+- **Body:** `{ token: string, platform: "android" | "ios" }` — `token` is 1–4096 characters of `[A-Za-z0-9_:-]`
+- **Headers:** `X-App-Version`, when well formed, is stored with the token
+- **Response:** `{ success: true }`
+- **Errors:** `404 PUSH_NOT_CONFIGURED` when native push is not configured
+
+### DELETE /api/v1/push/devices
+
+Unregister an install for the authenticated user (on sign-out). Only the caller's own row is touched.
+
+- **Auth:** Required
+- **Rate limit:** `push` category, 10/min
+- **Body:** `{ token: string }`
+- **Response:** `{ success: true }`
+
 ### POST /api/v1/push/test
 
-Dispatch a test notification to every registered subscription for the authenticated user. Used by the Settings UI to verify the PWA install is wired up correctly.
+Dispatch a test notification to every registered browser subscription and app install for the authenticated user. Used by the Settings UI to verify notifications are wired up correctly.
 
 - **Auth:** Required
 - **Rate limit:** `push` category, 5/min
@@ -1912,9 +1944,10 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 
 - **Auth:** Required
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes, per user (the limiter runs after `isAuthenticated`; the bucket is shared with `/callback`)
-- **Response:** `{ url: string }` — Redirect URL for Strava OAuth
+- **Response:** `{ authUrl: string }` — Strava consent URL to open
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
 - **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
+- **Native app:** with `?codeChallenge=<base64url(SHA-256(verifier))>` (43 characters, else `400 VALIDATION_ERROR`) it returns `{ authUrl }` for Strava's mobile consent page with `redirect_uri` = `<APP_URL>/strava/mobile-callback` and a state carrying the challenge, and sets no cookie. The app finishes with `POST /api/v1/strava/native/complete` ([Integrations → Native App Connect](integrations.md#native-app-connect))
 
 ### GET /api/v1/strava/callback
 
@@ -1926,6 +1959,20 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 - **Cookie:** the browser-binding cookie `/auth` set must match the state, so only the browser that started the flow can complete it; a missing or mismatched cookie redirects to `/settings?strava=error` before the code is exchanged. The cookie is cleared on every outcome
 - **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
 - **Response:** Redirect to `/settings`
+
+### POST /api/v1/strava/native/complete
+
+The native app finishing a Strava connect with the `code` and `state` Strava's App Link redirect gave it, plus the verifier whose challenge it sent to `/auth`.
+
+- **Auth:** Required (the app's bearer token; no CSRF token needed)
+- **Rate limit:** `stravaAuth` category, 20 per 15 minutes (shared with `/auth`)
+- **Body:** `{ code: string, state: string, verifier: string }` — `verifier` must be an RFC 7636 code verifier (43–128 of `[A-Za-z0-9._~-]`)
+- **Response:** `{ success: true }`; the connection is saved and the first import queued, as for the browser callback
+- **Errors:** `400 VALIDATION_ERROR` for a malformed body; `403 FORBIDDEN` when the state is invalid, expired, replayed, a browser-flow state, minted for another user, or the verifier does not match (one response for all, so it never says which); `502 EXTERNAL_API_ERROR` when Strava rejects the code
+
+### GET /strava/mobile-callback
+
+Strava's `redirect_uri` for the native app: an Android App Link, so normally the app opens instead of this page. When it does not, the server answers a static HTML page with an "Open fitai" link to itself (following it is a user gesture, which Android routes to a verified app). `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`; nothing from the query is echoed.
 
 ### POST /api/v1/strava/sync
 
@@ -2125,7 +2172,7 @@ Export all training data as CSV or JSON.
 
 **Base path:** `/api/v1/nutrition` (paths in the table are relative to it). **Files:** `server/routes/nutrition/*`.
 
-The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. These routes are **not yet registered with the OpenAPI registry**, so they are absent from [`docs/openapi.json`](openapi.json) and Swagger UI; this catalog and [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) are the reference until they are migrated.
+The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. Their request and response schemas are in [`docs/openapi.json`](openapi.json) (registered in `shared/openapiRoutes/nutrition.ts`); [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) covers the behaviour behind them.
 
 | Method | Path                                   | Purpose                                                                                                          | Rate limit (per min)                 |
 | ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |

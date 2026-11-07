@@ -1,0 +1,278 @@
+{
+  "suite": "unitConversion.standardizeWeightUnit",
+  "description": "A weight unit spelling to kg or lbs; null, empty and unknown are kg.",
+  "cases": [
+    {
+      "input": null,
+      "output": "kg"
+    },
+    {
+      "input": "",
+      "output": "kg"
+    },
+    {
+      "input": " ",
+      "output": "kg"
+    },
+    {
+      "input": "KG",
+      "output": "kg"
+    },
+    {
+      "input": "kg",
+      "output": "kg"
+    },
+    {
+      "input": "kgs",
+      "output": "kg"
+    },
+    {
+      "input": "kilo",
+      "output": "kg"
+    },
+    {
+      "input": "kilos",
+      "output": "kg"
+    },
+    {
+      "input": "kilogram",
+      "output": "kg"
+    },
+    {
+      "input": "Kilograms",
+      "output": "kg"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": "lb",
+      "output": "lbs"
+    },
+    {
+      "input": "LBS",
+      "output": "lbs"
+    },
+    {
+      "input": "Pound",
+      "output": "lbs"
+    },
+    {
+      "input": "pounds",
+      "output": "lbs"
+    },
+    {
+      "input": "stone",
+      "output": "kg"
+    },
+    {
+      "input": "stones",
+      "output": "kg"
+    },
+    {
+      "input": "mi",
+      "output": "kg"
+    },
+    {
+      "input": "MI",
+      "output": "kg"
+    },
+    {
+      "input": "mile",
+      "output": "kg"
+    },
+    {
+      "input": "Miles",
+      "output": "kg"
+    },
+    {
+      "input": "km",
+      "output": "kg"
+    },
+    {
+      "input": "KMS",
+      "output": "kg"
+    },
+    {
+      "input": "kilometer",
+      "output": "kg"
+    },
+    {
+      "input": "kilometers",
+      "output": "kg"
+    },
+    {
+      "input": "kilometre",
+      "output": "kg"
+    },
+    {
+      "input": "Kilometres",
+      "output": "kg"
+    },
+    {
+      "input": "m",
+      "output": "kg"
+    },
+    {
+      "input": "M",
+      "output": "kg"
+    },
+    {
+      "input": "meter",
+      "output": "kg"
+    },
+    {
+      "input": "meters",
+      "output": "kg"
+    },
+    {
+      "input": "metre",
+      "output": "kg"
+    },
+    {
+      "input": "metres",
+      "output": "kg"
+    },
+    {
+      "input": "ft",
+      "output": "kg"
+    },
+    {
+      "input": "FT",
+      "output": "kg"
+    },
+    {
+      "input": "foot",
+      "output": "kg"
+    },
+    {
+      "input": "feet",
+      "output": "kg"
+    },
+    {
+      "input": "yards",
+      "output": "kg"
+    },
+    {
+      "input": "k g",
+      "output": "kg"
+    },
+    {
+      "input": "kg.",
+      "output": "kg"
+    },
+    {
+      "input": "\tLBS\n",
+      "output": "lbs"
+    },
+    {
+      "input": "\u000bmiles\f",
+      "output": "kg"
+    },
+    {
+      "input": " lbs　",
+      "output": "lbs"
+    },
+    {
+      "input": "﻿lbs",
+      "output": "lbs"
+    },
+    {
+      "input": "﻿mi",
+      "output": "kg"
+    },
+    {
+      "input": "﻿ft",
+      "output": "kg"
+    },
+    {
+      "input": " mi ",
+      "output": "kg"
+    },
+    {
+      "input": " m ",
+      "output": "kg"
+    },
+    {
+      "input": "\u001clbs",
+      "output": "kg"
+    },
+    {
+      "input": "\u001fmi",
+      "output": "kg"
+    },
+    {
+      "input": "\u001cft",
+      "output": "kg"
+    },
+    {
+      "input": "lbs",
+      "output": "kg"
+    },
+    {
+      "input": "​lbs",
+      "output": "kg"
+    },
+    {
+      "input": "᠎mi",
+      "output": "kg"
+    },
+    {
+      "input": "Km",
+      "output": "kg"
+    },
+    {
+      "input": "KMS",
+      "output": "kg"
+    },
+    {
+      "input": "KG",
+      "output": "kg"
+    },
+    {
+      "input": "constructor",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": " Constructor ",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": "__proto__",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": "__PROTO__",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": "toString",
+      "output": "kg"
+    },
+    {
+      "input": "tostring",
+      "output": "kg"
+    },
+    {
+      "input": "hasOwnProperty",
+      "output": "kg"
+    },
+    {
+      "input": "valueOf",
+      "output": "kg"
+    },
+    {
+      "input": "prototype",
+      "output": "kg"
+    }
+  ]
+}

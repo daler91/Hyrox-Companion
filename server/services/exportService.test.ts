@@ -288,6 +288,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     stravaConnection: unknown;
     garminConnection: unknown;
     pushSubscriptions: unknown[];
+    deviceTokens: unknown[];
     aiUsageLogs: unknown[];
     planDays: Array<{ id: string; planId: string }>;
     planDayStructures: Map<string, unknown[]>;
@@ -307,7 +308,10 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       coaching: { listCoachingMaterials: vi.fn().mockResolvedValue(overrides.coachingMaterials ?? []) },
       timelineAnnotations: { list: vi.fn().mockResolvedValue(overrides.timelineAnnotations ?? []) },
       athleteFacts: { list: vi.fn().mockResolvedValue(overrides.athleteFacts ?? []) },
-      push: { getSubscriptionsForUser: vi.fn().mockResolvedValue(overrides.pushSubscriptions ?? []) },
+      push: {
+        getSubscriptionsForUser: vi.fn().mockResolvedValue(overrides.pushSubscriptions ?? []),
+        listDeviceTokensForExport: vi.fn().mockResolvedValue(overrides.deviceTokens ?? []),
+      },
       aiUsage: { listForUser: vi.fn().mockResolvedValue(overrides.aiUsageLogs ?? []) },
       workouts: {
         getWorkoutStructuresByPlanDays: vi.fn().mockResolvedValue(overrides.planDayStructures ?? new Map()),
@@ -360,6 +364,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       athleteFacts: [],
       connections: { strava: null, garmin: null },
       pushSubscriptions: [],
+      deviceTokens: [],
       aiUsageLogs: [],
       nutrition: {
         foodLog: [],
@@ -561,6 +566,22 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     expect(serialized).not.toContain('p256dh');
   });
 
+  it('includes the native app installs registered for push', async () => {
+    const deviceTokens = [
+      {
+        platform: 'android',
+        token: 'fcm-token-1',
+        appVersion: '1.0.0',
+        createdAt: new Date('2026-11-01T00:00:00Z'),
+        lastSeenAt: new Date('2026-11-07T00:00:00Z'),
+      },
+    ];
+
+    const result = await generateJSON(mockUserId, createMockStorage({ deviceTokens }));
+
+    expect(result.deviceTokens).toEqual(deviceTokens);
+  });
+
   it('includes chat messages, coaching materials, custom exercises, annotations, athlete facts, and AI usage logs verbatim', async () => {
     const chatMessages = [{ id: 'm1', role: 'user', content: 'hello', timestamp: new Date() }];
     const coachingMaterials = [{ id: 'cm1', title: 'My Programming', content: 'lift heavy', type: 'principles' }];
@@ -607,6 +628,7 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
       stravaConnections: 'connections.strava', // tokens redacted
       garminConnections: 'connections.garmin', // credentials redacted
       pushSubscriptions: 'pushSubscriptions', // encryption keys redacted
+      devicePushTokens: 'deviceTokens',
       aiUsageLogs: 'aiUsageLogs',
       foodLogEntries: 'nutrition.foodLog',
       nutritionTargets: 'nutrition.nutritionTargets',

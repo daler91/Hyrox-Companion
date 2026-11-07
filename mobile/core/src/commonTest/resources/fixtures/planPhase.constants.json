@@ -1,0 +1,18 @@
+{
+  "suite": "planPhase.constants",
+  "description": "PLAN_PHASE_ORDER: the phases in the order an athlete passes through them.",
+  "cases": [
+    {
+      "input": null,
+      "output": {
+        "PLAN_PHASE_ORDER": [
+          "early",
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    }
+  ]
+}

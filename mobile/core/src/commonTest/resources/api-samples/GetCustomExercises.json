@@ -1,0 +1,26 @@
+{
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "userId": "sample text",
+        "name": "sample text",
+        "category": "sample text",
+        "createdAt": "2026-11-07T10:15:30.000Z"
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "userId": "sample text",
+        "name": "sample text",
+        "category": "sample text",
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

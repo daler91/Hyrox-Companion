@@ -1,0 +1,16 @@
+{
+  "response": {
+    "min": {
+      "dismissed": true
+    },
+    "max": {
+      "dismissed": true
+    },
+    "future": {
+      "dismissed": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

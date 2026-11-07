@@ -1,0 +1,19 @@
+{
+  "suite": "nutritionScaling.KCAL_PER_G",
+  "description": "The Atwater factors, as separate constants and as the KCAL_PER_G map.",
+  "cases": [
+    {
+      "input": null,
+      "output": {
+        "KCAL_PER_G_PROTEIN": 4,
+        "KCAL_PER_G_CARB": 4,
+        "KCAL_PER_G_FAT": 9,
+        "KCAL_PER_G": {
+          "protein": 4,
+          "carb": 4,
+          "fat": 9
+        }
+      }
+    }
+  ]
+}

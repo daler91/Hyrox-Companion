@@ -1,21 +1,39 @@
 import { OpenApiGeneratorV3, OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { createSelectSchema } from "drizzle-zod";
 
+import { registerAccountPaths } from "./openapiRoutes/account";
+import { registerAnalyticsPaths } from "./openapiRoutes/analytics";
+import { registerCoachPaths } from "./openapiRoutes/coach";
+import { registerCommonComponents } from "./openapiRoutes/common";
+import { registerEntityComponents } from "./openapiRoutes/entities";
+import { registerGarminPaths } from "./openapiRoutes/garmin";
+import { registerNutritionPaths } from "./openapiRoutes/nutrition";
+import { registerPlansPaths } from "./openapiRoutes/plans";
+import { registerPushPaths } from "./openapiRoutes/push";
+import { registerStravaPaths } from "./openapiRoutes/strava";
+import { registerWorkoutsPaths } from "./openapiRoutes/workouts";
 import {
+  createWorkoutPayloadSchema,
   exerciseSetSchema,
-  exercisesPayloadSchema,
   insertExerciseSetSchema,
   insertPlanDaySchema,
-  insertWorkoutLogRouteSchema,
   insertWorkoutLogSchema,
   updateUserPreferencesSchema,
-  updateWorkoutLogRouteSchema,
+  updateWorkoutPayloadSchema,
   users,
   workoutLogs,
 } from "./schema";
 import { z } from "./schema/zod";
 
 export const registry = new OpenAPIRegistry();
+
+// Security scheme, error envelopes and response helpers shared by every path
+// module in shared/openapiRoutes/.
+const common = registerCommonComponents(registry);
+// Entities several areas return (set rows, structure blocks, parsed exercises,
+// coach-note inputs, plan proposals): one component each, whatever route
+// family returns them.
+const entities = registerEntityComponents(registry);
 
 // ---------------------------------------------------------------------------
 // Realistic Hyrox-specific examples for Swagger UI "Try it out"
@@ -144,7 +162,8 @@ export const WorkoutLogWithSetsSchema = registry.register(
   "WorkoutLogWithSets",
   createSelectSchema(workoutLogs)
     .extend({
-      exerciseSets: z.array(exerciseSetSchema).optional(),
+      // Stored rows (with id, version and units), not the request-side ExerciseSet.
+      exerciseSets: z.array(entities.ExerciseSetRow).optional(),
       newPersonalRecords: z
         .array(
           z.object({
@@ -171,10 +190,8 @@ export const WorkoutLogDetailSchema = registry.register(
   "WorkoutLogDetail",
   createSelectSchema(workoutLogs)
     .extend({
-      exerciseSets: z.array(exerciseSetSchema),
-      structureBlocks: z
-        .array(z.record(z.string(), z.unknown()))
-        .openapi({ description: "Structured workout blocks (see the structureBlockSchema Zod type)." }),
+      exerciseSets: z.array(entities.ExerciseSetRow),
+      structureBlocks: z.array(entities.WorkoutStructureBlock),
       suggestedRpe: z
         .number()
         .int()
@@ -292,31 +309,21 @@ export const InsertPlanDaySchema = registry.register(
 // Create a combined schema for creating a workout that includes the optional exercises payload
 export const CreateWorkoutRequestSchema = registry.register(
   "CreateWorkoutRequest",
-  z.intersection(
-    // The ROUTE schema, not the raw insert schema: device-provenance columns are
-    // server-owned and stripped from the request, so advertising them here would
-    // document a write surface the server does not accept.
-    insertWorkoutLogRouteSchema,
-    z.object({
-      exercises: exercisesPayloadSchema.optional(),
-    })
-  ).openapi({
+  // The route's own body schema (built on the ROUTE insert schema, so the
+  // server-owned device-provenance columns are not advertised), including the
+  // exercises and structureBlocks payloads.
+  createWorkoutPayloadSchema.openapi({
     title: "CreateWorkoutRequest",
-    description: "Payload for creating a new workout log along with optional exercise sets. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
+    description: "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
   })
 );
 
 // Create a combined schema for updating a workout that includes the optional exercises payload
 export const UpdateWorkoutRequestSchema = registry.register(
   "UpdateWorkoutRequest",
-  z.intersection(
-    updateWorkoutLogRouteSchema,
-    z.object({
-      exercises: exercisesPayloadSchema.optional(),
-    })
-  ).openapi({
+  updateWorkoutPayloadSchema.openapi({
     title: "UpdateWorkoutRequest",
-    description: "Payload for updating a workout log along with optional exercise sets. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.",
+    description: "Payload for updating a workout log along with optional exercise sets and structure blocks. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.",
   })
 );
 
@@ -332,15 +339,7 @@ export const WorkoutIdParam = registry.registerParameter(
   })
 );
 
-// Register Security Scheme
-const bearerAuth = registry.registerComponent("securitySchemes", "BearerAuth", {
-  type: "http",
-  scheme: "bearer",
-  bearerFormat: "JWT",
-  description: "Enter your Clerk JWT token in the format: Bearer <token>",
-});
-
-const security = [{ [bearerAuth.name]: [] }];
+const security = common.security;
 
 // Define Example Routes (Path Items)
 registry.registerPath({
@@ -546,6 +545,28 @@ registry.registerPath({
   },
 });
 
+// Path modules, one per area. Every /api/v1 route is either registered by one
+// of them or listed in test/docs/openapiUndocumented.ts, a list that may only
+// shrink (test/docs/openapiCoverage.test.ts).
+registerAccountPaths(registry, common, { PreferencesResponse: PreferencesResponseSchema });
+registerPushPaths(registry, common);
+registerStravaPaths(registry, common);
+registerGarminPaths(registry, common);
+// Analytics registers the session-grade and MAF shapes the workout routes
+// also return, so it runs first and hands them over: one component each.
+const analytics = registerAnalyticsPaths(registry, common);
+registerWorkoutsPaths(registry, common, {
+  WorkoutLog: WorkoutLogSchema,
+  WorkoutId: WorkoutIdParam,
+  SessionGrade: analytics.SessionGrade,
+  MafTestResult: analytics.MafTestResult,
+  MafWorkoutAnalysis: analytics.MafWorkoutAnalysis,
+  entities,
+});
+registerPlansPaths(registry, common, entities);
+registerCoachPaths(registry, common, entities);
+registerNutritionPaths(registry, common);
+
 export function generateOpenApiDocument() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
 
@@ -559,10 +580,22 @@ API for managing workouts, exercises, and training plans.
 
 ### Coverage
 This document is generated from the Zod schemas in \`shared/openapi.ts\` and
-currently describes the workout CRUD and preferences endpoints only. The
-remaining \`/api/v1\` routes (plans, timeline, analytics, coach, nutrition,
-integrations, …) are not yet registered here; \`server/routes/\` is their
-source of truth.
+the path modules in \`shared/openapiRoutes/\`, and describes every client route
+under \`/api/v1\`. \`test/docs/openapiCoverage.test.ts\` keeps it that way: a
+new route fails CI until it is registered. Webhooks, unsubscribe links, health
+probes and operator endpoints are left out on purpose; that test lists each
+with its reason.
+
+### Errors
+Errors use \`ErrorResponse\` (\`{ error, code, details? }\`), except validation
+failures from the Zod middleware, which use \`ValidationErrorResponse\`
+(\`{ code: "VALIDATION_ERROR", message, details.issues }\`). \`code\` is a member
+of the ErrorCode catalogue in \`server/errors.ts\`.
+
+### Native app
+The mobile app sends \`X-App-Platform\` and \`X-App-Version\` on every request;
+a build below the server's minimum gets \`426\` with \`AppUpdateRequiredResponse\`.
+Bearer-authenticated requests need no CSRF token.
 
 ### Authentication
 This API is protected using JWT Bearer authentication provided by Clerk.

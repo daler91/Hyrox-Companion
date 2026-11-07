@@ -1,0 +1,39 @@
+{
+  "request": {
+    "min": {
+      "entryMethod": "nl",
+      "loggedAt": "a",
+      "items": []
+    },
+    "max": {
+      "entryMethod": "photo",
+      "rawInput": "sample text",
+      "loggedAt": "sample text",
+      "items": [
+        {
+          "foodId": "sample text",
+          "quantityG": 1.5,
+          "mealType": "post_workout",
+          "parseConfidence": 1.5
+        }
+      ]
+    }
+  },
+  "response": {
+    "min": {
+      "created": 1,
+      "logDate": "2026-11-07"
+    },
+    "max": {
+      "created": 1,
+      "logDate": "2026-11-07"
+    },
+    "future": {
+      "created": 1,
+      "logDate": "2026-11-07",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

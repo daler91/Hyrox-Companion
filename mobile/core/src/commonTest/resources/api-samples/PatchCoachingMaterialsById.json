@@ -1,0 +1,42 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "title": "sample text",
+      "content": "sample text",
+      "type": "document"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "title": "a",
+      "content": "a",
+      "type": "principles",
+      "createdAt": null,
+      "updatedAt": null
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "title": "sample text",
+      "content": "sample text",
+      "type": "document",
+      "createdAt": "2026-11-07T10:15:30.000Z",
+      "updatedAt": "2026-11-07T10:15:30.000Z"
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "title": "sample text",
+      "content": "sample text",
+      "type": "zz_value_from_a_newer_server",
+      "createdAt": "2026-11-07T10:15:30.000Z",
+      "updatedAt": "2026-11-07T10:15:30.000Z",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -1,0 +1,4003 @@
+{
+  "suite": "sessionFuellingTargets.computeSessionFuellingTarget",
+  "description": "Pre/post carb and post protein targets from duration, RPE and bodyweight, with reason codes and the explanation.",
+  "cases": [
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": null,
+        "bodyweightKg": null
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min",
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": null
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 13,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min easy session at 70kg: ~13g carbs beforehand, then ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 36,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min moderate session at 70kg: ~21g carbs beforehand, then ~36g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.99999999999999,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44.99999999999999-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 75
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 53,
+        "postProteinG": 23,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 75kg: ~30g carbs beforehand, then ~53g carbs and ~23g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 75
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 16,
+        "postProteinG": 23,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 75kg: no pre-fuelling needed; ~16g carbs and ~23g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 75
+      },
+      "output": {
+        "preCarbG": 61,
+        "postCarbG": 106,
+        "postProteinG": 23,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 75kg: ~61g carbs beforehand, then ~106g carbs and ~23g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 50
+      },
+      "output": {
+        "preCarbG": 20,
+        "postCarbG": 35,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 50kg: ~20g carbs beforehand, then ~35g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 150
+      },
+      "output": {
+        "preCarbG": 60,
+        "postCarbG": 105,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 150kg: ~60g carbs beforehand, then ~105g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 0.30000000000000004
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 0,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 0.30000000000000004kg: no pre-fuelling needed; ~0g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 1e-7
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 0,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 1e-7kg: no pre-fuelling needed; ~0g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 0.000001
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 0,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 0.000001kg: no pre-fuelling needed; ~0g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 123456789.123
+      },
+      "output": {
+        "preCarbG": 49382716,
+        "postCarbG": 86419752,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 123456789.123kg: ~49382716g carbs beforehand, then ~86419752g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 1e+21
+      },
+      "output": {
+        "preCarbG": 400000000000000000000,
+        "postCarbG": 700000000000000000000,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 1e+21kg: ~400000000000000000000g carbs beforehand, then ~700000000000000000000g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 1.5e+300
+      },
+      "output": {
+        "preCarbG": 6e+299,
+        "postCarbG": 1.05e+300,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 1.5e+300kg: ~6e+299g carbs beforehand, then ~1.05e+300g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 5e-324
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 0,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 5e-324kg: no pre-fuelling needed; ~0g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 1e-323
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 0,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 1e-323kg: no pre-fuelling needed; ~0g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 2.2250738585072014e-308
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 0,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 2.2250738585072014e-308kg: no pre-fuelling needed; ~0g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1e-7,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1e-7-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0.30000000000000004,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 0.30000000000000004-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 5e-324,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 5e-324-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1e+21,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1e+21-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1e+25,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1e+25-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 123456789012345680000,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 123456789012345680000-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0.3333333333333333,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 0.3333333333333333-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 9007199254740994,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 9007199254740994-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": "NaN",
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": "NaN",
+        "postCarbG": "NaN",
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a NaN-min moderate session at 70kg: no pre-fuelling needed; ~NaNg carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": "NaN",
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": "NaN"
+      },
+      "output": {
+        "preCarbG": "NaN",
+        "postCarbG": "NaN",
+        "postProteinG": "NaN",
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at NaNkg: no pre-fuelling needed; ~NaNg carbs and ~NaNg protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": "Infinity",
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a Infinity-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": "-Infinity",
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": "-Infinity",
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": "Infinity",
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": "Infinity"
+      },
+      "output": {
+        "preCarbG": "Infinity",
+        "postCarbG": "Infinity",
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at Infinitykg: ~Infinityg carbs beforehand, then ~Infinityg carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": "-Infinity"
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {},
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min",
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 3
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity",
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 1-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 20-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 29-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 30-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 30.5-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 36,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 44-min moderate session at 70kg: ~21g carbs beforehand, then ~36g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 44.9-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 45-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 73,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 89-min moderate session at 70kg: ~42g carbs beforehand, then ~73g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 74,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 90-min moderate session at 70kg: ~42g carbs beforehand, then ~74g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 120-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": null,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_moderate_intensity"
+        ],
+        "explanation": "For a 150-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 1-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 20-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 29-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30.5-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44.9-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 13,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min easy session at 70kg: ~13g carbs beforehand, then ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 0,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 1-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 20-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 29-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30.5-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44.9-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 13,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min easy session at 70kg: ~13g carbs beforehand, then ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 1,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 1-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 20-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 29-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30.5-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44.9-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 13,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min easy session at 70kg: ~13g carbs beforehand, then ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 1-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 20-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 29-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30.5-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 44.9-min easy session at 70kg: no pre-fuelling needed; ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 13,
+        "postCarbG": 22,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min easy session at 70kg: ~13g carbs beforehand, then ~22g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 17,
+        "postCarbG": 29,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min easy session at 70kg: ~17g carbs beforehand, then ~29g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min easy session at 70kg: ~25g carbs beforehand, then ~44g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 4,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 59,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min easy session at 70kg: ~25g carbs beforehand, then ~59g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 20-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 29-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30.5-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 36,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min moderate session at 70kg: ~21g carbs beforehand, then ~36g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44.9-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 73,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min moderate session at 70kg: ~42g carbs beforehand, then ~73g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 74,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min moderate session at 70kg: ~42g carbs beforehand, then ~74g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 4.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 20-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 29-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30.5-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 36,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min moderate session at 70kg: ~21g carbs beforehand, then ~36g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44.9-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 73,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min moderate session at 70kg: ~42g carbs beforehand, then ~73g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 74,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min moderate session at 70kg: ~42g carbs beforehand, then ~74g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 20-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 29-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 25,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30.5-min moderate session at 70kg: ~21g carbs beforehand, then ~25g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 36,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min moderate session at 70kg: ~21g carbs beforehand, then ~36g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44.9-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 21,
+        "postCarbG": 37,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min moderate session at 70kg: ~21g carbs beforehand, then ~37g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 73,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min moderate session at 70kg: ~42g carbs beforehand, then ~73g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 74,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min moderate session at 70kg: ~42g carbs beforehand, then ~74g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 7,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 42,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min moderate session at 70kg: ~42g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 20-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 29-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 34,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30.5-min hard session at 70kg: ~28g carbs beforehand, then ~34g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min hard session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 50,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44.9-min hard session at 70kg: ~28g carbs beforehand, then ~50g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 50,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min hard session at 70kg: ~28g carbs beforehand, then ~50g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 56,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min hard session at 70kg: ~56g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 99,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 70kg: ~57g carbs beforehand, then ~99g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 132,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min hard session at 70kg: ~57g carbs beforehand, then ~132g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 7.5,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 132,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min hard session at 70kg: ~57g carbs beforehand, then ~132g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 20-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 29-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 34,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30.5-min hard session at 70kg: ~28g carbs beforehand, then ~34g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min hard session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 50,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44.9-min hard session at 70kg: ~28g carbs beforehand, then ~50g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 50,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min hard session at 70kg: ~28g carbs beforehand, then ~50g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 56,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min hard session at 70kg: ~56g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 99,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 70kg: ~57g carbs beforehand, then ~99g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 132,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min hard session at 70kg: ~57g carbs beforehand, then ~132g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 8,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 132,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min hard session at 70kg: ~57g carbs beforehand, then ~132g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": null,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 0,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": -10,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "assumed_duration_60min"
+        ],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 1,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 1-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 20,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 20-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 29,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 29-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 33,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30-min hard session at 70kg: ~28g carbs beforehand, then ~33g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30.5,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 34,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 30.5-min hard session at 70kg: ~28g carbs beforehand, then ~34g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44-min hard session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 44.9,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 50,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 44.9-min hard session at 70kg: ~28g carbs beforehand, then ~50g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 45,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 50,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 45-min hard session at 70kg: ~28g carbs beforehand, then ~50g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 38,
+        "postCarbG": 66,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min hard session at 70kg: ~38g carbs beforehand, then ~66g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 89,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 56,
+        "postCarbG": 98,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 89-min hard session at 70kg: ~56g carbs beforehand, then ~98g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 99,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 70kg: ~57g carbs beforehand, then ~99g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 120,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 132,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 120-min hard session at 70kg: ~57g carbs beforehand, then ~132g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 150,
+        "rpe": 10,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 132,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 150-min hard session at 70kg: ~57g carbs beforehand, then ~132g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": null
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": null
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": null
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 0
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 0
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 0
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 0
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 0
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 0
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": -70
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": -70
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": -70
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 60,
+        "postProteinG": 25,
+        "reasonCodes": [
+          "no_bodyweight_defaults"
+        ],
+        "explanation": "No bodyweight set — showing general defaults. Add your bodyweight in Settings for targets tailored to you. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 50
+      },
+      "output": {
+        "preCarbG": 20,
+        "postCarbG": 35,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 50kg: ~20g carbs beforehand, then ~35g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 50
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 11,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped",
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 50kg: no pre-fuelling needed; ~11g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 50
+      },
+      "output": {
+        "preCarbG": 41,
+        "postCarbG": 71,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 90-min hard session at 50kg: ~41g carbs beforehand, then ~71g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 60
+      },
+      "output": {
+        "preCarbG": 24,
+        "postCarbG": 42,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 60kg: ~24g carbs beforehand, then ~42g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 60
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 13,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped",
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 60kg: no pre-fuelling needed; ~13g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 60
+      },
+      "output": {
+        "preCarbG": 49,
+        "postCarbG": 85,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 90-min hard session at 60kg: ~49g carbs beforehand, then ~85g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 63.3
+      },
+      "output": {
+        "preCarbG": 25,
+        "postCarbG": 44,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 63.3kg: ~25g carbs beforehand, then ~44g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 63.3
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 13,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped",
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 63.3kg: no pre-fuelling needed; ~13g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 63.3
+      },
+      "output": {
+        "preCarbG": 51,
+        "postCarbG": 90,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 90-min hard session at 63.3kg: ~51g carbs beforehand, then ~90g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 65
+      },
+      "output": {
+        "preCarbG": 26,
+        "postCarbG": 46,
+        "postProteinG": 20,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 65kg: ~26g carbs beforehand, then ~46g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 65
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 14,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 65kg: no pre-fuelling needed; ~14g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 65
+      },
+      "output": {
+        "preCarbG": 53,
+        "postCarbG": 92,
+        "postProteinG": 20,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 65kg: ~53g carbs beforehand, then ~92g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 66.6
+      },
+      "output": {
+        "preCarbG": 27,
+        "postCarbG": 47,
+        "postProteinG": 20,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 66.6kg: ~27g carbs beforehand, then ~47g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 66.6
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 14,
+        "postProteinG": 20,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 66.6kg: no pre-fuelling needed; ~14g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 66.6
+      },
+      "output": {
+        "preCarbG": 54,
+        "postCarbG": 94,
+        "postProteinG": 20,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 66.6kg: ~54g carbs beforehand, then ~94g carbs and ~20g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 28,
+        "postCarbG": 49,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 70kg: ~28g carbs beforehand, then ~49g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 21,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 70kg: no pre-fuelling needed; ~15g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 70
+      },
+      "output": {
+        "preCarbG": 57,
+        "postCarbG": 99,
+        "postProteinG": 21,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 70kg: ~57g carbs beforehand, then ~99g carbs and ~21g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 72.5
+      },
+      "output": {
+        "preCarbG": 29,
+        "postCarbG": 51,
+        "postProteinG": 22,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 72.5kg: ~29g carbs beforehand, then ~51g carbs and ~22g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 72.5
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 15,
+        "postProteinG": 22,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 72.5kg: no pre-fuelling needed; ~15g carbs and ~22g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 72.5
+      },
+      "output": {
+        "preCarbG": 59,
+        "postCarbG": 103,
+        "postProteinG": 22,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 72.5kg: ~59g carbs beforehand, then ~103g carbs and ~22g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 75
+      },
+      "output": {
+        "preCarbG": 30,
+        "postCarbG": 53,
+        "postProteinG": 23,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 75kg: ~30g carbs beforehand, then ~53g carbs and ~23g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 75
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 16,
+        "postProteinG": 23,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 75kg: no pre-fuelling needed; ~16g carbs and ~23g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 75
+      },
+      "output": {
+        "preCarbG": 61,
+        "postCarbG": 106,
+        "postProteinG": 23,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 75kg: ~61g carbs beforehand, then ~106g carbs and ~23g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 133.3
+      },
+      "output": {
+        "preCarbG": 53,
+        "postCarbG": 93,
+        "postProteinG": 40,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 133.3kg: ~53g carbs beforehand, then ~93g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 133.3
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 28,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 133.3kg: no pre-fuelling needed; ~28g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 133.3
+      },
+      "output": {
+        "preCarbG": 108,
+        "postCarbG": 189,
+        "postProteinG": 40,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 133.3kg: ~108g carbs beforehand, then ~189g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 133.4
+      },
+      "output": {
+        "preCarbG": 53,
+        "postCarbG": 93,
+        "postProteinG": 40,
+        "reasonCodes": [],
+        "explanation": "For a 60-min moderate session at 133.4kg: ~53g carbs beforehand, then ~93g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 133.4
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 28,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 133.4kg: no pre-fuelling needed; ~28g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 133.4
+      },
+      "output": {
+        "preCarbG": 108,
+        "postCarbG": 189,
+        "postProteinG": 40,
+        "reasonCodes": [],
+        "explanation": "For a 90-min hard session at 133.4kg: ~108g carbs beforehand, then ~189g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 135
+      },
+      "output": {
+        "preCarbG": 54,
+        "postCarbG": 95,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 135kg: ~54g carbs beforehand, then ~95g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 135
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 28,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped",
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 135kg: no pre-fuelling needed; ~28g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 135
+      },
+      "output": {
+        "preCarbG": 109,
+        "postCarbG": 191,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 90-min hard session at 135kg: ~109g carbs beforehand, then ~191g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 60,
+        "rpe": 6,
+        "bodyweightKg": 150
+      },
+      "output": {
+        "preCarbG": 60,
+        "postCarbG": 105,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 60-min moderate session at 150kg: ~60g carbs beforehand, then ~105g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 30,
+        "rpe": 3,
+        "bodyweightKg": 150
+      },
+      "output": {
+        "preCarbG": 0,
+        "postCarbG": 32,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped",
+          "short_easy_no_pre"
+        ],
+        "explanation": "For a 30-min easy session at 150kg: no pre-fuelling needed; ~32g carbs and ~40g protein to recover. Guidance only."
+      }
+    },
+    {
+      "input": {
+        "durationMin": 90,
+        "rpe": 9,
+        "bodyweightKg": 150
+      },
+      "output": {
+        "preCarbG": 122,
+        "postCarbG": 213,
+        "postProteinG": 40,
+        "reasonCodes": [
+          "post_protein_clamped"
+        ],
+        "explanation": "For a 90-min hard session at 150kg: ~122g carbs beforehand, then ~213g carbs and ~40g protein to recover. Guidance only."
+      }
+    }
+  ]
+}

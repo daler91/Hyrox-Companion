@@ -412,11 +412,10 @@ must be a real calendar day with a four-digit year from 0100 on: `2026-02-30` or
 | PATCH | `/recipes/:id` | Edit recipe | `nutritionWrite` (30) |
 | DELETE | `/recipes/:id` | Delete recipe | `nutritionWrite` (30) |
 
-> **Note:** the nutrition routes are **not yet registered with the OpenAPI
-> registry** (`shared/openapi.ts`), so they're absent from `docs/openapi.json` and
-> Swagger UI; [`docs/api-reference.md`](api-reference.md#nutrition-routes) carries a
-> manually-maintained catalog until they are migrated. Closing that gap is listed
-> under improvements.
+> **Note:** the nutrition routes are registered with the OpenAPI registry in
+> `shared/openapiRoutes/nutrition.ts`, so they are in `docs/openapi.json` and
+> Swagger UI with their request and response schemas, the `NUTRITION_ENABLED` 404
+> and the AI routes' consent, budget and provider errors.
 
 ---
 
@@ -633,11 +632,10 @@ Grouped by theme and roughly prioritised. **P1** = correctness / trust / complia
   read by `server/storage/dataExport.ts`. A closed-world sweep in
   `exportService.test.ts` fails when a new user-owned table is neither exported nor
   excluded with a reason (P7, CODEBASE_ANALYSIS_2026-10-03).
-- **[P1] Register the routes with the OpenAPI registry.** Nutrition is absent from
-  `shared/openapi.ts`, so it's missing from `docs/openapi.json` and the Swagger UI
-  (`docs/api-reference.md` carries a manual catalog meanwhile — see the
-  [§5 note](#5-api-surface)). Add the schemas so the public contract is
-  CI-gated like the rest of the API.
+- **[DONE] Register the routes with the OpenAPI registry.** All 38 nutrition
+  operations are in `shared/openapiRoutes/nutrition.ts`, so the contract is
+  CI-gated like the rest of the API (`test/docs/openapiCoverage.test.ts`,
+  `openapi-breaking.yml`).
 - **[DONE] Sanity-filter per-100g values at import.** A NaN/negative/absurd macro
   from a source used to be cached as-is, silently poisoning every future log of
   that food. `sanitizeMappedFood` (`sanitize.ts`) now runs at the single cache

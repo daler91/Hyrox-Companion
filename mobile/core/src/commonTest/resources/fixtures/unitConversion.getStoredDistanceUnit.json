@@ -1,0 +1,270 @@
+{
+  "suite": "unitConversion.getStoredDistanceUnit",
+  "description": "The stored distance unit for a preference: ft for miles, m for anything else (ft is not a preference).",
+  "cases": [
+    {
+      "input": null,
+      "output": "m"
+    },
+    {
+      "input": "",
+      "output": "m"
+    },
+    {
+      "input": " ",
+      "output": "m"
+    },
+    {
+      "input": "KG",
+      "output": "m"
+    },
+    {
+      "input": "kg",
+      "output": "m"
+    },
+    {
+      "input": "kgs",
+      "output": "m"
+    },
+    {
+      "input": "kilo",
+      "output": "m"
+    },
+    {
+      "input": "kilos",
+      "output": "m"
+    },
+    {
+      "input": "kilogram",
+      "output": "m"
+    },
+    {
+      "input": "Kilograms",
+      "output": "m"
+    },
+    {
+      "input": " lbs ",
+      "output": "m"
+    },
+    {
+      "input": "lb",
+      "output": "m"
+    },
+    {
+      "input": "LBS",
+      "output": "m"
+    },
+    {
+      "input": "Pound",
+      "output": "m"
+    },
+    {
+      "input": "pounds",
+      "output": "m"
+    },
+    {
+      "input": "stone",
+      "output": "m"
+    },
+    {
+      "input": "stones",
+      "output": "m"
+    },
+    {
+      "input": "mi",
+      "output": "ft"
+    },
+    {
+      "input": "MI",
+      "output": "ft"
+    },
+    {
+      "input": "mile",
+      "output": "ft"
+    },
+    {
+      "input": "Miles",
+      "output": "ft"
+    },
+    {
+      "input": "km",
+      "output": "m"
+    },
+    {
+      "input": "KMS",
+      "output": "m"
+    },
+    {
+      "input": "kilometer",
+      "output": "m"
+    },
+    {
+      "input": "kilometers",
+      "output": "m"
+    },
+    {
+      "input": "kilometre",
+      "output": "m"
+    },
+    {
+      "input": "Kilometres",
+      "output": "m"
+    },
+    {
+      "input": "m",
+      "output": "m"
+    },
+    {
+      "input": "M",
+      "output": "m"
+    },
+    {
+      "input": "meter",
+      "output": "m"
+    },
+    {
+      "input": "meters",
+      "output": "m"
+    },
+    {
+      "input": "metre",
+      "output": "m"
+    },
+    {
+      "input": "metres",
+      "output": "m"
+    },
+    {
+      "input": "ft",
+      "output": "m"
+    },
+    {
+      "input": "FT",
+      "output": "m"
+    },
+    {
+      "input": "foot",
+      "output": "m"
+    },
+    {
+      "input": "feet",
+      "output": "m"
+    },
+    {
+      "input": "yards",
+      "output": "m"
+    },
+    {
+      "input": "k g",
+      "output": "m"
+    },
+    {
+      "input": "kg.",
+      "output": "m"
+    },
+    {
+      "input": "\tLBS\n",
+      "output": "m"
+    },
+    {
+      "input": "\u000bmiles\f",
+      "output": "ft"
+    },
+    {
+      "input": " lbs　",
+      "output": "m"
+    },
+    {
+      "input": "﻿lbs",
+      "output": "m"
+    },
+    {
+      "input": "﻿mi",
+      "output": "ft"
+    },
+    {
+      "input": "﻿ft",
+      "output": "m"
+    },
+    {
+      "input": " mi ",
+      "output": "ft"
+    },
+    {
+      "input": " m ",
+      "output": "m"
+    },
+    {
+      "input": "\u001clbs",
+      "output": "m"
+    },
+    {
+      "input": "\u001fmi",
+      "output": "m"
+    },
+    {
+      "input": "\u001cft",
+      "output": "m"
+    },
+    {
+      "input": "lbs",
+      "output": "m"
+    },
+    {
+      "input": "​lbs",
+      "output": "m"
+    },
+    {
+      "input": "᠎mi",
+      "output": "m"
+    },
+    {
+      "input": "Km",
+      "output": "m"
+    },
+    {
+      "input": "KMS",
+      "output": "m"
+    },
+    {
+      "input": "KG",
+      "output": "m"
+    },
+    {
+      "input": "constructor",
+      "output": "m"
+    },
+    {
+      "input": " Constructor ",
+      "output": "m"
+    },
+    {
+      "input": "__proto__",
+      "output": "m"
+    },
+    {
+      "input": "__PROTO__",
+      "output": "m"
+    },
+    {
+      "input": "toString",
+      "output": "m"
+    },
+    {
+      "input": "tostring",
+      "output": "m"
+    },
+    {
+      "input": "hasOwnProperty",
+      "output": "m"
+    },
+    {
+      "input": "valueOf",
+      "output": "m"
+    },
+    {
+      "input": "prototype",
+      "output": "m"
+    }
+  ]
+}

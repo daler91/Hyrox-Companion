@@ -611,6 +611,28 @@ make the server fan out requests to many third-party hosts.
 
 ---
 
+### device_push_tokens
+
+Native app installs registered for push: one FCM registration token per install (APNs reaches iOS through FCM too). Written by `POST /api/v1/push/devices`, read by `sendPushToUser` in `server/pushNotifications.ts`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `platform` | `varchar(16)` | NOT NULL, CHECK `platform IN ('android', 'ios')` (`devicePlatformEnum`) |
+| `token` | `text` | NOT NULL |
+| `app_version` | `varchar(32)` | nullable; the `X-App-Version` that last registered the token |
+| `created_at` | `timestamp` | NOT NULL, default `now()` |
+| `last_seen_at` | `timestamp` | NOT NULL, default `now()`; refreshed on every registration |
+
+**Indexes:**
+- `uq_device_push_tokens_token` -- UNIQUE on (`token`)
+- `idx_device_push_tokens_user_id` -- on (`user_id`)
+
+A token identifies an install, not an athlete, so it is unique on its own: when a second athlete signs in on the same phone, the registration upsert moves the row to them, so notifications follow whoever is signed in. Rows per user are capped at `MAX_DEVICE_PUSH_TOKENS_PER_USER` (10), evicting the least recently seen. A token FCM reports as `UNREGISTERED` (or rejects as malformed) is pruned at send time; `SENDER_ID_MISMATCH` and bare 403/404s are not, since a misconfigured Firebase project would return them for every token. Included in the GDPR export as `deviceTokens` (migration 0125).
+
+---
+
 ### custom_exercises
 
 User-defined exercises for AI recognition beyond the built-in list.

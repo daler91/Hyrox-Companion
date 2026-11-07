@@ -1,0 +1,38 @@
+{
+  "request": {
+    "min": {
+      "label": "a",
+      "grams": 1.5
+    },
+    "max": {
+      "label": "sample text",
+      "grams": 1.5
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "foodId": "a",
+      "label": "a",
+      "grams": 1.5,
+      "createdByUserId": null
+    },
+    "max": {
+      "id": "sample text",
+      "foodId": "sample text",
+      "label": "sample text",
+      "grams": 1.5,
+      "createdByUserId": "sample text"
+    },
+    "future": {
+      "id": "sample text",
+      "foodId": "sample text",
+      "label": "sample text",
+      "grams": 1.5,
+      "createdByUserId": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

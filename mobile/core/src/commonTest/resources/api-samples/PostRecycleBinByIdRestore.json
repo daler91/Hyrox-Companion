@@ -1,0 +1,32 @@
+{
+  "response": {
+    "min": {
+      "ok": true,
+      "entityType": "workout_log",
+      "entityId": "a",
+      "batchId": null,
+      "warnings": []
+    },
+    "max": {
+      "ok": true,
+      "entityType": "training_plan",
+      "entityId": "sample text",
+      "batchId": "sample text",
+      "warnings": [
+        "sample text"
+      ]
+    },
+    "future": {
+      "ok": true,
+      "entityType": "zz_value_from_a_newer_server",
+      "entityId": "sample text",
+      "batchId": "sample text",
+      "warnings": [
+        "sample text"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

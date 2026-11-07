@@ -1,0 +1,22 @@
+{
+  "response": {
+    "min": {
+      "total": 1,
+      "parsed": 1,
+      "failed": 1
+    },
+    "max": {
+      "total": 1,
+      "parsed": 1,
+      "failed": 1
+    },
+    "future": {
+      "total": 1,
+      "parsed": 1,
+      "failed": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

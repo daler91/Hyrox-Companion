@@ -1,6 +1,6 @@
+import { type LinkDeviceActivityBody, linkDeviceActivitySchema } from "@shared/schema/types/workoutsRequests";
 import type { DistanceUnit } from "@shared/unitConversion";
 import type { Request, Response, Router } from "express";
-import { z } from "zod";
 
 import { rateLimiter, validateBody } from "../../routeUtils";
 import { invalidateAnalyticsCachesForUser } from "../../services/analyticsRouteCache";
@@ -13,20 +13,6 @@ import { requestSessionStreamForLog } from "../../services/sessionStreamHooks";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPost } from "../_helpers/protectedRouteBuilder";
-
-/**
- * Exactly one target. The timeline sends whichever the suggestion named, or
- * whatever the athlete picked from the day's rows.
- */
-export const linkDeviceActivitySchema = z
-  .object({
-    planDayId: z.string().min(1).optional(),
-    workoutLogId: z.string().min(1).optional(),
-  })
-  .strict()
-  .refine((body) => (body.planDayId ? 1 : 0) + (body.workoutLogId ? 1 : 0) === 1, {
-    message: "Provide exactly one of planDayId or workoutLogId",
-  });
 
 /**
  * Device activity links are the one place the athlete's judgement must beat
@@ -49,7 +35,7 @@ export function registerWorkoutDeviceLinkRoutes(router: Router): void {
     "/api/v1/workouts/:id/device-link",
     { limiter: rateLimiter("workout", 40), middleware: [validateBody(linkDeviceActivitySchema)] },
     async (req: Request<{ id: string }>, res: Response) => {
-      const body = req.body as z.infer<typeof linkDeviceActivitySchema>;
+      const body = req.body as LinkDeviceActivityBody;
       const target = body.planDayId
         ? { planDayId: body.planDayId }
         : { workoutLogId: body.workoutLogId as string };

@@ -1,0 +1,60 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "quantityG": 1.5,
+      "mealType": "post_workout",
+      "loggedAt": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "foodId": "a",
+      "loggedAt": "2026-11-07T10:15:30.000Z",
+      "logDate": "2026-11-07",
+      "quantityG": 1.5,
+      "mealType": "breakfast",
+      "entryMethod": "manual",
+      "rawInput": null,
+      "parseConfidence": null,
+      "pendingReview": true,
+      "createdAt": "2026-11-07T10:15:30.000Z",
+      "updatedAt": "2026-11-07T10:15:30.000Z"
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "foodId": "sample text",
+      "loggedAt": "2026-11-07T10:15:30.000Z",
+      "logDate": "2026-11-07",
+      "quantityG": 1.5,
+      "mealType": "post_workout",
+      "entryMethod": "photo",
+      "rawInput": "sample text",
+      "parseConfidence": 1.5,
+      "pendingReview": true,
+      "createdAt": "2026-11-07T10:15:30.000Z",
+      "updatedAt": "2026-11-07T10:15:30.000Z"
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "foodId": "sample text",
+      "loggedAt": "2026-11-07T10:15:30.000Z",
+      "logDate": "2026-11-07",
+      "quantityG": 1.5,
+      "mealType": "zz_value_from_a_newer_server",
+      "entryMethod": "zz_value_from_a_newer_server",
+      "rawInput": "sample text",
+      "parseConfidence": 1.5,
+      "pendingReview": true,
+      "createdAt": "2026-11-07T10:15:30.000Z",
+      "updatedAt": "2026-11-07T10:15:30.000Z",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

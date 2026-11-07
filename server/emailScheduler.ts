@@ -245,6 +245,7 @@ export function buildMissedWorkoutPush(missed: MissedWorkoutData[]): PushPayload
       title: `Missed: ${first.focus}`,
       body: "Fold it into another day, shorten it, or let it go — see what each does to your plan.",
       url: `/?workout=${encodeURIComponent(first.planDayId)}`,
+      category: "training",
     };
   }
 
@@ -252,6 +253,7 @@ export function buildMissedWorkoutPush(missed: MissedWorkoutData[]): PushPayload
     title: `${missed.length} missed sessions`,
     body: `${missed.map(m => m.focus).join(", ")} — fold them into other days, shorten them, or let them go.`,
     url: "/",
+    category: "training",
   };
 }
 
@@ -493,12 +495,14 @@ export function buildTodaySessionPush(data: TodaySessionData): PushPayload {
       title: `${dayWord}: ${first.focus}`,
       body: parts.length > 0 ? parts.join(" · ") : first.mainWorkout.substring(0, 120),
       url: todaySessionDeepLink(data.sessions),
+      category: "training",
     };
   }
   return {
     title: `${dayWord}: ${data.sessions.length} sessions`,
     body: data.sessions.map((s) => s.focus).join(", "),
     url: "/",
+    category: "training",
   };
 }
 

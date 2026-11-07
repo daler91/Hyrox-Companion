@@ -1,0 +1,19 @@
+{
+  "response": {
+    "min": {
+      "added": 1,
+      "skipped": 1
+    },
+    "max": {
+      "added": 1,
+      "skipped": 1
+    },
+    "future": {
+      "added": 1,
+      "skipped": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

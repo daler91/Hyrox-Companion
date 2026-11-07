@@ -1,0 +1,20 @@
+{
+  "response": {
+    "min": {
+      "sent": []
+    },
+    "max": {
+      "sent": [
+        "missed_reminder"
+      ]
+    },
+    "future": {
+      "sent": [
+        "zz_value_from_a_newer_server"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

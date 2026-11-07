@@ -1,0 +1,400 @@
+{
+  "response": {
+    "min": {
+      "weeklySummaries": [],
+      "workoutDates": [],
+      "categoryTotals": {},
+      "stationCoverage": [],
+      "movementPatternCoverage": [],
+      "muscleGroupCoverage": [],
+      "currentStreak": 1,
+      "weeklyCompletedWorkouts": 1,
+      "weeklyGoal": 1,
+      "currentStats": {
+        "totalWorkouts": 1,
+        "avgPerWeek": 1.5,
+        "totalDuration": 1.5,
+        "avgDuration": 1.5,
+        "avgRpe": null,
+        "totalRunningMeters": 1.5,
+        "avgCompliancePct": null
+      },
+      "trainingLoad": {
+        "currentUtss": 1.5,
+        "acuteAvg": 1.5,
+        "chronicAvg": 1.5,
+        "acwr": null,
+        "zone": "insufficient_data",
+        "tsb": null,
+        "monotony": null,
+        "strain": null,
+        "monotonyZone": "unknown",
+        "hrTss": null,
+        "hrZone": null,
+        "tss": null,
+        "hrZones": [],
+        "estimatedLthr": null,
+        "powerTssEstimated": true,
+        "flaggedVectors": [],
+        "activeRestrictions": [],
+        "downshiftRationale": null,
+        "trend": []
+      }
+    },
+    "max": {
+      "weeklySummaries": [
+        {
+          "weekStart": "sample text",
+          "workoutCount": 1,
+          "totalDuration": 1.5,
+          "avgRpe": 1.5,
+          "categoryBreakdown": {
+            "key": 1.5
+          },
+          "workoutsWithDuration": 1,
+          "rpeCount": 1,
+          "runningMeters": 1.5
+        }
+      ],
+      "workoutDates": [
+        "sample text"
+      ],
+      "categoryTotals": {
+        "key": {
+          "count": 1,
+          "totalSets": 1
+        }
+      },
+      "stationCoverage": [
+        {
+          "station": "sample text",
+          "lastTrained": "sample text",
+          "daysSince": 1
+        }
+      ],
+      "movementPatternCoverage": [
+        {
+          "pattern": "core_anti_rotation",
+          "label": "sample text",
+          "sessionCount": 1,
+          "totalSets": 1,
+          "lastTrained": "sample text",
+          "daysSince": 1
+        }
+      ],
+      "muscleGroupCoverage": [
+        {
+          "muscle": "tibialis",
+          "bodyRegion": "lower",
+          "label": "sample text",
+          "sessionCount": 1,
+          "totalSets": 1,
+          "lastTrained": "sample text",
+          "daysSince": 1
+        }
+      ],
+      "currentStreak": 1,
+      "weeklyCompletedWorkouts": 1,
+      "weeklyGoal": 1,
+      "currentStats": {
+        "totalWorkouts": 1,
+        "avgPerWeek": 1.5,
+        "totalDuration": 1.5,
+        "avgDuration": 1.5,
+        "avgRpe": 1.5,
+        "totalRunningMeters": 1.5,
+        "avgCompliancePct": 1.5
+      },
+      "previousStats": {
+        "totalWorkouts": 1,
+        "avgPerWeek": 1.5,
+        "totalDuration": 1.5,
+        "avgDuration": 1.5,
+        "avgRpe": 1.5,
+        "totalRunningMeters": 1.5,
+        "avgCompliancePct": 1.5
+      },
+      "trainingLoad": {
+        "currentUtss": 1.5,
+        "acuteAvg": 1.5,
+        "chronicAvg": 1.5,
+        "acwr": 1.5,
+        "zone": "danger",
+        "tsb": 1.5,
+        "monotony": 1.5,
+        "strain": 1.5,
+        "monotonyZone": "high_risk",
+        "hrTss": 1.5,
+        "hrZone": "z5",
+        "tss": 1.5,
+        "hrZones": [
+          {
+            "zone": "z5",
+            "minHr": 1.5,
+            "maxHr": 1.5,
+            "minHrr": 1.5
+          }
+        ],
+        "estimatedLthr": 1.5,
+        "powerTssEstimated": true,
+        "flaggedVectors": [
+          "elastic_tendon"
+        ],
+        "activeRestrictions": [
+          {
+            "id": "sample text",
+            "label": "sample text",
+            "severity": "danger",
+            "expiresOn": "sample text",
+            "vector": "elastic_tendon",
+            "rationale": "sample text"
+          }
+        ],
+        "downshiftRationale": "sample text",
+        "trend": [
+          {
+            "date": "sample text",
+            "utss": 1.5,
+            "acwr": 1.5,
+            "zone": "danger",
+            "tsb": 1.5,
+            "monotony": 1.5,
+            "strain": 1.5,
+            "hrTss": 1.5,
+            "hrZone": "z5",
+            "tss": 1.5,
+            "acuteEwma": 1.5,
+            "chronicEwma": 1.5
+          }
+        ]
+      },
+      "bodySystemLoad": {
+        "asOf": "sample text",
+        "weeks": [
+          {
+            "start": "sample text",
+            "end": "sample text"
+          }
+        ],
+        "systems": [
+          {
+            "system": "upper_pull",
+            "current": 1.5,
+            "baseline": 1.5,
+            "ratio": 1.5,
+            "status": "very_high",
+            "sixWeekHigh": true,
+            "previousPeak": 1.5,
+            "weekly": [
+              1.5
+            ]
+          }
+        ],
+        "sessionCount": 1,
+        "estimatedSessions": 1,
+        "unattributedSessions": 1,
+        "unscoredSessions": 1
+      }
+    },
+    "future": {
+      "weeklySummaries": [
+        {
+          "weekStart": "sample text",
+          "workoutCount": 1,
+          "totalDuration": 1.5,
+          "avgRpe": 1.5,
+          "categoryBreakdown": {
+            "key": 1.5
+          },
+          "workoutsWithDuration": 1,
+          "rpeCount": 1,
+          "runningMeters": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "workoutDates": [
+        "sample text"
+      ],
+      "categoryTotals": {
+        "key": {
+          "count": 1,
+          "totalSets": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      },
+      "stationCoverage": [
+        {
+          "station": "sample text",
+          "lastTrained": "sample text",
+          "daysSince": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "movementPatternCoverage": [
+        {
+          "pattern": "zz_value_from_a_newer_server",
+          "label": "sample text",
+          "sessionCount": 1,
+          "totalSets": 1,
+          "lastTrained": "sample text",
+          "daysSince": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "muscleGroupCoverage": [
+        {
+          "muscle": "zz_value_from_a_newer_server",
+          "bodyRegion": "zz_value_from_a_newer_server",
+          "label": "sample text",
+          "sessionCount": 1,
+          "totalSets": 1,
+          "lastTrained": "sample text",
+          "daysSince": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "currentStreak": 1,
+      "weeklyCompletedWorkouts": 1,
+      "weeklyGoal": 1,
+      "currentStats": {
+        "totalWorkouts": 1,
+        "avgPerWeek": 1.5,
+        "totalDuration": 1.5,
+        "avgDuration": 1.5,
+        "avgRpe": 1.5,
+        "totalRunningMeters": 1.5,
+        "avgCompliancePct": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "previousStats": {
+        "totalWorkouts": 1,
+        "avgPerWeek": 1.5,
+        "totalDuration": 1.5,
+        "avgDuration": 1.5,
+        "avgRpe": 1.5,
+        "totalRunningMeters": 1.5,
+        "avgCompliancePct": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "trainingLoad": {
+        "currentUtss": 1.5,
+        "acuteAvg": 1.5,
+        "chronicAvg": 1.5,
+        "acwr": 1.5,
+        "zone": "zz_value_from_a_newer_server",
+        "tsb": 1.5,
+        "monotony": 1.5,
+        "strain": 1.5,
+        "monotonyZone": "zz_value_from_a_newer_server",
+        "hrTss": 1.5,
+        "hrZone": "zz_value_from_a_newer_server",
+        "tss": 1.5,
+        "hrZones": [
+          {
+            "zone": "zz_value_from_a_newer_server",
+            "minHr": 1.5,
+            "maxHr": 1.5,
+            "minHrr": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "estimatedLthr": 1.5,
+        "powerTssEstimated": true,
+        "flaggedVectors": [
+          "zz_value_from_a_newer_server"
+        ],
+        "activeRestrictions": [
+          {
+            "id": "sample text",
+            "label": "sample text",
+            "severity": "zz_value_from_a_newer_server",
+            "expiresOn": "sample text",
+            "vector": "zz_value_from_a_newer_server",
+            "rationale": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "downshiftRationale": "sample text",
+        "trend": [
+          {
+            "date": "sample text",
+            "utss": 1.5,
+            "acwr": 1.5,
+            "zone": "zz_value_from_a_newer_server",
+            "tsb": 1.5,
+            "monotony": 1.5,
+            "strain": 1.5,
+            "hrTss": 1.5,
+            "hrZone": "zz_value_from_a_newer_server",
+            "tss": 1.5,
+            "acuteEwma": 1.5,
+            "chronicEwma": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "bodySystemLoad": {
+        "asOf": "sample text",
+        "weeks": [
+          {
+            "start": "sample text",
+            "end": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "systems": [
+          {
+            "system": "zz_value_from_a_newer_server",
+            "current": 1.5,
+            "baseline": 1.5,
+            "ratio": 1.5,
+            "status": "zz_value_from_a_newer_server",
+            "sixWeekHigh": true,
+            "previousPeak": 1.5,
+            "weekly": [
+              1.5
+            ],
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "sessionCount": 1,
+        "estimatedSessions": 1,
+        "unattributedSessions": 1,
+        "unscoredSessions": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

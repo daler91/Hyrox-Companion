@@ -1,0 +1,24 @@
+{
+  "request": {
+    "min": {
+      "startDate": "a"
+    },
+    "max": {
+      "startDate": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "success": true
+    },
+    "max": {
+      "success": true
+    },
+    "future": {
+      "success": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

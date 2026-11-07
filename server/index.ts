@@ -16,12 +16,14 @@ import { configureApp } from "./bootstrap/appConfig";
 import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bootstrap/health";
 import { registerShutdownHandlers } from "./bootstrap/lifecycle";
 import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
+import { parseCertFingerprints, registerWellKnownRoutes } from "./bootstrap/wellKnown";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
 import { skipLargeJsonBodyPaths } from "./largeBodyParsers";
 import { logger } from "./logger";
 import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
+import { readAppClient } from "./middleware/appVersion";
 import { buildCspDirectives } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { globalErrorHandler } from "./middleware/errorHandler";
@@ -144,6 +146,13 @@ registerHealthEndpoint(app, {
   probeVectorDatabase,
   // Reported, not gated on — see the dep's doc comment in bootstrap/health.ts.
   vectorSchemaStatus: getVectorSchemaStatus,
+});
+
+// Digital Asset Links for Android App Links. Ahead of CORS, auth and the SPA
+// fallback, which would otherwise answer with index.html.
+registerWellKnownRoutes(app, {
+  packageName: env.ANDROID_APP_PACKAGE,
+  sha256Fingerprints: parseCertFingerprints(env.ANDROID_APP_CERT_SHA256),
 });
 
 // CORS — restrict cross-origin API access to known origins
@@ -269,11 +278,17 @@ app.use(pinoHttp({
     const loggedUserId =
       isErrorResponse || userId === 'anonymous' ? userId : 'authenticated';
 
+    // Native app requests name their platform and build, so a spike of
+    // errors can be traced to one release. readAppClient only returns
+    // validated values, so nothing client-controlled reaches the log raw.
+    const appClient = readAppClient(req as Request);
+
     return {
       context: 'http',
       userId: loggedUserId,
       requestId: req.id,
       route: req.url?.split('?')[0] || req.originalUrl?.split('?')[0],
+      ...(appClient ? { appPlatform: appClient.platform, appVersion: appClient.version ?? 'invalid' } : {}),
     };
   },
   // S2: pino-http's default request serializer logs the full URL (query

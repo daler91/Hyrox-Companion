@@ -1,0 +1,316 @@
+{
+  "suite": "notifyHours.fallbackNotifyHour",
+  "description": "The review reminder's Sunday-evening hour, else a valid default hour, else DEFAULT_NOTIFY_HOUR.",
+  "cases": [
+    {
+      "input": {
+        "kind": "weeklySummary"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": null
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": 0
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": 6
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": 23
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": 24
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": -1
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": 6.5
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "weeklySummary",
+        "notifyHour": "NaN"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "missedReminder"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": null
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": 0
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": 6
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": 23
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": 24
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": -1
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": 6.5
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "missedReminder",
+        "notifyHour": "NaN"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": null
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": 0
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": 6
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": 23
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": 24
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": -1
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": 6.5
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "weeklyReviewReminder",
+        "notifyHour": "NaN"
+      },
+      "output": 17
+    },
+    {
+      "input": {
+        "kind": "todaySession"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": null
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": 0
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": 6
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": 23
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": 24
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": -1
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": 6.5
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "todaySession",
+        "notifyHour": "NaN"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "analysisDigest"
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": null
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": 0
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": 6
+      },
+      "output": 6
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": 23
+      },
+      "output": 23
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": 24
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": -1
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": 6.5
+      },
+      "output": 7
+    },
+    {
+      "input": {
+        "kind": "analysisDigest",
+        "notifyHour": "NaN"
+      },
+      "output": 7
+    }
+  ]
+}

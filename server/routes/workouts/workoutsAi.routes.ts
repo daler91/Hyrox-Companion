@@ -1,4 +1,5 @@
 import { parseExercisesFromImageRequestSchema } from "@shared/schema";
+import { reparseWorkoutParamsSchema, reparseWorkoutRouteSchema } from "@shared/schema/types/workoutsRequests";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
@@ -9,7 +10,6 @@ import { batchReparseWorkoutsUseCase, reparseWorkoutFromImageUseCase, reparseWor
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedPost } from "../_helpers/protectedRouteBuilder";
-import { reparseWorkoutParamsSchema, reparseWorkoutRouteSchema } from "./shared";
 
 // Shared 422 body for a reparse that produced no persisted exercise sets.
 const PARSE_WRITE_THROUGH_ERROR = {

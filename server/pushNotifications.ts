@@ -2,6 +2,7 @@ import webpush from "web-push";
 
 import { PUSH_SEND_TIMEOUT_MS } from "./constants";
 import { env } from "./env";
+import { isFcmConfigured, type PushCategory, sendFcmMessage } from "./fcm";
 import { logger } from "./logger";
 import { assertResolvedHostIsPublic } from "./ssrfGuard";
 import { storage } from "./storage";
@@ -18,8 +19,19 @@ function ensureInitialized(): boolean {
   return true;
 }
 
-export function isPushEnabled(): boolean {
+/** Browser push (the PWA): needs the VAPID key pair and contact address. */
+export function isWebPushEnabled(): boolean {
   return Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_EMAIL);
+}
+
+/** Native app push: needs a Firebase service account (server/fcm.ts). */
+export function isNativePushEnabled(): boolean {
+  return isFcmConfigured();
+}
+
+/** Whether any push channel is configured, i.e. whether sending is worth attempting at all. */
+export function isPushEnabled(): boolean {
+  return isWebPushEnabled() || isNativePushEnabled();
 }
 
 /**
@@ -70,6 +82,8 @@ export interface PushPayload {
   title: string;
   body: string;
   url?: string;
+  /** Which Android notification channel it belongs to. Ignored by browsers. */
+  category?: PushCategory;
 }
 
 /**
@@ -135,15 +149,39 @@ async function sendToSubscription(
 }
 
 /**
- * Send a push notification to all subscriptions for a given user.
+ * Send a push notification to one native app install. A token FCM reports as
+ * dead (app uninstalled, token rotated) is pruned.
+ */
+async function sendToDevice(device: { id: string; token: string }, payload: PushPayload): Promise<boolean> {
+  const result = await sendFcmMessage(device.id, device.token, payload);
+  if (result === "stale") {
+    // deviceTokenId is the row's uuid, no secrets.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ deviceTokenId: device.id }, "[push] Removing stale device token");
+    await storage.push.removeDeviceTokenById(device.id);
+    return false;
+  }
+  return result === "sent";
+}
+
+/**
+ * Send a push notification to every browser subscription and app install a
+ * user has, over whichever channels are configured. Returns how many were
+ * delivered to the push service.
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<number> {
   if (!isPushEnabled()) return 0;
 
-  const subs = await storage.push.getSubscriptionsForUser(userId);
-  if (subs.length === 0) return 0;
+  const [subs, devices] = await Promise.all([
+    isWebPushEnabled() ? storage.push.getSubscriptionsForUser(userId) : [],
+    isNativePushEnabled() ? storage.push.getDeviceTokensForUser(userId) : [],
+  ]);
+  if (subs.length === 0 && devices.length === 0) return 0;
 
-  const results = await Promise.allSettled(subs.map((sub) => sendToSubscription(sub, payload)));
+  const results = await Promise.allSettled([
+    ...subs.map((sub) => sendToSubscription(sub, payload)),
+    ...devices.map((device) => sendToDevice(device, payload)),
+  ]);
 
   return results.filter((r) => r.status === "fulfilled" && r.value === true).length;
 }

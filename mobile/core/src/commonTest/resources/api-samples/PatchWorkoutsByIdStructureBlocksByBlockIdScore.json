@@ -1,0 +1,147 @@
+{
+  "request": {
+    "min": {
+      "score": {
+        "type": "emom",
+        "completed": true
+      }
+    },
+    "max": {
+      "score": {
+        "type": "emom",
+        "completed": true,
+        "completedMinutes": 1,
+        "missedReps": 1,
+        "notes": "sample text"
+      }
+    }
+  },
+  "response": {
+    "min": {
+      "structureBlocks": []
+    },
+    "max": {
+      "structureBlocks": [
+        {
+          "id": "sample text",
+          "sectionType": "mobility",
+          "formatType": "quality",
+          "durationSeconds": 1,
+          "rounds": 1,
+          "workSeconds": 1,
+          "restSeconds": 1,
+          "durationMinutes": 1,
+          "roundCount": 1,
+          "timeCapMinutes": 1,
+          "workIntervalSec": 1,
+          "restIntervalSec": 1,
+          "instructions": "sample text",
+          "score": {
+            "type": "emom",
+            "completed": true,
+            "completedMinutes": 1,
+            "missedReps": 1,
+            "notes": "sample text"
+          },
+          "sequenceOrder": 1,
+          "sortOrder": 1,
+          "steps": [
+            {
+              "stepNumber": 1,
+              "minuteIndex": 1,
+              "stepType": "transition",
+              "exerciseName": "sample text",
+              "category": "sample text",
+              "customLabel": "sample text",
+              "stepRole": "sample text",
+              "intensity": {
+                "key": "any"
+              },
+              "loadMode": "sample text",
+              "unilateralMode": "sample text",
+              "tempo": {
+                "key": "any"
+              },
+              "constraintTags": [
+                "sample text"
+              ],
+              "groupId": "sample text",
+              "groupMeta": {
+                "key": "any"
+              },
+              "targets": {
+                "key": "any"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "future": {
+      "structureBlocks": [
+        {
+          "id": "sample text",
+          "sectionType": "zz_value_from_a_newer_server",
+          "formatType": "zz_value_from_a_newer_server",
+          "durationSeconds": 1,
+          "rounds": 1,
+          "workSeconds": 1,
+          "restSeconds": 1,
+          "durationMinutes": 1,
+          "roundCount": 1,
+          "timeCapMinutes": 1,
+          "workIntervalSec": 1,
+          "restIntervalSec": 1,
+          "instructions": "sample text",
+          "score": {
+            "type": "emom",
+            "completed": true,
+            "completedMinutes": 1,
+            "missedReps": 1,
+            "notes": "sample text"
+          },
+          "sequenceOrder": 1,
+          "sortOrder": 1,
+          "steps": [
+            {
+              "stepNumber": 1,
+              "minuteIndex": 1,
+              "stepType": "zz_value_from_a_newer_server",
+              "exerciseName": "sample text",
+              "category": "sample text",
+              "customLabel": "sample text",
+              "stepRole": "sample text",
+              "intensity": {
+                "key": "any"
+              },
+              "loadMode": "sample text",
+              "unilateralMode": "sample text",
+              "tempo": {
+                "key": "any"
+              },
+              "constraintTags": [
+                "sample text"
+              ],
+              "groupId": "sample text",
+              "groupMeta": {
+                "key": "any"
+              },
+              "targets": {
+                "key": "any"
+              },
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

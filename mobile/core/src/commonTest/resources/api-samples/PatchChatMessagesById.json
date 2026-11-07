@@ -1,0 +1,27 @@
+{
+  "request": {
+    "min": {
+      "feedback": null
+    },
+    "max": {
+      "feedback": "down"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "feedback": null
+    },
+    "max": {
+      "id": "sample text",
+      "feedback": "down"
+    },
+    "future": {
+      "id": "sample text",
+      "feedback": "zz_value_from_a_newer_server",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

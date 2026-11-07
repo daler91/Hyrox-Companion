@@ -1,0 +1,861 @@
+{
+  "suite": "unitConversion.storedWeightToDisplay",
+  "description": "A stored weight in the current preference: identity for a legacy row or a matching stamp, else converted and rounded.",
+  "cases": [
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 220
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {},
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 225,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 102
+    },
+    {
+      "input": {
+        "value": 45,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 20.5
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "pounds"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 100.3
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "stone"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 100.3
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "stone"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 221
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": null
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": ""
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {}
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {}
+      },
+      "output": 45.5
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": null
+        }
+      },
+      "output": 45.5
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": " KG "
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 220
+    },
+    {
+      "input": {
+        "value": -10,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": -22
+    },
+    {
+      "input": {
+        "value": 0,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 0
+    },
+    {
+      "input": {
+        "value": 1,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 0.5
+    },
+    {
+      "input": {
+        "value": "NaN",
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": "NaN"
+    },
+    {
+      "input": {
+        "value": "Infinity",
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": "Infinity"
+    },
+    {
+      "input": {
+        "value": 1e+308,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": "Infinity"
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "constructor"
+        },
+        "preferences": {
+          "weightUnit": "kg"
+        }
+      },
+      "output": 100.5
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "constructor"
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "constructor"
+        },
+        "preferences": {
+          "weightUnit": "constructor"
+        }
+      },
+      "output": 100.3
+    },
+    {
+      "input": {
+        "value": 100.3,
+        "stamp": {
+          "weightUnit": "constructor"
+        },
+        "preferences": {
+          "weightUnit": "__proto__"
+        }
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "constructor"
+        }
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": " __Proto__"
+        }
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "value": 100,
+        "stamp": {},
+        "preferences": {
+          "weightUnit": "constructor"
+        }
+      },
+      "output": 100
+    },
+    {
+      "input": {
+        "value": -205.2548248320818,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -453
+    },
+    {
+      "input": {
+        "value": -205.2548248320818,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -93
+    },
+    {
+      "input": {
+        "value": -398.4492426738143,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -878
+    },
+    {
+      "input": {
+        "value": -398.4492426738143,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -180.5
+    },
+    {
+      "input": {
+        "value": 263.1927475333214,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 580
+    },
+    {
+      "input": {
+        "value": 263.1927475333214,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 119.5
+    },
+    {
+      "input": {
+        "value": -103.05771995335817,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -227
+    },
+    {
+      "input": {
+        "value": -103.05771995335817,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -46.5
+    },
+    {
+      "input": {
+        "value": -362.45098523795605,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -799
+    },
+    {
+      "input": {
+        "value": -362.45098523795605,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -164.5
+    },
+    {
+      "input": {
+        "value": 262.65116948634386,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 579
+    },
+    {
+      "input": {
+        "value": 262.65116948634386,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 119
+    },
+    {
+      "input": {
+        "value": 26.743634790182114,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 59
+    },
+    {
+      "input": {
+        "value": 26.743634790182114,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 12
+    },
+    {
+      "input": {
+        "value": -362.4464938417077,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -799
+    },
+    {
+      "input": {
+        "value": -362.4464938417077,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -164.5
+    },
+    {
+      "input": {
+        "value": -261.3074902445078,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -576
+    },
+    {
+      "input": {
+        "value": -261.3074902445078,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -118.5
+    },
+    {
+      "input": {
+        "value": 138.65513894706964,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 306
+    },
+    {
+      "input": {
+        "value": 138.65513894706964,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 63
+    },
+    {
+      "input": {
+        "value": -65.989750623703,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -145
+    },
+    {
+      "input": {
+        "value": -65.989750623703,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -30
+    },
+    {
+      "input": {
+        "value": 199.19745903462172,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 439
+    },
+    {
+      "input": {
+        "value": 199.19745903462172,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 90.5
+    },
+    {
+      "input": {
+        "value": -260.6460180133581,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -575
+    },
+    {
+      "input": {
+        "value": -260.6460180133581,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -118
+    },
+    {
+      "input": {
+        "value": 375.72069335728884,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 828
+    },
+    {
+      "input": {
+        "value": 375.72069335728884,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 170.5
+    },
+    {
+      "input": {
+        "value": -124.03508052229881,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -273
+    },
+    {
+      "input": {
+        "value": -124.03508052229881,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -56.5
+    },
+    {
+      "input": {
+        "value": -103.55200115591288,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -228
+    },
+    {
+      "input": {
+        "value": -103.55200115591288,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -47
+    },
+    {
+      "input": {
+        "value": 94.13033239543438,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 208
+    },
+    {
+      "input": {
+        "value": 94.13033239543438,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 42.5
+    },
+    {
+      "input": {
+        "value": 80.38488868623972,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": 177
+    },
+    {
+      "input": {
+        "value": 80.38488868623972,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": 36.5
+    },
+    {
+      "input": {
+        "value": -354.30515855550766,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -781
+    },
+    {
+      "input": {
+        "value": -354.30515855550766,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -160.5
+    },
+    {
+      "input": {
+        "value": -5.19022811204195,
+        "stamp": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": -11
+    },
+    {
+      "input": {
+        "value": -5.19022811204195,
+        "stamp": {
+          "weightUnit": "lbs"
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": -2.5
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "response": {
+    "min": {
+      "insights": null
+    },
+    "max": {
+      "insights": "sample text",
+      "ragInfo": {
+        "source": "none",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text"
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": true
+    },
+    "future": {
+      "insights": "sample text",
+      "ragInfo": {
+        "source": "zz_value_from_a_newer_server",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

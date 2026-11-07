@@ -1,0 +1,40 @@
+{
+  "response": {
+    "min": {
+      "connected": true,
+      "autoSync": {
+        "enabled": true,
+        "webhook": true,
+        "intervalMinutes": 1
+      }
+    },
+    "max": {
+      "connected": true,
+      "athleteId": "sample text",
+      "lastSyncedAt": "2026-11-07T10:15:30.000Z",
+      "requiresReauth": true,
+      "autoSync": {
+        "enabled": true,
+        "webhook": true,
+        "intervalMinutes": 1
+      }
+    },
+    "future": {
+      "connected": true,
+      "athleteId": "sample text",
+      "lastSyncedAt": "2026-11-07T10:15:30.000Z",
+      "requiresReauth": true,
+      "autoSync": {
+        "enabled": true,
+        "webhook": true,
+        "intervalMinutes": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "response": {
+    "min": {
+      "suggestions": []
+    },
+    "max": {
+      "suggestions": [
+        {
+          "workoutId": "sample text",
+          "date": "sample text",
+          "focus": "sample text",
+          "targetField": "accessory",
+          "action": "append",
+          "recommendation": "sample text",
+          "rationale": "sample text",
+          "priority": "high"
+        }
+      ],
+      "ragInfo": {
+        "source": "none",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text"
+      },
+      "message": "sample text",
+      "responseMetadata": {
+        "key": {
+          "trainingStyleId": "sample text",
+          "phase": "sample text",
+          "strategyRuleVersion": "sample text",
+          "promptBundleVersion": "sample text",
+          "rationaleCodes": [
+            "sample text"
+          ]
+        }
+      }
+    },
+    "future": {
+      "suggestions": [
+        {
+          "workoutId": "sample text",
+          "date": "sample text",
+          "focus": "sample text",
+          "targetField": "zz_value_from_a_newer_server",
+          "action": "zz_value_from_a_newer_server",
+          "recommendation": "sample text",
+          "rationale": "sample text",
+          "priority": "zz_value_from_a_newer_server",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "ragInfo": {
+        "source": "zz_value_from_a_newer_server",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "message": "sample text",
+      "responseMetadata": {
+        "key": {
+          "trainingStyleId": "sample text",
+          "phase": "sample text",
+          "strategyRuleVersion": "sample text",
+          "promptBundleVersion": "sample text",
+          "rationaleCodes": [
+            "sample text"
+          ],
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

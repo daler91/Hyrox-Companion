@@ -1,0 +1,460 @@
+{
+  "suite": "nutritionScaling.addInto",
+  "description": "Raw field-by-field sums of `addends` into a copy of `acc`, in order.",
+  "cases": [
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": []
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 1,
+          "protein": 2,
+          "carb": 3,
+          "fat": 4,
+          "fiber": 5
+        },
+        "addends": []
+      },
+      "output": {
+        "calories": 1,
+        "protein": 2,
+        "carb": 3,
+        "fat": 4,
+        "fiber": 5
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": [
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.2,
+            "protein": 0.2,
+            "carb": 0.2,
+            "fat": 0.2,
+            "fiber": 0.2
+          }
+        ]
+      },
+      "output": {
+        "calories": 0.30000000000000004,
+        "protein": 0.30000000000000004,
+        "carb": 0.30000000000000004,
+        "fat": 0.30000000000000004,
+        "fiber": 0.30000000000000004
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0.1,
+          "protein": 0.1,
+          "carb": 0.1,
+          "fat": 0.1,
+          "fiber": 0.1
+        },
+        "addends": [
+          {
+            "calories": 0.2,
+            "protein": 0.2,
+            "carb": 0.2,
+            "fat": 0.2,
+            "fiber": 0.2
+          },
+          {
+            "calories": 0.3,
+            "protein": 0.3,
+            "carb": 0.3,
+            "fat": 0.3,
+            "fiber": 0.3
+          }
+        ]
+      },
+      "output": {
+        "calories": 0.6000000000000001,
+        "protein": 0.6000000000000001,
+        "carb": 0.6000000000000001,
+        "fat": 0.6000000000000001,
+        "fiber": 0.6000000000000001
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": [
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          },
+          {
+            "calories": 0.1,
+            "protein": 0.1,
+            "carb": 0.1,
+            "fat": 0.1,
+            "fiber": 0.1
+          }
+        ]
+      },
+      "output": {
+        "calories": 0.9999999999999999,
+        "protein": 0.9999999999999999,
+        "carb": 0.9999999999999999,
+        "fat": 0.9999999999999999,
+        "fiber": 0.9999999999999999
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": [
+          {
+            "calories": 10000000000000000,
+            "protein": 10000000000000000,
+            "carb": 10000000000000000,
+            "fat": 10000000000000000,
+            "fiber": 10000000000000000
+          },
+          {
+            "calories": 1,
+            "protein": 1,
+            "carb": 1,
+            "fat": 1,
+            "fiber": 1
+          },
+          {
+            "calories": 1,
+            "protein": 1,
+            "carb": 1,
+            "fat": 1,
+            "fiber": 1
+          }
+        ]
+      },
+      "output": {
+        "calories": 10000000000000000,
+        "protein": 10000000000000000,
+        "carb": 10000000000000000,
+        "fat": 10000000000000000,
+        "fiber": 10000000000000000
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": [
+          {
+            "calories": 1,
+            "protein": 1,
+            "carb": 1,
+            "fat": 1,
+            "fiber": 1
+          },
+          {
+            "calories": 1,
+            "protein": 1,
+            "carb": 1,
+            "fat": 1,
+            "fiber": 1
+          },
+          {
+            "calories": 10000000000000000,
+            "protein": 10000000000000000,
+            "carb": 10000000000000000,
+            "fat": 10000000000000000,
+            "fiber": 10000000000000000
+          }
+        ]
+      },
+      "output": {
+        "calories": 10000000000000002,
+        "protein": 10000000000000002,
+        "carb": 10000000000000002,
+        "fat": 10000000000000002,
+        "fiber": 10000000000000002
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": [
+          {
+            "calories": 0,
+            "protein": 0,
+            "carb": 0,
+            "fat": 0,
+            "fiber": 0
+          }
+        ]
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": -5.5,
+          "protein": -5.5,
+          "carb": -5.5,
+          "fat": -5.5,
+          "fiber": -5.5
+        },
+        "addends": [
+          {
+            "calories": 2.25,
+            "protein": 2.25,
+            "carb": 2.25,
+            "fat": 2.25,
+            "fiber": 2.25
+          },
+          {
+            "calories": -1,
+            "protein": 1,
+            "carb": -1,
+            "fat": 1,
+            "fiber": -1
+          }
+        ]
+      },
+      "output": {
+        "calories": -4.25,
+        "protein": -2.25,
+        "carb": -4.25,
+        "fat": -2.25,
+        "fiber": -4.25
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 1e+308,
+          "protein": 1e+308,
+          "carb": 1e+308,
+          "fat": 1e+308,
+          "fiber": 1e+308
+        },
+        "addends": [
+          {
+            "calories": 1e+308,
+            "protein": 1e+308,
+            "carb": 1e+308,
+            "fat": 1e+308,
+            "fiber": 1e+308
+          }
+        ]
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": "Infinity",
+          "protein": "Infinity",
+          "carb": "Infinity",
+          "fat": "Infinity",
+          "fiber": "Infinity"
+        },
+        "addends": [
+          {
+            "calories": "-Infinity",
+            "protein": "-Infinity",
+            "carb": "-Infinity",
+            "fat": "-Infinity",
+            "fiber": "-Infinity"
+          }
+        ]
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": "NaN",
+        "fat": "NaN",
+        "fiber": "NaN"
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": "NaN",
+          "protein": "NaN",
+          "carb": "NaN",
+          "fat": "NaN",
+          "fiber": "NaN"
+        },
+        "addends": [
+          {
+            "calories": 1,
+            "protein": 1,
+            "carb": 1,
+            "fat": 1,
+            "fiber": 1
+          }
+        ]
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": "NaN",
+        "fat": "NaN",
+        "fiber": "NaN"
+      }
+    },
+    {
+      "input": {
+        "acc": {
+          "calories": 0,
+          "protein": 0,
+          "carb": 0,
+          "fat": 0,
+          "fiber": 0
+        },
+        "addends": [
+          {
+            "calories": 105.02,
+            "protein": 1.298,
+            "carb": 26.904,
+            "fat": 0.354,
+            "fiber": 3.068
+          },
+          {
+            "calories": 143.18999999999997,
+            "protein": 8.325,
+            "carb": 19.979999999999997,
+            "fat": 3.33,
+            "fiber": 1.665
+          }
+        ]
+      },
+      "output": {
+        "calories": 248.20999999999998,
+        "protein": 9.623,
+        "carb": 46.884,
+        "fat": 3.684,
+        "fiber": 4.7330000000000005
+      }
+    }
+  ]
+}

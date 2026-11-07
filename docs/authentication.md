@@ -280,6 +280,14 @@ Mixing the two keys would tie the HMAC used for CSRF token signing to the same s
 2. The token is cached in memory and attached as the `x-csrf-token` header on all mutating requests.
 3. If a mutation gets a 403 that may be a CSRF rejection, it refetches the token once and retries the request. csrf-csrf answers a bad token with code `EBADCSRFTOKEN`, so a 403 naming any other code (`AI_COACH_DISABLED`, say) is surfaced without the retry. A 403 with no code, or a body that is not JSON, is still retried.
 
+### Bearer-Token Clients (Native App)
+
+The native mobile app ([mobile-app-plan.md](mobile-app-plan.md)) sends no cookies. It authenticates with the Clerk session token from the Clerk Android SDK in an `Authorization: Bearer` header, which `clerkMiddleware()` already verifies; Clerk reads a header token ahead of any session cookie. `csrfProtection` skips the double-submit check for such a request (`bearerAuthState()` in `server/middleware/csrf.ts`), because a bearer token is never attached by the browser on its own and a cross-site page cannot add the header without a CORS preflight the origin allowlist refuses. The exemption is narrow:
+
+- A request that also carries a Clerk session cookie (`__session` or `__session_<suffix>`) keeps the check, so the cookie-authenticated web app is exactly as protected as before.
+- With no Clerk middleware installed (the dev auth bypass without keys) nothing is exempt.
+- A mutating request whose bearer token Clerk rejects is answered `401 { "error": "Unauthorized", "code": "UNAUTHORIZED" }` — what `isAuthenticated` would have said — rather than a CSRF error, so the app refreshes its token instead of looking for a cookie it never has.
+
 See [Server -- CSRF Protection](server.md#csrf-protection) for full implementation details.
 
 ---

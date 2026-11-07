@@ -4,6 +4,7 @@ import type { Express } from "express";
 
 import { setupAuth } from "./clerkAuth";
 import { registerGarminRoutes } from "./garmin";
+import { appVersionGate } from "./middleware/appVersion";
 import { csrfProtection, csrfTokenHandler } from "./middleware/csrf";
 import accountRoutes from "./routes/account";
 import aiRoutes from "./routes/ai";
@@ -33,6 +34,12 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await setupAuth(app);
+
+  // Outdated native app builds are turned away first, with 426
+  // APP_UPDATE_REQUIRED, so the app shows its update prompt instead of
+  // whatever auth or CSRF error an older client might trip over. Requests
+  // without X-App-Platform (the web app) pass untouched.
+  app.use("/api/v1", appVersionGate);
 
   // CSRF token issuance must be mounted BEFORE the protecting middleware so
   // the safe-method GET can set the cookie without needing a token first.

@@ -1,0 +1,40 @@
+{
+  "response": {
+    "min": {
+      "success": true,
+      "imported": 1,
+      "enriched": 1,
+      "completedPlanDays": 1,
+      "suggested": 1,
+      "standalone": 1,
+      "skipped": 1,
+      "total": 1,
+      "hasMore": true
+    },
+    "max": {
+      "success": true,
+      "imported": 1,
+      "enriched": 1,
+      "completedPlanDays": 1,
+      "suggested": 1,
+      "standalone": 1,
+      "skipped": 1,
+      "total": 1,
+      "hasMore": true
+    },
+    "future": {
+      "success": true,
+      "imported": 1,
+      "enriched": 1,
+      "completedPlanDays": 1,
+      "suggested": 1,
+      "standalone": 1,
+      "skipped": 1,
+      "total": 1,
+      "hasMore": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "suite": "dateUtils.constants",
+  "description": "MIN_PLAN_WEEKS, MAX_PLAN_WEEKS and PLAN_WEEKDAYS (Monday first).",
+  "cases": [
+    {
+      "input": null,
+      "output": {
+        "MIN_PLAN_WEEKS": 1,
+        "MAX_PLAN_WEEKS": 24,
+        "PLAN_WEEKDAYS": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ]
+      }
+    }
+  ]
+}

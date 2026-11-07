@@ -1,0 +1,31 @@
+{
+  "response": {
+    "min": {
+      "consents": []
+    },
+    "max": {
+      "consents": [
+        {
+          "consentType": "error_reporting",
+          "granted": true,
+          "consentedAt": "2026-11-07T10:15:30.000Z"
+        }
+      ]
+    },
+    "future": {
+      "consents": [
+        {
+          "consentType": "zz_value_from_a_newer_server",
+          "granted": true,
+          "consentedAt": "2026-11-07T10:15:30.000Z",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

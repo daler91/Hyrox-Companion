@@ -1,0 +1,54 @@
+{
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "source": "custom",
+        "sourceId": "sample text",
+        "name": "sample text",
+        "brand": "sample text",
+        "servingSizeG": 1.5,
+        "caloriesPer100g": 1.5,
+        "proteinPer100g": 1.5,
+        "carbPer100g": 1.5,
+        "fatPer100g": 1.5,
+        "fiberPer100g": 1.5,
+        "micros": {
+          "key": 1.5
+        },
+        "lastFetchedAt": "2026-11-07T10:15:30.000Z",
+        "createdByUserId": "sample text",
+        "isPublic": true,
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z"
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "source": "zz_value_from_a_newer_server",
+        "sourceId": "sample text",
+        "name": "sample text",
+        "brand": "sample text",
+        "servingSizeG": 1.5,
+        "caloriesPer100g": 1.5,
+        "proteinPer100g": 1.5,
+        "carbPer100g": 1.5,
+        "fatPer100g": 1.5,
+        "fiberPer100g": 1.5,
+        "micros": {
+          "key": 1.5
+        },
+        "lastFetchedAt": "2026-11-07T10:15:30.000Z",
+        "createdByUserId": "sample text",
+        "isPublic": true,
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

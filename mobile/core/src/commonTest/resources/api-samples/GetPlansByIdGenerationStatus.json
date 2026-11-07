@@ -1,0 +1,21 @@
+{
+  "response": {
+    "min": {
+      "planId": "a",
+      "generationStatus": "pending"
+    },
+    "max": {
+      "planId": "sample text",
+      "generationStatus": "failed",
+      "error": "sample text"
+    },
+    "future": {
+      "planId": "sample text",
+      "generationStatus": "zz_value_from_a_newer_server",
+      "error": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

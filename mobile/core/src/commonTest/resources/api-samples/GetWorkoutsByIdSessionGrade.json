@@ -1,0 +1,152 @@
+{
+  "response": {
+    "min": {
+      "grade": null
+    },
+    "max": {
+      "grade": {
+        "workoutLogId": "sample text",
+        "planDayId": "sample text",
+        "planId": "sample text",
+        "date": "sample text",
+        "weekNumber": 1,
+        "title": "sample text",
+        "intent": "threshold",
+        "purpose": "race",
+        "intentReason": "sample text",
+        "verdict": "ungradeable",
+        "headline": "sample text",
+        "evidence": [
+          "sample text"
+        ],
+        "confidence": "low",
+        "dataSource": "summary",
+        "streamStatus": "not_applicable",
+        "ungradeableReason": "too_short",
+        "targets": {
+          "easyCeilingHr": 1.5,
+          "thresholdHr": {
+            "min": 1.5,
+            "max": 1.5
+          },
+          "z5FloorHr": 1.5,
+          "hrBasis": "maf",
+          "easyPace": {
+            "fast": 1.5,
+            "slow": 1.5
+          },
+          "thresholdPace": 1.5,
+          "paceSource": "history"
+        },
+        "easy": {
+          "movingMinutes": 1.5,
+          "avgHr": 1.5,
+          "pctAboveCeiling": 1.5,
+          "firstThirdHr": 1.5,
+          "lastThirdHr": 1.5,
+          "hrDriftPct": 1.5,
+          "avgPaceSecPerKm": 1.5,
+          "pctFasterThanEasy": 1.5,
+          "excludedFinishMinutes": 1.5
+        },
+        "threshold": {
+          "segmentation": "whole_run",
+          "workMinutes": 1.5,
+          "repCount": 1,
+          "workAvgPaceSecPerKm": 1.5,
+          "paceDeltaPct": 1.5,
+          "workAvgHr": 1.5,
+          "pctWorkZ4": 1.5,
+          "pctWorkZ5": 1.5,
+          "firstRepHr": 1.5,
+          "lastRepHr": 1.5,
+          "decouplingPct": 1.5
+        },
+        "countsInRollup": true
+      }
+    },
+    "future": {
+      "grade": {
+        "workoutLogId": "sample text",
+        "planDayId": "sample text",
+        "planId": "sample text",
+        "date": "sample text",
+        "weekNumber": 1,
+        "title": "sample text",
+        "intent": "zz_value_from_a_newer_server",
+        "purpose": "zz_value_from_a_newer_server",
+        "intentReason": "sample text",
+        "verdict": "zz_value_from_a_newer_server",
+        "headline": "sample text",
+        "evidence": [
+          "sample text"
+        ],
+        "confidence": "zz_value_from_a_newer_server",
+        "dataSource": "zz_value_from_a_newer_server",
+        "streamStatus": "zz_value_from_a_newer_server",
+        "ungradeableReason": "zz_value_from_a_newer_server",
+        "targets": {
+          "easyCeilingHr": 1.5,
+          "thresholdHr": {
+            "min": 1.5,
+            "max": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "z5FloorHr": 1.5,
+          "hrBasis": "zz_value_from_a_newer_server",
+          "easyPace": {
+            "fast": 1.5,
+            "slow": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "thresholdPace": 1.5,
+          "paceSource": "zz_value_from_a_newer_server",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "easy": {
+          "movingMinutes": 1.5,
+          "avgHr": 1.5,
+          "pctAboveCeiling": 1.5,
+          "firstThirdHr": 1.5,
+          "lastThirdHr": 1.5,
+          "hrDriftPct": 1.5,
+          "avgPaceSecPerKm": 1.5,
+          "pctFasterThanEasy": 1.5,
+          "excludedFinishMinutes": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "threshold": {
+          "segmentation": "zz_value_from_a_newer_server",
+          "workMinutes": 1.5,
+          "repCount": 1,
+          "workAvgPaceSecPerKm": 1.5,
+          "paceDeltaPct": 1.5,
+          "workAvgHr": 1.5,
+          "pctWorkZ4": 1.5,
+          "pctWorkZ5": 1.5,
+          "firstRepHr": 1.5,
+          "lastRepHr": 1.5,
+          "decouplingPct": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "countsInRollup": true,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

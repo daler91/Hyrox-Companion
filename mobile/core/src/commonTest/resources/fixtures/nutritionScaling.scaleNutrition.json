@@ -1,0 +1,4923 @@
+{
+  "suite": "nutritionScaling.scaleNutrition",
+  "description": "Per-100g values scaled to grams, unrounded; energy derived from the macros when it is null and they fit in 101 g.",
+  "cases": [
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 29.636999999999997,
+        "protein": 0.3663,
+        "carb": 7.5924000000000005,
+        "fat": 0.09989999999999999,
+        "fiber": 0.8658
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 89,
+        "protein": 1.1,
+        "carb": 22.8,
+        "fat": 0.3,
+        "fiber": 2.6
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 105.02,
+        "protein": 1.298,
+        "carb": 26.904,
+        "fat": 0.354,
+        "fiber": 3.068
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 222.5,
+        "protein": 2.75,
+        "carb": 57,
+        "fat": 0.75,
+        "fiber": 6.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -44.5,
+        "protein": -0.55,
+        "carb": -11.4,
+        "fat": -0.15,
+        "fiber": -1.3
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.08900000000000001,
+        "protein": 0.0011,
+        "carb": 0.0228,
+        "fat": 0.0003,
+        "fiber": 0.0026
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 890000000,
+        "protein": 11000000,
+        "carb": 228000000,
+        "fat": 3000000,
+        "fiber": 26000000
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 1.1000000000000001e+306,
+        "carb": "Infinity",
+        "fat": 3e+305,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 89,
+          "proteinPer100g": 1.1,
+          "carbPer100g": 22.8,
+          "fatPer100g": 0.3,
+          "fiberPer100g": 2.6
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 5e-324,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 16.65,
+        "carb": 39.959999999999994,
+        "fat": 6.66,
+        "fiber": 1.665
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 50,
+        "carb": 120,
+        "fat": 20,
+        "fiber": 5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 59,
+        "carb": 141.6,
+        "fat": 23.6,
+        "fiber": 5.9
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 125,
+        "carb": 300,
+        "fat": 50,
+        "fiber": 12.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": -25,
+        "carb": -60,
+        "fat": -10,
+        "fiber": -2.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0.05,
+        "carb": 0.12,
+        "fat": 0.02,
+        "fiber": 0.005
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 500000000,
+        "carb": 1200000000,
+        "fat": 200000000,
+        "fiber": 50000000
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": "Infinity",
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 50,
+          "carbPer100g": 120,
+          "fatPer100g": 20,
+          "fiberPer100g": 5
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 5e-324,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 143.18999999999997,
+        "protein": 8.325,
+        "carb": 19.979999999999997,
+        "fat": 3.33,
+        "fiber": 1.665
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 430,
+        "protein": 25,
+        "carb": 60,
+        "fat": 10,
+        "fiber": 5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 507.4,
+        "protein": 29.5,
+        "carb": 70.8,
+        "fat": 11.8,
+        "fiber": 5.9
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 1075,
+        "protein": 62.5,
+        "carb": 150,
+        "fat": 25,
+        "fiber": 12.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -215,
+        "protein": -12.5,
+        "carb": -30,
+        "fat": -5,
+        "fiber": -2.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.43,
+        "protein": 0.025,
+        "carb": 0.06,
+        "fat": 0.01,
+        "fiber": 0.005
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 4300000000,
+        "protein": 250000000,
+        "carb": 600000000,
+        "fat": 100000000,
+        "fiber": 50000000
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": 60,
+          "fatPer100g": 10,
+          "fiberPer100g": 5
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 2e-323,
+        "protein": 0,
+        "carb": 5e-324,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 217.78199999999998,
+        "protein": 0.33299999999999996,
+        "carb": 16.65,
+        "fat": 16.65,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 654,
+        "protein": 1,
+        "carb": 50,
+        "fat": 50,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 771.72,
+        "protein": 1.18,
+        "carb": 59,
+        "fat": 59,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 1635,
+        "protein": 2.5,
+        "carb": 125,
+        "fat": 125,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -327,
+        "protein": -0.5,
+        "carb": -25,
+        "fat": -25,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.654,
+        "protein": 0.001,
+        "carb": 0.05,
+        "fat": 0.05,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 6540000000,
+        "protein": 10000000,
+        "carb": 500000000,
+        "fat": 500000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 1e+306,
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 3.5e-323,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0.49949999999999994,
+        "carb": 16.65,
+        "fat": 16.65,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 1.5,
+        "carb": 50,
+        "fat": 50,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 1.77,
+        "carb": 59,
+        "fat": 59,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 3.75,
+        "carb": 125,
+        "fat": 125,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": -0.75,
+        "carb": -25,
+        "fat": -25,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0.0015000000000000002,
+        "carb": 0.05,
+        "fat": 0.05,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 15000000,
+        "carb": 500000000,
+        "fat": 500000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": 1.5e+306,
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 1.5,
+          "carbPer100g": 50,
+          "fatPer100g": 50,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 66.6,
+        "carb": 66.6,
+        "fat": 66.6,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 200,
+        "carb": 200,
+        "fat": 200,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 236,
+        "carb": 236,
+        "fat": 236,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 500,
+        "carb": 500,
+        "fat": 500,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": -100,
+        "carb": -100,
+        "fat": -100,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0.2,
+        "carb": 0.2,
+        "fat": 0.2,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 2000000000,
+        "carb": 2000000000,
+        "fat": 2000000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": "Infinity",
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 200,
+          "carbPer100g": 200,
+          "fatPer100g": 200,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 1e-323,
+        "carb": 1e-323,
+        "fat": 1e-323,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 299.7,
+        "protein": 0,
+        "carb": 0,
+        "fat": 33.3,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 900,
+        "protein": 0,
+        "carb": 0,
+        "fat": 100,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 1062,
+        "protein": 0,
+        "carb": 0,
+        "fat": 118,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 2250,
+        "protein": 0,
+        "carb": 0,
+        "fat": 250,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -450,
+        "protein": 0,
+        "carb": 0,
+        "fat": -50,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.9,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0.1,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 9000000000,
+        "protein": 0,
+        "carb": 0,
+        "fat": 1000000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 100,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 4.4e-323,
+        "protein": 0,
+        "carb": 0,
+        "fat": 5e-324,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 33.3,
+        "protein": 8.325,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 100,
+        "protein": 25,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 118,
+        "protein": 29.5,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 250,
+        "protein": 62.5,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -50,
+        "protein": -12.5,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.1,
+        "protein": 0.025,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 1000000000,
+        "protein": 250000000,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 25,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 5e-324,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 20.978999999999996,
+        "protein": 0,
+        "carb": 0,
+        "fat": 2.3309999999999995,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 63,
+        "protein": 0,
+        "carb": 0,
+        "fat": 7,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 74.34,
+        "protein": 0,
+        "carb": 0,
+        "fat": 8.26,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 157.5,
+        "protein": 0,
+        "carb": 0,
+        "fat": 17.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -31.5,
+        "protein": 0,
+        "carb": 0,
+        "fat": -3.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.063,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0.007000000000000001,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 630000000,
+        "protein": 0,
+        "carb": 0,
+        "fat": 70000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": 7,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 5e-324,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 3.33,
+        "carb": 6.66,
+        "fat": 1.665,
+        "fiber": 0.33299999999999996
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 10,
+        "carb": 20,
+        "fat": 5,
+        "fiber": 1
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 11.8,
+        "carb": 23.6,
+        "fat": 5.9,
+        "fiber": 1.18
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 25,
+        "carb": 50,
+        "fat": 12.5,
+        "fiber": 2.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": -5,
+        "carb": -10,
+        "fat": -2.5,
+        "fiber": -0.5
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0.01,
+        "carb": 0.02,
+        "fat": 0.005,
+        "fiber": 0.001
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 100000000,
+        "carb": 200000000,
+        "fat": 50000000,
+        "fiber": 10000000
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": "Infinity",
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": 1e+306
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 0,
+          "proteinPer100g": 10,
+          "carbPer100g": 20,
+          "fatPer100g": 5,
+          "fiberPer100g": 1
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0.6992999999999999
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 2.1
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 2.478
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 5.25
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": -1.05
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0.0021000000000000003
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 21000000
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": 2.1
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 301.698,
+        "protein": 0.0666,
+        "carb": 0.1332,
+        "fat": 33.4332,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 906,
+        "protein": 0.2,
+        "carb": 0.4,
+        "fat": 100.4,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 1069.08,
+        "protein": 0.23600000000000002,
+        "carb": 0.47200000000000003,
+        "fat": 118.47200000000001,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 2265,
+        "protein": 0.5,
+        "carb": 1,
+        "fat": 251,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -453,
+        "protein": -0.1,
+        "carb": -0.2,
+        "fat": -50.2,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.9060000000000001,
+        "protein": 0.00020000000000000004,
+        "carb": 0.0004000000000000001,
+        "fat": 0.1004,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 9060000000,
+        "protein": 2000000,
+        "carb": 4000000,
+        "fat": 1004000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 2.0000000000000003e+305,
+        "carb": 4.0000000000000005e+305,
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.2,
+          "carbPer100g": 0.4,
+          "fatPer100g": 100.4,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 4.4e-323,
+        "protein": 0,
+        "carb": 0,
+        "fat": 5e-324,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 33.4332,
+        "carb": 0.1332,
+        "fat": 0.0666,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 100.4,
+        "carb": 0.4,
+        "fat": 0.2,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 118.47200000000001,
+        "carb": 0.47200000000000003,
+        "fat": 0.23600000000000002,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 251,
+        "carb": 1,
+        "fat": 0.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": -50.2,
+        "carb": -0.2,
+        "fat": -0.1,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0.1004,
+        "carb": 0.0004000000000000001,
+        "fat": 0.00020000000000000004,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 1004000000,
+        "carb": 4000000,
+        "fat": 2000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": "Infinity",
+        "carb": 4.0000000000000005e+305,
+        "fat": 2.0000000000000003e+305,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 100.4,
+          "carbPer100g": 0.4,
+          "fatPer100g": 0.2,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 5e-324,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 302.1975,
+        "protein": 0.0333,
+        "carb": 0.0666,
+        "fat": 33.5331,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 907.5000000000001,
+        "protein": 0.1,
+        "carb": 0.2,
+        "fat": 100.7,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 1070.8500000000001,
+        "protein": 0.11800000000000001,
+        "carb": 0.23600000000000002,
+        "fat": 118.82600000000001,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 2268.7500000000005,
+        "protein": 0.25,
+        "carb": 0.5,
+        "fat": 251.75,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -453.75000000000006,
+        "protein": -0.05,
+        "carb": -0.1,
+        "fat": -50.35,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.9075000000000002,
+        "protein": 0.00010000000000000002,
+        "carb": 0.00020000000000000004,
+        "fat": 0.1007,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 9075000000.000002,
+        "protein": 1000000,
+        "carb": 2000000,
+        "fat": 1007000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 1.0000000000000001e+305,
+        "carb": 2.0000000000000003e+305,
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0.1,
+          "carbPer100g": 0.2,
+          "fatPer100g": 100.7,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 4.4e-323,
+        "protein": 0,
+        "carb": 0,
+        "fat": 5e-324,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 113.21999999999998,
+        "protein": -3.33,
+        "carb": 16.65,
+        "fat": 6.66,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 340,
+        "protein": -10,
+        "carb": 50,
+        "fat": 20,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 401.2,
+        "protein": -11.8,
+        "carb": 59,
+        "fat": 23.6,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 850,
+        "protein": -25,
+        "carb": 125,
+        "fat": 50,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -170,
+        "protein": 5,
+        "carb": -25,
+        "fat": -10,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.34,
+        "protein": -0.01,
+        "carb": 0.05,
+        "fat": 0.02,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 3400000000,
+        "protein": -100000000,
+        "carb": 500000000,
+        "fat": 200000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "-Infinity",
+        "carb": "Infinity",
+        "fat": "Infinity",
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": -10,
+          "carbPer100g": 50,
+          "fatPer100g": 20,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 1.5e-323,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": -16.65,
+        "protein": -0.33299999999999996,
+        "carb": -0.6659999999999999,
+        "fat": -0.9989999999999999,
+        "fiber": -1.3319999999999999
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": -50,
+        "protein": -1,
+        "carb": -2,
+        "fat": -3,
+        "fiber": -4
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": -59,
+        "protein": -1.18,
+        "carb": -2.36,
+        "fat": -3.54,
+        "fiber": -4.72
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": -125,
+        "protein": -2.5,
+        "carb": -5,
+        "fat": -7.5,
+        "fiber": -10
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 25,
+        "protein": 0.5,
+        "carb": 1,
+        "fat": 1.5,
+        "fiber": 2
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": -0.05,
+        "protein": -0.001,
+        "carb": -0.002,
+        "fat": -0.0030000000000000005,
+        "fiber": -0.004
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": -500000000,
+        "protein": -10000000,
+        "carb": -20000000,
+        "fat": -30000000,
+        "fiber": -40000000
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "-Infinity",
+        "protein": -1e+306,
+        "carb": "-Infinity",
+        "fat": "-Infinity",
+        "fiber": "-Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": -50,
+          "proteinPer100g": -1,
+          "carbPer100g": -2,
+          "fatPer100g": -3,
+          "fiberPer100g": -4
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": 0,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 0
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": "-Infinity",
+        "protein": "-Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "-Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 1.0000000000000001e+305,
+        "protein": 1.0000000000000001e+305,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 1.0000000000000001e+305
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": 0,
+        "fat": 0,
+        "fiber": "Infinity"
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": 1e+308,
+          "proteinPer100g": 1e+308,
+          "carbPer100g": 0,
+          "fatPer100g": 0,
+          "fiberPer100g": 1e+308
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 4.9406564584124655e-18,
+        "protein": 4.9406564584124655e-18,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 4.9406564584124655e-18
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 3.33,
+        "fat": 0.33299999999999996,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 10,
+        "fat": 1,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 11.8,
+        "fat": 1.18,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 25,
+        "fat": 2.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": -5,
+        "fat": -0.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0.01,
+        "fat": 0.001,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 100000000,
+        "fat": 10000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": "Infinity",
+        "fat": 1e+306,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "NaN",
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 3.33,
+        "fat": 0.33299999999999996,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 10,
+        "fat": 1,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 11.8,
+        "fat": 1.18,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 25,
+        "fat": 2.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": -5,
+        "fat": -0.5,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0.01,
+        "fat": 0.001,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 100000000,
+        "fat": 10000000,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": "Infinity",
+        "fat": 1e+306,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": null,
+          "proteinPer100g": "NaN",
+          "carbPer100g": 10,
+          "fatPer100g": 1,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": "NaN",
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": "NaN",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": "-Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "caloriesPer100g": "Infinity",
+          "proteinPer100g": null,
+          "carbPer100g": null,
+          "fatPer100g": null,
+          "fiberPer100g": null
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 53.28,
+        "protein": 3.33,
+        "carb": 9.989999999999998,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 160,
+        "protein": 10,
+        "carb": 30,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 188.8,
+        "protein": 11.8,
+        "carb": 35.4,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 400,
+        "protein": 25,
+        "carb": 75,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": -50
+      },
+      "output": {
+        "calories": -80,
+        "protein": -5,
+        "carb": -15,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0.16,
+        "protein": 0.01,
+        "carb": 0.03,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 1600000000,
+        "protein": 100000000,
+        "carb": 300000000,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": "Infinity",
+        "protein": "Infinity",
+        "carb": "Infinity",
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {
+          "proteinPer100g": 10,
+          "carbPer100g": 30
+        },
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 1e-323,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 0
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 33.3
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 100
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 118
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 250
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": -50
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 0.1
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 1000000000
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 1e+308
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    },
+    {
+      "input": {
+        "food": {},
+        "quantityG": 5e-324
+      },
+      "output": {
+        "calories": 0,
+        "protein": 0,
+        "carb": 0,
+        "fat": 0,
+        "fiber": 0
+      }
+    }
+  ]
+}

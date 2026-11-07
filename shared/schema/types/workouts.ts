@@ -865,6 +865,23 @@ export const structureBlockSchema = structureBlockBaseSchema.superRefine((block,
 
 export const structureBlocksPayloadSchema = z.array(structureBlockSchema).max(100).optional();
 
+/**
+ * The full request bodies of POST and PATCH /api/v1/workouts: the client-facing
+ * columns plus the exercises and structure-block payloads. The routes add only
+ * a cross-field heart-rate check (server/routes/workouts/shared.ts), and the
+ * OpenAPI document registers these same objects (shared/openapi.ts), so the
+ * published contract is exactly what the server accepts. The document once
+ * left structureBlocks out, so the generated app models could not send blocks.
+ */
+export const createWorkoutPayloadSchema = insertWorkoutLogRouteSchema.extend({
+  exercises: exercisesPayloadSchema.optional(),
+  structureBlocks: structureBlocksPayloadSchema,
+});
+export const updateWorkoutPayloadSchema = updateWorkoutLogRouteSchema.extend({
+  exercises: exercisesPayloadSchema.optional(),
+  structureBlocks: structureBlocksPayloadSchema,
+});
+
 export type StructureBlockInput = z.infer<typeof structureBlockSchema>;
 
 // Shared measurement fields used by both patch and add request bodies.

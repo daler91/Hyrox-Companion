@@ -1,0 +1,72 @@
+{
+  "response": {
+    "min": {},
+    "max": {
+      "key": {
+        "category": "sample text",
+        "customLabel": "sample text",
+        "maxWeight": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text"
+        },
+        "maxDistance": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text"
+        },
+        "bestTime": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text"
+        },
+        "estimated1RM": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text"
+        }
+      }
+    },
+    "future": {
+      "key": {
+        "category": "sample text",
+        "customLabel": "sample text",
+        "maxWeight": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "maxDistance": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "bestTime": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "estimated1RM": {
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    }
+  }
+}

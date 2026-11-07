@@ -1,0 +1,54 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "workoutLogIds": [
+        "sample text"
+      ],
+      "planDayIds": [
+        "sample text"
+      ]
+    }
+  },
+  "response": {
+    "min": {
+      "success": true,
+      "deletedWorkoutLogIds": [],
+      "deletedPlanDayIds": [],
+      "deletedCount": 1,
+      "batchId": "a",
+      "recycleBinItemIds": []
+    },
+    "max": {
+      "success": true,
+      "deletedWorkoutLogIds": [
+        "sample text"
+      ],
+      "deletedPlanDayIds": [
+        "sample text"
+      ],
+      "deletedCount": 1,
+      "batchId": "sample text",
+      "recycleBinItemIds": [
+        "sample text"
+      ]
+    },
+    "future": {
+      "success": true,
+      "deletedWorkoutLogIds": [
+        "sample text"
+      ],
+      "deletedPlanDayIds": [
+        "sample text"
+      ],
+      "deletedCount": 1,
+      "batchId": "sample text",
+      "recycleBinItemIds": [
+        "sample text"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

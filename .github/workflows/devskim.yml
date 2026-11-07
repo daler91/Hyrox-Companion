@@ -50,11 +50,19 @@ jobs:
         # contain substrings like "Md2" that trip DevSkim's banned-hash-
         # algorithm rule (DS126858). Supply-chain checks on the lockfile are
         # covered by dependency-review, Socket, and Debricked instead.
+        # mobile/core's test resources are excluded too: they are generated
+        # JSON test data (golden fixtures and API samples) whose exercise names
+        # include words DevSkim's suspicious-comment rule (DS176209) reads as
+        # code markers. They are written by
+        # `pnpm mobile:fixtures` / `pnpm mobile:models` and hold no code.
+        # mobile/gradle/verification-metadata.xml is Gradle's list of the
+        # published SHA-256 sums of every dependency it downloads; each sum
+        # trips the token-in-source rule (DS173237), and none is a secret.
         run: |
           "$HOME/.dotnet/tools/devskim" analyze \
             --source-code "$GITHUB_WORKSPACE" \
             --output-file "$GITHUB_WORKSPACE/devskim-results.sarif" \
-            --ignore-globs "**/.git/**,**/bin/**,**/pnpm-lock.yaml"
+            --ignore-globs "**/.git/**,**/bin/**,**/pnpm-lock.yaml,**/mobile/core/src/commonTest/resources/**,**/mobile/gradle/verification-metadata.xml"
 
       - name: Upload DevSkim scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2

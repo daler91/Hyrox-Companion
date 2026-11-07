@@ -1,0 +1,16 @@
+{
+  "response": {
+    "min": {
+      "authUrl": "https://fitai.coach/x"
+    },
+    "max": {
+      "authUrl": "https://fitai.coach/x"
+    },
+    "future": {
+      "authUrl": "https://fitai.coach/x",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

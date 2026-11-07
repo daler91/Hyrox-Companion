@@ -1,0 +1,26 @@
+{
+  "request": {
+    "min": {
+      "token": "a",
+      "platform": "android"
+    },
+    "max": {
+      "token": "sample text",
+      "platform": "ios"
+    }
+  },
+  "response": {
+    "min": {
+      "success": true
+    },
+    "max": {
+      "success": true
+    },
+    "future": {
+      "success": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

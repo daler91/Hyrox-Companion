@@ -1,0 +1,22 @@
+{
+  "response": {
+    "min": {
+      "insights": "a",
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": false
+    },
+    "max": {
+      "insights": "sample text",
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": false
+    },
+    "future": {
+      "insights": "sample text",
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": false,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

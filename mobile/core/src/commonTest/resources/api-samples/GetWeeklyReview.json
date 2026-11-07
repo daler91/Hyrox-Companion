@@ -1,0 +1,279 @@
+{
+  "response": {
+    "min": {
+      "weekStart": "a",
+      "weekEnd": "a",
+      "timezone": "a",
+      "isCurrentWeek": true,
+      "weeklyGoal": 1,
+      "hasPlan": true,
+      "current": {
+        "sessionsLogged": 1,
+        "sessionsPlanned": 1,
+        "plannedCompleted": 1,
+        "missed": 1,
+        "skipped": 1,
+        "outstanding": 1,
+        "excused": 1,
+        "letGo": 1,
+        "totalDurationMin": 1.5,
+        "avgRpe": null
+      },
+      "previous": {
+        "sessionsLogged": 1,
+        "sessionsPlanned": 1,
+        "plannedCompleted": 1,
+        "missed": 1,
+        "skipped": 1,
+        "outstanding": 1,
+        "excused": 1,
+        "letGo": 1,
+        "totalDurationMin": 1.5,
+        "avgRpe": null
+      },
+      "deltas": {
+        "sessionsLogged": 1.5,
+        "totalDurationMin": 1.5,
+        "avgRpe": null
+      },
+      "sessions": [],
+      "plannedDays": [],
+      "personalRecords": [],
+      "annotations": [],
+      "intent": null,
+      "previousIntent": null
+    },
+    "max": {
+      "weekStart": "sample text",
+      "weekEnd": "sample text",
+      "timezone": "sample text",
+      "isCurrentWeek": true,
+      "weeklyGoal": 1,
+      "hasPlan": true,
+      "current": {
+        "sessionsLogged": 1,
+        "sessionsPlanned": 1,
+        "plannedCompleted": 1,
+        "missed": 1,
+        "skipped": 1,
+        "outstanding": 1,
+        "excused": 1,
+        "letGo": 1,
+        "totalDurationMin": 1.5,
+        "avgRpe": 1.5
+      },
+      "previous": {
+        "sessionsLogged": 1,
+        "sessionsPlanned": 1,
+        "plannedCompleted": 1,
+        "missed": 1,
+        "skipped": 1,
+        "outstanding": 1,
+        "excused": 1,
+        "letGo": 1,
+        "totalDurationMin": 1.5,
+        "avgRpe": 1.5
+      },
+      "deltas": {
+        "sessionsLogged": 1.5,
+        "totalDurationMin": 1.5,
+        "avgRpe": 1.5
+      },
+      "sessions": [
+        {
+          "workoutLogId": "sample text",
+          "date": "sample text",
+          "focus": "sample text",
+          "durationMin": 1.5,
+          "rpe": 1.5,
+          "source": "sample text",
+          "planDayId": "sample text",
+          "compliancePct": 1.5,
+          "matchedSetCount": 1.5,
+          "addedSetCount": 1.5,
+          "removedSetCount": 1.5,
+          "grade": {
+            "intent": "threshold",
+            "purpose": "race",
+            "verdict": "ungradeable",
+            "confidence": "low",
+            "headline": "sample text",
+            "streamStatus": "not_applicable"
+          }
+        }
+      ],
+      "plannedDays": [
+        {
+          "planDayId": "sample text",
+          "date": "sample text",
+          "focus": "sample text",
+          "status": "skipped",
+          "skipReason": "low_energy",
+          "priority": "optional",
+          "recovery": "let_go",
+          "planName": "sample text",
+          "excused": true
+        }
+      ],
+      "personalRecords": [
+        {
+          "exerciseName": "sample text",
+          "customLabel": "sample text",
+          "category": "sample text",
+          "metric": "estimated1RM",
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text"
+        }
+      ],
+      "annotations": [
+        {
+          "id": "sample text",
+          "type": "sample text",
+          "startDate": "sample text",
+          "endDate": "sample text",
+          "note": "sample text"
+        }
+      ],
+      "intent": "sample text",
+      "previousIntent": "sample text",
+      "gradeSummary": {
+        "graded": 1,
+        "onTarget": 1,
+        "driftedHarder": 1,
+        "easyTooHard": 1
+      }
+    },
+    "future": {
+      "weekStart": "sample text",
+      "weekEnd": "sample text",
+      "timezone": "sample text",
+      "isCurrentWeek": true,
+      "weeklyGoal": 1,
+      "hasPlan": true,
+      "current": {
+        "sessionsLogged": 1,
+        "sessionsPlanned": 1,
+        "plannedCompleted": 1,
+        "missed": 1,
+        "skipped": 1,
+        "outstanding": 1,
+        "excused": 1,
+        "letGo": 1,
+        "totalDurationMin": 1.5,
+        "avgRpe": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "previous": {
+        "sessionsLogged": 1,
+        "sessionsPlanned": 1,
+        "plannedCompleted": 1,
+        "missed": 1,
+        "skipped": 1,
+        "outstanding": 1,
+        "excused": 1,
+        "letGo": 1,
+        "totalDurationMin": 1.5,
+        "avgRpe": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "deltas": {
+        "sessionsLogged": 1.5,
+        "totalDurationMin": 1.5,
+        "avgRpe": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "sessions": [
+        {
+          "workoutLogId": "sample text",
+          "date": "sample text",
+          "focus": "sample text",
+          "durationMin": 1.5,
+          "rpe": 1.5,
+          "source": "sample text",
+          "planDayId": "sample text",
+          "compliancePct": 1.5,
+          "matchedSetCount": 1.5,
+          "addedSetCount": 1.5,
+          "removedSetCount": 1.5,
+          "grade": {
+            "intent": "zz_value_from_a_newer_server",
+            "purpose": "zz_value_from_a_newer_server",
+            "verdict": "zz_value_from_a_newer_server",
+            "confidence": "zz_value_from_a_newer_server",
+            "headline": "sample text",
+            "streamStatus": "zz_value_from_a_newer_server",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "plannedDays": [
+        {
+          "planDayId": "sample text",
+          "date": "sample text",
+          "focus": "sample text",
+          "status": "zz_value_from_a_newer_server",
+          "skipReason": "zz_value_from_a_newer_server",
+          "priority": "zz_value_from_a_newer_server",
+          "recovery": "zz_value_from_a_newer_server",
+          "planName": "sample text",
+          "excused": true,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "personalRecords": [
+        {
+          "exerciseName": "sample text",
+          "customLabel": "sample text",
+          "category": "sample text",
+          "metric": "zz_value_from_a_newer_server",
+          "value": 1.5,
+          "date": "sample text",
+          "workoutLogId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "annotations": [
+        {
+          "id": "sample text",
+          "type": "sample text",
+          "startDate": "sample text",
+          "endDate": "sample text",
+          "note": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "intent": "sample text",
+      "previousIntent": "sample text",
+      "gradeSummary": {
+        "graded": 1,
+        "onTarget": 1,
+        "driftedHarder": 1,
+        "easyTooHard": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

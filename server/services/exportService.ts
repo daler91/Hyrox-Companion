@@ -236,6 +236,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
     stravaConn,
     garminConn,
     pushSubs,
+    deviceTokens,
     aiUsageLogs,
     nutrition,
     userKeyed,
@@ -253,6 +254,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
     storage.users.getStravaConnection(userId),
     storage.users.getGarminConnection(userId),
     storage.push.getSubscriptionsForUser(userId),
+    storage.push.listDeviceTokensForExport(userId),
     storage.aiUsage.listForUser(userId),
     storage.dataExport.listNutrition(userId),
     storage.dataExport.listUserKeyedRows(userId),
@@ -304,6 +306,10 @@ export async function generateJSON(userId: string, storage: IStorage) {
       garmin: garminConn ? scrubGarminConnection(garminConn) : null,
     },
     pushSubscriptions: pushSubs.map(scrubPushSubscription),
+    // Native app installs registered for push: platform, token, the build
+    // that registered it and when. The token identifies the install the way a
+    // browser subscription's endpoint does, so it is the athlete's to see.
+    deviceTokens,
     aiUsageLogs,
     nutrition,
     weeklyReviews: userKeyed.weeklyReviews,

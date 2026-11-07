@@ -1,0 +1,39 @@
+{
+  "request": {
+    "min": {
+      "workoutId": "a",
+      "targetField": "notes",
+      "action": "replace",
+      "recommendation": "a"
+    },
+    "max": {
+      "workoutId": "sample text",
+      "targetField": "accessory",
+      "action": "append",
+      "recommendation": "sample text",
+      "rationale": "sample text",
+      "aiSource": "none"
+    }
+  },
+  "response": {
+    "min": {
+      "applied": true,
+      "structured": true
+    },
+    "max": {
+      "applied": true,
+      "structured": true,
+      "reason": "structured_partial_replace",
+      "message": "sample text"
+    },
+    "future": {
+      "applied": true,
+      "structured": true,
+      "reason": "zz_value_from_a_newer_server",
+      "message": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

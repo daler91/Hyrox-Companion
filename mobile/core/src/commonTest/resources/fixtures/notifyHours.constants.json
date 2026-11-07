@@ -1,0 +1,28 @@
+{
+  "suite": "notifyHours.constants",
+  "description": "The default hour, the briefs-tomorrow threshold, the review reminder's hour and the kinds' fields.",
+  "cases": [
+    {
+      "input": null,
+      "output": {
+        "DEFAULT_NOTIFY_HOUR": 7,
+        "BRIEF_TOMORROW_FROM_HOUR": 12,
+        "WEEKLY_REVIEW_SUNDAY_EVENING_HOUR": 17,
+        "EMAIL_NOTIFY_KINDS": [
+          "weeklySummary",
+          "missedReminder",
+          "weeklyReviewReminder",
+          "todaySession",
+          "analysisDigest"
+        ],
+        "NOTIFY_HOUR_FIELD": {
+          "weeklySummary": "notifyHourWeeklySummary",
+          "missedReminder": "notifyHourMissedReminder",
+          "weeklyReviewReminder": "notifyHourWeeklyReviewReminder",
+          "todaySession": "notifyHourTodaySession",
+          "analysisDigest": "notifyHourAnalysisDigest"
+        }
+      }
+    }
+  ]
+}

@@ -3,11 +3,17 @@ import {
   addExerciseSetBodySchema,
   type ExerciseSetOrderBody,
   exerciseSetOrderBodySchema,
-  insertWorkoutLogRouteSchema,
   type PatchExerciseSetBody,
   patchExerciseSetBodySchema,
-  structureBlockScoreSchema,
 } from "@shared/schema";
+import {
+  assignWorkoutPlanDaySchema,
+  bulkDeleteWorkoutsSchema,
+  combineWorkoutsSchema,
+  createCustomExerciseSchema,
+  exerciseHistoryQuerySchema,
+  updateBlockScoreBodySchema,
+} from "@shared/schema/types/workoutsRequests";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
@@ -30,7 +36,7 @@ import { getUserId } from "../../types";
 import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 import { rejectTextOnlyWriteIfNeeded } from "../structuredWriteGuard";
-import { assignWorkoutPlanDaySchema, createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
+import { createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
 const patchExerciseSetSchema = patchExerciseSetBodySchema;
 const addExerciseSetSchema = addExerciseSetBodySchema;
@@ -45,46 +51,6 @@ const workoutSetUseCase = createMutateExerciseSetUseCase({
     const user = await storage.users.getUser(userId);
     return { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit };
   },
-});
-
-// How many past sessions of one exercise to return. The client asks for a
-// handful to render "last time"; the ceiling keeps a hand-crafted request
-// from pulling an athlete's entire history of a staple lift.
-const exerciseHistoryQuerySchema = z.object({
-  sessions: z.coerce.number().int().min(1).max(20).optional(),
-});
-
-// The same client-facing create schema as POST /workouts: no planId and no
-// device provenance; combineWorkouts derives planId from the kept plan day.
-// S9 (CODEBASE_ANALYSIS_2026-10-03)
-const combineWorkoutsSchema = z.object({
-  newWorkout: insertWorkoutLogRouteSchema,
-  deleteWorkoutIds: z.array(z.string().min(1)).min(1).max(10),
-  skipPlanDayIds: z.array(z.string().min(1)).max(10).optional(),
-});
-
-const MAX_BULK_DELETE_TARGETS = 100;
-const bulkDeleteWorkoutsSchema = z.object({
-  workoutLogIds: z.array(z.string().min(1)).max(MAX_BULK_DELETE_TARGETS).default([]),
-  planDayIds: z.array(z.string().min(1)).max(MAX_BULK_DELETE_TARGETS).default([]),
-}).superRefine((payload, ctx) => {
-  const total = payload.workoutLogIds.length + payload.planDayIds.length;
-  if (total === 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Select at least one workout to delete",
-    });
-  }
-  if (total > MAX_BULK_DELETE_TARGETS) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Select no more than ${MAX_BULK_DELETE_TARGETS} workouts at once`,
-    });
-  }
-});
-
-const updateBlockScoreBodySchema = z.object({
-  score: structureBlockScoreSchema.nullable(),
 });
 
 export function uniqueIds(ids: readonly string[]): string[] {
