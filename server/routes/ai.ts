@@ -1,6 +1,8 @@
 import { ATHLETE_FACT_LIMIT_MESSAGE } from "@shared/athleteFacts";
 import type { ChatStatusStep } from "@shared/chat";
 import { type ChatAttachment, type ChatFactDecisionBody, chatFactDecisionSchema, type ChatIntentResult, type ChatMessage, type ChatMessageBody, type ChatMessageFeedbackBody, chatMessageFeedbackSchema, chatRequestSchema, insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
+import { type OverviewAnalysisQuery, overviewAnalysisQuerySchema } from "@shared/schema/types/analyticsRequests";
+import { applyTimelineSuggestionSchema, type ChatHistoryQuery, chatHistoryQuerySchema } from "@shared/schema/types/coachRequests";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -29,7 +31,7 @@ import { chatTurnLogFields, type ChatTurnTelemetry, markFirstText, recordClassif
 import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { getCoachWelcome } from "../services/coachWelcome";
 import { loadFocusedWorkout } from "../services/focusedWorkoutService";
-import { coversOverviewRange, overviewRangeSchema } from "../services/overviewAnalysisService";
+import { coversOverviewRange } from "../services/overviewAnalysisService";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../services/planAdjustmentService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { loadRecentPlanChanges } from "../services/recentPlanChanges";
@@ -42,15 +44,6 @@ import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/prote
 import { serializePlanProposal } from "./planProposals";
 
 const router = Router();
-
-const applyTimelineSuggestionSchema = z.object({
-  workoutId: z.string().min(1).max(128),
-  targetField: z.enum(["notes", "mainWorkout", "accessory"]),
-  action: z.enum(["replace", "append"]),
-  recommendation: z.string().min(1).max(10_000),
-  rationale: z.string().max(2_000).nullable().optional(),
-  aiSource: z.enum(["rag", "legacy", "none"]).nullable().optional(),
-});
 
 async function loadParseUserContext(req: ExpressRequest) {
   const userId = getUserId(req);
@@ -922,24 +915,12 @@ async function withProposals(userId: string, messages: ChatMessage[]) {
 // cursor for older messages is surfaced in two sibling response headers
 // (`X-Next-Cursor` = timestamp, `X-Next-Cursor-Id` = row id). Both must be
 // echoed back on the next request to avoid dropping rows that share a
-// millisecond — see `storage/users.ts` comment for details.
-const chatHistoryQuerySchema = z
-  .object({
-    limit: z.coerce.number().int().min(1).max(200).optional(),
-    before: z.string().datetime({ offset: true }).optional(),
-    beforeId: z.string().min(1).max(255).optional(),
-    // A workout's conversation; without either, the general one (I4).
-    focusPlanDayId: z.string().min(1).max(255).optional(),
-    focusWorkoutLogId: z.string().min(1).max(255).optional(),
-  })
-  .refine(
-    (q) => (q.before == null) === (q.beforeId == null),
-    { message: "before and beforeId must be provided together" },
-  );
+// millisecond — see `storage/users.ts` comment for details. The query schema
+// lives in shared/ so the OpenAPI document validates with the same object.
 
 router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 60), validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const { limit, before, beforeId, focusPlanDayId, focusWorkoutLogId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
+    const { limit, before, beforeId, focusPlanDayId, focusWorkoutLogId } = req.query as ChatHistoryQuery;
     const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, {
       userId,
       limit,
@@ -1054,12 +1035,11 @@ protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggesti
 // `range` is the Analytics page's own value ("30", "90", ... or "all"): the
 // analysis reads the same range as the charts beside it. A stored analysis of
 // another range answers `{ sections: null }` on GET, as if none existed.
-// AI31 (CODEBASE_ANALYSIS_2026-10-03)
-const overviewAnalysisQuerySchema = z.object({ range: overviewRangeSchema.optional() });
-
+// AI31 (CODEBASE_ANALYSIS_2026-10-03). The query schema lives in shared/ so the
+// OpenAPI document validates with the same object.
 router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics", 60), validateQuery(overviewAnalysisQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const { range } = req.query as z.infer<typeof overviewAnalysisQuerySchema>;
+    const { range } = req.query as OverviewAnalysisQuery;
     // See the coach-insights GET above: row and staleness anchor read
     // unrelated tables, so fetch them concurrently instead of paying two
     // sequential DB round-trips on this instant-paint path.
@@ -1087,7 +1067,7 @@ router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics"
 
 protectedPost(router, "/api/v1/overview-analysis", { limiter: rateLimiter("suggestions", 3), validation: [validateQuery(overviewAnalysisQuerySchema)], middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const { range } = req.query as z.infer<typeof overviewAnalysisQuerySchema>;
+    const { range } = req.query as OverviewAnalysisQuery;
     const result = await regenerateAndStoreOverviewAnalysis(userId, reqLogger(req), range);
     // Freshly generated against the current latest workout, so never stale.
     res.json({ ...result, stale: false });

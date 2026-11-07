@@ -10,7 +10,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 **Content-Type:** `application/json` (requests and responses)
 **Authentication:** Clerk JWT via `credentials: "include"` (cookie-based)
 
-**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Not every endpoint below is registered yet: the ones missing are listed in `test/docs/openapiUndocumented.ts`, which `test/docs/openapiCoverage.test.ts` allows only to shrink, and a new route must be registered before it can merge. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
+**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Every client endpoint below is registered; `test/docs/openapiCoverage.test.ts` fails CI when a new route is not, and lists the routes deliberately left out (webhooks, unsubscribe links, health probes, operator and debug endpoints) with the reason for each. Entities several areas return — `ExerciseSetRow`, `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal` — are registered once in `shared/openapiRoutes/entities.ts`. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
 
 ---
 
@@ -1042,7 +1042,7 @@ Manually refresh the AI coach note (`ai_rationale`) for a planned day. The servi
 - **Auth:** Required
 - **Rate limit:** `coachNoteRegenerate` category, 10/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** The updated plan day, or `429 COOLDOWN` (with `Retry-After` header) when called inside the cooldown window
+- **Response:** `{ planDayId, aiRationale, aiNoteUpdatedAt }` — the new note, not the whole plan day — or `429 COOLDOWN` with `retryAfterMs` (and a `Retry-After` header) when called inside the cooldown window
 
 ---
 
@@ -2172,7 +2172,7 @@ Export all training data as CSV or JSON.
 
 **Base path:** `/api/v1/nutrition` (paths in the table are relative to it). **Files:** `server/routes/nutrition/*`.
 
-The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. These routes are **not yet registered with the OpenAPI registry**, so they are absent from [`docs/openapi.json`](openapi.json) and Swagger UI; this catalog and [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) are the reference until they are migrated.
+The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. Their request and response schemas are in [`docs/openapi.json`](openapi.json) (registered in `shared/openapiRoutes/nutrition.ts`); [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) covers the behaviour behind them.
 
 | Method | Path                                   | Purpose                                                                                                          | Rate limit (per min)                 |
 | ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |

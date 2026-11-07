@@ -5,9 +5,10 @@ import { z } from "../schema/zod";
 import type { OpenApiCommon } from "./common";
 
 /**
- * Strava connection, from the app's side: status and the native connect flow
- * (code challenge in, App Link back, verifier to finish). The browser
- * callback and the webhook receiver are not client endpoints.
+ * Strava connection, from the app's side: status, the native connect flow
+ * (code challenge in, App Link back, verifier to finish), disconnect and a
+ * manual sync. The browser callback and the webhook receiver are not client
+ * endpoints.
  */
 export function registerStravaPaths(registry: OpenAPIRegistry, common: OpenApiCommon): void {
   const AutoSync = z.object({
@@ -86,6 +87,68 @@ export function registerStravaPaths(registry: OpenAPIRegistry, common: OpenApiCo
       ...common.error(403, "FORBIDDEN: the connection could not be verified"),
       ...common.error(502, "EXTERNAL_API_ERROR: Strava did not accept the code"),
       ...common.authenticatedResponses(),
+    },
+  });
+
+  registry.registerPath({
+    method: "delete",
+    path: "/api/v1/strava/disconnect",
+    tags: ["Strava"],
+    summary: "Disconnect Strava",
+    description:
+      "Revokes the app's access at Strava (best effort), then deletes the connection and the heart-rate/pace streams fetched from Strava. Imported workouts and their summary metrics stay.",
+    security: common.security,
+    responses: {
+      ...common.success("Disconnected (also when nothing was connected)"),
+      ...common.error(500, "INTERNAL_SERVER_ERROR: the connection could not be deleted"),
+      ...common.authenticatedResponses(),
+    },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/strava/sync",
+    tags: ["Strava"],
+    summary: "Sync Strava activities",
+    description:
+      "Imports activities since the last sync less a week (90 days back on the first sync), up to 1,000 per call; `hasMore` says older ones are left for the next call. Each activity enriches a matching logged workout, completes an open plan day, or lands standalone. Rate limited to 5 per 15 minutes.",
+    security: common.security,
+    responses: {
+      200: {
+        description: "Synced",
+        content: {
+          "application/json": {
+            schema: z.object({
+              success: z.literal(true),
+              imported: z.number().int().openapi({
+                description: "Activities now on the timeline: enriched + completedPlanDays + suggested + standalone",
+              }),
+              enriched: z.number().int().openapi({ description: "Attached to workouts the athlete had already logged" }),
+              completedPlanDays: z.number().int().openapi({ description: "Open plan days completed by a recording" }),
+              suggested: z.number().int().openapi({
+                description: "Standalone imports carrying a suggested plan day or log to confirm",
+              }),
+              standalone: z.number().int().openapi({ description: "Standalone imports with nothing to match" }),
+              skipped: z.number().int().openapi({
+                description: "Already imported (from Strava, or from Garmin), or claimed by a concurrent sync",
+              }),
+              total: z.number().int().openapi({ description: "Activities Strava returned" }),
+              hasMore: z.boolean().openapi({ description: "The per-call cap left older activities unfetched" }),
+            }),
+          },
+        },
+      },
+      ...common.error(502, "EXTERNAL_API_ERROR: Strava is temporarily unavailable"),
+      ...common.error(500, "INTERNAL_SERVER_ERROR: the sync failed"),
+      ...common.authenticatedResponses(),
+      ...common.error(
+        401,
+        "Not signed in; STRAVA_REAUTH_REQUIRED, Strava revoked the grant and the athlete must connect again; or UNAUTHORIZED with the message \"Strava not connected\" (not a sign-in failure: check the error text before signing out)",
+      ),
+      ...common.error(
+        429,
+        "RATE_LIMITED: this endpoint's limit, or Strava throttled the server (that body adds integer `retryAfterSeconds`); Retry-After says when to try again",
+      ),
     },
   });
 }

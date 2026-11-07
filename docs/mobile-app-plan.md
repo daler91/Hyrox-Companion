@@ -119,11 +119,17 @@ All of this ships to production first. The web is unaffected.
      documented nor on the shrink-only `test/docs/openapiUndocumented.ts` list, and
      `openapi-breaking.yml` fails a PR whose document would break installed app builds
      (`script/openapiBreaking.ts`, written in-repo rather than pinning a third-party action).
-   - **Done:** registered the native-app foundation: current user, preferences, consents,
-     account deletion, push devices, Strava status / auth / native complete (16 operations).
-   - **Remaining:** 162 operations on the list, v1's first (timeline, workouts, plans, coach chat
-     with its SSE event schemas, nutrition logging, onboarding, analytics overview). Phase 2's
-     model generation waits on these.
+   - **Done:** every client operation is registered (173), in per-area modules under
+     `shared/openapiRoutes/`, with the chat stream documented as `text/event-stream`
+     (`ChatStreamEvent`). Entities several areas return (`ExerciseSetRow`,
+     `WorkoutStructureBlock`, `ParsedExercise`, `CoachNoteInputs`, `PlanProposal`) are
+     registered once in `entities.ts`, so Phase 2 generates one class each. Webhooks,
+     unsubscribe links, health probes and operator/debug endpoints are excluded, each with
+     its reason, in `test/docs/openapiCoverage.test.ts`.
+   - **Follow-ups found while documenting:** `X-Idempotency-Key` (and its 409) is not yet
+     described on mutations; `GET /api/v1/plans/days/{dayId}/sets` returns two shapes
+     depending on `includeStructure`; the AI-suggestions debug endpoint is gated only by
+     sign-in.
 4. **Device push tokens.**
    - Add a `device_push_tokens` table (`id`, `user_id` → `users` on delete cascade, `platform`,
      unique `token`, `app_version`, `created_at`, `last_seen_at`) beside `push_subscriptions`

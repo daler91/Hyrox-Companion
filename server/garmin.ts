@@ -6,9 +6,9 @@ import type {
   IOauth2Token,
 } from "@flow-js/garmin-connect";
 import type { InsertExerciseSet, WorkoutLog } from "@shared/schema";
+import { type GarminConnectBody, garminConnectBodySchema } from "@shared/schema/types/analyticsRequests";
 import { type DistanceUnit, type UnitPreferences } from "@shared/unitConversion";
 import type { Request, Response, Router } from "express";
-import { z } from "zod";
 
 // @flow-js/garmin-connect ships as a CommonJS bundle that exposes its class
 // via `Object.defineProperty(exports, "GarminConnect", { get: ... })`. Node's
@@ -136,13 +136,6 @@ const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
 
 // Logger context tag — keep all Garmin log lines under one searchable bucket.
 const LOG_CTX = "garmin" as const;
-
-// Reject obviously-bad inputs at the boundary so we never round-trip them
-// to Garmin's auth flow (which is the most rate-limited surface).
-const garminConnectBodySchema = z.object({
-  email: z.string().trim().email("Invalid email").max(254),
-  password: z.string().min(1, "Password required").max(256),
-});
 
 // Layer 1 — Stricter than the Strava limiter because every login is a real
 // Garmin SSO call: a few too many of these from our shared server IP can
@@ -639,7 +632,7 @@ async function handleGarminStatus(req: Request, res: Response) {
   }
 }
 
-async function handleGarminConnect(req: Request<Record<string, never>, unknown, z.infer<typeof garminConnectBodySchema>>, res: Response) {
+async function handleGarminConnect(req: Request<Record<string, never>, unknown, GarminConnectBody>, res: Response) {
   // Layer 5 — refuse before any login attempt if Garmin has us in jail. (The
   // body has already been validated by the route's validateBody middleware.)
   if (rejectIfCircuitOpen(res)) return;

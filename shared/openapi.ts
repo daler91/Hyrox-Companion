@@ -2,9 +2,16 @@ import { OpenApiGeneratorV3, OpenAPIRegistry } from "@asteasolutions/zod-to-open
 import { createSelectSchema } from "drizzle-zod";
 
 import { registerAccountPaths } from "./openapiRoutes/account";
+import { registerAnalyticsPaths } from "./openapiRoutes/analytics";
+import { registerCoachPaths } from "./openapiRoutes/coach";
 import { registerCommonComponents } from "./openapiRoutes/common";
+import { registerEntityComponents } from "./openapiRoutes/entities";
+import { registerGarminPaths } from "./openapiRoutes/garmin";
+import { registerNutritionPaths } from "./openapiRoutes/nutrition";
+import { registerPlansPaths } from "./openapiRoutes/plans";
 import { registerPushPaths } from "./openapiRoutes/push";
 import { registerStravaPaths } from "./openapiRoutes/strava";
+import { registerWorkoutsPaths } from "./openapiRoutes/workouts";
 import {
   exerciseSetSchema,
   exercisesPayloadSchema,
@@ -24,6 +31,10 @@ export const registry = new OpenAPIRegistry();
 // Security scheme, error envelopes and response helpers shared by every path
 // module in shared/openapiRoutes/.
 const common = registerCommonComponents(registry);
+// Entities several areas return (set rows, structure blocks, parsed exercises,
+// coach-note inputs, plan proposals): one component each, whatever route
+// family returns them.
+const entities = registerEntityComponents(registry);
 
 // ---------------------------------------------------------------------------
 // Realistic Hyrox-specific examples for Swagger UI "Try it out"
@@ -152,7 +163,8 @@ export const WorkoutLogWithSetsSchema = registry.register(
   "WorkoutLogWithSets",
   createSelectSchema(workoutLogs)
     .extend({
-      exerciseSets: z.array(exerciseSetSchema).optional(),
+      // Stored rows (with id, version and units), not the request-side ExerciseSet.
+      exerciseSets: z.array(entities.ExerciseSetRow).optional(),
       newPersonalRecords: z
         .array(
           z.object({
@@ -179,10 +191,8 @@ export const WorkoutLogDetailSchema = registry.register(
   "WorkoutLogDetail",
   createSelectSchema(workoutLogs)
     .extend({
-      exerciseSets: z.array(exerciseSetSchema),
-      structureBlocks: z
-        .array(z.record(z.string(), z.unknown()))
-        .openapi({ description: "Structured workout blocks (see the structureBlockSchema Zod type)." }),
+      exerciseSets: z.array(entities.ExerciseSetRow),
+      structureBlocks: z.array(entities.WorkoutStructureBlock),
       suggestedRpe: z
         .number()
         .int()
@@ -552,6 +562,21 @@ registry.registerPath({
 registerAccountPaths(registry, common, { PreferencesResponse: PreferencesResponseSchema });
 registerPushPaths(registry, common);
 registerStravaPaths(registry, common);
+registerGarminPaths(registry, common);
+// Analytics registers the session-grade and MAF shapes the workout routes
+// also return, so it runs first and hands them over: one component each.
+const analytics = registerAnalyticsPaths(registry, common);
+registerWorkoutsPaths(registry, common, {
+  WorkoutLog: WorkoutLogSchema,
+  WorkoutId: WorkoutIdParam,
+  SessionGrade: analytics.SessionGrade,
+  MafTestResult: analytics.MafTestResult,
+  MafWorkoutAnalysis: analytics.MafWorkoutAnalysis,
+  entities,
+});
+registerPlansPaths(registry, common, entities);
+registerCoachPaths(registry, common, entities);
+registerNutritionPaths(registry, common);
 
 export function generateOpenApiDocument() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
@@ -566,10 +591,11 @@ API for managing workouts, exercises, and training plans.
 
 ### Coverage
 This document is generated from the Zod schemas in \`shared/openapi.ts\` and
-the path modules in \`shared/openapiRoutes/\`. It does not yet describe every
-\`/api/v1\` route: the ones still missing are listed in
-\`test/docs/openapiUndocumented.ts\`, which CI allows only to shrink, and
-\`server/routes/\` is their source of truth until they are registered.
+the path modules in \`shared/openapiRoutes/\`, and describes every client route
+under \`/api/v1\`. \`test/docs/openapiCoverage.test.ts\` keeps it that way: a
+new route fails CI until it is registered. Webhooks, unsubscribe links, health
+probes and operator endpoints are left out on purpose; that test lists each
+with its reason.
 
 ### Errors
 Errors use \`ErrorResponse\` (\`{ error, code, details? }\`), except validation

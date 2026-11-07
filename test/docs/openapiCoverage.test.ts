@@ -49,6 +49,10 @@ const NOT_CLIENT_ENDPOINTS: Record<string, string> = {
   "GET /api/v1/cron/emails": "scheduler endpoint behind CRON_SECRET (x-cron-secret), not part of the client API",
   "GET /api/v1/health": "readiness probe for the deploy gate (server/bootstrap/health.ts), not a client endpoint",
   "GET /api/v1/health/live": "liveness probe for the platform, not a client endpoint",
+  "GET /api/v1/timeline/ai-suggestions/debug/{workoutId}":
+    "debugging aid for the coach's suggestion inputs; no client calls it (docs/api-reference.md)",
+  "POST /api/v1/workouts/migration/backfill":
+    "one-off maintenance pass that re-parses set-less workouts with the AI; no client calls it",
 };
 
 function serverSources(): string[] {

@@ -17,6 +17,7 @@ import {
 } from "@shared/bodySystemLoad";
 import { addDaysToISODate } from "@shared/dateUtils";
 import type { OverviewAnalysisResult, OverviewChartKey, TrainingLoadOverview, TrainingOverview, WeeklySummary } from "@shared/schema";
+import { overviewRangeSchema } from "@shared/schema/types/analyticsRequests";
 import type { Logger } from "pino";
 import { z } from "zod";
 
@@ -51,14 +52,9 @@ export type OverviewRangeDays = number | null;
 /** The range the Analytics page opens on ("Last 90 days"). */
 export const DEFAULT_OVERVIEW_RANGE_DAYS = 90;
 
-/** The longest day count the page offers is a year; longer is "all". */
-const MAX_OVERVIEW_RANGE_DAYS = 366;
-
-/** The page's own `range` value: a day count, or "all" (parsed to null). */
-export const overviewRangeSchema = z.union([
-  z.literal("all").transform(() => null),
-  z.coerce.number().int().min(1).max(MAX_OVERVIEW_RANGE_DAYS),
-]);
+// The page's own `range` value lives in shared/ so the route and the OpenAPI
+// document validate with one schema; re-exported for this module's callers.
+export { overviewRangeSchema };
 
 /**
  * Whether a stored analysis covers the range asked for. One stored before

@@ -1,4 +1,5 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, calendarDateSchema, type CreateSamplePlanInput, createSamplePlanSchema, type ExerciseSetOrderBody, exerciseSetOrderBodySchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, structureSetRelinksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, type CreateSamplePlanInput, createSamplePlanSchema, type ExerciseSetOrderBody, exerciseSetOrderBodySchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, schedulePlanRequestSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema } from "@shared/schema";
+import { patchDayStatusSchema, planDayReparseBodySchema, planDayStructureBodySchema, renameTrainingPlanSchema } from "@shared/schema/types/plansRequests";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -26,18 +27,8 @@ import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/prote
 
 const router = Router();
 
-// structureBlocks stays undefined when absent (no default), so the handler can
-// tell relinks sent without blocks from a body that clears them (CL15).
-const planDayStructureBodySchema = z.object({
-  structureBlocks: structureBlocksPayloadSchema,
-  // Rows that follow a renumbered step, saved with the blocks (CL15).
-  relinks: structureSetRelinksPayloadSchema,
-});
-
-const planDayReparseBodySchema = z.object({
-  mainWorkout: z.string().nullable().optional(),
-  accessory: z.string().nullable().optional(),
-}).strict();
+// Request schemas defined for these routes live in
+// shared/schema/types/plansRequests.ts, shared with the OpenAPI document.
 
 function sendParseWriteThroughResponse(
   res: Response,
@@ -268,10 +259,6 @@ protectedPatch(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("plan
   res.json(updatedDay);
 });
 
-const renameTrainingPlanSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
-});
-
 protectedPatch(router, "/api/v1/plans/:id", { limiter: rateLimiter("planUpdate", 20), middleware: [validateBody(renameTrainingPlanSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, { name: string }>, res: Response) => {
     const userId = getUserId(req);
     const updated = await storage.plans.renameTrainingPlan(req.params.id, req.body.name, userId);
@@ -366,16 +353,6 @@ protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("
 
     res.json({ success: true });
   });
-
-const patchDayStatusSchema = z.object({
-  status: z.enum(workoutStatusEnum).optional(),
-  // A real day, not just its shape: "2026-02-30" reached the date column and
-  // came back as a 500 (C50, CODEBASE_ANALYSIS_2026-10-03).
-  scheduledDate: calendarDateSchema.nullable().optional(),
-  // Optional, and only meaningful alongside `status: "skipped"` — any other
-  // status clears it in updatePlanDayStatus.
-  skipReason: z.enum(planDaySkipReasonEnum).nullable().optional(),
-});
 
 protectedPatch(router, "/api/v1/plans/days/:dayId/status", { limiter: rateLimiter("planDayStatus", 20), middleware: [validateBody(patchDayStatusSchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof patchDayStatusSchema>>, res: Response) => {
     const { dayId } = req.params;
