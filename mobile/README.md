@@ -66,3 +66,24 @@ response fields, and omits request fields left at their defaults.
 a minimal and a maximal response, and a "future" one with a field and enum
 values the schema does not have, as a newer server could send. Every request
 sample must also encode back to the same JSON.
+
+## Ported logic and golden fixtures
+
+Logic the app needs on-device (unit conversion while typing, plan-week dates,
+nutrition totals, …) is ported from `shared/` TypeScript to Kotlin; which
+modules, and why, is [docs/mobile-shared-logic.md](../docs/mobile-shared-logic.md).
+A port is pinned to its original by golden fixtures:
+
+- `script/mobile-fixtures/suites/*.ts` run the TypeScript functions over fixed
+  inputs; `pnpm mobile:fixtures` writes `core/src/commonTest/resources/fixtures/<suite>.json`.
+- A Kotlin test calls `assertFixtureSuite("<suite>") { input -> port(input) }`,
+  which fails listing every case whose output differs.
+- The unit suite fails while a committed fixture differs from what its suite
+  produces now (`script/mobile-fixtures/fixtures.test.ts`), so changing the
+  TypeScript forces regenerating the fixtures, and the Kotlin test then shows
+  whether the port still matches.
+
+JavaScript number semantics Kotlin's defaults do not reproduce are in
+`core/.../js/JsMath.kt`: `jsRound` (`Math.round`: halves towards +∞) and
+`jsToFixed` (`toFixed` over the exact binary value, so `1.005` → `"1.00"`).
+Use them, never `kotlin.math.round` or `String.format`, in ported code.

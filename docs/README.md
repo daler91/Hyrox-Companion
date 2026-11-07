@@ -63,6 +63,7 @@ Scoped to one feature. Accurate for what they cover, but not a description of th
 | [Native Mobile](native-mobile.md)                                 | Capacitor vs. React Native comparison and packaging phases     |
 | [Mobile App Plan](mobile-app-plan.md)                             | The decided native app: Compose Multiplatform, Android first, then iOS |
 | [Mobile app README](../mobile/README.md)                          | Building `mobile/`, the generated API models and their contract test |
+| [Mobile Shared Logic](mobile-shared-logic.md)                    | Which client-side `shared/` logic the app ports, renders, or gets from the API |
 
 ## Brand and design
 
