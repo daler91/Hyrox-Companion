@@ -2,7 +2,9 @@ name: Mobile Core
 
 # The native app's shared Kotlin module (mobile/core): the API models
 # generated from docs/openapi.json and their contract test, which decodes
-# sample JSON for every endpoint. Whether the committed models match the
+# sample JSON for every endpoint, and the Kotlin ports of shared/ logic with
+# their golden fixtures (shared/** is a trigger because a TypeScript change
+# regenerates fixtures the ports must still match). Whether the committed models match the
 # document is checked in the unit suite (script/kotlin-models/generate.test.ts);
 # this job proves they compile and decode. Android and iOS targets join in
 # Phase 3 (docs/mobile-app-plan.md).
@@ -14,6 +16,9 @@ on:
       - mobile/**
       - docs/openapi.json
       - script/kotlin-models/**
+      - script/kotlin-catalogue/**
+      - script/mobile-fixtures/**
+      - shared/**
       - .github/workflows/mobile.yml
   pull_request:
     types: [opened, synchronize, reopened]
@@ -21,6 +26,9 @@ on:
       - mobile/**
       - docs/openapi.json
       - script/kotlin-models/**
+      - script/kotlin-catalogue/**
+      - script/mobile-fixtures/**
+      - shared/**
       - .github/workflows/mobile.yml
 
 permissions:

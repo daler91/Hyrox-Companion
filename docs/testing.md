@@ -616,9 +616,9 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 ### 7. Mobile Core (`mobile.yml`)
 
 - **Name:** Mobile Core
-- **Triggers:** Push to `main` and pull requests touching `mobile/**`, `docs/openapi.json`, `script/kotlin-models/**` or the workflow
-- **Steps:** Checkout, cache Gradle downloads, then `./gradlew :core:jvmTest` in `mobile/` with the runner's JDK 21. It compiles the Kotlin API models generated from `docs/openapi.json` and runs `ApiContractTest` (every endpoint's sample request and response JSON decodes, the forward-compatibility samples included) and the runtime tests. See [`mobile/README.md`](../mobile/README.md).
-- **Related:** `script/kotlin-models/generate.test.ts` (unit suite) fails while the committed models or samples differ from what the document generates; run `pnpm mobile:models`.
+- **Triggers:** Push to `main` and pull requests touching `mobile/**`, `docs/openapi.json`, `shared/**`, `script/kotlin-models/**`, `script/kotlin-catalogue/**`, `script/mobile-fixtures/**` or the workflow
+- **Steps:** Checkout, cache Gradle downloads, then `./gradlew :core:jvmTest` in `mobile/` with the runner's JDK 21. It compiles the Kotlin API models generated from `docs/openapi.json` and runs `ApiContractTest` (every endpoint's sample request and response JSON decodes, the forward-compatibility samples included), the runtime tests, and the golden-fixture tests of the Kotlin ports of `shared/` logic. See [`mobile/README.md`](../mobile/README.md).
+- **Related:** in the unit suite, `script/kotlin-models/generate.test.ts`, `script/kotlin-catalogue/catalogue.test.ts` and `script/mobile-fixtures/fixtures.test.ts` fail while the committed models, exercise catalogue or fixtures differ from what their sources generate; run `pnpm mobile:models`, `pnpm mobile:catalogue` or `pnpm mobile:fixtures`.
 
 ### 8. Other workflows
 
