@@ -46,6 +46,8 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
 | `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/bootstrap/appConfig.ts`. |
 | `ALLOWED_ORIGINS` | Optional | — | Comma-separated extra CORS origins (`server/index.ts`), added to `APP_URL` and `https://fitai.coach`. `http://localhost:5000` and `http://localhost:5173` are allowed only when `NODE_ENV` is not `production`. |
+| `MIN_APP_VERSION_ANDROID` | Optional | — | Oldest Android app build the API still serves, as `MAJOR.MINOR.PATCH` (`server/middleware/appVersion.ts`). Requests sending `X-App-Platform: android` with an older or missing `X-App-Version` get `426 APP_UPDATE_REQUIRED`. Unset serves every build. Web requests are never affected. |
+| `MIN_APP_VERSION_IOS` | Optional | — | Same as `MIN_APP_VERSION_ANDROID`, for `X-App-Platform: ios`. |
 
 ### Safety invariants (enforced at startup in `server/env.ts`)
 

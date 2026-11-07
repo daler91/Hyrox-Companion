@@ -105,6 +105,17 @@ const envSchema = z
     APP_URL: z.url().optional(),
     VECTOR_DATABASE_URL: z.url().optional(),
     ALLOWED_ORIGINS: z.string().optional(),
+    // Oldest native app build the API still serves, per platform, as
+    // MAJOR.MINOR.PATCH (server/middleware/appVersion.ts). Older builds get
+    // 426 APP_UPDATE_REQUIRED. Unset means every build is served.
+    MIN_APP_VERSION_ANDROID: z
+      .string()
+      .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_ANDROID must look like 1.4.0" })
+      .optional(),
+    MIN_APP_VERSION_IOS: z
+      .string()
+      .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_IOS must look like 1.4.0" })
+      .optional(),
     ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
     APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
     // Enum-validated so a typo (e.g. "warning") fails here with a message naming

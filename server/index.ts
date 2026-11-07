@@ -22,6 +22,7 @@ import { env } from "./env";
 import { skipLargeJsonBodyPaths } from "./largeBodyParsers";
 import { logger } from "./logger";
 import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
+import { readAppClient } from "./middleware/appVersion";
 import { buildCspDirectives } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { globalErrorHandler } from "./middleware/errorHandler";
@@ -269,11 +270,17 @@ app.use(pinoHttp({
     const loggedUserId =
       isErrorResponse || userId === 'anonymous' ? userId : 'authenticated';
 
+    // Native app requests name their platform and build, so a spike of
+    // errors can be traced to one release. readAppClient only returns
+    // validated values, so nothing client-controlled reaches the log raw.
+    const appClient = readAppClient(req as Request);
+
     return {
       context: 'http',
       userId: loggedUserId,
       requestId: req.id,
       route: req.url?.split('?')[0] || req.originalUrl?.split('?')[0],
+      ...(appClient ? { appPlatform: appClient.platform, appVersion: appClient.version ?? 'invalid' } : {}),
     };
   },
   // S2: pino-http's default request serializer logs the full URL (query

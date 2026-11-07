@@ -24,6 +24,8 @@ export enum ErrorCode {
   EMOM_BUILDER_DISABLED = "EMOM_BUILDER_DISABLED",
   MAF_SETUP_REQUIRED = "MAF_SETUP_REQUIRED",
   PUSH_NOT_CONFIGURED = "PUSH_NOT_CONFIGURED",
+  /** The native app build is older than the server's minimum for its platform (426). */
+  APP_UPDATE_REQUIRED = "APP_UPDATE_REQUIRED",
   PLAN_OVERLAP = "PLAN_OVERLAP",
   /** Scheduling refused: every session of the plan falls before the chosen start. */
   NO_SESSIONS_AFTER_START = "NO_SESSIONS_AFTER_START",

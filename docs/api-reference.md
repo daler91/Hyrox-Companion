@@ -171,6 +171,16 @@ The returned token must be sent as the `x-csrf-token` header on all mutating req
 
 Requests authenticated with a Clerk session token in an `Authorization: Bearer` header and no Clerk session cookie (the native app) need no CSRF token; a mutating bearer request whose token Clerk rejects gets `401 UNAUTHORIZED`. See [Authentication -- Bearer-Token Clients](authentication.md#bearer-token-clients-native-app).
 
+### Native app headers
+
+The native app sends `X-App-Platform` (`android` or `ios`) and `X-App-Version` (`MAJOR.MINOR.PATCH`) on every request. Both are logged on the access line (validated values only). When the operator sets `MIN_APP_VERSION_ANDROID` / `MIN_APP_VERSION_IOS`, an older build — or one with a missing or malformed version — gets, on any `/api/v1` route and ahead of auth and CSRF:
+
+```json
+426 { "error": "This version of the app is no longer supported. Update it to keep going.", "code": "APP_UPDATE_REQUIRED", "minimumVersion": "1.4.0" }
+```
+
+Requests without a recognised `X-App-Platform` (the web app) are never affected. Implementation: `server/middleware/appVersion.ts`.
+
 ---
 
 ## Idempotency
