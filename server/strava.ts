@@ -52,7 +52,7 @@ const STRAVA_OAUTH_MOBILE_AUTHORIZE_URL = "https://www.strava.com/oauth/mobile/a
 // completes the link itself (handleStravaNativeComplete). Any path on the
 // app's domain satisfies Strava's callback-domain rule.
 const STRAVA_NATIVE_CALLBACK_PATH = "/strava/mobile-callback";
-const STRAVA_NATIVE_REDIRECT_URI = `${env.APP_URL ?? "http://localhost:5000"}${STRAVA_NATIVE_CALLBACK_PATH}`;
+const STRAVA_NATIVE_REDIRECT_URI = `${env.APP_URL ?? "http://localhost:5000"}${STRAVA_NATIVE_CALLBACK_PATH}`; // DevSkim: ignore DS162092
 const STRAVA_OAUTH_TOKEN_URL = "https://www.strava.com/oauth/token";
 const STRAVA_OAUTH_DEAUTHORIZE_URL = "https://www.strava.com/oauth/deauthorize";
 const STRAVA_API_BASE = "https://www.strava.com/api/v3";

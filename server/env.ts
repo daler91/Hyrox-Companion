@@ -12,12 +12,13 @@ import { checkSafeOutboundUrl } from "./ssrfGuard";
 
 // Reject deterministic strings that appear in docs, CI, or tests. If a real
 // secret ever matches one of these it would be compromised anyway — they
-// leak in public CI logs and example configs (W10).
+// leak in public CI logs and example configs (W10). They are a blocklist of
+// known-weak placeholders, not secrets, hence the DevSkim suppressions.
 const WEAK_ENCRYPTION_KEYS = new Set<string>([
-  "01234567890123456789012345678901",
-  "0123456789abcdef0123456789abcdef",
-  "00000000000000000000000000000000",
-  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "01234567890123456789012345678901", // DevSkim: ignore DS173237
+  "0123456789abcdef0123456789abcdef", // DevSkim: ignore DS173237
+  "00000000000000000000000000000000", // DevSkim: ignore DS173237
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // DevSkim: ignore DS173237
   "changeme_changeme_changeme_change",
 ]);
 
