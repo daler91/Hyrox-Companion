@@ -1,4 +1,4 @@
-import { exercisesPayloadSchema, insertWorkoutLogRouteSchema, structureBlocksPayloadSchema, updateWorkoutLogRouteSchema } from "@shared/schema";
+import { createWorkoutPayloadSchema, updateWorkoutPayloadSchema } from "@shared/schema";
 import { z } from "zod";
 
 /**
@@ -25,15 +25,11 @@ function enforceHeartRateConsistency(
   }
 }
 
-// The client-facing write surface lives in shared/schema/types/workouts.ts so the
-// route validator and the published OpenAPI contract cannot drift apart; these
-// only add the payload extensions and the cross-field HR check.
-export const createWorkoutRouteSchema = insertWorkoutLogRouteSchema
-  .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
-  .superRefine(enforceHeartRateConsistency);
-export const updateWorkoutRouteSchema = updateWorkoutLogRouteSchema
-  .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
-  .superRefine(enforceHeartRateConsistency);
+// The request bodies live in shared/schema/types/workouts.ts and the OpenAPI
+// document registers the same objects, so the route validator and the
+// published contract cannot drift apart; these only add the cross-field HR check.
+export const createWorkoutRouteSchema = createWorkoutPayloadSchema.superRefine(enforceHeartRateConsistency);
+export const updateWorkoutRouteSchema = updateWorkoutPayloadSchema.superRefine(enforceHeartRateConsistency);
 // The other workout request schemas (plan-day assignment, reparse, custom
 // exercises, bulk delete, combine, device links, MAF tags, migration reviews)
 // live in shared/schema/types/workoutsRequests.ts, beside their OpenAPI paths.

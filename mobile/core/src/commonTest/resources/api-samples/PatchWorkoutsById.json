@@ -104,6 +104,68 @@
             }
           ]
         }
+      ],
+      "structureBlocks": [
+        {
+          "id": "sample text",
+          "sectionType": "mobility",
+          "formatType": "quality",
+          "durationMinutes": 1,
+          "roundCount": 1,
+          "timeCapMinutes": 1,
+          "durationSeconds": 1,
+          "rounds": 1,
+          "workSeconds": 1,
+          "restSeconds": 1,
+          "workIntervalSec": 1,
+          "restIntervalSec": 1,
+          "instructions": "sample text",
+          "score": {
+            "type": "emom",
+            "completed": true,
+            "completedMinutes": 1,
+            "missedReps": 1,
+            "notes": "sample text"
+          },
+          "sequenceOrder": 1,
+          "sortOrder": 1,
+          "steps": [
+            {
+              "stepNumber": 1,
+              "minuteIndex": 1,
+              "stepType": "transition",
+              "exerciseName": "sample text",
+              "category": "sample text",
+              "customLabel": "sample text",
+              "stepRole": "sample text",
+              "intensity": {
+                "key": "any"
+              },
+              "loadMode": "sample text",
+              "unilateralMode": "sample text",
+              "tempo": {
+                "key": "any"
+              },
+              "constraintTags": [
+                "sample text"
+              ],
+              "groupId": "sample text",
+              "groupMeta": {
+                "key": "any"
+              },
+              "targets": {
+                "targetReps": 1,
+                "targetTime": 1.5,
+                "targetDistance": 1.5,
+                "targetWeight": 1.5,
+                "reps": 1,
+                "time": 1.5,
+                "distance": 1.5,
+                "weight": 1.5
+              }
+            }
+          ]
+        }
       ]
     }
   },

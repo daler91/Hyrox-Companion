@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Payload for updating a workout log along with optional exercise sets. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.
+ * Payload for updating a workout log along with optional exercise sets and structure blocks. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.
  */
 @Serializable
 public data class UpdateWorkoutRequest(
@@ -41,6 +41,7 @@ public data class UpdateWorkoutRequest(
      */
     public val relinks: List<UpdateWorkoutRequest.RelinksItem>? = null,
     public val exercises: List<UpdateWorkoutRequest.ExercisesItem>? = null,
+    public val structureBlocks: List<UpdateWorkoutRequest.StructureBlocksItem>? = null,
 ) {
     @Serializable
     public data class RelinksItem(
@@ -127,6 +128,101 @@ public data class UpdateWorkoutRequest(
 
                 internal object Serializer : WireEnumSerializer<RepMode>("RepMode", RepMode.entries, Unknown)
             }
+        }
+    }
+
+    @Serializable
+    public data class StructureBlocksItem(
+        public val id: String? = null,
+        public val sectionType: UpdateWorkoutRequest.StructureBlocksItem.SectionType,
+        public val formatType: UpdateWorkoutRequest.StructureBlocksItem.FormatType,
+        public val durationMinutes: Patch<Int> = Patch.Absent,
+        public val roundCount: Patch<Int> = Patch.Absent,
+        public val timeCapMinutes: Patch<Int> = Patch.Absent,
+        public val durationSeconds: Patch<Int> = Patch.Absent,
+        public val rounds: Patch<Int> = Patch.Absent,
+        public val workSeconds: Patch<Int> = Patch.Absent,
+        public val restSeconds: Patch<Int> = Patch.Absent,
+        public val workIntervalSec: Patch<Int> = Patch.Absent,
+        public val restIntervalSec: Patch<Int> = Patch.Absent,
+        public val instructions: Patch<String> = Patch.Absent,
+        public val score: JsonElement? = null,
+        public val sequenceOrder: Int? = null,
+        public val sortOrder: Int? = null,
+        public val steps: List<UpdateWorkoutRequest.StructureBlocksItem.StepsItem>,
+    ) {
+        @Serializable(with = SectionType.Serializer::class)
+        public enum class SectionType(override val wireValue: String) : WireEnum {
+            Warmup("warmup"),
+            Activation("activation"),
+            Main("main"),
+            Accessory("accessory"),
+            Cooldown("cooldown"),
+            Mobility("mobility"),
+            /** A value this build does not know; never sent. */
+            Unknown(""),
+            ;
+
+            internal object Serializer : WireEnumSerializer<SectionType>("SectionType", SectionType.entries, Unknown)
+        }
+
+        @Serializable(with = FormatType.Serializer::class)
+        public enum class FormatType(override val wireValue: String) : WireEnum {
+            Steady("steady"),
+            Emom("emom"),
+            Amrap("amrap"),
+            Rounds("rounds"),
+            Interval("interval"),
+            ForTime("for_time"),
+            Quality("quality"),
+            /** A value this build does not know; never sent. */
+            Unknown(""),
+            ;
+
+            internal object Serializer : WireEnumSerializer<FormatType>("FormatType", FormatType.entries, Unknown)
+        }
+
+        @Serializable
+        public data class StepsItem(
+            public val stepNumber: Int,
+            public val minuteIndex: Patch<Int> = Patch.Absent,
+            public val stepType: UpdateWorkoutRequest.StructureBlocksItem.StepsItem.StepType? = null,
+            public val exerciseName: Patch<String> = Patch.Absent,
+            public val category: Patch<String> = Patch.Absent,
+            public val customLabel: Patch<String> = Patch.Absent,
+            public val stepRole: Patch<String> = Patch.Absent,
+            public val intensity: Patch<Map<String, JsonElement?>> = Patch.Absent,
+            public val loadMode: Patch<String> = Patch.Absent,
+            public val unilateralMode: Patch<String> = Patch.Absent,
+            public val tempo: Patch<Map<String, JsonElement?>> = Patch.Absent,
+            public val constraintTags: Patch<List<String>> = Patch.Absent,
+            public val groupId: Patch<String> = Patch.Absent,
+            public val groupMeta: Patch<Map<String, JsonElement?>> = Patch.Absent,
+            public val targets: Patch<UpdateWorkoutRequest.StructureBlocksItem.StepsItem.Targets> = Patch.Absent,
+        ) {
+            @Serializable(with = StepType.Serializer::class)
+            public enum class StepType(override val wireValue: String) : WireEnum {
+                Work("work"),
+                Rest("rest"),
+                Transition("transition"),
+                /** A value this build does not know; never sent. */
+                Unknown(""),
+                ;
+
+                internal object Serializer : WireEnumSerializer<StepType>("StepType", StepType.entries, Unknown)
+            }
+
+            @Serializable
+            public data class Targets(
+                public val targetReps: Patch<Int> = Patch.Absent,
+                public val targetTime: Patch<Double> = Patch.Absent,
+                public val targetDistance: Patch<Double> = Patch.Absent,
+                public val targetWeight: Patch<Double> = Patch.Absent,
+                public val reps: Patch<Int> = Patch.Absent,
+                public val time: Patch<Double> = Patch.Absent,
+                public val distance: Patch<Double> = Patch.Absent,
+                public val weight: Patch<Double> = Patch.Absent,
+            )
         }
     }
 }

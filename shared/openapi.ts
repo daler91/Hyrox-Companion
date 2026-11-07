@@ -13,14 +13,13 @@ import { registerPushPaths } from "./openapiRoutes/push";
 import { registerStravaPaths } from "./openapiRoutes/strava";
 import { registerWorkoutsPaths } from "./openapiRoutes/workouts";
 import {
+  createWorkoutPayloadSchema,
   exerciseSetSchema,
-  exercisesPayloadSchema,
   insertExerciseSetSchema,
   insertPlanDaySchema,
-  insertWorkoutLogRouteSchema,
   insertWorkoutLogSchema,
   updateUserPreferencesSchema,
-  updateWorkoutLogRouteSchema,
+  updateWorkoutPayloadSchema,
   users,
   workoutLogs,
 } from "./schema";
@@ -310,31 +309,21 @@ export const InsertPlanDaySchema = registry.register(
 // Create a combined schema for creating a workout that includes the optional exercises payload
 export const CreateWorkoutRequestSchema = registry.register(
   "CreateWorkoutRequest",
-  z.intersection(
-    // The ROUTE schema, not the raw insert schema: device-provenance columns are
-    // server-owned and stripped from the request, so advertising them here would
-    // document a write surface the server does not accept.
-    insertWorkoutLogRouteSchema,
-    z.object({
-      exercises: exercisesPayloadSchema.optional(),
-    })
-  ).openapi({
+  // The route's own body schema (built on the ROUTE insert schema, so the
+  // server-owned device-provenance columns are not advertised), including the
+  // exercises and structureBlocks payloads.
+  createWorkoutPayloadSchema.openapi({
     title: "CreateWorkoutRequest",
-    description: "Payload for creating a new workout log along with optional exercise sets. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
+    description: "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
   })
 );
 
 // Create a combined schema for updating a workout that includes the optional exercises payload
 export const UpdateWorkoutRequestSchema = registry.register(
   "UpdateWorkoutRequest",
-  z.intersection(
-    updateWorkoutLogRouteSchema,
-    z.object({
-      exercises: exercisesPayloadSchema.optional(),
-    })
-  ).openapi({
+  updateWorkoutPayloadSchema.openapi({
     title: "UpdateWorkoutRequest",
-    description: "Payload for updating a workout log along with optional exercise sets. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.",
+    description: "Payload for updating a workout log along with optional exercise sets and structure blocks. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.",
   })
 );
 
