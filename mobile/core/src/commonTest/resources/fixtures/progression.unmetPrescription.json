@@ -1,0 +1,282 @@
+{
+  "suite": "progression.unmetPrescription",
+  "description": "unmetPrescription: the prescription when every set carried the same one and a set fell short of it.",
+  "cases": [
+    {
+      "input": [],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 5,
+          "weight": 100
+        },
+        {
+          "reps": 5,
+          "weight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 5,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        },
+        {
+          "reps": 5,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 5,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        },
+        {
+          "reps": 6,
+          "weight": 102.5,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": {
+        "reps": 5,
+        "weight": 100
+      }
+    },
+    {
+      "input": [
+        {
+          "reps": 5,
+          "weight": 90,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": {
+        "reps": 5,
+        "weight": 100
+      }
+    },
+    {
+      "input": [
+        {
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": {
+        "reps": 5,
+        "weight": 100
+      }
+    },
+    {
+      "input": [
+        {
+          "reps": null,
+          "weight": null,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": {
+        "reps": 5,
+        "weight": 100
+      }
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        },
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": 6,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        },
+        {
+          "reps": 3,
+          "weight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100
+        },
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": 5
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 100,
+          "plannedReps": null,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": 0,
+          "plannedReps": 5,
+          "plannedWeight": 0
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 3,
+          "weight": -10,
+          "plannedReps": 5,
+          "plannedWeight": -10
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 0,
+          "weight": 90,
+          "plannedReps": 0,
+          "plannedWeight": 100
+        }
+      ],
+      "output": {
+        "reps": 0,
+        "weight": 100
+      }
+    },
+    {
+      "input": [
+        {
+          "reps": 0,
+          "weight": 100,
+          "plannedReps": 0,
+          "plannedWeight": 100
+        }
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        {
+          "reps": 5,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        },
+        {
+          "reps": 5,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        },
+        {
+          "reps": 4,
+          "weight": 100,
+          "plannedReps": 5,
+          "plannedWeight": 100
+        }
+      ],
+      "output": {
+        "reps": 5,
+        "weight": 100
+      }
+    },
+    {
+      "input": [
+        {
+          "reps": 5,
+          "weight": 100.005,
+          "plannedReps": 5,
+          "plannedWeight": 100.005
+        },
+        {
+          "reps": 4,
+          "weight": 100.005,
+          "plannedReps": 5,
+          "plannedWeight": 100.005
+        }
+      ],
+      "output": {
+        "reps": 5,
+        "weight": 100.005
+      }
+    }
+  ]
+}

@@ -1,0 +1,1006 @@
+{
+  "suite": "exercises.implementFor",
+  "description": "implementFor over every catalogue name and table key. Null where the TypeScript returns a non-implement (a name inherited from Object.prototype).",
+  "cases": [
+    {
+      "input": "skierg",
+      "output": "barbell"
+    },
+    {
+      "input": "sled_push",
+      "output": "barbell"
+    },
+    {
+      "input": "sled_pull",
+      "output": "barbell"
+    },
+    {
+      "input": "burpee_broad_jump",
+      "output": "barbell"
+    },
+    {
+      "input": "rowing",
+      "output": "barbell"
+    },
+    {
+      "input": "farmers_carry",
+      "output": "dumbbell"
+    },
+    {
+      "input": "sandbag_lunges",
+      "output": "barbell"
+    },
+    {
+      "input": "wall_balls",
+      "output": "barbell"
+    },
+    {
+      "input": "shuttle_run",
+      "output": "barbell"
+    },
+    {
+      "input": "med_ball_slams",
+      "output": "barbell"
+    },
+    {
+      "input": "step_ups",
+      "output": "dumbbell"
+    },
+    {
+      "input": "suitcase_carry",
+      "output": "dumbbell"
+    },
+    {
+      "input": "overhead_carry",
+      "output": "barbell"
+    },
+    {
+      "input": "front_rack_carry",
+      "output": "dumbbell"
+    },
+    {
+      "input": "yoke_carry",
+      "output": "barbell"
+    },
+    {
+      "input": "sandbag_carry",
+      "output": "barbell"
+    },
+    {
+      "input": "sandbag_clean",
+      "output": "barbell"
+    },
+    {
+      "input": "sandbag_to_shoulder",
+      "output": "barbell"
+    },
+    {
+      "input": "tire_flip",
+      "output": "barbell"
+    },
+    {
+      "input": "rope_climb",
+      "output": "barbell"
+    },
+    {
+      "input": "box_step_over",
+      "output": "barbell"
+    },
+    {
+      "input": "dumbbell_thruster",
+      "output": "dumbbell"
+    },
+    {
+      "input": "kettlebell_thruster",
+      "output": "kettlebell"
+    },
+    {
+      "input": "run",
+      "output": "barbell"
+    },
+    {
+      "input": "run_1k",
+      "output": "barbell"
+    },
+    {
+      "input": "easy_run",
+      "output": "barbell"
+    },
+    {
+      "input": "recovery_run",
+      "output": "barbell"
+    },
+    {
+      "input": "tempo_run",
+      "output": "barbell"
+    },
+    {
+      "input": "interval_run",
+      "output": "barbell"
+    },
+    {
+      "input": "hill_repeats",
+      "output": "barbell"
+    },
+    {
+      "input": "fartlek_run",
+      "output": "barbell"
+    },
+    {
+      "input": "long_run",
+      "output": "barbell"
+    },
+    {
+      "input": "treadmill_run",
+      "output": "barbell"
+    },
+    {
+      "input": "back_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "front_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "air_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "overhead_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "zercher_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "pistol_squat",
+      "output": "bodyweight"
+    },
+    {
+      "input": "split_squat",
+      "output": "dumbbell"
+    },
+    {
+      "input": "cossack_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "belt_squat",
+      "output": "machine"
+    },
+    {
+      "input": "box_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "smith_machine_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "deadlift",
+      "output": "barbell"
+    },
+    {
+      "input": "trap_bar_deadlift",
+      "output": "barbell"
+    },
+    {
+      "input": "sumo_deadlift",
+      "output": "barbell"
+    },
+    {
+      "input": "stiff_leg_deadlift",
+      "output": "barbell"
+    },
+    {
+      "input": "rack_pull",
+      "output": "barbell"
+    },
+    {
+      "input": "deficit_deadlift",
+      "output": "barbell"
+    },
+    {
+      "input": "romanian_deadlift",
+      "output": "barbell"
+    },
+    {
+      "input": "good_morning",
+      "output": "barbell"
+    },
+    {
+      "input": "bench_press",
+      "output": "barbell"
+    },
+    {
+      "input": "incline_bench_press",
+      "output": "barbell"
+    },
+    {
+      "input": "decline_bench_press",
+      "output": "barbell"
+    },
+    {
+      "input": "close_grip_bench_press",
+      "output": "barbell"
+    },
+    {
+      "input": "incline_dumbbell_bench_press",
+      "output": "dumbbell"
+    },
+    {
+      "input": "dumbbell_fly",
+      "output": "barbell"
+    },
+    {
+      "input": "floor_press",
+      "output": "barbell"
+    },
+    {
+      "input": "smith_machine_bench_press",
+      "output": "barbell"
+    },
+    {
+      "input": "dumbbell_pullover",
+      "output": "barbell"
+    },
+    {
+      "input": "push_up",
+      "output": "bodyweight"
+    },
+    {
+      "input": "handstand_push_up",
+      "output": "barbell"
+    },
+    {
+      "input": "pike_push_up",
+      "output": "barbell"
+    },
+    {
+      "input": "overhead_press",
+      "output": "barbell"
+    },
+    {
+      "input": "push_press",
+      "output": "barbell"
+    },
+    {
+      "input": "landmine_press",
+      "output": "barbell"
+    },
+    {
+      "input": "pull_up",
+      "output": "bodyweight"
+    },
+    {
+      "input": "chin_up",
+      "output": "bodyweight"
+    },
+    {
+      "input": "assisted_pull_up",
+      "output": "machine"
+    },
+    {
+      "input": "inverted_row",
+      "output": "bodyweight"
+    },
+    {
+      "input": "lat_pulldown",
+      "output": "machine"
+    },
+    {
+      "input": "straight_arm_pulldown",
+      "output": "machine"
+    },
+    {
+      "input": "bent_over_row",
+      "output": "barbell"
+    },
+    {
+      "input": "pendlay_row",
+      "output": "barbell"
+    },
+    {
+      "input": "machine_row",
+      "output": "barbell"
+    },
+    {
+      "input": "landmine_row",
+      "output": "barbell"
+    },
+    {
+      "input": "single_arm_dumbbell_row",
+      "output": "dumbbell"
+    },
+    {
+      "input": "lunges",
+      "output": "dumbbell"
+    },
+    {
+      "input": "reverse_lunge",
+      "output": "dumbbell"
+    },
+    {
+      "input": "bulgarian_split_squat",
+      "output": "dumbbell"
+    },
+    {
+      "input": "hip_thrust",
+      "output": "barbell"
+    },
+    {
+      "input": "single_leg_rdl",
+      "output": "dumbbell"
+    },
+    {
+      "input": "barbell_thruster",
+      "output": "barbell"
+    },
+    {
+      "input": "goblet_squat",
+      "output": "dumbbell"
+    },
+    {
+      "input": "dumbbell_snatch",
+      "output": "barbell"
+    },
+    {
+      "input": "dumbbell_bench_press",
+      "output": "dumbbell"
+    },
+    {
+      "input": "seated_cable_row",
+      "output": "machine"
+    },
+    {
+      "input": "chest_supported_row",
+      "output": "dumbbell"
+    },
+    {
+      "input": "leg_press",
+      "output": "machine"
+    },
+    {
+      "input": "hack_squat",
+      "output": "machine"
+    },
+    {
+      "input": "leg_extension",
+      "output": "barbell"
+    },
+    {
+      "input": "hamstring_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "calf_raise",
+      "output": "dumbbell"
+    },
+    {
+      "input": "seated_calf_raise",
+      "output": "dumbbell"
+    },
+    {
+      "input": "standing_calf_raise",
+      "output": "machine"
+    },
+    {
+      "input": "tibialis_raise",
+      "output": "bodyweight"
+    },
+    {
+      "input": "dip",
+      "output": "bodyweight"
+    },
+    {
+      "input": "assisted_dip",
+      "output": "barbell"
+    },
+    {
+      "input": "ring_dip",
+      "output": "bodyweight"
+    },
+    {
+      "input": "bench_dip",
+      "output": "barbell"
+    },
+    {
+      "input": "triceps_pushdown",
+      "output": "barbell"
+    },
+    {
+      "input": "triceps_kickback",
+      "output": "barbell"
+    },
+    {
+      "input": "rope_triceps_pushdown",
+      "output": "barbell"
+    },
+    {
+      "input": "skull_crusher",
+      "output": "barbell"
+    },
+    {
+      "input": "overhead_triceps_extension",
+      "output": "barbell"
+    },
+    {
+      "input": "barbell_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "dumbbell_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "hammer_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "preacher_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "cable_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "concentration_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "incline_dumbbell_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "reverse_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "wrist_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "reverse_wrist_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "face_pull",
+      "output": "machine"
+    },
+    {
+      "input": "cable_fly",
+      "output": "barbell"
+    },
+    {
+      "input": "pec_deck",
+      "output": "barbell"
+    },
+    {
+      "input": "lateral_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "cable_lateral_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "machine_lateral_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "front_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "rear_delt_fly",
+      "output": "barbell"
+    },
+    {
+      "input": "reverse_pec_deck",
+      "output": "barbell"
+    },
+    {
+      "input": "cable_rear_delt_fly",
+      "output": "barbell"
+    },
+    {
+      "input": "band_pull_apart",
+      "output": "barbell"
+    },
+    {
+      "input": "seated_dumbbell_press",
+      "output": "dumbbell"
+    },
+    {
+      "input": "arnold_press",
+      "output": "dumbbell"
+    },
+    {
+      "input": "machine_shoulder_press",
+      "output": "barbell"
+    },
+    {
+      "input": "barbell_shrug",
+      "output": "barbell"
+    },
+    {
+      "input": "upright_row",
+      "output": "barbell"
+    },
+    {
+      "input": "t_bar_row",
+      "output": "barbell"
+    },
+    {
+      "input": "single_arm_cable_row",
+      "output": "machine"
+    },
+    {
+      "input": "high_row_machine",
+      "output": "barbell"
+    },
+    {
+      "input": "chest_press_machine",
+      "output": "barbell"
+    },
+    {
+      "input": "pullover_machine",
+      "output": "barbell"
+    },
+    {
+      "input": "glute_bridge",
+      "output": "barbell"
+    },
+    {
+      "input": "nordic_hamstring_curl",
+      "output": "barbell"
+    },
+    {
+      "input": "glute_ham_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "cable_pull_through",
+      "output": "machine"
+    },
+    {
+      "input": "hip_abduction_machine",
+      "output": "machine"
+    },
+    {
+      "input": "hip_adduction_machine",
+      "output": "barbell"
+    },
+    {
+      "input": "glute_kickback",
+      "output": "barbell"
+    },
+    {
+      "input": "donkey_kick",
+      "output": "barbell"
+    },
+    {
+      "input": "frog_pump",
+      "output": "barbell"
+    },
+    {
+      "input": "clamshell",
+      "output": "barbell"
+    },
+    {
+      "input": "sissy_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "pendulum_squat",
+      "output": "barbell"
+    },
+    {
+      "input": "cable_crunch",
+      "output": "barbell"
+    },
+    {
+      "input": "side_plank",
+      "output": "barbell"
+    },
+    {
+      "input": "ab_wheel_rollout",
+      "output": "barbell"
+    },
+    {
+      "input": "pallof_press",
+      "output": "machine"
+    },
+    {
+      "input": "sit_up",
+      "output": "barbell"
+    },
+    {
+      "input": "crunch",
+      "output": "barbell"
+    },
+    {
+      "input": "reverse_crunch",
+      "output": "barbell"
+    },
+    {
+      "input": "bicycle_crunch",
+      "output": "barbell"
+    },
+    {
+      "input": "russian_twist",
+      "output": "barbell"
+    },
+    {
+      "input": "dead_bug",
+      "output": "barbell"
+    },
+    {
+      "input": "bird_dog",
+      "output": "barbell"
+    },
+    {
+      "input": "back_extension",
+      "output": "machine"
+    },
+    {
+      "input": "plank",
+      "output": "barbell"
+    },
+    {
+      "input": "hanging_leg_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "lying_leg_raise",
+      "output": "barbell"
+    },
+    {
+      "input": "toes_to_bar",
+      "output": "barbell"
+    },
+    {
+      "input": "v_up",
+      "output": "barbell"
+    },
+    {
+      "input": "hollow_hold",
+      "output": "barbell"
+    },
+    {
+      "input": "flutter_kicks",
+      "output": "barbell"
+    },
+    {
+      "input": "clean",
+      "output": "barbell"
+    },
+    {
+      "input": "power_clean",
+      "output": "barbell"
+    },
+    {
+      "input": "hang_clean",
+      "output": "barbell"
+    },
+    {
+      "input": "clean_and_jerk",
+      "output": "barbell"
+    },
+    {
+      "input": "jerk",
+      "output": "barbell"
+    },
+    {
+      "input": "split_jerk",
+      "output": "barbell"
+    },
+    {
+      "input": "snatch",
+      "output": "barbell"
+    },
+    {
+      "input": "power_snatch",
+      "output": "barbell"
+    },
+    {
+      "input": "hang_snatch",
+      "output": "barbell"
+    },
+    {
+      "input": "turkish_get_up",
+      "output": "barbell"
+    },
+    {
+      "input": "kettlebell_clean",
+      "output": "kettlebell"
+    },
+    {
+      "input": "kettlebell_snatch",
+      "output": "barbell"
+    },
+    {
+      "input": "kettlebell_press",
+      "output": "kettlebell"
+    },
+    {
+      "input": "burpees",
+      "output": "barbell"
+    },
+    {
+      "input": "box_jumps",
+      "output": "barbell"
+    },
+    {
+      "input": "devil_press",
+      "output": "barbell"
+    },
+    {
+      "input": "walking",
+      "output": "barbell"
+    },
+    {
+      "input": "incline_walk",
+      "output": "barbell"
+    },
+    {
+      "input": "hiking",
+      "output": "barbell"
+    },
+    {
+      "input": "rucking",
+      "output": "barbell"
+    },
+    {
+      "input": "cycling",
+      "output": "barbell"
+    },
+    {
+      "input": "bike_erg",
+      "output": "barbell"
+    },
+    {
+      "input": "elliptical",
+      "output": "machine"
+    },
+    {
+      "input": "stair_climber",
+      "output": "machine"
+    },
+    {
+      "input": "swimming",
+      "output": "barbell"
+    },
+    {
+      "input": "sprints",
+      "output": "barbell"
+    },
+    {
+      "input": "bear_crawl",
+      "output": "barbell"
+    },
+    {
+      "input": "crab_walk",
+      "output": "barbell"
+    },
+    {
+      "input": "jumping_jacks",
+      "output": "barbell"
+    },
+    {
+      "input": "high_knees",
+      "output": "barbell"
+    },
+    {
+      "input": "butt_kicks",
+      "output": "barbell"
+    },
+    {
+      "input": "assault_bike",
+      "output": "barbell"
+    },
+    {
+      "input": "stationary_bike",
+      "output": "barbell"
+    },
+    {
+      "input": "kettlebell_swings",
+      "output": "kettlebell"
+    },
+    {
+      "input": "battle_ropes",
+      "output": "barbell"
+    },
+    {
+      "input": "walking_lunges",
+      "output": "dumbbell"
+    },
+    {
+      "input": "echo_bike",
+      "output": "barbell"
+    },
+    {
+      "input": "ski_erg_intervals",
+      "output": "barbell"
+    },
+    {
+      "input": "jump_rope",
+      "output": "barbell"
+    },
+    {
+      "input": "mountain_climbers",
+      "output": "barbell"
+    },
+    {
+      "input": "rowing_intervals",
+      "output": "barbell"
+    },
+    {
+      "input": "treadmill_intervals",
+      "output": "barbell"
+    },
+    {
+      "input": "emom",
+      "output": "barbell"
+    },
+    {
+      "input": "amrap",
+      "output": "barbell"
+    },
+    {
+      "input": "custom",
+      "output": "barbell"
+    },
+    {
+      "input": "running",
+      "output": "barbell"
+    },
+    {
+      "input": "runs",
+      "output": "barbell"
+    },
+    {
+      "input": "road_run",
+      "output": "barbell"
+    },
+    {
+      "input": "trail_run",
+      "output": "barbell"
+    },
+    {
+      "input": "rdl",
+      "output": "barbell"
+    },
+    {
+      "input": "romanian_deadlifts",
+      "output": "barbell"
+    },
+    {
+      "input": "air_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "overhead_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "zercher_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "pistols",
+      "output": "barbell"
+    },
+    {
+      "input": "pistol_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "split_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "cossack_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "belt_squats",
+      "output": "barbell"
+    },
+    {
+      "input": "stiff_leg_deadlifts",
+      "output": "barbell"
+    },
+    {
+      "input": "sldl",
+      "output": "barbell"
+    },
+    {
+      "input": "rack_pulls",
+      "output": "barbell"
+    },
+    {
+      "input": "deficit_deadlifts",
+      "output": "barbell"
+    },
+    {
+      "input": "pushups",
+      "output": "barbell"
+    },
+    {
+      "input": "push_ups",
+      "output": "barbell"
+    },
+    {
+      "input": "Back Squat",
+      "output": "barbell"
+    },
+    {
+      "input": "BACK_SQUAT",
+      "output": "barbell"
+    },
+    {
+      "input": "",
+      "output": "barbell"
+    },
+    {
+      "input": "not_a_real_exercise",
+      "output": "barbell"
+    },
+    {
+      "input": "barbell",
+      "output": "barbell"
+    },
+    {
+      "input": "constructor",
+      "output": null
+    },
+    {
+      "input": "__defineGetter__",
+      "output": null
+    },
+    {
+      "input": "__defineSetter__",
+      "output": null
+    },
+    {
+      "input": "hasOwnProperty",
+      "output": null
+    },
+    {
+      "input": "__lookupGetter__",
+      "output": null
+    },
+    {
+      "input": "__lookupSetter__",
+      "output": null
+    },
+    {
+      "input": "isPrototypeOf",
+      "output": null
+    },
+    {
+      "input": "propertyIsEnumerable",
+      "output": null
+    },
+    {
+      "input": "toString",
+      "output": null
+    },
+    {
+      "input": "valueOf",
+      "output": null
+    },
+    {
+      "input": "__proto__",
+      "output": null
+    },
+    {
+      "input": "toLocaleString",
+      "output": null
+    }
+  ]
+}

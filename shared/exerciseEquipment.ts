@@ -117,8 +117,12 @@ export type Implement = "barbell" | "dumbbell" | "kettlebell" | "machine" | "bod
  * lifts (a logged weight there is added load, which Epley cannot read), and
  * lunge-family work the table leaves open because it can be done holding
  * anything — logged with dumbbells far more often than not.
+ *
+ * This table and the three below are exported only for the native app's
+ * catalogue generator (script/kotlin-catalogue); app code calls implementFor
+ * and loadIncrement.
  */
-const IMPLEMENT_OVERRIDES: Readonly<Partial<Record<ExerciseName, Implement>>> = {
+export const IMPLEMENT_OVERRIDES: Readonly<Partial<Record<ExerciseName, Implement>>> = {
   pull_up: "bodyweight",
   chin_up: "bodyweight",
   push_up: "bodyweight",
@@ -137,22 +141,22 @@ const IMPLEMENT_OVERRIDES: Readonly<Partial<Record<ExerciseName, Implement>>> = 
   standing_calf_raise: "machine",
 };
 
-interface ImplementSteps {
+export interface ImplementSteps {
   readonly kg: number;
   readonly lbs: number;
 }
 
-const BARBELL_STEPS: ImplementSteps = { kg: 2.5, lbs: 5 };
+export const BARBELL_STEPS: ImplementSteps = { kg: 2.5, lbs: 5 };
 
 /** The smallest jump each implement allows, per unit. Bodyweight work loads like a barbell. */
-const INCREMENTS: ReadonlyMap<Implement, ImplementSteps> = new Map([
+export const INCREMENTS: ReadonlyMap<Implement, ImplementSteps> = new Map([
   ["barbell", BARBELL_STEPS],
   ["dumbbell", { kg: 2, lbs: 5 }],
   ["kettlebell", { kg: 4, lbs: 5 }],
   ["machine", { kg: 5, lbs: 10 }],
 ]);
 
-const LOADED_IMPLEMENTS: readonly Exclude<Implement, "bodyweight">[] = [
+export const LOADED_IMPLEMENTS: readonly Exclude<Implement, "bodyweight">[] = [
   "barbell",
   "dumbbell",
   "kettlebell",

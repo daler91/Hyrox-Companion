@@ -1,0 +1,3681 @@
+{
+  "suite": "exercises.loadIncrement",
+  "description": "loadIncrement over every catalogue name in kg and lbs, and units other than \"kg\" (all pounds).",
+  "cases": [
+    {
+      "input": [
+        "skierg",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "skierg",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sled_push",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sled_push",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sled_pull",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sled_pull",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "burpee_broad_jump",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "burpee_broad_jump",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rowing",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rowing",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "farmers_carry",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "farmers_carry",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sandbag_lunges",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sandbag_lunges",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "wall_balls",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "wall_balls",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "shuttle_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "shuttle_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "med_ball_slams",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "med_ball_slams",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "step_ups",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "step_ups",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "suitcase_carry",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "suitcase_carry",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "overhead_carry",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "overhead_carry",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "front_rack_carry",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "front_rack_carry",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "yoke_carry",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "yoke_carry",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sandbag_carry",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sandbag_carry",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sandbag_clean",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sandbag_clean",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sandbag_to_shoulder",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sandbag_to_shoulder",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "tire_flip",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "tire_flip",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rope_climb",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rope_climb",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "box_step_over",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "box_step_over",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dumbbell_thruster",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "dumbbell_thruster",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_thruster",
+        "kg"
+      ],
+      "output": 4
+    },
+    {
+      "input": [
+        "kettlebell_thruster",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "run_1k",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "run_1k",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "easy_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "easy_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "recovery_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "recovery_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "tempo_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "tempo_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "interval_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "interval_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hill_repeats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hill_repeats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "fartlek_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "fartlek_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "long_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "long_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "treadmill_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "treadmill_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "back_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "front_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "front_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "air_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "air_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "overhead_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "overhead_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "zercher_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "zercher_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pistol_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pistol_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "split_squat",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "split_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cossack_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cossack_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "belt_squat",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "belt_squat",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "box_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "box_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "smith_machine_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "smith_machine_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "deadlift",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "deadlift",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "trap_bar_deadlift",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "trap_bar_deadlift",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sumo_deadlift",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sumo_deadlift",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "stiff_leg_deadlift",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "stiff_leg_deadlift",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rack_pull",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rack_pull",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "deficit_deadlift",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "deficit_deadlift",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "romanian_deadlift",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "romanian_deadlift",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "good_morning",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "good_morning",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bench_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "incline_bench_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "incline_bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "decline_bench_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "decline_bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "close_grip_bench_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "close_grip_bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "incline_dumbbell_bench_press",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "incline_dumbbell_bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dumbbell_fly",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "dumbbell_fly",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "floor_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "floor_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "smith_machine_bench_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "smith_machine_bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dumbbell_pullover",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "dumbbell_pullover",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "push_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "push_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "handstand_push_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "handstand_push_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pike_push_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pike_push_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "overhead_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "overhead_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "push_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "push_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "landmine_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "landmine_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pull_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pull_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "chin_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "chin_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "assisted_pull_up",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "assisted_pull_up",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "inverted_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "inverted_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "lat_pulldown",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "lat_pulldown",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "straight_arm_pulldown",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "straight_arm_pulldown",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "bent_over_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bent_over_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pendlay_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pendlay_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "machine_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "machine_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "landmine_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "landmine_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "single_arm_dumbbell_row",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "single_arm_dumbbell_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "lunges",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "lunges",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "reverse_lunge",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "reverse_lunge",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bulgarian_split_squat",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "bulgarian_split_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hip_thrust",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hip_thrust",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "single_leg_rdl",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "single_leg_rdl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "barbell_thruster",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "barbell_thruster",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "goblet_squat",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "goblet_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dumbbell_snatch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "dumbbell_snatch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dumbbell_bench_press",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "dumbbell_bench_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "seated_cable_row",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "seated_cable_row",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "chest_supported_row",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "chest_supported_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "leg_press",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "leg_press",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "hack_squat",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hack_squat",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "leg_extension",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "leg_extension",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hamstring_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hamstring_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "calf_raise",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "calf_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "seated_calf_raise",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "seated_calf_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "standing_calf_raise",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "standing_calf_raise",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "tibialis_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "tibialis_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dip",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "dip",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "assisted_dip",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "assisted_dip",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "ring_dip",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "ring_dip",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bench_dip",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bench_dip",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "triceps_pushdown",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "triceps_pushdown",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "triceps_kickback",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "triceps_kickback",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rope_triceps_pushdown",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rope_triceps_pushdown",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "skull_crusher",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "skull_crusher",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "overhead_triceps_extension",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "overhead_triceps_extension",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "barbell_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "barbell_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dumbbell_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "dumbbell_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hammer_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hammer_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "preacher_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "preacher_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cable_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cable_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "concentration_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "concentration_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "incline_dumbbell_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "incline_dumbbell_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "reverse_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "reverse_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "wrist_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "wrist_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "reverse_wrist_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "reverse_wrist_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "face_pull",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "face_pull",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "cable_fly",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cable_fly",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pec_deck",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pec_deck",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "lateral_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "lateral_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cable_lateral_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cable_lateral_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "machine_lateral_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "machine_lateral_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "front_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "front_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rear_delt_fly",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rear_delt_fly",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "reverse_pec_deck",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "reverse_pec_deck",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cable_rear_delt_fly",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cable_rear_delt_fly",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "band_pull_apart",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "band_pull_apart",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "seated_dumbbell_press",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "seated_dumbbell_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "arnold_press",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "arnold_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "machine_shoulder_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "machine_shoulder_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "barbell_shrug",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "barbell_shrug",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "upright_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "upright_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "t_bar_row",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "t_bar_row",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "single_arm_cable_row",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "single_arm_cable_row",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "high_row_machine",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "high_row_machine",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "chest_press_machine",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "chest_press_machine",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pullover_machine",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pullover_machine",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "glute_bridge",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "glute_bridge",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "nordic_hamstring_curl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "nordic_hamstring_curl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "glute_ham_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "glute_ham_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cable_pull_through",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cable_pull_through",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "hip_abduction_machine",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hip_abduction_machine",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "hip_adduction_machine",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hip_adduction_machine",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "glute_kickback",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "glute_kickback",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "donkey_kick",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "donkey_kick",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "frog_pump",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "frog_pump",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "clamshell",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "clamshell",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sissy_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sissy_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pendulum_squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pendulum_squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cable_crunch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cable_crunch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "side_plank",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "side_plank",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "ab_wheel_rollout",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "ab_wheel_rollout",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pallof_press",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pallof_press",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "sit_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sit_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "crunch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "crunch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "reverse_crunch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "reverse_crunch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bicycle_crunch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bicycle_crunch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "russian_twist",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "russian_twist",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "dead_bug",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "dead_bug",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bird_dog",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bird_dog",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_extension",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_extension",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "plank",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "plank",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hanging_leg_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hanging_leg_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "lying_leg_raise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "lying_leg_raise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "toes_to_bar",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "toes_to_bar",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "v_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "v_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hollow_hold",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hollow_hold",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "flutter_kicks",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "flutter_kicks",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "clean",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "clean",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "power_clean",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "power_clean",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hang_clean",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hang_clean",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "clean_and_jerk",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "clean_and_jerk",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "jerk",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "jerk",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "split_jerk",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "split_jerk",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "snatch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "snatch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "power_snatch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "power_snatch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hang_snatch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hang_snatch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "turkish_get_up",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "turkish_get_up",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_clean",
+        "kg"
+      ],
+      "output": 4
+    },
+    {
+      "input": [
+        "kettlebell_clean",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_snatch",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "kettlebell_snatch",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_press",
+        "kg"
+      ],
+      "output": 4
+    },
+    {
+      "input": [
+        "kettlebell_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "burpees",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "burpees",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "box_jumps",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "box_jumps",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "devil_press",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "devil_press",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "walking",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "walking",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "incline_walk",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "incline_walk",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hiking",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hiking",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rucking",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rucking",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cycling",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cycling",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bike_erg",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bike_erg",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "elliptical",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "elliptical",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "stair_climber",
+        "kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "stair_climber",
+        "lbs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "swimming",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "swimming",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sprints",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sprints",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "bear_crawl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "bear_crawl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "crab_walk",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "crab_walk",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "jumping_jacks",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "jumping_jacks",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "high_knees",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "high_knees",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "butt_kicks",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "butt_kicks",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "assault_bike",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "assault_bike",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "stationary_bike",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "stationary_bike",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        "kg"
+      ],
+      "output": 4
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "battle_ropes",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "battle_ropes",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "walking_lunges",
+        "kg"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "walking_lunges",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "echo_bike",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "echo_bike",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "ski_erg_intervals",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "ski_erg_intervals",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "jump_rope",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "jump_rope",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "mountain_climbers",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "mountain_climbers",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rowing_intervals",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rowing_intervals",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "treadmill_intervals",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "treadmill_intervals",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "emom",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "emom",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "amrap",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "amrap",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "custom",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "custom",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "running",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "running",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "runs",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "runs",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "road_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "road_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "trail_run",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "trail_run",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rdl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rdl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "romanian_deadlifts",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "romanian_deadlifts",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "air_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "air_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "overhead_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "overhead_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "zercher_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "zercher_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pistols",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pistols",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pistol_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pistol_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "split_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "split_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "cossack_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "cossack_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "belt_squats",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "belt_squats",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "stiff_leg_deadlifts",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "stiff_leg_deadlifts",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "sldl",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "sldl",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "rack_pulls",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "rack_pulls",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "deficit_deadlifts",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "deficit_deadlifts",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pushups",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "pushups",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "push_ups",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "push_ups",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "Back Squat",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "Back Squat",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "BACK_SQUAT",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "BACK_SQUAT",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "not_a_real_exercise",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "not_a_real_exercise",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "barbell",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "barbell",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "constructor",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "constructor",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "__defineGetter__",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "__defineGetter__",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "__defineSetter__",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "__defineSetter__",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "hasOwnProperty",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "hasOwnProperty",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "__lookupGetter__",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "__lookupGetter__",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "__lookupSetter__",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "__lookupSetter__",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "isPrototypeOf",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "isPrototypeOf",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "propertyIsEnumerable",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "propertyIsEnumerable",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "toString",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "toString",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "valueOf",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "valueOf",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "__proto__",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "__proto__",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "toLocaleString",
+        "kg"
+      ],
+      "output": 2.5
+    },
+    {
+      "input": [
+        "toLocaleString",
+        "lbs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_squat",
+        "lb"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_squat",
+        "KG"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_squat",
+        "Kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_squat",
+        ""
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "back_squat",
+        "kgs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "goblet_squat",
+        "lb"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "goblet_squat",
+        "KG"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "goblet_squat",
+        "Kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "goblet_squat",
+        ""
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "goblet_squat",
+        "kgs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        "lb"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        "KG"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        "Kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        ""
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "kettlebell_swings",
+        "kgs"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "leg_press",
+        "lb"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "leg_press",
+        "KG"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "leg_press",
+        "Kg"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "leg_press",
+        ""
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "leg_press",
+        "kgs"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "pull_up",
+        "lb"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pull_up",
+        "KG"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pull_up",
+        "Kg"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pull_up",
+        ""
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "pull_up",
+        "kgs"
+      ],
+      "output": 5
+    }
+  ]
+}

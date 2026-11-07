@@ -1,0 +1,2634 @@
+{
+  "suite": "exercises.knownExerciseLabel",
+  "description": "knownExerciseLabel (exact canonical keys only; undefined is written as null).",
+  "cases": [
+    {
+      "input": "skierg",
+      "output": "SkiErg"
+    },
+    {
+      "input": "sled_push",
+      "output": "Sled Push"
+    },
+    {
+      "input": "sled_pull",
+      "output": "Sled Pull"
+    },
+    {
+      "input": "burpee_broad_jump",
+      "output": "Burpee Broad Jump"
+    },
+    {
+      "input": "rowing",
+      "output": "Rowing"
+    },
+    {
+      "input": "farmers_carry",
+      "output": "Farmers Carry"
+    },
+    {
+      "input": "sandbag_lunges",
+      "output": "Sandbag Lunges"
+    },
+    {
+      "input": "wall_balls",
+      "output": "Wall Balls"
+    },
+    {
+      "input": "shuttle_run",
+      "output": "Shuttle Run"
+    },
+    {
+      "input": "med_ball_slams",
+      "output": "Med Ball Slams"
+    },
+    {
+      "input": "step_ups",
+      "output": "Step Ups"
+    },
+    {
+      "input": "suitcase_carry",
+      "output": "Suitcase Carry"
+    },
+    {
+      "input": "overhead_carry",
+      "output": "Overhead Carry"
+    },
+    {
+      "input": "front_rack_carry",
+      "output": "Front Rack Carry"
+    },
+    {
+      "input": "yoke_carry",
+      "output": "Yoke Carry"
+    },
+    {
+      "input": "sandbag_carry",
+      "output": "Sandbag Carry"
+    },
+    {
+      "input": "sandbag_clean",
+      "output": "Sandbag Clean"
+    },
+    {
+      "input": "sandbag_to_shoulder",
+      "output": "Sandbag to Shoulder"
+    },
+    {
+      "input": "tire_flip",
+      "output": "Tire Flip"
+    },
+    {
+      "input": "rope_climb",
+      "output": "Rope Climb"
+    },
+    {
+      "input": "box_step_over",
+      "output": "Box Step Over"
+    },
+    {
+      "input": "dumbbell_thruster",
+      "output": "Dumbbell Thruster"
+    },
+    {
+      "input": "kettlebell_thruster",
+      "output": "Kettlebell Thruster"
+    },
+    {
+      "input": "run",
+      "output": "Run"
+    },
+    {
+      "input": "run_1k",
+      "output": "Run 1K"
+    },
+    {
+      "input": "easy_run",
+      "output": "Easy Run"
+    },
+    {
+      "input": "recovery_run",
+      "output": "Recovery Run"
+    },
+    {
+      "input": "tempo_run",
+      "output": "Tempo Run"
+    },
+    {
+      "input": "interval_run",
+      "output": "Intervals"
+    },
+    {
+      "input": "hill_repeats",
+      "output": "Hill Repeats"
+    },
+    {
+      "input": "fartlek_run",
+      "output": "Fartlek Run"
+    },
+    {
+      "input": "long_run",
+      "output": "Long Run"
+    },
+    {
+      "input": "treadmill_run",
+      "output": "Treadmill Run"
+    },
+    {
+      "input": "back_squat",
+      "output": "Back Squat"
+    },
+    {
+      "input": "front_squat",
+      "output": "Front Squat"
+    },
+    {
+      "input": "air_squat",
+      "output": "Air Squat"
+    },
+    {
+      "input": "overhead_squat",
+      "output": "Overhead Squat"
+    },
+    {
+      "input": "zercher_squat",
+      "output": "Zercher Squat"
+    },
+    {
+      "input": "pistol_squat",
+      "output": "Pistol Squat"
+    },
+    {
+      "input": "split_squat",
+      "output": "Split Squat"
+    },
+    {
+      "input": "cossack_squat",
+      "output": "Cossack Squat"
+    },
+    {
+      "input": "belt_squat",
+      "output": "Belt Squat"
+    },
+    {
+      "input": "box_squat",
+      "output": "Box Squat"
+    },
+    {
+      "input": "smith_machine_squat",
+      "output": "Smith Machine Squat"
+    },
+    {
+      "input": "deadlift",
+      "output": "Deadlift"
+    },
+    {
+      "input": "trap_bar_deadlift",
+      "output": "Trap Bar Deadlift"
+    },
+    {
+      "input": "sumo_deadlift",
+      "output": "Sumo Deadlift"
+    },
+    {
+      "input": "stiff_leg_deadlift",
+      "output": "Stiff Leg Deadlift"
+    },
+    {
+      "input": "rack_pull",
+      "output": "Rack Pull"
+    },
+    {
+      "input": "deficit_deadlift",
+      "output": "Deficit Deadlift"
+    },
+    {
+      "input": "romanian_deadlift",
+      "output": "Romanian Deadlift"
+    },
+    {
+      "input": "good_morning",
+      "output": "Good Morning"
+    },
+    {
+      "input": "bench_press",
+      "output": "Bench Press"
+    },
+    {
+      "input": "incline_bench_press",
+      "output": "Incline Bench Press"
+    },
+    {
+      "input": "decline_bench_press",
+      "output": "Decline Bench Press"
+    },
+    {
+      "input": "close_grip_bench_press",
+      "output": "Close Grip Bench Press"
+    },
+    {
+      "input": "incline_dumbbell_bench_press",
+      "output": "Incline Dumbbell Bench Press"
+    },
+    {
+      "input": "dumbbell_fly",
+      "output": "Dumbbell Fly"
+    },
+    {
+      "input": "floor_press",
+      "output": "Floor Press"
+    },
+    {
+      "input": "smith_machine_bench_press",
+      "output": "Smith Machine Bench Press"
+    },
+    {
+      "input": "dumbbell_pullover",
+      "output": "Dumbbell Pullover"
+    },
+    {
+      "input": "push_up",
+      "output": "Push-up"
+    },
+    {
+      "input": "handstand_push_up",
+      "output": "Handstand Push-up"
+    },
+    {
+      "input": "pike_push_up",
+      "output": "Pike Push-up"
+    },
+    {
+      "input": "overhead_press",
+      "output": "Overhead Press"
+    },
+    {
+      "input": "push_press",
+      "output": "Push Press"
+    },
+    {
+      "input": "landmine_press",
+      "output": "Landmine Press"
+    },
+    {
+      "input": "pull_up",
+      "output": "Pull-ups"
+    },
+    {
+      "input": "chin_up",
+      "output": "Chin-ups"
+    },
+    {
+      "input": "assisted_pull_up",
+      "output": "Assisted Pull-up"
+    },
+    {
+      "input": "inverted_row",
+      "output": "Inverted Row"
+    },
+    {
+      "input": "lat_pulldown",
+      "output": "Lat Pulldown"
+    },
+    {
+      "input": "straight_arm_pulldown",
+      "output": "Straight Arm Pulldown"
+    },
+    {
+      "input": "bent_over_row",
+      "output": "Bent Over Row"
+    },
+    {
+      "input": "pendlay_row",
+      "output": "Pendlay Row"
+    },
+    {
+      "input": "machine_row",
+      "output": "Machine Row"
+    },
+    {
+      "input": "landmine_row",
+      "output": "Landmine Row"
+    },
+    {
+      "input": "single_arm_dumbbell_row",
+      "output": "Single Arm Dumbbell Row"
+    },
+    {
+      "input": "lunges",
+      "output": "Lunges"
+    },
+    {
+      "input": "reverse_lunge",
+      "output": "Reverse Lunge"
+    },
+    {
+      "input": "bulgarian_split_squat",
+      "output": "Bulgarian Split Squat"
+    },
+    {
+      "input": "hip_thrust",
+      "output": "Hip Thrust"
+    },
+    {
+      "input": "single_leg_rdl",
+      "output": "Single Leg RDL"
+    },
+    {
+      "input": "barbell_thruster",
+      "output": "Barbell Thruster"
+    },
+    {
+      "input": "goblet_squat",
+      "output": "Goblet Squat"
+    },
+    {
+      "input": "dumbbell_snatch",
+      "output": "Dumbbell Snatch"
+    },
+    {
+      "input": "dumbbell_bench_press",
+      "output": "Dumbbell Bench Press"
+    },
+    {
+      "input": "seated_cable_row",
+      "output": "Seated Cable Row"
+    },
+    {
+      "input": "chest_supported_row",
+      "output": "Chest Supported Row"
+    },
+    {
+      "input": "leg_press",
+      "output": "Leg Press"
+    },
+    {
+      "input": "hack_squat",
+      "output": "Hack Squat"
+    },
+    {
+      "input": "leg_extension",
+      "output": "Leg Extension"
+    },
+    {
+      "input": "hamstring_curl",
+      "output": "Hamstring Curl"
+    },
+    {
+      "input": "calf_raise",
+      "output": "Calf Raise"
+    },
+    {
+      "input": "seated_calf_raise",
+      "output": "Seated Calf Raise"
+    },
+    {
+      "input": "standing_calf_raise",
+      "output": "Standing Calf Raise"
+    },
+    {
+      "input": "tibialis_raise",
+      "output": "Tibialis Raise"
+    },
+    {
+      "input": "dip",
+      "output": "Dips"
+    },
+    {
+      "input": "assisted_dip",
+      "output": "Assisted Dip"
+    },
+    {
+      "input": "ring_dip",
+      "output": "Ring Dip"
+    },
+    {
+      "input": "bench_dip",
+      "output": "Bench Dip"
+    },
+    {
+      "input": "triceps_pushdown",
+      "output": "Triceps Pushdown"
+    },
+    {
+      "input": "triceps_kickback",
+      "output": "Triceps Kickback"
+    },
+    {
+      "input": "rope_triceps_pushdown",
+      "output": "Rope Triceps Pushdown"
+    },
+    {
+      "input": "skull_crusher",
+      "output": "Skull Crusher"
+    },
+    {
+      "input": "overhead_triceps_extension",
+      "output": "Overhead Triceps Extension"
+    },
+    {
+      "input": "barbell_curl",
+      "output": "Barbell Curl"
+    },
+    {
+      "input": "dumbbell_curl",
+      "output": "Dumbbell Curl"
+    },
+    {
+      "input": "hammer_curl",
+      "output": "Hammer Curl"
+    },
+    {
+      "input": "preacher_curl",
+      "output": "Preacher Curl"
+    },
+    {
+      "input": "cable_curl",
+      "output": "Cable Curl"
+    },
+    {
+      "input": "concentration_curl",
+      "output": "Concentration Curl"
+    },
+    {
+      "input": "incline_dumbbell_curl",
+      "output": "Incline Dumbbell Curl"
+    },
+    {
+      "input": "reverse_curl",
+      "output": "Reverse Curl"
+    },
+    {
+      "input": "wrist_curl",
+      "output": "Wrist Curl"
+    },
+    {
+      "input": "reverse_wrist_curl",
+      "output": "Reverse Wrist Curl"
+    },
+    {
+      "input": "face_pull",
+      "output": "Face Pull"
+    },
+    {
+      "input": "cable_fly",
+      "output": "Cable Fly"
+    },
+    {
+      "input": "pec_deck",
+      "output": "Pec Deck"
+    },
+    {
+      "input": "lateral_raise",
+      "output": "Lateral Raise"
+    },
+    {
+      "input": "cable_lateral_raise",
+      "output": "Cable Lateral Raise"
+    },
+    {
+      "input": "machine_lateral_raise",
+      "output": "Machine Lateral Raise"
+    },
+    {
+      "input": "front_raise",
+      "output": "Front Raise"
+    },
+    {
+      "input": "rear_delt_fly",
+      "output": "Rear Delt Fly"
+    },
+    {
+      "input": "reverse_pec_deck",
+      "output": "Reverse Pec Deck"
+    },
+    {
+      "input": "cable_rear_delt_fly",
+      "output": "Cable Rear Delt Fly"
+    },
+    {
+      "input": "band_pull_apart",
+      "output": "Band Pull Apart"
+    },
+    {
+      "input": "seated_dumbbell_press",
+      "output": "Seated Dumbbell Press"
+    },
+    {
+      "input": "arnold_press",
+      "output": "Arnold Press"
+    },
+    {
+      "input": "machine_shoulder_press",
+      "output": "Machine Shoulder Press"
+    },
+    {
+      "input": "barbell_shrug",
+      "output": "Barbell Shrug"
+    },
+    {
+      "input": "upright_row",
+      "output": "Upright Row"
+    },
+    {
+      "input": "t_bar_row",
+      "output": "T-Bar Row"
+    },
+    {
+      "input": "single_arm_cable_row",
+      "output": "Single Arm Cable Row"
+    },
+    {
+      "input": "high_row_machine",
+      "output": "High Row Machine"
+    },
+    {
+      "input": "chest_press_machine",
+      "output": "Chest Press Machine"
+    },
+    {
+      "input": "pullover_machine",
+      "output": "Pullover Machine"
+    },
+    {
+      "input": "glute_bridge",
+      "output": "Glute Bridge"
+    },
+    {
+      "input": "nordic_hamstring_curl",
+      "output": "Nordic Hamstring Curl"
+    },
+    {
+      "input": "glute_ham_raise",
+      "output": "Glute Ham Raise"
+    },
+    {
+      "input": "cable_pull_through",
+      "output": "Cable Pull Through"
+    },
+    {
+      "input": "hip_abduction_machine",
+      "output": "Hip Abduction Machine"
+    },
+    {
+      "input": "hip_adduction_machine",
+      "output": "Hip Adduction Machine"
+    },
+    {
+      "input": "glute_kickback",
+      "output": "Glute Kickback"
+    },
+    {
+      "input": "donkey_kick",
+      "output": "Donkey Kick"
+    },
+    {
+      "input": "frog_pump",
+      "output": "Frog Pump"
+    },
+    {
+      "input": "clamshell",
+      "output": "Clamshell"
+    },
+    {
+      "input": "sissy_squat",
+      "output": "Sissy Squat"
+    },
+    {
+      "input": "pendulum_squat",
+      "output": "Pendulum Squat"
+    },
+    {
+      "input": "cable_crunch",
+      "output": "Cable Crunch"
+    },
+    {
+      "input": "side_plank",
+      "output": "Side Plank"
+    },
+    {
+      "input": "ab_wheel_rollout",
+      "output": "Ab Wheel Rollout"
+    },
+    {
+      "input": "pallof_press",
+      "output": "Pallof Press"
+    },
+    {
+      "input": "sit_up",
+      "output": "Sit-up"
+    },
+    {
+      "input": "crunch",
+      "output": "Crunch"
+    },
+    {
+      "input": "reverse_crunch",
+      "output": "Reverse Crunch"
+    },
+    {
+      "input": "bicycle_crunch",
+      "output": "Bicycle Crunch"
+    },
+    {
+      "input": "russian_twist",
+      "output": "Russian Twist"
+    },
+    {
+      "input": "dead_bug",
+      "output": "Dead Bug"
+    },
+    {
+      "input": "bird_dog",
+      "output": "Bird Dog"
+    },
+    {
+      "input": "back_extension",
+      "output": "Back Extension"
+    },
+    {
+      "input": "plank",
+      "output": "Plank"
+    },
+    {
+      "input": "hanging_leg_raise",
+      "output": "Hanging Leg Raise"
+    },
+    {
+      "input": "lying_leg_raise",
+      "output": "Lying Leg Raise"
+    },
+    {
+      "input": "toes_to_bar",
+      "output": "Toes to Bar"
+    },
+    {
+      "input": "v_up",
+      "output": "V-up"
+    },
+    {
+      "input": "hollow_hold",
+      "output": "Hollow Hold"
+    },
+    {
+      "input": "flutter_kicks",
+      "output": "Flutter Kicks"
+    },
+    {
+      "input": "clean",
+      "output": "Clean"
+    },
+    {
+      "input": "power_clean",
+      "output": "Power Clean"
+    },
+    {
+      "input": "hang_clean",
+      "output": "Hang Clean"
+    },
+    {
+      "input": "clean_and_jerk",
+      "output": "Clean and Jerk"
+    },
+    {
+      "input": "jerk",
+      "output": "Jerk"
+    },
+    {
+      "input": "split_jerk",
+      "output": "Split Jerk"
+    },
+    {
+      "input": "snatch",
+      "output": "Snatch"
+    },
+    {
+      "input": "power_snatch",
+      "output": "Power Snatch"
+    },
+    {
+      "input": "hang_snatch",
+      "output": "Hang Snatch"
+    },
+    {
+      "input": "turkish_get_up",
+      "output": "Turkish Get-up"
+    },
+    {
+      "input": "kettlebell_clean",
+      "output": "Kettlebell Clean"
+    },
+    {
+      "input": "kettlebell_snatch",
+      "output": "Kettlebell Snatch"
+    },
+    {
+      "input": "kettlebell_press",
+      "output": "Kettlebell Press"
+    },
+    {
+      "input": "burpees",
+      "output": "Burpees"
+    },
+    {
+      "input": "box_jumps",
+      "output": "Box Jumps"
+    },
+    {
+      "input": "devil_press",
+      "output": "Devil Press"
+    },
+    {
+      "input": "walking",
+      "output": "Walking"
+    },
+    {
+      "input": "incline_walk",
+      "output": "Incline Walk"
+    },
+    {
+      "input": "hiking",
+      "output": "Hiking"
+    },
+    {
+      "input": "rucking",
+      "output": "Rucking"
+    },
+    {
+      "input": "cycling",
+      "output": "Cycling"
+    },
+    {
+      "input": "bike_erg",
+      "output": "BikeErg"
+    },
+    {
+      "input": "elliptical",
+      "output": "Elliptical"
+    },
+    {
+      "input": "stair_climber",
+      "output": "Stair Climber"
+    },
+    {
+      "input": "swimming",
+      "output": "Swimming"
+    },
+    {
+      "input": "sprints",
+      "output": "Sprints"
+    },
+    {
+      "input": "bear_crawl",
+      "output": "Bear Crawl"
+    },
+    {
+      "input": "crab_walk",
+      "output": "Crab Walk"
+    },
+    {
+      "input": "jumping_jacks",
+      "output": "Jumping Jacks"
+    },
+    {
+      "input": "high_knees",
+      "output": "High Knees"
+    },
+    {
+      "input": "butt_kicks",
+      "output": "Butt Kicks"
+    },
+    {
+      "input": "assault_bike",
+      "output": "Assault Bike"
+    },
+    {
+      "input": "stationary_bike",
+      "output": "Stationary Bike"
+    },
+    {
+      "input": "kettlebell_swings",
+      "output": "KB Swings"
+    },
+    {
+      "input": "battle_ropes",
+      "output": "Battle Ropes"
+    },
+    {
+      "input": "walking_lunges",
+      "output": "Walking Lunges"
+    },
+    {
+      "input": "echo_bike",
+      "output": "Echo Bike"
+    },
+    {
+      "input": "ski_erg_intervals",
+      "output": "SkiErg Intervals"
+    },
+    {
+      "input": "jump_rope",
+      "output": "Jump Rope"
+    },
+    {
+      "input": "mountain_climbers",
+      "output": "Mountain Climbers"
+    },
+    {
+      "input": "rowing_intervals",
+      "output": "Rowing Intervals"
+    },
+    {
+      "input": "treadmill_intervals",
+      "output": "Treadmill Intervals"
+    },
+    {
+      "input": "emom",
+      "output": "EMOM"
+    },
+    {
+      "input": "amrap",
+      "output": "AMRAP"
+    },
+    {
+      "input": "custom",
+      "output": "Custom"
+    },
+    {
+      "input": "running",
+      "output": null
+    },
+    {
+      "input": "runs",
+      "output": null
+    },
+    {
+      "input": "road_run",
+      "output": null
+    },
+    {
+      "input": "trail_run",
+      "output": null
+    },
+    {
+      "input": "rdl",
+      "output": null
+    },
+    {
+      "input": "romanian_deadlifts",
+      "output": null
+    },
+    {
+      "input": "air_squats",
+      "output": null
+    },
+    {
+      "input": "overhead_squats",
+      "output": null
+    },
+    {
+      "input": "zercher_squats",
+      "output": null
+    },
+    {
+      "input": "pistols",
+      "output": null
+    },
+    {
+      "input": "pistol_squats",
+      "output": null
+    },
+    {
+      "input": "split_squats",
+      "output": null
+    },
+    {
+      "input": "cossack_squats",
+      "output": null
+    },
+    {
+      "input": "belt_squats",
+      "output": null
+    },
+    {
+      "input": "stiff_leg_deadlifts",
+      "output": null
+    },
+    {
+      "input": "sldl",
+      "output": null
+    },
+    {
+      "input": "rack_pulls",
+      "output": null
+    },
+    {
+      "input": "deficit_deadlifts",
+      "output": null
+    },
+    {
+      "input": "pushups",
+      "output": null
+    },
+    {
+      "input": "push_ups",
+      "output": null
+    },
+    {
+      "input": "handstand_pushups",
+      "output": null
+    },
+    {
+      "input": "handstand_push_ups",
+      "output": null
+    },
+    {
+      "input": "hspu",
+      "output": null
+    },
+    {
+      "input": "pike_pushups",
+      "output": null
+    },
+    {
+      "input": "pike_push_ups",
+      "output": null
+    },
+    {
+      "input": "floor_presses",
+      "output": null
+    },
+    {
+      "input": "smith_bench",
+      "output": null
+    },
+    {
+      "input": "smith_machine_bench",
+      "output": null
+    },
+    {
+      "input": "db_bench",
+      "output": null
+    },
+    {
+      "input": "dumbbell_bench",
+      "output": null
+    },
+    {
+      "input": "incline_db_bench",
+      "output": null
+    },
+    {
+      "input": "incline_dumbbell_bench",
+      "output": null
+    },
+    {
+      "input": "db_pullover",
+      "output": null
+    },
+    {
+      "input": "dumbbell_pullovers",
+      "output": null
+    },
+    {
+      "input": "db_fly",
+      "output": null
+    },
+    {
+      "input": "dumbbell_flys",
+      "output": null
+    },
+    {
+      "input": "dumbbell_flies",
+      "output": null
+    },
+    {
+      "input": "close_grip_bench",
+      "output": null
+    },
+    {
+      "input": "ohp",
+      "output": null
+    },
+    {
+      "input": "strict_press",
+      "output": null
+    },
+    {
+      "input": "landmine_presses",
+      "output": null
+    },
+    {
+      "input": "lat_pulldowns",
+      "output": null
+    },
+    {
+      "input": "lat_pull_down",
+      "output": null
+    },
+    {
+      "input": "pullups",
+      "output": null
+    },
+    {
+      "input": "chinup",
+      "output": null
+    },
+    {
+      "input": "chinups",
+      "output": null
+    },
+    {
+      "input": "chin_ups",
+      "output": null
+    },
+    {
+      "input": "assisted_pullups",
+      "output": null
+    },
+    {
+      "input": "assisted_pull_ups",
+      "output": null
+    },
+    {
+      "input": "inverted_rows",
+      "output": null
+    },
+    {
+      "input": "straight_arm_lat_pulldown",
+      "output": null
+    },
+    {
+      "input": "straight_arm_pulldowns",
+      "output": null
+    },
+    {
+      "input": "seated_row",
+      "output": null
+    },
+    {
+      "input": "cable_row",
+      "output": null
+    },
+    {
+      "input": "chest_supported_rows",
+      "output": null
+    },
+    {
+      "input": "pendlay_rows",
+      "output": null
+    },
+    {
+      "input": "machine_rows",
+      "output": null
+    },
+    {
+      "input": "landmine_rows",
+      "output": null
+    },
+    {
+      "input": "trap_bar_dl",
+      "output": null
+    },
+    {
+      "input": "hex_bar_deadlift",
+      "output": null
+    },
+    {
+      "input": "hex_bar_dl",
+      "output": null
+    },
+    {
+      "input": "sumo_dl",
+      "output": null
+    },
+    {
+      "input": "sumo_deadlifts",
+      "output": null
+    },
+    {
+      "input": "good_mornings",
+      "output": null
+    },
+    {
+      "input": "box_squats",
+      "output": null
+    },
+    {
+      "input": "smith_squat",
+      "output": null
+    },
+    {
+      "input": "smith_machine_squats",
+      "output": null
+    },
+    {
+      "input": "legpress",
+      "output": null
+    },
+    {
+      "input": "hacksquat",
+      "output": null
+    },
+    {
+      "input": "leg_extensions",
+      "output": null
+    },
+    {
+      "input": "hamstring_curls",
+      "output": null
+    },
+    {
+      "input": "calf_raises",
+      "output": null
+    },
+    {
+      "input": "seated_calf_raises",
+      "output": null
+    },
+    {
+      "input": "standing_calf_raises",
+      "output": null
+    },
+    {
+      "input": "tib_raises",
+      "output": null
+    },
+    {
+      "input": "tibialis_raises",
+      "output": null
+    },
+    {
+      "input": "reverse_lunges",
+      "output": null
+    },
+    {
+      "input": "dips",
+      "output": null
+    },
+    {
+      "input": "assisted_dips",
+      "output": null
+    },
+    {
+      "input": "ring_dips",
+      "output": null
+    },
+    {
+      "input": "bench_dips",
+      "output": null
+    },
+    {
+      "input": "tricep_pushdown",
+      "output": null
+    },
+    {
+      "input": "tricep_pushdowns",
+      "output": null
+    },
+    {
+      "input": "tricep_kickback",
+      "output": null
+    },
+    {
+      "input": "tricep_kickbacks",
+      "output": null
+    },
+    {
+      "input": "triceps_kickbacks",
+      "output": null
+    },
+    {
+      "input": "rope_tricep_pushdown",
+      "output": null
+    },
+    {
+      "input": "rope_tricep_pushdowns",
+      "output": null
+    },
+    {
+      "input": "rope_pushdown",
+      "output": null
+    },
+    {
+      "input": "rope_pushdowns",
+      "output": null
+    },
+    {
+      "input": "skullcrushers",
+      "output": null
+    },
+    {
+      "input": "skull_crushers",
+      "output": null
+    },
+    {
+      "input": "overhead_tricep_extension",
+      "output": null
+    },
+    {
+      "input": "overhead_tricep_extensions",
+      "output": null
+    },
+    {
+      "input": "overhead_triceps_extensions",
+      "output": null
+    },
+    {
+      "input": "bb_curl",
+      "output": null
+    },
+    {
+      "input": "curls",
+      "output": null
+    },
+    {
+      "input": "hammer_curls",
+      "output": null
+    },
+    {
+      "input": "preacher_curls",
+      "output": null
+    },
+    {
+      "input": "cable_curls",
+      "output": null
+    },
+    {
+      "input": "concentration_curls",
+      "output": null
+    },
+    {
+      "input": "incline_db_curl",
+      "output": null
+    },
+    {
+      "input": "incline_db_curls",
+      "output": null
+    },
+    {
+      "input": "reverse_curls",
+      "output": null
+    },
+    {
+      "input": "wrist_curls",
+      "output": null
+    },
+    {
+      "input": "reverse_wrist_curls",
+      "output": null
+    },
+    {
+      "input": "db_row",
+      "output": null
+    },
+    {
+      "input": "arnold_presses",
+      "output": null
+    },
+    {
+      "input": "cable_lateral_raises",
+      "output": null
+    },
+    {
+      "input": "machine_lateral_raises",
+      "output": null
+    },
+    {
+      "input": "front_raises",
+      "output": null
+    },
+    {
+      "input": "shrugs",
+      "output": null
+    },
+    {
+      "input": "barbell_shrugs",
+      "output": null
+    },
+    {
+      "input": "tbar_row",
+      "output": null
+    },
+    {
+      "input": "machine_chest_press",
+      "output": null
+    },
+    {
+      "input": "shoulder_press_machine",
+      "output": null
+    },
+    {
+      "input": "lat_raise",
+      "output": null
+    },
+    {
+      "input": "rear_delt_raise",
+      "output": null
+    },
+    {
+      "input": "reverse_pec_decks",
+      "output": null
+    },
+    {
+      "input": "cable_rear_delt_flys",
+      "output": null
+    },
+    {
+      "input": "cable_rear_delt_flies",
+      "output": null
+    },
+    {
+      "input": "band_pull_aparts",
+      "output": null
+    },
+    {
+      "input": "high_rows",
+      "output": null
+    },
+    {
+      "input": "high_row",
+      "output": null
+    },
+    {
+      "input": "pullover_machines",
+      "output": null
+    },
+    {
+      "input": "abductor_machine",
+      "output": null
+    },
+    {
+      "input": "hip_abductor",
+      "output": null
+    },
+    {
+      "input": "hip_abductor_machine",
+      "output": null
+    },
+    {
+      "input": "adductor_machine",
+      "output": null
+    },
+    {
+      "input": "hip_adductor",
+      "output": null
+    },
+    {
+      "input": "hip_adductor_machine",
+      "output": null
+    },
+    {
+      "input": "glute_kickbacks",
+      "output": null
+    },
+    {
+      "input": "cable_kickback",
+      "output": null
+    },
+    {
+      "input": "cable_kickbacks",
+      "output": null
+    },
+    {
+      "input": "donkey_kicks",
+      "output": null
+    },
+    {
+      "input": "frog_pumps",
+      "output": null
+    },
+    {
+      "input": "clamshells",
+      "output": null
+    },
+    {
+      "input": "sissy_squats",
+      "output": null
+    },
+    {
+      "input": "pendulum_squats",
+      "output": null
+    },
+    {
+      "input": "nordics",
+      "output": null
+    },
+    {
+      "input": "nordic_curl",
+      "output": null
+    },
+    {
+      "input": "nordic_curls",
+      "output": null
+    },
+    {
+      "input": "ghr",
+      "output": null
+    },
+    {
+      "input": "glute_ham_raises",
+      "output": null
+    },
+    {
+      "input": "pull_through",
+      "output": null
+    },
+    {
+      "input": "pull_throughs",
+      "output": null
+    },
+    {
+      "input": "cable_pull_throughs",
+      "output": null
+    },
+    {
+      "input": "ab_crunch",
+      "output": null
+    },
+    {
+      "input": "situps",
+      "output": null
+    },
+    {
+      "input": "sit_ups",
+      "output": null
+    },
+    {
+      "input": "crunches",
+      "output": null
+    },
+    {
+      "input": "reverse_crunches",
+      "output": null
+    },
+    {
+      "input": "bicycle_crunches",
+      "output": null
+    },
+    {
+      "input": "russian_twists",
+      "output": null
+    },
+    {
+      "input": "dead_bugs",
+      "output": null
+    },
+    {
+      "input": "bird_dogs",
+      "output": null
+    },
+    {
+      "input": "back_extensions",
+      "output": null
+    },
+    {
+      "input": "hyperextension",
+      "output": null
+    },
+    {
+      "input": "hyperextensions",
+      "output": null
+    },
+    {
+      "input": "side_planks",
+      "output": null
+    },
+    {
+      "input": "ab_wheel",
+      "output": null
+    },
+    {
+      "input": "ab_rollout",
+      "output": null
+    },
+    {
+      "input": "ab_rollouts",
+      "output": null
+    },
+    {
+      "input": "pallof_presses",
+      "output": null
+    },
+    {
+      "input": "hanging_leg_raises",
+      "output": null
+    },
+    {
+      "input": "lying_leg_raises",
+      "output": null
+    },
+    {
+      "input": "toes_to_bars",
+      "output": null
+    },
+    {
+      "input": "t2b",
+      "output": null
+    },
+    {
+      "input": "vups",
+      "output": null
+    },
+    {
+      "input": "v_ups",
+      "output": null
+    },
+    {
+      "input": "hollow_holds",
+      "output": null
+    },
+    {
+      "input": "flutter_kick",
+      "output": null
+    },
+    {
+      "input": "rope_jump",
+      "output": null
+    },
+    {
+      "input": "row_intervals",
+      "output": null
+    },
+    {
+      "input": "bikeerg",
+      "output": null
+    },
+    {
+      "input": "bike_ergometer",
+      "output": null
+    },
+    {
+      "input": "stairmaster",
+      "output": null
+    },
+    {
+      "input": "stair_climbers",
+      "output": null
+    },
+    {
+      "input": "ruck",
+      "output": null
+    },
+    {
+      "input": "bear_crawls",
+      "output": null
+    },
+    {
+      "input": "crab_walks",
+      "output": null
+    },
+    {
+      "input": "jumping_jack",
+      "output": null
+    },
+    {
+      "input": "high_knee",
+      "output": null
+    },
+    {
+      "input": "butt_kick",
+      "output": null
+    },
+    {
+      "input": "suitcase_carries",
+      "output": null
+    },
+    {
+      "input": "overhead_carries",
+      "output": null
+    },
+    {
+      "input": "front_rack_carries",
+      "output": null
+    },
+    {
+      "input": "yoke_walk",
+      "output": null
+    },
+    {
+      "input": "yoke_walks",
+      "output": null
+    },
+    {
+      "input": "sandbag_carries",
+      "output": null
+    },
+    {
+      "input": "sandbag_cleans",
+      "output": null
+    },
+    {
+      "input": "sandbag_shouldering",
+      "output": null
+    },
+    {
+      "input": "tire_flips",
+      "output": null
+    },
+    {
+      "input": "rope_climbs",
+      "output": null
+    },
+    {
+      "input": "box_step_overs",
+      "output": null
+    },
+    {
+      "input": "db_thruster",
+      "output": null
+    },
+    {
+      "input": "db_thrusters",
+      "output": null
+    },
+    {
+      "input": "kb_thruster",
+      "output": null
+    },
+    {
+      "input": "kb_thrusters",
+      "output": null
+    },
+    {
+      "input": "clean_jerk",
+      "output": null
+    },
+    {
+      "input": "c_j",
+      "output": null
+    },
+    {
+      "input": "power_cleans",
+      "output": null
+    },
+    {
+      "input": "hang_cleans",
+      "output": null
+    },
+    {
+      "input": "split_jerks",
+      "output": null
+    },
+    {
+      "input": "power_snatches",
+      "output": null
+    },
+    {
+      "input": "hang_snatches",
+      "output": null
+    },
+    {
+      "input": "tgu",
+      "output": null
+    },
+    {
+      "input": "turkish_getup",
+      "output": null
+    },
+    {
+      "input": "kb_clean",
+      "output": null
+    },
+    {
+      "input": "kb_cleans",
+      "output": null
+    },
+    {
+      "input": "kb_snatch",
+      "output": null
+    },
+    {
+      "input": "kb_snatches",
+      "output": null
+    },
+    {
+      "input": "kb_press",
+      "output": null
+    },
+    {
+      "input": "kb_presses",
+      "output": null
+    },
+    {
+      "input": "devil_presses",
+      "output": null
+    },
+    {
+      "input": "SkiErg",
+      "output": null
+    },
+    {
+      "input": "Sled Push",
+      "output": null
+    },
+    {
+      "input": "Sled Pull",
+      "output": null
+    },
+    {
+      "input": "Burpee Broad Jump",
+      "output": null
+    },
+    {
+      "input": "Rowing",
+      "output": null
+    },
+    {
+      "input": "Farmers Carry",
+      "output": null
+    },
+    {
+      "input": "Sandbag Lunges",
+      "output": null
+    },
+    {
+      "input": "Wall Balls",
+      "output": null
+    },
+    {
+      "input": "Shuttle Run",
+      "output": null
+    },
+    {
+      "input": "Med Ball Slams",
+      "output": null
+    },
+    {
+      "input": "Step Ups",
+      "output": null
+    },
+    {
+      "input": "Suitcase Carry",
+      "output": null
+    },
+    {
+      "input": "Overhead Carry",
+      "output": null
+    },
+    {
+      "input": "Front Rack Carry",
+      "output": null
+    },
+    {
+      "input": "Yoke Carry",
+      "output": null
+    },
+    {
+      "input": "Sandbag Carry",
+      "output": null
+    },
+    {
+      "input": "Sandbag Clean",
+      "output": null
+    },
+    {
+      "input": "Sandbag to Shoulder",
+      "output": null
+    },
+    {
+      "input": "Tire Flip",
+      "output": null
+    },
+    {
+      "input": "Rope Climb",
+      "output": null
+    },
+    {
+      "input": "Box Step Over",
+      "output": null
+    },
+    {
+      "input": "Dumbbell Thruster",
+      "output": null
+    },
+    {
+      "input": "Kettlebell Thruster",
+      "output": null
+    },
+    {
+      "input": "Run",
+      "output": null
+    },
+    {
+      "input": "Run 1K",
+      "output": null
+    },
+    {
+      "input": "Easy Run",
+      "output": null
+    },
+    {
+      "input": "Recovery Run",
+      "output": null
+    },
+    {
+      "input": "Tempo Run",
+      "output": null
+    },
+    {
+      "input": "Intervals",
+      "output": null
+    },
+    {
+      "input": "Hill Repeats",
+      "output": null
+    },
+    {
+      "input": "Fartlek Run",
+      "output": null
+    },
+    {
+      "input": "Long Run",
+      "output": null
+    },
+    {
+      "input": "Treadmill Run",
+      "output": null
+    },
+    {
+      "input": "Back Squat",
+      "output": null
+    },
+    {
+      "input": "Front Squat",
+      "output": null
+    },
+    {
+      "input": "Air Squat",
+      "output": null
+    },
+    {
+      "input": "Overhead Squat",
+      "output": null
+    },
+    {
+      "input": "Zercher Squat",
+      "output": null
+    },
+    {
+      "input": "Pistol Squat",
+      "output": null
+    },
+    {
+      "input": "Split Squat",
+      "output": null
+    },
+    {
+      "input": "Cossack Squat",
+      "output": null
+    },
+    {
+      "input": "Belt Squat",
+      "output": null
+    },
+    {
+      "input": "Box Squat",
+      "output": null
+    },
+    {
+      "input": "Smith Machine Squat",
+      "output": null
+    },
+    {
+      "input": "Deadlift",
+      "output": null
+    },
+    {
+      "input": "Trap Bar Deadlift",
+      "output": null
+    },
+    {
+      "input": "Sumo Deadlift",
+      "output": null
+    },
+    {
+      "input": "Stiff Leg Deadlift",
+      "output": null
+    },
+    {
+      "input": "Rack Pull",
+      "output": null
+    },
+    {
+      "input": "Deficit Deadlift",
+      "output": null
+    },
+    {
+      "input": "Romanian Deadlift",
+      "output": null
+    },
+    {
+      "input": "Good Morning",
+      "output": null
+    },
+    {
+      "input": "Bench Press",
+      "output": null
+    },
+    {
+      "input": "Incline Bench Press",
+      "output": null
+    },
+    {
+      "input": "Decline Bench Press",
+      "output": null
+    },
+    {
+      "input": "Close Grip Bench Press",
+      "output": null
+    },
+    {
+      "input": "Incline Dumbbell Bench Press",
+      "output": null
+    },
+    {
+      "input": "Dumbbell Fly",
+      "output": null
+    },
+    {
+      "input": "Floor Press",
+      "output": null
+    },
+    {
+      "input": "Smith Machine Bench Press",
+      "output": null
+    },
+    {
+      "input": "Dumbbell Pullover",
+      "output": null
+    },
+    {
+      "input": "Push-up",
+      "output": null
+    },
+    {
+      "input": "Handstand Push-up",
+      "output": null
+    },
+    {
+      "input": "Pike Push-up",
+      "output": null
+    },
+    {
+      "input": "Overhead Press",
+      "output": null
+    },
+    {
+      "input": "Push Press",
+      "output": null
+    },
+    {
+      "input": "Landmine Press",
+      "output": null
+    },
+    {
+      "input": "Pull-ups",
+      "output": null
+    },
+    {
+      "input": "Chin-ups",
+      "output": null
+    },
+    {
+      "input": "Assisted Pull-up",
+      "output": null
+    },
+    {
+      "input": "Inverted Row",
+      "output": null
+    },
+    {
+      "input": "Lat Pulldown",
+      "output": null
+    },
+    {
+      "input": "Straight Arm Pulldown",
+      "output": null
+    },
+    {
+      "input": "Bent Over Row",
+      "output": null
+    },
+    {
+      "input": "Pendlay Row",
+      "output": null
+    },
+    {
+      "input": "Machine Row",
+      "output": null
+    },
+    {
+      "input": "Landmine Row",
+      "output": null
+    },
+    {
+      "input": "Single Arm Dumbbell Row",
+      "output": null
+    },
+    {
+      "input": "Lunges",
+      "output": null
+    },
+    {
+      "input": "Reverse Lunge",
+      "output": null
+    },
+    {
+      "input": "Bulgarian Split Squat",
+      "output": null
+    },
+    {
+      "input": "Hip Thrust",
+      "output": null
+    },
+    {
+      "input": "Single Leg RDL",
+      "output": null
+    },
+    {
+      "input": "Barbell Thruster",
+      "output": null
+    },
+    {
+      "input": "Goblet Squat",
+      "output": null
+    },
+    {
+      "input": "Dumbbell Snatch",
+      "output": null
+    },
+    {
+      "input": "Dumbbell Bench Press",
+      "output": null
+    },
+    {
+      "input": "Seated Cable Row",
+      "output": null
+    },
+    {
+      "input": "Chest Supported Row",
+      "output": null
+    },
+    {
+      "input": "Leg Press",
+      "output": null
+    },
+    {
+      "input": "Hack Squat",
+      "output": null
+    },
+    {
+      "input": "Leg Extension",
+      "output": null
+    },
+    {
+      "input": "Hamstring Curl",
+      "output": null
+    },
+    {
+      "input": "Calf Raise",
+      "output": null
+    },
+    {
+      "input": "Seated Calf Raise",
+      "output": null
+    },
+    {
+      "input": "Standing Calf Raise",
+      "output": null
+    },
+    {
+      "input": "Tibialis Raise",
+      "output": null
+    },
+    {
+      "input": "Dips",
+      "output": null
+    },
+    {
+      "input": "Assisted Dip",
+      "output": null
+    },
+    {
+      "input": "Ring Dip",
+      "output": null
+    },
+    {
+      "input": "Bench Dip",
+      "output": null
+    },
+    {
+      "input": "Triceps Pushdown",
+      "output": null
+    },
+    {
+      "input": "Triceps Kickback",
+      "output": null
+    },
+    {
+      "input": "Rope Triceps Pushdown",
+      "output": null
+    },
+    {
+      "input": "Skull Crusher",
+      "output": null
+    },
+    {
+      "input": "Overhead Triceps Extension",
+      "output": null
+    },
+    {
+      "input": "Barbell Curl",
+      "output": null
+    },
+    {
+      "input": "Dumbbell Curl",
+      "output": null
+    },
+    {
+      "input": "Hammer Curl",
+      "output": null
+    },
+    {
+      "input": "Preacher Curl",
+      "output": null
+    },
+    {
+      "input": "Cable Curl",
+      "output": null
+    },
+    {
+      "input": "Concentration Curl",
+      "output": null
+    },
+    {
+      "input": "Incline Dumbbell Curl",
+      "output": null
+    },
+    {
+      "input": "Reverse Curl",
+      "output": null
+    },
+    {
+      "input": "Wrist Curl",
+      "output": null
+    },
+    {
+      "input": "Reverse Wrist Curl",
+      "output": null
+    },
+    {
+      "input": "Face Pull",
+      "output": null
+    },
+    {
+      "input": "Cable Fly",
+      "output": null
+    },
+    {
+      "input": "Pec Deck",
+      "output": null
+    },
+    {
+      "input": "Lateral Raise",
+      "output": null
+    },
+    {
+      "input": "Cable Lateral Raise",
+      "output": null
+    },
+    {
+      "input": "Machine Lateral Raise",
+      "output": null
+    },
+    {
+      "input": "Front Raise",
+      "output": null
+    },
+    {
+      "input": "Rear Delt Fly",
+      "output": null
+    },
+    {
+      "input": "Reverse Pec Deck",
+      "output": null
+    },
+    {
+      "input": "Cable Rear Delt Fly",
+      "output": null
+    },
+    {
+      "input": "Band Pull Apart",
+      "output": null
+    },
+    {
+      "input": "Seated Dumbbell Press",
+      "output": null
+    },
+    {
+      "input": "Arnold Press",
+      "output": null
+    },
+    {
+      "input": "Machine Shoulder Press",
+      "output": null
+    },
+    {
+      "input": "Barbell Shrug",
+      "output": null
+    },
+    {
+      "input": "Upright Row",
+      "output": null
+    },
+    {
+      "input": "T-Bar Row",
+      "output": null
+    },
+    {
+      "input": "Single Arm Cable Row",
+      "output": null
+    },
+    {
+      "input": "High Row Machine",
+      "output": null
+    },
+    {
+      "input": "Chest Press Machine",
+      "output": null
+    },
+    {
+      "input": "Pullover Machine",
+      "output": null
+    },
+    {
+      "input": "Glute Bridge",
+      "output": null
+    },
+    {
+      "input": "Nordic Hamstring Curl",
+      "output": null
+    },
+    {
+      "input": "Glute Ham Raise",
+      "output": null
+    },
+    {
+      "input": "Cable Pull Through",
+      "output": null
+    },
+    {
+      "input": "Hip Abduction Machine",
+      "output": null
+    },
+    {
+      "input": "Hip Adduction Machine",
+      "output": null
+    },
+    {
+      "input": "Glute Kickback",
+      "output": null
+    },
+    {
+      "input": "Donkey Kick",
+      "output": null
+    },
+    {
+      "input": "Frog Pump",
+      "output": null
+    },
+    {
+      "input": "Clamshell",
+      "output": null
+    },
+    {
+      "input": "Sissy Squat",
+      "output": null
+    },
+    {
+      "input": "Pendulum Squat",
+      "output": null
+    },
+    {
+      "input": "Cable Crunch",
+      "output": null
+    },
+    {
+      "input": "Side Plank",
+      "output": null
+    },
+    {
+      "input": "Ab Wheel Rollout",
+      "output": null
+    },
+    {
+      "input": "Pallof Press",
+      "output": null
+    },
+    {
+      "input": "Sit-up",
+      "output": null
+    },
+    {
+      "input": "Crunch",
+      "output": null
+    },
+    {
+      "input": "Reverse Crunch",
+      "output": null
+    },
+    {
+      "input": "Bicycle Crunch",
+      "output": null
+    },
+    {
+      "input": "Russian Twist",
+      "output": null
+    },
+    {
+      "input": "Dead Bug",
+      "output": null
+    },
+    {
+      "input": "Bird Dog",
+      "output": null
+    },
+    {
+      "input": "Back Extension",
+      "output": null
+    },
+    {
+      "input": "Plank",
+      "output": null
+    },
+    {
+      "input": "Hanging Leg Raise",
+      "output": null
+    },
+    {
+      "input": "Lying Leg Raise",
+      "output": null
+    },
+    {
+      "input": "Toes to Bar",
+      "output": null
+    },
+    {
+      "input": "V-up",
+      "output": null
+    },
+    {
+      "input": "Hollow Hold",
+      "output": null
+    },
+    {
+      "input": "Flutter Kicks",
+      "output": null
+    },
+    {
+      "input": "Clean",
+      "output": null
+    },
+    {
+      "input": "Power Clean",
+      "output": null
+    },
+    {
+      "input": "Hang Clean",
+      "output": null
+    },
+    {
+      "input": "Clean and Jerk",
+      "output": null
+    },
+    {
+      "input": "Jerk",
+      "output": null
+    },
+    {
+      "input": "Split Jerk",
+      "output": null
+    },
+    {
+      "input": "Snatch",
+      "output": null
+    },
+    {
+      "input": "Power Snatch",
+      "output": null
+    },
+    {
+      "input": "Hang Snatch",
+      "output": null
+    },
+    {
+      "input": "Turkish Get-up",
+      "output": null
+    },
+    {
+      "input": "Kettlebell Clean",
+      "output": null
+    },
+    {
+      "input": "Kettlebell Snatch",
+      "output": null
+    },
+    {
+      "input": "Kettlebell Press",
+      "output": null
+    },
+    {
+      "input": "Burpees",
+      "output": null
+    },
+    {
+      "input": "Box Jumps",
+      "output": null
+    },
+    {
+      "input": "Devil Press",
+      "output": null
+    },
+    {
+      "input": "Walking",
+      "output": null
+    },
+    {
+      "input": "Incline Walk",
+      "output": null
+    },
+    {
+      "input": "Hiking",
+      "output": null
+    },
+    {
+      "input": "Rucking",
+      "output": null
+    },
+    {
+      "input": "Cycling",
+      "output": null
+    },
+    {
+      "input": "BikeErg",
+      "output": null
+    },
+    {
+      "input": "Elliptical",
+      "output": null
+    },
+    {
+      "input": "Stair Climber",
+      "output": null
+    },
+    {
+      "input": "Swimming",
+      "output": null
+    },
+    {
+      "input": "Sprints",
+      "output": null
+    },
+    {
+      "input": "Bear Crawl",
+      "output": null
+    },
+    {
+      "input": "Crab Walk",
+      "output": null
+    },
+    {
+      "input": "Jumping Jacks",
+      "output": null
+    },
+    {
+      "input": "High Knees",
+      "output": null
+    },
+    {
+      "input": "Butt Kicks",
+      "output": null
+    },
+    {
+      "input": "Assault Bike",
+      "output": null
+    },
+    {
+      "input": "Stationary Bike",
+      "output": null
+    },
+    {
+      "input": "KB Swings",
+      "output": null
+    },
+    {
+      "input": "Battle Ropes",
+      "output": null
+    },
+    {
+      "input": "Walking Lunges",
+      "output": null
+    },
+    {
+      "input": "Echo Bike",
+      "output": null
+    },
+    {
+      "input": "SkiErg Intervals",
+      "output": null
+    },
+    {
+      "input": "Jump Rope",
+      "output": null
+    },
+    {
+      "input": "Mountain Climbers",
+      "output": null
+    },
+    {
+      "input": "Rowing Intervals",
+      "output": null
+    },
+    {
+      "input": "Treadmill Intervals",
+      "output": null
+    },
+    {
+      "input": "EMOM",
+      "output": null
+    },
+    {
+      "input": "AMRAP",
+      "output": null
+    },
+    {
+      "input": "Custom",
+      "output": null
+    },
+    {
+      "input": "BACK_SQUAT",
+      "output": null
+    },
+    {
+      "input": " back_squat",
+      "output": null
+    },
+    {
+      "input": "",
+      "output": null
+    },
+    {
+      "input": "not_a_real_exercise",
+      "output": null
+    },
+    {
+      "input": "constructor",
+      "output": null
+    },
+    {
+      "input": "__defineGetter__",
+      "output": null
+    },
+    {
+      "input": "__defineSetter__",
+      "output": null
+    },
+    {
+      "input": "hasOwnProperty",
+      "output": null
+    },
+    {
+      "input": "__lookupGetter__",
+      "output": null
+    },
+    {
+      "input": "__lookupSetter__",
+      "output": null
+    },
+    {
+      "input": "isPrototypeOf",
+      "output": null
+    },
+    {
+      "input": "propertyIsEnumerable",
+      "output": null
+    },
+    {
+      "input": "toString",
+      "output": null
+    },
+    {
+      "input": "valueOf",
+      "output": null
+    },
+    {
+      "input": "__proto__",
+      "output": null
+    },
+    {
+      "input": "toLocaleString",
+      "output": null
+    }
+  ]
+}
