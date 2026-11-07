@@ -20,4 +20,14 @@ describe("prefers-reduced-motion global override", () => {
     expect(css).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
     expect(css).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
   });
+
+  it("makes .fade-up elements immediately visible so content is never hidden behind a pending observer", () => {
+    const cssPath = resolve(__dirname, "../index.css");
+    const css = readFileSync(cssPath, "utf8");
+
+    const reducedMotionBlock = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotionBlock).toContain(".fade-up");
+    expect(reducedMotionBlock).toMatch(/opacity:\s*1\s*!important/);
+    expect(reducedMotionBlock).toMatch(/transform:\s*none\s*!important/);
+  });
 });
