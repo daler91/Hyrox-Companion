@@ -1,6 +1,6 @@
 # Native Mobile App Investigation: Capacitor vs React Native
 
-> **Android is decided:** see [android-app-plan.md](android-app-plan.md) for the phased plan. It replaces the packaging phases below for Android; this page stays as the original comparison.
+> **Superseded (2026-11-07):** the app will be native, built with Compose Multiplatform (Android first, then iOS), not Capacitor. See [mobile-app-plan.md](mobile-app-plan.md). This page stays as the original comparison.
 
 ## Recommendation: Capacitor
 
