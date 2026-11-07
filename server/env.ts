@@ -278,7 +278,11 @@ const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
   // Log to both stdout and stderr so Railway captures it regardless of log drain config
   const msg = `❌ Invalid environment variables: ${JSON.stringify(parsed.error.format(), null, 2)}`;
+  // Zod's messages name each failing variable and rule, never its value.
+  // bearer:disable javascript_lang_logger_leak
   console.error(msg);
+  // Zod's messages name each failing variable and rule, never its value.
+  // bearer:disable javascript_lang_logger_leak
   console.log(JSON.stringify({ level: "fatal", msg, context: "env" })); // eslint-disable-line no-console
   throw new Error(msg);
 }

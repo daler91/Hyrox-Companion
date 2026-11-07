@@ -55,9 +55,13 @@ configureObservability();
 // work notices the misconfiguration instead of debugging a silent 401.
 if (env.NODE_ENV === "production") {
   if (!env.CRON_SECRET) {
+    // Static config warning: names the unset variable, never a value.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "startup-config" }, "CRON_SECRET not set — /api/v1/cron/emails will reject every request");
   }
   if (!env.INTERNAL_ANALYTICS_SECRET) {
+    // Static config warning: names the unset variable, never a value.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "startup-config" }, "INTERNAL_ANALYTICS_SECRET not set — internal analytics endpoints will reject every request");
   }
   // Without a global ceiling, total AI spend is bounded only by the per-user
@@ -82,6 +86,8 @@ if (env.NODE_ENV === "production") {
 const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;
 const clientEmomFlag = clientEmomFlagRaw === "true";
 const serverEmomFlag = env.EMOM_BUILDER_ENABLED === "true";
+// NODE_ENV and the EMOM builder's on/off flags only.
+// bearer:disable javascript_lang_logger_leak
 logger.info({
   context: "startup-config",
   nodeEnv: env.NODE_ENV,
@@ -325,6 +331,8 @@ await new Promise<void>((resolve, reject) => {
     resolve();
   });
 });
+// The port number only.
+// bearer:disable javascript_lang_logger_leak
 logger.info({ port }, `HTTP server listening on port ${port} — running startup tasks...`);
 
 try {
@@ -356,6 +364,8 @@ try {
   logger.info("Startup phase: cron");
   startCron(storage);
   if (!env.RESEND_API_KEY) {
+    // Static config warning: names the unset variable, never a value.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "email" }, "RESEND_API_KEY is not set — email delivery is disabled");
   }
 
@@ -410,9 +420,13 @@ try {
 
   startupState.startupPhase = "ready";
   startupState.isReady = true;
+  // The port and startup duration only.
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ port, uptimeMs: Date.now() - startupState.startupBeganAt }, `startup complete — serving on port ${port}`);
 } catch (err) {
   startupState.startupError = err instanceof Error ? err.message : String(err);
+  // The startup error and the phase name; no request or user data.
+  // bearer:disable javascript_lang_logger_leak
   logger.fatal({ err, phase: startupState.startupPhase }, `Startup failed during phase '${startupState.startupPhase}' — server is running but not ready`);
   Sentry.captureException(err);
 }

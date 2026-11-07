@@ -38,6 +38,8 @@ import { logger } from "../logger";
 function resolveCsrfSecret(): string {
   if (env.CSRF_SECRET) return env.CSRF_SECRET;
   const generated = randomBytes(32).toString("hex");
+  // Static config warning; the generated secret itself is never logged.
+  // bearer:disable javascript_lang_logger_leak
   logger.warn(
     { context: "csrf" },
     "CSRF_SECRET not set — generated a per-process random dev secret. Set CSRF_SECRET before deploying to production.",

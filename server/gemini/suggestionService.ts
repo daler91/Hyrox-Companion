@@ -147,6 +147,8 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
         workoutFocus: item.workoutFocus.replaceAll("&", "and"),
       });
     } else {
+      // Zod's issues and a sanitized 200-character preview of the model's invalid output.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         // The item is model output shaped by the athlete's own text, so it goes
         // through the log-injection boundary rather than straight into the line.
@@ -443,6 +445,8 @@ export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
         note: note.note.replaceAll("&", "and").slice(0, 400),
       });
     } else {
+      // Zod's issues and a sanitized 200-character preview of the model's invalid output.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         // The item is model output shaped by the athlete's own text, so it goes
         // through the log-injection boundary rather than straight into the line.

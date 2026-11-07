@@ -56,6 +56,8 @@ const STRAVA_REAUTH_MESSAGE = "Strava authorization was revoked — please recon
 
 const STATE_SECRET = env.STRAVA_STATE_SECRET ?? crypto.randomBytes(32).toString("hex");
 if (!env.STRAVA_STATE_SECRET) {
+  // Static config warning: names the unset variable, never a value.
+  // bearer:disable javascript_lang_logger_leak
   logger.warn({ context: "strava" }, "STRAVA_STATE_SECRET not configured — using random secret. Strava OAuth state will not be verifiable across multiple server instances.");
 }
 
@@ -217,6 +219,8 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaRefreshRe
       { label: "strava.refreshToken", retries: 3 },
     );
   } catch (error) {
+    // err is a network or retryable-status error; the request body holding the client secret and refresh token is never attached to it.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err: error }, "Error refreshing Strava token:");
     return { ok: false, permanent: false };
   }
