@@ -1,0 +1,390 @@
+{
+  "suite": "dateUtils.weekdayName",
+  "description": "The weekday's name; \"Monday\" for a date that does not parse.",
+  "cases": [
+    {
+      "input": "2026-11-09",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11-10",
+      "output": "Tuesday"
+    },
+    {
+      "input": "2026-11-11",
+      "output": "Wednesday"
+    },
+    {
+      "input": "2026-11-12",
+      "output": "Thursday"
+    },
+    {
+      "input": "2026-11-13",
+      "output": "Friday"
+    },
+    {
+      "input": "2026-11-14",
+      "output": "Saturday"
+    },
+    {
+      "input": "2026-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-01-31",
+      "output": "Saturday"
+    },
+    {
+      "input": "2026-02-01",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-02-28",
+      "output": "Saturday"
+    },
+    {
+      "input": "2026-03-01",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-04-30",
+      "output": "Thursday"
+    },
+    {
+      "input": "2026-06-30",
+      "output": "Tuesday"
+    },
+    {
+      "input": "2026-09-30",
+      "output": "Wednesday"
+    },
+    {
+      "input": "2026-11-30",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-12-28",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-12-30",
+      "output": "Wednesday"
+    },
+    {
+      "input": "2026-12-31",
+      "output": "Thursday"
+    },
+    {
+      "input": "2027-01-01",
+      "output": "Friday"
+    },
+    {
+      "input": "2027-01-03",
+      "output": "Sunday"
+    },
+    {
+      "input": "2027-01-04",
+      "output": "Monday"
+    },
+    {
+      "input": "2024-02-28",
+      "output": "Wednesday"
+    },
+    {
+      "input": "2024-02-29",
+      "output": "Thursday"
+    },
+    {
+      "input": "2024-03-01",
+      "output": "Friday"
+    },
+    {
+      "input": "2025-02-28",
+      "output": "Friday"
+    },
+    {
+      "input": "2025-03-01",
+      "output": "Saturday"
+    },
+    {
+      "input": "2000-02-29",
+      "output": "Tuesday"
+    },
+    {
+      "input": "1900-02-28",
+      "output": "Wednesday"
+    },
+    {
+      "input": "1900-03-01",
+      "output": "Thursday"
+    },
+    {
+      "input": "2100-02-28",
+      "output": "Sunday"
+    },
+    {
+      "input": "2100-03-01",
+      "output": "Monday"
+    },
+    {
+      "input": "1970-01-01",
+      "output": "Thursday"
+    },
+    {
+      "input": "1969-12-31",
+      "output": "Wednesday"
+    },
+    {
+      "input": "0100-01-01",
+      "output": "Friday"
+    },
+    {
+      "input": "0100-03-01",
+      "output": "Monday"
+    },
+    {
+      "input": "0999-12-31",
+      "output": "Tuesday"
+    },
+    {
+      "input": "1000-01-01",
+      "output": "Wednesday"
+    },
+    {
+      "input": "9999-12-31",
+      "output": "Friday"
+    },
+    {
+      "input": "10000-01-01",
+      "output": "Saturday"
+    },
+    {
+      "input": "275760-09-13",
+      "output": "Saturday"
+    },
+    {
+      "input": "2025-02-29",
+      "output": "Saturday"
+    },
+    {
+      "input": "2026-02-30",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-04-31",
+      "output": "Friday"
+    },
+    {
+      "input": "2026-13-01",
+      "output": "Friday"
+    },
+    {
+      "input": "2026-00-10",
+      "output": "Wednesday"
+    },
+    {
+      "input": "2026-11-00",
+      "output": "Saturday"
+    },
+    {
+      "input": "2026-12-32",
+      "output": "Friday"
+    },
+    {
+      "input": "0000-01-01",
+      "output": "Monday"
+    },
+    {
+      "input": "0050-01-01",
+      "output": "Sunday"
+    },
+    {
+      "input": "0099-12-31",
+      "output": "Friday"
+    },
+    {
+      "input": "2026-1-5",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-011-05",
+      "output": "Thursday"
+    },
+    {
+      "input": "20266-11-15",
+      "output": "Thursday"
+    },
+    {
+      "input": "+2026-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-+11-+15",
+      "output": "Sunday"
+    },
+    {
+      "input": " 2026-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-11-15 ",
+      "output": "Sunday"
+    },
+    {
+      "input": "\t2026-11-15\n",
+      "output": "Sunday"
+    },
+    {
+      "input": " 2026-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "﻿2026-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "　2026-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-11-15-01",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-11-09-garbage",
+      "output": "Monday"
+    },
+    {
+      "input": "2026--01",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11-",
+      "output": "Saturday"
+    },
+    {
+      "input": "-2026-01-01",
+      "output": "Monday"
+    },
+    {
+      "input": "2026.9-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-11.9-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-11-15.9",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-11-15.",
+      "output": "Sunday"
+    },
+    {
+      "input": "2026-0.5-10",
+      "output": "Saturday"
+    },
+    {
+      "input": "1e3-01-01",
+      "output": "Wednesday"
+    },
+    {
+      "input": ".5e4-01-01",
+      "output": "Wednesday"
+    },
+    {
+      "input": "2026-11-1e1",
+      "output": "Tuesday"
+    },
+    {
+      "input": "0x7EA-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "0o3752-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "0b11111101010-11-15",
+      "output": "Sunday"
+    },
+    {
+      "input": "",
+      "output": "Monday"
+    },
+    {
+      "input": "abcd-ef-gh",
+      "output": "Monday"
+    },
+    {
+      "input": "aaaa",
+      "output": "Monday"
+    },
+    {
+      "input": "last-week",
+      "output": "Monday"
+    },
+    {
+      "input": "15/11/2026",
+      "output": "Monday"
+    },
+    {
+      "input": "2026",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11-15T00:00",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-01-05T00:00:00Z",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-aa-01",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11-15e",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11-1 5",
+      "output": "Monday"
+    },
+    {
+      "input": "2026-11-0x",
+      "output": "Monday"
+    },
+    {
+      "input": "0x-01-01",
+      "output": "Monday"
+    },
+    {
+      "input": "1_000-01-01",
+      "output": "Monday"
+    },
+    {
+      "input": "Infinity-01-01",
+      "output": "Monday"
+    },
+    {
+      "input": "᠎2026-11-15",
+      "output": "Monday"
+    },
+    {
+      "input": "275760-09-14",
+      "output": "Monday"
+    },
+    {
+      "input": "300000-01-01",
+      "output": "Monday"
+    }
+  ]
+}

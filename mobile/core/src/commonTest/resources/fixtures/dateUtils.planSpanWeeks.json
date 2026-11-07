@@ -1,0 +1,3645 @@
+{
+  "suite": "dateUtils.planSpanWeeks",
+  "description": "Plan weeks, unclamped: round(days / 7), or the Monday-anchored week of a race end date.",
+  "cases": [
+    {
+      "input": [
+        "2026-11-09",
+        "2026-10-30"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-10-30",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-01"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-02"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-05"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-06"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-08"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-09"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-10"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-12"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-13"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-15"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-15",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-16"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-16",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-19"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-19",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-22"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-22",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-12-31"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-12-31",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-04"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-07"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-08"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-17"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-17",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-18"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-01-18",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-22"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-22",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-23"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-23",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-25"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-25",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-26"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-26",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-29"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-29",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-30"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-04-30",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-05-03"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-05-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-06-07"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-06-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-11-09"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2027-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 53
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-10-31"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-10-31",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-02"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-03"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-06"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-07"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-09"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-10"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-11"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-13"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-14"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-16"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-16",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-17"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-17",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-20"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-20",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-23"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2026-11-23",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-01"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-05"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-08"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-09"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-18"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-18",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-19"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-01-19",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-23"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-23",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-24"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-24",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-26"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-26",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-27"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-27",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-30"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-04-30",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-05-01"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-05-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-05-04"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-05-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-06-08"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-06-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-11-10"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-10",
+        "2027-11-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 53
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-01"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-03"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-04"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-07"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-08"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-10"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-11"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-12"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-14"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-15"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-15",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-17"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-17",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-18"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-18",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-21"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-21",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-24"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-24",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-02"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-06"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-09"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-10"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-19"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-19",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-20"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-01-20",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-24"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-24",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-25"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-25",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-27"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-27",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-28"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-04-28",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-05-01"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-05-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-05-02"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-05-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-05-05"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-05-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-06-09"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-06-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-11-11"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2027-11-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 53
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-02"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-04"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-05"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-08"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-09"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-11"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-12"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-13"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-15"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-15",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-16"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-16",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-18"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-18",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-19"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-19",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-22"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-22",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-25"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-25",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-03"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-07"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-10"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-11"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-20"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-20",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-21"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-01-21",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-25"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-25",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-26"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-26",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-28"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-28",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-29"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-04-29",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-05-02"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-05-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-05-03"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-05-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-05-06"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-05-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-06-10"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-06-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-11-12"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2027-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 53
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-03"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-05"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-06"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-09"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-10"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-12"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-13"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-14"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-16"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-16",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-17"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-17",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-19"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-19",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-20"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-20",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-23"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-23",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-26"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2026-11-26",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-04"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-08"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-11"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-12"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-21"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-21",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-22"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-01-22",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-26"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-26",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-27"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-27",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-29"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-29",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-30"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-04-30",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-05-03"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-05-03",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-05-04"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-05-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-05-07"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-05-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-06-11"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-06-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-11-13"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-13",
+        "2027-11-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 53
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-04"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-06"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-07"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-10"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-11"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-13"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-14"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-15"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-15",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-17"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-17",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-18"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-18",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-20"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-20",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-21"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-21",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-24"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-24",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-27"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2026-11-27",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-05"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-09"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-12"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-13"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-22"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-22",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-23"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-01-23",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-04-27"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-04-27",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-04-28"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-04-28",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-04-30"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-04-30",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-01"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-04"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-04",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-05"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-08"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-05-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-06-12"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-06-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-11-14"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-14",
+        "2027-11-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 53
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-05"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-07"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-08"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-08",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-11"
+      ],
+      "output": -1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-11",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-12"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-14"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-15"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-15",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-16"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-16",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-18"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-18",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-19"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-19",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-21"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-21",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-22"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-22",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-25"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-25",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-28"
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2026-11-28",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 3
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-06"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-10"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-10",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-13"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-14"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-14",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-23"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-23",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-24"
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-01-24",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 11
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-04-28"
+      ],
+      "output": 23
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-04-28",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-04-29"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-04-29",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-01"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-02"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-02",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-05"
+      ],
+      "output": 24
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-05",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-06"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-06",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-09"
+      ],
+      "output": 25
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-05-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 26
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-06-13"
+      ],
+      "output": 30
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-06-13",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 31
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-11-15"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-11-15",
+        "2027-11-15",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 54
+    },
+    {
+      "input": [
+        "2026-11-11",
+        "2026-11-21",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 2
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "2026-11-12",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-09"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        "2026-11-12",
+        "2026-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        "2026-10-07",
+        "2026-11-28"
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-10-07",
+        "2026-11-28",
+        {}
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-10-07",
+        "2026-11-28",
+        {
+          "endDateIsRaceDate": false
+        }
+      ],
+      "output": 7
+    },
+    {
+      "input": [
+        "2026-10-07",
+        "2026-11-28",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "2024-02-26",
+        "2024-03-25"
+      ],
+      "output": 4
+    },
+    {
+      "input": [
+        "2024-02-26",
+        "2024-03-25",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "2026-12-30",
+        "2027-03-01"
+      ],
+      "output": 9
+    },
+    {
+      "input": [
+        "2026-12-30",
+        "2027-03-01",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 10
+    },
+    {
+      "input": [
+        "2026-01-01",
+        "2027-01-01"
+      ],
+      "output": 52
+    },
+    {
+      "input": [
+        "2026-02-30",
+        "2026-03-30"
+      ],
+      "output": 4
+    },
+    {
+      "input": [
+        "2026-02-30",
+        "2026-03-30",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        " 2026-11-09",
+        "2026-12-07",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        "0050-01-01",
+        "1950-03-01"
+      ],
+      "output": 8
+    },
+    {
+      "input": [
+        "garbage",
+        "2026-11-09"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "garbage",
+        "2026-11-09",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "garbage"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "2026-11-09",
+        "garbage",
+        {
+          "endDateIsRaceDate": true
+        }
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "",
+        ""
+      ],
+      "output": "NaN"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "suite": "notifyHours.isValidNotifyHour",
+  "description": "True only for a number that is a whole hour from 0 to 23.",
+  "cases": [
+    {
+      "input": "7",
+      "output": false
+    },
+    {
+      "input": "",
+      "output": false
+    },
+    {
+      "input": -1,
+      "output": false
+    },
+    {
+      "input": 0,
+      "output": true
+    },
+    {
+      "input": 1,
+      "output": true
+    },
+    {
+      "input": 7,
+      "output": true
+    },
+    {
+      "input": 23,
+      "output": true
+    },
+    {
+      "input": 24,
+      "output": false
+    },
+    {
+      "input": 23.5,
+      "output": false
+    },
+    {
+      "input": 6.5,
+      "output": false
+    },
+    {
+      "input": 0.5,
+      "output": false
+    },
+    {
+      "input": -0.5,
+      "output": false
+    },
+    {
+      "input": 1e+21,
+      "output": false
+    },
+    {
+      "input": "NaN",
+      "output": false
+    },
+    {
+      "input": "Infinity",
+      "output": false
+    },
+    {
+      "input": "-Infinity",
+      "output": false
+    },
+    {
+      "input": null,
+      "output": false
+    },
+    {
+      "input": true,
+      "output": false
+    },
+    {
+      "input": false,
+      "output": false
+    },
+    {
+      "input": [
+        7
+      ],
+      "output": false
+    },
+    {
+      "input": {
+        "hour": 7
+      },
+      "output": false
+    }
+  ]
+}

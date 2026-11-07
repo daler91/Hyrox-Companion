@@ -1,0 +1,2753 @@
+{
+  "suite": "planPhase.computePlanPhase",
+  "description": "Phase, midpoint progress and remaining phases for a week; null outside 1..totalWeeks.",
+  "cases": [
+    {
+      "input": [
+        1,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        1,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        1,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 1,
+        "phaseLabel": "race_week",
+        "progressPct": 50,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        1,
+        2
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        2,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        2,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        2,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 2,
+        "phaseLabel": "build",
+        "progressPct": 25,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        2,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 2,
+        "phaseLabel": "race_week",
+        "progressPct": 75,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        2,
+        3
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        3,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        3,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        3,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 3,
+        "phaseLabel": "early",
+        "progressPct": 17,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        3,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 3,
+        "phaseLabel": "build",
+        "progressPct": 50,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        3,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 3,
+        "phaseLabel": "race_week",
+        "progressPct": 83,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        3,
+        4
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        4,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        4,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        4,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 4,
+        "phaseLabel": "early",
+        "progressPct": 13,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        4,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 4,
+        "phaseLabel": "build",
+        "progressPct": 38,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        4,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 4,
+        "phaseLabel": "taper",
+        "progressPct": 63,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        4,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 4,
+        "phaseLabel": "race_week",
+        "progressPct": 88,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        4,
+        5
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        5,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        5,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        5,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 5,
+        "phaseLabel": "early",
+        "progressPct": 10,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        5,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 5,
+        "phaseLabel": "build",
+        "progressPct": 30,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        5,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 5,
+        "phaseLabel": "build",
+        "progressPct": 50,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        5,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 5,
+        "phaseLabel": "taper",
+        "progressPct": 70,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        5,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 5,
+        "phaseLabel": "race_week",
+        "progressPct": 90,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        5,
+        6
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        6,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        6,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        6,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 6,
+        "phaseLabel": "early",
+        "progressPct": 8,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        6,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 6,
+        "phaseLabel": "build",
+        "progressPct": 25,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        6,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 6,
+        "phaseLabel": "build",
+        "progressPct": 42,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        6,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 6,
+        "phaseLabel": "build",
+        "progressPct": 58,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        6,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 6,
+        "phaseLabel": "taper",
+        "progressPct": 75,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        6,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 6,
+        "phaseLabel": "race_week",
+        "progressPct": 92,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        6,
+        7
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        7,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        7,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        7,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 7,
+        "phaseLabel": "early",
+        "progressPct": 7,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        7,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 7,
+        "phaseLabel": "early",
+        "progressPct": 21,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        7,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 7,
+        "phaseLabel": "build",
+        "progressPct": 36,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        7,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 7,
+        "phaseLabel": "build",
+        "progressPct": 50,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        7,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 7,
+        "phaseLabel": "peak",
+        "progressPct": 64,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        7,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 7,
+        "phaseLabel": "taper",
+        "progressPct": 79,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        7,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 7,
+        "phaseLabel": "race_week",
+        "progressPct": 93,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        7,
+        8
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        8,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        8,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        8,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 8,
+        "phaseLabel": "early",
+        "progressPct": 6,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 8,
+        "phaseLabel": "early",
+        "progressPct": 19,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 8,
+        "phaseLabel": "build",
+        "progressPct": 31,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 8,
+        "phaseLabel": "build",
+        "progressPct": 44,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 8,
+        "phaseLabel": "build",
+        "progressPct": 56,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 8,
+        "phaseLabel": "peak",
+        "progressPct": 69,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 8,
+        "phaseLabel": "taper",
+        "progressPct": 81,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        8,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 8,
+        "phaseLabel": "race_week",
+        "progressPct": 94,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        8,
+        9
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        9,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        9,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        9,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 9,
+        "phaseLabel": "early",
+        "progressPct": 6,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 9,
+        "phaseLabel": "early",
+        "progressPct": 17,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 9,
+        "phaseLabel": "build",
+        "progressPct": 28,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 9,
+        "phaseLabel": "build",
+        "progressPct": 39,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 9,
+        "phaseLabel": "build",
+        "progressPct": 50,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 9,
+        "phaseLabel": "peak",
+        "progressPct": 61,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 9,
+        "phaseLabel": "peak",
+        "progressPct": 72,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 9,
+        "phaseLabel": "taper",
+        "progressPct": 83,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        9,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 9,
+        "phaseLabel": "race_week",
+        "progressPct": 94,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        9,
+        10
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        10,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        10,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        10,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 10,
+        "phaseLabel": "early",
+        "progressPct": 5,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 10,
+        "phaseLabel": "early",
+        "progressPct": 15,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 10,
+        "phaseLabel": "build",
+        "progressPct": 25,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 10,
+        "phaseLabel": "build",
+        "progressPct": 35,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 10,
+        "phaseLabel": "build",
+        "progressPct": 45,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 10,
+        "phaseLabel": "build",
+        "progressPct": 55,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 10,
+        "phaseLabel": "peak",
+        "progressPct": 65,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 10,
+        "phaseLabel": "peak",
+        "progressPct": 75,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 10,
+        "phaseLabel": "taper",
+        "progressPct": 85,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        10,
+        10
+      ],
+      "output": {
+        "currentWeek": 10,
+        "totalWeeks": 10,
+        "phaseLabel": "race_week",
+        "progressPct": 95,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        10,
+        11
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        11,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        11,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        11,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 11,
+        "phaseLabel": "early",
+        "progressPct": 5,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 11,
+        "phaseLabel": "early",
+        "progressPct": 14,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 11,
+        "phaseLabel": "early",
+        "progressPct": 23,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 11,
+        "phaseLabel": "build",
+        "progressPct": 32,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 11,
+        "phaseLabel": "build",
+        "progressPct": 41,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 11,
+        "phaseLabel": "build",
+        "progressPct": 50,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 11,
+        "phaseLabel": "build",
+        "progressPct": 59,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 11,
+        "phaseLabel": "peak",
+        "progressPct": 68,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 11,
+        "phaseLabel": "peak",
+        "progressPct": 77,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        10
+      ],
+      "output": {
+        "currentWeek": 10,
+        "totalWeeks": 11,
+        "phaseLabel": "taper",
+        "progressPct": 86,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        11,
+        11
+      ],
+      "output": {
+        "currentWeek": 11,
+        "totalWeeks": 11,
+        "phaseLabel": "race_week",
+        "progressPct": 95,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        11,
+        12
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        12,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        12,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        12,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 12,
+        "phaseLabel": "early",
+        "progressPct": 4,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 12,
+        "phaseLabel": "early",
+        "progressPct": 13,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 12,
+        "phaseLabel": "early",
+        "progressPct": 21,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 12,
+        "phaseLabel": "build",
+        "progressPct": 29,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 12,
+        "phaseLabel": "build",
+        "progressPct": 38,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 12,
+        "phaseLabel": "build",
+        "progressPct": 46,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 12,
+        "phaseLabel": "build",
+        "progressPct": 54,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 12,
+        "phaseLabel": "peak",
+        "progressPct": 63,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 12,
+        "phaseLabel": "peak",
+        "progressPct": 71,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        10
+      ],
+      "output": {
+        "currentWeek": 10,
+        "totalWeeks": 12,
+        "phaseLabel": "peak",
+        "progressPct": 79,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        11
+      ],
+      "output": {
+        "currentWeek": 11,
+        "totalWeeks": 12,
+        "phaseLabel": "taper",
+        "progressPct": 88,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        12,
+        12
+      ],
+      "output": {
+        "currentWeek": 12,
+        "totalWeeks": 12,
+        "phaseLabel": "race_week",
+        "progressPct": 96,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        12,
+        13
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        16,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        16,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        16,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 16,
+        "phaseLabel": "early",
+        "progressPct": 3,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 16,
+        "phaseLabel": "early",
+        "progressPct": 9,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 16,
+        "phaseLabel": "early",
+        "progressPct": 16,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 16,
+        "phaseLabel": "early",
+        "progressPct": 22,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 16,
+        "phaseLabel": "build",
+        "progressPct": 28,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 16,
+        "phaseLabel": "build",
+        "progressPct": 34,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 16,
+        "phaseLabel": "build",
+        "progressPct": 41,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 16,
+        "phaseLabel": "build",
+        "progressPct": 47,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 16,
+        "phaseLabel": "build",
+        "progressPct": 53,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        10
+      ],
+      "output": {
+        "currentWeek": 10,
+        "totalWeeks": 16,
+        "phaseLabel": "build",
+        "progressPct": 59,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        11
+      ],
+      "output": {
+        "currentWeek": 11,
+        "totalWeeks": 16,
+        "phaseLabel": "peak",
+        "progressPct": 66,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        12
+      ],
+      "output": {
+        "currentWeek": 12,
+        "totalWeeks": 16,
+        "phaseLabel": "peak",
+        "progressPct": 72,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        13
+      ],
+      "output": {
+        "currentWeek": 13,
+        "totalWeeks": 16,
+        "phaseLabel": "peak",
+        "progressPct": 78,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        14
+      ],
+      "output": {
+        "currentWeek": 14,
+        "totalWeeks": 16,
+        "phaseLabel": "peak",
+        "progressPct": 84,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        15
+      ],
+      "output": {
+        "currentWeek": 15,
+        "totalWeeks": 16,
+        "phaseLabel": "taper",
+        "progressPct": 91,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        16,
+        16
+      ],
+      "output": {
+        "currentWeek": 16,
+        "totalWeeks": 16,
+        "phaseLabel": "race_week",
+        "progressPct": 97,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        16,
+        17
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        20,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        20,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        20,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 20,
+        "phaseLabel": "early",
+        "progressPct": 3,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 20,
+        "phaseLabel": "early",
+        "progressPct": 8,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 20,
+        "phaseLabel": "early",
+        "progressPct": 13,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 20,
+        "phaseLabel": "early",
+        "progressPct": 18,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 20,
+        "phaseLabel": "early",
+        "progressPct": 23,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 28,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 33,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 38,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 43,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        10
+      ],
+      "output": {
+        "currentWeek": 10,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 48,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        11
+      ],
+      "output": {
+        "currentWeek": 11,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 53,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        12
+      ],
+      "output": {
+        "currentWeek": 12,
+        "totalWeeks": 20,
+        "phaseLabel": "build",
+        "progressPct": 57,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        13
+      ],
+      "output": {
+        "currentWeek": 13,
+        "totalWeeks": 20,
+        "phaseLabel": "peak",
+        "progressPct": 63,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        14
+      ],
+      "output": {
+        "currentWeek": 14,
+        "totalWeeks": 20,
+        "phaseLabel": "peak",
+        "progressPct": 68,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        15
+      ],
+      "output": {
+        "currentWeek": 15,
+        "totalWeeks": 20,
+        "phaseLabel": "peak",
+        "progressPct": 73,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        16
+      ],
+      "output": {
+        "currentWeek": 16,
+        "totalWeeks": 20,
+        "phaseLabel": "peak",
+        "progressPct": 78,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        17
+      ],
+      "output": {
+        "currentWeek": 17,
+        "totalWeeks": 20,
+        "phaseLabel": "peak",
+        "progressPct": 83,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        18
+      ],
+      "output": {
+        "currentWeek": 18,
+        "totalWeeks": 20,
+        "phaseLabel": "taper",
+        "progressPct": 88,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        19
+      ],
+      "output": {
+        "currentWeek": 19,
+        "totalWeeks": 20,
+        "phaseLabel": "taper",
+        "progressPct": 93,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        20,
+        20
+      ],
+      "output": {
+        "currentWeek": 20,
+        "totalWeeks": 20,
+        "phaseLabel": "race_week",
+        "progressPct": 98,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        20,
+        21
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        24,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        24,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        24,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 24,
+        "phaseLabel": "early",
+        "progressPct": 2,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        2
+      ],
+      "output": {
+        "currentWeek": 2,
+        "totalWeeks": 24,
+        "phaseLabel": "early",
+        "progressPct": 6,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        3
+      ],
+      "output": {
+        "currentWeek": 3,
+        "totalWeeks": 24,
+        "phaseLabel": "early",
+        "progressPct": 10,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        4
+      ],
+      "output": {
+        "currentWeek": 4,
+        "totalWeeks": 24,
+        "phaseLabel": "early",
+        "progressPct": 15,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        5
+      ],
+      "output": {
+        "currentWeek": 5,
+        "totalWeeks": 24,
+        "phaseLabel": "early",
+        "progressPct": 19,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        6
+      ],
+      "output": {
+        "currentWeek": 6,
+        "totalWeeks": 24,
+        "phaseLabel": "early",
+        "progressPct": 23,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        7
+      ],
+      "output": {
+        "currentWeek": 7,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 27,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        8
+      ],
+      "output": {
+        "currentWeek": 8,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 31,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        9
+      ],
+      "output": {
+        "currentWeek": 9,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 35,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        10
+      ],
+      "output": {
+        "currentWeek": 10,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 40,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        11
+      ],
+      "output": {
+        "currentWeek": 11,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 44,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        12
+      ],
+      "output": {
+        "currentWeek": 12,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 48,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        13
+      ],
+      "output": {
+        "currentWeek": 13,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 52,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        14
+      ],
+      "output": {
+        "currentWeek": 14,
+        "totalWeeks": 24,
+        "phaseLabel": "build",
+        "progressPct": 56,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        15
+      ],
+      "output": {
+        "currentWeek": 15,
+        "totalWeeks": 24,
+        "phaseLabel": "peak",
+        "progressPct": 60,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        16
+      ],
+      "output": {
+        "currentWeek": 16,
+        "totalWeeks": 24,
+        "phaseLabel": "peak",
+        "progressPct": 65,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        17
+      ],
+      "output": {
+        "currentWeek": 17,
+        "totalWeeks": 24,
+        "phaseLabel": "peak",
+        "progressPct": 69,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        18
+      ],
+      "output": {
+        "currentWeek": 18,
+        "totalWeeks": 24,
+        "phaseLabel": "peak",
+        "progressPct": 73,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        19
+      ],
+      "output": {
+        "currentWeek": 19,
+        "totalWeeks": 24,
+        "phaseLabel": "peak",
+        "progressPct": 77,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        20
+      ],
+      "output": {
+        "currentWeek": 20,
+        "totalWeeks": 24,
+        "phaseLabel": "peak",
+        "progressPct": 81,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        21
+      ],
+      "output": {
+        "currentWeek": 21,
+        "totalWeeks": 24,
+        "phaseLabel": "taper",
+        "progressPct": 85,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        22
+      ],
+      "output": {
+        "currentWeek": 22,
+        "totalWeeks": 24,
+        "phaseLabel": "taper",
+        "progressPct": 90,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        23
+      ],
+      "output": {
+        "currentWeek": 23,
+        "totalWeeks": 24,
+        "phaseLabel": "taper",
+        "progressPct": 94,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        24,
+        24
+      ],
+      "output": {
+        "currentWeek": 24,
+        "totalWeeks": 24,
+        "phaseLabel": "race_week",
+        "progressPct": 98,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        24,
+        25
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        0,
+        -1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        0,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        0,
+        1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        -1,
+        0
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        -1,
+        1
+      ],
+      "output": null
+    },
+    {
+      "input": [
+        52,
+        1
+      ],
+      "output": {
+        "currentWeek": 1,
+        "totalWeeks": 52,
+        "phaseLabel": "early",
+        "progressPct": 1,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        13
+      ],
+      "output": {
+        "currentWeek": 13,
+        "totalWeeks": 52,
+        "phaseLabel": "early",
+        "progressPct": 24,
+        "remainingPhases": [
+          "build",
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        26
+      ],
+      "output": {
+        "currentWeek": 26,
+        "totalWeeks": 52,
+        "phaseLabel": "build",
+        "progressPct": 49,
+        "remainingPhases": [
+          "peak",
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        44
+      ],
+      "output": {
+        "currentWeek": 44,
+        "totalWeeks": 52,
+        "phaseLabel": "peak",
+        "progressPct": 84,
+        "remainingPhases": [
+          "taper",
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        45
+      ],
+      "output": {
+        "currentWeek": 45,
+        "totalWeeks": 52,
+        "phaseLabel": "taper",
+        "progressPct": 86,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        50
+      ],
+      "output": {
+        "currentWeek": 50,
+        "totalWeeks": 52,
+        "phaseLabel": "taper",
+        "progressPct": 95,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        51
+      ],
+      "output": {
+        "currentWeek": 51,
+        "totalWeeks": 52,
+        "phaseLabel": "taper",
+        "progressPct": 97,
+        "remainingPhases": [
+          "race_week"
+        ]
+      }
+    },
+    {
+      "input": [
+        52,
+        52
+      ],
+      "output": {
+        "currentWeek": 52,
+        "totalWeeks": 52,
+        "phaseLabel": "race_week",
+        "progressPct": 99,
+        "remainingPhases": []
+      }
+    },
+    {
+      "input": [
+        52,
+        53
+      ],
+      "output": null
+    }
+  ]
+}
