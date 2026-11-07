@@ -1,11 +1,19 @@
-1. **Fix missing `aria-hidden="true"` on decorative icons and remove native `title` attributes on UI elements in `client/src/components/ui/sidebar.tsx`**
-   - In `SidebarTrigger`, the `PanelLeftIcon` is missing `aria-hidden="true"`. Since the button contains a `<span className="sr-only">Toggle Sidebar</span>`, the icon is purely decorative and should be hidden from screen readers.
-   - In `SidebarRail`, there is a native `title="Toggle Sidebar"` attribute. As noted in `palette.md` (2026-10-07), native `title` attributes are an accessibility anti-pattern in this mobile-first PWA because they do not render on touch devices. Since `SidebarRail` already has `aria-label="Toggle Sidebar"`, the `title` attribute should simply be removed.
+1. **Optimize `client/src/hooks/usePlanProposal.ts`**:
+   - In `undoneMessage`, replace the chained `.map().filter(Boolean)` with a single `for...of` loop to prevent intermediate array allocations.
 
-   - *Alternative consideration: The `SidebarRail` is an invisible 4px wide drag handle / click target on the edge of the screen. A native tooltip popping up when resting the mouse there is annoying and unnecessary, so removing it improves both UX and a11y.*
+2. **Optimize `client/src/components/coach/PlanProposalCard.tsx`**:
+   - In `PlanProposalCard` component, replace the chained `.map().filter()` with a single `for...of` loop.
 
-2. **Run tests & linting**
-   - Run `pnpm lint` and `pnpm test` to ensure changes didn't break anything.
+3. **Verify changes using `cat` or `read_file`**:
+   - Verify the edits made to `client/src/hooks/usePlanProposal.ts`.
+   - Verify the edits made to `client/src/components/coach/PlanProposalCard.tsx`.
 
-3. **Commit and create PR**
-   - Create PR with title '🎨 Palette: Improve accessibility of sidebar toggle elements' and follow the required description format.
+4. **Verify tests and run lint**:
+   - Run `pnpm test usePlanProposal PlanProposalCard`.
+   - Run `NODE_OPTIONS="--max-old-space-size=4096" pnpm lint`.
+
+5. **Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done**.
+
+6. **Submit PR**:
+   - PR Title: `⚡ Bolt: [performance improvement] Replace chained array methods with single loops`
+   - Description should detail What, Why, Impact, and Measurement.

@@ -124,7 +124,11 @@ function appliedMessage(count: number, total: number): string {
 function undoneMessage(result: UndoPlanProposalResponse): string {
   const count = result.restoredCount ?? 0;
   const restored = `Undone — I've put ${plural(count, "day")} back the way ${count === 1 ? "it was" : "they were"}.`;
-  const kept = (result.keptDays ?? []).map((day) => day.dayLabel).filter(Boolean);
+  // ⚡ Bolt Optimization: Replace map().filter() with for...of to avoid intermediate array allocation
+  const kept: string[] = [];
+  for (const day of result.keptDays ?? []) {
+    if (day.dayLabel) kept.push(day.dayLabel);
+  }
   return kept.length > 0 ? `${restored} I left what's changed since on ${kept.join(", ")} as it is.` : restored;
 }
 

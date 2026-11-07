@@ -414,10 +414,18 @@ export function PlanProposalCard({
   const isClosed = !isPending && proposal.status !== "applied";
   const canAct = isPending && onApply !== undefined && onDismiss !== undefined;
   const canPick = canAct && proposal.changes.length > 1;
-  const selectedIds =
-    excluded.size > 0
-      ? proposal.changes.map((change) => change.planDayId).filter((id) => !excluded.has(id))
-      : undefined;
+
+  let selectedIds: string[] | undefined;
+  if (excluded.size > 0) {
+    // ⚡ Bolt Optimization: Replace map().filter() with for...of to avoid intermediate array allocation
+    selectedIds = [];
+    for (const change of proposal.changes) {
+      if (!excluded.has(change.planDayId)) {
+        selectedIds.push(change.planDayId);
+      }
+    }
+  }
+
   // An undone proposal still names what its apply changed, so its folded
   // changes mark the ones the athlete left out, as an applied one's do.
   const decided = proposal.status === "applied" || proposal.status === "reverted";
