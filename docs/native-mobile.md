@@ -1,5 +1,7 @@
 # Native Mobile App Investigation: Capacitor vs React Native
 
+> **Android is decided:** see [android-app-plan.md](android-app-plan.md) for the phased plan. It replaces the packaging phases below for Android; this page stays as the original comparison.
+
 ## Recommendation: Capacitor
 
 Capacitor is the recommended path for wrapping fitai.coach as a native mobile app. It avoids a full UI rewrite while enabling native features.

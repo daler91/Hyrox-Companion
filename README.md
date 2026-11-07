@@ -295,6 +295,7 @@ the brand kit, in-flight plans, and the dated review snapshots.
 | [Integrations](docs/integrations.md)                   | Strava, Garmin, Resend, pg-boss, cron, Sentry                                              |
 | [Testing](docs/testing.md)                             | Vitest, integration tests, Cypress, accessibility checks, CI workflows                     |
 | [Native Mobile](docs/native-mobile.md)                 | Capacitor vs. React Native comparison and packaging phases                                 |
+| [Android App Plan](docs/android-app-plan.md)           | The decided Android build: Capacitor, token auth, FCM push, Health Connect                 |
 | [Product Opportunities](docs/PRODUCT_OPPORTUNITIES.md) | Prioritised register of new features and improvements, with code-level evidence            |
 
 ---

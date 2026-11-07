@@ -61,6 +61,7 @@ Scoped to one feature. Accurate for what they cover, but not a description of th
 | [AI Coach Auto-Regulation Flow](ai-coach-auto-regulation-flow.md) | How fatigue signals reach a plan adjustment                    |
 | [New Training Style Checklist](new-training-style-checklist.md)   | Every place that needs touching when a training style is added |
 | [Native Mobile](native-mobile.md)                                 | Capacitor vs. React Native comparison and packaging phases     |
+| [Android App Plan](android-app-plan.md)                           | The decided Android build: Capacitor, token auth, FCM, Health Connect |
 
 ## Brand and design
 
