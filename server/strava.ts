@@ -1,9 +1,8 @@
 import crypto from "node:crypto";
 
-import { type StravaConnection } from "@shared/schema";
+import { CODE_CHALLENGE_PATTERN, type StravaConnection, stravaNativeCompleteSchema } from "@shared/schema";
 import { type DistanceUnit } from "@shared/unitConversion";
 import type { CookieOptions, Request, Response, Router } from "express";
-import { z } from "zod";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
@@ -134,15 +133,6 @@ function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
   return crypto.timingSafeEqual(presented, expected);
 }
 
-/**
- * A PKCE-style code challenge from the native app: base64url(SHA-256(verifier)),
- * 43 characters with no padding (RFC 7636 §4.2, S256). It never contains a
- * colon, so it can ride in the colon-separated state.
- */
-const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
-/** RFC 7636 §4.1 code_verifier: 43–128 unreserved characters. */
-const CODE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
-
 export function codeChallengeFor(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
@@ -168,7 +158,7 @@ export function verifySignedState(state: string): { userId: string; codeChalleng
   const [userId, timestamp, nonce] = parts;
   const codeChallenge = parts.length === 5 ? parts[3] : undefined;
   const signature = parts.at(-1) ?? "";
-  if (codeChallenge !== undefined && !CODE_CHALLENGE.test(codeChallenge)) return null;
+  if (codeChallenge !== undefined && !CODE_CHALLENGE_PATTERN.test(codeChallenge)) return null;
   const payload = codeChallenge ? `${userId}:${timestamp}:${nonce}:${codeChallenge}` : `${userId}:${timestamp}:${nonce}`;
   const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex");
 
@@ -414,7 +404,7 @@ function handleStravaAuth(req: Request, res: Response) {
   // own with the verifier instead, at /api/v1/strava/native/complete.
   const { codeChallenge } = req.query;
   if (codeChallenge !== undefined) {
-    if (typeof codeChallenge !== "string" || !CODE_CHALLENGE.test(codeChallenge)) {
+    if (typeof codeChallenge !== "string" || !CODE_CHALLENGE_PATTERN.test(codeChallenge)) {
       return res.status(400).json({
         error: "codeChallenge must be base64url(SHA-256(verifier)), 43 characters",
         code: "VALIDATION_ERROR",
@@ -518,12 +508,6 @@ async function handleStravaCallback(req: Request, res: Response) {
   const linked = await linkStravaAccount(req, userId, code);
   res.redirect(linked ? "/settings?strava=connected" : "/settings?strava=error");
 }
-
-const stravaNativeCompleteSchema = z.object({
-  code: z.string().min(1).max(512),
-  state: z.string().min(1).max(1024),
-  verifier: z.string().regex(CODE_VERIFIER, { message: "verifier must be an RFC 7636 code verifier" }),
-});
 
 /**
  * The native app finishing a Strava connect: Strava's App Link redirect gave

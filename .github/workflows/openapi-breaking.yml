@@ -1,0 +1,48 @@
+name: OpenAPI Breaking Changes
+
+# Installed native app builds keep calling the API for months with models
+# generated from docs/openapi.json, so a change that would break them must be
+# deliberate (docs/mobile-app-plan.md). This compares the PR's document with
+# the base branch's (script/openapiBreaking.ts) and fails on a breaking change.
+# To ship one on purpose, raise MIN_APP_VERSION_* in the same release and add
+# the `openapi-breaking-ok` label; label changes re-run only this workflow.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - docs/openapi.json
+      - script/openapiBreaking.ts
+      - script/openapi-breaking.ts
+      - .github/workflows/openapi-breaking.yml
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  breaking:
+    name: OpenAPI breaking-change check
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'openapi-breaking-ok') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # --ignore-scripts: no dependency lifecycle scripts in CI (see build.yml).
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Compare docs/openapi.json with the base branch
+        env:
+          # Passed through the environment, never interpolated into the script.
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          if ! git show "origin/$BASE_REF:docs/openapi.json" > "$RUNNER_TEMP/openapi-base.json" 2>/dev/null; then
+            echo "The base branch has no docs/openapi.json; nothing to compare."
+            exit 0
+          fi
+          pnpm openapi:breaking "$RUNNER_TEMP/openapi-base.json" docs/openapi.json

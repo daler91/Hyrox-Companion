@@ -315,7 +315,7 @@ flowchart LR
 1. **Drizzle table definitions** (`shared/schema/tables.ts`) -- `pgTable()` calls define columns, types, indexes, and constraints. A custom `vector()` type maps PostgreSQL `vector(N)` to TypeScript `number[]`.
 2. **drizzle-zod generation** -- `createInsertSchema()` auto-generates a Zod schema from each Drizzle table, handling column types, nullability, and defaults.
 3. **Zod refinement** (`shared/schema/types.ts`) -- `.omit({ id: true })` removes server-generated fields; `.extend()` adds stricter validation (e.g., `z.number().min(1).max(14)`).
-4. **OpenAPI registration** (`shared/openapi.ts`) -- Schemas are registered with `@asteasolutions/zod-to-openapi`'s `OpenAPIRegistry`, including path definitions with examples and security schemes.
+4. **OpenAPI registration** (`shared/openapi.ts` and the per-area path modules in `shared/openapiRoutes/`) -- Schemas are registered with `@asteasolutions/zod-to-openapi`'s `OpenAPIRegistry`, including path definitions with examples, the security scheme and the shared error envelopes. Request schemas are the same objects the route validation uses (e.g. `shared/schema/types/native.ts`), so the document cannot drift from what the server accepts; `test/docs/openapiCoverage.test.ts` keeps registered routes and the document in step.
 5. **Document generation** -- `OpenApiGeneratorV3` produces an OpenAPI 3.0 JSON spec from the registry.
 6. **Swagger UI** -- In development, `swagger-ui-express` serves interactive docs at `/api/docs` with a relaxed CSP.
 

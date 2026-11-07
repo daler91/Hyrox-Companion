@@ -10,7 +10,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints req
 **Content-Type:** `application/json` (requests and responses)
 **Authentication:** Clerk JWT via `credentials: "include"` (cookie-based)
 
-**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Endpoints marked below that are not yet registered with the registry are **not** in the snapshot; coverage is being broadened as routes are migrated.
+**Machine-readable spec:** a committed OpenAPI 3.0 snapshot lives at [`docs/openapi.json`](openapi.json). It is regenerated from the same Zod registry that powers Swagger UI (`shared/openapi.ts`) via `pnpm docs:openapi` and is CI-gated — the `Build` workflow fails if the committed file drifts from the schemas. Use it for client-code generation, contract testing, or importing into tools like Postman / Insomnia. Path definitions live in per-area modules under `shared/openapiRoutes/`, which share the bearer security scheme, the two error envelopes (`ErrorResponse`, `ValidationErrorResponse`) and the native app's `426 AppUpdateRequiredResponse` (`shared/openapiRoutes/common.ts`). Not every endpoint below is registered yet: the ones missing are listed in `test/docs/openapiUndocumented.ts`, which `test/docs/openapiCoverage.test.ts` allows only to shrink, and a new route must be registered before it can merge. On pull requests, `openapi-breaking.yml` fails a change that would break installed app builds ([Testing → OpenAPI Breaking Changes](testing.md#6-openapi-breaking-changes-openapi-breakingyml)).
 
 ---
 
@@ -1944,7 +1944,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 
 - **Auth:** Required
 - **Rate limit:** `stravaAuth` category, 20 per 15 minutes, per user (the limiter runs after `isAuthenticated`; the bucket is shared with `/callback`)
-- **Response:** `{ url: string }` — Redirect URL for Strava OAuth
+- **Response:** `{ authUrl: string }` — Strava consent URL to open
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
 - **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
 - **Native app:** with `?codeChallenge=<base64url(SHA-256(verifier))>` (43 characters, else `400 VALIDATION_ERROR`) it returns `{ authUrl }` for Strava's mobile consent page with `redirect_uri` = `<APP_URL>/strava/mobile-callback` and a state carrying the challenge, and sets no cookie. The app finishes with `POST /api/v1/strava/native/complete` ([Integrations → Native App Connect](integrations.md#native-app-connect))

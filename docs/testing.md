@@ -605,7 +605,15 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 - **Install:** `pnpm install --frozen-lockfile --ignore-scripts`, which also skips this repo's own `postinstall` (it only patches deps vendored inside the Cypress binary, which this job never touches).
 - **Note:** SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
 
-### 6. Other workflows
+### 6. OpenAPI Breaking Changes (`openapi-breaking.yml`)
+
+- **Name:** OpenAPI Breaking Changes
+- **Triggers:** Pull request (opened/synchronize/reopened/labeled/unlabeled) touching `docs/openapi.json` or the checker
+- **Steps:** Checkout, install, fetch the base branch, then `pnpm openapi:breaking <base openapi.json> docs/openapi.json` (`script/openapiBreaking.ts`). It fails on a change that would break an installed native app build: a removed operation or success response; a response field removed, retyped, no longer always present or newly nullable; a request that gains a required field or parameter, loses an enum value or tightens a length. A response enum gaining a value, or a changed pattern or union, is printed as a warning without failing.
+- **Override:** the job is skipped on a PR labelled `openapi-breaking-ok`, for a deliberate break shipped with a raised `MIN_APP_VERSION_*`. Label changes re-run only this workflow.
+- **Related:** `test/docs/openapiCoverage.test.ts` (in the unit suite) keeps every registered `/api` route either documented, on the shrink-only `test/docs/openapiUndocumented.ts` list, or excluded as not a client endpoint.
+
+### 7. Other workflows
 
 - **Secret Scan** (`gitleaks.yml`) -- Gitleaks secret scanning on push to `main` and on pull request. Scans **incrementally** -- only the commits the push or PR introduces -- so it blocks new secrets without re-flagging already-revoked ones buried in old history. Added after a former `.replit` config leaked an `ENCRYPTION_KEY`; that key has since been rotated through the keyring.
 - **DevSkim** (`devskim.yml`) -- Static security analysis

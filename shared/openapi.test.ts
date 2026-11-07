@@ -28,13 +28,30 @@ function okSchema(op: Operation) {
 describe("generateOpenApiDocument", () => {
   const doc = generateOpenApiDocument();
 
-  it("registers the workout CRUD and preferences operations", () => {
+  it("registers the workout CRUD, preferences and native-app foundation operations", () => {
     expect(Object.keys(doc.paths ?? {}).sort()).toEqual([
+      "/api/v1/account",
+      "/api/v1/auth/user",
+      "/api/v1/consents",
       "/api/v1/preferences",
+      "/api/v1/push/devices",
+      "/api/v1/strava/auth",
+      "/api/v1/strava/native/complete",
+      "/api/v1/strava/status",
       "/api/v1/workouts",
       "/api/v1/workouts/{id}",
     ]);
     expect(Object.keys(doc.paths?.["/api/v1/workouts/{id}"] ?? {}).sort()).toEqual(["delete", "get", "patch"]);
+    expect(Object.keys(doc.paths?.["/api/v1/preferences"] ?? {}).sort()).toEqual(["get", "patch"]);
+  });
+
+  it("describes both error envelopes and the native app's 426 on authenticated operations", () => {
+    const schemas = doc.components?.schemas ?? {};
+    expect(Object.keys(schemas)).toEqual(
+      expect.arrayContaining(["ErrorResponse", "ValidationErrorResponse", "AppUpdateRequiredResponse"]),
+    );
+    const responses = operation(doc, "/api/v1/push/devices", "post").responses;
+    expect(Object.keys(responses).sort()).toEqual(["200", "400", "401", "404", "426", "429"]);
   });
 
   it("documents responses as stored rows, not insert payloads", () => {
@@ -51,7 +68,8 @@ describe("generateOpenApiDocument", () => {
   });
 
   it("states its own coverage so a reader does not mistake it for the whole API", () => {
-    expect(doc.info.description).toMatch(/workout CRUD and preferences endpoints only/);
+    expect(doc.info.description).toMatch(/does not yet describe every/);
+    expect(doc.info.description).toMatch(/test\/docs\/openapiUndocumented\.ts/);
   });
 
   it("matches the committed docs/openapi.json snapshot", () => {

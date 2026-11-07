@@ -3,7 +3,7 @@
   "info": {
     "version": "1.0.0",
     "title": "fitai.coach Workout API",
-    "description": "API for managing workouts, exercises, and training plans.\n\n### Coverage\nThis document is generated from the Zod schemas in `shared/openapi.ts` and\ncurrently describes the workout CRUD and preferences endpoints only. The\nremaining `/api/v1` routes (plans, timeline, analytics, coach, nutrition,\nintegrations, …) are not yet registered here; `server/routes/` is their\nsource of truth.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
+    "description": "API for managing workouts, exercises, and training plans.\n\n### Coverage\nThis document is generated from the Zod schemas in `shared/openapi.ts` and\nthe path modules in `shared/openapiRoutes/`. It does not yet describe every\n`/api/v1` route: the ones still missing are listed in\n`test/docs/openapiUndocumented.ts`, which CI allows only to shrink, and\n`server/routes/` is their source of truth until they are registered.\n\n### Errors\nErrors use `ErrorResponse` (`{ error, code, details? }`), except validation\nfailures from the Zod middleware, which use `ValidationErrorResponse`\n(`{ code: \"VALIDATION_ERROR\", message, details.issues }`). `code` is a member\nof the ErrorCode catalogue in `server/errors.ts`.\n\n### Native app\nThe mobile app sends `X-App-Platform` and `X-App-Version` on every request;\na build below the server's minimum gets `426` with `AppUpdateRequiredResponse`.\nBearer-authenticated requests need no CSRF token.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
   },
   "servers": [
     {
@@ -20,6 +20,120 @@
       }
     },
     "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable message",
+            "example": "Unauthorized"
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable code, a member of ErrorCode (server/errors.ts)",
+            "example": "UNAUTHORIZED"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "description": "Extra context; present on some 4xx responses only"
+          }
+        },
+        "required": [
+          "error",
+          "code"
+        ]
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "VALIDATION_ERROR"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "The first issue's message",
+            "example": "Invalid input"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "example": "token"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Device token must be an FCM registration token"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "message"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "issues"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details"
+        ]
+      },
+      "AppUpdateRequiredResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "This version of the app is no longer supported. Update it to keep going."
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "APP_UPDATE_REQUIRED"
+            ]
+          },
+          "minimumVersion": {
+            "type": "string",
+            "description": "Oldest build the API still serves",
+            "example": "1.4.0"
+          }
+        },
+        "required": [
+          "error",
+          "code",
+          "minimumVersion"
+        ]
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "WorkoutLog": {
         "type": "object",
         "properties": {
@@ -3409,6 +3523,390 @@
         "title": "UpdateWorkoutRequest",
         "description": "Payload for updating a workout log along with optional exercise sets. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned."
       },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "profileImageUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "weightUnit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "distanceUnit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "userTimezone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "weeklyGoal": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "mealSchedule": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "emailNotifications": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailWeeklySummary": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailMissedReminder": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "showAdherenceInsights": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "aiCoachEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "coachAutoApplyPlanChanges": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "trainingStyleId": {
+            "type": "string",
+            "nullable": true
+          },
+          "trainingStylePreviousId": {
+            "type": "string",
+            "nullable": true
+          },
+          "trainingStyleChangedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "trainingStyleRecomputeNow": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "onboardingCompleted": {
+            "type": "boolean"
+          },
+          "division": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 32
+          },
+          "age": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "bodyweightKg": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "heightCm": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "restingHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "maxHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "ftp": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "activityLevel": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 24
+          },
+          "weightGoalDirection": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "weightGoalRateKgPerWeek": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "trainingConstraints": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafAge": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "mafInjuryIllnessMedication": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mafConsistency": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafTrend": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafHrDataAvailable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mafHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "mafBaselineTestScheduledAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "isAutoCoaching": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "lastWeeklySummaryAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "lastMissedReminderAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "emailWeeklyReviewReminder": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailTodaySession": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailAnalysisDigest": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "notifyHour": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourWeeklySummary": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourMissedReminder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourWeeklyReviewReminder": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourTodaySession": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "notifyHourAnalysisDigest": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "lastWeeklyReviewReminderAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "lastTodaySessionAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "lastAnalysisDigestAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "pushRefuelReminder": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "pushLoggingReminder": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "lastRefuelReminderAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "lastLoggingReminderAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "erasureRequestedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "firstName",
+          "lastName",
+          "profileImageUrl",
+          "weightUnit",
+          "distanceUnit",
+          "userTimezone",
+          "weeklyGoal",
+          "mealSchedule",
+          "emailNotifications",
+          "emailWeeklySummary",
+          "emailMissedReminder",
+          "showAdherenceInsights",
+          "aiCoachEnabled",
+          "coachAutoApplyPlanChanges",
+          "trainingStyleId",
+          "trainingStylePreviousId",
+          "trainingStyleChangedAt",
+          "trainingStyleRecomputeNow",
+          "onboardingCompleted",
+          "division",
+          "gender",
+          "age",
+          "bodyweightKg",
+          "heightCm",
+          "restingHr",
+          "maxHr",
+          "ftp",
+          "activityLevel",
+          "weightGoalDirection",
+          "weightGoalRateKgPerWeek",
+          "trainingConstraints",
+          "mafAge",
+          "mafInjuryIllnessMedication",
+          "mafConsistency",
+          "mafTrend",
+          "mafCategory",
+          "mafHrDataAvailable",
+          "mafHr",
+          "mafBaselineTestScheduledAt",
+          "isAutoCoaching",
+          "lastWeeklySummaryAt",
+          "lastMissedReminderAt",
+          "emailWeeklyReviewReminder",
+          "emailTodaySession",
+          "emailAnalysisDigest",
+          "notifyHour",
+          "notifyHourWeeklySummary",
+          "notifyHourMissedReminder",
+          "notifyHourWeeklyReviewReminder",
+          "notifyHourTodaySession",
+          "notifyHourAnalysisDigest",
+          "lastWeeklyReviewReminderAt",
+          "lastTodaySessionAt",
+          "lastAnalysisDigestAt",
+          "pushRefuelReminder",
+          "pushLoggingReminder",
+          "lastRefuelReminderAt",
+          "lastLoggingReminderAt",
+          "erasureRequestedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ConsentType": {
+        "type": "string",
+        "enum": [
+          "privacy_notice",
+          "error_reporting"
+        ]
+      },
       "WorkoutId": {
         "type": "string",
         "example": "123e4567-e89b-12d3-a456-426614174000",
@@ -3923,6 +4421,861 @@
           },
           "401": {
             "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Preferences"
+        ],
+        "summary": "Get user preferences",
+        "description": "The athlete's units, notification settings, training style and onboarding state.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The serialised preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/user": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Get the signed-in user",
+        "description": "The athlete's user row, provisioned from Clerk on the first authenticated request (server/routes/auth.ts). Rate limited to 60/min because the web app polls it while the auto-coach runs.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/consents": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Record a consent decision",
+        "description": "Stores an auditable consent decision (GDPR Art. 7): the privacy notice acknowledgement or the error-reporting opt-in/out. The latest decision per type is kept.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "consentType": "privacy_notice",
+                "granted": true
+              },
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "consentType": {
+                    "type": "string",
+                    "enum": [
+                      "privacy_notice",
+                      "error_reporting"
+                    ]
+                  },
+                  "granted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "consentType",
+                  "granted"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "List recorded consent decisions",
+        "description": "The athlete's recorded consent decisions, newest first.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consent decisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "consents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "consentType": {
+                            "$ref": "#/components/schemas/ConsentType"
+                          },
+                          "granted": {
+                            "type": "boolean"
+                          },
+                          "consentedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "consentType",
+                          "granted",
+                          "consentedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "consents"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account": {
+      "delete": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete the account and all its data",
+        "description": "Permanent erasure (GDPR Art. 17): the Clerk identity, every user-owned row and the vector-DB copies. Resumable: a run that fails after the Clerk identity is gone is finished by the erasure sweep. Rate limited to 3 per window.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account was erased",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/push/devices": {
+      "post": {
+        "tags": [
+          "Push"
+        ],
+        "summary": "Register this app install for push",
+        "description": "Registers (or refreshes) the install's FCM registration token. Call on every launch and whenever FCM rotates the token. A token another athlete held moves to the caller, so a shared phone notifies whoever is signed in. At most 10 installs per user; the least recently seen is evicted. A well-formed X-App-Version is stored with the token.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "token": "dQw4w9WgXcQ:APA91bH-example",
+                "platform": "android"
+              },
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "^[\\w:-]+$"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "android",
+                      "ios"
+                    ]
+                  }
+                },
+                "required": [
+                  "token",
+                  "platform"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PUSH_NOT_CONFIGURED: native push is not configured on this server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Push"
+        ],
+        "summary": "Unregister this app install",
+        "description": "Removes the install's token for the signed-in athlete, on sign-out. Only the caller's own row is touched.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "^[\\w:-]+$"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unregistered (also when the token was not registered)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/strava/status": {
+      "get": {
+        "tags": [
+          "Strava"
+        ],
+        "summary": "Get the Strava connection status",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connected (with the athlete and sync details) or not",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "athleteId": {
+                      "type": "string"
+                    },
+                    "lastSyncedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "requiresReauth": {
+                      "type": "boolean",
+                      "description": "Strava revoked the grant; the athlete must connect again"
+                    },
+                    "autoSync": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "webhook": {
+                          "type": "boolean",
+                          "description": "Whether Strava pushes new activities (else polling)"
+                        },
+                        "intervalMinutes": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "webhook",
+                        "intervalMinutes"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "autoSync"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/strava/auth": {
+      "get": {
+        "tags": [
+          "Strava"
+        ],
+        "summary": "Start connecting Strava",
+        "description": "Returns Strava's consent URL. The native app passes `codeChallenge` = base64url(SHA-256(verifier)) and gets Strava's mobile consent page, which redirects to the App Link `/strava/mobile-callback`; it then finishes with POST /api/v1/strava/native/complete. Without `codeChallenge` this is the browser flow, which also sets a binding cookie.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "description": "Native app only: base64url(SHA-256(verifier)), 43 characters (RFC 7636 S256)"
+            },
+            "required": false,
+            "description": "Native app only: base64url(SHA-256(verifier)), 43 characters (RFC 7636 S256)",
+            "name": "codeChallenge",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The URL to open for Strava's consent screen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "authUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: malformed codeChallenge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Strava is not configured on this server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/strava/native/complete": {
+      "post": {
+        "tags": [
+          "Strava"
+        ],
+        "summary": "Finish connecting Strava from the native app",
+        "description": "The app posts the `code` and `state` from Strava's App Link redirect plus the verifier whose challenge it sent to /auth. The account is linked only if the state is valid, unexpired, unused, minted for the caller, and the verifier matches; every refusal is the same 403. On success the first import is queued.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "state": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "verifier": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9._~-]{43,128}$"
+                  }
+                },
+                "required": [
+                  "code",
+                  "state",
+                  "verifier"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: malformed body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN: the connection could not be verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "EXTERNAL_API_ERROR: Strava did not accept the code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }

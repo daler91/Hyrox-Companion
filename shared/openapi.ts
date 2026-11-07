@@ -1,6 +1,10 @@
 import { OpenApiGeneratorV3, OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { createSelectSchema } from "drizzle-zod";
 
+import { registerAccountPaths } from "./openapiRoutes/account";
+import { registerCommonComponents } from "./openapiRoutes/common";
+import { registerPushPaths } from "./openapiRoutes/push";
+import { registerStravaPaths } from "./openapiRoutes/strava";
 import {
   exerciseSetSchema,
   exercisesPayloadSchema,
@@ -16,6 +20,10 @@ import {
 import { z } from "./schema/zod";
 
 export const registry = new OpenAPIRegistry();
+
+// Security scheme, error envelopes and response helpers shared by every path
+// module in shared/openapiRoutes/.
+const common = registerCommonComponents(registry);
 
 // ---------------------------------------------------------------------------
 // Realistic Hyrox-specific examples for Swagger UI "Try it out"
@@ -332,15 +340,7 @@ export const WorkoutIdParam = registry.registerParameter(
   })
 );
 
-// Register Security Scheme
-const bearerAuth = registry.registerComponent("securitySchemes", "BearerAuth", {
-  type: "http",
-  scheme: "bearer",
-  bearerFormat: "JWT",
-  description: "Enter your Clerk JWT token in the format: Bearer <token>",
-});
-
-const security = [{ [bearerAuth.name]: [] }];
+const security = common.security;
 
 // Define Example Routes (Path Items)
 registry.registerPath({
@@ -546,6 +546,13 @@ registry.registerPath({
   },
 });
 
+// Path modules, one per area. Every /api/v1 route is either registered by one
+// of them or listed in test/docs/openapiUndocumented.ts, a list that may only
+// shrink (test/docs/openapiCoverage.test.ts).
+registerAccountPaths(registry, common, { PreferencesResponse: PreferencesResponseSchema });
+registerPushPaths(registry, common);
+registerStravaPaths(registry, common);
+
 export function generateOpenApiDocument() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
 
@@ -559,10 +566,21 @@ API for managing workouts, exercises, and training plans.
 
 ### Coverage
 This document is generated from the Zod schemas in \`shared/openapi.ts\` and
-currently describes the workout CRUD and preferences endpoints only. The
-remaining \`/api/v1\` routes (plans, timeline, analytics, coach, nutrition,
-integrations, …) are not yet registered here; \`server/routes/\` is their
-source of truth.
+the path modules in \`shared/openapiRoutes/\`. It does not yet describe every
+\`/api/v1\` route: the ones still missing are listed in
+\`test/docs/openapiUndocumented.ts\`, which CI allows only to shrink, and
+\`server/routes/\` is their source of truth until they are registered.
+
+### Errors
+Errors use \`ErrorResponse\` (\`{ error, code, details? }\`), except validation
+failures from the Zod middleware, which use \`ValidationErrorResponse\`
+(\`{ code: "VALIDATION_ERROR", message, details.issues }\`). \`code\` is a member
+of the ErrorCode catalogue in \`server/errors.ts\`.
+
+### Native app
+The mobile app sends \`X-App-Platform\` and \`X-App-Version\` on every request;
+a build below the server's minimum gets \`426\` with \`AppUpdateRequiredResponse\`.
+Bearer-authenticated requests need no CSRF token.
 
 ### Authentication
 This API is protected using JWT Bearer authentication provided by Clerk.

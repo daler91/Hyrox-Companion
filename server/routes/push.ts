@@ -1,4 +1,9 @@
-import { devicePlatformEnum } from "@shared/schema";
+import {
+  type RegisterDeviceTokenInput,
+  registerDeviceTokenSchema,
+  type UnregisterDeviceTokenInput,
+  unregisterDeviceTokenSchema,
+} from "@shared/schema";
 import { type Request as ExpressRequest, type Response, Router } from "express";
 import { z } from "zod";
 
@@ -66,43 +71,26 @@ protectedDelete(router, "/api/v1/push/unsubscribe", { limiter: rateLimiter("push
   res.json({ success: true });
 });
 
-/**
- * An FCM registration token, as the Firebase SDK hands it to the app. Real
- * tokens are around 160 characters of base64url plus a colon; the bound is
- * generous, the charset is not, so nothing but a token is ever stored.
- */
-const deviceTokenSchema = z
-  .string()
-  .min(1)
-  .max(4096)
-  .regex(/^[\w:-]+$/, { message: "Device token must be an FCM registration token" });
-
-const registerDeviceSchema = z.object({
-  token: deviceTokenSchema,
-  platform: z.enum(devicePlatformEnum),
-});
-
-const unregisterDeviceSchema = z.object({ token: deviceTokenSchema });
 
 // Native app installs. The app registers on every launch and whenever FCM
 // rotates its token, which also refreshes last_seen_at; it unregisters on
 // sign-out. Refused when native push is not configured, so the app can tell
 // the athlete notifications are unavailable instead of silently never
 // delivering any.
-protectedPost(router, "/api/v1/push/devices", { limiter: rateLimiter("push", 10), middleware: [validateBody(registerDeviceSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/push/devices", { limiter: rateLimiter("push", 10), middleware: [validateBody(registerDeviceTokenSchema)] }, async (req: ExpressRequest, res: Response) => {
   if (!isNativePushEnabled()) {
     res.status(404).json({ error: "Push notifications not configured", code: "PUSH_NOT_CONFIGURED" });
     return;
   }
   const userId = getUserId(req);
-  const { token, platform } = req.body as z.infer<typeof registerDeviceSchema>;
+  const { token, platform } = req.body as RegisterDeviceTokenInput;
   await storage.push.saveDeviceToken(userId, { token, platform, appVersion: readAppClient(req)?.version ?? null });
   res.json({ success: true });
 });
 
-protectedDelete(router, "/api/v1/push/devices", { limiter: rateLimiter("push", 10), middleware: [validateBody(unregisterDeviceSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/push/devices", { limiter: rateLimiter("push", 10), middleware: [validateBody(unregisterDeviceTokenSchema)] }, async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
-  const { token } = req.body as z.infer<typeof unregisterDeviceSchema>;
+  const { token } = req.body as UnregisterDeviceTokenInput;
   await storage.push.removeDeviceToken(userId, token);
   res.json({ success: true });
 });
