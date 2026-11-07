@@ -12,14 +12,19 @@ import kotlin.math.floor
 
 /**
  * `Math.round`: the nearest integer, halves rounded up (towards +∞), so
- * -2.5 → -2. Not `kotlin.math.round` (half to even: 2.5 → 2) and not
+ * -2.5 → -2, and -0 for results that round to zero from below. Not `kotlin.math.round` (half to even: 2.5 → 2) and not
  * `x + 0.5` then floor (wrong for 0.49999999999999994).
  */
 public fun jsRound(x: Double): Double {
     if (x.isNaN() || x.isInfinite()) return x
     val down = floor(x)
-    return if (x - down >= 0.5) down + 1.0 else down
+    val rounded = if (x - down >= 0.5) down + 1.0 else down
+    // JS keeps the sign of a zero result: Math.round(-0.4) and Math.round(-0)
+    // are -0. JSON cannot show it, but 1 / result and Math.sign can.
+    return if (rounded == 0.0 && (x < 0.0 || x.toRawBits() == NEGATIVE_ZERO_BITS)) -0.0 else rounded
 }
+
+private val NEGATIVE_ZERO_BITS = (-0.0).toRawBits()
 
 /**
  * `Number.prototype.toFixed(digits)` for |x| < 1e21 (JS switches to

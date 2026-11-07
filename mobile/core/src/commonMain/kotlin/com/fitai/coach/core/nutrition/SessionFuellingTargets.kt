@@ -1,5 +1,6 @@
 package com.fitai.coach.core.nutrition
 
+import com.fitai.coach.core.js.jsNumberToString
 import com.fitai.coach.core.js.jsRound
 
 /*

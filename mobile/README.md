@@ -83,7 +83,13 @@ A port is pinned to its original by golden fixtures:
   TypeScript forces regenerating the fixtures, and the Kotlin test then shows
   whether the port still matches.
 
-JavaScript number semantics Kotlin's defaults do not reproduce are in
-`core/.../js/JsMath.kt`: `jsRound` (`Math.round`: halves towards +∞) and
-`jsToFixed` (`toFixed` over the exact binary value, so `1.005` → `"1.00"`).
-Use them, never `kotlin.math.round` or `String.format`, in ported code.
+JavaScript semantics Kotlin's defaults do not reproduce are in `core/.../js/`:
+`jsRound` (`Math.round`: halves towards +∞, -0 kept), `jsToFixed` (`toFixed`
+over the exact binary value, so `1.005` → `"1.00"`), `jsNumberToString`
+(`String(n)`: `1`, not `1.0`) and `jsTrim` (JS's whitespace set). Use them,
+never `kotlin.math.round`, `String.format`, `toString()` or `trim()`, in ported code.
+
+Ported so far (packages under `com.fitai.coach.core`): `units`, `dates`, `plans`,
+`notifications`, `nutrition`, `exercises` (with the generated exercise catalogue,
+`pnpm mobile:catalogue`) and `structure`. The table in the inventory lists each
+with its suites.

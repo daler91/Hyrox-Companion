@@ -1,5 +1,6 @@
 package com.fitai.coach.core.exercises
 
+import com.fitai.coach.core.js.jsTrim
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.core.exercises.generated.EXERCISE_NAME_ALIASES
 
@@ -95,22 +96,3 @@ private fun resolveExerciseSlug(slug: String): String? {
     return EXERCISE_NAME_ALIASES[slug]
 }
 
-/**
- * `String.prototype.trim`: strips JS WhiteSpace and LineTerminator characters.
- * Kotlin's `trim()` uses a different set (it also strips U+001C–U+001F, and not
- * U+FEFF). The slug would absorb the difference, but this keeps the port literal.
- */
-private fun jsTrim(text: String): String {
-    var start = 0
-    var end = text.length
-    while (start < end && isJsWhitespace(text[start])) start++
-    while (end > start && isJsWhitespace(text[end - 1])) end--
-    return text.substring(start, end)
-}
-
-private fun isJsWhitespace(char: Char): Boolean = when (char) {
-    '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', ' ', ' ', ' ',
-    ' ', ' ', ' ', ' ', '　', '﻿',
-    -> true
-    else -> char in ' '..' '
-}

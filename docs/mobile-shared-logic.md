@@ -3,7 +3,9 @@
 # Mobile App: Shared Logic Inventory
 
 **Status:** inventory for Phase 2, step 2 of [mobile-app-plan.md](mobile-app-plan.md), taken
-2026-11-07 against the web client as it stands.
+2026-11-07 against the web client as it stands. **Every module in the port list except
+`schema/micros` (deferred) is now ported**, each pinned to its TypeScript original by golden
+fixtures; see [Ports done](#ports-done) below.
 
 ## What this is
 
@@ -91,19 +93,57 @@ How it was checked:
 
 ## Port list
 
+### Ports done
+
+All in `mobile/core/src/commonMain/kotlin/com/fitai/coach/core/`, pure common Kotlin (no
+`java.*`), each tested by a `<Module>FixtureTest` that reproduces every case of its suites:
+
+| Module | Kotlin package | Suites (cases) |
+| --- | --- | --- |
+| `unitConversion` (19 functions) | `units` | `unitConversion.*` (1,056) |
+| `dateUtils` | `dates` | `dateUtils.*` (1,914) |
+| `planPhase` | `plans` | `planPhase.*` (270) |
+| `notifyHours` | `notifications` | `notifyHours.*` (222) |
+| `nutritionScaling`, `mealFuelling.mergeMealOverride`, `sessionFuellingTargets` | `nutrition` | 8 suites (1,035) |
+| `progression`, `exerciseEquipment`, `schema/exercises` | `exercises` | 8 suites (5,158) |
+| `schema/structureLint` | `structure` | `structureLint.lintWorkoutStructure` (184) |
+| JS number and string semantics the ports share | `js` | `js.*` |
+
+The exercise tables are generated Kotlin (`exercises/generated/ExerciseCatalogue.kt`,
+`pnpm mobile:catalogue`), checked for drift in the unit suite like the API models.
+`structureLint` lints the generated request models through adapters, so the app lints exactly
+the body it sends.
+
+**TypeScript bugs found while porting, ported faithfully and pinned by fixtures** (fixing them
+means changing the TypeScript, regenerating the fixtures and simplifying the ports):
+
+- The unit alias tables and `EXERCISE_DEFINITIONS` are plain objects, so lookups also find
+  inherited `Object.prototype` members: `normalizeExerciseName("Constructor")` returns
+  `"constructor"`, `convertWeight(100, "constructor", "lbs")` returns 100, and
+  `storedWeightToDisplay` with such a unit throws. The Kotlin ports reproduce this from a list of
+  the 12 prototype names (`exercises/JsPlainObject.kt`) or throw `UnitAliasException` where the TS
+  result is not a unit at all. Fix: `Object.hasOwn`, a `Map`, or `Object.create(null)`.
+- `structureLint`: the AMRAP fixed-rounds check reads `rounds` where Zod checks `roundCount`;
+  presence checks treat 0 as set where Zod treats it as missing; MISSING_STEP_TARGET fires on
+  for_time rest steps, which Zod forbids targets on.
+- `cmToFtIn` mixes `Math.floor` with `%` for negative heights (-33.02 cm gives -2 ft -1 in).
+
 ### Rules for every fixture
 
 None of the ported functions call `Intl`, `toLocale*` or the local-time `Date` getters, and none
 use a regex. Every output is reproducible, as long as the Kotlin side copies JS numeric behaviour:
 
-- **`Math.round`.** JS rounds ties toward +∞ (`Math.round(-2.5)` is `-2`). Use `roundToLong()` /
-  `roundToInt()`, which do the same. Never use `kotlin.math.round`, which rounds ties to even.
+The helpers below live in `core/.../js/` (common Kotlin, so they work on iOS too, unlike
+`BigDecimal`) and are pinned by the `js.*` fixture suites against real JS output.
+
+- **`Math.round`.** JS rounds ties toward +∞ (`Math.round(-2.5)` is `-2`) and keeps the sign of a
+  zero result (`Math.round(-0.4)` is `-0`). Use `jsRound`. Never use `kotlin.math.round`, which
+  rounds ties to even.
 - **`toFixed(d)`.** JS rounds the exact binary value, ties away from zero, so `(1.005).toFixed(2)`
-  is `"1.00"`. Use `BigDecimal(x).setScale(d, RoundingMode.HALF_UP)`, with the exact `double`
-  constructor. `BigDecimal.valueOf` and `String.format` both give `"1.01"`.
+  is `"1.00"`. Use `jsToFixed`; `String.format` gives `"1.01"`.
 - **Number to string** (`String(n)` and template literals). JS prints `1` and `10000000`, and
-  switches to an exponent only at 1e21 (`"1e+21"`). Kotlin prints `1.0` and `1.0E7`. The port needs
-  a `jsNumberToString` helper. Affected:
+  switches to an exponent only at 1e21 (`"1e+21"`). Kotlin prints `1.0` and `1.0E7`. Use
+  `jsNumberToString`. Affected:
   - `unitConversion`'s `text` fields and formatters.
   - `units.formatMinutes`.
   - The `explanation` strings of `sessionFuellingTargets`.
@@ -284,7 +324,8 @@ client.
 
 - `scaleNutrition`:
   - A food with every per-100g value `null`.
-  - Calories `null` with 50/120/20 g protein/carb/fat: calories are derived, 860 per 100 g.
+  - Calories `null` with 25/60/10 g protein/carb/fat: calories are derived, 430 per 100 g. (With
+    50/120/20 g the macros sum to 190 g, past the 101 g guard, so calories come out 0, not 860.)
   - Macros summing to 101: still derived.
   - Macros summing to 101.5: not derived, gives 0 kcal.
   - `caloriesPer100g: 0` with macros: an explicit 0 is kept and not derived.
@@ -313,7 +354,8 @@ the server, which returns the split in the nutrition day summary.
 
 **Fixture inputs:**
 
-- A split whose calories equal its macro energy, `{calories:720, carbG:80, proteinG:40, fatG:20}`,
+- A split, `{calories:720, carbG:80, proteinG:40, fatG:20}` (its macros come to 660 kcal, not 720;
+  the outcomes below hold either way, and the fixtures also use a true 660 split),
   with these overrides:
   - `{}`
   - `{calories:900}`

@@ -1,0 +1,222 @@
+{
+  "suite": "js.trim",
+  "description": "String.prototype.trim: ECMAScript WhiteSpace and LineTerminator, which differ from Kotlin's trim().",
+  "cases": [
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "  kg ",
+      "output": "kg"
+    },
+    {
+      "input": "kg",
+      "output": "kg"
+    },
+    {
+      "input": " kg ",
+      "output": "kg"
+    },
+    {
+      "input": "\tlbs\t",
+      "output": "lbs"
+    },
+    {
+      "input": "\nlbs\n",
+      "output": "lbs"
+    },
+    {
+      "input": "\u000blbs\u000b",
+      "output": "lbs"
+    },
+    {
+      "input": "\flbs\f",
+      "output": "lbs"
+    },
+    {
+      "input": "\rlbs\r",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": " lbs ",
+      "output": "lbs"
+    },
+    {
+      "input": "　lbs　",
+      "output": "lbs"
+    },
+    {
+      "input": "﻿lbs﻿",
+      "output": "lbs"
+    },
+    {
+      "input": "\u001clbs\u001c",
+      "output": "\u001clbs\u001c"
+    },
+    {
+      "input": "\u001dlbs\u001d",
+      "output": "\u001dlbs\u001d"
+    },
+    {
+      "input": "\u001elbs\u001e",
+      "output": "\u001elbs\u001e"
+    },
+    {
+      "input": "\u001flbs\u001f",
+      "output": "\u001flbs\u001f"
+    },
+    {
+      "input": "lbs",
+      "output": "lbs"
+    },
+    {
+      "input": "᠎lbs᠎",
+      "output": "᠎lbs᠎"
+    },
+    {
+      "input": "​lbs​",
+      "output": "​lbs​"
+    },
+    {
+      "input": "\t",
+      "output": ""
+    },
+    {
+      "input": "\n",
+      "output": ""
+    },
+    {
+      "input": "\u000b",
+      "output": ""
+    },
+    {
+      "input": "\f",
+      "output": ""
+    },
+    {
+      "input": "\r",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": " ",
+      "output": ""
+    },
+    {
+      "input": "　",
+      "output": ""
+    },
+    {
+      "input": "﻿",
+      "output": ""
+    },
+    {
+      "input": "\u001c",
+      "output": "\u001c"
+    },
+    {
+      "input": "\u001d",
+      "output": "\u001d"
+    },
+    {
+      "input": "\u001e",
+      "output": "\u001e"
+    },
+    {
+      "input": "\u001f",
+      "output": "\u001f"
+    },
+    {
+      "input": "",
+      "output": ""
+    },
+    {
+      "input": "᠎",
+      "output": "᠎"
+    },
+    {
+      "input": "​",
+      "output": "​"
+    },
+    {
+      "input": "\t\n\u000b\f\r          　﻿\u001c\u001d\u001e\u001f᠎​",
+      "output": "\u001c\u001d\u001e\u001f᠎​"
+    },
+    {
+      "input": "\t\n\u000b\f\r          　﻿\u001c\u001d\u001e\u001f᠎​mid dle\t\n\u000b\f\r          　﻿\u001c\u001d\u001e\u001f᠎​",
+      "output": "\u001c\u001d\u001e\u001f᠎​mid dle\t\n\u000b\f\r          　﻿\u001c\u001d\u001e\u001f᠎​"
+    }
+  ]
+}

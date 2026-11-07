@@ -1,14 +1,12 @@
-package com.fitai.coach.core.units
+package com.fitai.coach.core.js
 
 import kotlin.math.abs
 
 /*
- * JavaScript string semantics the unit-conversion port needs and Kotlin's
- * defaults do not reproduce. Internal to this package for now; both belong
- * next to jsRound / jsToFixed in core/.../js/JsMath.kt once that is shared
- * (sessionFuellingTargets and units.formatMinutes need jsNumberToString too).
- * Pinned through the unitConversion.* fixture suites: `standardize*` inputs
- * for jsTrim, getWorkoutDistanceDisplay's `text` for jsNumberToString.
+ * JavaScript string semantics Kotlin's defaults do not reproduce, shared by
+ * every port that trims input or prints numbers into text (unit labels,
+ * fuelling explanations). Pinned by the js.trim and js.numberToString
+ * fixture suites against real JS output.
  */
 
 /**
@@ -16,7 +14,7 @@ import kotlin.math.abs
  * code points. Kotlin's `trim()` uses a different set: it also strips
  * U+001C..U+001F, and it keeps U+FEFF, which JS strips.
  */
-internal fun jsTrim(text: String): String = text.trim { it.isJsWhitespace() }
+public fun jsTrim(text: String): String = text.trim { it.isJsWhitespace() }
 
 private fun Char.isJsWhitespace(): Boolean = when (this) {
     '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0020', '\u00A0', '\u1680',
@@ -32,7 +30,7 @@ private fun Char.isJsWhitespace(): Boolean = when (this) {
  * `"10000000"`, 1e21 `"1e+21"`, -0.0 `"0"`, where Kotlin prints `"1.0"`,
  * `"1.0E7"`, `"1.0E21"` and `"-0.0"`.
  */
-internal fun jsNumberToString(x: Double): String {
+public fun jsNumberToString(x: Double): String {
     if (x.isNaN()) return "NaN"
     if (x == 0.0) return "0"
     if (x.isInfinite()) return if (x > 0) "Infinity" else "-Infinity"

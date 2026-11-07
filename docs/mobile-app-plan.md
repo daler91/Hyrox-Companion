@@ -169,17 +169,19 @@ OpenAPI document covers every endpoint v1 calls.
    and round-trips every request body. The unit suite fails on drift; `mobile.yml` compiles and
    tests on the JVM. The hand-written Ktor layer (auth, retries, SSE) comes in Phase 3, on top
    of `ApiEndpoints`. `core` has a JVM target only until Phase 3 adds Android and iOS.
-2. **Inventory of client-side logic.** The web client imports 37 `@shared/*` modules. Put each in
-   one of three buckets: rendering only; needed in the app (port it to `core/commonMain`); or
-   better served by an API field (add the field instead).
-   - Likely ports: unit conversion and formatting (`shared/unitConversion`, `shared/units`), date
-     utils.
-   - Likely API fields: fuelling and nutrition targets, MAF, planned-session estimates.
-3. **Golden fixtures.** `script/mobile-fixtures.ts` runs the TypeScript implementations over a
-   fixed input set and writes JSON into `mobile/core/src/commonTest/resources/`. Kotlin tests
-   assert identical output, and CI regenerates the fixtures and fails on diff. A math change on
-   one side without the other then goes red, instead of shipping the kind of bug the unit
-   normalizer once had (`80-90kg` became `80-198 lbs`).
+2. **Inventory of client-side logic. Done:** [mobile-shared-logic.md](mobile-shared-logic.md)
+   puts each of the 37 `@shared/*` modules the web client imports in one bucket: 10 to port, 11
+   better served by an API field (listed there with the endpoint each belongs on), 12 render-only.
+   The unit-text normaliser behind the `80-90kg` → `80-198 lbs` bug turned out to be server-only,
+   so it stays there.
+3. **Golden fixtures and ports. Done:** every module in the port list (except `schema/micros`,
+   deferred until its panel ships) is ported to common Kotlin under `mobile/core`, and reproduces
+   its golden fixtures: 58 suites, 10,942 cases, written by running the TypeScript originals
+   (`pnpm mobile:fixtures`). The unit suite fails when a fixture is stale, so a change to the
+   TypeScript forces the Kotlin test to say whether the port still matches. The JavaScript number
+   and string semantics the ports share (`Math.round`, `toFixed`, `String(n)`, `trim`) are in
+   `core/.../js/`, pinned against real JS output. Porting found three TypeScript bugs and one API
+   contract gap (since fixed); the bugs are listed in the inventory.
 
 ### Phase 3: app foundation
 
