@@ -112,6 +112,20 @@ const envSchema = z
       .string()
       .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_ANDROID must look like 1.4.0" })
       .optional(),
+    // Android App Links (server/bootstrap/wellKnown.ts): the app's package
+    // name and the SHA-256 fingerprints (comma-separated, AA:BB:… form) of
+    // its Play app-signing and upload certificates. Both unset means
+    // /.well-known/assetlinks.json is a 404.
+    ANDROID_APP_PACKAGE: z
+      .string()
+      .regex(/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/, { error: "ANDROID_APP_PACKAGE must be a package name like com.fitai.coach" })
+      .optional(),
+    ANDROID_APP_CERT_SHA256: z
+      .string()
+      .regex(/^\s*[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}\s*(,\s*[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){31}\s*)*$/, {
+        error: "ANDROID_APP_CERT_SHA256 must be comma-separated SHA-256 fingerprints like AB:CD:…",
+      })
+      .optional(),
     MIN_APP_VERSION_IOS: z
       .string()
       .regex(/^\d{1,5}\.\d{1,5}\.\d{1,5}$/, { error: "MIN_APP_VERSION_IOS must look like 1.4.0" })
@@ -191,6 +205,12 @@ const envSchema = z
   .refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
     message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
     path: ["ALLOW_DEV_AUTH_BYPASS"],
+  })
+  .refine((data) => !data.ANDROID_APP_PACKAGE === !data.ANDROID_APP_CERT_SHA256, {
+    // Half a Digital Asset Links config would silently serve a 404, and App
+    // Links verification would fail on every device with no error anywhere.
+    message: "❌ FATAL: ANDROID_APP_PACKAGE and ANDROID_APP_CERT_SHA256 must be set together",
+    path: ["ANDROID_APP_CERT_SHA256"],
   })
   .refine((data) => data.NODE_ENV !== "production" || !!data.CSRF_SECRET, {
     message: "❌ FATAL: CSRF_SECRET is required in production",

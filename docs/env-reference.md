@@ -48,6 +48,8 @@ Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`)
 | `ALLOWED_ORIGINS` | Optional | — | Comma-separated extra CORS origins (`server/index.ts`), added to `APP_URL` and `https://fitai.coach`. `http://localhost:5000` and `http://localhost:5173` are allowed only when `NODE_ENV` is not `production`. |
 | `MIN_APP_VERSION_ANDROID` | Optional | — | Oldest Android app build the API still serves, as `MAJOR.MINOR.PATCH` (`server/middleware/appVersion.ts`). Requests sending `X-App-Platform: android` with an older or missing `X-App-Version` get `426 APP_UPDATE_REQUIRED`. Unset serves every build. Web requests are never affected. |
 | `MIN_APP_VERSION_IOS` | Optional | — | Same as `MIN_APP_VERSION_ANDROID`, for `X-App-Platform: ios`. |
+| `ANDROID_APP_PACKAGE` | Optional | — | Android application ID (e.g. `com.fitai.coach`) served in `/.well-known/assetlinks.json` for App Links verification (`server/bootstrap/wellKnown.ts`). Must be set together with `ANDROID_APP_CERT_SHA256`; both unset makes the path a 404. |
+| `ANDROID_APP_CERT_SHA256` | Optional | — | Comma-separated SHA-256 certificate fingerprints (`AB:CD:…`, 32 bytes) for the app: list both the Play app-signing key and the upload key from Play Console → App integrity. Startup fails if only one of the pair is set. |
 
 ### Safety invariants (enforced at startup in `server/env.ts`)
 

@@ -16,6 +16,7 @@ import { configureApp } from "./bootstrap/appConfig";
 import { probePool, registerHealthEndpoint, type StartupHealthState } from "./bootstrap/health";
 import { registerShutdownHandlers } from "./bootstrap/lifecycle";
 import { configureObservability, registerProcessErrorHandlers } from "./bootstrap/observability";
+import { parseCertFingerprints, registerWellKnownRoutes } from "./bootstrap/wellKnown";
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
@@ -145,6 +146,13 @@ registerHealthEndpoint(app, {
   probeVectorDatabase,
   // Reported, not gated on — see the dep's doc comment in bootstrap/health.ts.
   vectorSchemaStatus: getVectorSchemaStatus,
+});
+
+// Digital Asset Links for Android App Links. Ahead of CORS, auth and the SPA
+// fallback, which would otherwise answer with index.html.
+registerWellKnownRoutes(app, {
+  packageName: env.ANDROID_APP_PACKAGE,
+  sha256Fingerprints: parseCertFingerprints(env.ANDROID_APP_CERT_SHA256),
 });
 
 // CORS — restrict cross-origin API access to known origins
