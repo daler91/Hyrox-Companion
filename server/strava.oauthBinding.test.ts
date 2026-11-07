@@ -113,6 +113,7 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
     // cookie-parser globally (server/index.ts) with csrfProtection on /api/v1
     // (server/routes.ts); a bare cookie-parser in this test app, with no CSRF
     // middleware, reads to CodeQL as exactly the setup it warns about.
+    app.use(express.json());
     app.use((req, _res, next) => {
       Object.assign(req, { log, cookies: parseCookieHeader(req.headers.cookie) });
       next();
@@ -353,6 +354,168 @@ describe('Strava OAuth routes: the callback only completes in the browser that c
 
       expect(res.headers.location).toBe('/settings?strava=connected');
       expect(upsertStravaConnection).toHaveBeenCalledTimes(1);
+    });
+  });
+  // The native app has no browser cookie to bind the flow to. It sends a code
+  // challenge to /auth and proves the flow is its own at native/complete with
+  // the verifier, under its own bearer token.
+  describe('native app connect (code challenge instead of the binding cookie)', () => {
+    const VERIFIER = 'v'.repeat(43) + '-._~0123456789';
+    const challengeOf = (verifier: string) => crypto.createHash('sha256').update(verifier).digest('base64url');
+
+    async function startNative(app: express.Express, user: string, verifier = VERIFIER) {
+      const res = await request(app)
+        .get(`/api/v1/strava/auth?codeChallenge=${challengeOf(verifier)}`)
+        .set('x-test-user', user);
+      return { res, state: stateOf(res) };
+    }
+
+    function complete(app: express.Express, user: string, body: Record<string, string>) {
+      return request(app).post('/api/v1/strava/native/complete').set('x-test-user', user).send(body);
+    }
+
+    it("returns Strava's mobile consent URL with the App Link callback, a state carrying the challenge, and no cookie", async () => {
+      const app = await buildApp();
+
+      const { res, state } = await startNative(app, 'user-1');
+
+      const url = authUrlOf(res);
+      expect(url.origin + url.pathname).toBe('https://www.strava.com/oauth/mobile/authorize');
+      expect(url.searchParams.get('redirect_uri')).toBe('https://app.example.com/strava/mobile-callback');
+      expect(url.searchParams.get('approval_prompt')).toBe('force');
+      const parts = state.split(':');
+      expect(parts).toHaveLength(5);
+      expect(parts[0]).toBe('user-1');
+      expect(parts[3]).toBe(challengeOf(VERIFIER));
+      expect(setCookies(res)).toEqual([]);
+    });
+
+    it('rejects a malformed code challenge', async () => {
+      const app = await buildApp();
+
+      const res = await request(app).get('/api/v1/strava/auth?codeChallenge=short').set('x-test-user', 'user-1');
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('links the account when the same athlete completes with the matching verifier', async () => {
+      const app = await buildApp();
+      const { state } = await startNative(app, 'user-1');
+
+      const res = await complete(app, 'user-1', { code: 'strava-code', state, verifier: VERIFIER });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true });
+      expect(claimRuntimeCacheKey).toHaveBeenCalledWith(`strava-oauth-state:${state}`, 600_000);
+      expect(upsertStravaConnection).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-1', stravaAthleteId: '4242' }));
+      expect(enqueueStravaSync).toHaveBeenCalledWith('user-1', 'connect');
+    });
+
+    it("refuses a state minted by another account, even with that account's verifier", async () => {
+      const app = await buildApp();
+      // The attacker mints a native state and gets the victim to consent; the
+      // code lands in the victim's app, signed in as the victim.
+      const { state } = await startNative(app, 'attacker');
+
+      const res = await complete(app, 'victim', { code: 'strava-code', state, verifier: VERIFIER });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+      expectNothingLinked();
+    });
+
+    it('refuses the wrong verifier without burning the state, so the owner can still finish', async () => {
+      const app = await buildApp();
+      const { state } = await startNative(app, 'user-1');
+
+      const wrong = await complete(app, 'user-1', { code: 'strava-code', state, verifier: 'w'.repeat(43) });
+      expect(wrong.status).toBe(403);
+      expectNothingLinked();
+
+      const right = await complete(app, 'user-1', { code: 'strava-code', state, verifier: VERIFIER });
+      expect(right.status).toBe(200);
+    });
+
+    it('refuses a replayed state', async () => {
+      const app = await buildApp();
+      const { state } = await startNative(app, 'user-1');
+      claimRuntimeCacheKey.mockResolvedValue(false);
+
+      const res = await complete(app, 'user-1', { code: 'strava-code', state, verifier: VERIFIER });
+
+      expect(res.status).toBe(403);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(upsertStravaConnection).not.toHaveBeenCalled();
+    });
+
+    it('refuses an expired state', async () => {
+      const app = await buildApp();
+      const { state } = await startNative(app, 'user-1');
+      const realNow = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(realNow + 11 * 60_000);
+
+      const res = await complete(app, 'user-1', { code: 'strava-code', state, verifier: VERIFIER });
+
+      vi.mocked(Date.now).mockRestore();
+      expect(res.status).toBe(403);
+      expectNothingLinked();
+    });
+
+    it("refuses a browser flow's state, which has no challenge to check", async () => {
+      const app = await buildApp();
+      const { state } = await startConnect(app);
+
+      const res = await complete(app, 'dev-user', { code: 'strava-code', state, verifier: VERIFIER });
+
+      expect(res.status).toBe(403);
+      expectNothingLinked();
+    });
+
+    it("refuses a native state at the browser callback, even with a binding cookie", async () => {
+      const app = await buildApp();
+      const { cookie } = await startConnect(app);
+      const { state } = await startNative(app, 'dev-user');
+
+      const res = await request(app).get(callbackUrl(state)).set('Cookie', cookie);
+
+      expect(res.headers.location).toBe('/settings?strava=error');
+      expectNothingLinked();
+    });
+
+    it('rejects a body without a valid RFC 7636 verifier', async () => {
+      const app = await buildApp();
+      const { state } = await startNative(app, 'user-1');
+
+      const res = await complete(app, 'user-1', { code: 'strava-code', state, verifier: 'too-short' });
+
+      expect(res.status).toBe(400);
+      expectNothingLinked();
+    });
+
+    it('answers 502 when Strava rejects the code', async () => {
+      const app = await buildApp();
+      const { state } = await startNative(app, 'user-1');
+      fetchMock.mockResolvedValue(stravaResponse({ message: 'Bad Request' }, 400));
+
+      const res = await complete(app, 'user-1', { code: 'strava-code', state, verifier: VERIFIER });
+
+      expect(res.status).toBe(502);
+      expect(res.body.code).toBe('EXTERNAL_API_ERROR');
+      expect(upsertStravaConnection).not.toHaveBeenCalled();
+    });
+
+    it('serves a no-store, no-referrer fallback page at the App Link path that echoes nothing from the query', async () => {
+      const app = await buildApp();
+
+      const res = await request(app).get('/strava/mobile-callback?code=<script>x</script>&state=abc');
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/^text\/html/);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
+      expect(res.text).not.toContain('<script>');
+      expect(res.text).not.toContain('abc');
     });
   });
 });

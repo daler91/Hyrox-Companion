@@ -131,17 +131,19 @@ All of this ships to production first. The web is unaffected.
      also delivers to iOS once an APNs key is uploaded, so one sender covers both platforms.
    - Add a server-only `FCM_SERVICE_ACCOUNT_JSON` to `server/env.ts` and
      `docs/env-reference.md`.
-5. **Strava connect for the app.** `handleStravaAuth` (`server/strava.ts:366`) binds the OAuth
-   state to a `__Host-` cookie that the app's Custom Tab won't have. That binding is what stops an
-   attacker's link from attaching a victim's Strava account to the attacker's account, so the
-   native flow replaces it with an equivalent check rather than dropping it:
-   1. The app sends `sha256(verifier)` with its bearer token, and the signed state carries it.
-   2. For a native state, the callback holds the pending link (encrypted) under a single-use,
-      short-TTL code, then redirects to an App Link.
-   3. The app redeems the code with its token and the verifier. The server links the account only
-      if the token's user matches the state's user and the verifier matches.
+5. **Strava connect for the app.** `handleStravaAuth` (`server/strava.ts`) binds the OAuth state to a
+   `__Host-` cookie that the app won't have. That binding is what stops an attacker's link from
+   attaching a victim's Strava account to the attacker's account, so the native flow replaces it
+   with an equivalent check (RFC 7636 S256 / RFC 8252) rather than dropping it:
+   1. The app sends `sha256(verifier)` to `/auth` with its bearer token, and the signed state
+      carries it.
+   2. Strava redirects to the App Link `/strava/mobile-callback`, so the code lands in the app.
+   3. The app sends the code, the state and the verifier to `POST /api/v1/strava/native/complete`.
+      The server links the account only if the token's user matches the state's user and the
+      verifier matches. Nothing is held server-side between the steps.
 
-   Tests: mismatched user, wrong verifier, reused code, expired code.
+   Tests: mismatched user, wrong verifier, reused state, expired state. **Done**
+   ([Integrations → Native App Connect](integrations.md#native-app-connect)).
 6. **`/.well-known/assetlinks.json`.** Serve it ahead of auth, listing the Play App Signing and
    upload-key SHA-256 fingerprints.
 

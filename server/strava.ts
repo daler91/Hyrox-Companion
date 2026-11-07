@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { type StravaConnection } from "@shared/schema";
 import { type DistanceUnit } from "@shared/unitConversion";
 import type { CookieOptions, Request, Response, Router } from "express";
+import { z } from "zod";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
@@ -44,6 +45,15 @@ const STRAVA_REDIRECT_URI = env.APP_URL
   : "http://localhost:5000/api/v1/strava/callback";
 
 const STRAVA_OAUTH_AUTHORIZE_URL = "https://www.strava.com/oauth/authorize";
+// Strava's mobile consent page: with the Strava app installed it hands off to
+// the app for a one-tap consent, otherwise it is the same web page.
+const STRAVA_OAUTH_MOBILE_AUTHORIZE_URL = "https://www.strava.com/oauth/mobile/authorize";
+// Where Strava sends the native app's consent back to: an Android App Link
+// (server/bootstrap/wellKnown.ts), so the code lands in the app, which
+// completes the link itself (handleStravaNativeComplete). Any path on the
+// app's domain satisfies Strava's callback-domain rule.
+const STRAVA_NATIVE_CALLBACK_PATH = "/strava/mobile-callback";
+const STRAVA_NATIVE_REDIRECT_URI = `${env.APP_URL ?? "http://localhost:5000"}${STRAVA_NATIVE_CALLBACK_PATH}`;
 const STRAVA_OAUTH_TOKEN_URL = "https://www.strava.com/oauth/token";
 const STRAVA_OAUTH_DEAUTHORIZE_URL = "https://www.strava.com/oauth/deauthorize";
 const STRAVA_API_BASE = "https://www.strava.com/api/v3";
@@ -124,20 +134,42 @@ function isStateBoundToBrowser(cookieValue: unknown, state: string): boolean {
   return crypto.timingSafeEqual(presented, expected);
 }
 
-export function createSignedState(userId: string): string {
+/**
+ * A PKCE-style code challenge from the native app: base64url(SHA-256(verifier)),
+ * 43 characters with no padding (RFC 7636 §4.2, S256). It never contains a
+ * colon, so it can ride in the colon-separated state.
+ */
+const CODE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
+/** RFC 7636 §4.1 code_verifier: 43–128 unreserved characters. */
+const CODE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
+
+export function codeChallengeFor(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+/**
+ * Signed OAuth state: `userId:timestamp:nonce:signature`, or, for the native
+ * app, `userId:timestamp:nonce:challenge:signature`. The HMAC covers the
+ * challenge, so it cannot be swapped for one the presenter knows the verifier
+ * of.
+ */
+export function createSignedState(userId: string, codeChallenge?: string): string {
   const timestamp = Date.now().toString(36);
   const nonce = crypto.randomBytes(8).toString("hex");
-  const payload = `${userId}:${timestamp}:${nonce}`;
+  const payload = codeChallenge ? `${userId}:${timestamp}:${nonce}:${codeChallenge}` : `${userId}:${timestamp}:${nonce}`;
   // 🛡️ Sentinel: Use full 256-bit HMAC — no truncation needed
   const signature = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex");
   return `${payload}:${signature}`;
 }
 
-export function verifySignedState(state: string): { userId: string } | null {
+export function verifySignedState(state: string): { userId: string; codeChallenge?: string } | null {
   const parts = state.split(":");
-  if (parts.length !== 4) return null;
-  const [userId, timestamp, nonce, signature] = parts;
-  const payload = `${userId}:${timestamp}:${nonce}`;
+  if (parts.length !== 4 && parts.length !== 5) return null;
+  const [userId, timestamp, nonce] = parts;
+  const codeChallenge = parts.length === 5 ? parts[3] : undefined;
+  const signature = parts.at(-1) ?? "";
+  if (codeChallenge !== undefined && !CODE_CHALLENGE.test(codeChallenge)) return null;
+  const payload = codeChallenge ? `${userId}:${timestamp}:${nonce}:${codeChallenge}` : `${userId}:${timestamp}:${nonce}`;
   const expected = crypto.createHmac("sha256", STATE_SECRET).update(payload).digest("hex");
 
   // Use timingSafeEqual with hashed values to prevent timing attacks
@@ -148,7 +180,14 @@ export function verifySignedState(state: string): { userId: string } | null {
   if (!crypto.timingSafeEqual(signatureHash, expectedHash)) return null;
   const ts = Number.parseInt(timestamp, 36);
   if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
-  return { userId };
+  return codeChallenge ? { userId, codeChallenge } : { userId };
+}
+
+/** Whether `verifier` hashes to `challenge`, compared in constant time. */
+function verifierMatchesChallenge(verifier: string, challenge: string): boolean {
+  const presented = crypto.createHash("sha256").update(codeChallengeFor(verifier)).digest();
+  const expected = crypto.createHash("sha256").update(challenge).digest();
+  return crypto.timingSafeEqual(presented, expected);
 }
 
 interface StravaTokenResponse {
@@ -370,6 +409,27 @@ function handleStravaAuth(req: Request, res: Response) {
 
   const userId = getUserId(req);
 
+  // The native app passes a code challenge and gets a state carrying it. It
+  // has no browser cookie to bind the flow to, so it proves the flow is its
+  // own with the verifier instead, at /api/v1/strava/native/complete.
+  const { codeChallenge } = req.query;
+  if (codeChallenge !== undefined) {
+    if (typeof codeChallenge !== "string" || !CODE_CHALLENGE.test(codeChallenge)) {
+      return res.status(400).json({
+        error: "codeChallenge must be base64url(SHA-256(verifier)), 43 characters",
+        code: "VALIDATION_ERROR",
+      });
+    }
+    const nativeAuthUrl = new URL(STRAVA_OAUTH_MOBILE_AUTHORIZE_URL);
+    nativeAuthUrl.searchParams.set("client_id", STRAVA_CLIENT_ID);
+    nativeAuthUrl.searchParams.set("redirect_uri", STRAVA_NATIVE_REDIRECT_URI);
+    nativeAuthUrl.searchParams.set("response_type", "code");
+    nativeAuthUrl.searchParams.set("scope", STRAVA_SCOPE);
+    nativeAuthUrl.searchParams.set("state", createSignedState(userId, codeChallenge));
+    nativeAuthUrl.searchParams.set("approval_prompt", "force");
+    return res.json({ authUrl: nativeAuthUrl.toString() });
+  }
+
   const state = createSignedState(userId);
 
   const authUrl = new URL(STRAVA_OAUTH_AUTHORIZE_URL);
@@ -417,6 +477,13 @@ async function handleStravaCallback(req: Request, res: Response) {
     return res.redirect("/settings?strava=error");
   }
 
+  // A state minted for the native app is completed only by the app, with its
+  // verifier (handleStravaNativeComplete); it is never good here.
+  if (verified.codeChallenge) {
+    reqLogger(req).error("Native-app Strava state presented to the browser callback");
+    return res.redirect("/settings?strava=error");
+  }
+
   // S3 (CODEBASE_ANALYSIS_2026-10-03): only the browser that called /auth may
   // complete the flow. Checked before the claim below so a captured callback
   // URL replayed from another browser cannot burn the owner's in-flight state.
@@ -444,10 +511,85 @@ async function handleStravaCallback(req: Request, res: Response) {
   }
 
   const userId = verified.userId;
-
-  if (!userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
+  if (!userId) {
     return res.redirect("/settings?strava=error");
   }
+
+  const linked = await linkStravaAccount(req, userId, code);
+  res.redirect(linked ? "/settings?strava=connected" : "/settings?strava=error");
+}
+
+const stravaNativeCompleteSchema = z.object({
+  code: z.string().min(1).max(512),
+  state: z.string().min(1).max(1024),
+  verifier: z.string().regex(CODE_VERIFIER, { message: "verifier must be an RFC 7636 code verifier" }),
+});
+
+/**
+ * The native app finishing a Strava connect: Strava's App Link redirect gave
+ * the app `code` and `state`, and the app adds the verifier it generated when
+ * it called /auth.
+ *
+ * This replaces the browser flow's binding cookie (S3) with the same
+ * guarantee. Someone who mints a state and gets another athlete to consent
+ * cannot finish the link: the code arrives in the victim's app, whose bearer
+ * token names a different user and which holds no matching verifier. Every
+ * refusal is the same 403, so the response never says which check failed.
+ * The state is claimed only after all of them pass, so a bad attempt cannot
+ * burn the owner's in-flight state.
+ */
+async function handleStravaNativeComplete(req: Request, res: Response) {
+  const parsed = stravaNativeCompleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid Strava connect request", code: "VALIDATION_ERROR" });
+  }
+  const { code, state, verifier } = parsed.data;
+  const refuse = (reason: string) => {
+    reqLogger(req).error({ reason }, "Strava native connect refused - possible CSRF attack");
+    return res.status(403).json({ error: "This Strava connection could not be verified", code: "FORBIDDEN" });
+  };
+
+  const verified = verifySignedState(state);
+  if (!verified) return refuse("state invalid or expired");
+  if (!verified.codeChallenge) return refuse("browser state presented to the native completion");
+  if (verified.userId !== getUserId(req)) return refuse("state belongs to another user");
+  if (!verifierMatchesChallenge(verifier, verified.codeChallenge)) return refuse("verifier does not match");
+
+  const stateClaimed = await claimRuntimeCacheKey(runtimeCacheKey("strava-oauth-state", state), STATE_MAX_AGE_MS);
+  if (!stateClaimed) return refuse("state replayed");
+
+  const linked = await linkStravaAccount(req, verified.userId, code);
+  if (!linked) {
+    return res.status(502).json({ error: "Strava did not accept the connection", code: "EXTERNAL_API_ERROR" });
+  }
+  res.json({ success: true });
+}
+
+/**
+ * What a browser shows if the native callback's App Link does not hand off
+ * to the app (no app installed, or links not yet verified). A link to the
+ * page itself: following it is a user gesture, which Android does route to a
+ * verified app. Nothing from the query string is echoed into the page, and
+ * the referrer is withheld so the one-time code goes nowhere else.
+ */
+function handleStravaNativeCallbackFallback(_req: Request, res: Response) {
+  res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" });
+  res
+    .type("html")
+    .send(
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect Strava</title></head><body><main><h1>Finish connecting Strava</h1><p>Open the fitai app to finish connecting your Strava account.</p><p><a href="">Open fitai</a></p></main></body></html>',
+    );
+}
+
+/**
+ * Trade an authorization code for tokens and save the connection for
+ * `userId`, then queue the first import. Shared by the browser callback and
+ * the native app's completion step, which differ only in how they establish
+ * that `userId` is the athlete who consented. Returns false on any failure,
+ * logged here.
+ */
+async function linkStravaAccount(req: Request, userId: string, code: string): Promise<boolean> {
+  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) return false;
 
   try {
     const tokenResponse = await retryWithJitter(async () => {
@@ -473,14 +615,14 @@ async function handleStravaCallback(req: Request, res: Response) {
       // Do NOT log the raw response body (see refreshToken above) — it can
       // contain token/secret material and bypasses pino redaction. Status only.
       reqLogger(req).error({ status: tokenResponse.status }, "Token exchange failed");
-      return res.redirect("/settings?strava=error");
+      return false;
     }
 
     const tokenData = (await tokenResponse.json()) as StravaTokenResponse;
 
     if (!tokenData.athlete) {
       reqLogger(req).error("Strava token exchange response missing athlete data");
-      return res.redirect("/settings?strava=error");
+      return false;
     }
 
     await storage.users.upsertStravaConnection({
@@ -501,10 +643,10 @@ async function handleStravaCallback(req: Request, res: Response) {
       reqLogger(req).warn({ err }, "Failed to enqueue the post-connect Strava sync (non-fatal)");
     }
 
-    res.redirect("/settings?strava=connected");
+    return true;
   } catch (error) {
     reqLogger(req).error({ err: error }, "Strava callback error:");
-    res.redirect("/settings?strava=error");
+    return false;
   }
 }
 
@@ -1070,6 +1212,8 @@ export function registerStravaRoutes(router: Router): void {
   router.get("/api/v1/strava/status", isAuthenticated, stravaStatusLimiter, asyncHandler(handleStravaStatus));
   router.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, handleStravaAuth);
   router.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
+  router.post("/api/v1/strava/native/complete", ...protectedMutationGuards, stravaAuthLimiter, asyncHandler(handleStravaNativeComplete));
+  router.get(STRAVA_NATIVE_CALLBACK_PATH, stravaAuthLimiter, handleStravaNativeCallbackFallback);
   router.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, stravaDisconnectLimiter, asyncHandler(handleStravaDisconnect));
   router.post("/api/v1/strava/sync", ...protectedMutationGuards, stravaSyncLimiter, asyncHandler(handleStravaSync));
 }

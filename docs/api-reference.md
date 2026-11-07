@@ -1947,6 +1947,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 - **Response:** `{ url: string }` — Redirect URL for Strava OAuth
 - **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback). The authorize URL also sets `approval_prompt=force`
 - **Cookie:** sets the `HttpOnly`, `Secure`, `SameSite=Lax` browser-binding cookie (`__Host-fitai.strava-oauth` in production, `fitai.strava-oauth` elsewhere) holding the SHA-256 of the state, valid for the state's max age; the callback requires it ([Integrations → CSRF State Verification](integrations.md#csrf-state-verification))
+- **Native app:** with `?codeChallenge=<base64url(SHA-256(verifier))>` (43 characters, else `400 VALIDATION_ERROR`) it returns `{ authUrl }` for Strava's mobile consent page with `redirect_uri` = `<APP_URL>/strava/mobile-callback` and a state carrying the challenge, and sets no cookie. The app finishes with `POST /api/v1/strava/native/complete` ([Integrations → Native App Connect](integrations.md#native-app-connect))
 
 ### GET /api/v1/strava/callback
 
@@ -1958,6 +1959,20 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 - **Cookie:** the browser-binding cookie `/auth` set must match the state, so only the browser that started the flow can complete it; a missing or mismatched cookie redirects to `/settings?strava=error` before the code is exchanged. The cookie is cleared on every outcome
 - **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
 - **Response:** Redirect to `/settings`
+
+### POST /api/v1/strava/native/complete
+
+The native app finishing a Strava connect with the `code` and `state` Strava's App Link redirect gave it, plus the verifier whose challenge it sent to `/auth`.
+
+- **Auth:** Required (the app's bearer token; no CSRF token needed)
+- **Rate limit:** `stravaAuth` category, 20 per 15 minutes (shared with `/auth`)
+- **Body:** `{ code: string, state: string, verifier: string }` — `verifier` must be an RFC 7636 code verifier (43–128 of `[A-Za-z0-9._~-]`)
+- **Response:** `{ success: true }`; the connection is saved and the first import queued, as for the browser callback
+- **Errors:** `400 VALIDATION_ERROR` for a malformed body; `403 FORBIDDEN` when the state is invalid, expired, replayed, a browser-flow state, minted for another user, or the verifier does not match (one response for all, so it never says which); `502 EXTERNAL_API_ERROR` when Strava rejects the code
+
+### GET /strava/mobile-callback
+
+Strava's `redirect_uri` for the native app: an Android App Link, so normally the app opens instead of this page. When it does not, the server answers a static HTML page with an "Open fitai" link to itself (following it is a user gesture, which Android routes to a verified app). `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`; nothing from the query is echoed.
 
 ### POST /api/v1/strava/sync
 
