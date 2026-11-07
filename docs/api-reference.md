@@ -169,6 +169,8 @@ Retrieve a CSRF token for use in subsequent mutating requests.
 
 The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in `403 { "error": "invalid csrf token", "code": "EBADCSRFTOKEN" }` — csrf-csrf's error, rendered by the global error handler.
 
+Requests authenticated with a Clerk session token in an `Authorization: Bearer` header and no Clerk session cookie (the native app) need no CSRF token; a mutating bearer request whose token Clerk rejects gets `401 UNAUTHORIZED`. See [Authentication -- Bearer-Token Clients](authentication.md#bearer-token-clients-native-app).
+
 ---
 
 ## Idempotency

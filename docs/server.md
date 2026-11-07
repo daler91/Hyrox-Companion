@@ -191,6 +191,8 @@ CSRF protection uses the **double-submit cookie pattern** via the `csrf-csrf` li
 
 **Session binding:** The CSRF token is bound to the Clerk `userId` when authenticated, so tokens issued pre-login are invalidated after sign-in and tokens cannot be replayed across users. Falls back to client IP for the pre-login window.
 
+**Bearer-token exemption:** a mutating request that Clerk authenticated from an `Authorization: Bearer` header, and that carries no Clerk session cookie, skips the check — it holds no ambient credential to forge. One whose bearer token Clerk rejects gets `401 UNAUTHORIZED` instead of `EBADCSRFTOKEN`. Conditions and rationale: `bearerAuthState()` and [Authentication -- Bearer-Token Clients](authentication.md#bearer-token-clients-native-app).
+
 **Configuration:**
 
 - Cookie: `httpOnly: true`, `sameSite: "strict"`, `secure: true` (production)
