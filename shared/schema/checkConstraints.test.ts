@@ -8,6 +8,7 @@ import {
   chatFeedbackEnum,
   chatMessageKindEnum,
   deviceLinkSourceEnum,
+  devicePlatformEnum,
   MEAL_TYPES,
   planDaySkipReasonEnum,
   recycleBinEntityTypeEnum,
@@ -17,6 +18,7 @@ import {
 import {
   athleteFacts,
   chatMessages,
+  devicePushTokens,
   FOOD_SOURCES,
   foodLogEntries,
   foods,
@@ -69,6 +71,11 @@ describe("enum-backed CHECK constraints", () => {
     expect(checkSql(athleteFacts, "athlete_facts_fact_length_check")).toBe("char_length(fact) BETWEEN 1 AND 140");
     expect(athleteFactCategoryEnum).toEqual(["constraint", "equipment", "schedule", "preference", "other"]);
     expect(athleteFactSourceEnum).toEqual(["athlete", "plan_generation", "onboarding", "chat"]);
+  });
+
+  it("renders device_push_tokens.platform from devicePlatformEnum", () => {
+    expect(checkSql(devicePushTokens, "device_push_tokens_platform_check")).toBe("platform IN ('android', 'ios')");
+    expect(devicePlatformEnum).toEqual(["android", "ios"]);
   });
 
   it("renders chat_messages.feedback from chatFeedbackEnum", () => {

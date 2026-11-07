@@ -1862,7 +1862,7 @@ Internal structured exercise health rollup endpoint. Defined in `server/routes/a
 
 **File:** `server/routes/push.ts`
 
-Web Push (VAPID) endpoints used by the PWA to deliver missed-workout nudges and weekly summary notifications. Push counts as configured only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set (`isPushEnabled()` in `server/pushNotifications.ts`). Only `GET /api/v1/push/vapid-key` checks this up front; the other routes still run, and `POST /api/v1/push/test` then reports `sent: 0`.
+Push registration for two channels. **Web push** (VAPID) serves the PWA and counts as configured only when `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_EMAIL` are all set (`isWebPushEnabled()`). **Native push** (FCM) serves the mobile app and needs `FCM_SERVICE_ACCOUNT_JSON` (`isNativePushEnabled()`). `sendPushToUser` delivers to every browser subscription and app install over whichever channels are configured. `GET /api/v1/push/vapid-key` and `POST /api/v1/push/devices` check their channel up front; the other routes still run, and `POST /api/v1/push/test` then reports `sent: 0`.
 
 ### GET /api/v1/push/vapid-key
 
@@ -1896,9 +1896,29 @@ Remove a specific subscription endpoint for the authenticated user.
 - **Body:** `{ endpoint: string }`
 - **Response:** `{ success: true }`
 
+### POST /api/v1/push/devices
+
+Register (or refresh) a native app install's FCM registration token for the authenticated user. The app calls it on every launch and whenever FCM rotates the token. The token is unique across users: registering a token another athlete held moves it to the caller, so a shared phone notifies whoever is signed in. Capped at **10** installs per user, evicting the least recently seen (`MAX_DEVICE_PUSH_TOKENS_PER_USER`).
+
+- **Auth:** Required (bearer token from the app; no CSRF token needed)
+- **Rate limit:** `push` category, 10/min
+- **Body:** `{ token: string, platform: "android" | "ios" }` — `token` is 1–4096 characters of `[A-Za-z0-9_:-]`
+- **Headers:** `X-App-Version`, when well formed, is stored with the token
+- **Response:** `{ success: true }`
+- **Errors:** `404 PUSH_NOT_CONFIGURED` when native push is not configured
+
+### DELETE /api/v1/push/devices
+
+Unregister an install for the authenticated user (on sign-out). Only the caller's own row is touched.
+
+- **Auth:** Required
+- **Rate limit:** `push` category, 10/min
+- **Body:** `{ token: string }`
+- **Response:** `{ success: true }`
+
 ### POST /api/v1/push/test
 
-Dispatch a test notification to every registered subscription for the authenticated user. Used by the Settings UI to verify the PWA install is wired up correctly.
+Dispatch a test notification to every registered browser subscription and app install for the authenticated user. Used by the Settings UI to verify notifications are wired up correctly.
 
 - **Auth:** Required
 - **Rate limit:** `push` category, 5/min

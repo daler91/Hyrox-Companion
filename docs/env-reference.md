@@ -184,6 +184,7 @@ npx web-push generate-vapid-keys
 |---|---|---|---|
 | `VAPID_PUBLIC_KEY` | Optional (required for push) | — | Sent to the client via `GET /api/v1/push/vapid-key`. |
 | `VAPID_PRIVATE_KEY` | Optional (required for push) | — | Server-only. Do not expose. |
+| `FCM_SERVICE_ACCOUNT_JSON` | Optional (required for native app push) | — | Firebase service account key file, pasted whole as JSON (Firebase console → Project settings → Service accounts). `server/fcm.ts` signs access-token requests with it to send through FCM HTTP v1, which also reaches iOS once an APNs key is uploaded to the project. Validated at startup (`project_id`, `client_email`, `private_key`). Server-only secret; do not expose. Unset disables native push and makes `POST /api/v1/push/devices` answer `404 PUSH_NOT_CONFIGURED`; web push is unaffected. |
 | `VAPID_EMAIL` | Optional (required for push) | — | Bare contact email address; `server/pushNotifications.ts` prepends `mailto:` when registering VAPID details with push services. |
 
 ---

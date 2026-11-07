@@ -7,6 +7,7 @@ process.stderr.write(
 
 import { z } from "zod";
 
+import { parseFcmServiceAccount } from "./fcmServiceAccount";
 import { checkSafeOutboundUrl } from "./ssrfGuard";
 
 // Reject deterministic strings that appear in docs, CI, or tests. If a real
@@ -158,6 +159,17 @@ const envSchema = z
     VAPID_PUBLIC_KEY: z.string().optional(),
     VAPID_PRIVATE_KEY: z.string().optional(),
     VAPID_EMAIL: z.email().optional(),
+    // Firebase service account key file (JSON, pasted whole) for native app
+    // push through FCM HTTP v1 (server/fcm.ts). Server-only secret: it signs
+    // the access-token requests. Unset disables native push; web push is
+    // unaffected.
+    FCM_SERVICE_ACCOUNT_JSON: z
+      .string()
+      .refine((value) => parseFcmServiceAccount(value) !== null, {
+        error:
+          "FCM_SERVICE_ACCOUNT_JSON must be a Firebase service account key file with project_id, client_email and private_key",
+      })
+      .optional(),
     // Runtime kill-switch for all AI routes (chat, parsing, plan generation,
     // RAG, coach suggestions). Lets operators disable AI provider traffic
     // without redeploying or rotating provider keys. Defaults to "true" so

@@ -657,7 +657,12 @@ describe('processTodaySessionBrief', () => {
     const [, data] = vi.mocked(sendTodaySessionBrief).mock.calls[0];
     expect(data).toEqual({ date: '2026-07-21', isTomorrow: false, sessions: [session] });
     const push = vi.mocked(sendPushToUser).mock.calls[0][1];
-    expect(push).toEqual({ title: 'Today: Threshold intervals', body: '~55 min · RPE 7', url: '/?workout=pd-1' });
+    expect(push).toEqual({
+      title: 'Today: Threshold intervals',
+      body: '~55 min · RPE 7',
+      url: '/?workout=pd-1',
+      category: 'training',
+    });
   });
 
   it('falls back to the timeline root when several sessions are planned', async () => {
@@ -1101,6 +1106,7 @@ describe('claim-before-send ledger', () => {
       title: 'Missed: Easy Run',
       body: 'Fold it into another day, shorten it, or let it go — see what each does to your plan.',
       url: '/?workout=pd-1',
+      category: 'training',
     });
   });
 
