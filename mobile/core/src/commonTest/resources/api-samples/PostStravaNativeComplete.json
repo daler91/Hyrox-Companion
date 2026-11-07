@@ -1,0 +1,28 @@
+{
+  "request": {
+    "min": {
+      "code": "a",
+      "state": "a",
+      "verifier": "a"
+    },
+    "max": {
+      "code": "sample text",
+      "state": "sample text",
+      "verifier": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "success": true
+    },
+    "max": {
+      "success": true
+    },
+    "future": {
+      "success": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

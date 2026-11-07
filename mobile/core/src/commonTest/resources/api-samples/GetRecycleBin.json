@@ -1,0 +1,66 @@
+{
+  "response": {
+    "min": {
+      "items": [],
+      "counts": {
+        "total": 1,
+        "workout_log": 1,
+        "plan_day": 1,
+        "training_plan": 1
+      }
+    },
+    "max": {
+      "items": [
+        {
+          "id": "sample text",
+          "entityType": "training_plan",
+          "entityId": "sample text",
+          "batchId": "sample text",
+          "label": "sample text",
+          "summary": "sample text",
+          "entityDate": "sample text",
+          "childCount": 1,
+          "deletedAt": "2026-11-07T10:15:30.000Z",
+          "expiresAt": "2026-11-07T10:15:30.000Z"
+        }
+      ],
+      "counts": {
+        "total": 1,
+        "workout_log": 1,
+        "plan_day": 1,
+        "training_plan": 1
+      }
+    },
+    "future": {
+      "items": [
+        {
+          "id": "sample text",
+          "entityType": "zz_value_from_a_newer_server",
+          "entityId": "sample text",
+          "batchId": "sample text",
+          "label": "sample text",
+          "summary": "sample text",
+          "entityDate": "sample text",
+          "childCount": 1,
+          "deletedAt": "2026-11-07T10:15:30.000Z",
+          "expiresAt": "2026-11-07T10:15:30.000Z",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "counts": {
+        "total": 1,
+        "workout_log": 1,
+        "plan_day": 1,
+        "training_plan": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

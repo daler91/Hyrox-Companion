@@ -1,0 +1,26 @@
+{
+  "request": {
+    "min": {
+      "consentType": "privacy_notice",
+      "granted": true
+    },
+    "max": {
+      "consentType": "error_reporting",
+      "granted": true
+    }
+  },
+  "response": {
+    "min": {
+      "success": true
+    },
+    "max": {
+      "success": true
+    },
+    "future": {
+      "success": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

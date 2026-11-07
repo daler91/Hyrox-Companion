@@ -1,0 +1,106 @@
+{
+  "request": {
+    "min": {
+      "setIds": []
+    },
+    "max": {
+      "setIds": [
+        "sample text"
+      ]
+    }
+  },
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "workoutLogId": "sample text",
+        "planDayId": "sample text",
+        "exerciseName": "sample text",
+        "customLabel": "sample text",
+        "category": "sample text",
+        "setNumber": 1,
+        "reps": 1,
+        "weight": 1.5,
+        "distance": 1.5,
+        "time": 1.5,
+        "weightUnit": "sample text",
+        "distanceUnit": "sample text",
+        "plannedReps": 1,
+        "plannedWeight": 1.5,
+        "plannedDistance": 1.5,
+        "plannedTime": 1.5,
+        "blockId": "sample text",
+        "stepNumber": 1,
+        "intervalMinute": 1,
+        "cycleNumber": 1,
+        "stepRole": "sample text",
+        "groupId": "sample text",
+        "intensity": {
+          "key": "any"
+        },
+        "load": {
+          "key": "any"
+        },
+        "repMode": "per_side",
+        "tempo": {
+          "key": "any"
+        },
+        "standards": {
+          "key": "any"
+        },
+        "notes": "sample text",
+        "confidence": 1,
+        "sortOrder": 1,
+        "version": 1
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "workoutLogId": "sample text",
+        "planDayId": "sample text",
+        "exerciseName": "sample text",
+        "customLabel": "sample text",
+        "category": "sample text",
+        "setNumber": 1,
+        "reps": 1,
+        "weight": 1.5,
+        "distance": 1.5,
+        "time": 1.5,
+        "weightUnit": "sample text",
+        "distanceUnit": "sample text",
+        "plannedReps": 1,
+        "plannedWeight": 1.5,
+        "plannedDistance": 1.5,
+        "plannedTime": 1.5,
+        "blockId": "sample text",
+        "stepNumber": 1,
+        "intervalMinute": 1,
+        "cycleNumber": 1,
+        "stepRole": "sample text",
+        "groupId": "sample text",
+        "intensity": {
+          "key": "any"
+        },
+        "load": {
+          "key": "any"
+        },
+        "repMode": "zz_value_from_a_newer_server",
+        "tempo": {
+          "key": "any"
+        },
+        "standards": {
+          "key": "any"
+        },
+        "notes": "sample text",
+        "confidence": 1,
+        "sortOrder": 1,
+        "version": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "response": {
+    "min": {
+      "greeting": "a",
+      "quickActions": []
+    },
+    "max": {
+      "greeting": "sample text",
+      "quickActions": [
+        {
+          "id": "sample text",
+          "label": "sample text",
+          "message": "sample text"
+        }
+      ]
+    },
+    "future": {
+      "greeting": "sample text",
+      "quickActions": [
+        {
+          "id": "sample text",
+          "label": "sample text",
+          "message": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

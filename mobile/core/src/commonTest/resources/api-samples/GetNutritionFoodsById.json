@@ -1,0 +1,99 @@
+{
+  "response": {
+    "min": {
+      "food": {
+        "id": "a",
+        "source": "usda",
+        "sourceId": null,
+        "name": "a",
+        "brand": null,
+        "servingSizeG": null,
+        "caloriesPer100g": null,
+        "proteinPer100g": null,
+        "carbPer100g": null,
+        "fatPer100g": null,
+        "fiberPer100g": null,
+        "micros": null,
+        "lastFetchedAt": null,
+        "createdByUserId": null,
+        "isPublic": true,
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z"
+      },
+      "servings": []
+    },
+    "max": {
+      "food": {
+        "id": "sample text",
+        "source": "custom",
+        "sourceId": "sample text",
+        "name": "sample text",
+        "brand": "sample text",
+        "servingSizeG": 1.5,
+        "caloriesPer100g": 1.5,
+        "proteinPer100g": 1.5,
+        "carbPer100g": 1.5,
+        "fatPer100g": 1.5,
+        "fiberPer100g": 1.5,
+        "micros": {
+          "key": 1.5
+        },
+        "lastFetchedAt": "2026-11-07T10:15:30.000Z",
+        "createdByUserId": "sample text",
+        "isPublic": true,
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z"
+      },
+      "servings": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "label": "sample text",
+          "grams": 1.5,
+          "createdByUserId": "sample text"
+        }
+      ]
+    },
+    "future": {
+      "food": {
+        "id": "sample text",
+        "source": "zz_value_from_a_newer_server",
+        "sourceId": "sample text",
+        "name": "sample text",
+        "brand": "sample text",
+        "servingSizeG": 1.5,
+        "caloriesPer100g": 1.5,
+        "proteinPer100g": 1.5,
+        "carbPer100g": 1.5,
+        "fatPer100g": 1.5,
+        "fiberPer100g": 1.5,
+        "micros": {
+          "key": 1.5
+        },
+        "lastFetchedAt": "2026-11-07T10:15:30.000Z",
+        "createdByUserId": "sample text",
+        "isPublic": true,
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "servings": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "label": "sample text",
+          "grams": 1.5,
+          "createdByUserId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

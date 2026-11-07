@@ -1,0 +1,165 @@
+{
+  "request": {
+    "min": {
+      "text": "a"
+    },
+    "max": {
+      "text": "sample text"
+    }
+  },
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "exerciseName": "sample text",
+        "category": "sample text",
+        "customLabel": "sample text",
+        "confidence": 1,
+        "missingFields": [
+          "sample text"
+        ],
+        "numSets": 1.5,
+        "reps": 1,
+        "weight": 1.5,
+        "distance": 1.5,
+        "time": 1.5,
+        "plannedReps": 1,
+        "plannedWeight": 1.5,
+        "plannedDistance": 1.5,
+        "plannedTime": 1.5,
+        "notes": "sample text",
+        "blockId": "sample text",
+        "stepNumber": 1,
+        "intervalMinute": 1,
+        "cycleNumber": 1,
+        "stepRole": "sample text",
+        "groupId": "sample text",
+        "intensity": {
+          "key": "any"
+        },
+        "load": {
+          "key": "any"
+        },
+        "repMode": "per_side",
+        "tempo": {
+          "key": "any"
+        },
+        "standards": {
+          "key": "any"
+        },
+        "sets": [
+          {
+            "setNumber": 1,
+            "reps": 1,
+            "weight": 1.5,
+            "distance": 1.5,
+            "time": 1.5,
+            "plannedReps": 1,
+            "plannedWeight": 1.5,
+            "plannedDistance": 1.5,
+            "plannedTime": 1.5,
+            "notes": "sample text",
+            "blockId": "sample text",
+            "stepNumber": 1,
+            "intervalMinute": 1,
+            "cycleNumber": 1,
+            "stepRole": "sample text",
+            "groupId": "sample text",
+            "intensity": {
+              "key": "any"
+            },
+            "load": {
+              "key": "any"
+            },
+            "repMode": "per_side",
+            "tempo": {
+              "key": "any"
+            },
+            "standards": {
+              "key": "any"
+            }
+          }
+        ]
+      }
+    ],
+    "future": [
+      {
+        "exerciseName": "sample text",
+        "category": "sample text",
+        "customLabel": "sample text",
+        "confidence": 1,
+        "missingFields": [
+          "sample text"
+        ],
+        "numSets": 1.5,
+        "reps": 1,
+        "weight": 1.5,
+        "distance": 1.5,
+        "time": 1.5,
+        "plannedReps": 1,
+        "plannedWeight": 1.5,
+        "plannedDistance": 1.5,
+        "plannedTime": 1.5,
+        "notes": "sample text",
+        "blockId": "sample text",
+        "stepNumber": 1,
+        "intervalMinute": 1,
+        "cycleNumber": 1,
+        "stepRole": "sample text",
+        "groupId": "sample text",
+        "intensity": {
+          "key": "any"
+        },
+        "load": {
+          "key": "any"
+        },
+        "repMode": "zz_value_from_a_newer_server",
+        "tempo": {
+          "key": "any"
+        },
+        "standards": {
+          "key": "any"
+        },
+        "sets": [
+          {
+            "setNumber": 1,
+            "reps": 1,
+            "weight": 1.5,
+            "distance": 1.5,
+            "time": 1.5,
+            "plannedReps": 1,
+            "plannedWeight": 1.5,
+            "plannedDistance": 1.5,
+            "plannedTime": 1.5,
+            "notes": "sample text",
+            "blockId": "sample text",
+            "stepNumber": 1,
+            "intervalMinute": 1,
+            "cycleNumber": 1,
+            "stepRole": "sample text",
+            "groupId": "sample text",
+            "intensity": {
+              "key": "any"
+            },
+            "load": {
+              "key": "any"
+            },
+            "repMode": "zz_value_from_a_newer_server",
+            "tempo": {
+              "key": "any"
+            },
+            "standards": {
+              "key": "any"
+            },
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

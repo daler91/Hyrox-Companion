@@ -1,0 +1,125 @@
+{
+  "request": {
+    "min": {
+      "mimeType": "image/jpeg",
+      "imageBase64": "a"
+    },
+    "max": {
+      "mimeType": "image/webp",
+      "imageBase64": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "label": null,
+      "suggestion": null,
+      "warnings": []
+    },
+    "max": {
+      "label": {
+        "productName": "sample text",
+        "brand": "sample text",
+        "servingSizeText": "sample text",
+        "servingSizeG": 1.5,
+        "servingsPerContainer": 1.5,
+        "per100g": {
+          "calories": 1.5,
+          "protein": 1.5,
+          "carb": 1.5,
+          "fat": 1.5,
+          "fiber": 1.5
+        },
+        "perServing": {
+          "calories": 1.5,
+          "protein": 1.5,
+          "carb": 1.5,
+          "fat": 1.5,
+          "fiber": 1.5
+        },
+        "basis": "both",
+        "confidence": 1.5
+      },
+      "suggestion": {
+        "name": "sample text",
+        "brand": "sample text",
+        "caloriesPer100g": 1.5,
+        "proteinPer100g": 1.5,
+        "carbPer100g": 1.5,
+        "fatPer100g": 1.5,
+        "fiberPer100g": 1.5,
+        "servingSizeG": 1.5,
+        "servings": [
+          {
+            "label": "sample text",
+            "grams": 1.5
+          }
+        ]
+      },
+      "warnings": [
+        "sample text"
+      ]
+    },
+    "future": {
+      "label": {
+        "productName": "sample text",
+        "brand": "sample text",
+        "servingSizeText": "sample text",
+        "servingSizeG": 1.5,
+        "servingsPerContainer": 1.5,
+        "per100g": {
+          "calories": 1.5,
+          "protein": 1.5,
+          "carb": 1.5,
+          "fat": 1.5,
+          "fiber": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "perServing": {
+          "calories": 1.5,
+          "protein": 1.5,
+          "carb": 1.5,
+          "fat": 1.5,
+          "fiber": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "basis": "zz_value_from_a_newer_server",
+        "confidence": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "suggestion": {
+        "name": "sample text",
+        "brand": "sample text",
+        "caloriesPer100g": 1.5,
+        "proteinPer100g": 1.5,
+        "carbPer100g": 1.5,
+        "fatPer100g": 1.5,
+        "fiberPer100g": 1.5,
+        "servingSizeG": 1.5,
+        "servings": [
+          {
+            "label": "sample text",
+            "grams": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "warnings": [
+        "sample text"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

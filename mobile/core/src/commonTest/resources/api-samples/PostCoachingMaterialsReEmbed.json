@@ -1,0 +1,26 @@
+{
+  "response": {
+    "min": {
+      "success": true,
+      "materialsProcessed": 1,
+      "errors": []
+    },
+    "max": {
+      "success": true,
+      "materialsProcessed": 1,
+      "errors": [
+        "sample text"
+      ]
+    },
+    "future": {
+      "success": true,
+      "materialsProcessed": 1,
+      "errors": [
+        "sample text"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

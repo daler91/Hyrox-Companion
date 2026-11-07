@@ -1,0 +1,42 @@
+{
+  "response": {
+    "min": {
+      "ok": true,
+      "batchId": "a",
+      "restored": [],
+      "warnings": []
+    },
+    "max": {
+      "ok": true,
+      "batchId": "sample text",
+      "restored": [
+        {
+          "entityType": "training_plan",
+          "entityId": "sample text"
+        }
+      ],
+      "warnings": [
+        "sample text"
+      ]
+    },
+    "future": {
+      "ok": true,
+      "batchId": "sample text",
+      "restored": [
+        {
+          "entityType": "zz_value_from_a_newer_server",
+          "entityId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "warnings": [
+        "sample text"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

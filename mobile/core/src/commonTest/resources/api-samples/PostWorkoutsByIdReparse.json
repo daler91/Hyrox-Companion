@@ -1,0 +1,189 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "prescribedMainWorkout": "sample text",
+      "prescribedAccessory": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "exercises": [],
+      "saved": true,
+      "setCount": 1,
+      "rejectedCount": 1,
+      "rejectionReasons": []
+    },
+    "max": {
+      "exercises": [
+        {
+          "exerciseName": "sample text",
+          "category": "sample text",
+          "customLabel": "sample text",
+          "confidence": 1,
+          "missingFields": [
+            "sample text"
+          ],
+          "numSets": 1.5,
+          "reps": 1,
+          "weight": 1.5,
+          "distance": 1.5,
+          "time": 1.5,
+          "plannedReps": 1,
+          "plannedWeight": 1.5,
+          "plannedDistance": 1.5,
+          "plannedTime": 1.5,
+          "notes": "sample text",
+          "blockId": "sample text",
+          "stepNumber": 1,
+          "intervalMinute": 1,
+          "cycleNumber": 1,
+          "stepRole": "sample text",
+          "groupId": "sample text",
+          "intensity": {
+            "key": "any"
+          },
+          "load": {
+            "key": "any"
+          },
+          "repMode": "per_side",
+          "tempo": {
+            "key": "any"
+          },
+          "standards": {
+            "key": "any"
+          },
+          "sets": [
+            {
+              "setNumber": 1,
+              "reps": 1,
+              "weight": 1.5,
+              "distance": 1.5,
+              "time": 1.5,
+              "plannedReps": 1,
+              "plannedWeight": 1.5,
+              "plannedDistance": 1.5,
+              "plannedTime": 1.5,
+              "notes": "sample text",
+              "blockId": "sample text",
+              "stepNumber": 1,
+              "intervalMinute": 1,
+              "cycleNumber": 1,
+              "stepRole": "sample text",
+              "groupId": "sample text",
+              "intensity": {
+                "key": "any"
+              },
+              "load": {
+                "key": "any"
+              },
+              "repMode": "per_side",
+              "tempo": {
+                "key": "any"
+              },
+              "standards": {
+                "key": "any"
+              }
+            }
+          ]
+        }
+      ],
+      "saved": true,
+      "setCount": 1,
+      "rejectedCount": 1,
+      "rejectionReasons": [
+        "sample text"
+      ]
+    },
+    "future": {
+      "exercises": [
+        {
+          "exerciseName": "sample text",
+          "category": "sample text",
+          "customLabel": "sample text",
+          "confidence": 1,
+          "missingFields": [
+            "sample text"
+          ],
+          "numSets": 1.5,
+          "reps": 1,
+          "weight": 1.5,
+          "distance": 1.5,
+          "time": 1.5,
+          "plannedReps": 1,
+          "plannedWeight": 1.5,
+          "plannedDistance": 1.5,
+          "plannedTime": 1.5,
+          "notes": "sample text",
+          "blockId": "sample text",
+          "stepNumber": 1,
+          "intervalMinute": 1,
+          "cycleNumber": 1,
+          "stepRole": "sample text",
+          "groupId": "sample text",
+          "intensity": {
+            "key": "any"
+          },
+          "load": {
+            "key": "any"
+          },
+          "repMode": "zz_value_from_a_newer_server",
+          "tempo": {
+            "key": "any"
+          },
+          "standards": {
+            "key": "any"
+          },
+          "sets": [
+            {
+              "setNumber": 1,
+              "reps": 1,
+              "weight": 1.5,
+              "distance": 1.5,
+              "time": 1.5,
+              "plannedReps": 1,
+              "plannedWeight": 1.5,
+              "plannedDistance": 1.5,
+              "plannedTime": 1.5,
+              "notes": "sample text",
+              "blockId": "sample text",
+              "stepNumber": 1,
+              "intervalMinute": 1,
+              "cycleNumber": 1,
+              "stepRole": "sample text",
+              "groupId": "sample text",
+              "intensity": {
+                "key": "any"
+              },
+              "load": {
+                "key": "any"
+              },
+              "repMode": "zz_value_from_a_newer_server",
+              "tempo": {
+                "key": "any"
+              },
+              "standards": {
+                "key": "any"
+              },
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "saved": true,
+      "setCount": 1,
+      "rejectedCount": 1,
+      "rejectionReasons": [
+        "sample text"
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

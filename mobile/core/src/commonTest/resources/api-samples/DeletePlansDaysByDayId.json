@@ -1,0 +1,19 @@
+{
+  "response": {
+    "min": {
+      "success": true,
+      "recycleBinItemId": "a"
+    },
+    "max": {
+      "success": true,
+      "recycleBinItemId": "sample text"
+    },
+    "future": {
+      "success": true,
+      "recycleBinItemId": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

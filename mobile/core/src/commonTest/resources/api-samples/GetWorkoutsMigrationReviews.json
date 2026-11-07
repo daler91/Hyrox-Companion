@@ -1,0 +1,34 @@
+{
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "ownerType": "planDay",
+        "ownerId": "sample text",
+        "userId": "sample text",
+        "status": "resolved",
+        "reason": "sample text",
+        "firstSeenAt": "2026-11-07T10:15:30.000Z",
+        "lastSeenAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z"
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "ownerType": "zz_value_from_a_newer_server",
+        "ownerId": "sample text",
+        "userId": "sample text",
+        "status": "zz_value_from_a_newer_server",
+        "reason": "sample text",
+        "firstSeenAt": "2026-11-07T10:15:30.000Z",
+        "lastSeenAt": "2026-11-07T10:15:30.000Z",
+        "updatedAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

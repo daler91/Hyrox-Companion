@@ -1,0 +1,31 @@
+{
+  "response": {
+    "min": {
+      "planDayId": "a",
+      "durationMin": null,
+      "rpe": null,
+      "rationale": null,
+      "source": "structure",
+      "refined": true
+    },
+    "max": {
+      "planDayId": "sample text",
+      "durationMin": 1.5,
+      "rpe": 1.5,
+      "rationale": "sample text",
+      "source": "none",
+      "refined": true
+    },
+    "future": {
+      "planDayId": "sample text",
+      "durationMin": 1.5,
+      "rpe": 1.5,
+      "rationale": "sample text",
+      "source": "zz_value_from_a_newer_server",
+      "refined": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

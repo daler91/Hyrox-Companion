@@ -1,0 +1,37 @@
+{
+  "request": {
+    "min": {
+      "name": "a"
+    },
+    "max": {
+      "name": "sample text",
+      "category": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "name": "a",
+      "category": "a",
+      "createdAt": null
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "name": "sample text",
+      "category": "sample text",
+      "createdAt": "2026-11-07T10:15:30.000Z"
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "name": "sample text",
+      "category": "sample text",
+      "createdAt": "2026-11-07T10:15:30.000Z",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

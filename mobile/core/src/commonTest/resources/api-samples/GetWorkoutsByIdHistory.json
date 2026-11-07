@@ -1,0 +1,31 @@
+{
+  "response": {
+    "min": {
+      "lastSameFocus": null,
+      "prSetCount": 1,
+      "blockAvgRpe": null
+    },
+    "max": {
+      "lastSameFocus": {
+        "date": "sample text",
+        "focus": "sample text"
+      },
+      "prSetCount": 1,
+      "blockAvgRpe": 1.5
+    },
+    "future": {
+      "lastSameFocus": {
+        "date": "sample text",
+        "focus": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "prSetCount": 1,
+      "blockAvgRpe": 1.5,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

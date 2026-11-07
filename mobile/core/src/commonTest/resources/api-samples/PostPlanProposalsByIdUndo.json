@@ -1,0 +1,35 @@
+{
+  "response": {
+    "min": {
+      "undone": true,
+      "restoredCount": 1,
+      "keptDays": []
+    },
+    "max": {
+      "undone": true,
+      "restoredCount": 1,
+      "keptDays": [
+        {
+          "planDayId": "sample text",
+          "dayLabel": "sample text"
+        }
+      ]
+    },
+    "future": {
+      "undone": true,
+      "restoredCount": 1,
+      "keptDays": [
+        {
+          "planDayId": "sample text",
+          "dayLabel": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

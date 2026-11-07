@@ -1,0 +1,40 @@
+{
+  "response": {
+    "min": {
+      "date": "2026-11-07",
+      "micros": []
+    },
+    "max": {
+      "date": "2026-11-07",
+      "micros": [
+        {
+          "key": "sample text",
+          "label": "sample text",
+          "unit": "mcg",
+          "amount": 1.5,
+          "rdi": 1.5,
+          "pctRdi": 1
+        }
+      ]
+    },
+    "future": {
+      "date": "2026-11-07",
+      "micros": [
+        {
+          "key": "sample text",
+          "label": "sample text",
+          "unit": "zz_value_from_a_newer_server",
+          "amount": 1.5,
+          "rdi": 1.5,
+          "pctRdi": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

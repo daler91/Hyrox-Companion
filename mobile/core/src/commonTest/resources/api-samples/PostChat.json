@@ -1,0 +1,82 @@
+{
+  "request": {
+    "min": {
+      "message": "a"
+    },
+    "max": {
+      "message": "sample text",
+      "history": [
+        {
+          "role": "assistant",
+          "content": "sample text"
+        }
+      ],
+      "planEditing": true,
+      "focusPlanDayId": "sample text",
+      "focusWorkoutLogId": "sample text",
+      "userMessageId": "sample text",
+      "assistantMessageId": "sample text",
+      "replaceAssistantId": "sample text",
+      "photo": {
+        "mimeType": "image/webp",
+        "imageBase64": "sample text"
+      }
+    }
+  },
+  "response": {
+    "min": {
+      "response": "a",
+      "ragInfo": {
+        "source": "rag",
+        "chunkCount": 1
+      }
+    },
+    "max": {
+      "response": "sample text",
+      "ragInfo": {
+        "source": "none",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text"
+      },
+      "safetyNotice": {
+        "level": "caution",
+        "message": "sample text"
+      }
+    },
+    "future": {
+      "response": "sample text",
+      "ragInfo": {
+        "source": "zz_value_from_a_newer_server",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "safetyNotice": {
+        "level": "zz_value_from_a_newer_server",
+        "message": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

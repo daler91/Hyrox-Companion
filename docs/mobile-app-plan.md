@@ -161,9 +161,14 @@ OpenAPI document covers every endpoint v1 calls.
 
 ### Phase 2: contract and shared logic
 
-1. **Generated models.** Generate Kotlin models (kotlinx.serialization) from
-   `docs/openapi.json` into `core`, with a thin hand-written Ktor layer on top for auth, retries
-   and SSE. CI regenerates the models and fails on drift.
+1. **Generated models. Done.** `script/kotlin-models/` generates kotlinx.serialization models
+   and a typed `ApiEndpoints` catalogue from `docs/openapi.json` into `mobile/core`
+   ([mobile/README.md](../mobile/README.md) lists the mapping rules: `Patch<T>` for optional
+   nullable request fields, enums that decode unknown values as `Unknown`). `ApiContractTest`
+   decodes generated sample JSON for every endpoint, including what a newer server could send,
+   and round-trips every request body. The unit suite fails on drift; `mobile.yml` compiles and
+   tests on the JVM. The hand-written Ktor layer (auth, retries, SSE) comes in Phase 3, on top
+   of `ApiEndpoints`. `core` has a JVM target only until Phase 3 adds Android and iOS.
 2. **Inventory of client-side logic.** The web client imports 37 `@shared/*` modules. Put each in
    one of three buckets: rendering only; needed in the app (port it to `core/commonMain`); or
    better served by an API field (add the field instead).

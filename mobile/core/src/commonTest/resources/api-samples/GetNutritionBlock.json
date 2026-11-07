@@ -1,0 +1,51 @@
+{
+  "response": {
+    "min": {
+      "from": "2026-11-07",
+      "to": "2026-11-07",
+      "points": []
+    },
+    "max": {
+      "from": "2026-11-07",
+      "to": "2026-11-07",
+      "points": [
+        {
+          "date": "2026-11-07",
+          "calories": 1.5,
+          "protein": 1.5,
+          "carb": 1.5,
+          "fat": 1.5,
+          "fiber": 1.5,
+          "utss": 1.5,
+          "carbTargetG": 1.5,
+          "avgRpe": 1.5,
+          "compliancePct": 1.5
+        }
+      ]
+    },
+    "future": {
+      "from": "2026-11-07",
+      "to": "2026-11-07",
+      "points": [
+        {
+          "date": "2026-11-07",
+          "calories": 1.5,
+          "protein": 1.5,
+          "carb": 1.5,
+          "fat": 1.5,
+          "fiber": 1.5,
+          "utss": 1.5,
+          "carbTargetG": 1.5,
+          "avgRpe": 1.5,
+          "compliancePct": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

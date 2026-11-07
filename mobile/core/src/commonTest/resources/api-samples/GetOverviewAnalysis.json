@@ -1,0 +1,68 @@
+{
+  "response": {
+    "min": {
+      "sections": null
+    },
+    "max": {
+      "sections": {
+        "trainingLoad": "sample text",
+        "bodySystems": "sample text",
+        "formMonotony": "sample text",
+        "objectiveLoad": "sample text",
+        "weeklyWorkouts": "sample text",
+        "rpeDuration": "sample text",
+        "consistency": "sample text"
+      },
+      "ragInfo": {
+        "source": "none",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text"
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "rangeDays": 1,
+      "stale": true
+    },
+    "future": {
+      "sections": {
+        "trainingLoad": "sample text",
+        "bodySystems": "sample text",
+        "formMonotony": "sample text",
+        "objectiveLoad": "sample text",
+        "weeklyWorkouts": "sample text",
+        "rpeDuration": "sample text",
+        "consistency": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "ragInfo": {
+        "source": "zz_value_from_a_newer_server",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "rangeDays": 1,
+      "stale": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

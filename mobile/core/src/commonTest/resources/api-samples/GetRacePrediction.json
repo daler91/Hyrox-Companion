@@ -1,0 +1,126 @@
+{
+  "response": {
+    "min": {
+      "totalFinishSeconds": 1.5,
+      "segments": [],
+      "transitionSeconds": 1.5,
+      "aiUsed": true,
+      "overallConfidence": "low",
+      "narrative": null,
+      "division": "open",
+      "gender": null,
+      "genderAssumed": true,
+      "ageGroup": null,
+      "ageGroupAssumed": true,
+      "percentile": null,
+      "dataCompleteness": {
+        "stationsWithData": 1,
+        "totalStations": 1,
+        "hasRunData": true
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": true
+    },
+    "max": {
+      "totalFinishSeconds": 1.5,
+      "segments": [
+        {
+          "index": 1,
+          "kind": "station",
+          "exerciseName": "sample text",
+          "label": "sample text",
+          "estimatedSeconds": 1.5,
+          "basis": "blended",
+          "confidence": "high",
+          "sampleSize": 1
+        }
+      ],
+      "transitionSeconds": 1.5,
+      "aiUsed": true,
+      "aiUnavailableReason": "ai_error",
+      "overallConfidence": "high",
+      "narrative": "sample text",
+      "division": "pro",
+      "gender": "prefer_not_to_say",
+      "genderAssumed": true,
+      "ageGroup": "sample text",
+      "ageGroupAssumed": true,
+      "percentile": {
+        "fasterThanPct": 1.5,
+        "cohortLabel": "sample text",
+        "cohortSize": 1,
+        "basis": "division_gender"
+      },
+      "raceReadiness": {
+        "tsb": 1.5,
+        "status": "very_fatigued",
+        "guidance": "sample text"
+      },
+      "dataCompleteness": {
+        "stationsWithData": 1,
+        "totalStations": 1,
+        "hasRunData": true
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": true
+    },
+    "future": {
+      "totalFinishSeconds": 1.5,
+      "segments": [
+        {
+          "index": 1,
+          "kind": "zz_value_from_a_newer_server",
+          "exerciseName": "sample text",
+          "label": "sample text",
+          "estimatedSeconds": 1.5,
+          "basis": "zz_value_from_a_newer_server",
+          "confidence": "zz_value_from_a_newer_server",
+          "sampleSize": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "transitionSeconds": 1.5,
+      "aiUsed": true,
+      "aiUnavailableReason": "zz_value_from_a_newer_server",
+      "overallConfidence": "zz_value_from_a_newer_server",
+      "narrative": "sample text",
+      "division": "zz_value_from_a_newer_server",
+      "gender": "zz_value_from_a_newer_server",
+      "genderAssumed": true,
+      "ageGroup": "sample text",
+      "ageGroupAssumed": true,
+      "percentile": {
+        "fasterThanPct": 1.5,
+        "cohortLabel": "sample text",
+        "cohortSize": 1,
+        "basis": "zz_value_from_a_newer_server",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "raceReadiness": {
+        "tsb": 1.5,
+        "status": "zz_value_from_a_newer_server",
+        "guidance": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "dataCompleteness": {
+        "stationsWithData": 1,
+        "totalStations": 1,
+        "hasRunData": true,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "generatedAt": "2026-11-07T10:15:30.000Z",
+      "stale": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

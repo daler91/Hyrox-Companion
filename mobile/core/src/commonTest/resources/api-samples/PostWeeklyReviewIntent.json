@@ -1,0 +1,28 @@
+{
+  "request": {
+    "min": {
+      "week": "a"
+    },
+    "max": {
+      "week": "sample text",
+      "intent": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "weekStart": "a",
+      "intent": null
+    },
+    "max": {
+      "weekStart": "sample text",
+      "intent": "sample text"
+    },
+    "future": {
+      "weekStart": "sample text",
+      "intent": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

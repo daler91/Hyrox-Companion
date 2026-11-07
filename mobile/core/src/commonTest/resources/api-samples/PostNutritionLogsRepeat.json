@@ -1,0 +1,29 @@
+{
+  "request": {
+    "min": {
+      "sourceDate": "a"
+    },
+    "max": {
+      "sourceDate": "sample text",
+      "mealType": "post_workout",
+      "targetDate": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "created": 1,
+      "logDate": "2026-11-07"
+    },
+    "max": {
+      "created": 1,
+      "logDate": "2026-11-07"
+    },
+    "future": {
+      "created": 1,
+      "logDate": "2026-11-07",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "request": {
+    "min": {
+      "ownerType": "workoutLog",
+      "ownerId": "a",
+      "action": "accept"
+    },
+    "max": {
+      "ownerType": "planDay",
+      "ownerId": "sample text",
+      "action": "edit",
+      "reason": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "ok": true
+    },
+    "max": {
+      "ok": true
+    },
+    "future": {
+      "ok": true,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

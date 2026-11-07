@@ -1,0 +1,53 @@
+name: Mobile Core
+
+# The native app's shared Kotlin module (mobile/core): the API models
+# generated from docs/openapi.json and their contract test, which decodes
+# sample JSON for every endpoint. Whether the committed models match the
+# document is checked in the unit suite (script/kotlin-models/generate.test.ts);
+# this job proves they compile and decode. Android and iOS targets join in
+# Phase 3 (docs/mobile-app-plan.md).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - mobile/**
+      - docs/openapi.json
+      - script/kotlin-models/**
+      - .github/workflows/mobile.yml
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - mobile/**
+      - docs/openapi.json
+      - script/kotlin-models/**
+      - .github/workflows/mobile.yml
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  core-jvm:
+    name: Kotlin core (JVM)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache Gradle downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/gradle/wrapper/gradle-wrapper.properties', 'mobile/gradle/libs.versions.toml', 'mobile/**/*.gradle.kts') }}
+          restore-keys: gradle-${{ runner.os }}-
+      # The runner image ships JDK 21; core's jvmToolchain(21) uses it.
+      - name: Compile and test
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          ./gradlew :core:jvmTest --no-daemon --console=plain

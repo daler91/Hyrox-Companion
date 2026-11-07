@@ -1,0 +1,43 @@
+{
+  "response": {
+    "min": {
+      "currentStreak": 1,
+      "weeklyCompletedWorkouts": 1,
+      "weeklyGoal": 1,
+      "stationCoverage": [],
+      "coverageLookbackDays": 1
+    },
+    "max": {
+      "currentStreak": 1,
+      "weeklyCompletedWorkouts": 1,
+      "weeklyGoal": 1,
+      "stationCoverage": [
+        {
+          "station": "sample text",
+          "lastTrained": "sample text",
+          "daysSince": 1
+        }
+      ],
+      "coverageLookbackDays": 1
+    },
+    "future": {
+      "currentStreak": 1,
+      "weeklyCompletedWorkouts": 1,
+      "weeklyGoal": 1,
+      "stationCoverage": [
+        {
+          "station": "sample text",
+          "lastTrained": "sample text",
+          "daysSince": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "coverageLookbackDays": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "protocolType": "sample text",
+      "notes": "sample text",
+      "metrics": {
+        "avgHeartRate": 20,
+        "maxHeartRate": 20,
+        "durationSeconds": 1,
+        "distanceMeters": 1.5
+      }
+    }
+  },
+  "response": {
+    "min": {
+      "testResult": {
+        "id": "a",
+        "userId": "a",
+        "protocolType": "a",
+        "notes": null,
+        "version": 1,
+        "conditions": null,
+        "metrics": null,
+        "createdAt": null
+      },
+      "analysis": null
+    },
+    "max": {
+      "testResult": {
+        "id": "sample text",
+        "userId": "sample text",
+        "protocolType": "sample text",
+        "notes": "sample text",
+        "version": 1,
+        "conditions": {
+          "source": "sample text",
+          "workoutLogId": "sample text"
+        },
+        "metrics": {
+          "durationSeconds": 1.5,
+          "distanceMeters": 1.5,
+          "avgHeartRate": 1.5,
+          "maxHeartRate": 1.5,
+          "mafCeilingUsed": 1.5
+        },
+        "createdAt": "2026-11-07T10:15:30.000Z"
+      },
+      "analysis": {
+        "id": "sample text",
+        "userId": "sample text",
+        "workoutLogId": "sample text",
+        "compliancePct": 1,
+        "classification": "sample text",
+        "nextAction": "sample text",
+        "version": 1,
+        "analysisDetails": {
+          "avgHeartRate": 1.5,
+          "maxHeartRate": 1.5,
+          "ceiling": 1.5,
+          "avgOverBy": 1.5,
+          "maxOverBy": 1.5
+        },
+        "createdAt": "2026-11-07T10:15:30.000Z"
+      }
+    },
+    "future": {
+      "testResult": {
+        "id": "sample text",
+        "userId": "sample text",
+        "protocolType": "sample text",
+        "notes": "sample text",
+        "version": 1,
+        "conditions": {
+          "source": "sample text",
+          "workoutLogId": "sample text",
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "metrics": {
+          "durationSeconds": 1.5,
+          "distanceMeters": 1.5,
+          "avgHeartRate": 1.5,
+          "maxHeartRate": 1.5,
+          "mafCeilingUsed": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "analysis": {
+        "id": "sample text",
+        "userId": "sample text",
+        "workoutLogId": "sample text",
+        "compliancePct": 1,
+        "classification": "sample text",
+        "nextAction": "sample text",
+        "version": 1,
+        "analysisDetails": {
+          "avgHeartRate": 1.5,
+          "maxHeartRate": 1.5,
+          "ceiling": 1.5,
+          "avgOverBy": 1.5,
+          "maxOverBy": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

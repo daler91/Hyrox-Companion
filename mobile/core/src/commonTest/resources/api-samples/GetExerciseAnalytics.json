@@ -1,0 +1,32 @@
+{
+  "response": {
+    "min": {},
+    "max": {
+      "key": [
+        {
+          "date": "sample text",
+          "totalVolume": 1.5,
+          "maxWeight": 1.5,
+          "totalSets": 1,
+          "totalReps": 1.5,
+          "totalDistance": 1.5
+        }
+      ]
+    },
+    "future": {
+      "key": [
+        {
+          "date": "sample text",
+          "totalVolume": 1.5,
+          "maxWeight": 1.5,
+          "totalSets": 1,
+          "totalReps": 1.5,
+          "totalDistance": 1.5,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ]
+    }
+  }
+}

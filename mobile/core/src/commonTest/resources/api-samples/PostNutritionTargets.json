@@ -1,0 +1,80 @@
+{
+  "request": {
+    "min": {},
+    "max": {
+      "calories": 1.5,
+      "proteinG": 1.5,
+      "carbG": 1.5,
+      "fatG": 1.5,
+      "periodizationEnabled": true,
+      "referenceUtss": 1.5,
+      "carbGramsPerUtss": 1.5,
+      "recoveryEnabled": true,
+      "recoveryProteinBumpFrac": 1.5,
+      "preloadCarbGramsPerUtss": 1.5,
+      "preloadDaysAhead": 1,
+      "phaseAware": true,
+      "maxCarbDeltaG": 1.5,
+      "effectiveFrom": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "calories": null,
+      "proteinG": null,
+      "carbG": null,
+      "fatG": null,
+      "periodizationEnabled": true,
+      "referenceUtss": null,
+      "carbGramsPerUtss": null,
+      "recoveryEnabled": true,
+      "recoveryProteinBumpFrac": null,
+      "preloadCarbGramsPerUtss": null,
+      "preloadDaysAhead": null,
+      "phaseAware": true,
+      "maxCarbDeltaG": null,
+      "effectiveFrom": "2026-11-07"
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "calories": 1.5,
+      "proteinG": 1.5,
+      "carbG": 1.5,
+      "fatG": 1.5,
+      "periodizationEnabled": true,
+      "referenceUtss": 1.5,
+      "carbGramsPerUtss": 1.5,
+      "recoveryEnabled": true,
+      "recoveryProteinBumpFrac": 1.5,
+      "preloadCarbGramsPerUtss": 1.5,
+      "preloadDaysAhead": 1,
+      "phaseAware": true,
+      "maxCarbDeltaG": 1.5,
+      "effectiveFrom": "2026-11-07"
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "calories": 1.5,
+      "proteinG": 1.5,
+      "carbG": 1.5,
+      "fatG": 1.5,
+      "periodizationEnabled": true,
+      "referenceUtss": 1.5,
+      "carbGramsPerUtss": 1.5,
+      "recoveryEnabled": true,
+      "recoveryProteinBumpFrac": 1.5,
+      "preloadCarbGramsPerUtss": 1.5,
+      "preloadDaysAhead": 1,
+      "phaseAware": true,
+      "maxCarbDeltaG": 1.5,
+      "effectiveFrom": "2026-11-07",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

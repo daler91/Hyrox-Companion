@@ -1,0 +1,485 @@
+{
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "date": "sample text",
+        "type": "logged",
+        "status": "skipped",
+        "focus": "sample text",
+        "mainWorkout": "sample text",
+        "accessory": "sample text",
+        "notes": "sample text",
+        "excused": true,
+        "skipReason": "low_energy",
+        "priority": "optional",
+        "recovery": "let_go",
+        "missedOn": "sample text",
+        "recoverable": true,
+        "recoveryUndoable": true,
+        "raceDerived": true,
+        "expectedDurationMin": 1,
+        "expectedRpe": 1,
+        "plannedTimeOfDayMin": 1,
+        "planDayId": "sample text",
+        "weekNumber": 1,
+        "dayName": "sample text",
+        "planName": "sample text",
+        "planId": "sample text",
+        "aiSource": "sample text",
+        "aiRationale": "sample text",
+        "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z",
+        "aiInputsUsed": {
+          "rpeTrend": "insufficient_data",
+          "fatigueFlag": true,
+          "planPhase": "race_week",
+          "weeklyVolumeTrend": "decreasing",
+          "loadGovernorAcwrZone": "danger",
+          "loadGovernorAcwr": 1.5,
+          "loadGovernorFlaggedVectors": [
+            "elastic_tendon"
+          ],
+          "loadGovernorRestrictions": [
+            "sample text"
+          ],
+          "stationGaps": [
+            "sample text"
+          ],
+          "progressionFlags": [
+            "sample text"
+          ],
+          "ragUsed": true,
+          "recentWorkoutCount": 1,
+          "completedWorkoutCount": 1,
+          "planGoalPresent": true,
+          "recommendationTrace": {
+            "trainingStyleId": "sample text",
+            "phase": "sample text",
+            "strategyRuleVersion": "sample text",
+            "promptBundleVersion": "sample text",
+            "rationaleCodes": [
+              "sample text"
+            ]
+          },
+          "lastModification": {
+            "kind": "auto_progression",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "insufficient_data",
+            "prescriptionFingerprint": "sample text"
+          },
+          "progressionChanges": [
+            {
+              "exercise": "sample text",
+              "kind": "pace",
+              "from": 1.5,
+              "to": 1.5,
+              "unit": "sample text"
+            }
+          ],
+          "lastFatigueReduction": {
+            "kind": "fatigue_volume_reduction",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "insufficient_data",
+            "prescriptionFingerprint": "sample text"
+          },
+          "replacedPrescription": {
+            "focus": "sample text",
+            "mainWorkout": "sample text",
+            "accessory": "sample text",
+            "notes": "sample text"
+          }
+        },
+        "workoutLogId": "sample text",
+        "duration": 1,
+        "rpe": 1,
+        "source": "sample text",
+        "stravaActivityId": "sample text",
+        "deviceLinkSource": "manual",
+        "countsAsTraining": true,
+        "deviceActivityName": "sample text",
+        "deviceSportType": "sample text",
+        "stoppedSeconds": 1.5,
+        "suggestedPlanDayId": "sample text",
+        "suggestedWorkoutLogId": "sample text",
+        "suggestedLinkConfidence": 1.5,
+        "calories": 1,
+        "distanceMeters": 1.5,
+        "elevationGain": 1.5,
+        "avgHeartrate": 1,
+        "maxHeartrate": 1,
+        "avgSpeed": 1.5,
+        "maxSpeed": 1.5,
+        "avgCadence": 1.5,
+        "avgWatts": 1,
+        "sufferScore": 1,
+        "plannedSetCount": 1,
+        "actualSetCount": 1,
+        "matchedSetCount": 1,
+        "addedSetCount": 1,
+        "removedSetCount": 1,
+        "compliancePct": 1,
+        "exerciseSets": [
+          {
+            "id": "sample text",
+            "workoutLogId": "sample text",
+            "planDayId": "sample text",
+            "exerciseName": "sample text",
+            "customLabel": "sample text",
+            "category": "sample text",
+            "setNumber": 1,
+            "reps": 1,
+            "weight": 1.5,
+            "distance": 1.5,
+            "time": 1.5,
+            "weightUnit": "sample text",
+            "distanceUnit": "sample text",
+            "plannedReps": 1,
+            "plannedWeight": 1.5,
+            "plannedDistance": 1.5,
+            "plannedTime": 1.5,
+            "blockId": "sample text",
+            "stepNumber": 1,
+            "intervalMinute": 1,
+            "cycleNumber": 1,
+            "stepRole": "sample text",
+            "groupId": "sample text",
+            "intensity": {
+              "key": "any"
+            },
+            "load": {
+              "key": "any"
+            },
+            "repMode": "per_side",
+            "tempo": {
+              "key": "any"
+            },
+            "standards": {
+              "key": "any"
+            },
+            "notes": "sample text",
+            "confidence": 1,
+            "sortOrder": 1,
+            "version": 1
+          }
+        ],
+        "structureBlocks": [
+          {
+            "id": "sample text",
+            "sectionType": "mobility",
+            "formatType": "quality",
+            "durationSeconds": 1,
+            "rounds": 1,
+            "workSeconds": 1,
+            "restSeconds": 1,
+            "durationMinutes": 1,
+            "roundCount": 1,
+            "timeCapMinutes": 1,
+            "workIntervalSec": 1,
+            "restIntervalSec": 1,
+            "instructions": "sample text",
+            "score": {
+              "type": "emom",
+              "completed": true,
+              "completedMinutes": 1,
+              "missedReps": 1,
+              "notes": "sample text"
+            },
+            "sequenceOrder": 1,
+            "sortOrder": 1,
+            "steps": [
+              {
+                "stepNumber": 1,
+                "minuteIndex": 1,
+                "stepType": "transition",
+                "exerciseName": "sample text",
+                "category": "sample text",
+                "customLabel": "sample text",
+                "stepRole": "sample text",
+                "intensity": {
+                  "key": "any"
+                },
+                "loadMode": "sample text",
+                "unilateralMode": "sample text",
+                "tempo": {
+                  "key": "any"
+                },
+                "constraintTags": [
+                  "sample text"
+                ],
+                "groupId": "sample text",
+                "groupMeta": {
+                  "key": "any"
+                },
+                "targets": {
+                  "key": "any"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "date": "sample text",
+        "type": "zz_value_from_a_newer_server",
+        "status": "zz_value_from_a_newer_server",
+        "focus": "sample text",
+        "mainWorkout": "sample text",
+        "accessory": "sample text",
+        "notes": "sample text",
+        "excused": true,
+        "skipReason": "zz_value_from_a_newer_server",
+        "priority": "zz_value_from_a_newer_server",
+        "recovery": "zz_value_from_a_newer_server",
+        "missedOn": "sample text",
+        "recoverable": true,
+        "recoveryUndoable": true,
+        "raceDerived": true,
+        "expectedDurationMin": 1,
+        "expectedRpe": 1,
+        "plannedTimeOfDayMin": 1,
+        "planDayId": "sample text",
+        "weekNumber": 1,
+        "dayName": "sample text",
+        "planName": "sample text",
+        "planId": "sample text",
+        "aiSource": "sample text",
+        "aiRationale": "sample text",
+        "aiNoteUpdatedAt": "2026-11-07T10:15:30.000Z",
+        "aiInputsUsed": {
+          "rpeTrend": "zz_value_from_a_newer_server",
+          "fatigueFlag": true,
+          "planPhase": "zz_value_from_a_newer_server",
+          "weeklyVolumeTrend": "zz_value_from_a_newer_server",
+          "loadGovernorAcwrZone": "zz_value_from_a_newer_server",
+          "loadGovernorAcwr": 1.5,
+          "loadGovernorFlaggedVectors": [
+            "zz_value_from_a_newer_server"
+          ],
+          "loadGovernorRestrictions": [
+            "sample text"
+          ],
+          "stationGaps": [
+            "sample text"
+          ],
+          "progressionFlags": [
+            "sample text"
+          ],
+          "ragUsed": true,
+          "recentWorkoutCount": 1,
+          "completedWorkoutCount": 1,
+          "planGoalPresent": true,
+          "recommendationTrace": {
+            "trainingStyleId": "sample text",
+            "phase": "sample text",
+            "strategyRuleVersion": "sample text",
+            "promptBundleVersion": "sample text",
+            "rationaleCodes": [
+              "sample text"
+            ],
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "lastModification": {
+            "kind": "zz_value_from_a_newer_server",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "zz_value_from_a_newer_server",
+            "prescriptionFingerprint": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "progressionChanges": [
+            {
+              "exercise": "sample text",
+              "kind": "zz_value_from_a_newer_server",
+              "from": 1.5,
+              "to": 1.5,
+              "unit": "sample text",
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
+          "lastFatigueReduction": {
+            "kind": "fatigue_volume_reduction",
+            "reason": "sample text",
+            "at": "sample text",
+            "completedWorkoutCount": 1,
+            "fatigueFlag": true,
+            "rpeTrend": "zz_value_from_a_newer_server",
+            "prescriptionFingerprint": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "replacedPrescription": {
+            "focus": "sample text",
+            "mainWorkout": "sample text",
+            "accessory": "sample text",
+            "notes": "sample text",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "workoutLogId": "sample text",
+        "duration": 1,
+        "rpe": 1,
+        "source": "sample text",
+        "stravaActivityId": "sample text",
+        "deviceLinkSource": "zz_value_from_a_newer_server",
+        "countsAsTraining": true,
+        "deviceActivityName": "sample text",
+        "deviceSportType": "sample text",
+        "stoppedSeconds": 1.5,
+        "suggestedPlanDayId": "sample text",
+        "suggestedWorkoutLogId": "sample text",
+        "suggestedLinkConfidence": 1.5,
+        "calories": 1,
+        "distanceMeters": 1.5,
+        "elevationGain": 1.5,
+        "avgHeartrate": 1,
+        "maxHeartrate": 1,
+        "avgSpeed": 1.5,
+        "maxSpeed": 1.5,
+        "avgCadence": 1.5,
+        "avgWatts": 1,
+        "sufferScore": 1,
+        "plannedSetCount": 1,
+        "actualSetCount": 1,
+        "matchedSetCount": 1,
+        "addedSetCount": 1,
+        "removedSetCount": 1,
+        "compliancePct": 1,
+        "exerciseSets": [
+          {
+            "id": "sample text",
+            "workoutLogId": "sample text",
+            "planDayId": "sample text",
+            "exerciseName": "sample text",
+            "customLabel": "sample text",
+            "category": "sample text",
+            "setNumber": 1,
+            "reps": 1,
+            "weight": 1.5,
+            "distance": 1.5,
+            "time": 1.5,
+            "weightUnit": "sample text",
+            "distanceUnit": "sample text",
+            "plannedReps": 1,
+            "plannedWeight": 1.5,
+            "plannedDistance": 1.5,
+            "plannedTime": 1.5,
+            "blockId": "sample text",
+            "stepNumber": 1,
+            "intervalMinute": 1,
+            "cycleNumber": 1,
+            "stepRole": "sample text",
+            "groupId": "sample text",
+            "intensity": {
+              "key": "any"
+            },
+            "load": {
+              "key": "any"
+            },
+            "repMode": "zz_value_from_a_newer_server",
+            "tempo": {
+              "key": "any"
+            },
+            "standards": {
+              "key": "any"
+            },
+            "notes": "sample text",
+            "confidence": 1,
+            "sortOrder": 1,
+            "version": 1,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "structureBlocks": [
+          {
+            "id": "sample text",
+            "sectionType": "zz_value_from_a_newer_server",
+            "formatType": "zz_value_from_a_newer_server",
+            "durationSeconds": 1,
+            "rounds": 1,
+            "workSeconds": 1,
+            "restSeconds": 1,
+            "durationMinutes": 1,
+            "roundCount": 1,
+            "timeCapMinutes": 1,
+            "workIntervalSec": 1,
+            "restIntervalSec": 1,
+            "instructions": "sample text",
+            "score": {
+              "type": "emom",
+              "completed": true,
+              "completedMinutes": 1,
+              "missedReps": 1,
+              "notes": "sample text"
+            },
+            "sequenceOrder": 1,
+            "sortOrder": 1,
+            "steps": [
+              {
+                "stepNumber": 1,
+                "minuteIndex": 1,
+                "stepType": "zz_value_from_a_newer_server",
+                "exerciseName": "sample text",
+                "category": "sample text",
+                "customLabel": "sample text",
+                "stepRole": "sample text",
+                "intensity": {
+                  "key": "any"
+                },
+                "loadMode": "sample text",
+                "unilateralMode": "sample text",
+                "tempo": {
+                  "key": "any"
+                },
+                "constraintTags": [
+                  "sample text"
+                ],
+                "groupId": "sample text",
+                "groupMeta": {
+                  "key": "any"
+                },
+                "targets": {
+                  "key": "any"
+                },
+                "zzPropertyFromANewerServer": {
+                  "added": true
+                }
+              }
+            ],
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

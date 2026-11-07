@@ -1,0 +1,25 @@
+{
+  "response": {
+    "min": {
+      "success": true,
+      "imported": 1,
+      "skipped": 1,
+      "total": 1
+    },
+    "max": {
+      "success": true,
+      "imported": 1,
+      "skipped": 1,
+      "total": 1
+    },
+    "future": {
+      "success": true,
+      "imported": 1,
+      "skipped": 1,
+      "total": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

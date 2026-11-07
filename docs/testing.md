@@ -613,7 +613,14 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 - **Override:** the job is skipped on a PR labelled `openapi-breaking-ok`, for a deliberate break shipped with a raised `MIN_APP_VERSION_*`. Label changes re-run only this workflow.
 - **Related:** `test/docs/openapiCoverage.test.ts` (in the unit suite) keeps every registered `/api` route either documented, on the shrink-only `test/docs/openapiUndocumented.ts` list, or excluded as not a client endpoint.
 
-### 7. Other workflows
+### 7. Mobile Core (`mobile.yml`)
+
+- **Name:** Mobile Core
+- **Triggers:** Push to `main` and pull requests touching `mobile/**`, `docs/openapi.json`, `script/kotlin-models/**` or the workflow
+- **Steps:** Checkout, cache Gradle downloads, then `./gradlew :core:jvmTest` in `mobile/` with the runner's JDK 21. It compiles the Kotlin API models generated from `docs/openapi.json` and runs `ApiContractTest` (every endpoint's sample request and response JSON decodes, the forward-compatibility samples included) and the runtime tests. See [`mobile/README.md`](../mobile/README.md).
+- **Related:** `script/kotlin-models/generate.test.ts` (unit suite) fails while the committed models or samples differ from what the document generates; run `pnpm mobile:models`.
+
+### 8. Other workflows
 
 - **Secret Scan** (`gitleaks.yml`) -- Gitleaks secret scanning on push to `main` and on pull request. Scans **incrementally** -- only the commits the push or PR introduces -- so it blocks new secrets without re-flagging already-revoked ones buried in old history. Added after a former `.replit` config leaked an `ENCRYPTION_KEY`; that key has since been rotated through the keyring.
 - **DevSkim** (`devskim.yml`) -- Static security analysis

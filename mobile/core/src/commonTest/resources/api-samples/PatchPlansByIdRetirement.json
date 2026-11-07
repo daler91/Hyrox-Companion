@@ -1,0 +1,67 @@
+{
+  "request": {
+    "min": {
+      "retiredOn": null
+    },
+    "max": {
+      "retiredOn": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "name": "a",
+      "sourceFileName": null,
+      "totalWeeks": 1,
+      "goal": null,
+      "startDate": null,
+      "endDate": null,
+      "raceDate": null,
+      "retiredOn": null,
+      "generationStatus": "pending",
+      "generationError": null,
+      "generationStartedAt": null,
+      "engineState": null
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "name": "sample text",
+      "sourceFileName": "sample text",
+      "totalWeeks": 1,
+      "goal": "sample text",
+      "startDate": "sample text",
+      "endDate": "sample text",
+      "raceDate": "sample text",
+      "retiredOn": "sample text",
+      "generationStatus": "failed",
+      "generationError": "sample text",
+      "generationStartedAt": "2026-11-07T10:15:30.000Z",
+      "engineState": {
+        "key": "any"
+      }
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "name": "sample text",
+      "sourceFileName": "sample text",
+      "totalWeeks": 1,
+      "goal": "sample text",
+      "startDate": "sample text",
+      "endDate": "sample text",
+      "raceDate": "sample text",
+      "retiredOn": "sample text",
+      "generationStatus": "zz_value_from_a_newer_server",
+      "generationError": "sample text",
+      "generationStartedAt": "2026-11-07T10:15:30.000Z",
+      "engineState": {
+        "key": "any"
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

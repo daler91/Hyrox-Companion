@@ -1,0 +1,24 @@
+{
+  "response": {
+    "min": [],
+    "max": [
+      {
+        "id": "sample text",
+        "name": "sample text",
+        "servings": 1.5,
+        "foodId": "sample text"
+      }
+    ],
+    "future": [
+      {
+        "id": "sample text",
+        "name": "sample text",
+        "servings": 1.5,
+        "foodId": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      }
+    ]
+  }
+}

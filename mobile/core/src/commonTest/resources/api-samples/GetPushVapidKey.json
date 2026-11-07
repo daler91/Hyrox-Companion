@@ -1,0 +1,16 @@
+{
+  "response": {
+    "min": {
+      "publicKey": "a"
+    },
+    "max": {
+      "publicKey": "sample text"
+    },
+    "future": {
+      "publicKey": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

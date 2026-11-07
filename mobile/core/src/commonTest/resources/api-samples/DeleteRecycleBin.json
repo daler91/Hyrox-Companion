@@ -1,0 +1,19 @@
+{
+  "response": {
+    "min": {
+      "success": true,
+      "purgedCount": 1
+    },
+    "max": {
+      "success": true,
+      "purgedCount": 1
+    },
+    "future": {
+      "success": true,
+      "purgedCount": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

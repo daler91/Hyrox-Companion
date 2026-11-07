@@ -1,0 +1,122 @@
+{
+  "request": {
+    "min": {
+      "role": "user",
+      "content": "a"
+    },
+    "max": {
+      "role": "assistant",
+      "content": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "role": "a",
+      "content": "a",
+      "timestamp": null,
+      "kind": "text",
+      "proposalId": null,
+      "safetyNotice": null,
+      "ragInfo": null,
+      "focusPlanDayId": null,
+      "focusWorkoutLogId": null,
+      "feedback": null,
+      "feedbackAt": null,
+      "factProposal": null,
+      "attachment": null
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "role": "sample text",
+      "content": "sample text",
+      "timestamp": "2026-11-07T10:15:30.000Z",
+      "kind": "rolling",
+      "proposalId": "sample text",
+      "safetyNotice": {
+        "level": "caution",
+        "message": "sample text"
+      },
+      "ragInfo": {
+        "source": "none",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text"
+      },
+      "focusPlanDayId": "sample text",
+      "focusWorkoutLogId": "sample text",
+      "feedback": "down",
+      "feedbackAt": "2026-11-07T10:15:30.000Z",
+      "factProposal": {
+        "fact": "sample text",
+        "category": "other",
+        "status": "dismissed"
+      },
+      "attachment": {
+        "kind": "photo",
+        "reading": "sample text"
+      }
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "role": "sample text",
+      "content": "sample text",
+      "timestamp": "2026-11-07T10:15:30.000Z",
+      "kind": "zz_value_from_a_newer_server",
+      "proposalId": "sample text",
+      "safetyNotice": {
+        "level": "zz_value_from_a_newer_server",
+        "message": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "ragInfo": {
+        "source": "zz_value_from_a_newer_server",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "focusPlanDayId": "sample text",
+      "focusWorkoutLogId": "sample text",
+      "feedback": "zz_value_from_a_newer_server",
+      "feedbackAt": "2026-11-07T10:15:30.000Z",
+      "factProposal": {
+        "fact": "sample text",
+        "category": "zz_value_from_a_newer_server",
+        "status": "zz_value_from_a_newer_server",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "attachment": {
+        "kind": "photo",
+        "reading": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

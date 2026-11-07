@@ -1,0 +1,91 @@
+{
+  "response": {
+    "min": {
+      "from": "2026-11-07",
+      "to": "2026-11-07",
+      "days": []
+    },
+    "max": {
+      "from": "2026-11-07",
+      "to": "2026-11-07",
+      "days": [
+        {
+          "date": "2026-11-07",
+          "totals": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5
+          },
+          "effectiveTarget": {
+            "calories": 1.5,
+            "proteinG": 1.5,
+            "carbG": 1.5,
+            "fatG": 1.5,
+            "carbDeltaG": 1.5,
+            "baseLoadDeltaG": 1.5,
+            "recoveryDeltaG": 1.5,
+            "preloadDeltaG": 1.5,
+            "proteinDeltaG": 1.5,
+            "utss": 1.5,
+            "scaled": true,
+            "reasonCodes": [
+              "sample text"
+            ],
+            "explanation": "sample text",
+            "phase": "race_week"
+          },
+          "hasPostWorkoutFuel": true
+        }
+      ]
+    },
+    "future": {
+      "from": "2026-11-07",
+      "to": "2026-11-07",
+      "days": [
+        {
+          "date": "2026-11-07",
+          "totals": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "effectiveTarget": {
+            "calories": 1.5,
+            "proteinG": 1.5,
+            "carbG": 1.5,
+            "fatG": 1.5,
+            "carbDeltaG": 1.5,
+            "baseLoadDeltaG": 1.5,
+            "recoveryDeltaG": 1.5,
+            "preloadDeltaG": 1.5,
+            "proteinDeltaG": 1.5,
+            "utss": 1.5,
+            "scaled": true,
+            "reasonCodes": [
+              "sample text"
+            ],
+            "explanation": "sample text",
+            "phase": "zz_value_from_a_newer_server",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "hasPostWorkoutFuel": true,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

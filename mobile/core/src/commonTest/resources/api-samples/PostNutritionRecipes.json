@@ -1,0 +1,110 @@
+{
+  "request": {
+    "min": {
+      "name": "a",
+      "servings": 1.5,
+      "ingredients": []
+    },
+    "max": {
+      "name": "sample text",
+      "servings": 1.5,
+      "ingredients": [
+        {
+          "foodId": "sample text",
+          "quantityG": 1.5
+        }
+      ]
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "name": "a",
+      "servings": 1.5,
+      "foodId": "a",
+      "totalGrams": 1.5,
+      "perServing": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5
+      },
+      "ingredients": []
+    },
+    "max": {
+      "id": "sample text",
+      "name": "sample text",
+      "servings": 1.5,
+      "foodId": "sample text",
+      "totalGrams": 1.5,
+      "perServing": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5
+      },
+      "ingredients": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "name": "sample text",
+          "brand": "sample text",
+          "quantityG": 1.5,
+          "position": 1,
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5
+          }
+        }
+      ]
+    },
+    "future": {
+      "id": "sample text",
+      "name": "sample text",
+      "servings": 1.5,
+      "foodId": "sample text",
+      "totalGrams": 1.5,
+      "perServing": {
+        "calories": 1.5,
+        "protein": 1.5,
+        "carb": 1.5,
+        "fat": 1.5,
+        "fiber": 1.5,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "ingredients": [
+        {
+          "id": "sample text",
+          "foodId": "sample text",
+          "name": "sample text",
+          "brand": "sample text",
+          "quantityG": 1.5,
+          "position": 1,
+          "nutrition": {
+            "calories": 1.5,
+            "protein": 1.5,
+            "carb": 1.5,
+            "fat": 1.5,
+            "fiber": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

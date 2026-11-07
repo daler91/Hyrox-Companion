@@ -62,6 +62,7 @@ Scoped to one feature. Accurate for what they cover, but not a description of th
 | [New Training Style Checklist](new-training-style-checklist.md)   | Every place that needs touching when a training style is added |
 | [Native Mobile](native-mobile.md)                                 | Capacitor vs. React Native comparison and packaging phases     |
 | [Mobile App Plan](mobile-app-plan.md)                             | The decided native app: Compose Multiplatform, Android first, then iOS |
+| [Mobile app README](../mobile/README.md)                          | Building `mobile/`, the generated API models and their contract test |
 
 ## Brand and design
 

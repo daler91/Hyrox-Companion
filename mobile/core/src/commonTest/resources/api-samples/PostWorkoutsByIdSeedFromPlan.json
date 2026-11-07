@@ -1,0 +1,16 @@
+{
+  "response": {
+    "min": {
+      "seededCount": 1
+    },
+    "max": {
+      "seededCount": 1
+    },
+    "future": {
+      "seededCount": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

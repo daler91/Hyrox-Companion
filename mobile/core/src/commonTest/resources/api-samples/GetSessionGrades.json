@@ -1,0 +1,418 @@
+{
+  "response": {
+    "min": {
+      "plan": null,
+      "sessions": [],
+      "weeks": [],
+      "blocks": [],
+      "totals": null
+    },
+    "max": {
+      "plan": {
+        "id": "sample text",
+        "name": "sample text",
+        "totalWeeks": 1,
+        "startDate": "sample text",
+        "currentWeek": 1
+      },
+      "sessions": [
+        {
+          "workoutLogId": "sample text",
+          "planDayId": "sample text",
+          "planId": "sample text",
+          "date": "sample text",
+          "weekNumber": 1,
+          "title": "sample text",
+          "intent": "threshold",
+          "purpose": "race",
+          "intentReason": "sample text",
+          "verdict": "ungradeable",
+          "headline": "sample text",
+          "evidence": [
+            "sample text"
+          ],
+          "confidence": "low",
+          "dataSource": "summary",
+          "streamStatus": "not_applicable",
+          "ungradeableReason": "too_short",
+          "targets": {
+            "easyCeilingHr": 1.5,
+            "thresholdHr": {
+              "min": 1.5,
+              "max": 1.5
+            },
+            "z5FloorHr": 1.5,
+            "hrBasis": "maf",
+            "easyPace": {
+              "fast": 1.5,
+              "slow": 1.5
+            },
+            "thresholdPace": 1.5,
+            "paceSource": "history"
+          },
+          "easy": {
+            "movingMinutes": 1.5,
+            "avgHr": 1.5,
+            "pctAboveCeiling": 1.5,
+            "firstThirdHr": 1.5,
+            "lastThirdHr": 1.5,
+            "hrDriftPct": 1.5,
+            "avgPaceSecPerKm": 1.5,
+            "pctFasterThanEasy": 1.5,
+            "excludedFinishMinutes": 1.5
+          },
+          "threshold": {
+            "segmentation": "whole_run",
+            "workMinutes": 1.5,
+            "repCount": 1,
+            "workAvgPaceSecPerKm": 1.5,
+            "paceDeltaPct": 1.5,
+            "workAvgHr": 1.5,
+            "pctWorkZ4": 1.5,
+            "pctWorkZ5": 1.5,
+            "firstRepHr": 1.5,
+            "lastRepHr": 1.5,
+            "decouplingPct": 1.5
+          },
+          "countsInRollup": true
+        }
+      ],
+      "weeks": [
+        {
+          "weekNumber": 1,
+          "weekStart": "sample text",
+          "block": 1,
+          "phase": "race_week",
+          "deload": true,
+          "counts": {
+            "easy": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1
+            },
+            "threshold": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1
+            },
+            "graded": 1,
+            "onTarget": 1,
+            "onTargetRate": 1.5,
+            "driftedHarder": 1,
+            "easyTooHard": 1,
+            "ungradeable": 1,
+            "pending": 1,
+            "plannedGradeable": 1
+          }
+        }
+      ],
+      "blocks": [
+        {
+          "block": 1,
+          "firstWeek": 1,
+          "lastWeek": 1,
+          "phases": [
+            "race_week"
+          ],
+          "includesDeload": true,
+          "counts": {
+            "easy": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1
+            },
+            "threshold": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1
+            },
+            "graded": 1,
+            "onTarget": 1,
+            "onTargetRate": 1.5,
+            "driftedHarder": 1,
+            "easyTooHard": 1,
+            "ungradeable": 1,
+            "pending": 1,
+            "plannedGradeable": 1
+          }
+        }
+      ],
+      "totals": {
+        "easy": {
+          "onTarget": 1,
+          "creptUp": 1,
+          "tooHard": 1,
+          "driftedHarder": 1,
+          "under": 1,
+          "inconclusive": 1,
+          "ungradeable": 1
+        },
+        "threshold": {
+          "onTarget": 1,
+          "creptUp": 1,
+          "tooHard": 1,
+          "driftedHarder": 1,
+          "under": 1,
+          "inconclusive": 1,
+          "ungradeable": 1
+        },
+        "graded": 1,
+        "onTarget": 1,
+        "onTargetRate": 1.5,
+        "driftedHarder": 1,
+        "easyTooHard": 1,
+        "ungradeable": 1,
+        "pending": 1,
+        "plannedGradeable": 1
+      }
+    },
+    "future": {
+      "plan": {
+        "id": "sample text",
+        "name": "sample text",
+        "totalWeeks": 1,
+        "startDate": "sample text",
+        "currentWeek": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "sessions": [
+        {
+          "workoutLogId": "sample text",
+          "planDayId": "sample text",
+          "planId": "sample text",
+          "date": "sample text",
+          "weekNumber": 1,
+          "title": "sample text",
+          "intent": "zz_value_from_a_newer_server",
+          "purpose": "zz_value_from_a_newer_server",
+          "intentReason": "sample text",
+          "verdict": "zz_value_from_a_newer_server",
+          "headline": "sample text",
+          "evidence": [
+            "sample text"
+          ],
+          "confidence": "zz_value_from_a_newer_server",
+          "dataSource": "zz_value_from_a_newer_server",
+          "streamStatus": "zz_value_from_a_newer_server",
+          "ungradeableReason": "zz_value_from_a_newer_server",
+          "targets": {
+            "easyCeilingHr": 1.5,
+            "thresholdHr": {
+              "min": 1.5,
+              "max": 1.5,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "z5FloorHr": 1.5,
+            "hrBasis": "zz_value_from_a_newer_server",
+            "easyPace": {
+              "fast": 1.5,
+              "slow": 1.5,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "thresholdPace": 1.5,
+            "paceSource": "zz_value_from_a_newer_server",
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "easy": {
+            "movingMinutes": 1.5,
+            "avgHr": 1.5,
+            "pctAboveCeiling": 1.5,
+            "firstThirdHr": 1.5,
+            "lastThirdHr": 1.5,
+            "hrDriftPct": 1.5,
+            "avgPaceSecPerKm": 1.5,
+            "pctFasterThanEasy": 1.5,
+            "excludedFinishMinutes": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "threshold": {
+            "segmentation": "zz_value_from_a_newer_server",
+            "workMinutes": 1.5,
+            "repCount": 1,
+            "workAvgPaceSecPerKm": 1.5,
+            "paceDeltaPct": 1.5,
+            "workAvgHr": 1.5,
+            "pctWorkZ4": 1.5,
+            "pctWorkZ5": 1.5,
+            "firstRepHr": 1.5,
+            "lastRepHr": 1.5,
+            "decouplingPct": 1.5,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "countsInRollup": true,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "weeks": [
+        {
+          "weekNumber": 1,
+          "weekStart": "sample text",
+          "block": 1,
+          "phase": "zz_value_from_a_newer_server",
+          "deload": true,
+          "counts": {
+            "easy": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "threshold": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "graded": 1,
+            "onTarget": 1,
+            "onTargetRate": 1.5,
+            "driftedHarder": 1,
+            "easyTooHard": 1,
+            "ungradeable": 1,
+            "pending": 1,
+            "plannedGradeable": 1,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "blocks": [
+        {
+          "block": 1,
+          "firstWeek": 1,
+          "lastWeek": 1,
+          "phases": [
+            "zz_value_from_a_newer_server"
+          ],
+          "includesDeload": true,
+          "counts": {
+            "easy": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "threshold": {
+              "onTarget": 1,
+              "creptUp": 1,
+              "tooHard": 1,
+              "driftedHarder": 1,
+              "under": 1,
+              "inconclusive": 1,
+              "ungradeable": 1,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "graded": 1,
+            "onTarget": 1,
+            "onTargetRate": 1.5,
+            "driftedHarder": 1,
+            "easyTooHard": 1,
+            "ungradeable": 1,
+            "pending": 1,
+            "plannedGradeable": 1,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          },
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        }
+      ],
+      "totals": {
+        "easy": {
+          "onTarget": 1,
+          "creptUp": 1,
+          "tooHard": 1,
+          "driftedHarder": 1,
+          "under": 1,
+          "inconclusive": 1,
+          "ungradeable": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "threshold": {
+          "onTarget": 1,
+          "creptUp": 1,
+          "tooHard": 1,
+          "driftedHarder": 1,
+          "under": 1,
+          "inconclusive": 1,
+          "ungradeable": 1,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "graded": 1,
+        "onTarget": 1,
+        "onTargetRate": 1.5,
+        "driftedHarder": 1,
+        "easyTooHard": 1,
+        "ungradeable": 1,
+        "pending": 1,
+        "plannedGradeable": 1,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

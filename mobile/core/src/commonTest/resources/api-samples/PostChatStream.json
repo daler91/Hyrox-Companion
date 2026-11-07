@@ -1,0 +1,191 @@
+{
+  "request": {
+    "min": {
+      "message": "a"
+    },
+    "max": {
+      "message": "sample text",
+      "history": [
+        {
+          "role": "assistant",
+          "content": "sample text"
+        }
+      ],
+      "planEditing": true,
+      "focusPlanDayId": "sample text",
+      "focusWorkoutLogId": "sample text",
+      "userMessageId": "sample text",
+      "assistantMessageId": "sample text",
+      "replaceAssistantId": "sample text",
+      "photo": {
+        "mimeType": "image/webp",
+        "imageBase64": "sample text"
+      }
+    }
+  },
+  "response": {
+    "min": {},
+    "max": {
+      "ragInfo": {
+        "source": "none",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text"
+      },
+      "safetyNotice": {
+        "level": "caution",
+        "message": "sample text"
+      },
+      "status": "searching_notes",
+      "text": "sample text",
+      "planProposal": {
+        "id": "sample text",
+        "planId": "sample text",
+        "status": "reverted",
+        "summaryMessage": "sample text",
+        "changes": [
+          {
+            "planDayId": "sample text",
+            "updatedFields": {
+              "focus": "sample text",
+              "mainWorkout": "sample text",
+              "accessory": "sample text",
+              "notes": "sample text",
+              "scheduledDate": "sample text",
+              "expectedDurationMin": 1,
+              "expectedRpe": 1
+            },
+            "rationale": "sample text",
+            "kind": "tune",
+            "dayLabel": "sample text",
+            "baseline": {
+              "focus": "sample text",
+              "mainWorkout": "sample text",
+              "accessory": "sample text",
+              "notes": "sample text",
+              "scheduledDate": "sample text",
+              "expectedDurationMin": 1.5,
+              "expectedRpe": 1.5,
+              "status": "sample text",
+              "fingerprint": "sample text"
+            },
+            "structured": true,
+            "hasStructureBlocks": true
+          }
+        ],
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "appliedPlanDayIds": [
+          "sample text"
+        ],
+        "undoable": true
+      },
+      "factProposal": {
+        "fact": "sample text",
+        "category": "other",
+        "status": "dismissed"
+      },
+      "done": true,
+      "error": "sample text",
+      "reason": "sample text"
+    },
+    "future": {
+      "ragInfo": {
+        "source": "zz_value_from_a_newer_server",
+        "chunkCount": 1,
+        "chunks": [
+          "sample text"
+        ],
+        "sources": [
+          "sample text"
+        ],
+        "materialCount": 1,
+        "fallbackReason": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "safetyNotice": {
+        "level": "zz_value_from_a_newer_server",
+        "message": "sample text",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "status": "zz_value_from_a_newer_server",
+      "text": "sample text",
+      "planProposal": {
+        "id": "sample text",
+        "planId": "sample text",
+        "status": "zz_value_from_a_newer_server",
+        "summaryMessage": "sample text",
+        "changes": [
+          {
+            "planDayId": "sample text",
+            "updatedFields": {
+              "focus": "sample text",
+              "mainWorkout": "sample text",
+              "accessory": "sample text",
+              "notes": "sample text",
+              "scheduledDate": "sample text",
+              "expectedDurationMin": 1,
+              "expectedRpe": 1,
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "rationale": "sample text",
+            "kind": "zz_value_from_a_newer_server",
+            "dayLabel": "sample text",
+            "baseline": {
+              "focus": "sample text",
+              "mainWorkout": "sample text",
+              "accessory": "sample text",
+              "notes": "sample text",
+              "scheduledDate": "sample text",
+              "expectedDurationMin": 1.5,
+              "expectedRpe": 1.5,
+              "status": "sample text",
+              "fingerprint": "sample text",
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            },
+            "structured": true,
+            "hasStructureBlocks": true,
+            "zzPropertyFromANewerServer": {
+              "added": true
+            }
+          }
+        ],
+        "createdAt": "2026-11-07T10:15:30.000Z",
+        "appliedPlanDayIds": [
+          "sample text"
+        ],
+        "undoable": true,
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "factProposal": {
+        "fact": "sample text",
+        "category": "zz_value_from_a_newer_server",
+        "status": "zz_value_from_a_newer_server",
+        "zzPropertyFromANewerServer": {
+          "added": true
+        }
+      },
+      "done": true,
+      "error": "sample text",
+      "reason": "sample text",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "request": {
+    "min": {
+      "mealType": "breakfast"
+    },
+    "max": {
+      "mealType": "post_workout",
+      "calories": 1.5,
+      "proteinG": 1.5,
+      "carbG": 1.5,
+      "fatG": 1.5,
+      "effectiveFrom": "sample text"
+    }
+  },
+  "response": {
+    "min": {
+      "id": "a",
+      "userId": "a",
+      "mealType": "breakfast",
+      "calories": null,
+      "proteinG": null,
+      "carbG": null,
+      "fatG": null,
+      "effectiveFrom": "2026-11-07"
+    },
+    "max": {
+      "id": "sample text",
+      "userId": "sample text",
+      "mealType": "post_workout",
+      "calories": 1.5,
+      "proteinG": 1.5,
+      "carbG": 1.5,
+      "fatG": 1.5,
+      "effectiveFrom": "2026-11-07"
+    },
+    "future": {
+      "id": "sample text",
+      "userId": "sample text",
+      "mealType": "zz_value_from_a_newer_server",
+      "calories": 1.5,
+      "proteinG": 1.5,
+      "carbG": 1.5,
+      "fatG": 1.5,
+      "effectiveFrom": "2026-11-07",
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}
