@@ -1,0 +1,328 @@
+{
+  "suite": "unitConversion.userDistanceToMeters",
+  "description": "A distance in km or miles in metres, as (value / KM_TO_MILES) * 1000 for miles.",
+  "cases": [
+    {
+      "input": [
+        1,
+        "miles"
+      ],
+      "output": 1609.344
+    },
+    {
+      "input": [
+        26.2,
+        "miles"
+      ],
+      "output": 42164.8128
+    },
+    {
+      "input": [
+        5,
+        "km"
+      ],
+      "output": 5000
+    },
+    {
+      "input": [
+        0.1,
+        "km"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        0,
+        "miles"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        -3,
+        "miles"
+      ],
+      "output": -4828.032
+    },
+    {
+      "input": [
+        -3,
+        "km"
+      ],
+      "output": -3000
+    },
+    {
+      "input": [
+        13.1,
+        "mi"
+      ],
+      "output": 21082.4064
+    },
+    {
+      "input": [
+        1,
+        null
+      ],
+      "output": 1000
+    },
+    {
+      "input": [
+        1,
+        "m"
+      ],
+      "output": 1000
+    },
+    {
+      "input": [
+        1,
+        "constructor"
+      ],
+      "output": 1000
+    },
+    {
+      "input": [
+        1,
+        "__proto__"
+      ],
+      "output": 1000
+    },
+    {
+      "input": [
+        -52.39885300397873,
+        "miles"
+      ],
+      "output": -84327.77968883514
+    },
+    {
+      "input": [
+        46.41714687459171,
+        "miles"
+      ],
+      "output": 74701.15681974292
+    },
+    {
+      "input": [
+        -51.3849756680429,
+        "miles"
+      ],
+      "output": -82696.10228151083
+    },
+    {
+      "input": [
+        70.58974546380341,
+        "miles"
+      ],
+      "output": 113603.18332369924
+    },
+    {
+      "input": [
+        43.28173194080591,
+        "miles"
+      ],
+      "output": 69655.19560854435
+    },
+    {
+      "input": [
+        -27.92763547040522,
+        "miles"
+      ],
+      "output": -44945.17257848382
+    },
+    {
+      "input": [
+        -0.2177816815674305,
+        "miles"
+      ],
+      "output": -350.4856425404549
+    },
+    {
+      "input": [
+        -55.8399164583534,
+        "miles"
+      ],
+      "output": -89865.6345127523
+    },
+    {
+      "input": [
+        -89.7292461246252,
+        "miles"
+      ],
+      "output": -144405.22387518882
+    },
+    {
+      "input": [
+        73.80800279788673,
+        "miles"
+      ],
+      "output": 118782.46645476222
+    },
+    {
+      "input": [
+        -86.92925302311778,
+        "miles"
+      ],
+      "output": -139899.07177723644
+    },
+    {
+      "input": [
+        -67.6747105550021,
+        "miles"
+      ],
+      "output": -108911.8893834293
+    },
+    {
+      "input": [
+        -0.3729702904820442,
+        "miles"
+      ],
+      "output": -600.237499165535
+    },
+    {
+      "input": [
+        28.840829944238067,
+        "miles"
+      ],
+      "output": 46414.81662577987
+    },
+    {
+      "input": [
+        -70.32347256317735,
+        "miles"
+      ],
+      "output": -113174.65862871408
+    },
+    {
+      "input": [
+        69.04537179507315,
+        "miles"
+      ],
+      "output": 111117.75482617022
+    },
+    {
+      "input": [
+        -5.299211293458939,
+        "miles"
+      ],
+      "output": -8528.253899860383
+    },
+    {
+      "input": [
+        -22.464650170877576,
+        "miles"
+      ],
+      "output": -36153.3499646008
+    },
+    {
+      "input": [
+        75.3879145719111,
+        "miles"
+      ],
+      "output": 121325.0879888177
+    },
+    {
+      "input": [
+        -84.28359511308372,
+        "miles"
+      ],
+      "output": -135641.2980936706
+    },
+    {
+      "input": [
+        "NaN",
+        "km"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "NaN",
+        "miles"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "Infinity",
+        "km"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "Infinity",
+        "miles"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "km"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "miles"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        "km"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        "miles"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        -1e+308,
+        "km"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        -1e+308,
+        "miles"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        5e-324,
+        "km"
+      ],
+      "output": 4.94e-321
+    },
+    {
+      "input": [
+        5e-324,
+        "miles"
+      ],
+      "output": 9.88e-321
+    },
+    {
+      "input": [
+        1e-300,
+        "km"
+      ],
+      "output": 1e-297
+    },
+    {
+      "input": [
+        1e-300,
+        "miles"
+      ],
+      "output": 1.609344e-297
+    }
+  ]
+}

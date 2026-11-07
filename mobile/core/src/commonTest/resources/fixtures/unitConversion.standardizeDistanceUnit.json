@@ -1,0 +1,278 @@
+{
+  "suite": "unitConversion.standardizeDistanceUnit",
+  "description": "A distance preference spelling to km or miles; null, empty, unknown, m, ft and kilometre are km.",
+  "cases": [
+    {
+      "input": null,
+      "output": "km"
+    },
+    {
+      "input": "",
+      "output": "km"
+    },
+    {
+      "input": " ",
+      "output": "km"
+    },
+    {
+      "input": "KG",
+      "output": "km"
+    },
+    {
+      "input": "kg",
+      "output": "km"
+    },
+    {
+      "input": "kgs",
+      "output": "km"
+    },
+    {
+      "input": "kilo",
+      "output": "km"
+    },
+    {
+      "input": "kilos",
+      "output": "km"
+    },
+    {
+      "input": "kilogram",
+      "output": "km"
+    },
+    {
+      "input": "Kilograms",
+      "output": "km"
+    },
+    {
+      "input": " lbs ",
+      "output": "km"
+    },
+    {
+      "input": "lb",
+      "output": "km"
+    },
+    {
+      "input": "LBS",
+      "output": "km"
+    },
+    {
+      "input": "Pound",
+      "output": "km"
+    },
+    {
+      "input": "pounds",
+      "output": "km"
+    },
+    {
+      "input": "stone",
+      "output": "km"
+    },
+    {
+      "input": "stones",
+      "output": "km"
+    },
+    {
+      "input": "mi",
+      "output": "miles"
+    },
+    {
+      "input": "MI",
+      "output": "miles"
+    },
+    {
+      "input": "mile",
+      "output": "miles"
+    },
+    {
+      "input": "Miles",
+      "output": "miles"
+    },
+    {
+      "input": "km",
+      "output": "km"
+    },
+    {
+      "input": "KMS",
+      "output": "km"
+    },
+    {
+      "input": "kilometer",
+      "output": "km"
+    },
+    {
+      "input": "kilometers",
+      "output": "km"
+    },
+    {
+      "input": "kilometre",
+      "output": "km"
+    },
+    {
+      "input": "Kilometres",
+      "output": "km"
+    },
+    {
+      "input": "m",
+      "output": "km"
+    },
+    {
+      "input": "M",
+      "output": "km"
+    },
+    {
+      "input": "meter",
+      "output": "km"
+    },
+    {
+      "input": "meters",
+      "output": "km"
+    },
+    {
+      "input": "metre",
+      "output": "km"
+    },
+    {
+      "input": "metres",
+      "output": "km"
+    },
+    {
+      "input": "ft",
+      "output": "km"
+    },
+    {
+      "input": "FT",
+      "output": "km"
+    },
+    {
+      "input": "foot",
+      "output": "km"
+    },
+    {
+      "input": "feet",
+      "output": "km"
+    },
+    {
+      "input": "yards",
+      "output": "km"
+    },
+    {
+      "input": "k g",
+      "output": "km"
+    },
+    {
+      "input": "kg.",
+      "output": "km"
+    },
+    {
+      "input": "\tLBS\n",
+      "output": "km"
+    },
+    {
+      "input": "\u000bmiles\f",
+      "output": "miles"
+    },
+    {
+      "input": " lbs　",
+      "output": "km"
+    },
+    {
+      "input": "﻿lbs",
+      "output": "km"
+    },
+    {
+      "input": "﻿mi",
+      "output": "miles"
+    },
+    {
+      "input": "﻿ft",
+      "output": "km"
+    },
+    {
+      "input": " mi ",
+      "output": "miles"
+    },
+    {
+      "input": " m ",
+      "output": "km"
+    },
+    {
+      "input": "\u001clbs",
+      "output": "km"
+    },
+    {
+      "input": "\u001fmi",
+      "output": "km"
+    },
+    {
+      "input": "\u001cft",
+      "output": "km"
+    },
+    {
+      "input": "lbs",
+      "output": "km"
+    },
+    {
+      "input": "​lbs",
+      "output": "km"
+    },
+    {
+      "input": "᠎mi",
+      "output": "km"
+    },
+    {
+      "input": "Km",
+      "output": "km"
+    },
+    {
+      "input": "KMS",
+      "output": "km"
+    },
+    {
+      "input": "KG",
+      "output": "km"
+    },
+    {
+      "input": "constructor",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": " Constructor ",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": "__proto__",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": "__PROTO__",
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": "toString",
+      "output": "km"
+    },
+    {
+      "input": "tostring",
+      "output": "km"
+    },
+    {
+      "input": "hasOwnProperty",
+      "output": "km"
+    },
+    {
+      "input": "valueOf",
+      "output": "km"
+    },
+    {
+      "input": "prototype",
+      "output": "km"
+    }
+  ]
+}

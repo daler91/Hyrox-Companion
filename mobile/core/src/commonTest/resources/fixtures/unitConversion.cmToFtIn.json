@@ -1,0 +1,391 @@
+{
+  "suite": "unitConversion.cmToFtIn",
+  "description": "Centimetres to whole feet and inches: Math.round to the inch, then Math.floor and JS % (negative heights keep the sign).",
+  "cases": [
+    {
+      "input": 180,
+      "output": {
+        "feet": 5,
+        "inches": 11
+      }
+    },
+    {
+      "input": 182.88,
+      "output": {
+        "feet": 6,
+        "inches": 0
+      }
+    },
+    {
+      "input": 152.4,
+      "output": {
+        "feet": 5,
+        "inches": 0
+      }
+    },
+    {
+      "input": 0,
+      "output": {
+        "feet": 0,
+        "inches": 0
+      }
+    },
+    {
+      "input": 1.27,
+      "output": {
+        "feet": 0,
+        "inches": 1
+      }
+    },
+    {
+      "input": 3.81,
+      "output": {
+        "feet": 0,
+        "inches": 2
+      }
+    },
+    {
+      "input": -2.54,
+      "output": {
+        "feet": -1,
+        "inches": -1
+      }
+    },
+    {
+      "input": -1.27,
+      "output": {
+        "feet": 0,
+        "inches": 0
+      }
+    },
+    {
+      "input": 29.21,
+      "output": {
+        "feet": 1,
+        "inches": 0
+      }
+    },
+    {
+      "input": 175,
+      "output": {
+        "feet": 5,
+        "inches": 9
+      }
+    },
+    {
+      "input": 200,
+      "output": {
+        "feet": 6,
+        "inches": 7
+      }
+    },
+    {
+      "input": 250.19,
+      "output": {
+        "feet": 8,
+        "inches": 3
+      }
+    },
+    {
+      "input": 30.48,
+      "output": {
+        "feet": 1,
+        "inches": 0
+      }
+    },
+    {
+      "input": -30.48,
+      "output": {
+        "feet": -1,
+        "inches": 0
+      }
+    },
+    {
+      "input": -31.75,
+      "output": {
+        "feet": -1,
+        "inches": 0
+      }
+    },
+    {
+      "input": -33.02,
+      "output": {
+        "feet": -2,
+        "inches": -1
+      }
+    },
+    {
+      "input": 0.0001,
+      "output": {
+        "feet": 0,
+        "inches": 0
+      }
+    },
+    {
+      "input": 10000000000,
+      "output": {
+        "feet": 328083989,
+        "inches": 6
+      }
+    },
+    {
+      "input": -130.2220276556909,
+      "output": {
+        "feet": -5,
+        "inches": -3
+      }
+    },
+    {
+      "input": -202.5496024871245,
+      "output": {
+        "feet": -7,
+        "inches": -8
+      }
+    },
+    {
+      "input": 240.95410550944507,
+      "output": {
+        "feet": 7,
+        "inches": 11
+      }
+    },
+    {
+      "input": -249.49290452059358,
+      "output": {
+        "feet": -9,
+        "inches": -2
+      }
+    },
+    {
+      "input": -58.863154612481594,
+      "output": {
+        "feet": -2,
+        "inches": -11
+      }
+    },
+    {
+      "input": -74.3973545031622,
+      "output": {
+        "feet": -3,
+        "inches": -5
+      }
+    },
+    {
+      "input": -138.47038964740932,
+      "output": {
+        "feet": -5,
+        "inches": -7
+      }
+    },
+    {
+      "input": 192.70613242406398,
+      "output": {
+        "feet": 6,
+        "inches": 4
+      }
+    },
+    {
+      "input": -206.89284848049283,
+      "output": {
+        "feet": -7,
+        "inches": -9
+      }
+    },
+    {
+      "input": -200.5830059060827,
+      "output": {
+        "feet": -7,
+        "inches": -7
+      }
+    },
+    {
+      "input": 190.128164133057,
+      "output": {
+        "feet": 6,
+        "inches": 3
+      }
+    },
+    {
+      "input": 200.43756312225014,
+      "output": {
+        "feet": 6,
+        "inches": 7
+      }
+    },
+    {
+      "input": -47.20995016396046,
+      "output": {
+        "feet": -2,
+        "inches": -7
+      }
+    },
+    {
+      "input": -24.262679857201874,
+      "output": {
+        "feet": -1,
+        "inches": -10
+      }
+    },
+    {
+      "input": -219.1553225275129,
+      "output": {
+        "feet": -8,
+        "inches": -2
+      }
+    },
+    {
+      "input": 104.80387799907476,
+      "output": {
+        "feet": 3,
+        "inches": 5
+      }
+    },
+    {
+      "input": -206.93960366770625,
+      "output": {
+        "feet": -7,
+        "inches": -9
+      }
+    },
+    {
+      "input": -25.761002325452864,
+      "output": {
+        "feet": -1,
+        "inches": -10
+      }
+    },
+    {
+      "input": -214.3617880064994,
+      "output": {
+        "feet": -7,
+        "inches": 0
+      }
+    },
+    {
+      "input": 62.85246799234301,
+      "output": {
+        "feet": 2,
+        "inches": 1
+      }
+    },
+    {
+      "input": 122.31894116848707,
+      "output": {
+        "feet": 4,
+        "inches": 0
+      }
+    },
+    {
+      "input": 53.58246236573905,
+      "output": {
+        "feet": 1,
+        "inches": 9
+      }
+    },
+    {
+      "input": -33.796681789681315,
+      "output": {
+        "feet": -2,
+        "inches": -1
+      }
+    },
+    {
+      "input": 196.27801713068038,
+      "output": {
+        "feet": 6,
+        "inches": 5
+      }
+    },
+    {
+      "input": -215.50156781449914,
+      "output": {
+        "feet": -8,
+        "inches": -1
+      }
+    },
+    {
+      "input": -129.13244275841862,
+      "output": {
+        "feet": -5,
+        "inches": -3
+      }
+    },
+    {
+      "input": -61.24847033061087,
+      "output": {
+        "feet": -2,
+        "inches": 0
+      }
+    },
+    {
+      "input": 7.956926361657679,
+      "output": {
+        "feet": 0,
+        "inches": 3
+      }
+    },
+    {
+      "input": 120.88612467050552,
+      "output": {
+        "feet": 4,
+        "inches": 0
+      }
+    },
+    {
+      "input": 94.70115962903947,
+      "output": {
+        "feet": 3,
+        "inches": 1
+      }
+    },
+    {
+      "input": "NaN",
+      "output": {
+        "feet": "NaN",
+        "inches": "NaN"
+      }
+    },
+    {
+      "input": "Infinity",
+      "output": {
+        "feet": "Infinity",
+        "inches": "NaN"
+      }
+    },
+    {
+      "input": "-Infinity",
+      "output": {
+        "feet": "-Infinity",
+        "inches": "NaN"
+      }
+    },
+    {
+      "input": 1e+308,
+      "output": {
+        "feet": 3.280839895013123e+306,
+        "inches": 4
+      }
+    },
+    {
+      "input": -1e+308,
+      "output": {
+        "feet": -3.280839895013123e+306,
+        "inches": -4
+      }
+    },
+    {
+      "input": 5e-324,
+      "output": {
+        "feet": 0,
+        "inches": 0
+      }
+    },
+    {
+      "input": 1e-300,
+      "output": {
+        "feet": 0,
+        "inches": 0
+      }
+    }
+  ]
+}

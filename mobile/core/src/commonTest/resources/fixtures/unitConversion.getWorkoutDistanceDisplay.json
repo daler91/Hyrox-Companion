@@ -1,0 +1,2272 @@
+{
+  "suite": "unitConversion.getWorkoutDistanceDisplay",
+  "description": "How the set editor shows a stored distance: metres for km; for miles, whole-kilometre metres, else miles (2 dp) from a mile, else feet.",
+  "cases": [
+    {
+      "input": [
+        1000,
+        "km"
+      ],
+      "output": {
+        "value": 1000,
+        "unit": "m",
+        "text": "1000 m"
+      }
+    },
+    {
+      "input": [
+        1000.4,
+        "km"
+      ],
+      "output": {
+        "value": 1000,
+        "unit": "m",
+        "text": "1000 m"
+      }
+    },
+    {
+      "input": [
+        10000000,
+        "km"
+      ],
+      "output": {
+        "value": 10000000,
+        "unit": "m",
+        "text": "10000000 m"
+      }
+    },
+    {
+      "input": [
+        3280.84,
+        "miles"
+      ],
+      "output": {
+        "value": 1000,
+        "unit": "m",
+        "text": "1000 m"
+      }
+    },
+    {
+      "input": [
+        3281,
+        "miles"
+      ],
+      "output": {
+        "value": 1000,
+        "unit": "m",
+        "text": "1000 m"
+      }
+    },
+    {
+      "input": [
+        5280,
+        "miles"
+      ],
+      "output": {
+        "value": 1,
+        "unit": "mi",
+        "text": "1 mi"
+      }
+    },
+    {
+      "input": [
+        7920,
+        "miles"
+      ],
+      "output": {
+        "value": 1.5,
+        "unit": "mi",
+        "text": "1.5 mi"
+      }
+    },
+    {
+      "input": [
+        5306.4,
+        "miles"
+      ],
+      "output": {
+        "value": 1,
+        "unit": "mi",
+        "text": "1 mi"
+      }
+    },
+    {
+      "input": [
+        5279.9,
+        "miles"
+      ],
+      "output": {
+        "value": 5280,
+        "unit": "ft",
+        "text": "5280 ft"
+      }
+    },
+    {
+      "input": [
+        1640.42,
+        "miles"
+      ],
+      "output": {
+        "value": 1640,
+        "unit": "ft",
+        "text": "1640 ft"
+      }
+    },
+    {
+      "input": [
+        100,
+        "miles"
+      ],
+      "output": {
+        "value": 100,
+        "unit": "ft",
+        "text": "100 ft"
+      }
+    },
+    {
+      "input": [
+        0,
+        "miles"
+      ],
+      "output": {
+        "value": 0,
+        "unit": "ft",
+        "text": "0 ft"
+      }
+    },
+    {
+      "input": [
+        -3280.84,
+        "miles"
+      ],
+      "output": {
+        "value": -1000,
+        "unit": "m",
+        "text": "-1000 m"
+      }
+    },
+    {
+      "input": [
+        15840,
+        "miles"
+      ],
+      "output": {
+        "value": 3,
+        "unit": "mi",
+        "text": "3 mi"
+      }
+    },
+    {
+      "input": [
+        16404,
+        "miles"
+      ],
+      "output": {
+        "value": 5000,
+        "unit": "m",
+        "text": "5000 m"
+      }
+    },
+    {
+      "input": [
+        164,
+        "miles"
+      ],
+      "output": {
+        "value": 164,
+        "unit": "ft",
+        "text": "164 ft"
+      }
+    },
+    {
+      "input": [
+        5000,
+        "km"
+      ],
+      "output": {
+        "value": 5000,
+        "unit": "m",
+        "text": "5000 m"
+      }
+    },
+    {
+      "input": [
+        1000.5,
+        "km"
+      ],
+      "output": {
+        "value": 1001,
+        "unit": "m",
+        "text": "1001 m"
+      }
+    },
+    {
+      "input": [
+        -0.5,
+        "km"
+      ],
+      "output": {
+        "value": 0,
+        "unit": "m",
+        "text": "0 m"
+      }
+    },
+    {
+      "input": [
+        -1.5,
+        "km"
+      ],
+      "output": {
+        "value": -1,
+        "unit": "m",
+        "text": "-1 m"
+      }
+    },
+    {
+      "input": [
+        0.4,
+        "km"
+      ],
+      "output": {
+        "value": 0,
+        "unit": "m",
+        "text": "0 m"
+      }
+    },
+    {
+      "input": [
+        0,
+        "km"
+      ],
+      "output": {
+        "value": 0,
+        "unit": "m",
+        "text": "0 m"
+      }
+    },
+    {
+      "input": [
+        3280.3,
+        "miles"
+      ],
+      "output": {
+        "value": 1000,
+        "unit": "m",
+        "text": "1000 m"
+      }
+    },
+    {
+      "input": [
+        3279,
+        "miles"
+      ],
+      "output": {
+        "value": 3279,
+        "unit": "ft",
+        "text": "3279 ft"
+      }
+    },
+    {
+      "input": [
+        3282.5,
+        "miles"
+      ],
+      "output": {
+        "value": 3283,
+        "unit": "ft",
+        "text": "3283 ft"
+      }
+    },
+    {
+      "input": [
+        1640.4,
+        "miles"
+      ],
+      "output": {
+        "value": 1640,
+        "unit": "ft",
+        "text": "1640 ft"
+      }
+    },
+    {
+      "input": [
+        6561.68,
+        "miles"
+      ],
+      "output": {
+        "value": 2000,
+        "unit": "m",
+        "text": "2000 m"
+      }
+    },
+    {
+      "input": [
+        14124,
+        "miles"
+      ],
+      "output": {
+        "value": 2.67,
+        "unit": "mi",
+        "text": "2.67 mi"
+      }
+    },
+    {
+      "input": [
+        6626.4,
+        "miles"
+      ],
+      "output": {
+        "value": 1.25,
+        "unit": "mi",
+        "text": "1.25 mi"
+      }
+    },
+    {
+      "input": [
+        -5280,
+        "miles"
+      ],
+      "output": {
+        "value": -1,
+        "unit": "mi",
+        "text": "-1 mi"
+      }
+    },
+    {
+      "input": [
+        -7920,
+        "miles"
+      ],
+      "output": {
+        "value": -1.5,
+        "unit": "mi",
+        "text": "-1.5 mi"
+      }
+    },
+    {
+      "input": [
+        -100,
+        "miles"
+      ],
+      "output": {
+        "value": -100,
+        "unit": "ft",
+        "text": "-100 ft"
+      }
+    },
+    {
+      "input": [
+        -5279.9,
+        "miles"
+      ],
+      "output": {
+        "value": -5280,
+        "unit": "ft",
+        "text": "-5280 ft"
+      }
+    },
+    {
+      "input": [
+        -5306.4,
+        "miles"
+      ],
+      "output": {
+        "value": -1,
+        "unit": "mi",
+        "text": "-1 mi"
+      }
+    },
+    {
+      "input": [
+        5280,
+        "mi"
+      ],
+      "output": {
+        "value": 1,
+        "unit": "mi",
+        "text": "1 mi"
+      }
+    },
+    {
+      "input": [
+        5280,
+        " MILES "
+      ],
+      "output": {
+        "value": 1,
+        "unit": "mi",
+        "text": "1 mi"
+      }
+    },
+    {
+      "input": [
+        5280,
+        null
+      ],
+      "output": {
+        "value": 5280,
+        "unit": "m",
+        "text": "5280 m"
+      }
+    },
+    {
+      "input": [
+        5280,
+        ""
+      ],
+      "output": {
+        "value": 5280,
+        "unit": "m",
+        "text": "5280 m"
+      }
+    },
+    {
+      "input": [
+        5280,
+        "feet"
+      ],
+      "output": {
+        "value": 5280,
+        "unit": "m",
+        "text": "5280 m"
+      }
+    },
+    {
+      "input": [
+        5280,
+        "constructor"
+      ],
+      "output": {
+        "value": 1,
+        "unit": "mi",
+        "text": "1 mi"
+      }
+    },
+    {
+      "input": [
+        5280,
+        "__proto__"
+      ],
+      "output": {
+        "value": 1,
+        "unit": "mi",
+        "text": "1 mi"
+      }
+    },
+    {
+      "input": [
+        1e-300,
+        "miles"
+      ],
+      "output": {
+        "value": 0,
+        "unit": "ft",
+        "text": "0 ft"
+      }
+    },
+    {
+      "input": [
+        1e-300,
+        "km"
+      ],
+      "output": {
+        "value": 0,
+        "unit": "m",
+        "text": "0 m"
+      }
+    },
+    {
+      "input": [
+        100000000000000000000,
+        "km"
+      ],
+      "output": {
+        "value": 100000000000000000000,
+        "unit": "m",
+        "text": "100000000000000000000 m"
+      }
+    },
+    {
+      "input": [
+        1e+21,
+        "km"
+      ],
+      "output": {
+        "value": 1e+21,
+        "unit": "m",
+        "text": "1e+21 m"
+      }
+    },
+    {
+      "input": [
+        1.5e+21,
+        "km"
+      ],
+      "output": {
+        "value": 1.5e+21,
+        "unit": "m",
+        "text": "1.5e+21 m"
+      }
+    },
+    {
+      "input": [
+        -1.5e+21,
+        "km"
+      ],
+      "output": {
+        "value": -1.5e+21,
+        "unit": "m",
+        "text": "-1.5e+21 m"
+      }
+    },
+    {
+      "input": [
+        1.7976931348623157e+308,
+        "km"
+      ],
+      "output": {
+        "value": 1.7976931348623157e+308,
+        "unit": "m",
+        "text": "1.7976931348623157e+308 m"
+      }
+    },
+    {
+      "input": [
+        123456789012345680000,
+        "km"
+      ],
+      "output": {
+        "value": 123456789012345680000,
+        "unit": "m",
+        "text": "123456789012345680000 m"
+      }
+    },
+    {
+      "input": [
+        9007199254740994,
+        "km"
+      ],
+      "output": {
+        "value": 9007199254740994,
+        "unit": "m",
+        "text": "9007199254740994 m"
+      }
+    },
+    {
+      "input": [
+        10000000000000004,
+        "km"
+      ],
+      "output": {
+        "value": 10000000000000004,
+        "unit": "m",
+        "text": "10000000000000004 m"
+      }
+    },
+    {
+      "input": [
+        999999999999999.5,
+        "km"
+      ],
+      "output": {
+        "value": 1000000000000000,
+        "unit": "m",
+        "text": "1000000000000000 m"
+      }
+    },
+    {
+      "input": [
+        1e+25,
+        "miles"
+      ],
+      "output": {
+        "value": 3.0479999024640034e+24,
+        "unit": "m",
+        "text": "3.0479999024640034e+24 m"
+      }
+    },
+    {
+      "input": [
+        5.28e+24,
+        "miles"
+      ],
+      "output": {
+        "value": 1.6093439485009937e+24,
+        "unit": "m",
+        "text": "1.6093439485009937e+24 m"
+      }
+    },
+    {
+      "input": [
+        52800000000001580,
+        "miles"
+      ],
+      "output": {
+        "value": 10000000000000.3,
+        "unit": "mi",
+        "text": "10000000000000.3 mi"
+      }
+    },
+    {
+      "input": [
+        65185184598518160,
+        "miles"
+      ],
+      "output": {
+        "value": 12345678901234.5,
+        "unit": "mi",
+        "text": "12345678901234.5 mi"
+      }
+    },
+    {
+      "input": [
+        5280000000000000000,
+        "miles"
+      ],
+      "output": {
+        "value": 1000000000000000,
+        "unit": "mi",
+        "text": "1000000000000000 mi"
+      }
+    },
+    {
+      "input": [
+        1.056e+24,
+        "miles"
+      ],
+      "output": {
+        "value": 3.218687897001987e+23,
+        "unit": "m",
+        "text": "3.218687897001987e+23 m"
+      }
+    },
+    {
+      "input": [
+        1.7976931348623157e+308,
+        "miles"
+      ],
+      "output": {
+        "value": 5.479368499720546e+307,
+        "unit": "m",
+        "text": "5.479368499720546e+307 m"
+      }
+    },
+    {
+      "input": [
+        -1.7976931348623157e+308,
+        "miles"
+      ],
+      "output": {
+        "value": -5.479368499720546e+307,
+        "unit": "m",
+        "text": "-5.479368499720546e+307 m"
+      }
+    },
+    {
+      "input": [
+        "NaN",
+        "km"
+      ],
+      "output": {
+        "value": "NaN",
+        "unit": "m",
+        "text": "NaN m"
+      }
+    },
+    {
+      "input": [
+        "NaN",
+        "miles"
+      ],
+      "output": {
+        "value": "NaN",
+        "unit": "ft",
+        "text": "NaN ft"
+      }
+    },
+    {
+      "input": [
+        "Infinity",
+        "km"
+      ],
+      "output": {
+        "value": "Infinity",
+        "unit": "m",
+        "text": "Infinity m"
+      }
+    },
+    {
+      "input": [
+        "Infinity",
+        "miles"
+      ],
+      "output": {
+        "value": "Infinity",
+        "unit": "mi",
+        "text": "Infinity mi"
+      }
+    },
+    {
+      "input": [
+        "-Infinity",
+        "km"
+      ],
+      "output": {
+        "value": "-Infinity",
+        "unit": "m",
+        "text": "-Infinity m"
+      }
+    },
+    {
+      "input": [
+        "-Infinity",
+        "miles"
+      ],
+      "output": {
+        "value": "-Infinity",
+        "unit": "mi",
+        "text": "-Infinity mi"
+      }
+    },
+    {
+      "input": [
+        -50538.601353764534,
+        "miles"
+      ],
+      "output": {
+        "value": -9.57,
+        "unit": "mi",
+        "text": "-9.57 mi"
+      }
+    },
+    {
+      "input": [
+        81795.21965794265,
+        "miles"
+      ],
+      "output": {
+        "value": 15.49,
+        "unit": "mi",
+        "text": "15.49 mi"
+      }
+    },
+    {
+      "input": [
+        35214.73156288266,
+        "miles"
+      ],
+      "output": {
+        "value": 6.67,
+        "unit": "mi",
+        "text": "6.67 mi"
+      }
+    },
+    {
+      "input": [
+        48268.30183155835,
+        "miles"
+      ],
+      "output": {
+        "value": 9.14,
+        "unit": "mi",
+        "text": "9.14 mi"
+      }
+    },
+    {
+      "input": [
+        42319.769226014614,
+        "miles"
+      ],
+      "output": {
+        "value": 8.02,
+        "unit": "mi",
+        "text": "8.02 mi"
+      }
+    },
+    {
+      "input": [
+        -38915.47345556319,
+        "miles"
+      ],
+      "output": {
+        "value": -7.37,
+        "unit": "mi",
+        "text": "-7.37 mi"
+      }
+    },
+    {
+      "input": [
+        68759.97325405478,
+        "miles"
+      ],
+      "output": {
+        "value": 13.02,
+        "unit": "mi",
+        "text": "13.02 mi"
+      }
+    },
+    {
+      "input": [
+        -58305.699890479445,
+        "miles"
+      ],
+      "output": {
+        "value": -11.04,
+        "unit": "mi",
+        "text": "-11.04 mi"
+      }
+    },
+    {
+      "input": [
+        -47896.60573005676,
+        "miles"
+      ],
+      "output": {
+        "value": -9.07,
+        "unit": "mi",
+        "text": "-9.07 mi"
+      }
+    },
+    {
+      "input": [
+        -50439.2281640321,
+        "miles"
+      ],
+      "output": {
+        "value": -9.55,
+        "unit": "mi",
+        "text": "-9.55 mi"
+      }
+    },
+    {
+      "input": [
+        90953.8590349257,
+        "miles"
+      ],
+      "output": {
+        "value": 17.23,
+        "unit": "mi",
+        "text": "17.23 mi"
+      }
+    },
+    {
+      "input": [
+        19423.704268410802,
+        "miles"
+      ],
+      "output": {
+        "value": 3.68,
+        "unit": "mi",
+        "text": "3.68 mi"
+      }
+    },
+    {
+      "input": [
+        88560.97105890512,
+        "miles"
+      ],
+      "output": {
+        "value": 16.77,
+        "unit": "mi",
+        "text": "16.77 mi"
+      }
+    },
+    {
+      "input": [
+        -2434.5813784748316,
+        "miles"
+      ],
+      "output": {
+        "value": -2435,
+        "unit": "ft",
+        "text": "-2435 ft"
+      }
+    },
+    {
+      "input": [
+        25644.588749855757,
+        "miles"
+      ],
+      "output": {
+        "value": 4.86,
+        "unit": "mi",
+        "text": "4.86 mi"
+      }
+    },
+    {
+      "input": [
+        -93697.55177758634,
+        "miles"
+      ],
+      "output": {
+        "value": -17.75,
+        "unit": "mi",
+        "text": "-17.75 mi"
+      }
+    },
+    {
+      "input": [
+        -70158.99233520031,
+        "miles"
+      ],
+      "output": {
+        "value": -13.29,
+        "unit": "mi",
+        "text": "-13.29 mi"
+      }
+    },
+    {
+      "input": [
+        50496.845273301005,
+        "miles"
+      ],
+      "output": {
+        "value": 9.56,
+        "unit": "mi",
+        "text": "9.56 mi"
+      }
+    },
+    {
+      "input": [
+        -91407.86407515407,
+        "miles"
+      ],
+      "output": {
+        "value": -17.31,
+        "unit": "mi",
+        "text": "-17.31 mi"
+      }
+    },
+    {
+      "input": [
+        -27736.10125295818,
+        "miles"
+      ],
+      "output": {
+        "value": -5.25,
+        "unit": "mi",
+        "text": "-5.25 mi"
+      }
+    },
+    {
+      "input": [
+        13275.514356791973,
+        "miles"
+      ],
+      "output": {
+        "value": 2.51,
+        "unit": "mi",
+        "text": "2.51 mi"
+      }
+    },
+    {
+      "input": [
+        72748.33372794092,
+        "miles"
+      ],
+      "output": {
+        "value": 13.78,
+        "unit": "mi",
+        "text": "13.78 mi"
+      }
+    },
+    {
+      "input": [
+        67412.09542378783,
+        "miles"
+      ],
+      "output": {
+        "value": 12.77,
+        "unit": "mi",
+        "text": "12.77 mi"
+      }
+    },
+    {
+      "input": [
+        -34651.12498961389,
+        "miles"
+      ],
+      "output": {
+        "value": -6.56,
+        "unit": "mi",
+        "text": "-6.56 mi"
+      }
+    },
+    {
+      "input": [
+        -16609.742492437363,
+        "miles"
+      ],
+      "output": {
+        "value": -3.15,
+        "unit": "mi",
+        "text": "-3.15 mi"
+      }
+    },
+    {
+      "input": [
+        -84408.62973220646,
+        "miles"
+      ],
+      "output": {
+        "value": -15.99,
+        "unit": "mi",
+        "text": "-15.99 mi"
+      }
+    },
+    {
+      "input": [
+        -27191.40639528632,
+        "miles"
+      ],
+      "output": {
+        "value": -5.15,
+        "unit": "mi",
+        "text": "-5.15 mi"
+      }
+    },
+    {
+      "input": [
+        71483.48060436547,
+        "miles"
+      ],
+      "output": {
+        "value": 13.54,
+        "unit": "mi",
+        "text": "13.54 mi"
+      }
+    },
+    {
+      "input": [
+        87766.57599955797,
+        "miles"
+      ],
+      "output": {
+        "value": 16.62,
+        "unit": "mi",
+        "text": "16.62 mi"
+      }
+    },
+    {
+      "input": [
+        -92870.74119783938,
+        "miles"
+      ],
+      "output": {
+        "value": -17.59,
+        "unit": "mi",
+        "text": "-17.59 mi"
+      }
+    },
+    {
+      "input": [
+        -23278.739023953676,
+        "miles"
+      ],
+      "output": {
+        "value": -4.41,
+        "unit": "mi",
+        "text": "-4.41 mi"
+      }
+    },
+    {
+      "input": [
+        4139.748075976968,
+        "miles"
+      ],
+      "output": {
+        "value": 4140,
+        "unit": "ft",
+        "text": "4140 ft"
+      }
+    },
+    {
+      "input": [
+        -38620.23986876011,
+        "miles"
+      ],
+      "output": {
+        "value": -7.31,
+        "unit": "mi",
+        "text": "-7.31 mi"
+      }
+    },
+    {
+      "input": [
+        92446.04664854705,
+        "miles"
+      ],
+      "output": {
+        "value": 17.51,
+        "unit": "mi",
+        "text": "17.51 mi"
+      }
+    },
+    {
+      "input": [
+        3011.267352849245,
+        "miles"
+      ],
+      "output": {
+        "value": 3011,
+        "unit": "ft",
+        "text": "3011 ft"
+      }
+    },
+    {
+      "input": [
+        -22995.904041454196,
+        "miles"
+      ],
+      "output": {
+        "value": -4.36,
+        "unit": "mi",
+        "text": "-4.36 mi"
+      }
+    },
+    {
+      "input": [
+        -9961.006976664066,
+        "miles"
+      ],
+      "output": {
+        "value": -1.89,
+        "unit": "mi",
+        "text": "-1.89 mi"
+      }
+    },
+    {
+      "input": [
+        -97924.23718608916,
+        "miles"
+      ],
+      "output": {
+        "value": -18.55,
+        "unit": "mi",
+        "text": "-18.55 mi"
+      }
+    },
+    {
+      "input": [
+        -93688.58048692346,
+        "miles"
+      ],
+      "output": {
+        "value": -17.74,
+        "unit": "mi",
+        "text": "-17.74 mi"
+      }
+    },
+    {
+      "input": [
+        62778.5983029753,
+        "miles"
+      ],
+      "output": {
+        "value": 11.89,
+        "unit": "mi",
+        "text": "11.89 mi"
+      }
+    },
+    {
+      "input": [
+        -6446.145474910736,
+        "miles"
+      ],
+      "output": {
+        "value": -1.22,
+        "unit": "mi",
+        "text": "-1.22 mi"
+      }
+    },
+    {
+      "input": [
+        76916.96877591312,
+        "miles"
+      ],
+      "output": {
+        "value": 14.57,
+        "unit": "mi",
+        "text": "14.57 mi"
+      }
+    },
+    {
+      "input": [
+        64665.32135382295,
+        "miles"
+      ],
+      "output": {
+        "value": 12.25,
+        "unit": "mi",
+        "text": "12.25 mi"
+      }
+    },
+    {
+      "input": [
+        91240.06670899689,
+        "miles"
+      ],
+      "output": {
+        "value": 17.28,
+        "unit": "mi",
+        "text": "17.28 mi"
+      }
+    },
+    {
+      "input": [
+        19252.38762050867,
+        "miles"
+      ],
+      "output": {
+        "value": 3.65,
+        "unit": "mi",
+        "text": "3.65 mi"
+      }
+    },
+    {
+      "input": [
+        -72282.37823583186,
+        "miles"
+      ],
+      "output": {
+        "value": -13.69,
+        "unit": "mi",
+        "text": "-13.69 mi"
+      }
+    },
+    {
+      "input": [
+        21580.596547573805,
+        "miles"
+      ],
+      "output": {
+        "value": 4.09,
+        "unit": "mi",
+        "text": "4.09 mi"
+      }
+    },
+    {
+      "input": [
+        89681.94485642016,
+        "miles"
+      ],
+      "output": {
+        "value": 16.99,
+        "unit": "mi",
+        "text": "16.99 mi"
+      }
+    },
+    {
+      "input": [
+        86475.72733461857,
+        "miles"
+      ],
+      "output": {
+        "value": 16.38,
+        "unit": "mi",
+        "text": "16.38 mi"
+      }
+    },
+    {
+      "input": [
+        57255.2505414933,
+        "miles"
+      ],
+      "output": {
+        "value": 10.84,
+        "unit": "mi",
+        "text": "10.84 mi"
+      }
+    },
+    {
+      "input": [
+        43121.173698455095,
+        "miles"
+      ],
+      "output": {
+        "value": 8.17,
+        "unit": "mi",
+        "text": "8.17 mi"
+      }
+    },
+    {
+      "input": [
+        -81135.9844636172,
+        "miles"
+      ],
+      "output": {
+        "value": -15.37,
+        "unit": "mi",
+        "text": "-15.37 mi"
+      }
+    },
+    {
+      "input": [
+        -27325.707860291004,
+        "miles"
+      ],
+      "output": {
+        "value": -5.18,
+        "unit": "mi",
+        "text": "-5.18 mi"
+      }
+    },
+    {
+      "input": [
+        -76662.55631484091,
+        "miles"
+      ],
+      "output": {
+        "value": -14.52,
+        "unit": "mi",
+        "text": "-14.52 mi"
+      }
+    },
+    {
+      "input": [
+        -94336.36600151658,
+        "miles"
+      ],
+      "output": {
+        "value": -17.87,
+        "unit": "mi",
+        "text": "-17.87 mi"
+      }
+    },
+    {
+      "input": [
+        7594.920182600617,
+        "miles"
+      ],
+      "output": {
+        "value": 1.44,
+        "unit": "mi",
+        "text": "1.44 mi"
+      }
+    },
+    {
+      "input": [
+        -18269.462138414383,
+        "miles"
+      ],
+      "output": {
+        "value": -3.46,
+        "unit": "mi",
+        "text": "-3.46 mi"
+      }
+    },
+    {
+      "input": [
+        70747.65036813915,
+        "miles"
+      ],
+      "output": {
+        "value": 13.4,
+        "unit": "mi",
+        "text": "13.4 mi"
+      }
+    },
+    {
+      "input": [
+        79942.621383816,
+        "miles"
+      ],
+      "output": {
+        "value": 15.14,
+        "unit": "mi",
+        "text": "15.14 mi"
+      }
+    },
+    {
+      "input": [
+        -60927.509097382426,
+        "miles"
+      ],
+      "output": {
+        "value": -11.54,
+        "unit": "mi",
+        "text": "-11.54 mi"
+      }
+    },
+    {
+      "input": [
+        -503835803.8291335,
+        "miles"
+      ],
+      "output": {
+        "value": -95423.45,
+        "unit": "mi",
+        "text": "-95423.45 mi"
+      }
+    },
+    {
+      "input": [
+        -819232742.767781,
+        "miles"
+      ],
+      "output": {
+        "value": -155157.72,
+        "unit": "mi",
+        "text": "-155157.72 mi"
+      }
+    },
+    {
+      "input": [
+        -909019595.0120687,
+        "miles"
+      ],
+      "output": {
+        "value": -172162.8,
+        "unit": "mi",
+        "text": "-172162.8 mi"
+      }
+    },
+    {
+      "input": [
+        630748481.9553792,
+        "miles"
+      ],
+      "output": {
+        "value": 119459.94,
+        "unit": "mi",
+        "text": "119459.94 mi"
+      }
+    },
+    {
+      "input": [
+        -910937276.6688466,
+        "miles"
+      ],
+      "output": {
+        "value": -172526,
+        "unit": "mi",
+        "text": "-172526 mi"
+      }
+    },
+    {
+      "input": [
+        601688733.7900698,
+        "miles"
+      ],
+      "output": {
+        "value": 113956.2,
+        "unit": "mi",
+        "text": "113956.2 mi"
+      }
+    },
+    {
+      "input": [
+        411747861.65356636,
+        "miles"
+      ],
+      "output": {
+        "value": 77982.55,
+        "unit": "mi",
+        "text": "77982.55 mi"
+      }
+    },
+    {
+      "input": [
+        -918445151.7648995,
+        "miles"
+      ],
+      "output": {
+        "value": -173947.95,
+        "unit": "mi",
+        "text": "-173947.95 mi"
+      }
+    },
+    {
+      "input": [
+        -444105523.63842726,
+        "miles"
+      ],
+      "output": {
+        "value": -84110.89,
+        "unit": "mi",
+        "text": "-84110.89 mi"
+      }
+    },
+    {
+      "input": [
+        -274598307.44192004,
+        "miles"
+      ],
+      "output": {
+        "value": -52007.26,
+        "unit": "mi",
+        "text": "-52007.26 mi"
+      }
+    },
+    {
+      "input": [
+        724441183.7309599,
+        "miles"
+      ],
+      "output": {
+        "value": 137204.77,
+        "unit": "mi",
+        "text": "137204.77 mi"
+      }
+    },
+    {
+      "input": [
+        933485721.7036188,
+        "miles"
+      ],
+      "output": {
+        "value": 176796.54,
+        "unit": "mi",
+        "text": "176796.54 mi"
+      }
+    },
+    {
+      "input": [
+        793054661.7135406,
+        "miles"
+      ],
+      "output": {
+        "value": 150199.75,
+        "unit": "mi",
+        "text": "150199.75 mi"
+      }
+    },
+    {
+      "input": [
+        -217075323.2203424,
+        "miles"
+      ],
+      "output": {
+        "value": -41112.75,
+        "unit": "mi",
+        "text": "-41112.75 mi"
+      }
+    },
+    {
+      "input": [
+        -830247394.7405815,
+        "miles"
+      ],
+      "output": {
+        "value": -157243.82,
+        "unit": "mi",
+        "text": "-157243.82 mi"
+      }
+    },
+    {
+      "input": [
+        927405379.2469203,
+        "miles"
+      ],
+      "output": {
+        "value": 175644.96,
+        "unit": "mi",
+        "text": "175644.96 mi"
+      }
+    },
+    {
+      "input": [
+        -88973074.2201209,
+        "miles"
+      ],
+      "output": {
+        "value": -16850.96,
+        "unit": "mi",
+        "text": "-16850.96 mi"
+      }
+    },
+    {
+      "input": [
+        565769698.9364922,
+        "miles"
+      ],
+      "output": {
+        "value": 107153.35,
+        "unit": "mi",
+        "text": "107153.35 mi"
+      }
+    },
+    {
+      "input": [
+        280258210.37590504,
+        "miles"
+      ],
+      "output": {
+        "value": 53079.21,
+        "unit": "mi",
+        "text": "53079.21 mi"
+      }
+    },
+    {
+      "input": [
+        -730238100.9794772,
+        "miles"
+      ],
+      "output": {
+        "value": -138302.67,
+        "unit": "mi",
+        "text": "-138302.67 mi"
+      }
+    },
+    {
+      "input": [
+        -49918517470359800,
+        "miles"
+      ],
+      "output": {
+        "value": -9454264672416.63,
+        "unit": "mi",
+        "text": "-9454264672416.63 mi"
+      }
+    },
+    {
+      "input": [
+        26921243919059636,
+        "miles"
+      ],
+      "output": {
+        "value": 5098720439215.84,
+        "unit": "mi",
+        "text": "5098720439215.84 mi"
+      }
+    },
+    {
+      "input": [
+        -69252032693475490,
+        "miles"
+      ],
+      "output": {
+        "value": -13115915282855.21,
+        "unit": "mi",
+        "text": "-13115915282855.21 mi"
+      }
+    },
+    {
+      "input": [
+        -92505512712523340,
+        "miles"
+      ],
+      "output": {
+        "value": -17519983468280.94,
+        "unit": "mi",
+        "text": "-17519983468280.94 mi"
+      }
+    },
+    {
+      "input": [
+        -91334218345582480,
+        "miles"
+      ],
+      "output": {
+        "value": -17298147413936.08,
+        "unit": "mi",
+        "text": "-17298147413936.08 mi"
+      }
+    },
+    {
+      "input": [
+        -42578086117282510,
+        "miles"
+      ],
+      "output": {
+        "value": -8064031461606.54,
+        "unit": "mi",
+        "text": "-8064031461606.54 mi"
+      }
+    },
+    {
+      "input": [
+        -41580775100737810,
+        "miles"
+      ],
+      "output": {
+        "value": -7875146799382.16,
+        "unit": "mi",
+        "text": "-7875146799382.16 mi"
+      }
+    },
+    {
+      "input": [
+        7539038965478539,
+        "miles"
+      ],
+      "output": {
+        "value": 1427848288916.39,
+        "unit": "mi",
+        "text": "1427848288916.39 mi"
+      }
+    },
+    {
+      "input": [
+        -33952392265200616,
+        "miles"
+      ],
+      "output": {
+        "value": -6430377322954.66,
+        "unit": "mi",
+        "text": "-6430377322954.66 mi"
+      }
+    },
+    {
+      "input": [
+        41478361515328290,
+        "miles"
+      ],
+      "output": {
+        "value": 7855750286993.99,
+        "unit": "mi",
+        "text": "7855750286993.99 mi"
+      }
+    },
+    {
+      "input": [
+        16914896387606860,
+        "miles"
+      ],
+      "output": {
+        "value": 3203578861289.18,
+        "unit": "mi",
+        "text": "3203578861289.18 mi"
+      }
+    },
+    {
+      "input": [
+        -84876824123784900,
+        "miles"
+      ],
+      "output": {
+        "value": -16075156084050.17,
+        "unit": "mi",
+        "text": "-16075156084050.17 mi"
+      }
+    },
+    {
+      "input": [
+        51538951508700850,
+        "miles"
+      ],
+      "output": {
+        "value": 9761165058466.07,
+        "unit": "mi",
+        "text": "9761165058466.07 mi"
+      }
+    },
+    {
+      "input": [
+        -79526385152712460,
+        "miles"
+      ],
+      "output": {
+        "value": -15061815369831.91,
+        "unit": "mi",
+        "text": "-15061815369831.91 mi"
+      }
+    },
+    {
+      "input": [
+        -9032724145799876,
+        "miles"
+      ],
+      "output": {
+        "value": -1710743209431.79,
+        "unit": "mi",
+        "text": "-1710743209431.79 mi"
+      }
+    },
+    {
+      "input": [
+        52054807031527160,
+        "miles"
+      ],
+      "output": {
+        "value": 9858864968092.27,
+        "unit": "mi",
+        "text": "9858864968092.27 mi"
+      }
+    },
+    {
+      "input": [
+        -25112252682447430,
+        "miles"
+      ],
+      "output": {
+        "value": -4756108462584.74,
+        "unit": "mi",
+        "text": "-4756108462584.74 mi"
+      }
+    },
+    {
+      "input": [
+        74817343754693870,
+        "miles"
+      ],
+      "output": {
+        "value": 14169951468692.02,
+        "unit": "mi",
+        "text": "14169951468692.02 mi"
+      }
+    },
+    {
+      "input": [
+        -13673123624175786,
+        "miles"
+      ],
+      "output": {
+        "value": -2589606747002.99,
+        "unit": "mi",
+        "text": "-2589606747002.99 mi"
+      }
+    },
+    {
+      "input": [
+        -8886936632916331,
+        "miles"
+      ],
+      "output": {
+        "value": -1683131938052.34,
+        "unit": "mi",
+        "text": "-1683131938052.34 mi"
+      }
+    },
+    {
+      "input": [
+        -496084755.28657436,
+        "km"
+      ],
+      "output": {
+        "value": -496084755,
+        "unit": "m",
+        "text": "-496084755 m"
+      }
+    },
+    {
+      "input": [
+        994842560.4961812,
+        "km"
+      ],
+      "output": {
+        "value": 994842560,
+        "unit": "m",
+        "text": "994842560 m"
+      }
+    },
+    {
+      "input": [
+        785145851.7834544,
+        "km"
+      ],
+      "output": {
+        "value": 785145852,
+        "unit": "m",
+        "text": "785145852 m"
+      }
+    },
+    {
+      "input": [
+        -628924199.8456419,
+        "km"
+      ],
+      "output": {
+        "value": -628924200,
+        "unit": "m",
+        "text": "-628924200 m"
+      }
+    },
+    {
+      "input": [
+        418387878.68618965,
+        "km"
+      ],
+      "output": {
+        "value": 418387879,
+        "unit": "m",
+        "text": "418387879 m"
+      }
+    },
+    {
+      "input": [
+        -444093924.4814217,
+        "km"
+      ],
+      "output": {
+        "value": -444093924,
+        "unit": "m",
+        "text": "-444093924 m"
+      }
+    },
+    {
+      "input": [
+        -967511492.7813411,
+        "km"
+      ],
+      "output": {
+        "value": -967511493,
+        "unit": "m",
+        "text": "-967511493 m"
+      }
+    },
+    {
+      "input": [
+        -595385916.0654247,
+        "km"
+      ],
+      "output": {
+        "value": -595385916,
+        "unit": "m",
+        "text": "-595385916 m"
+      }
+    },
+    {
+      "input": [
+        -269802855.3277254,
+        "km"
+      ],
+      "output": {
+        "value": -269802855,
+        "unit": "m",
+        "text": "-269802855 m"
+      }
+    },
+    {
+      "input": [
+        874371563.5500848,
+        "km"
+      ],
+      "output": {
+        "value": 874371564,
+        "unit": "m",
+        "text": "874371564 m"
+      }
+    },
+    {
+      "input": [
+        -201045849.3605256,
+        "km"
+      ],
+      "output": {
+        "value": -201045849,
+        "unit": "m",
+        "text": "-201045849 m"
+      }
+    },
+    {
+      "input": [
+        629729116.8011725,
+        "km"
+      ],
+      "output": {
+        "value": 629729117,
+        "unit": "m",
+        "text": "629729117 m"
+      }
+    },
+    {
+      "input": [
+        330279417.3359871,
+        "km"
+      ],
+      "output": {
+        "value": 330279417,
+        "unit": "m",
+        "text": "330279417 m"
+      }
+    },
+    {
+      "input": [
+        819277129.6016872,
+        "km"
+      ],
+      "output": {
+        "value": 819277130,
+        "unit": "m",
+        "text": "819277130 m"
+      }
+    },
+    {
+      "input": [
+        -263713805.9362769,
+        "km"
+      ],
+      "output": {
+        "value": -263713806,
+        "unit": "m",
+        "text": "-263713806 m"
+      }
+    },
+    {
+      "input": [
+        249309864.36083913,
+        "km"
+      ],
+      "output": {
+        "value": 249309864,
+        "unit": "m",
+        "text": "249309864 m"
+      }
+    },
+    {
+      "input": [
+        974111171.43929,
+        "km"
+      ],
+      "output": {
+        "value": 974111171,
+        "unit": "m",
+        "text": "974111171 m"
+      }
+    },
+    {
+      "input": [
+        869775929.953903,
+        "km"
+      ],
+      "output": {
+        "value": 869775930,
+        "unit": "m",
+        "text": "869775930 m"
+      }
+    },
+    {
+      "input": [
+        251942466.01313353,
+        "km"
+      ],
+      "output": {
+        "value": 251942466,
+        "unit": "m",
+        "text": "251942466 m"
+      }
+    },
+    {
+      "input": [
+        -994623543.2289541,
+        "km"
+      ],
+      "output": {
+        "value": -994623543,
+        "unit": "m",
+        "text": "-994623543 m"
+      }
+    },
+    {
+      "input": [
+        -4945345455780625000,
+        "km"
+      ],
+      "output": {
+        "value": -4945345455780625000,
+        "unit": "m",
+        "text": "-4945345455780625000 m"
+      }
+    },
+    {
+      "input": [
+        -6423423788510263000,
+        "km"
+      ],
+      "output": {
+        "value": -6423423788510263000,
+        "unit": "m",
+        "text": "-6423423788510263000 m"
+      }
+    },
+    {
+      "input": [
+        -4760210588574410000,
+        "km"
+      ],
+      "output": {
+        "value": -4760210588574410000,
+        "unit": "m",
+        "text": "-4760210588574410000 m"
+      }
+    },
+    {
+      "input": [
+        -4808587362058461000,
+        "km"
+      ],
+      "output": {
+        "value": -4808587362058461000,
+        "unit": "m",
+        "text": "-4808587362058461000 m"
+      }
+    },
+    {
+      "input": [
+        -9157470902428031000,
+        "km"
+      ],
+      "output": {
+        "value": -9157470902428031000,
+        "unit": "m",
+        "text": "-9157470902428031000 m"
+      }
+    },
+    {
+      "input": [
+        5467495438642800000,
+        "km"
+      ],
+      "output": {
+        "value": 5467495438642800000,
+        "unit": "m",
+        "text": "5467495438642800000 m"
+      }
+    },
+    {
+      "input": [
+        7566366363316774000,
+        "km"
+      ],
+      "output": {
+        "value": 7566366363316774000,
+        "unit": "m",
+        "text": "7566366363316774000 m"
+      }
+    },
+    {
+      "input": [
+        -9307740689255297000,
+        "km"
+      ],
+      "output": {
+        "value": -9307740689255297000,
+        "unit": "m",
+        "text": "-9307740689255297000 m"
+      }
+    },
+    {
+      "input": [
+        -2349423216655850500,
+        "km"
+      ],
+      "output": {
+        "value": -2349423216655850500,
+        "unit": "m",
+        "text": "-2349423216655850500 m"
+      }
+    },
+    {
+      "input": [
+        -8958344622515142000,
+        "km"
+      ],
+      "output": {
+        "value": -8958344622515142000,
+        "unit": "m",
+        "text": "-8958344622515142000 m"
+      }
+    },
+    {
+      "input": [
+        -3861432559788227000,
+        "km"
+      ],
+      "output": {
+        "value": -3861432559788227000,
+        "unit": "m",
+        "text": "-3861432559788227000 m"
+      }
+    },
+    {
+      "input": [
+        -6310222041793167000,
+        "km"
+      ],
+      "output": {
+        "value": -6310222041793167000,
+        "unit": "m",
+        "text": "-6310222041793167000 m"
+      }
+    },
+    {
+      "input": [
+        2377243684604764000,
+        "km"
+      ],
+      "output": {
+        "value": 2377243684604764000,
+        "unit": "m",
+        "text": "2377243684604764000 m"
+      }
+    },
+    {
+      "input": [
+        6265476201660931000,
+        "km"
+      ],
+      "output": {
+        "value": 6265476201660931000,
+        "unit": "m",
+        "text": "6265476201660931000 m"
+      }
+    },
+    {
+      "input": [
+        6495929118245840000,
+        "km"
+      ],
+      "output": {
+        "value": 6495929118245840000,
+        "unit": "m",
+        "text": "6495929118245840000 m"
+      }
+    },
+    {
+      "input": [
+        1136907613836228900,
+        "km"
+      ],
+      "output": {
+        "value": 1136907613836228900,
+        "unit": "m",
+        "text": "1136907613836228900 m"
+      }
+    },
+    {
+      "input": [
+        -4132719794288277500,
+        "km"
+      ],
+      "output": {
+        "value": -4132719794288277500,
+        "unit": "m",
+        "text": "-4132719794288277500 m"
+      }
+    },
+    {
+      "input": [
+        9305771761573851000,
+        "km"
+      ],
+      "output": {
+        "value": 9305771761573851000,
+        "unit": "m",
+        "text": "9305771761573851000 m"
+      }
+    },
+    {
+      "input": [
+        -5537206828594208000,
+        "km"
+      ],
+      "output": {
+        "value": -5537206828594208000,
+        "unit": "m",
+        "text": "-5537206828594208000 m"
+      }
+    },
+    {
+      "input": [
+        5524993683211506000,
+        "km"
+      ],
+      "output": {
+        "value": 5524993683211506000,
+        "unit": "m",
+        "text": "5524993683211506000 m"
+      }
+    }
+  ]
+}

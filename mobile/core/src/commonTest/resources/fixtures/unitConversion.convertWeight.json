@@ -1,0 +1,294 @@
+{
+  "suite": "unitConversion.convertWeight",
+  "description": "Weight between two unit spellings, unrounded; identity for the same unit or an inherited-member spelling.",
+  "cases": [
+    {
+      "input": [
+        100,
+        "kg",
+        "lbs"
+      ],
+      "output": 220.462
+    },
+    {
+      "input": [
+        220.462,
+        "lbs",
+        "kg"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        0,
+        "kg",
+        "lbs"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        -5,
+        "kg",
+        "lbs"
+      ],
+      "output": -11.0231
+    },
+    {
+      "input": [
+        100,
+        "kg",
+        "stone"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "KG",
+        "Pounds"
+      ],
+      "output": 220.462
+    },
+    {
+      "input": [
+        100,
+        "kg",
+        "kg"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "lbs",
+        "lbs"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        " lb ",
+        "LBS"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "stone",
+        "lbs"
+      ],
+      "output": 220.462
+    },
+    {
+      "input": [
+        100,
+        "lbs",
+        "stone"
+      ],
+      "output": 45.35929094356398
+    },
+    {
+      "input": [
+        0.1,
+        "lb",
+        "kgs"
+      ],
+      "output": 0.045359290943563974
+    },
+    {
+      "input": [
+        0.3333333333333333,
+        "kg",
+        "lbs"
+      ],
+      "output": 0.7348733333333333
+    },
+    {
+      "input": [
+        100,
+        null,
+        "lbs"
+      ],
+      "output": 220.462
+    },
+    {
+      "input": [
+        100,
+        "lbs",
+        null
+      ],
+      "output": 45.35929094356398
+    },
+    {
+      "input": [
+        100,
+        "",
+        "lbs"
+      ],
+      "output": 220.462
+    },
+    {
+      "input": [
+        100,
+        null,
+        null
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "constructor",
+        "lbs"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "lbs",
+        "constructor"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "kg",
+        "__proto__"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "constructor",
+        "constructor"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        100,
+        "constructor",
+        "__proto__"
+      ],
+      "output": 100
+    },
+    {
+      "input": [
+        "NaN",
+        "kg",
+        "lbs"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "NaN",
+        "lbs",
+        "kg"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "Infinity",
+        "kg",
+        "lbs"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "Infinity",
+        "lbs",
+        "kg"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "kg",
+        "lbs"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "lbs",
+        "kg"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        "kg",
+        "lbs"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        "lbs",
+        "kg"
+      ],
+      "output": 4.535929094356397e+307
+    },
+    {
+      "input": [
+        -1e+308,
+        "kg",
+        "lbs"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        -1e+308,
+        "lbs",
+        "kg"
+      ],
+      "output": -4.535929094356397e+307
+    },
+    {
+      "input": [
+        5e-324,
+        "kg",
+        "lbs"
+      ],
+      "output": 1e-323
+    },
+    {
+      "input": [
+        5e-324,
+        "lbs",
+        "kg"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        1e-300,
+        "kg",
+        "lbs"
+      ],
+      "output": 2.2046199999999998e-300
+    },
+    {
+      "input": [
+        1e-300,
+        "lbs",
+        "kg"
+      ],
+      "output": 4.535929094356398e-301
+    }
+  ]
+}

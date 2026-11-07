@@ -1,0 +1,119 @@
+{
+  "suite": "unitConversion.stampForPreferences",
+  "description": "The stamp for a new row: the weight unit and the stored distance unit (m or ft).",
+  "cases": [
+    {
+      "input": {},
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "lb",
+        "distanceUnit": "mi"
+      },
+      "output": {
+        "weightUnit": "lbs",
+        "distanceUnit": "ft"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": null,
+        "distanceUnit": "km"
+      },
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "kg",
+        "distanceUnit": "km"
+      },
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "lbs",
+        "distanceUnit": "miles"
+      },
+      "output": {
+        "weightUnit": "lbs",
+        "distanceUnit": "ft"
+      }
+    },
+    {
+      "input": {
+        "distanceUnit": "ft"
+      },
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "Pounds",
+        "distanceUnit": " MILES "
+      },
+      "output": {
+        "weightUnit": "lbs",
+        "distanceUnit": "ft"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "stone",
+        "distanceUnit": "kilometre"
+      },
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "",
+        "distanceUnit": ""
+      },
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "kg",
+        "distanceUnit": "constructor"
+      },
+      "output": {
+        "weightUnit": "kg",
+        "distanceUnit": "m"
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "constructor"
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "weightUnit": "__proto__",
+        "distanceUnit": "miles"
+      },
+      "output": {
+        "notAUnit": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,688 @@
+{
+  "suite": "unitConversion.restampSetPatch",
+  "description": "A partial set update re-stamped with the current units; the untouched value on a touched axis is converted from the old stamp.",
+  "cases": [
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 100,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": 225
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": {
+        "weight": 225,
+        "weightUnit": "lbs",
+        "plannedWeight": 220
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 100,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": null
+        },
+        "preferences": {
+          "weightUnit": "lbs"
+        }
+      },
+      "output": {
+        "weight": null,
+        "weightUnit": "lbs",
+        "plannedWeight": 220
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 400,
+          "plannedDistance": 800,
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "plannedDistance": 1000
+        },
+        "preferences": {
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "plannedDistance": 1000,
+        "distanceUnit": "ft",
+        "distance": 1312
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "distance": 400,
+          "plannedDistance": 800
+        },
+        "patch": {
+          "weight": 105,
+          "distance": 500
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 105,
+        "distance": 500,
+        "weightUnit": "lbs",
+        "plannedWeight": 90,
+        "distanceUnit": "ft",
+        "plannedDistance": 800
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg",
+          "distance": 400,
+          "distanceUnit": "m"
+        },
+        "patch": {},
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {}
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg",
+          "distance": 400,
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "weight": 230
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 230,
+        "weightUnit": "lbs",
+        "plannedWeight": 198
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "weightUnit": "kg",
+          "distance": 400,
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "reps": 8
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "reps": 8
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "reps": 8,
+          "notes": null,
+          "plannedWeight": 200
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "reps": 8,
+        "notes": null,
+        "plannedWeight": 200,
+        "weightUnit": "lbs",
+        "weight": 220
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 400,
+          "plannedDistance": 1000,
+          "distanceUnit": "m",
+          "weight": 20,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "distance": 1500
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "distance": 1500,
+        "distanceUnit": "ft",
+        "plannedDistance": 3281
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": 230,
+          "plannedWeight": null
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 230,
+        "plannedWeight": null,
+        "weightUnit": "lbs"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": null
+        },
+        "patch": {
+          "weight": 105
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": {
+        "weight": 105,
+        "weightUnit": "kg",
+        "plannedWeight": 90
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": 105
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": {
+        "weight": 105,
+        "weightUnit": "kg",
+        "plannedWeight": 90
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "plannedWeight": null
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "plannedWeight": null,
+        "weightUnit": "lbs",
+        "weight": 220
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 225,
+          "plannedWeight": 100,
+          "weightUnit": "lbs"
+        },
+        "patch": {
+          "weight": 50
+        },
+        "preferences": {}
+      },
+      "output": {
+        "weight": 50,
+        "weightUnit": "kg",
+        "plannedWeight": 45.5
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": null,
+          "plannedWeight": 90,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "plannedWeight": 95
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "plannedWeight": 95,
+        "weightUnit": "lbs"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": 60
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 60,
+        "weightUnit": "lbs"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": ""
+        },
+        "patch": {
+          "weight": 105
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 105,
+        "weightUnit": "lbs",
+        "plannedWeight": 90
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weightUnit": "kg"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": 230,
+          "weightUnit": "kg"
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 230,
+        "weightUnit": "lbs"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 1000,
+          "distanceUnit": "ft"
+        },
+        "patch": {
+          "distanceUnit": null,
+          "weight": 10
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": {
+        "distanceUnit": null,
+        "weight": 10,
+        "weightUnit": "kg"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 1000,
+          "plannedDistance": 2000,
+          "distanceUnit": "ft"
+        },
+        "patch": {
+          "plannedDistance": 600
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": {
+        "plannedDistance": 600,
+        "distanceUnit": "m",
+        "distance": 305
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 3,
+          "plannedDistance": 5,
+          "distanceUnit": "km"
+        },
+        "patch": {
+          "distance": 2500
+        },
+        "preferences": {
+          "weightUnit": "kg",
+          "distanceUnit": "km"
+        }
+      },
+      "output": {
+        "distance": 2500,
+        "distanceUnit": "m",
+        "plannedDistance": 5000
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 3,
+          "plannedDistance": 5,
+          "distanceUnit": "xyz"
+        },
+        "patch": {
+          "distance": 2500
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "distance": 2500,
+        "distanceUnit": "ft",
+        "plannedDistance": 5
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "distance": 400,
+          "plannedDistance": 800,
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "distance": null,
+          "plannedDistance": null
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "distance": null,
+        "plannedDistance": null,
+        "distanceUnit": "ft"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg",
+          "distance": 400,
+          "plannedDistance": 800,
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "weight": 1,
+          "distance": 2
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "weight": 1,
+        "distance": 2,
+        "weightUnit": "lbs",
+        "plannedWeight": 198,
+        "distanceUnit": "ft",
+        "plannedDistance": 2625
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": "NaN",
+          "plannedWeight": "Infinity",
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "reps": 5,
+          "plannedDistance": 3
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "reps": 5,
+        "plannedDistance": 3,
+        "distanceUnit": "ft"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": "NaN",
+          "plannedWeight": "Infinity",
+          "weightUnit": "kg",
+          "distance": "NaN",
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "reps": 5,
+          "weightUnit": "lbs",
+          "plannedWeight": 1,
+          "plannedDistance": 3
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "reps": 5,
+        "weightUnit": "lbs",
+        "plannedWeight": 1,
+        "plannedDistance": 3,
+        "weight": "NaN",
+        "distanceUnit": "ft",
+        "distance": "NaN"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "weightUnit": null
+        },
+        "patch": {
+          "weight": 5
+        },
+        "preferences": {
+          "weightUnit": "constructor"
+        }
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg",
+          "distance": 400,
+          "distanceUnit": "m"
+        },
+        "patch": {
+          "distance": 5
+        },
+        "preferences": {
+          "weightUnit": "constructor",
+          "distanceUnit": "miles"
+        }
+      },
+      "output": {
+        "distance": 5,
+        "distanceUnit": "ft"
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "kg"
+        },
+        "patch": {
+          "weight": 5
+        },
+        "preferences": {
+          "weightUnit": "constructor"
+        }
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "constructor"
+        },
+        "patch": {
+          "weight": 5
+        },
+        "preferences": {
+          "weightUnit": "constructor"
+        }
+      },
+      "output": {
+        "notAUnit": true
+      }
+    },
+    {
+      "input": {
+        "existing": {
+          "weight": 100,
+          "plannedWeight": 90,
+          "weightUnit": "constructor",
+          "distance": 1,
+          "distanceUnit": "__proto__"
+        },
+        "patch": {
+          "weight": 5,
+          "plannedDistance": 2
+        },
+        "preferences": {
+          "weightUnit": "lbs",
+          "distanceUnit": "km"
+        }
+      },
+      "output": {
+        "weight": 5,
+        "plannedDistance": 2,
+        "weightUnit": "lbs",
+        "plannedWeight": 90,
+        "distanceUnit": "m",
+        "distance": 1609
+      }
+    }
+  ]
+}

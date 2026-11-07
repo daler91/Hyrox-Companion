@@ -1,0 +1,216 @@
+{
+  "suite": "unitConversion.metersToUserDistance",
+  "description": "Metres in km or miles, unrounded; an inherited-member spelling matches neither and returns the metres.",
+  "cases": [
+    {
+      "input": [
+        5000,
+        "km"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        1609.344,
+        "miles"
+      ],
+      "output": 1
+    },
+    {
+      "input": [
+        42195,
+        "miles"
+      ],
+      "output": 26.218757456454306
+    },
+    {
+      "input": [
+        0,
+        "km"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        -100,
+        "km"
+      ],
+      "output": -0.1
+    },
+    {
+      "input": [
+        42195,
+        "km"
+      ],
+      "output": 42.195
+    },
+    {
+      "input": [
+        5000,
+        "mi"
+      ],
+      "output": 3.1068559611866697
+    },
+    {
+      "input": [
+        5000,
+        " Mile "
+      ],
+      "output": 3.1068559611866697
+    },
+    {
+      "input": [
+        5000,
+        null
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        5000,
+        ""
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        5000,
+        "m"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        5000,
+        "feet"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        5000,
+        "kilometre"
+      ],
+      "output": 5
+    },
+    {
+      "input": [
+        5000,
+        "constructor"
+      ],
+      "output": 5000
+    },
+    {
+      "input": [
+        5000,
+        "__proto__"
+      ],
+      "output": 5000
+    },
+    {
+      "input": [
+        0.001,
+        "miles"
+      ],
+      "output": 6.21371192237334e-7
+    },
+    {
+      "input": [
+        "NaN",
+        "km"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "NaN",
+        "miles"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "Infinity",
+        "km"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "Infinity",
+        "miles"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "km"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "miles"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        "km"
+      ],
+      "output": 1e+305
+    },
+    {
+      "input": [
+        1e+308,
+        "miles"
+      ],
+      "output": 6.21371192237334e+304
+    },
+    {
+      "input": [
+        -1e+308,
+        "km"
+      ],
+      "output": -1e+305
+    },
+    {
+      "input": [
+        -1e+308,
+        "miles"
+      ],
+      "output": -6.21371192237334e+304
+    },
+    {
+      "input": [
+        5e-324,
+        "km"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        5e-324,
+        "miles"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        1e-300,
+        "km"
+      ],
+      "output": 1.0000000000000001e-303
+    },
+    {
+      "input": [
+        1e-300,
+        "miles"
+      ],
+      "output": 6.2137119223733395e-304
+    }
+  ]
+}

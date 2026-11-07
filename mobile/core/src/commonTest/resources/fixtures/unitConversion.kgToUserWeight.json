@@ -1,0 +1,174 @@
+{
+  "suite": "unitConversion.kgToUserWeight",
+  "description": "Kilograms in the athlete's weight unit, unrounded.",
+  "cases": [
+    {
+      "input": [
+        70,
+        "kg"
+      ],
+      "output": 70
+    },
+    {
+      "input": [
+        70,
+        "lbs"
+      ],
+      "output": 154.3234
+    },
+    {
+      "input": [
+        154.3,
+        "kg"
+      ],
+      "output": 154.3
+    },
+    {
+      "input": [
+        154.3,
+        "lbs"
+      ],
+      "output": 340.172866
+    },
+    {
+      "input": [
+        0.1,
+        "kg"
+      ],
+      "output": 0.1
+    },
+    {
+      "input": [
+        0.1,
+        "lbs"
+      ],
+      "output": 0.220462
+    },
+    {
+      "input": [
+        500,
+        "kg"
+      ],
+      "output": 500
+    },
+    {
+      "input": [
+        500,
+        "lbs"
+      ],
+      "output": 1102.31
+    },
+    {
+      "input": [
+        0,
+        "kg"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        0,
+        "lbs"
+      ],
+      "output": 0
+    },
+    {
+      "input": [
+        -70,
+        "kg"
+      ],
+      "output": -70
+    },
+    {
+      "input": [
+        -70,
+        "lbs"
+      ],
+      "output": -154.3234
+    },
+    {
+      "input": [
+        70,
+        "pounds"
+      ],
+      "output": 154.3234
+    },
+    {
+      "input": [
+        70,
+        null
+      ],
+      "output": 70
+    },
+    {
+      "input": [
+        70,
+        "stone"
+      ],
+      "output": 70
+    },
+    {
+      "input": [
+        70,
+        "constructor"
+      ],
+      "output": 70
+    },
+    {
+      "input": [
+        70,
+        "__proto__"
+      ],
+      "output": 70
+    },
+    {
+      "input": [
+        "NaN",
+        "lbs"
+      ],
+      "output": "NaN"
+    },
+    {
+      "input": [
+        "Infinity",
+        "lbs"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        "-Infinity",
+        "lbs"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        1e+308,
+        "lbs"
+      ],
+      "output": "Infinity"
+    },
+    {
+      "input": [
+        -1e+308,
+        "lbs"
+      ],
+      "output": "-Infinity"
+    },
+    {
+      "input": [
+        5e-324,
+        "lbs"
+      ],
+      "output": 1e-323
+    },
+    {
+      "input": [
+        1e-300,
+        "lbs"
+      ],
+      "output": 2.2046199999999998e-300
+    }
+  ]
+}
