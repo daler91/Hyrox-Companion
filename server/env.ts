@@ -225,7 +225,7 @@ const envSchema = z
     message: "❌ FATAL: ANDROID_APP_PACKAGE and ANDROID_APP_CERT_SHA256 must be set together",
     path: ["ANDROID_APP_CERT_SHA256"],
   })
-  .refine((data) => data.NODE_ENV !== "production" || !!data.CSRF_SECRET, {
+  .refine((data) => data.NODE_ENV !== "production" || Boolean(data.CSRF_SECRET), {
     message: "❌ FATAL: CSRF_SECRET is required in production",
     path: ["CSRF_SECRET"],
   })
@@ -237,7 +237,7 @@ const envSchema = z
     // verification. Requiring it in production turns an intermittent,
     // load-balancer-dependent OAuth failure into a startup error.
     (data) =>
-      data.NODE_ENV !== "production" || !data.STRAVA_CLIENT_ID || !!data.STRAVA_STATE_SECRET,
+      data.NODE_ENV !== "production" || !data.STRAVA_CLIENT_ID || Boolean(data.STRAVA_STATE_SECRET),
     {
       message:
         "❌ FATAL: STRAVA_STATE_SECRET is required in production when Strava is configured — without it OAuth state cannot be verified across replicas",

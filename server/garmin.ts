@@ -629,7 +629,8 @@ async function handleGarminStatus(req: Request, res: Response) {
     const conn = await storage.users.getGarminConnection(userId);
 
     if (!conn) {
-      return res.json({ connected: false });
+      res.json({ connected: false });
+      return;
     }
 
     res.json({

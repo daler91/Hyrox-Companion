@@ -256,17 +256,17 @@ function createSseWriter(res: Response, controller: AbortController): SseWriter 
   const awaitDrain = () =>
     new Promise<void>((resolve) => {
       let settled = false;
+      // settle is itself the listener on both, so it can remove both by
+      // reference without referring to anything declared after it.
       const settle = () => {
         if (settled) return;
         settled = true;
-        res.off("drain", onDrain);
-        controller.signal.removeEventListener("abort", onAbort);
+        res.off("drain", settle);
+        controller.signal.removeEventListener("abort", settle);
         resolve();
       };
-      const onDrain = () => settle();
-      const onAbort = () => settle();
-      res.once("drain", onDrain);
-      controller.signal.addEventListener("abort", onAbort, { once: true });
+      res.once("drain", settle);
+      controller.signal.addEventListener("abort", settle, { once: true });
       // Re-check after registration: if abort fired between the caller's
       // pre-check and our addEventListener, the listener will never be
       // invoked and the promise would hang forever.

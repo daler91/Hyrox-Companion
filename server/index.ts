@@ -314,7 +314,7 @@ app.use(pinoHttp({
 }));
 
 app.use((req, _res, next) => {
-  const r = req as Request & { id?: string };
+  const reqWithId = req as Request & { id?: string };
   // Binds requestId only. This middleware is mounted here, at module scope,
   // but `clerkMiddleware()` is registered much later — inside registerRoutes()
   // → setupAuth(), below the httpServer.listen() call — so Clerk auth has NOT
@@ -329,7 +329,7 @@ app.use((req, _res, next) => {
   // moving this binding below setupAuth (costing /api/v1/health its requestId)
   // or having isAuthenticated write userId into the live context object; do
   // that alongside the first real consumer, not speculatively.
-  runWithRequestContext({ requestId: r.id ?? "" }, () => next());
+  runWithRequestContext({ requestId: reqWithId.id ?? "" }, () => next());
 });
 
 const port = Number.parseInt(env.PORT || "5000", 10);
