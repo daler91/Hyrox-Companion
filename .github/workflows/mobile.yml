@@ -8,11 +8,16 @@ name: Mobile Core
 #   because a TypeScript change regenerates fixtures the ports must still
 #   match). Whether the committed models match the document is checked in the
 #   unit suite (script/kotlin-models/generate.test.ts); this job proves they
-#   compile and decode. composeApp: the shared UI's view-model logic.
+#   compile and decode. composeApp: the shared UI's view-model logic, its
+#   colour contrast (WCAG AA), and the whole app driven end to end on the
+#   desktop JVM (Compose UI tests: flows, labels and 48 dp touch targets).
 # - android: builds the debug APK and an unsigned release bundle (R8, as
-#   shipped), and runs the Android-side tests and the linters (ktlint, detekt,
-#   Android lint). The runner image ships an Android SDK with its
-#   licences accepted; the Android Gradle Plugin installs a missing platform.
+#   shipped), runs the Android-side tests (Robolectric), checks the design
+#   system's screenshots against the committed references (light and dark, font
+#   scales up to 200%; the diffs are uploaded when they differ), and runs the
+#   linters (ktlint, detekt, Android lint). The runner image ships an Android
+#   SDK with its licences accepted; the Android Gradle Plugin installs a
+#   missing platform.
 #
 # iOS targets join in Phase 7, compiled on a macOS runner.
 on:
@@ -87,4 +92,13 @@ jobs:
       - name: Build the debug APK, test and lint
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
-          ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease :androidApp:lintDebug ktlintCheck detekt --no-daemon --console=plain
+          ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease :composeApp:verifyRoborazziAndroidHostTest \
+            :androidApp:lintDebug ktlintCheck detekt --no-daemon --console=plain
+      # After an intended UI change: ./gradlew :composeApp:recordRoborazziAndroidHostTest, and commit the images.
+      - name: Upload screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshot-diffs
+          path: mobile/composeApp/build/outputs/roborazzi
+          if-no-files-found: ignore

@@ -63,6 +63,8 @@ kotlin {
         }
         getByName("androidHostTest").dependencies {
             implementation(libs.junit4)
+            // runComposeUiTest: the screenshots render with the test clock under control.
+            implementation(libs.compose.ui.test)
             implementation(libs.robolectric)
             implementation(libs.roborazzi)
             implementation(libs.roborazzi.compose)
@@ -89,6 +91,9 @@ tasks.withType<Test>().configureEach {
     dependsOn(robolectricJars)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", robolectricJarsDir.get())
+    // Robolectric's Android runtime and native graphics outgrow the default
+    // 512 MB heap; at that size the screenshot tests spend minutes in GC.
+    maxHeapSize = "2g"
 }
 
 compose.resources {
