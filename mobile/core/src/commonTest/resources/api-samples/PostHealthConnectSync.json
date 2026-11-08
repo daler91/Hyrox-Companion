@@ -1,0 +1,47 @@
+{
+  "request": {
+    "min": {
+      "sessions": []
+    },
+    "max": {
+      "sessions": [
+        {
+          "id": "sample text",
+          "startTime": "2026-11-07T10:15:30.000Z",
+          "endTime": "2026-11-07T10:15:30.000Z",
+          "zoneOffsetMinutes": 1,
+          "sportType": "sample text",
+          "title": "sample text",
+          "distanceMeters": 1.5,
+          "activeCalories": 1.5,
+          "avgHeartRate": 20,
+          "maxHeartRate": 20,
+          "dataOrigin": "sample text"
+        }
+      ],
+      "deletedIds": [
+        "sample text"
+      ]
+    }
+  },
+  "response": {
+    "min": {
+      "imported": 1,
+      "skipped": 1,
+      "deleted": 1
+    },
+    "max": {
+      "imported": 1,
+      "skipped": 1,
+      "deleted": 1
+    },
+    "future": {
+      "imported": 1,
+      "skipped": 1,
+      "deleted": 1,
+      "zzPropertyFromANewerServer": {
+        "added": true
+      }
+    }
+  }
+}

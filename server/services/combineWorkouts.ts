@@ -59,6 +59,7 @@ export async function combineWorkouts({
         planDayId: workoutLogs.planDayId,
         stravaActivityId: workoutLogs.stravaActivityId,
         garminActivityId: workoutLogs.garminActivityId,
+        healthConnectId: workoutLogs.healthConnectId,
       })
       .from(workoutLogs)
       .where(and(inArray(workoutLogs.id, [...deleteWorkoutIds]), eq(workoutLogs.userId, userId)));
@@ -156,7 +157,7 @@ export async function combineWorkouts({
     // source row (and its activity id) without the sets the merged log now
     // owns: restoring it cannot collide with them. D39
     const deviceSourceIds = sourceWorkouts
-      .filter((src) => src.stravaActivityId || src.garminActivityId)
+      .filter((src) => src.stravaActivityId || src.garminActivityId || src.healthConnectId)
       .map((src) => src.id);
     if (deviceSourceIds.length > 0) {
       await captureWorkoutLogs(tx, userId, deviceSourceIds, { batchId: randomUUID() });

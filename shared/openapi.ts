@@ -7,6 +7,7 @@ import { registerCoachPaths } from "./openapiRoutes/coach";
 import { registerCommonComponents } from "./openapiRoutes/common";
 import { registerEntityComponents } from "./openapiRoutes/entities";
 import { registerGarminPaths } from "./openapiRoutes/garmin";
+import { registerHealthConnectPaths } from "./openapiRoutes/healthConnect";
 import { registerNutritionPaths } from "./openapiRoutes/nutrition";
 import { registerPlansPaths } from "./openapiRoutes/plans";
 import { registerPushPaths } from "./openapiRoutes/push";
@@ -314,7 +315,7 @@ export const CreateWorkoutRequestSchema = registry.register(
   // exercises and structureBlocks payloads.
   createWorkoutPayloadSchema.openapi({
     title: "CreateWorkoutRequest",
-    description: "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
+    description: "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, healthConnectId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
   })
 );
 
@@ -552,6 +553,7 @@ registerAccountPaths(registry, common, { PreferencesResponse: PreferencesRespons
 registerPushPaths(registry, common);
 registerStravaPaths(registry, common);
 registerGarminPaths(registry, common);
+registerHealthConnectPaths(registry, common);
 // Analytics registers the session-grade and MAF shapes the workout routes
 // also return, so it runs first and hands them over: one component each.
 const analytics = registerAnalyticsPaths(registry, common);

@@ -45,6 +45,8 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             // Custom Tabs for Strava's consent page and external links.
             implementation(libs.androidx.browser)
+            // Health Connect's permission request (an activity result).
+            implementation(libs.health.connect.client)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

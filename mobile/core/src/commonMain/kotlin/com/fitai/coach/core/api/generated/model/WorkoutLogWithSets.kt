@@ -35,6 +35,7 @@ public data class WorkoutLogWithSets(
     public val source: String? = null,
     public val stravaActivityId: String? = null,
     public val garminActivityId: String? = null,
+    public val healthConnectId: String? = null,
     public val calories: Int? = null,
     public val distanceMeters: Double? = null,
     public val elevationGain: Double? = null,

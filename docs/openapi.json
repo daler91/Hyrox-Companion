@@ -1438,6 +1438,11 @@
             "nullable": true,
             "maxLength": 255
           },
+          "healthConnectId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
           "calories": {
             "type": "integer",
             "nullable": true,
@@ -1589,6 +1594,7 @@
           "source",
           "stravaActivityId",
           "garminActivityId",
+          "healthConnectId",
           "calories",
           "distanceMeters",
           "elevationGain",
@@ -1727,6 +1733,11 @@
             "maxLength": 255
           },
           "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "healthConnectId": {
             "type": "string",
             "nullable": true,
             "maxLength": 255
@@ -1931,6 +1942,7 @@
           "source",
           "stravaActivityId",
           "garminActivityId",
+          "healthConnectId",
           "calories",
           "distanceMeters",
           "elevationGain",
@@ -2069,6 +2081,11 @@
             "maxLength": 255
           },
           "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "healthConnectId": {
             "type": "string",
             "nullable": true,
             "maxLength": 255
@@ -2243,6 +2260,7 @@
           "source",
           "stravaActivityId",
           "garminActivityId",
+          "healthConnectId",
           "calories",
           "distanceMeters",
           "elevationGain",
@@ -2603,6 +2621,11 @@
             "maxLength": 255
           },
           "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "healthConnectId": {
             "type": "string",
             "nullable": true,
             "maxLength": 255
@@ -4310,7 +4333,7 @@
           "mainWorkout"
         ],
         "title": "CreateWorkoutRequest",
-        "description": "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage."
+        "description": "Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, healthConnectId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage."
       },
       "UpdateWorkoutRequest": {
         "type": "object",
@@ -13552,6 +13575,196 @@
           },
           "503": {
             "description": "GARMIN_CIRCUIT_OPEN: Garmin rate-limited this server, so all Garmin calls are paused for a while; try again later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health-connect/sync": {
+      "post": {
+        "tags": [
+          "Health Connect"
+        ],
+        "summary": "Import Health Connect exercise sessions",
+        "description": "Imports the exercise sessions the app read from Health Connect since its last sync, and moves the imports of sessions deleted there to the recycle bin. Each session becomes a standalone workout with its synthesised set, unless it is already imported (by its id, live or in the bin), was written by the Strava or Garmin Connect app while that provider is connected, or matches a stored Strava, Garmin or Health Connect recording (start within two minutes, similar length, compatible sport). A later Strava or Garmin import of the same session supersedes the Health Connect one. At most 100 sessions and 500 deletions per request.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "sessions": [
+                  {
+                    "id": "0b3c6f9e-0f43-4a8e-9a39-2f0c1d1b7a11",
+                    "startTime": "2026-11-08T07:02:00Z",
+                    "endTime": "2026-11-08T07:48:30Z",
+                    "zoneOffsetMinutes": 60,
+                    "sportType": "Run",
+                    "title": "Morning run",
+                    "distanceMeters": 8120,
+                    "activeCalories": 610,
+                    "avgHeartRate": 151,
+                    "maxHeartRate": 172,
+                    "dataOrigin": "com.sec.android.app.shealth"
+                  }
+                ],
+                "deletedIds": []
+              },
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        "startTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "endTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "zoneOffsetMinutes": {
+                          "type": "integer",
+                          "minimum": -1080,
+                          "maximum": 1080
+                        },
+                        "sportType": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "distanceMeters": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "activeCalories": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 20000
+                        },
+                        "avgHeartRate": {
+                          "type": "integer",
+                          "minimum": 20,
+                          "maximum": 250
+                        },
+                        "maxHeartRate": {
+                          "type": "integer",
+                          "minimum": 20,
+                          "maximum": 250
+                        },
+                        "dataOrigin": {
+                          "type": "string",
+                          "maxLength": 255
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "startTime",
+                        "endTime",
+                        "sportType"
+                      ]
+                    },
+                    "maxItems": 100
+                  },
+                  "deletedIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    "maxItems": 500,
+                    "default": []
+                  }
+                },
+                "required": [
+                  "sessions"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Imported; `skipped` counts sessions not imported, `deleted` the imports moved to the bin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "integer"
+                    },
+                    "skipped": {
+                      "type": "integer"
+                    },
+                    "deleted": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "imported",
+                    "skipped",
+                    "deleted"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in, or the bearer token was rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "Native app only: the X-App-Version build is older than the server's minimum for its X-App-Platform",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateRequiredResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; Retry-After says when to try again",
             "content": {
               "application/json": {
                 "schema": {

@@ -207,8 +207,9 @@ export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
 /**
  * Device provenance is server-owned.
  *
- * `source`, `stravaActivityId`, `garminActivityId` and `startedAt` are written by
- * the Strava/Garmin sync and by the device-link routes. Accepting them from a
+ * `source`, `stravaActivityId`, `garminActivityId`, `healthConnectId` and
+ * `startedAt` are written by the Strava/Garmin/Health Connect syncs and by the
+ * device-link routes. Accepting them from a
  * client let a manually-logged workout present itself as a device import, which
  * is enough to satisfy the checks in `linkStandaloneDeviceLog`. Dedupe queries
  * are per-user so this was an integrity problem rather than a cross-tenant one,
@@ -218,6 +219,7 @@ const DEVICE_PROVENANCE_FIELDS = {
   source: true,
   stravaActivityId: true,
   garminActivityId: true,
+  healthConnectId: true,
   startedAt: true,
 } as const;
 

@@ -506,6 +506,19 @@ public object ApiEndpoints {
     )
 
     /**
+     * POST /api/v1/health-connect/sync: Import Health Connect exercise sessions
+     * Imports the exercise sessions the app read from Health Connect since its last sync, and moves the imports of sessions deleted there to the recycle bin. Each session becomes a standalone workout with its synthesised set, unless it is already imported (by its id, live or in the bin), was written by the Strava or Garmin Connect app while that provider is connected, or matches a stored Strava, Garmin or Health Connect recording (start within two minutes, similar length, compatible sport). A later Strava or Garmin import of the same session supersedes the Health Connect one. At most 100 sessions and 500 deletions per request.
+     */
+    public object PostHealthConnectSync : ApiEndpoint<PostHealthConnectSyncRequest, PostHealthConnectSyncResponse>(
+        method = HttpMethod.Post,
+        pathTemplate = "/api/v1/health-connect/sync",
+        requestSerializer = PostHealthConnectSyncRequest.serializer(),
+        responseSerializer = PostHealthConnectSyncResponse.serializer(),
+        responseKind = ResponseKind.Json,
+        successStatus = 200,
+    )
+
+    /**
      * GET /api/v1/maf-tests: Get MAF test history
      * The newest 200 MAF tests and compliance analyses, with the date of each tagged workout.
      */
@@ -2521,6 +2534,7 @@ public object ApiEndpoints {
         "DeleteGarminDisconnect" to DeleteGarminDisconnect,
         "GetGarminStatus" to GetGarminStatus,
         "PostGarminSync" to PostGarminSync,
+        "PostHealthConnectSync" to PostHealthConnectSync,
         "GetMafTests" to GetMafTests,
         "GetNutritionBlock" to GetNutritionBlock,
         "GetNutritionFavorites" to GetNutritionFavorites,

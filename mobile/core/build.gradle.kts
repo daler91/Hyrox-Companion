@@ -31,6 +31,10 @@ kotlin {
             implementation(libs.room.runtime)
             implementation(libs.sqlite.bundled)
         }
+        androidMain.dependencies {
+            // HealthDataSource on Android (core/.../health/HealthConnectSource.kt).
+            implementation(libs.health.connect.client)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)

@@ -40,6 +40,7 @@ describe("generateOpenApiDocument", () => {
         "/api/v1/push/devices",
         "/api/v1/strava/native/complete",
         "/api/v1/garmin/status",
+        "/api/v1/health-connect/sync",
         "/api/v1/timeline",
         "/api/v1/chat/stream",
         "/api/v1/plans",

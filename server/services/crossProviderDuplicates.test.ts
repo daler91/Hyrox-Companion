@@ -8,12 +8,19 @@ import {
   type RecordingTiming,
   recordingTimingFromLog,
   recordingTimingFromStrava,
+  supersedeHealthConnectRecordings,
 } from "./crossProviderDuplicates";
 import { mapGarminActivityToWorkout } from "./garminMapper";
 import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
 
 vi.mock("../storage", () => ({
-  storage: { workouts: { listDeviceRecordingsForDates: vi.fn() } },
+  storage: {
+    workouts: {
+      listDeviceRecordingsForDates: vi.fn(),
+      listUntouchedHealthConnectLogsForDates: vi.fn(),
+      binWorkoutLogs: vi.fn(),
+    },
+  },
 }));
 
 const USER = "user-1";
@@ -171,5 +178,29 @@ describe("dropCrossProviderDuplicates", () => {
       duplicates: 0,
     });
     expect(storage.workouts.listDeviceRecordingsForDates).not.toHaveBeenCalled();
+  });
+});
+
+describe("supersedeHealthConnectRecordings", () => {
+  beforeEach(() => {
+    vi.mocked(storage.workouts.binWorkoutLogs).mockReset().mockImplementation(async (_user, ids) => ids.length);
+    vi.mocked(storage.workouts.listUntouchedHealthConnectLogsForDates).mockReset();
+  });
+
+  it("bins the Health Connect import of a session Strava or Garmin now recorded", async () => {
+    vi.mocked(storage.workouts.listUntouchedHealthConnectLogsForDates).mockResolvedValue([
+      { id: "hc-run", startedAt: new Date(START + MIN), duration: 45, focus: "Run" },
+      { id: "hc-walk", startedAt: new Date(START + 300 * MIN), duration: 30, focus: "Walk" },
+    ]);
+    const binned = await supersedeHealthConnectRecordings(USER, [{ date: "2026-09-08", timing: timing() }]);
+    expect(binned).toBe(1);
+    expect(storage.workouts.binWorkoutLogs).toHaveBeenCalledWith(USER, ["hc-run"]);
+  });
+
+  it("does nothing when no Health Connect import matches", async () => {
+    vi.mocked(storage.workouts.listUntouchedHealthConnectLogsForDates).mockResolvedValue([]);
+    expect(await supersedeHealthConnectRecordings(USER, [{ date: "2026-09-08", timing: timing() }])).toBe(0);
+    expect(await supersedeHealthConnectRecordings(USER, [])).toBe(0);
+    expect(storage.workouts.binWorkoutLogs).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
 import { registerEmailUnsubscribeRoutes } from "./routes/emailUnsubscribe";
+import healthConnectRoutes from "./routes/healthConnect";
 import nutritionRoutes from "./routes/nutrition/index";
 import planProposalRoutes from "./routes/planProposals";
 import planRecoveryRoutes from "./routes/planRecovery";
@@ -57,6 +58,7 @@ vi.mock("./routes/planRecovery", () => ({ default: { name: "planRecoveryRoutes" 
 vi.mock("./routes/plans", () => ({ default: { name: "planRoutes" } }));
 vi.mock("./routes/preferences", () => ({ default: { name: "preferencesRoutes" } }));
 vi.mock("./routes/push", () => ({ default: { name: "pushRoutes" } }));
+vi.mock("./routes/healthConnect", () => ({ default: { name: "healthConnectRoutes" } }));
 vi.mock("./routes/recycleBin", () => ({ default: { name: "recycleBinRoutes" } }));
 vi.mock("./routes/sessionGrades", () => ({ default: { name: "sessionGradesRoutes" } }));
 vi.mock("./routes/timelineAnnotations", () => ({ default: { name: "timelineAnnotationsRoutes" } }));
@@ -161,6 +163,7 @@ describe("registerRoutes", () => {
     expect(app.use).toHaveBeenCalledWith(coachingRoutes);
     expect(app.use).toHaveBeenCalledWith(consentRoutes);
     expect(app.use).toHaveBeenCalledWith(pushRoutes);
+    expect(app.use).toHaveBeenCalledWith(healthConnectRoutes);
     expect(app.use).toHaveBeenCalledWith(timelineAnnotationsRoutes);
     expect(app.use).toHaveBeenCalledWith(athleteFactsRoutes);
     expect(app.use).toHaveBeenCalledWith(recycleBinRoutes);

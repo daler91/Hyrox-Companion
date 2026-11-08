@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.
+ * Payload for creating a new workout log along with optional exercise sets and structure blocks. Device-provenance fields (source, stravaActivityId, garminActivityId, healthConnectId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.
  */
 @Serializable
 public data class CreateWorkoutRequest(

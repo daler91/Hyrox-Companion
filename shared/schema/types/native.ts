@@ -43,3 +43,46 @@ export const stravaNativeCompleteSchema = z.object({
   verifier: z.string().regex(CODE_VERIFIER_PATTERN, { message: "verifier must be an RFC 7636 code verifier" }),
 });
 export type StravaNativeCompleteInput = z.infer<typeof stravaNativeCompleteSchema>;
+
+/** Health Connect allows a session at most this long; anything longer is not a workout. */
+const MAX_HEALTH_SESSION_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * One Health Connect exercise session, as the app reads it: the record's id,
+ * when it ran, its sport (mapped by the app onto Strava's sport-type names,
+ * which shared/deviceSportTypes.ts and the matcher already understand), and
+ * the totals the app aggregated over the session's span from the heart-rate,
+ * distance and active-calories records.
+ */
+export const healthConnectSessionSchema = z
+  .object({
+    id: z.string().min(1).max(255),
+    startTime: z.string().datetime({ offset: true }),
+    endTime: z.string().datetime({ offset: true }),
+    /** The session's UTC offset where it was recorded, which fixes its calendar date. */
+    zoneOffsetMinutes: z.number().int().min(-18 * 60).max(18 * 60).optional(),
+    sportType: z.string().min(1).max(64),
+    title: z.string().max(200).optional(),
+    distanceMeters: z.number().nonnegative().max(1_000_000).optional(),
+    activeCalories: z.number().nonnegative().max(20_000).optional(),
+    avgHeartRate: z.number().int().min(20).max(250).optional(),
+    maxHeartRate: z.number().int().min(20).max(250).optional(),
+    /** The package of the app that wrote the session (e.g. com.strava). */
+    dataOrigin: z.string().max(255).optional(),
+  })
+  .refine(
+    (session) => {
+      const span = Date.parse(session.endTime) - Date.parse(session.startTime);
+      return span > 0 && span <= MAX_HEALTH_SESSION_MS;
+    },
+    { message: "endTime must be after startTime, at most 24 hours later", path: ["endTime"] },
+  );
+export type HealthConnectSessionInput = z.infer<typeof healthConnectSessionSchema>;
+
+/** POST /api/v1/health-connect/sync */
+export const healthConnectSyncSchema = z.object({
+  sessions: z.array(healthConnectSessionSchema).max(100),
+  /** Sessions deleted in Health Connect since the last sync. */
+  deletedIds: z.array(z.string().min(1).max(255)).max(500).default([]),
+});
+export type HealthConnectSyncInput = z.infer<typeof healthConnectSyncSchema>;

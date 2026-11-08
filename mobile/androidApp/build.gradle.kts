@@ -80,4 +80,6 @@ dependencies {
     implementation(libs.play.app.update.ktx)
     implementation(libs.firebase.messaging)
     implementation(libs.glance.appwidget)
+    implementation(libs.health.connect.client)
+    implementation(libs.work.runtime.ktx)
 }
