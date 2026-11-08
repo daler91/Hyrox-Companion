@@ -33,6 +33,7 @@ import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.log.LogWorkoutScreen
+import com.fitai.coach.ui.nutrition.NutritionScreen
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.timeline.TimelineNavigation
@@ -81,9 +82,7 @@ fun AppShell() {
                 }
                 entry<Route.WorkoutDetail> { route -> WorkoutDetailScreen(route.workoutId, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
-                entry<Route.Nutrition> {
-                    Placeholder("nutrition", "your food log and today's targets will show here.")
-                }
+                entry<Route.Nutrition> { NutritionScreen() }
                 entry<Route.Analytics> {
                     Placeholder("analytics", "trends, personal records and progression will show here.")
                 }

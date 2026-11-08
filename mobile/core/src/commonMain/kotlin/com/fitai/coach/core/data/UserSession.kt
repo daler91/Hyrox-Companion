@@ -29,6 +29,7 @@ public class UserSession internal constructor(
     public val preferences: PreferencesRepository = PreferencesRepository(api, cache)
     public val parser: WorkoutParser = WorkoutParser(api)
     public val coach: CoachRepository = CoachRepository(api)
+    public val nutrition: NutritionRepository = NutritionRepository(api, cache)
 
     private var job: Job? = null
 

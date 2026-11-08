@@ -7,3 +7,13 @@ package com.fitai.coach.core.dates
  * does with the same preference.
  */
 public expect fun todayIn(timeZone: String?): String
+
+/** The current hour (0–23) in [timeZone], the device's zone when it is null or unknown. */
+public expect fun currentHourIn(timeZone: String?): Int
+
+/**
+ * The `loggedAt` timestamp for an entry on [date]: now when it is [today],
+ * otherwise noon that day, both in [timeZone], as the web's nutrition log
+ * stamps them (pages/nutrition/utils.ts).
+ */
+public expect fun loggedAtFor(date: String, today: String, timeZone: String?): String
