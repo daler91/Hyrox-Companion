@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.ui.analytics.AnalyticsScreen
 import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
@@ -83,9 +84,7 @@ fun AppShell() {
                 entry<Route.WorkoutDetail> { route -> WorkoutDetailScreen(route.workoutId, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
                 entry<Route.Nutrition> { NutritionScreen() }
-                entry<Route.Analytics> {
-                    Placeholder("analytics", "trends, personal records and progression will show here.")
-                }
+                entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }
                 entry<Route.Settings> { SettingsPlaceholder() }
             },
         )
@@ -123,11 +122,6 @@ private fun BottomBar(current: TopLevel, onSelect: (TopLevel) -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun Placeholder(title: String, message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState(title = title, message = message) }
 }
 
 @Composable
