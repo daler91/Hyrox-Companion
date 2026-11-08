@@ -43,7 +43,8 @@ jobs:
 
   cypress-run:
     needs: plan
-    runs-on: ubuntu-latest
+    # Pinned: Ubuntu 26.04 (now ubuntu-latest) ships no postgresql-16-pgvector.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     strategy:

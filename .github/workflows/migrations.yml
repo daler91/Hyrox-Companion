@@ -51,7 +51,9 @@ jobs:
   # errors at apply time (e.g. 0035's ambiguous column reference, which broke
   # every fresh-database bootstrap) was structurally invisible to CI.
   fresh-db-migrate:
-    runs-on: ubuntu-latest
+    # Pinned: Ubuntu 26.04 (now ubuntu-latest) ships no postgresql-16-pgvector,
+    # the Postgres 16 + pgvector this job installs.
+    runs-on: ubuntu-24.04
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
