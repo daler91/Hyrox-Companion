@@ -1,5 +1,6 @@
 package com.fitai.coach.core.data
 
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
@@ -15,9 +16,17 @@ import kotlinx.coroutines.IO
  * own file ([UserDatabaseStore]), deleted when they sign out.
  */
 @Database(
-    entities = [TimelineEntryEntity::class, WorkoutEntity::class, ExerciseSetEntity::class, OutboxEntity::class],
-    version = 1,
+    entities = [
+        TimelineEntryEntity::class,
+        WorkoutEntity::class,
+        ExerciseSetEntity::class,
+        OutboxEntity::class,
+        CacheEntryEntity::class,
+    ],
+    version = 2,
     exportSchema = true,
+    // Each version's schema is in core/schemas/. 2 added cache_entries.
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @ConstructedBy(FitaiDatabaseConstructor::class)
 public abstract class FitaiDatabase : RoomDatabase() {
@@ -26,6 +35,8 @@ public abstract class FitaiDatabase : RoomDatabase() {
     public abstract fun workouts(): WorkoutDao
 
     public abstract fun outbox(): OutboxDao
+
+    public abstract fun cache(): CacheDao
 }
 
 /** Room generates the actual implementations of this for each target. */

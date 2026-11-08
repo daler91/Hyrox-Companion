@@ -8,9 +8,30 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+public interface CacheDao {
+    @Query("SELECT * FROM cache_entries WHERE `key` = :key")
+    public fun observe(key: String): Flow<CacheEntryEntity?>
+
+    @Query("SELECT * FROM cache_entries WHERE `key` = :key")
+    public suspend fun get(key: String): CacheEntryEntity?
+
+    @Upsert
+    public suspend fun upsert(entry: CacheEntryEntity)
+
+    @Query("DELETE FROM cache_entries WHERE `key` = :key")
+    public suspend fun delete(key: String)
+
+    @Query("DELETE FROM cache_entries WHERE `key` LIKE :prefix || '%'")
+    public suspend fun deletePrefix(prefix: String)
+}
+
+@Dao
 public interface TimelineDao {
     @Query("SELECT * FROM timeline_entries ORDER BY position")
     public fun observeAll(): Flow<List<TimelineEntryEntity>>
+
+    @Query("SELECT * FROM timeline_entries WHERE id = :id")
+    public suspend fun get(id: String): TimelineEntryEntity?
 
     @Query("DELETE FROM timeline_entries")
     public suspend fun clear()

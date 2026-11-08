@@ -18,6 +18,8 @@ style:
     ignorePropertyDeclaration: true
     ignoreCompanionObjectPropertyDeclaration: true
     ignoreAnnotated: ['Composable', 'Preview']
+    # Bands such as RPE 1..3 read better as ranges than as named constants.
+    ignoreRanges: true
   UnusedPrivateMember:
     ignoreAnnotated: ['Preview']
 complexity:
@@ -25,8 +27,16 @@ complexity:
     # Kotlin files of top-level functions (unit conversion, date helpers) are
     # the equivalent of a TypeScript module; 11 is a class-sized limit.
     thresholdInFiles: 40
+    # A screen's view model has one function per user action.
+    thresholdInClasses: 20
   LongParameterList:
-    # Composables take their state and callbacks as parameters.
+    # Composables take their state and callbacks as parameters; test builders
+    # take one per field they vary.
+    ignoreAnnotated: ['Composable']
+    excludes: ['**/*Test/**', '**/test/**']
+  CyclomaticComplexMethod:
+    # A screen branches on its state to pick what to draw; the logic it
+    # renders lives in view models and plain functions, which stay checked.
     ignoreAnnotated: ['Composable']
   LongMethod:
     ignoreAnnotated: ['Composable']

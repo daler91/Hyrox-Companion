@@ -7,23 +7,30 @@ import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.prepareRequest
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.utils.io.readLine
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import io.ktor.http.HttpMethod as KtorMethod
 
 /** Which build is calling: sent as `X-App-Platform` / `X-App-Version` for the server's version gate. */
@@ -50,6 +57,9 @@ public class ApiException(
     message: String,
     public val details: Map<String, JsonElement?>? = null,
 ) : Exception(message)
+
+/** A decoded body with the response's headers (names lower-cased). */
+public data class ApiResponse<T>(val body: T, val headers: Map<String, String>)
 
 /** Request headers for idempotent creates (the server's idempotency middleware). */
 public const val IDEMPOTENCY_KEY_HEADER: String = "X-Idempotency-Key"
@@ -104,15 +114,64 @@ public class ApiClient(private val http: HttpClient) {
         path: String = endpoint.pathTemplate,
         query: List<Pair<String, String>> = emptyList(),
         idempotencyKey: String? = null,
-    ): Res {
-        val serializer = endpoint.requestSerializer
-        val json = if (serializer != null) {
-            requireNotNull(body) { "$endpoint needs a request body" }
-            ApiJson.encodeToString(serializer, body)
-        } else {
-            null
+    ): Res = decode(endpoint, execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey))
+
+    /**
+     * [call], also returning the response headers, for endpoints that page
+     * through one (`X-Next-Cursor` on the timeline and the chat history).
+     * Header names are lower-cased.
+     */
+    public suspend fun <Req, Res> callWithHeaders(
+        endpoint: ApiEndpoint<Req, Res>,
+        body: Req? = null,
+        path: String = endpoint.pathTemplate,
+        query: List<Pair<String, String>> = emptyList(),
+    ): ApiResponse<Res> {
+        val response = execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey = null)
+        val headers = response.headers.entries().associate { (name, values) -> name.lowercase() to values.first() }
+        return ApiResponse(decode(endpoint, response), headers)
+    }
+
+    /**
+     * Sends an endpoint that answers with Server-Sent Events (the coach's
+     * replies) and emits each event's `data:` JSON, decoded, as it arrives.
+     * The flow completes when the server closes the stream; cancelling the
+     * collector aborts the request. A line that is not an event, or does not
+     * decode, is skipped, as the web's parser does.
+     *
+     * @throws ApiException when the server refuses the request before streaming.
+     */
+    public fun <Req, Res> stream(endpoint: ApiEndpoint<Req, Res>, body: Req? = null, path: String = endpoint.pathTemplate): Flow<Res> =
+        channelFlow {
+            require(endpoint.responseKind == ResponseKind.EventStream) { "$endpoint does not stream" }
+            val serializer = requireNotNull(endpoint.responseSerializer)
+            val json = encodeBody(endpoint, body)
+            http.prepareRequest(path) {
+                method = endpoint.method.toKtor()
+                header(HttpHeaders.Accept, EVENT_STREAM)
+                timeout {
+                    requestTimeoutMillis = STREAM_TIMEOUT_MS
+                    socketTimeoutMillis = STREAM_IDLE_TIMEOUT_MS
+                }
+                if (json != null) {
+                    contentType(ContentType.Application.Json)
+                    setBody(json)
+                }
+            }.execute { response ->
+                if (response.status.value !in SUCCESS_RANGE) throw failure(response)
+                val channel = response.bodyAsChannel()
+                var line = channel.readLine()
+                while (line != null) {
+                    eventData(line)?.let { payload -> decodeOrNull(serializer, payload)?.let { send(it) } }
+                    line = channel.readLine()
+                }
+            }
         }
-        return decode(endpoint, execute(endpoint, path, query, json, idempotencyKey))
+
+    private fun <Req> encodeBody(endpoint: ApiEndpoint<Req, *>, body: Req?): String? {
+        val serializer = endpoint.requestSerializer ?: return null
+        requireNotNull(body) { "$endpoint needs a request body" }
+        return ApiJson.encodeToString(serializer, body)
     }
 
     /**
@@ -149,7 +208,7 @@ public class ApiClient(private val http: HttpClient) {
         ResponseKind.Json -> ApiJson.decodeFromString(requireNotNull(endpoint.responseSerializer), response.bodyAsText())
         ResponseKind.Raw -> response.bodyAsText() as Res
         ResponseKind.None -> Unit as Res
-        ResponseKind.EventStream -> error("$endpoint streams Server-Sent Events; it has no single body to decode")
+        ResponseKind.EventStream -> error("$endpoint streams Server-Sent Events: use stream()")
     }
 
     private suspend fun failure(response: HttpResponse): ApiException {
@@ -168,19 +227,36 @@ public class ApiClient(private val http: HttpClient) {
         }
         return ApiException(
             status = status,
-            code = parsed?.code,
-            message = parsed?.error ?: "HTTP $status",
+            code = parsed?.code ?: stringField(text, "code"),
+            // Some refusals ({undone:false, reason, message}) carry `message`, not `error`.
+            message = parsed?.error ?: stringField(text, "message") ?: "HTTP $status",
             details = parsed?.details,
         )
     }
 
-    private fun minimumVersion(body: String): String? = try {
-        ApiJson.parseToJsonElement(body).jsonObject["minimumVersion"]?.jsonPrimitive?.contentOrNull
+    private fun minimumVersion(body: String): String? = stringField(body, "minimumVersion")
+
+    private fun stringField(body: String, name: String): String? = try {
+        (ApiJson.parseToJsonElement(body) as? JsonObject)?.get(name)?.let { it as? JsonPrimitive }?.contentOrNull
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {
         null
     }
+}
+
+/** The payload of an SSE `data:` line, or null for any other line (comments, `event:`, blank separators). */
+internal fun eventData(line: String): String? {
+    if (!line.startsWith(DATA_PREFIX)) return null
+    return line.removePrefix(DATA_PREFIX).trim().takeIf { it.isNotEmpty() }
+}
+
+private fun <T> decodeOrNull(serializer: kotlinx.serialization.KSerializer<T>, json: String): T? = try {
+    ApiJson.decodeFromString(serializer, json)
+} catch (_: SerializationException) {
+    null
+} catch (_: IllegalArgumentException) {
+    null
 }
 
 private fun HttpMethod.toKtor(): KtorMethod = when (this) {
@@ -195,6 +271,14 @@ internal const val APP_PLATFORM_HEADER = "X-App-Platform"
 internal const val APP_VERSION_HEADER = "X-App-Version"
 private const val CONNECT_TIMEOUT_MS = 15_000L
 private const val REQUEST_TIMEOUT_MS = 30_000L
+
+// The server caps a coach reply at 5 minutes and sends no heartbeats, so a
+// long silent step (drafting a plan change) must not trip an idle timeout
+// before the server's own cap does.
+private const val STREAM_TIMEOUT_MS = 6L * 60 * 1000
+private const val STREAM_IDLE_TIMEOUT_MS = STREAM_TIMEOUT_MS
+private const val EVENT_STREAM = "text/event-stream"
+private const val DATA_PREFIX = "data:"
 private const val UNAUTHORIZED = 401
 private const val UPGRADE_REQUIRED = 426
 private val SUCCESS_RANGE = 200..299

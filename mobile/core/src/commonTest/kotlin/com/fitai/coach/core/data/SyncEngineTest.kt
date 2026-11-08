@@ -30,7 +30,7 @@ class SyncEngineTest {
     private var clock = 1_000L
     private var keys = 0
     private val sync = SyncEngine(db, server.api, now = { clock }, newKey = { "key-${++keys}" })
-    private val workouts = WorkoutRepository(db, server.api, sync)
+    private val workouts = WorkoutRepository(db, server.api, sync) { "live-key" }
 
     @AfterTest
     fun closeDatabase() = db.close()
@@ -165,7 +165,7 @@ class ExerciseSetSyncTest {
     private val server = FakeServer()
     private val db = testDatabaseStore().open("u1")
     private val sync = SyncEngine(db, server.api, now = { 0L }, newKey = { newIdempotencyKey() })
-    private val workouts = WorkoutRepository(db, server.api, sync)
+    private val workouts = WorkoutRepository(db, server.api, sync) { "live-key" }
 
     @AfterTest
     fun closeDatabase() = db.close()

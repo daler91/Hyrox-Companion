@@ -1,61 +1,88 @@
 package com.fitai.coach.ui.shell
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
-import com.fitai.coach.core.data.SessionManager
-import com.fitai.coach.ui.components.ButtonVariant
-import com.fitai.coach.ui.components.EmptyState
-import com.fitai.coach.ui.components.FitaiBottomSheet
-import com.fitai.coach.ui.components.FitaiButton
+import com.fitai.coach.ui.analytics.AnalyticsScreen
+import com.fitai.coach.ui.coach.CoachPanel
+import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.log.LogWorkoutScreen
+import com.fitai.coach.ui.nutrition.NutritionScreen
+import com.fitai.coach.ui.onboarding.OnboardingScreen
+import com.fitai.coach.ui.session.LocalUserSession
+import com.fitai.coach.ui.settings.SettingsScreen
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
-import com.fitai.coach.ui.theme.Spacing
-import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
+import com.fitai.coach.ui.timeline.TimelineNavigation
+import com.fitai.coach.ui.timeline.TimelineScreen
+import com.fitai.coach.ui.workout.WorkoutDetailScreen
 
 /**
  * The signed-in app: the bottom bar's five destinations, and the coach,
  * which opens as a panel over any of them, as CoachPanel does on the web.
- * Destinations are placeholders until their v1 screens land (Phase 4).
  */
 @Composable
 fun AppShell() {
+    val session = LocalUserSession.current
     val backStack = remember { AppBackStack() }
     var coachOpen by rememberSaveable { mutableStateOf(false) }
+    // Setup (onboarding): opens by itself once for a new account, and again
+    // from Settings. Each opening is a new run, so it starts fresh.
+    var setupOpen by rememberSaveable { mutableStateOf(false) }
+    var setupRun by rememberSaveable { mutableIntStateOf(0) }
+    var setupChecked by rememberSaveable { mutableStateOf(false) }
+    var shellMessage by remember { mutableStateOf<String?>(null) }
+    val toasts = remember { SnackbarHostState() }
     val colors = FitaiTheme.colors
+
+    LaunchedEffect(session.userId) {
+        if (setupChecked) return@LaunchedEffect
+        // Offline or failed: not now. A returning athlete is never shown setup on a guess.
+        if (runCatching { session.onboarding.shouldStart() }.getOrDefault(false)) setupOpen = true
+        setupChecked = true
+    }
+    LaunchedEffect(shellMessage) {
+        shellMessage?.let {
+            toasts.showSnackbar(it)
+            shellMessage = null
+        }
+    }
+
+    if (setupOpen) {
+        OnboardingScreen(run = setupRun) { result ->
+            setupOpen = false
+            if (result.madePlan) backStack.select(TopLevel.Training)
+            shellMessage = result.message
+        }
+        return
+    }
 
     Scaffold(
         containerColor = colors.background,
+        snackbarHost = { FitaiToastHost(toasts) },
         bottomBar = { BottomBar(current = backStack.currentTab, onSelect = backStack::select) },
         floatingActionButton = {
             FloatingActionButton(
@@ -73,18 +100,26 @@ fun AppShell() {
             modifier = Modifier.padding(padding),
             entryProvider = entryProvider {
                 entry<Route.Training> {
-                    Placeholder("training", "your plan and logged workouts will show here, week by week.")
+                    TimelineScreen(
+                        TimelineNavigation(
+                            openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
+                            askCoach = { coachOpen = true },
+                            logWorkout = { backStack.select(TopLevel.LogWorkout) },
+                        ),
+                    )
                 }
-                entry<Route.LogWorkout> {
-                    Placeholder("log a workout", "type it, say it or snap it — the coach structures it for you.")
+                entry<Route.WorkoutDetail> { route -> WorkoutDetailScreen(route.workoutId, onBack = { backStack.pop() }) }
+                entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
+                entry<Route.Nutrition> { NutritionScreen() }
+                entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }
+                entry<Route.Settings> {
+                    SettingsScreen(
+                        onRunSetup = {
+                            setupRun++
+                            setupOpen = true
+                        },
+                    )
                 }
-                entry<Route.Nutrition> {
-                    Placeholder("nutrition", "your food log and today's targets will show here.")
-                }
-                entry<Route.Analytics> {
-                    Placeholder("analytics", "trends, personal records and progression will show here.")
-                }
-                entry<Route.Settings> { SettingsPlaceholder() }
             },
         )
     }
@@ -119,53 +154,6 @@ private fun BottomBar(current: TopLevel, onSelect: (TopLevel) -> Unit) {
                     ),
                 )
             }
-        }
-    }
-}
-
-/** The coach panel. The streaming chat arrives with the v1 features (Phase 4). */
-@Composable
-private fun CoachPanel(onClose: () -> Unit) {
-    FitaiBottomSheet(onDismissRequest = onClose) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
-        ) {
-            Icon(LucideIcons.MessageSquare, contentDescription = null, tint = FitaiTheme.colors.text)
-            Text(
-                "coach",
-                style = FitaiTheme.typography.h3,
-                color = FitaiTheme.colors.text,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            IconButton(onClick = onClose) { Icon(LucideIcons.X, contentDescription = "close coach panel") }
-        }
-        EmptyState(
-            title = "ask your coach",
-            message = "chat about today's session, your plan or your recovery. coming in the next release.",
-        )
-    }
-}
-
-@Composable
-private fun Placeholder(title: String, message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState(title = title, message = message) }
-}
-
-@Composable
-private fun SettingsPlaceholder() {
-    val sessions = koinInject<SessionManager>()
-    val scope = rememberCoroutineScope()
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            EmptyState(title = "settings", message = "profile, units, notifications and integrations will show here.")
-            // Signing out also deletes this user's data from the device, unsent changes included.
-            FitaiButton(
-                text = "sign out",
-                onClick = { scope.launch { runCatching { sessions.signOut() } } },
-                variant = ButtonVariant.Secondary,
-            )
         }
     }
 }
