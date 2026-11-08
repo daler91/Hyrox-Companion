@@ -24,7 +24,7 @@ public class UserSession internal constructor(
 ) {
     public val sync: SyncEngine = SyncEngine(database, api, now, newKey)
     public val cache: CacheStore = CacheStore(database, now)
-    public val timeline: TimelineRepository = TimelineRepository(database, api)
+    public val timeline: TimelineRepository = TimelineRepository(database, api, sync, cache)
     public val workouts: WorkoutRepository = WorkoutRepository(database, api, sync)
     public val preferences: PreferencesRepository = PreferencesRepository(api, cache)
 
@@ -42,6 +42,7 @@ public class UserSession internal constructor(
             launch { sync.events.filterIsInstance<SyncEvent.Synced>().collect { bestEffort { timeline.refresh() } } }
             bestEffort { preferences.refresh() }
             bestEffort { timeline.refresh() }
+            bestEffort { timeline.refreshPlans() }
         }
     }
 

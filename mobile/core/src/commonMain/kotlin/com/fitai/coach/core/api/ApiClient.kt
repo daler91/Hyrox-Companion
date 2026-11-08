@@ -58,6 +58,9 @@ public class ApiException(
     public val details: Map<String, JsonElement?>? = null,
 ) : Exception(message)
 
+/** A decoded body with the response's headers (names lower-cased). */
+public data class ApiResponse<T>(val body: T, val headers: Map<String, String>)
+
 /** Request headers for idempotent creates (the server's idempotency middleware). */
 public const val IDEMPOTENCY_KEY_HEADER: String = "X-Idempotency-Key"
 
@@ -112,6 +115,22 @@ public class ApiClient(private val http: HttpClient) {
         query: List<Pair<String, String>> = emptyList(),
         idempotencyKey: String? = null,
     ): Res = decode(endpoint, execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey))
+
+    /**
+     * [call], also returning the response headers, for endpoints that page
+     * through one (`X-Next-Cursor` on the timeline and the chat history).
+     * Header names are lower-cased.
+     */
+    public suspend fun <Req, Res> callWithHeaders(
+        endpoint: ApiEndpoint<Req, Res>,
+        body: Req? = null,
+        path: String = endpoint.pathTemplate,
+        query: List<Pair<String, String>> = emptyList(),
+    ): ApiResponse<Res> {
+        val response = execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey = null)
+        val headers = response.headers.entries().associate { (name, values) -> name.lowercase() to values.first() }
+        return ApiResponse(decode(endpoint, response), headers)
+    }
 
     /**
      * Sends an endpoint that answers with Server-Sent Events (the coach's
@@ -250,9 +269,11 @@ internal const val APP_VERSION_HEADER = "X-App-Version"
 private const val CONNECT_TIMEOUT_MS = 15_000L
 private const val REQUEST_TIMEOUT_MS = 30_000L
 
-// A coach reply can run for minutes; what matters is that bytes keep arriving.
-private const val STREAM_TIMEOUT_MS = 10L * 60 * 1000
-private const val STREAM_IDLE_TIMEOUT_MS = 90_000L
+// The server caps a coach reply at 5 minutes and sends no heartbeats, so a
+// long silent step (drafting a plan change) must not trip an idle timeout
+// before the server's own cap does.
+private const val STREAM_TIMEOUT_MS = 6L * 60 * 1000
+private const val STREAM_IDLE_TIMEOUT_MS = STREAM_TIMEOUT_MS
 private const val EVENT_STREAM = "text/event-stream"
 private const val DATA_PREFIX = "data:"
 private const val UNAUTHORIZED = 401

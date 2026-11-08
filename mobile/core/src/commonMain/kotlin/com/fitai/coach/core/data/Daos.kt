@@ -30,6 +30,9 @@ public interface TimelineDao {
     @Query("SELECT * FROM timeline_entries ORDER BY position")
     public fun observeAll(): Flow<List<TimelineEntryEntity>>
 
+    @Query("SELECT * FROM timeline_entries WHERE id = :id")
+    public suspend fun get(id: String): TimelineEntryEntity?
+
     @Query("DELETE FROM timeline_entries")
     public suspend fun clear()
 

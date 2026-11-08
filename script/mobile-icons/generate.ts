@@ -20,6 +20,22 @@ export const ICONS: Readonly<Record<string, string>> = {
   Settings: "settings",
   MessageSquare: "message-square",
   X: "x",
+  ArrowLeft: "arrow-left",
+  ChevronLeft: "chevron-left",
+  ChevronRight: "chevron-right",
+  Camera: "camera",
+  Image: "image",
+  Mic: "mic",
+  Send: "send",
+  Square: "square",
+  Trash: "trash",
+  Star: "star",
+  Plus: "plus",
+  Search: "search",
+  Check: "check",
+  RefreshCw: "refresh-cw",
+  ThumbsUp: "thumbs-up",
+  ThumbsDown: "thumbs-down",
 };
 
 export type IconNode = [tag: string, attrs: Record<string, string>];

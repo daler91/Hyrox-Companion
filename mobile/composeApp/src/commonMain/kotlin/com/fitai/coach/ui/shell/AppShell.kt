@@ -40,6 +40,9 @@ import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
+import com.fitai.coach.ui.timeline.TimelineNavigation
+import com.fitai.coach.ui.timeline.TimelineScreen
+import com.fitai.coach.ui.workout.WorkoutDetailScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -73,8 +76,15 @@ fun AppShell() {
             modifier = Modifier.padding(padding),
             entryProvider = entryProvider {
                 entry<Route.Training> {
-                    Placeholder("training", "your plan and logged workouts will show here, week by week.")
+                    TimelineScreen(
+                        TimelineNavigation(
+                            openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
+                            askCoach = { coachOpen = true },
+                            logWorkout = { backStack.select(TopLevel.LogWorkout) },
+                        ),
+                    )
                 }
+                entry<Route.WorkoutDetail> { route -> WorkoutDetailScreen(route.workoutId, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> {
                     Placeholder("log a workout", "type it, say it or snap it — the coach structures it for you.")
                 }

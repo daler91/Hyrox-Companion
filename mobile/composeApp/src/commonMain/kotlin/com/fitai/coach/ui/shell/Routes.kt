@@ -18,6 +18,9 @@ sealed interface Route : NavKey {
     @Serializable data object Analytics : Route
 
     @Serializable data object Settings : Route
+
+    /** A logged workout and its sets. */
+    @Serializable data class WorkoutDetail(val workoutId: String) : Route
 }
 
 /**
