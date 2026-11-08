@@ -233,7 +233,6 @@ function BlockAssignmentBadge({
         <button
           type="button"
           className="hidden max-w-[9rem] shrink-0 truncate rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:inline-block"
-          title={option.label}
           aria-label={`Block assignment for ${label}: ${option.label}`}
           data-testid="exercise-row-block-assignment"
         >
@@ -359,15 +358,23 @@ const GroupRow = memo(function GroupRow({
             className="inline-block size-2 shrink-0 rounded-full"
             style={{ backgroundColor: color }}
           />
-          <span
-            className={cn(
-              "min-w-0 flex-1 truncate font-medium",
-              lowConfidence && "text-muted-foreground",
-            )}
-            title={label}
-          >
-            {label}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate font-medium",
+                    lowConfidence && "text-muted-foreground",
+                  )}
+                >
+                  {label}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{label}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {lowConfidence && (
             <span
               className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"

@@ -2,6 +2,7 @@ import type { FuellingDayPoint } from "@shared/schema";
 import { Check, Flame } from "lucide-react";
 import { useLocation } from "wouter";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { computeTargetProgress } from "@/pages/nutrition/utils";
 
@@ -39,27 +40,40 @@ export function FuellingDayChip({
     : `Fuelling: ${totals.calories} kcal logged${postWorkoutLabel}`;
 
   return (
-    <button
-      type="button"
-      onClick={() => setLocation(`/nutrition?date=${date}`)}
-      className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 md:h-7"
-      aria-label={label}
-      title={label}
-      data-testid={`fuelling-chip-${date}`}
-    >
-      <Flame className="h-3.5 w-3.5" aria-hidden="true" />
-      <span className="tabular-nums">
-        <span className={cn("font-medium", caloriesOver ? "text-warning" : "text-foreground")}>
-          {totals.calories}
-        </span>
-        {calories ? <span>/{calories.target}</span> : null}
-      </span>
-      {protein ? (
-        <span className="tabular-nums">
-          P <span className="font-medium text-foreground">{protein.value}</span>/{protein.target}
-        </span>
-      ) : null}
-      {hasPostWorkoutFuel ? <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" /> : null}
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => setLocation(`/nutrition?date=${date}`)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 md:h-7"
+            aria-label={label}
+            data-testid={`fuelling-chip-${date}`}
+          >
+            <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="tabular-nums">
+              <span
+                className={cn("font-medium", caloriesOver ? "text-warning" : "text-foreground")}
+              >
+                {totals.calories}
+              </span>
+              {calories ? <span>/{calories.target}</span> : null}
+            </span>
+            {protein ? (
+              <span className="tabular-nums">
+                P <span className="font-medium text-foreground">{protein.value}</span>/
+                {protein.target}
+              </span>
+            ) : null}
+            {hasPostWorkoutFuel ? (
+              <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            ) : null}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>{label}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
