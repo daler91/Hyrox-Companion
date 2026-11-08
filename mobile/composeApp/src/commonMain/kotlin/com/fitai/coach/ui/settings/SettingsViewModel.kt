@@ -7,6 +7,7 @@ import com.fitai.coach.core.api.generated.GetStravaStatusResponse
 import com.fitai.coach.core.api.generated.PreferencesResponse
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.api.generated.User
+import com.fitai.coach.core.data.ExportFormat
 import com.fitai.coach.core.data.SessionManager
 import com.fitai.coach.core.data.StravaConnectException
 import com.fitai.coach.core.data.UserSession
@@ -141,6 +142,13 @@ class SettingsViewModel(
         session.account.disconnectGarmin()
         toasts.send("Garmin disconnected")
     }
+
+    /** Fetches the athlete's data export and hands it to [share]. */
+    fun export(format: ExportFormat, share: (fileName: String, mimeType: String, content: String) -> Unit) =
+        run("export", "Couldn't export your data") {
+            val content = session.account.exportData(format)
+            share(format.fileName, format.mimeType, content)
+        }
 
     /** Registers this phone for push, once the system allows notifications. */
     fun enablePush() = run("push", "Couldn't turn on notifications") {

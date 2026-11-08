@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -35,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.PreferencesResponse
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
+import com.fitai.coach.core.data.ExportFormat
 import com.fitai.coach.core.data.SessionManager
 import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.components.BadgeTone
@@ -51,6 +54,7 @@ import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.platform.rememberBrowser
+import com.fitai.coach.ui.platform.rememberFileSharer
 import com.fitai.coach.ui.platform.rememberNotificationAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
@@ -103,7 +107,7 @@ fun SettingsScreen(
                 dialog =
                     it
             })
-            Privacy(state, vm::setErrorReporting)
+            Privacy(state, vm)
             Account(onSignOut = {
                 dialog = if (state.pendingWrites >
                     0
@@ -129,11 +133,15 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    val haptics = LocalHapticFeedback.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
         Switch(
             checked = checked,
-            onCheckedChange = onChange,
+            onCheckedChange = { on ->
+                haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+                onChange(on)
+            },
             enabled = enabled,
             colors = SwitchDefaults.colors(checkedTrackColor = FitaiTheme.colors.primary, checkedThumbColor = FitaiTheme.colors.onPrimary),
         )
@@ -330,10 +338,34 @@ private fun Integrations(
 }
 
 @Composable
-private fun Privacy(state: SettingsUiState, onErrorReporting: (Boolean) -> Unit) {
+private fun Privacy(state: SettingsUiState, vm: SettingsViewModel) {
     val uri = LocalUriHandler.current
+    val sharer = rememberFileSharer()
     Section("Data & privacy") {
-        Toggle("Send error diagnostics", state.errorReporting == true, enabled = state.errorReporting != null, onChange = onErrorReporting)
+        Toggle(
+            "Send error diagnostics",
+            state.errorReporting == true,
+            enabled = state.errorReporting != null,
+            onChange = vm::setErrorReporting,
+        )
+        sharer?.let {
+            Text("Export your training data", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton(
+                    "CSV",
+                    onClick = { vm.export(ExportFormat.Csv, it::share) },
+                    variant = ButtonVariant.Secondary,
+                    loading = state.busy == "export",
+                )
+                FitaiButton(
+                    "JSON",
+                    onClick = { vm.export(ExportFormat.Json, it::share) },
+                    variant = ButtonVariant.Secondary,
+                    enabled =
+                    state.busy != "export",
+                )
+            }
+        }
         TextButton(onClick = { uri.openUri(PRIVACY_POLICY_URL) }) { Text("Privacy policy", color = FitaiTheme.colors.accent) }
     }
 }

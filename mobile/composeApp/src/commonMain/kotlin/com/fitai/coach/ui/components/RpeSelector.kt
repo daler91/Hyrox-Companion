@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 
@@ -24,10 +26,14 @@ fun rpeLabel(rpe: Int): String = when (rpe) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RpeSelector(value: Int?, onChange: (Int?) -> Unit, modifier: Modifier = Modifier) {
+    val haptics = LocalHapticFeedback.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             for (rpe in 1..MAX_RPE) {
-                FitaiChip(label = rpe.toString(), selected = value == rpe, onClick = { onChange(if (value == rpe) null else rpe) })
+                FitaiChip(label = rpe.toString(), selected = value == rpe, onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onChange(if (value == rpe) null else rpe)
+                })
             }
         }
         Text(

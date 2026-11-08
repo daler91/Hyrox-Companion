@@ -6,6 +6,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Asked for from Settings when the athlete turns notifications on, never at launch. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Dictation with the on-device speech recogniser; asked for on the first tap of Dictate. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Finding the speech recogniser service and a camera app (package visibility, API 30+). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
 
     <application
         android:name=".FitaiApplication"
@@ -43,6 +55,18 @@
                 <data android:path="/strava/mobile-callback" />
             </intent-filter>
         </activity>
+
+        <!-- Hands the camera app a file to write its photo to, and the share
+             sheet a data export (composeApp/.../platform, media). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <service
             android:name=".push.FitaiMessagingService"

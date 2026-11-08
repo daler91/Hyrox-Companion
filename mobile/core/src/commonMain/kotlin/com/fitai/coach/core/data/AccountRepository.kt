@@ -16,6 +16,12 @@ import com.fitai.coach.core.auth.Pkce
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.builtins.serializer
 
+/** The data export's formats, with the file each is shared as. */
+public enum class ExportFormat(public val wireValue: String, public val fileName: String, public val mimeType: String) {
+    Csv("csv", "fitai-training-data.csv", "text/csv"),
+    Json("json", "fitai-training-data.json", "application/json"),
+}
+
 /** Why a native Strava connection didn't finish, in words for the athlete. */
 public class StravaConnectException(message: String) : Exception(message)
 
@@ -98,6 +104,9 @@ public class AccountRepository(private val api: ApiClient, private val cache: Ca
         val request = PostConsentsRequest(consentType = PostConsentsRequest.ConsentType.ErrorReporting, granted = granted)
         api.call(ApiEndpoints.PostConsents, request)
     }
+
+    /** All the athlete's training data, as the server exports it (GET /export, as on the web's Settings). */
+    public suspend fun exportData(format: ExportFormat): String = api.text(ApiEndpoints.GetExport, listOf("format" to format.wireValue))
 
     /** Deletes the account and everything in it on the server. Irreversible. */
     public suspend fun deleteAccount() {

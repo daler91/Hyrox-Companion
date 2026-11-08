@@ -57,4 +57,11 @@ class AccountRepositoryTest {
         assertFailsWith<StravaConnectException> { account.finishStravaConnect("c1", "s1", null) }
         assertTrue(server.sentTo("POST", "/api/v1/strava/native/complete").isEmpty())
     }
+
+    @Test
+    fun theExportIsFetchedAsTextInTheChosenFormat() = runTest {
+        server.on("GET", "/api/v1/export", 200, "date,type\n2026-11-08,run\n")
+        assertEquals("date,type\n2026-11-08,run\n", account.exportData(ExportFormat.Csv))
+        assertEquals("format=csv", server.sentTo("GET", "/api/v1/export").single().query)
+    }
 }

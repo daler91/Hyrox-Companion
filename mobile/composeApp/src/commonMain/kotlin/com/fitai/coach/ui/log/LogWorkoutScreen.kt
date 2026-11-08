@@ -3,6 +3,8 @@ package com.fitai.coach.ui.log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -45,6 +49,8 @@ import com.fitai.coach.ui.format.exerciseLabel
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.media.SpeechInput
+import com.fitai.coach.ui.media.rememberCamera
 import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.media.rememberSpeechInput
 import com.fitai.coach.ui.session.LocalUserSession
@@ -62,9 +68,16 @@ fun LogWorkoutScreen(onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
     val toast: (String) -> Unit = { message -> scope.launch { toasts.showSnackbar(message) } }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
-    LaunchedEffect(vm) { vm.saved.collect { onSaved() } }
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(vm) {
+        vm.saved.collect {
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            onSaved()
+        }
+    }
     val pickPhoto = rememberPhotoPicker(onPicked = vm::parsePhoto, onError = toast)
     val dictate = rememberSpeechInput(onText = vm::appendText, onError = toast)
+    val takePhoto = rememberCamera(onPicked = vm::parsePhoto, onError = toast)
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -82,7 +95,7 @@ fun LogWorkoutScreen(onSaved: () -> Unit) {
             Steps(state.step)
             if (state.restored && state.step == LogStep.Capture) Restored(state, vm)
             when (state.step) {
-                LogStep.Capture -> Capture(state, vm, pickPhoto, dictate)
+                LogStep.Capture -> Capture(state, vm, PhotoSources(pickPhoto, takePhoto), dictate)
                 LogStep.Confirm -> Confirm(state, vm, prefs?.weightUnit, prefs?.distanceUnit)
                 LogStep.Reflect -> Reflect(state, vm, dictate)
             }
@@ -120,8 +133,22 @@ private fun Restored(state: LogUiState, vm: LogWorkoutViewModel) {
     }
 }
 
+/** Where a workout photo can come from: the camera, the gallery, either or neither. */
+private data class PhotoSources(val pick: (() -> Unit)?, val take: (() -> Unit)?)
+
+/** Starts dictation, and stops it while listening. */
 @Composable
-private fun Capture(state: LogUiState, vm: LogWorkoutViewModel, pickPhoto: (() -> Unit)?, dictate: (() -> Unit)?) {
+private fun DictateButton(input: SpeechInput, label: String, variant: ButtonVariant) {
+    if (input.listening) {
+        FitaiButton("Listening… tap to stop", onClick = input::stop, variant = variant, leadingIcon = LucideIcons.Square)
+    } else {
+        FitaiButton(label, onClick = input::start, variant = variant, leadingIcon = LucideIcons.Mic)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Capture(state: LogUiState, vm: LogWorkoutViewModel, photos: PhotoSources, dictate: SpeechInput?) {
     val draft = state.draft
     val yesterday = addDaysToIsoDate(state.today, -1)
     FitaiTextField(draft.title, { title -> vm.edit { it.copy(title = title) } }, "Title (optional)", placeholder = "e.g., Morning Push")
@@ -139,9 +166,10 @@ private fun Capture(state: LogUiState, vm: LogWorkoutViewModel, pickPhoto: (() -
         supportingText = "${draft.text.length}/$MAX_PARSE_TEXT",
         singleLine = false,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        pickPhoto?.let { FitaiButton("Photo", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Image) }
-        dictate?.let { FitaiButton("Dictate", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Mic) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        photos.take?.let { FitaiButton("Camera", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Camera) }
+        photos.pick?.let { FitaiButton("Photo", onClick = it, variant = ButtonVariant.Secondary, leadingIcon = LucideIcons.Image) }
+        dictate?.let { DictateButton(it, "Dictate", ButtonVariant.Secondary) }
     }
     FitaiButton("Continue to exercises", onClick = vm::continueToConfirm, modifier = Modifier.fillMaxWidth())
 }
@@ -221,7 +249,7 @@ private fun SetValue(
 }
 
 @Composable
-private fun Reflect(state: LogUiState, vm: LogWorkoutViewModel, dictate: (() -> Unit)?) {
+private fun Reflect(state: LogUiState, vm: LogWorkoutViewModel, dictate: SpeechInput?) {
     val draft = state.draft
     Text("How hard was that?", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
     if (!draft.skipRpe) RpeSelector(draft.rpe, { rpe -> vm.edit { it.copy(rpe = rpe) } })
@@ -243,7 +271,7 @@ private fun Reflect(state: LogUiState, vm: LogWorkoutViewModel, dictate: (() -> 
         placeholder = "How did the workout feel? Any observations...",
         singleLine = false,
     )
-    dictate?.let { FitaiButton("Dictate a note", onClick = it, variant = ButtonVariant.Ghost, leadingIcon = LucideIcons.Mic) }
+    dictate?.let { DictateButton(it, "Dictate a note", ButtonVariant.Ghost) }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
         FitaiButton("Back", onClick = vm::back, variant = ButtonVariant.Ghost)
         FitaiButton("Save workout", onClick = vm::save, loading = state.saving, modifier = Modifier.weight(1f))

@@ -21,8 +21,24 @@ const val MAX_SOURCE_BYTES: Long = 20L * 1024 * 1024
 expect fun rememberPhotoPicker(onPicked: (EncodedImage) -> Unit, onError: (String) -> Unit): (() -> Unit)?
 
 /**
- * Remembers a launcher for the platform's speech recogniser; the transcript
- * arrives through [onText]. Null where the platform has none.
+ * Remembers a launcher for the camera: the photo taken arrives scaled and
+ * JPEG-encoded through [onPicked], as from the picker. Null where there is no camera.
  */
 @Composable
-expect fun rememberSpeechInput(onText: (String) -> Unit, onError: (String) -> Unit): (() -> Unit)?
+expect fun rememberCamera(onPicked: (EncodedImage) -> Unit, onError: (String) -> Unit): (() -> Unit)?
+
+/** Dictation: [start] listens until the athlete stops talking (or [stop]); the transcript goes to onText. */
+interface SpeechInput {
+    val listening: Boolean
+
+    fun start()
+
+    fun stop()
+}
+
+/**
+ * Remembers the platform's speech recogniser; the transcript arrives
+ * through [onText]. Null where the platform has none.
+ */
+@Composable
+expect fun rememberSpeechInput(onText: (String) -> Unit, onError: (String) -> Unit): SpeechInput?

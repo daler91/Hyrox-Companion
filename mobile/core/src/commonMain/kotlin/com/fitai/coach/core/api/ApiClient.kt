@@ -183,6 +183,10 @@ public class ApiClient(private val http: HttpClient) {
     public suspend fun send(endpoint: ApiEndpoint<*, *>, path: String, body: String?, idempotencyKey: String?): String =
         execute(endpoint, path, emptyList(), body, idempotencyKey).bodyAsText()
 
+    /** A GET whose body the app keeps as text, undecoded: a file the server generates (the data export). */
+    public suspend fun text(endpoint: ApiEndpoint<Unit, *>, query: List<Pair<String, String>> = emptyList()): String =
+        execute(endpoint, endpoint.pathTemplate, query, null, null).bodyAsText()
+
     private suspend fun execute(
         endpoint: ApiEndpoint<*, *>,
         path: String,

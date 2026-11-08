@@ -31,6 +31,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -55,6 +57,7 @@ import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.markdown.MarkdownText
+import com.fitai.coach.ui.media.rememberCamera
 import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -85,6 +88,7 @@ fun CoachPanel(onClose: () -> Unit) {
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
     var confirmClear by remember { mutableStateOf(false) }
     val pickPhoto = rememberPhotoPicker(onPicked = vm::attachPhoto, onError = { scope.launch { toasts.showSnackbar(it) } })
+    val takePhoto = rememberCamera(onPicked = vm::attachPhoto, onError = { scope.launch { toasts.showSnackbar(it) } })
 
     FitaiBottomSheet(onDismissRequest = onClose) {
         Box(Modifier.fillMaxHeight(PANEL_HEIGHT).imePadding()) {
@@ -95,7 +99,7 @@ fun CoachPanel(onClose: () -> Unit) {
                     Consent(state.enablingAi, vm::enableAiCoach)
                 } else {
                     Conversation(state, vm, Modifier.weight(1f))
-                    Composer(state, vm, pickPhoto)
+                    Composer(state, vm, pickPhoto, takePhoto)
                 }
             }
             FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
@@ -210,6 +214,7 @@ private fun UserBubble(item: ChatItem) {
 
 @Composable
 private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewModel) {
+    val haptics = LocalHapticFeedback.current
     val colors = FitaiTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         item.safety?.let { notice ->
@@ -224,7 +229,10 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
             ProposalCard(
                 proposal,
                 busy = state.busyProposal == proposal.id,
-                onApply = { vm.applyProposal(proposal, it) },
+                onApply = {
+                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    vm.applyProposal(proposal, it)
+                },
                 onDismiss = { vm.dismissProposal(proposal) },
                 onUndo = { vm.undoProposal(proposal) },
             )
@@ -272,7 +280,7 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
 }
 
 @Composable
-private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> Unit)?) {
+private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> Unit)?, takePhoto: (() -> Unit)?) {
     var text by rememberSaveable { mutableStateOf("") }
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg, vertical = Spacing.Sm),
@@ -294,9 +302,14 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> 
             }
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+            takePhoto?.let {
+                IconButton(onClick = it, enabled = state.photo == null) {
+                    Icon(LucideIcons.Camera, contentDescription = "take a photo", tint = FitaiTheme.colors.text)
+                }
+            }
             pickPhoto?.let {
                 IconButton(onClick = it, enabled = state.photo == null) {
-                    Icon(LucideIcons.Camera, contentDescription = "attach a photo", tint = FitaiTheme.colors.text)
+                    Icon(LucideIcons.Image, contentDescription = "attach a photo", tint = FitaiTheme.colors.text)
                 }
             }
             FitaiTextField(
