@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The outbox waits for a network and sends when one comes back (NetworkMonitor). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Asked for from Settings when the athlete turns notifications on, never at launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".FitaiApplication"
@@ -41,6 +43,25 @@
                 <data android:path="/strava/mobile-callback" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".push.FitaiMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- No FCM token until the athlete turns notifications on in Settings. -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+        <!-- For notifications FCM shows itself (the app in the background). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="training" />
     </application>
 
 </manifest>

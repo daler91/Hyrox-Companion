@@ -10,6 +10,7 @@ import com.fitai.coach.core.api.generated.User
 import com.fitai.coach.core.data.SessionManager
 import com.fitai.coach.core.data.StravaConnectException
 import com.fitai.coach.core.data.UserSession
+import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.format.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -30,13 +31,21 @@ data class SettingsUiState(
     val garmin: GetGarminStatusResponse? = null,
     val errorReporting: Boolean? = null,
     val pendingWrites: Int = 0,
+    /** Whether this build can receive push notifications. */
+    val pushAvailable: Boolean = false,
+    /** Whether push is on on this phone, for this athlete. */
+    val pushOn: Boolean = false,
     /** Which action is in flight ("strava-sync", "garmin-connect", "delete", …). */
     val busy: String? = null,
 )
 
 /** Settings, v1 scope: profile and units, AI coach, notifications, integrations, privacy, account. */
 @Suppress("TooGenericExceptionCaught", "TooManyFunctions")
-class SettingsViewModel(private val session: UserSession, private val sessions: SessionManager) : ViewModel() {
+class SettingsViewModel(
+    private val session: UserSession,
+    private val sessions: SessionManager,
+    private val push: PushRegistration,
+) : ViewModel() {
     private val local = MutableStateFlow(Local())
     private val toasts = Channel<String>(Channel.BUFFERED)
     val messages: Flow<String> = toasts.receiveAsFlow()
@@ -45,10 +54,20 @@ class SettingsViewModel(private val session: UserSession, private val sessions: 
         session.account.user,
         session.preferences.preferences,
         combine(session.account.strava, session.account.garmin, ::Pair),
-        session.sync.pendingCount,
+        combine(session.sync.pendingCount, push.enabledFor, ::Pair),
         local,
-    ) { user, prefs, (strava, garmin), pending, l ->
-        SettingsUiState(user, prefs, strava, garmin, l.errorReporting, pending, l.busy)
+    ) { user, prefs, (strava, garmin), (pending, pushUser), l ->
+        SettingsUiState(
+            user = user,
+            preferences = prefs,
+            strava = strava,
+            garmin = garmin,
+            errorReporting = l.errorReporting,
+            pendingWrites = pending,
+            pushAvailable = push.available,
+            pushOn = pushUser == session.userId,
+            busy = l.busy,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
 
     init {
@@ -123,12 +142,29 @@ class SettingsViewModel(private val session: UserSession, private val sessions: 
         toasts.send("Garmin disconnected")
     }
 
-    /** Signs out and deletes this user's data from the device, unsent changes included. */
-    fun signOut() = run("sign-out", "Couldn't sign out. Check your connection and try again.") { sessions.signOut() }
+    /** Registers this phone for push, once the system allows notifications. */
+    fun enablePush() = run("push", "Couldn't turn on notifications") {
+        push.enable(session.userId)
+        toasts.send("Notifications are on for this phone")
+    }
+
+    fun disablePush() = run("push", "Couldn't turn off notifications") { push.disable() }
+
+    /** The system refused the permission: only its settings can grant it now. */
+    fun notificationsBlocked() {
+        viewModelScope.launch { toasts.send("Notifications are blocked for fitai. Allow them in your phone's settings.") }
+    }
+
+    /** Signs out and deletes this user's data from the device, unsent changes included. Push stops first. */
+    fun signOut() = run("sign-out", "Couldn't sign out. Check your connection and try again.") {
+        push.disable()
+        sessions.signOut()
+    }
 
     /** Deletes the account on the server, then everything of it on the device. */
     fun deleteAccount() = run("delete", "Deletion failed") {
         session.account.deleteAccount()
+        push.forget()
         sessions.forgetDeletedAccount()
     }
 

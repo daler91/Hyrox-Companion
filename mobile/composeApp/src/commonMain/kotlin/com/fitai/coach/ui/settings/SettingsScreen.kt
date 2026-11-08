@@ -36,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.PreferencesResponse
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBadge
@@ -50,6 +51,7 @@ import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.platform.rememberBrowser
+import com.fitai.coach.ui.platform.rememberNotificationAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -68,7 +70,8 @@ fun SettingsScreen(
 ) {
     val session = LocalUserSession.current
     val sessions = koinInject<SessionManager>()
-    val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions) }
+    val push = koinInject<PushRegistration>()
+    val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions, push) }
     val state by vm.state.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
@@ -93,6 +96,7 @@ fun SettingsScreen(
                 Coach(prefs, vm::update)
                 EmailNotifications(prefs, vm::update)
             }
+            PushNotifications(state, vm)
             Integrations(state, vm, onConnectStrava = {
                 vm.connectStrava(browser::open)
             }, onConnectGarmin = { dialog = GARMIN_FORM }, onDisconnect = {
@@ -216,6 +220,30 @@ private fun EmailNotifications(prefs: PreferencesResponse, update: (UpdateUserPr
         }
         Toggle("Today's session", prefs.emailTodaySession == true, on) { update(UpdateUserPreferences(emailTodaySession = it)) }
         Toggle("Analysis digest", prefs.emailAnalysisDigest == true, on) { update(UpdateUserPreferences(emailAnalysisDigest = it)) }
+    }
+}
+
+@Composable
+private fun PushNotifications(state: SettingsUiState, vm: SettingsViewModel) {
+    val access = rememberNotificationAccess()
+    Section("Notifications on this phone") {
+        if (!state.pushAvailable) {
+            Text(
+                "Push notifications aren't available in this build.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            return@Section
+        }
+        Toggle("Push notifications", state.pushOn, enabled = state.busy != "push") { on ->
+            if (on) access.request { granted -> if (granted) vm.enablePush() else vm.notificationsBlocked() } else vm.disablePush()
+        }
+        Text(
+            "Training reminders, coach messages and nutrition reminders. Mute any of them in your phone's settings.",
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+        )
+        FitaiButton("Choose which notifications", onClick = access::openSettings, variant = ButtonVariant.Ghost)
     }
 }
 

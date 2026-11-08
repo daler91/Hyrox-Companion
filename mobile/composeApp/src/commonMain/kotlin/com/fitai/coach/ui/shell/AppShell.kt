@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.analytics.AnalyticsScreen
 import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.components.FitaiToastHost
@@ -90,6 +91,10 @@ fun AppShell() {
         }
         deepLinks.consumed(current)
     }
+
+    // Push, when this athlete turned it on here, re-registers at each launch.
+    val push = koinInject<PushRegistration>()
+    LaunchedEffect(session.userId) { push.refresh(session.userId) }
 
     LaunchedEffect(session.userId) {
         if (setupChecked) return@LaunchedEffect

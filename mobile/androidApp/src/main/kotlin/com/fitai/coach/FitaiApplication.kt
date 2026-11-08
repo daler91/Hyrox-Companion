@@ -11,6 +11,11 @@ import com.fitai.coach.core.auth.AuthGateway
 import com.fitai.coach.core.auth.AuthTokenProvider
 import com.fitai.coach.core.data.AndroidUserDatabaseStore
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.push.PushRegistration
+import com.fitai.coach.push.FcmTokens
+import com.fitai.coach.push.SharedPreferencesPushPreference
+import com.fitai.coach.push.createNotificationChannels
+import com.fitai.coach.push.startFirebase
 import com.fitai.coach.ui.uiModule
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.CoroutineScope
@@ -29,14 +34,20 @@ class FitaiApplication : Application() {
         // The publishable key is public (it identifies the Clerk instance);
         // it comes from the build, never from source (see androidApp/build.gradle.kts).
         Clerk.initialize(this, BuildConfig.CLERK_PUBLISHABLE_KEY)
+        createNotificationChannels(this)
+        val pushAvailable = startFirebase(this)
         startKoin {
             androidContext(this@FitaiApplication)
-            modules(appModule, uiModule)
+            modules(appModule, uiModule, pushModule(pushAvailable))
         }
         // Opens the signed-in user's database and outbox, and closes them when
         // they go. Off the main thread: refreshes decode whole timelines.
         get<SessionManager>().start(CoroutineScope(SupervisorJob() + Dispatchers.Default))
     }
+}
+
+private fun pushModule(available: Boolean) = module {
+    single { PushRegistration(get(), if (available) FcmTokens() else null, SharedPreferencesPushPreference(androidContext())) }
 }
 
 private val appModule = module {
