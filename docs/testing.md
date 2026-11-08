@@ -617,10 +617,19 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Mobile Core
 - **Triggers:** Push to `main` and pull requests touching `mobile/**`, `docs/openapi.json`, `shared/**`, `script/kotlin-models/**`, `script/kotlin-catalogue/**`, `script/mobile-fixtures/**` or the workflow
-- **Steps:** Checkout, cache Gradle downloads, then `./gradlew :core:jvmTest` in `mobile/` with the runner's JDK 21. It compiles the Kotlin API models generated from `docs/openapi.json` and runs `ApiContractTest` (every endpoint's sample request and response JSON decodes, the forward-compatibility samples included), the runtime tests, and the golden-fixture tests of the Kotlin ports of `shared/` logic. See [`mobile/README.md`](../mobile/README.md).
+- **Steps:** two jobs, both in `mobile/` with the runner's JDK 21 and a Gradle download cache. See [`mobile/README.md`](../mobile/README.md).
+  - *Kotlin core (JVM)*: `./gradlew :core:jvmTest :composeApp:jvmTest`. It compiles the Kotlin API models generated from `docs/openapi.json` and runs `ApiContractTest` (every endpoint's sample request and response JSON decodes, the forward-compatibility samples included), the runtime tests, the golden-fixture tests of the Kotlin ports of `shared/` logic, the shared UI's view-model tests, `ContrastTest` (WCAG AA for every token pair, both themes), and the Compose UI tests that render the whole app on the desktop JVM (`AppUiTest`, `AccessibilityUiTest`: labels and 48 dp touch targets).
+  - *Android app*: builds the debug APK and the release bundle (R8), runs the Robolectric tests and checks the design-system screenshots against the committed references (`verifyRoborazziAndroidHostTest`; the differences are uploaded as `screenshot-diffs` when they fail), then Android lint, ktlint and detekt.
 - **Related:** in the unit suite, `script/kotlin-models/generate.test.ts`, `script/kotlin-catalogue/catalogue.test.ts` and `script/mobile-fixtures/fixtures.test.ts` fail while the committed models, exercise catalogue or fixtures differ from what their sources generate; run `pnpm mobile:models`, `pnpm mobile:catalogue` or `pnpm mobile:fixtures`.
 
-### 8. Other workflows
+### 8. Mobile release and on-demand checks
+
+- **Mobile Release** (`mobile-release.yml`) -- On a `mobile-v<major>.<minor>.<patch>` tag: runs the JVM tests, builds the signed release bundle and uploads it to Play's internal track (Gradle Play Publisher), keeping the bundle and its R8 mapping as an artifact. Uses the `play-store` environment.
+- **Mobile Promote** (`mobile-promote.yml`) -- Run by hand: moves a release between Play tracks (internal → closed test → production), production as a staged rollout by user fraction.
+- **Mobile Performance** (`mobile-performance.yml`) -- Run by hand, on an emulator: generates the Baseline Profile (uploaded to be committed) and runs the Macrobenchmark startup and frame-timing benchmarks, checking them against `mobile/baselineprofile/budgets.json` with `pnpm mobile:perf-budgets` (`script/mobile-perf/`).
+- **Mobile E2E** (`mobile-e2e.yml`) -- Run by hand: the debug app against staging on an emulator, driven by the Maestro flows in `mobile/maestro/` (sign-in with a Clerk test account, every tab, logging a workout, sign-out).
+
+### 9. Other workflows
 
 - **Secret Scan** (`gitleaks.yml`) -- Gitleaks secret scanning on push to `main` and on pull request. Scans **incrementally** -- only the commits the push or PR introduces -- so it blocks new secrets without re-flagging already-revoked ones buried in old history. Added after a former `.replit` config leaked an `ENCRYPTION_KEY`; that key has since been rotated through the keyring.
 - **DevSkim** (`devskim.yml`) -- Static security analysis
