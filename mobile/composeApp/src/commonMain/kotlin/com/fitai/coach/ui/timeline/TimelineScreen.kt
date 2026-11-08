@@ -56,7 +56,7 @@ private sealed interface OpenSheet {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimelineScreen(navigation: TimelineNavigation) {
+fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null, onPlanDayOpened: () -> Unit = {}) {
     val session = LocalUserSession.current
     val vm = viewModel(key = "timeline-${session.userId}") { TimelineViewModel(session.timeline, session.preferences, ::todayIn) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -67,6 +67,12 @@ fun TimelineScreen(navigation: TimelineNavigation) {
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
     val allEntries = state.rows.days.flatMap { it.entries }
     val sheetEntry = sheet?.let { open -> allEntries.firstOrNull { it.id == open.entryId } }
+    // A link to a plan day (an email's "Open the session") opens that day once it is on the timeline.
+    LaunchedEffect(openPlanDayId, state.loaded) {
+        if (openPlanDayId == null || !state.loaded) return@LaunchedEffect
+        allEntries.firstOrNull { it.planDayId == openPlanDayId }?.let { sheet = OpenSheet.Surface(it.id) }
+        onPlanDayOpened()
+    }
 
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {

@@ -12,13 +12,33 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- singleTask: an App Link brings the app forward and closes what was
+             opened above it, such as the Custom Tab of the Strava connect flow. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- App Links (verified by server/bootstrap/wellKnown.ts): the paths
+                 emails and Strava's return use that the app has a screen for.
+                 Anything else on the domain (the weekly review, unsubscribe
+                 links) keeps opening in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${appLinkHost}" />
+                <data android:path="/" />
+                <data android:path="/log" />
+                <data android:path="/nutrition" />
+                <data android:path="/analytics" />
+                <data android:path="/settings" />
+                <data android:path="/strava/mobile-callback" />
             </intent-filter>
         </activity>
     </application>

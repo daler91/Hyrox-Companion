@@ -1,5 +1,6 @@
 package com.fitai.coach
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +12,9 @@ import com.fitai.coach.core.api.ApiClient
 import com.fitai.coach.core.api.SessionEvent
 import com.fitai.coach.core.data.SessionManager
 import com.fitai.coach.ui.App
+import com.fitai.coach.ui.links.DeepLinks
+import com.fitai.coach.ui.links.LinkSource
+import com.fitai.coach.ui.links.parseDeepLink
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -18,6 +22,7 @@ import org.koin.android.ext.android.inject
 class MainActivity : ComponentActivity() {
     private val api: ApiClient by inject()
     private val sessions: SessionManager by inject()
+    private val deepLinks: DeepLinks by inject()
     private val inAppUpdate = InAppUpdate(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +36,33 @@ class MainActivity : ComponentActivity() {
                 api.events.filterIsInstance<SessionEvent.UpdateRequired>().collect { inAppUpdate.prompt() }
             }
         }
+        // A recreated activity (rotation, process restore) already handled its intent.
+        if (savedInstanceState == null) openLink(intent)
         setContent { App() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openLink(intent)
+    }
+
+    /**
+     * An App Link (an email, Strava's return) carries its URL as the intent's
+     * data; a tapped notification carries the server's path in its "url"
+     * extra, which only ever opens one of the app's own screens.
+     */
+    private fun openLink(intent: Intent) {
+        val appLink = intent.data?.takeIf { intent.action == Intent.ACTION_VIEW }?.toString()
+        val notificationUrl = intent.getStringExtra(EXTRA_NOTIFICATION_URL)
+        when {
+            appLink != null -> deepLinks.open(parseDeepLink(appLink, BuildConfig.API_BASE_URL, LinkSource.AppLink))
+            notificationUrl != null -> deepLinks.open(parseDeepLink(notificationUrl, BuildConfig.API_BASE_URL, LinkSource.Notification))
+        }
+    }
+
+    companion object {
+        /** The extra a notification's tap intent carries the server's path in (FCM's data key "url"). */
+        const val EXTRA_NOTIFICATION_URL = "url"
     }
 }

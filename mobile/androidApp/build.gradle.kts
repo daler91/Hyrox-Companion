@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -12,6 +14,8 @@ val clerkPublishableKey: String = providers.gradleProperty("fitai.clerkPublishab
     .orElse(providers.environmentVariable("CLERK_PUBLISHABLE_KEY"))
     .getOrElse("")
 val apiBaseUrl: String = providers.gradleProperty("fitai.apiBaseUrl").getOrElse("https://fitai.coach")
+// The domain whose links open in the app (App Links); the API server's by default.
+val appLinkHost: String = providers.gradleProperty("fitai.appLinkHost").getOrElse(URI(apiBaseUrl).host)
 
 android {
     namespace = "com.fitai.coach"
@@ -26,6 +30,7 @@ android {
         versionName = "0.1.0"
         buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"$clerkPublishableKey\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        manifestPlaceholders["appLinkHost"] = appLinkHost
     }
 
     buildTypes {

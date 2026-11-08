@@ -52,7 +52,7 @@ import com.fitai.coach.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NutritionScreen() {
+fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val timeZone = prefs?.userTimezone
@@ -69,6 +69,12 @@ fun NutritionScreen() {
     val targets by vm.targets.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(openDate) {
+        openDate?.let {
+            vm.goTo(it)
+            onDateOpened()
+        }
+    }
     var searching by remember { mutableStateOf<Meal?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<NutritionLogEntryWithNutrition?>(null) }

@@ -134,6 +134,9 @@ class NutritionViewModel(
 
     fun goToToday() = moveTo(today)
 
+    /** Opens [day] (a link to a nutrition day). */
+    fun goTo(day: String) = moveTo(day)
+
     private fun moveTo(day: String) {
         date.value = day
         refresh()

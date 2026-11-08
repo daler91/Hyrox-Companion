@@ -23,12 +23,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.fitai.coach.ui.analytics.AnalyticsScreen
 import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.links.DeepLink
+import com.fitai.coach.ui.links.DeepLinks
 import com.fitai.coach.ui.log.LogWorkoutScreen
 import com.fitai.coach.ui.nutrition.NutritionScreen
 import com.fitai.coach.ui.onboarding.OnboardingScreen
@@ -39,6 +42,7 @@ import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.timeline.TimelineNavigation
 import com.fitai.coach.ui.timeline.TimelineScreen
 import com.fitai.coach.ui.workout.WorkoutDetailScreen
+import org.koin.compose.koinInject
 
 /**
  * The signed-in app: the bottom bar's five destinations, and the coach,
@@ -57,6 +61,30 @@ fun AppShell() {
     var shellMessage by remember { mutableStateOf<String?>(null) }
     val toasts = remember { SnackbarHostState() }
     val colors = FitaiTheme.colors
+    // Links from emails and notifications: the tab, and what to open on it.
+    val deepLinks = koinInject<DeepLinks>()
+    val link by deepLinks.current.collectAsStateWithLifecycle()
+    var openPlanDayId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openNutritionDate by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(link) {
+        val current = link ?: return@LaunchedEffect
+        coachOpen = false
+        when (current) {
+            is DeepLink.Training -> {
+                openPlanDayId = current.planDayId
+                backStack.select(TopLevel.Training)
+            }
+            DeepLink.LogWorkout -> backStack.select(TopLevel.LogWorkout)
+            is DeepLink.Nutrition -> {
+                openNutritionDate = current.date
+                backStack.select(TopLevel.Nutrition)
+            }
+            DeepLink.Analytics -> backStack.select(TopLevel.Analytics)
+            DeepLink.Settings, is DeepLink.StravaReturn -> backStack.select(TopLevel.Settings)
+        }
+        deepLinks.consumed(current)
+    }
 
     LaunchedEffect(session.userId) {
         if (setupChecked) return@LaunchedEffect
@@ -106,11 +134,13 @@ fun AppShell() {
                             askCoach = { coachOpen = true },
                             logWorkout = { backStack.select(TopLevel.LogWorkout) },
                         ),
+                        openPlanDayId = openPlanDayId,
+                        onPlanDayOpened = { openPlanDayId = null },
                     )
                 }
                 entry<Route.WorkoutDetail> { route -> WorkoutDetailScreen(route.workoutId, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
-                entry<Route.Nutrition> { NutritionScreen() }
+                entry<Route.Nutrition> { NutritionScreen(openDate = openNutritionDate, onDateOpened = { openNutritionDate = null }) }
                 entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }
                 entry<Route.Settings> {
                     SettingsScreen(
