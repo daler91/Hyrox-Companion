@@ -27,6 +27,8 @@ clerk = "1.4.1"
 play-app-update = "2.1.0"
 roborazzi = "1.77.0"
 robolectric = "4.17"
+# The SDK 35 runtime jar Robolectric 4.17 uses (composeApp runs Robolectric offline).
+robolectric-android-all = "15-robolectric-13954326-i7"
 junit4 = "4.13.2"
 ktlint-gradle = "14.2.0"
 detekt = "1.23.8"
@@ -71,6 +73,7 @@ play-app-update-ktx = { module = "com.google.android.play:app-update-ktx", versi
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-android-all" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 
 [plugins]

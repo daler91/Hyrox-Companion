@@ -8,7 +8,12 @@ naming:
     # Compose's own Material tokens).
     constantPattern: '[A-Z][_A-Za-z0-9]*'
 style:
+  MaxLineLength:
+    # Same limit as ktlint (.editorconfig).
+    maxLineLength: 140
   MagicNumber:
+    # Test source sets of every target (commonTest, jvmTest, androidHostTest).
+    excludes: ['**/*Test/**', '**/test/**']
     # Design tokens (dp, sp, colour channels) are the numbers themselves.
     ignorePropertyDeclaration: true
     ignoreCompanionObjectPropertyDeclaration: true
