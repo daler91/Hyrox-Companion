@@ -9,6 +9,7 @@ import com.fitai.coach.core.api.AppIdentity
 import com.fitai.coach.core.api.createHttpClient
 import com.fitai.coach.core.auth.AuthGateway
 import com.fitai.coach.core.auth.AuthTokenProvider
+import com.fitai.coach.ui.uiModule
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
@@ -25,7 +26,7 @@ class FitaiApplication : Application() {
         Clerk.initialize(this, BuildConfig.CLERK_PUBLISHABLE_KEY)
         startKoin {
             androidContext(this@FitaiApplication)
-            modules(appModule)
+            modules(appModule, uiModule)
         }
     }
 }

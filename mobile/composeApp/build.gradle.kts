@@ -7,6 +7,10 @@ plugins {
 }
 
 kotlin {
+    // A JVM target runs commonTest (view-model logic) without Robolectric, and
+    // keeps Android-only APIs out of commonMain until the iOS targets join.
+    jvm()
+
     android {
         namespace = "com.fitai.coach.ui"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -28,6 +32,14 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.ui.tooling.preview)
+            implementation(libs.jb.lifecycle.viewmodel.compose)
+            implementation(libs.jb.lifecycle.runtime.compose)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
         getByName("androidHostTest").dependencies {
             implementation(libs.junit4)
