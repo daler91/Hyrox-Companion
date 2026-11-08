@@ -1,10 +1,10 @@
 package com.fitai.coach.core.units
 
-import com.fitai.coach.core.js.jsTrim
-import com.fitai.coach.core.js.jsNumberToString
 import com.fitai.coach.core.api.Patch
+import com.fitai.coach.core.js.jsNumberToString
 import com.fitai.coach.core.js.jsRound
 import com.fitai.coach.core.js.jsToFixed
+import com.fitai.coach.core.js.jsTrim
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.sign

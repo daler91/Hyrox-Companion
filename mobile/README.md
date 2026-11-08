@@ -3,18 +3,32 @@
 The native app: Kotlin and Compose Multiplatform, Android first, iOS later.
 The plan, phase by phase, is [docs/mobile-app-plan.md](../docs/mobile-app-plan.md).
 
-Phase 2 has one module, `core`, holding the API models and their tests. Phase 3
-adds `composeApp` (shared UI) and `androidApp`, and the Android and iOS targets.
+Three modules, in the Android Gradle Plugin 9 layout:
+
+- `androidApp`: the Android entry point only (application `com.fitai.coach`).
+- `composeApp`: the shared Compose Multiplatform UI.
+- `core`: the API models and client, the data layer (database, outbox,
+  repositories) and the ported logic. It also has a JVM target, so its tests run
+  on any machine without an Android SDK.
+
+iOS targets join in Phase 7.
 
 ## Build and test
 
-Needs JDK 21. From this directory:
+Needs JDK 21, and an Android SDK for the Android modules (`ANDROID_HOME`, or
+`sdk.dir` in `local.properties`). From this directory:
 
 ```sh
-./gradlew :core:jvmTest
+./gradlew :core:jvmTest                 # core's tests, JVM only
+./gradlew :androidApp:assembleDebug     # debug APK
+./gradlew ktlintCheck detekt            # lint (ktlintFormat fixes formatting)
 ```
 
-CI runs the same in `.github/workflows/mobile.yml`.
+CI runs these in `.github/workflows/mobile.yml`.
+
+detekt's findings in code written before it was added (the Phase 2 ports, which
+mirror their TypeScript originals) are recorded in `core/detekt-baseline.xml`;
+new code is held to the rules. ktlint follows `.editorconfig`.
 
 Gradle checks every dependency and plugin it downloads against the SHA-256
 sums in `gradle/verification-metadata.xml`, and fails the build on an artifact
@@ -67,6 +81,44 @@ Mapping rules worth knowing:
 
 Encode and decode with `ApiJson` (`core/.../api/ApiJson.kt`): it ignores unknown
 response fields, and omits request fields left at their defaults.
+
+## Data and sync
+
+`core/.../data/` is the offline layer. The database (Room, on the bundled
+SQLite driver) is the source of truth: screens read Flows from repositories,
+which serve the cache offline and refresh it from the API.
+
+- **One database per user.** `SessionManager` opens the signed-in user's file
+  (`fitai-<userId>.db`) at sign-in, after deleting any other user's file left
+  on the device, so one athlete's queued writes can never be sent under
+  another's account (the web's version of that bug is in `.jules/sentinel.md`).
+  Signing out from Settings deletes the file; a session the server ends (a 401)
+  keeps it for the same user's next sign-in.
+- **The outbox.** A write changes the database and queues an outbox entry in
+  one transaction. `SyncEngine` sends entries one at a time, oldest first,
+  each with its own `X-Idempotency-Key` on every attempt. Its retry rules match
+  the web's offline queue (`client/src/lib/offlineQueue.ts`); the class comment
+  lists them. It runs when a write is queued, when the network comes back, when
+  the app returns to the foreground, and after a failure with a backoff from
+  5 s to 5 minutes.
+- **Exercise-set edits** carry the optimistic lock
+  (`client/src/lib/exerciseSetVersionLock.ts`): each PATCH sends the version the
+  server last reported as `expectedVersion`. A 409 drops the edits queued for
+  that set and refetches the workout, so the other device's change shows and is
+  never overwritten. A refresh leaves a set with an unsent edit alone.
+
+Rows store the server's JSON, decoded through the generated models, so a new
+response field needs no migration. A change to the tables bumps the database
+version and adds a migration; Room exports each version's schema to
+`core/schemas/`, which is committed.
+
+## Icons
+
+The app uses the web's icon set, Lucide (brand kit §8). `pnpm mobile:icons`
+generates the icons listed in `script/mobile-icons/generate.ts` from
+lucide-react into `composeApp/.../ui/icons/generated/LucideIcons.kt`, and copies
+Lucide's ISC licence into the app's resources. The unit suite fails while the
+committed file differs from what lucide-react generates.
 
 ## Contract test
 

@@ -1,13 +1,19 @@
 name: Mobile Core
 
-# The native app's shared Kotlin module (mobile/core): the API models
-# generated from docs/openapi.json and their contract test, which decodes
-# sample JSON for every endpoint, and the Kotlin ports of shared/ logic with
-# their golden fixtures (shared/** is a trigger because a TypeScript change
-# regenerates fixtures the ports must still match). Whether the committed models match the
-# document is checked in the unit suite (script/kotlin-models/generate.test.ts);
-# this job proves they compile and decode. Android and iOS targets join in
-# Phase 3 (docs/mobile-app-plan.md).
+# The native app (mobile/, docs/mobile-app-plan.md).
+#
+# - core-jvm: the shared modules' tests on the JVM. core: the API client and models
+#   generated from docs/openapi.json and their contract test, and the Kotlin
+#   ports of shared/ logic with their golden fixtures (shared/** is a trigger
+#   because a TypeScript change regenerates fixtures the ports must still
+#   match). Whether the committed models match the document is checked in the
+#   unit suite (script/kotlin-models/generate.test.ts); this job proves they
+#   compile and decode. composeApp: the shared UI's view-model logic.
+# - android: builds the debug APK and runs the Android-side tests and the
+#   linters (ktlint, detekt). The runner image ships an Android SDK with its
+#   licences accepted; the Android Gradle Plugin installs a missing platform.
+#
+# iOS targets join in Phase 7, compiled on a macOS runner.
 on:
   push:
     branches:
@@ -54,8 +60,29 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('mobile/gradle/wrapper/gradle-wrapper.properties', 'mobile/gradle/libs.versions.toml', 'mobile/**/*.gradle.kts') }}
           restore-keys: gradle-${{ runner.os }}-
-      # The runner image ships JDK 21; core's jvmToolchain(21) uses it.
+      # The runner image ships JDK 21; the modules' jvmToolchain(21) uses it.
       - name: Compile and test
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
-          ./gradlew :core:jvmTest --no-daemon --console=plain
+          ./gradlew :core:jvmTest :composeApp:jvmTest --no-daemon --console=plain
+
+  android:
+    name: Android app (build, test, lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache Gradle downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-android-${{ runner.os }}-${{ hashFiles('mobile/gradle/wrapper/gradle-wrapper.properties', 'mobile/gradle/libs.versions.toml', 'mobile/**/*.gradle.kts') }}
+          restore-keys: gradle-android-${{ runner.os }}-
+      - name: Build the debug APK, test and lint
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          ./gradlew :androidApp:assembleDebug ktlintCheck detekt --no-daemon --console=plain

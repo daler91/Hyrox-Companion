@@ -1,0 +1,17 @@
+root = true
+
+[*.{kt,kts}]
+indent_size = 4
+max_line_length = 140
+# Matches kotlin.code.style=official (gradle.properties), the style core/ was written in.
+ktlint_code_style = intellij_idea
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+# Composables are PascalCase by convention.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# These only reflow signatures and boolean conditions onto fewer lines; the
+# existing layout (an expression body on its own line, one operand per line
+# where it reads better) is kept.
+ktlint_standard_function-signature = disabled
+ktlint_standard_class-signature = disabled
+ktlint_standard_condition-wrapping = disabled

@@ -10,8 +10,8 @@ import com.fitai.coach.core.fixtures.assertFixtureSuite
 import com.fitai.coach.core.fixtures.fixtureCases
 import com.fitai.coach.core.fixtures.jsonEquals
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement

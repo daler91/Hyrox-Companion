@@ -1,8 +1,8 @@
 package com.fitai.coach.core.exercises
 
-import com.fitai.coach.core.js.jsTrim
 import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.core.exercises.generated.EXERCISE_NAME_ALIASES
+import com.fitai.coach.core.js.jsTrim
 
 /*
  * The exercise catalogue's lookups, ported from shared/schema/exercises.ts.
@@ -95,4 +95,3 @@ private fun resolveExerciseSlug(slug: String): String? {
     if (slug in EXERCISE_DEFINITIONS || slug in JS_OBJECT_PROTOTYPE_KEYS) return slug
     return EXERCISE_NAME_ALIASES[slug]
 }
-

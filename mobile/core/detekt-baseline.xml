@@ -1,0 +1,143 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:ApiEndpoint.kt$ch.isLetterOrDigit() &amp;&amp; c &lt; 0x80 || ch == '-' || ch == '.' || ch == '_' || ch == '~'</ID>
+    <ID>ComplexCondition:ExercisesFixtureTest.kt$ExercisesFixtureTest$lowered.any { it in 'a'..'z' || it in '0'..'9' || it == '\'' || it == '’' }</ID>
+    <ID>ComplexCondition:StructureLint.kt$format == "amrap" &amp;&amp; block.durationSeconds == null &amp;&amp; block.durationMinutes == null &amp;&amp; block.timeCapMinutes == null</ID>
+    <ID>ComplexCondition:StructureLint.kt$format == "interval" &amp;&amp; (block.workSeconds == null || block.restSeconds == null) &amp;&amp; (block.workIntervalSec == null || block.restIntervalSec == null)</ID>
+    <ID>CyclomaticComplexMethod:Fixtures.kt$public fun jsonEquals(expected: JsonElement, actual: JsonElement): Boolean</ID>
+    <ID>CyclomaticComplexMethod:JsDate.kt$private fun parseDecimalLiteral(s: String): Double</ID>
+    <ID>CyclomaticComplexMethod:JsText.kt$private fun shortestDigits(x: Double): Pair&lt;String, Int&gt;</ID>
+    <ID>CyclomaticComplexMethod:Progression.kt$public fun unmetPrescription(sets: List&lt;ProgressionSet&gt;): Prescription?</ID>
+    <ID>CyclomaticComplexMethod:StructureLint.kt$private fun blockFormatIssues(block: StructureLintBlock, format: String): List&lt;StructureLintIssue&gt;</ID>
+    <ID>LoopWithTooManyJumpStatements:ApiContractTest.kt$ApiContractTest$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Exercises.kt$for</ID>
+    <ID>LoopWithTooManyJumpStatements:StructureLint.kt$for</ID>
+    <ID>MagicNumber:ApiEndpoint.kt$0x80</ID>
+    <ID>MagicNumber:ApiEndpoint.kt$0xFF</ID>
+    <ID>MagicNumber:ApiEndpoint.kt$4</ID>
+    <ID>MagicNumber:DateUtils.kt$6</ID>
+    <ID>MagicNumber:DateUtils.kt$7</ID>
+    <ID>MagicNumber:DateUtils.kt$7.0</ID>
+    <ID>MagicNumber:JsDate.kt$10</ID>
+    <ID>MagicNumber:JsDate.kt$100</ID>
+    <ID>MagicNumber:JsDate.kt$10_000_000.0</ID>
+    <ID>MagicNumber:JsDate.kt$12</ID>
+    <ID>MagicNumber:JsDate.kt$146_096</ID>
+    <ID>MagicNumber:JsDate.kt$146_097</ID>
+    <ID>MagicNumber:JsDate.kt$153</ID>
+    <ID>MagicNumber:JsDate.kt$16</ID>
+    <ID>MagicNumber:JsDate.kt$1900.0</ID>
+    <ID>MagicNumber:JsDate.kt$1_000_000.0</ID>
+    <ID>MagicNumber:JsDate.kt$1_460</ID>
+    <ID>MagicNumber:JsDate.kt$3</ID>
+    <ID>MagicNumber:JsDate.kt$365</ID>
+    <ID>MagicNumber:JsDate.kt$36_524</ID>
+    <ID>MagicNumber:JsDate.kt$4</ID>
+    <ID>MagicNumber:JsDate.kt$400</ID>
+    <ID>MagicNumber:JsDate.kt$5</ID>
+    <ID>MagicNumber:JsDate.kt$6</ID>
+    <ID>MagicNumber:JsDate.kt$719_468</ID>
+    <ID>MagicNumber:JsDate.kt$7L</ID>
+    <ID>MagicNumber:JsDate.kt$8</ID>
+    <ID>MagicNumber:JsDate.kt$9</ID>
+    <ID>MagicNumber:JsDate.kt$99.0</ID>
+    <ID>MagicNumber:JsDate.kt$9999L</ID>
+    <ID>MagicNumber:JsMath.kt$0.0</ID>
+    <ID>MagicNumber:JsMath.kt$0.5</ID>
+    <ID>MagicNumber:JsMath.kt$100</ID>
+    <ID>MagicNumber:JsMath.kt$1e21</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$0x7FF</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$0xFFFFFFFFFFFFFL</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$1074</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$1075</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$5</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$52</ID>
+    <ID>MagicNumber:JsMath.kt$ExactDecimal.Companion$9</ID>
+    <ID>MagicNumber:JsText.kt$0x7FF</ID>
+    <ID>MagicNumber:JsText.kt$0xFFFFFFFFFFFFFL</ID>
+    <ID>MagicNumber:JsText.kt$1074</ID>
+    <ID>MagicNumber:JsText.kt$1075</ID>
+    <ID>MagicNumber:JsText.kt$17</ID>
+    <ID>MagicNumber:JsText.kt$21</ID>
+    <ID>MagicNumber:JsText.kt$5</ID>
+    <ID>MagicNumber:JsText.kt$52</ID>
+    <ID>MagicNumber:JsText.kt$9</ID>
+    <ID>MagicNumber:MealFuelling.kt$10.0</ID>
+    <ID>MagicNumber:NotifyHours.kt$23.0</ID>
+    <ID>MagicNumber:PlanPhase.kt$0.5</ID>
+    <ID>MagicNumber:PlanPhase.kt$100</ID>
+    <ID>MagicNumber:PlanPhase.kt$25</ID>
+    <ID>MagicNumber:PlanPhase.kt$4</ID>
+    <ID>MagicNumber:PlanPhase.kt$60</ID>
+    <ID>MagicNumber:PlanPhase.kt$7.0</ID>
+    <ID>MagicNumber:PlanPhase.kt$85</ID>
+    <ID>MagicNumber:Progression.kt$100</ID>
+    <ID>MagicNumber:Progression.kt$30</ID>
+    <ID>MagicNumber:Progression.kt$30.0</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$0.5</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$0.75</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$1.5</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$4.0</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$45.0</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$60.0</ID>
+    <ID>MagicNumber:SessionFuellingTargets.kt$7.0</ID>
+    <ID>MagicNumber:StructureLint.kt$10</ID>
+    <ID>MagicNumber:StructureLint.kt$100</ID>
+    <ID>MagicNumber:StructureLint.kt$3</ID>
+    <ID>MagicNumber:StructureLint.kt$30</ID>
+    <ID>MagicNumber:UnitConversion.kt$1000</ID>
+    <ID>MagicNumber:UnitConversion.kt$1e21</ID>
+    <ID>MatchingDeclarationName:Exercises.kt$ExerciseDefinition</ID>
+    <ID>MaxLineLength:Fixtures.kt$if (e != null &amp;&amp; a != null) e == a else expected.isString == actual.isString &amp;&amp; expected.content == actual.content</ID>
+    <ID>MaxLineLength:Fixtures.kt$if (failures.isNotEmpty()) fail("$suite: ${failures.size} of ${cases.size} cases differ\n" + failures.take(50).joinToString("\n"))</ID>
+    <ID>MaxLineLength:Fixtures.kt$val actual = runCatching { port(case.input) }.getOrElse { return@mapIndexedNotNull "#$index ${case.input}: threw $it" }</ID>
+    <ID>MaxLineLength:Fixtures.kt$val text = readTestResource("fixtures/$suite.json") ?: fail("No fixture file for $suite; run `pnpm mobile:fixtures`")</ID>
+    <ID>MaxLineLength:JsDate.kt$/** StrDecimalLiteral, checked by hand (JS digits are ASCII only), then converted by Kotlin's correctly rounded parser. */</ID>
+    <ID>MaxLineLength:JsDate.kt$UtcDate$/** A proleptic Gregorian UTC calendar day, as the `getUTCFullYear` / `getUTCMonth() + 1` / `getUTCDate` getters read it. */</ID>
+    <ID>MaxLineLength:NotifyHours.kt$public</ID>
+    <ID>MaxLineLength:NotifyHoursFixtureTest.kt$NotifyHoursFixtureTest$putJsonObject("NOTIFY_HOUR_FIELD") { NOTIFY_HOUR_FIELD.forEach { (kind, field) -&gt; put(kind.wireValue, field) } }</ID>
+    <ID>MaxLineLength:Patch.kt$PatchSerializer$Patch.Absent -&gt; throw SerializationException("Patch.Absent has no JSON form; leave the property at its default")</ID>
+    <ID>MaxLineLength:PlanPhaseFixtureTest.kt$PlanPhaseFixtureTest$val week = computeCurrentWeek(planStartDate.jsonPrimitive.contentOrNull, totalWeeks.jsonPrimitive.int, today.jsonPrimitive.content)</ID>
+    <ID>MaxLineLength:RuntimeTest.kt$RuntimeTest$assertEquals("""{"weeklyGoal":4,"age":null,"heightCm":180.5}""", ApiJson.encodeToString(UpdateUserPreferences.serializer(), body))</ID>
+    <ID>MaxLineLength:SessionFuellingTargets.kt$/** Port of the private `intensityFactor`: RPE to a multiplier; null assumes moderate. NaN falls through to hard, as in JS. */</ID>
+    <ID>MaxLineLength:StructureLint.kt$if</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$assertTrue(checked &gt;= cases.size * 3 / 4, "only $checked of ${cases.size} cases decoded into the request models")</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$if (!jsonEquals(case.output, fromCreate)) failures += "#$index create: expected ${case.output}, got $fromCreate"</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$if (!jsonEquals(case.output, fromUpdate)) failures += "#$index update: expected ${case.output}, got $fromUpdate"</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$if (blocks.value.orEmpty().any(::hasUnknownEnum) || created.value.orEmpty().any(::hasUnknownEnum)) return@forEachIndexed</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$val blocks = decodeOrNull(input["blocks"], PatchPlansDaysByDayIdStructureRequest.StructureBlocksItem.serializer())</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$val fromCreate = encode(lintWorkoutStructure(lintBlocks, created.value?.map { it.toStructureLintExercise() }))</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$StructureLintFixtureTest$val fromUpdate = encode(lintWorkoutStructure(lintBlocks, updated.value?.map { it.toStructureLintExercise() }))</ID>
+    <ID>MaxLineLength:StructureLintFixtureTest.kt$block.steps.any { it.stepType == PatchPlansDaysByDayIdStructureRequest.StructureBlocksItem.StepsItem.StepType.Unknown }</ID>
+    <ID>MaxLineLength:UnitConversion.kt$/** A [WorkoutDistanceDisplay] whose text is [textValue] printed by formatCompactNumber (TS `formatWorkoutDistanceDisplayText`). */</ID>
+    <ID>MaxLineLength:UnitConversion.kt$/** A distance rounded as it is stored: `Math.round`, NaN and infinities passed through. Ports TS `roundStoredDistance`. */</ID>
+    <ID>MaxLineLength:UnitConversion.kt$/** How close a miles athlete's feet must be to a whole kilometre to show as metres: TS `CLEAN_KILOMETER_TOLERANCE_METERS`. */</ID>
+    <ID>MaxLineLength:UnitConversion.kt$WorkoutDistanceDisplay(value = value, unit = unit, text = "${formatCompactNumber(textValue, decimals)} ${unit.wireValue}")</ID>
+    <ID>MaxLineLength:UnitConversionFixtureTest.kt$UnitConversionFixtureTest$// The rest of the update (reps, notes, …) is not the port's business: it passes through as in the TS spread.</ID>
+    <ID>MaxLineLength:UnitConversionFixtureTest.kt$private val STAMPED_FIELDS = setOf("weight", "plannedWeight", "distance", "plannedDistance", "weightUnit", "distanceUnit")</ID>
+    <ID>MaxLineLength:WireEnum.kt$WireEnumSerializer$if (value == unknown) throw SerializationException("$value cannot be sent: it stands for a value this build does not know")</ID>
+    <ID>ReturnCount:ExerciseEquipment.kt$public fun implementFor(exercise: String): Implement?</ID>
+    <ID>ReturnCount:Exercises.kt$private fun resolveExerciseSlug(slug: String): String?</ID>
+    <ID>ReturnCount:JsDate.kt$internal fun jsStringToNumber(text: String): Double</ID>
+    <ID>ReturnCount:JsDate.kt$private fun parseDecimalLiteral(s: String): Double</ID>
+    <ID>ReturnCount:JsDate.kt$private fun parseUnsignedInteger(digits: String, radix: Int): Double</ID>
+    <ID>ReturnCount:JsText.kt$private fun shortestDigits(x: Double): Pair&lt;String, Int&gt;</ID>
+    <ID>ReturnCount:JsText.kt$public fun jsNumberToString(x: Double): String</ID>
+    <ID>ReturnCount:NutritionScaling.kt$private fun derivedCaloriesPer100g(food: Per100gMacros): Double?</ID>
+    <ID>ReturnCount:PlanPhase.kt$public fun computeCurrentWeek(planStartDate: String?, totalWeeks: Int, today: String): Int?</ID>
+    <ID>ReturnCount:PlanPhase.kt$public fun computePlanPhase(totalWeeks: Int, currentWeek: Int): PlanPhase?</ID>
+    <ID>ReturnCount:Progression.kt$private fun progressFrom(setCount: Int, weight: Double, reps: Int, steps: WeightSteps): NextTarget?</ID>
+    <ID>ReturnCount:Progression.kt$private inline fun uniformValue(sets: List&lt;ProgressionSet&gt;, read: (ProgressionSet) -&gt; Double?): Double?</ID>
+    <ID>ReturnCount:Progression.kt$public fun suggestNextTarget( lastSets: List&lt;ProgressionSet&gt;, category: String, weightUnit: String, previousSets: List&lt;ProgressionSet&gt;? = null, exerciseName: String? = null, ): NextTarget?</ID>
+    <ID>ReturnCount:Progression.kt$public fun unmetPrescription(sets: List&lt;ProgressionSet&gt;): Prescription?</ID>
+    <ID>ReturnCount:UnitConversion.kt$private fun &lt;U : Any&gt; resolve(unit: String?, aliases: Map&lt;String, U&gt;, fallback: U?): Resolved&lt;U&gt;?</ID>
+    <ID>ReturnCount:UnitConversion.kt$public fun convertWeight(value: Double, from: String?, to: String?): Double</ID>
+    <ID>ReturnCount:UnitConversion.kt$public fun getWorkoutDistanceDisplay(value: Double, distanceUnit: String?): WorkoutDistanceDisplay</ID>
+    <ID>ReturnCount:UnitConversion.kt$public fun metersToUserDistance(meters: Double, distanceUnit: String?): Double</ID>
+    <ID>ReturnCount:UnitConversion.kt$public fun storedDistanceToDisplay(value: Double, stamp: StoredUnitStamp, preferences: UnitPreferences): Double</ID>
+    <ID>ReturnCount:UnitConversion.kt$public fun storedWeightToDisplay(value: Double, stamp: StoredUnitStamp, preferences: UnitPreferences): Double</ID>
+    <ID>UnusedParameter:PlanPhase.kt$totalWeeks: Int</ID>
+  </CurrentIssues>
+</SmellBaseline>
