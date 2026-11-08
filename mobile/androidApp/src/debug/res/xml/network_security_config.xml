@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug builds only: a local server over plain HTTP, from the emulator
-     (10.0.2.2 is the host machine) or a device on adb reverse (localhost).
-     Release builds keep the default, HTTPS-only policy. -->
+<!-- Debug builds only: a local server over plain HTTP. Release builds keep the default, HTTPS-only policy. -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
+        <!-- The host machine, as the emulator sees it. -->
         <domain includeSubdomains="false">10.0.2.2</domain>
-        <domain includeSubdomains="false">localhost</domain>
+        <!-- A device using adb reverse. -->
+        <domain includeSubdomains="false">localhost</domain> <!-- DevSkim: ignore DS162092 -->
     </domain-config>
 </network-security-config>
