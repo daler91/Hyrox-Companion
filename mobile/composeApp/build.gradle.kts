@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.roborazzi)
 }
 
@@ -34,6 +35,7 @@ kotlin {
             implementation(libs.compose.ui.tooling.preview)
             implementation(libs.jb.lifecycle.viewmodel.compose)
             implementation(libs.jb.lifecycle.runtime.compose)
+            implementation(libs.jb.navigation3.ui)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }

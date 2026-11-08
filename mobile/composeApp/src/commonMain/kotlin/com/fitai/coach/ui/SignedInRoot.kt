@@ -2,7 +2,6 @@ package com.fitai.coach.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -12,7 +11,7 @@ import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.privacy.PrivacyNoticeContent
 import com.fitai.coach.ui.privacy.PrivacyNoticeState
 import com.fitai.coach.ui.privacy.PrivacyNoticeViewModel
-import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.shell.AppShell
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -27,14 +26,6 @@ fun SignedInRoot(userId: String) {
     when (val current = state) {
         PrivacyNoticeState.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingState() }
         is PrivacyNoticeState.Needed -> PrivacyNoticeContent(current, privacy::acknowledge)
-        PrivacyNoticeState.Acknowledged -> MainPlaceholder()
-    }
-}
-
-/** Replaced by the navigation shell (Phase 3, step 6). */
-@Composable
-private fun MainPlaceholder() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("signed in", style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
+        PrivacyNoticeState.Acknowledged -> AppShell()
     }
 }

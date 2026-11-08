@@ -81,6 +81,14 @@ Mapping rules worth knowing:
 Encode and decode with `ApiJson` (`core/.../api/ApiJson.kt`): it ignores unknown
 response fields, and omits request fields left at their defaults.
 
+## Icons
+
+The app uses the web's icon set, Lucide (brand kit §8). `pnpm mobile:icons`
+generates the icons listed in `script/mobile-icons/generate.ts` from
+lucide-react into `composeApp/.../ui/icons/generated/LucideIcons.kt`, and copies
+Lucide's ISC licence into the app's resources. The unit suite fails while the
+committed file differs from what lucide-react generates.
+
 ## Contract test
 
 `ApiContractTest` decodes sample JSON for every endpoint
