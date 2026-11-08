@@ -2,8 +2,8 @@ package com.fitai.coach.core.api
 
 import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

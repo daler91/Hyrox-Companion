@@ -1,0 +1,27 @@
+# Overrides on top of detekt's default rule set (buildUponDefaultConfig).
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by convention.
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    # SCREAMING_CASE constants, and design tokens as PascalCase vals (as in
+    # Compose's own Material tokens).
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
+style:
+  MagicNumber:
+    # Design tokens (dp, sp, colour channels) are the numbers themselves.
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreAnnotated: ['Composable', 'Preview']
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+complexity:
+  TooManyFunctions:
+    # Kotlin files of top-level functions (unit conversion, date helpers) are
+    # the equivalent of a TypeScript module; 11 is a class-sized limit.
+    thresholdInFiles: 40
+  LongParameterList:
+    # Composables take their state and callbacks as parameters.
+    ignoreAnnotated: ['Composable']
+  LongMethod:
+    ignoreAnnotated: ['Composable']

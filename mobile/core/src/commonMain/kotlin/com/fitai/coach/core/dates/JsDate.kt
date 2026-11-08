@@ -196,8 +196,8 @@ private fun parseDecimalLiteral(s: String): Double {
 
 /** ECMAScript WhiteSpace and LineTerminator: what `Number()` and `String.prototype.trim` strip. */
 private fun isJsWhitespace(c: Char): Boolean = when (c) {
-    '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', ' ', ' ', ' ',
-    ' ', ' ', ' ', ' ', '　', '﻿',
+    '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0020', '\u00A0', '\u1680',
+    '\u2028', '\u2029', '\u202F', '\u205F', '\u3000', '\uFEFF',
     -> true
-    else -> c in ' '..' '
+    else -> c in '\u2000'..'\u200A'
 }

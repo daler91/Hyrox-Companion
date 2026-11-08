@@ -1,14 +1,20 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.kmp.library)
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
-    // JVM only for now: it compiles and runs commonTest on any machine, which
-    // is what the generated API models and the golden-fixture parity tests
-    // need. Phase 3 adds the Android target (Android Gradle Plugin) and the
-    // iOS targets (macOS host) to this same module.
+    // The JVM target stays: it runs commonTest (the API contract test and the
+    // golden-fixture parity tests) on any machine, without an Android SDK.
     jvm()
+
+    android {
+        namespace = "com.fitai.coach.core"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+    }
+
     jvmToolchain(21)
 
     sourceSets {

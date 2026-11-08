@@ -3,18 +3,31 @@
 The native app: Kotlin and Compose Multiplatform, Android first, iOS later.
 The plan, phase by phase, is [docs/mobile-app-plan.md](../docs/mobile-app-plan.md).
 
-Phase 2 has one module, `core`, holding the API models and their tests. Phase 3
-adds `composeApp` (shared UI) and `androidApp`, and the Android and iOS targets.
+Three modules, in the Android Gradle Plugin 9 layout:
+
+- `androidApp`: the Android entry point only (application `com.fitai.coach`).
+- `composeApp`: the shared Compose Multiplatform UI.
+- `core`: the API models and client, the data layer and the ported logic. It
+  also has a JVM target, so its tests run on any machine without an Android SDK.
+
+iOS targets join in Phase 7.
 
 ## Build and test
 
-Needs JDK 21. From this directory:
+Needs JDK 21, and an Android SDK for the Android modules (`ANDROID_HOME`, or
+`sdk.dir` in `local.properties`). From this directory:
 
 ```sh
-./gradlew :core:jvmTest
+./gradlew :core:jvmTest                 # core's tests, JVM only
+./gradlew :androidApp:assembleDebug     # debug APK
+./gradlew ktlintCheck detekt            # lint (ktlintFormat fixes formatting)
 ```
 
-CI runs the same in `.github/workflows/mobile.yml`.
+CI runs these in `.github/workflows/mobile.yml`.
+
+detekt's findings in code written before it was added (the Phase 2 ports, which
+mirror their TypeScript originals) are recorded in `core/detekt-baseline.xml`;
+new code is held to the rules. ktlint follows `.editorconfig`.
 
 Gradle checks every dependency and plugin it downloads against the SHA-256
 sums in `gradle/verification-metadata.xml`, and fails the build on an artifact
