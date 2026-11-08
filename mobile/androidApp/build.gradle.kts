@@ -79,4 +79,5 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.play.app.update.ktx)
     implementation(libs.firebase.messaging)
+    implementation(libs.glance.appwidget)
 }

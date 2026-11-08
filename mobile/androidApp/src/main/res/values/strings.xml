@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">fitai</string>
+    <string name="widget_today_label">Today\'s session</string>
+    <string name="widget_today_description">Your session for today, from your plan.</string>
 </resources>

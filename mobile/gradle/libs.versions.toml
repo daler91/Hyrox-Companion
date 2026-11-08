@@ -28,6 +28,7 @@ androidx-activity = "1.13.0"
 # Custom Tabs; the version Clerk already brings.
 androidx-browser = "1.10.0"
 firebase-messaging = "26.0.1"
+glance = "1.2.0"
 clerk = "1.4.1"
 play-app-update = "2.1.0"
 roborazzi = "1.77.0"
@@ -75,6 +76,7 @@ jb-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:life
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-browser = { module = "androidx.browser:browser", version.ref = "androidx-browser" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebase-messaging" }
+glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 clerk-android-api = { module = "com.clerk:clerk-android-api", version.ref = "clerk" }
 clerk-android-ui = { module = "com.clerk:clerk-android-ui", version.ref = "clerk" }
 play-app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "play-app-update" }
