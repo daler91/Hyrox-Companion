@@ -22,7 +22,7 @@ export default function Privacy() {
 
         <article className="prose prose-neutral dark:prose-invert max-w-none">
           <h1>Privacy Policy</h1>
-          <p className="text-muted-foreground">Last updated: October 4, 2026</p>
+          <p className="text-muted-foreground">Last updated: November 8, 2026</p>
 
           <h2>1. Data We Collect</h2>
           <p>
@@ -40,7 +40,8 @@ export default function Privacy() {
             </li>
             <li>
               <strong>Health metrics</strong> &mdash; heart rate (including per-session heart-rate
-              and pace series), calories, cadence, and power data synced from Strava or Garmin.
+              and pace series), calories, cadence, and power data synced from Strava, Garmin or Health
+              Connect.
             </li>
             <li>
               <strong>Body and health profile</strong> &mdash; bodyweight, height, age, gender,
@@ -147,6 +148,12 @@ export default function Privacy() {
                   content</td>
               </tr>
               <tr>
+                <td>Firebase Cloud Messaging (Google)</td>
+                <td>Push notifications in the Android app (opt-in only)</td>
+                <td>The app install&rsquo;s push token and each notification&rsquo;s title, text and
+                  link</td>
+              </tr>
+              <tr>
                 <td>Sentry</td>
                 <td>Error monitoring</td>
                 <td>Error reports with personal data scrubbed (in your browser only if you have not
@@ -197,7 +204,38 @@ export default function Privacy() {
             have held.
           </p>
 
-          <h2>6. Data Security</h2>
+          <h2>6. Android App</h2>
+          <h3>Health Connect</h3>
+          <p>
+            If you connect Health Connect in the Android app, fitai.coach reads your exercise sessions
+            and, over each session&rsquo;s span, the heart rate, distance and active calories recorded
+            by the app that wrote it. We use this data only to show those workouts in your training
+            log and to calculate your analytics, training load and AI coaching, as we do for workouts
+            you log yourself. We only read; fitai.coach never writes to Health Connect.
+          </p>
+          <p>
+            Health Connect data is sent to your fitai.coach account over an encrypted connection and
+            stored with your other workouts. It is never sold, never used for advertising, and never
+            shared with third parties other than the processors above that provide the features you
+            use (the AI provider, for example, when AI coaching is on). Turn the sync off in Settings,
+            or withdraw access in Health Connect, at any time; workouts already imported stay until you
+            delete them.
+          </p>
+          <p>
+            fitai.coach&rsquo;s use of information received from Health Connect adheres to the Health
+            Connect Permissions policy, including the Limited Use requirements.
+          </p>
+          <h3>Camera, microphone and notifications</h3>
+          <p>
+            The camera is used only when you take a photo of a workout or for the AI Coach; the photo is
+            handled like one you upload. Dictation uses your phone&rsquo;s speech recogniser, which turns
+            speech into text on the phone or through its own service; fitai.coach receives only the
+            text. Notifications use Firebase Cloud Messaging: your app install&rsquo;s push token is
+            registered with your account when you turn notifications on, and removed when you turn them
+            off, sign out or delete your account.
+          </p>
+
+          <h2>7. Data Security</h2>
           <ul>
             <li>All third-party credentials (Strava OAuth tokens, Garmin credentials) are encrypted
               at rest using AES-256-GCM.</li>
@@ -207,7 +245,7 @@ export default function Privacy() {
             <li>Content Security Policy with nonce-based script loading.</li>
           </ul>
 
-          <h2>7. Data Retention</h2>
+          <h2>8. Data Retention</h2>
           <ul>
             <li>Workout data, training plans, and analytics are retained for the lifetime of your
               account.</li>
@@ -226,7 +264,7 @@ export default function Privacy() {
               provider&rsquo;s policy for specifics.</li>
           </ul>
 
-          <h2>8. Your Rights</h2>
+          <h2>9. Your Rights</h2>
           <p>You have the right to:</p>
           <ul>
             <li>
@@ -266,7 +304,7 @@ export default function Privacy() {
             </li>
           </ul>
 
-          <h2>9. California Privacy Rights (CCPA/CPRA)</h2>
+          <h2>10. California Privacy Rights (CCPA/CPRA)</h2>
           <p>
             If you are a California resident, the California Consumer Privacy Act (as amended by the
             CPRA) gives you the rights to know, access, delete, and correct the personal information
@@ -289,7 +327,7 @@ export default function Privacy() {
             disabled (the default) or turn it off in Settings, which turns those features off.
           </p>
 
-          <h2>10. Cookies</h2>
+          <h2>11. Cookies</h2>
           <p>
             fitai.coach uses the following cookies, all of which are strictly necessary for the
             application to function:
@@ -304,7 +342,7 @@ export default function Privacy() {
           </ul>
           <p>We do not use tracking cookies or third-party analytics cookies.</p>
 
-          <h2>11. Contact</h2>
+          <h2>12. Contact</h2>
           <p>
             For questions about this privacy policy or to exercise your data rights, please contact
             us through the application&apos;s Settings page.

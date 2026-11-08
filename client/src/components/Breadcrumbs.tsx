@@ -13,6 +13,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/analytics": "Analytics",
   "/settings": "Settings",
   "/privacy": "Privacy Policy",
+  "/delete-account": "Delete Account",
 };
 
 const WORKOUT_LABEL_MAX_CHARS = 40;
