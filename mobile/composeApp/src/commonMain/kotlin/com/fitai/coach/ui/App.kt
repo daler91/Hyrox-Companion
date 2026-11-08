@@ -51,11 +51,12 @@ fun App() {
 
     FitaiTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = FitaiTheme.colors.background) {
+            val current = authState
             when {
                 updateRequired -> UpdateRequiredScreen()
-                authState is AuthState.Loading -> Splash()
-                authState is AuthState.SignedOut -> SignInScreen()
-                else -> SignedInRoot()
+                current is AuthState.SignedIn -> SignedInRoot(current.userId)
+                current is AuthState.SignedOut -> SignInScreen()
+                else -> Splash()
             }
         }
     }
