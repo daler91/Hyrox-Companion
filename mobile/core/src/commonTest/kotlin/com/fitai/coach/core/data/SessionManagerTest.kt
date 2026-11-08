@@ -87,6 +87,18 @@ class SessionManagerTest {
     }
 
     @Test
+    fun aDeletedAccountsDatabaseGoesEvenWhenSignOutFails() = runTest {
+        val manager = manager()
+        signIn(manager, "user_a").queueAWrite()
+        auth.failSignOut = true
+
+        manager.forgetDeletedAccount()
+
+        assertFalse(store.exists("user_a"))
+        assertNull(manager.session.value)
+    }
+
+    @Test
     fun aLostSessionKeepsTheUnsentWritesForTheSameUser() = runTest {
         val manager = manager()
         signIn(manager, "user_a").queueAWrite()

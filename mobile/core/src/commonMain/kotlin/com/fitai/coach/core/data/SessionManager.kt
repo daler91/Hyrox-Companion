@@ -69,6 +69,21 @@ public class SessionManager(
         }
     }
 
+    /**
+     * After the account was deleted on the server: deletes the user's
+     * database whatever happens next, then signs out of the identity
+     * provider (which may fail, the account being gone; the next request's
+     * 401 then signs out anyway).
+     */
+    public suspend fun forgetDeletedAccount() {
+        val userId = (auth.state.value as? AuthState.SignedIn)?.userId ?: current.value?.userId
+        lock.withLock {
+            closeLocked()
+            userId?.let { withContext(Dispatchers.IO) { databases.delete(it) } }
+        }
+        runCatching { auth.signOut() }
+    }
+
     /** Asks the open session to send its queued writes now (the app came to the foreground). */
     public fun syncNow() {
         current.value?.sync?.requestSync()
