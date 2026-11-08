@@ -28,9 +28,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import io.ktor.http.HttpMethod as KtorMethod
 
 /** Which build is calling: sent as `X-App-Platform` / `X-App-Version` for the server's version gate. */
@@ -227,14 +227,17 @@ public class ApiClient(private val http: HttpClient) {
         }
         return ApiException(
             status = status,
-            code = parsed?.code,
-            message = parsed?.error ?: "HTTP $status",
+            code = parsed?.code ?: stringField(text, "code"),
+            // Some refusals ({undone:false, reason, message}) carry `message`, not `error`.
+            message = parsed?.error ?: stringField(text, "message") ?: "HTTP $status",
             details = parsed?.details,
         )
     }
 
-    private fun minimumVersion(body: String): String? = try {
-        ApiJson.parseToJsonElement(body).jsonObject["minimumVersion"]?.jsonPrimitive?.contentOrNull
+    private fun minimumVersion(body: String): String? = stringField(body, "minimumVersion")
+
+    private fun stringField(body: String, name: String): String? = try {
+        (ApiJson.parseToJsonElement(body) as? JsonObject)?.get(name)?.let { it as? JsonPrimitive }?.contentOrNull
     } catch (_: SerializationException) {
         null
     } catch (_: IllegalArgumentException) {

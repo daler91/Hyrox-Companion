@@ -1,16 +1,12 @@
 package com.fitai.coach.ui.shell
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -26,21 +22,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
-import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.log.LogWorkoutScreen
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
-import com.fitai.coach.ui.theme.Spacing
 import com.fitai.coach.ui.timeline.TimelineNavigation
 import com.fitai.coach.ui.timeline.TimelineScreen
 import com.fitai.coach.ui.workout.WorkoutDetailScreen
@@ -129,31 +123,6 @@ private fun BottomBar(current: TopLevel, onSelect: (TopLevel) -> Unit) {
                 )
             }
         }
-    }
-}
-
-/** The coach panel. The streaming chat arrives with the v1 features (Phase 4). */
-@Composable
-private fun CoachPanel(onClose: () -> Unit) {
-    FitaiBottomSheet(onDismissRequest = onClose) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
-        ) {
-            Icon(LucideIcons.MessageSquare, contentDescription = null, tint = FitaiTheme.colors.text)
-            Text(
-                "coach",
-                style = FitaiTheme.typography.h3,
-                color = FitaiTheme.colors.text,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            IconButton(onClick = onClose) { Icon(LucideIcons.X, contentDescription = "close coach panel") }
-        }
-        EmptyState(
-            title = "ask your coach",
-            message = "chat about today's session, your plan or your recovery. coming in the next release.",
-        )
     }
 }
 
