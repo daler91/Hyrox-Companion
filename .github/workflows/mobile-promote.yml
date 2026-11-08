@@ -1,0 +1,60 @@
+name: Mobile Promote
+
+# Moves a release on Play from one track to another, or changes a staged
+# production rollout (Gradle Play Publisher's promoteReleaseArtifact). Run it
+# by hand from the Actions tab:
+#   internal → alpha (the closed test; a new personal developer account needs
+#                     12+ testers on it for 14 days before production access)
+#   alpha → production at, say, 0.1 (10% staged rollout), then
+#   production → production at 0.5, then 1.0 to finish the rollout.
+on:
+  workflow_dispatch:
+    inputs:
+      from_track:
+        description: Track the release is on
+        type: choice
+        options: [internal, alpha, production]
+        default: internal
+      to_track:
+        description: Track to move it to
+        type: choice
+        options: [alpha, production]
+        default: alpha
+      user_fraction:
+        description: Share of production users for a staged rollout (0.01 to 1.0; 1.0 completes it)
+        type: string
+        default: "1.0"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.from_track }} → ${{ inputs.to_track }}
+    runs-on: ubuntu-latest
+    environment: play-store
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Promote
+        env:
+          ANDROID_PUBLISHER_CREDENTIALS: ${{ secrets.ANDROID_PUBLISHER_CREDENTIALS }}
+          FROM_TRACK: ${{ inputs.from_track }}
+          TO_TRACK: ${{ inputs.to_track }}
+          USER_FRACTION: ${{ inputs.user_fraction }}
+        run: |
+          if [[ ! "$USER_FRACTION" =~ ^(0\.[0-9]{1,3}|1(\.0+)?)$ ]] || [[ "$USER_FRACTION" =~ ^0\.0+$ ]]; then
+            echo "::error::user_fraction must be between 0.001 and 1.0"
+            exit 1
+          fi
+          status=COMPLETED
+          if [[ "$TO_TRACK" == production && ! "$USER_FRACTION" =~ ^1(\.0+)?$ ]]; then status=IN_PROGRESS; fi
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          args=(--from-track "$FROM_TRACK" --promote-track "$TO_TRACK" --release-status "$status")
+          if [[ "$status" == IN_PROGRESS ]]; then args+=(--user-fraction "$USER_FRACTION"); fi
+          ./gradlew :androidApp:promoteReleaseArtifact "${args[@]}" --no-daemon --console=plain

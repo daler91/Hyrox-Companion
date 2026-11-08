@@ -65,6 +65,28 @@ upload in `HealthSync` (commonMain), with tests against a fake source.
 Before release, Play Console needs the Health Connect permissions declaration;
 the permissions rationale Health Connect shows is `HealthPermissionsRationaleActivity`.
 
+## Releasing
+
+Play App Signing holds the app signing key; CI signs bundles with the upload
+key. Tagging a commit `mobile-v<major>.<minor>.<patch>` runs
+`.github/workflows/mobile-release.yml`: it tests, builds the release bundle
+(version name from the tag, version code `major·1,000,000 + minor·1,000 + patch`)
+and uploads it to Play's internal track with Gradle Play Publisher, keeping the
+bundle and its R8 mapping as a workflow artifact.
+
+```sh
+git tag mobile-v1.0.0 && git push origin mobile-v1.0.0
+```
+
+`.github/workflows/mobile-promote.yml` (run by hand) moves a release on:
+internal → alpha (the closed test) → production as a staged rollout (e.g. 0.1,
+then 0.5, then 1.0). Both workflows use the `play-store` environment's secrets
+and variables, listed at the top of mobile-release.yml. Without the upload key a
+release build is unsigned, which is all a local or PR build needs.
+
+Play Console's questionnaires (Data safety, Health Connect, content rating,
+app access) are answered in [docs/mobile-play-console.md](../docs/mobile-play-console.md).
+
 ## API models
 
 `core/src/commonMain/kotlin/com/fitai/coach/core/api/generated/` is generated

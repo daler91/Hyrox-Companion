@@ -1,0 +1,85 @@
+name: Mobile Release
+
+# Builds the Android App Bundle for a mobile-v<major>.<minor>.<patch> tag and
+# uploads it to Play's internal track (Gradle Play Publisher, configured in
+# mobile/androidApp/build.gradle.kts). Promotion to the closed test and staged
+# production rollouts is mobile-promote.yml.
+#
+# The version name is the tag's version; the version code is
+# major * 1,000,000 + minor * 1,000 + patch, so every tag uploads a higher one.
+#
+# Secrets (repository → Settings → Secrets and variables → Actions):
+#   ANDROID_UPLOAD_KEYSTORE_BASE64     the upload keystore (Play App Signing holds the app signing key)
+#   ANDROID_UPLOAD_KEYSTORE_PASSWORD
+#   ANDROID_UPLOAD_KEY_ALIAS
+#   ANDROID_UPLOAD_KEY_PASSWORD
+#   ANDROID_PUBLISHER_CREDENTIALS      a Play Console service account's JSON key
+# Variables (public per-environment configuration, baked into the build):
+#   CLERK_PUBLISHABLE_KEY, FIREBASE_APP_ID, FIREBASE_API_KEY, FIREBASE_PROJECT_ID, FIREBASE_SENDER_ID
+on:
+  push:
+    tags:
+      - mobile-v*
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  bundle:
+    name: Build and upload to the internal track
+    runs-on: ubuntu-latest
+    environment: play-store
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the version from the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^mobile-v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Tag $TAG is not mobile-v<major>.<minor>.<patch>"
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+          if (( minor > 999 || patch > 999 )); then
+            echo "::error::Minor and patch must be below 1000"
+            exit 1
+          fi
+          echo "APP_VERSION_NAME=$major.$minor.$patch" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CODE=$(( major * 1000000 + minor * 1000 + patch ))" >> "$GITHUB_ENV"
+      - name: Decode the upload key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_UPLOAD_KEYSTORE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+      - name: Test, build the bundle and upload it
+        env:
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          ANDROID_PUBLISHER_CREDENTIALS: ${{ secrets.ANDROID_PUBLISHER_CREDENTIALS }}
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+          FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_SENDER_ID: ${{ vars.FIREBASE_SENDER_ID }}
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          ./gradlew :core:jvmTest :composeApp:jvmTest :androidApp:publishReleaseBundle --no-daemon --console=plain
+      - name: Keep the bundle and its R8 mapping
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-release-${{ env.APP_VERSION_NAME }}
+          path: |
+            mobile/androidApp/build/outputs/bundle/release/*.aab
+            mobile/androidApp/build/outputs/mapping/release/mapping.txt
+          retention-days: 90
+      - name: Remove the upload key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"

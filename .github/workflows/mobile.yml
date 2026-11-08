@@ -9,8 +9,9 @@ name: Mobile Core
 #   match). Whether the committed models match the document is checked in the
 #   unit suite (script/kotlin-models/generate.test.ts); this job proves they
 #   compile and decode. composeApp: the shared UI's view-model logic.
-# - android: builds the debug APK and runs the Android-side tests and the
-#   linters (ktlint, detekt). The runner image ships an Android SDK with its
+# - android: builds the debug APK and an unsigned release bundle (R8, as
+#   shipped), and runs the Android-side tests and the linters (ktlint, detekt,
+#   Android lint). The runner image ships an Android SDK with its
 #   licences accepted; the Android Gradle Plugin installs a missing platform.
 #
 # iOS targets join in Phase 7, compiled on a macOS runner.
@@ -26,6 +27,7 @@ on:
       - script/mobile-fixtures/**
       - shared/**
       - .github/workflows/mobile.yml
+      - .github/workflows/mobile-release.yml
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
@@ -85,4 +87,4 @@ jobs:
       - name: Build the debug APK, test and lint
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
-          ./gradlew :androidApp:assembleDebug ktlintCheck detekt --no-daemon --console=plain
+          ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease :androidApp:lintDebug ktlintCheck detekt --no-daemon --console=plain
