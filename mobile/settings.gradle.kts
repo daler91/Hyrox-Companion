@@ -34,3 +34,4 @@ rootProject.name = "fitai-mobile"
 include(":core")
 include(":composeApp")
 include(":androidApp")
+include(":baselineprofile")

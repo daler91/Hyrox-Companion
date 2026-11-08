@@ -1,0 +1,112 @@
+name: Mobile Performance
+
+# Generates the Android app's Baseline Profile and checks startup and jank
+# against budgets, on an emulator (a Gradle Managed Device, Pixel 6 / API 34;
+# mobile/baselineprofile). Run it from the Actions tab before a release, or
+# after a change to startup or the main screens.
+#
+# 1. Baseline Profile: BaselineProfileGenerator records the code the app runs
+#    at startup (and, with a test account, on the timeline and every tab). The
+#    profile is uploaded as the `baseline-profile` artifact; commit its files
+#    under mobile/androidApp/src/release/generated/baselineProfiles/ so release
+#    builds compile that code ahead of time.
+# 2. Macrobenchmark: cold startup with and without the new profile, and frame
+#    timing while browsing the signed-in app, checked against
+#    mobile/baselineprofile/budgets.json (pnpm mobile:perf-budgets). The
+#    results table goes to the job summary. Emulator timings run slower and
+#    noisier than a phone's: the budgets catch regressions, not absolutes.
+#
+# Variables (repository → Settings → Secrets and variables → Actions), all optional:
+#   STAGING_CLERK_PUBLISHABLE_KEY  a Clerk development instance (test accounts work there)
+#   STAGING_API_BASE_URL           the server that instance signs in to
+#   FITAI_TEST_EMAIL               a +clerk_test address (code 424242) whose account finished setup
+# Without them both steps stop at the sign-in screen and the jank benchmark is skipped.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  performance:
+    name: Baseline Profile and benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CLERK_PUBLISHABLE_KEY: ${{ vars.STAGING_CLERK_PUBLISHABLE_KEY }}
+      STAGING_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+      FITAI_TEST_EMAIL: ${{ vars.FITAI_TEST_EMAIL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The emulator needs hardware acceleration, which the runner allows once
+      # /dev/kvm is opened to the runner's user.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Cache Gradle downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-perf-${{ runner.os }}-${{ hashFiles('mobile/gradle/wrapper/gradle-wrapper.properties', 'mobile/gradle/libs.versions.toml', 'mobile/**/*.gradle.kts') }}
+          restore-keys: gradle-perf-${{ runner.os }}-
+      - name: Generate the Baseline Profile
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          args=(-Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect)
+          if [ -n "$STAGING_API_BASE_URL" ]; then args+=("-Pfitai.apiBaseUrl=$STAGING_API_BASE_URL"); fi
+          if [ -n "$FITAI_TEST_EMAIL" ]; then args+=("-Pandroid.testInstrumentationRunnerArguments.fitaiTestEmail=$FITAI_TEST_EMAIL"); fi
+          ./gradlew :androidApp:generateBaselineProfile "${args[@]}" --no-daemon --console=plain
+      # A separate run, so the benchmark build includes the profile just generated.
+      - name: Run the benchmarks
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          args=(
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+            -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark
+            -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+          )
+          if [ -n "$STAGING_API_BASE_URL" ]; then args+=("-Pfitai.apiBaseUrl=$STAGING_API_BASE_URL"); fi
+          if [ -n "$FITAI_TEST_EMAIL" ]; then args+=("-Pandroid.testInstrumentationRunnerArguments.fitaiTestEmail=$FITAI_TEST_EMAIL"); fi
+          ./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest "${args[@]}" --no-daemon --console=plain
+      # The version comes from package.json's packageManager field.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # --ignore-scripts keeps dependency lifecycle scripts from executing in CI.
+      - name: Install the budget checker's dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Check the budgets
+        working-directory: .
+        run: |
+          {
+            echo "## Startup and jank budgets"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          pnpm -s mobile:perf-budgets mobile/baselineprofile/build/outputs | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload the Baseline Profile
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: baseline-profile
+          path: mobile/androidApp/src/release/generated/baselineProfiles
+          if-no-files-found: warn
+      - name: Upload the benchmark results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark-results
+          path: mobile/baselineprofile/build/outputs
+          if-no-files-found: warn

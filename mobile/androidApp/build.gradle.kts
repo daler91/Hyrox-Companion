@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.play.publisher)
+    alias(libs.plugins.baselineprofile)
 }
 
 // Clerk's publishable key identifies the Clerk instance and is public, but it
@@ -126,4 +127,14 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.health.connect.client)
     implementation(libs.work.runtime.ktx)
+    // Installs the Baseline Profile (compiled ahead of time) where Play's cloud profiles don't reach.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
+}
+
+// The profile is generated on demand (it needs an emulator), then committed
+// under src/release/generated/baselineProfiles; release builds only read it.
+baselineProfile {
+    automaticGenerationDuringBuild = false
+    dexLayoutOptimization = true
 }

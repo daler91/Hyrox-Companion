@@ -1,0 +1,5 @@
+{
+  "coldStartupWithBaselineProfile": { "timeToInitialDisplayMs.median": 1500 },
+  "coldStartupWithoutProfile": { "timeToInitialDisplayMs.median": 2500 },
+  "browsingTabs": { "frameDurationCpuMs.P90": 16, "frameOverrunMs.P90": 8 }
+}
