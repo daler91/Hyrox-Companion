@@ -12,7 +12,12 @@ import com.fitai.coach.core.auth.AuthGateway
 import com.fitai.coach.core.auth.AuthTokenProvider
 import com.fitai.coach.core.data.AndroidUserDatabaseStore
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.health.HealthConnectSource
+import com.fitai.coach.core.health.HealthSync
+import com.fitai.coach.core.health.HealthSyncScheduler
 import com.fitai.coach.core.push.PushRegistration
+import com.fitai.coach.health.SharedPreferencesHealthSyncStore
+import com.fitai.coach.health.WorkManagerHealthScheduler
 import com.fitai.coach.push.FcmTokens
 import com.fitai.coach.push.SharedPreferencesPushPreference
 import com.fitai.coach.push.createNotificationChannels
@@ -47,7 +52,7 @@ class FitaiApplication : Application() {
         val pushAvailable = startFirebase(this)
         startKoin {
             androidContext(this@FitaiApplication)
-            modules(appModule, uiModule, pushModule(pushAvailable))
+            modules(appModule, uiModule, pushModule(pushAvailable), healthModule)
         }
         // Opens the signed-in user's database and outbox, and closes them when
         // they go. Off the main thread: refreshes decode whole timelines.
@@ -70,6 +75,12 @@ private fun FitaiApplication.refreshWidgetOnTimelineChange(scope: CoroutineScope
 }
 
 private const val WIDGET_REFRESH_DEBOUNCE_MS = 1_000L
+
+private val healthModule = module {
+    single { HealthConnectSource(androidContext()) }
+    single<HealthSyncScheduler> { WorkManagerHealthScheduler(androidContext()) }
+    single { HealthSync(get(), get<HealthConnectSource>(), SharedPreferencesHealthSyncStore(androidContext())) }
+}
 
 private fun pushModule(available: Boolean) = module {
     single { PushRegistration(get(), if (available) FcmTokens() else null, SharedPreferencesPushPreference(androidContext())) }

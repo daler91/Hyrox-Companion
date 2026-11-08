@@ -52,6 +52,20 @@ public interface HealthDataSource {
      * expired) the last [HEALTH_BACKFILL_DAYS] days. Reads only; never writes.
      */
     public suspend fun changesSince(token: String?): HealthChanges
+
+    /** Withdraws the permissions granted to the app. */
+    public suspend fun revokePermissions()
+}
+
+/** Runs the sync in the background (WorkManager on Android). */
+public interface HealthSyncScheduler {
+    /** Periodic syncs while the sync is on. */
+    public fun schedule()
+
+    public fun cancel()
+
+    /** One sync soon, e.g. when the app comes to the foreground. */
+    public fun syncNow()
 }
 
 /** How far back a first sync reads. */
@@ -99,10 +113,14 @@ public class HealthSync(
         return checkNotNull(sync(userId)) { "Health Connect permissions were withdrawn" }
     }
 
-    /** Turns the sync off and forgets the read position; imports made so far stay. */
-    public fun disable() {
+    /**
+     * Turns the sync off, forgets the read position and withdraws the
+     * permissions; imports made so far stay.
+     */
+    public suspend fun disable() {
         store.enabledFor?.let { store.saveToken(it, null) }
         remember(null)
+        runCatching { source?.revokePermissions() }
     }
 
     /**

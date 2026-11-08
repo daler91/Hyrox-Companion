@@ -26,6 +26,12 @@ class HealthSyncTest {
             tokensAsked += token
             return changes
         }
+
+        var revoked = 0
+
+        override suspend fun revokePermissions() {
+            revoked++
+        }
     }
 
     private class MemoryStore : HealthSyncStore {
@@ -100,5 +106,6 @@ class HealthSyncTest {
         sync.disable()
         assertNull(store.enabledFor)
         assertNull(store.tokens["u1"])
+        assertEquals(1, source.revoked)
     }
 }

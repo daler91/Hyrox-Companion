@@ -33,12 +33,17 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.PreferencesResponse
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.ExportFormat
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.health.HealthAvailability
+import com.fitai.coach.core.health.HealthSync
+import com.fitai.coach.core.health.HealthSyncScheduler
 import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonVariant
@@ -55,6 +60,7 @@ import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.platform.rememberBrowser
 import com.fitai.coach.ui.platform.rememberFileSharer
+import com.fitai.coach.ui.platform.rememberHealthConnectAccess
 import com.fitai.coach.ui.platform.rememberNotificationAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
@@ -75,7 +81,11 @@ fun SettingsScreen(
     val session = LocalUserSession.current
     val sessions = koinInject<SessionManager>()
     val push = koinInject<PushRegistration>()
-    val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions, push) }
+    val health = koinInject<HealthSync>()
+    val healthScheduler = koinInject<HealthSyncScheduler>()
+    val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions, push, health, healthScheduler) }
+    // Back from Health Connect's own settings, access may have changed.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshHealth() }
     val state by vm.state.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
@@ -256,6 +266,63 @@ private fun PushNotifications(state: SettingsUiState, vm: SettingsViewModel) {
 }
 
 @Composable
+private fun HealthConnectCard(state: SettingsUiState, vm: SettingsViewModel) {
+    val access = rememberHealthConnectAccess() ?: return
+    val health = state.health
+    if (health.availability == HealthAvailability.Unsupported) return
+    val busy = state.busy == "health"
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        Text("Health Connect", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+        when {
+            health.accessWithdrawn -> FitaiBadge("Access off", tone = BadgeTone.Warning)
+            health.on -> FitaiBadge("Connected", tone = BadgeTone.Success)
+            else -> FitaiBadge("Not connected")
+        }
+    }
+    val connect = { access.requestPermissions { granted -> if (granted) vm.enableHealth() else vm.healthAccessDenied() } }
+    when {
+        health.availability == HealthAvailability.NeedsInstall -> {
+            Text(
+                "Import workouts from your watch and other fitness apps. Install or update Health Connect first.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            FitaiButton("Get Health Connect", onClick = access::openInstall, variant = ButtonVariant.Secondary)
+        }
+        health.accessWithdrawn -> {
+            Text(
+                "Health Connect access was turned off, so workouts stopped importing. Reconnect to resume.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton("Reconnect", onClick = connect, variant = ButtonVariant.Secondary, loading = busy)
+                FitaiButton("Disconnect", onClick = vm::disconnectHealth, variant = ButtonVariant.Ghost, enabled = !busy)
+            }
+        }
+        health.on -> {
+            Text(
+                "Workouts from Health Connect import automatically every few hours and when you open fitai.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton("Sync now", onClick = vm::syncHealth, variant = ButtonVariant.Secondary, loading = busy)
+                FitaiButton("Disconnect", onClick = vm::disconnectHealth, variant = ButtonVariant.Ghost, enabled = !busy)
+            }
+        }
+        else -> {
+            Text(
+                "Import workouts from your watch and other fitness apps through Health Connect. fitai only reads.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            FitaiButton("Connect Health Connect", onClick = connect, variant = ButtonVariant.Secondary, loading = busy)
+        }
+    }
+}
+
+@Composable
 private fun Integrations(
     state: SettingsUiState,
     vm: SettingsViewModel,
@@ -309,6 +376,7 @@ private fun Integrations(
                 FitaiButton("Connect Strava", onClick = onConnectStrava, variant = ButtonVariant.Secondary, loading = connecting)
             }
         }
+        HealthConnectCard(state, vm)
         val garmin = state.garmin
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             Text("Garmin", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))

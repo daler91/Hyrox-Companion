@@ -42,7 +42,7 @@ public class HealthConnectSource(private val context: Context) : HealthDataSourc
     }
 
     /** Withdraws everything the app was granted (Settings → disconnect). */
-    public suspend fun revokePermissions() {
+    override suspend fun revokePermissions() {
         if (availability() == HealthAvailability.Available) client.permissionController.revokeAllPermissions()
     }
 

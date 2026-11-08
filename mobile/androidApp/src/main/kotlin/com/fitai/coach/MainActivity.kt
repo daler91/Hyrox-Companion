@@ -11,6 +11,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.fitai.coach.core.api.ApiClient
 import com.fitai.coach.core.api.SessionEvent
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.health.HealthSync
+import com.fitai.coach.core.health.HealthSyncScheduler
 import com.fitai.coach.ui.App
 import com.fitai.coach.ui.links.DeepLinks
 import com.fitai.coach.ui.links.LinkSource
@@ -23,6 +25,8 @@ class MainActivity : ComponentActivity() {
     private val api: ApiClient by inject()
     private val sessions: SessionManager by inject()
     private val deepLinks: DeepLinks by inject()
+    private val health: HealthSync by inject()
+    private val healthScheduler: HealthSyncScheduler by inject()
     private val inAppUpdate = InAppUpdate(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +37,11 @@ class MainActivity : ComponentActivity() {
                 // Back in the foreground: a device that never lost its network
                 // gets no reconnect signal, so this is the other moment to send.
                 sessions.syncNow()
+                // And pick up workouts recorded since, when the Health Connect sync is on.
+                if (health.enabledFor.value != null) {
+                    healthScheduler.schedule()
+                    healthScheduler.syncNow()
+                }
                 api.events.filterIsInstance<SessionEvent.UpdateRequired>().collect { inAppUpdate.prompt() }
             }
         }

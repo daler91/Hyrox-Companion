@@ -11,6 +11,9 @@ import com.fitai.coach.core.data.ExportFormat
 import com.fitai.coach.core.data.SessionManager
 import com.fitai.coach.core.data.StravaConnectException
 import com.fitai.coach.core.data.UserSession
+import com.fitai.coach.core.health.HealthAvailability
+import com.fitai.coach.core.health.HealthSync
+import com.fitai.coach.core.health.HealthSyncScheduler
 import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.format.userMessage
 import kotlinx.coroutines.CancellationException
@@ -36,18 +39,30 @@ data class SettingsUiState(
     val pushAvailable: Boolean = false,
     /** Whether push is on on this phone, for this athlete. */
     val pushOn: Boolean = false,
+    val health: HealthState = HealthState(),
     /** Which action is in flight ("strava-sync", "garmin-connect", "delete", …). */
     val busy: String? = null,
 )
 
 /** Settings, v1 scope: profile and units, AI coach, notifications, integrations, privacy, account. */
+/** The Health Connect card: what the phone offers, and whether the sync is on for this athlete. */
+data class HealthState(
+    val availability: HealthAvailability = HealthAvailability.Unsupported,
+    val on: Boolean = false,
+    /** On, but the athlete withdrew access in Health Connect since. */
+    val accessWithdrawn: Boolean = false,
+)
+
 @Suppress("TooGenericExceptionCaught", "TooManyFunctions")
 class SettingsViewModel(
     private val session: UserSession,
     private val sessions: SessionManager,
     private val push: PushRegistration,
+    private val health: HealthSync? = null,
+    private val healthScheduler: HealthSyncScheduler? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(Local())
+    private val healthAccess = MutableStateFlow(HealthAvailability.Unsupported to true)
     private val toasts = Channel<String>(Channel.BUFFERED)
     val messages: Flow<String> = toasts.receiveAsFlow()
 
@@ -55,9 +70,11 @@ class SettingsViewModel(
         session.account.user,
         session.preferences.preferences,
         combine(session.account.strava, session.account.garmin, ::Pair),
-        combine(session.sync.pendingCount, push.enabledFor, ::Pair),
+        combine(session.sync.pendingCount, push.enabledFor, health?.enabledFor ?: MutableStateFlow(null), healthAccess, ::Devices),
         local,
-    ) { user, prefs, (strava, garmin), (pending, pushUser), l ->
+    ) { user, prefs, (strava, garmin), devices, l ->
+        val (pending, pushUser) = devices.pendingWrites to devices.pushUser
+        val (healthUser, access) = devices.healthUser to devices.healthAccess
         SettingsUiState(
             user = user,
             preferences = prefs,
@@ -67,11 +84,17 @@ class SettingsViewModel(
             pendingWrites = pending,
             pushAvailable = push.available,
             pushOn = pushUser == session.userId,
+            health = HealthState(
+                availability = access.first,
+                on = healthUser == session.userId,
+                accessWithdrawn = healthUser == session.userId && !access.second,
+            ),
             busy = l.busy,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
 
     init {
+        refreshHealth()
         viewModelScope.launch { runCatching { session.account.refreshUser() } }
         viewModelScope.launch { runCatching { session.account.refreshIntegrations() } }
         viewModelScope.launch { runCatching { session.preferences.refresh() } }
@@ -150,6 +173,48 @@ class SettingsViewModel(
             share(format.fileName, format.mimeType, content)
         }
 
+    /** Re-reads what Health Connect offers and whether access still holds (e.g. back from its settings). */
+    fun refreshHealth() {
+        val sync = health ?: return
+        viewModelScope.launch {
+            runCatching { sync.availability() to sync.hasPermissions() }.onSuccess { healthAccess.value = it }
+        }
+    }
+
+    /** Access granted: turns the sync on, runs the first one and schedules the rest. */
+    fun enableHealth() = run("health", "Couldn't sync Health Connect") {
+        val sync = health ?: return@run
+        try {
+            val result = sync.enable(session.userId)
+            healthScheduler?.schedule()
+            toasts.send("Health Connect connected. ${healthImported(result.imported)}")
+            runCatching { session.timeline.refresh() }
+        } finally {
+            refreshHealth()
+        }
+    }
+
+    fun syncHealth() = run("health", "Couldn't sync Health Connect") {
+        val result = health?.sync(session.userId) ?: return@run
+        toasts.send(healthImported(result.imported))
+        if (result.imported > 0 || result.deleted > 0) runCatching { session.timeline.refresh() }
+    }
+
+    fun disconnectHealth() = run("health", "Couldn't disconnect Health Connect") {
+        stopHealth()
+        toasts.send("Health Connect disconnected. Workouts already imported stay.")
+        refreshHealth()
+    }
+
+    fun healthAccessDenied() {
+        viewModelScope.launch { toasts.send("Health Connect access wasn't granted. fitai needs it to import your workouts.") }
+    }
+
+    private suspend fun stopHealth() {
+        healthScheduler?.cancel()
+        health?.disable()
+    }
+
     /** Registers this phone for push, once the system allows notifications. */
     fun enablePush() = run("push", "Couldn't turn on notifications") {
         push.enable(session.userId)
@@ -166,6 +231,7 @@ class SettingsViewModel(
     /** Signs out and deletes this user's data from the device, unsent changes included. Push stops first. */
     fun signOut() = run("sign-out", "Couldn't sign out. Check your connection and try again.") {
         push.disable()
+        stopHealth()
         sessions.signOut()
     }
 
@@ -173,6 +239,7 @@ class SettingsViewModel(
     fun deleteAccount() = run("delete", "Deletion failed") {
         session.account.deleteAccount()
         push.forget()
+        stopHealth()
         sessions.forgetDeletedAccount()
     }
 
@@ -203,6 +270,17 @@ const val DELETE_CONFIRMATION = "DELETE"
 
 /** "07:00": the hour of the day emails go out. */
 fun hourLabel(hour: Int): String = "${hour.toString().padStart(2, '0')}:00"
+
+fun healthImported(count: Long): String =
+    if (count == 0L) "No new workouts to import." else "Imported $count new ${if (count == 1L) "workout" else "workouts"}."
+
+/** This phone's side of Settings, read together: unsent writes, push, Health Connect. */
+private data class Devices(
+    val pendingWrites: Int,
+    val pushUser: String?,
+    val healthUser: String?,
+    val healthAccess: Pair<HealthAvailability, Boolean>,
+)
 
 fun stravaImported(count: Long): String = "Imported $count new ${if (count == 1L) "activity" else "activities"} from Strava"
 
