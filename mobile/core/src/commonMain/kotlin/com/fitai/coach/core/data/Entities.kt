@@ -11,6 +11,18 @@ import androidx.room.PrimaryKey
  * field never needs a migration here.
  */
 
+/**
+ * A cached API response kept whole: the user's preferences, a plan, a day's
+ * nutrition, an analytics summary. [key] names the request (`preferences`,
+ * `plan:<id>`); screens read it offline and a refresh replaces it.
+ */
+@Entity(tableName = "cache_entries")
+public data class CacheEntryEntity(
+    @PrimaryKey val key: String,
+    val json: String,
+    val updatedAt: Long,
+)
+
 /** One `GET /api/v1/timeline` entry. [position] is its place in the server's order. */
 @Entity(tableName = "timeline_entries", indices = [Index("date")])
 public data class TimelineEntryEntity(

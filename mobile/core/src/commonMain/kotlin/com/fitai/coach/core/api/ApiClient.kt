@@ -7,18 +7,25 @@ import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.prepareRequest
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.utils.io.readLine
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
@@ -104,15 +111,48 @@ public class ApiClient(private val http: HttpClient) {
         path: String = endpoint.pathTemplate,
         query: List<Pair<String, String>> = emptyList(),
         idempotencyKey: String? = null,
-    ): Res {
-        val serializer = endpoint.requestSerializer
-        val json = if (serializer != null) {
-            requireNotNull(body) { "$endpoint needs a request body" }
-            ApiJson.encodeToString(serializer, body)
-        } else {
-            null
+    ): Res = decode(endpoint, execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey))
+
+    /**
+     * Sends an endpoint that answers with Server-Sent Events (the coach's
+     * replies) and emits each event's `data:` JSON, decoded, as it arrives.
+     * The flow completes when the server closes the stream; cancelling the
+     * collector aborts the request. A line that is not an event, or does not
+     * decode, is skipped, as the web's parser does.
+     *
+     * @throws ApiException when the server refuses the request before streaming.
+     */
+    public fun <Req, Res> stream(endpoint: ApiEndpoint<Req, Res>, body: Req? = null, path: String = endpoint.pathTemplate): Flow<Res> =
+        channelFlow {
+            require(endpoint.responseKind == ResponseKind.EventStream) { "$endpoint does not stream" }
+            val serializer = requireNotNull(endpoint.responseSerializer)
+            val json = encodeBody(endpoint, body)
+            http.prepareRequest(path) {
+                method = endpoint.method.toKtor()
+                header(HttpHeaders.Accept, EVENT_STREAM)
+                timeout {
+                    requestTimeoutMillis = STREAM_TIMEOUT_MS
+                    socketTimeoutMillis = STREAM_IDLE_TIMEOUT_MS
+                }
+                if (json != null) {
+                    contentType(ContentType.Application.Json)
+                    setBody(json)
+                }
+            }.execute { response ->
+                if (response.status.value !in SUCCESS_RANGE) throw failure(response)
+                val channel = response.bodyAsChannel()
+                var line = channel.readLine()
+                while (line != null) {
+                    eventData(line)?.let { payload -> decodeOrNull(serializer, payload)?.let { send(it) } }
+                    line = channel.readLine()
+                }
+            }
         }
-        return decode(endpoint, execute(endpoint, path, query, json, idempotencyKey))
+
+    private fun <Req> encodeBody(endpoint: ApiEndpoint<Req, *>, body: Req?): String? {
+        val serializer = endpoint.requestSerializer ?: return null
+        requireNotNull(body) { "$endpoint needs a request body" }
+        return ApiJson.encodeToString(serializer, body)
     }
 
     /**
@@ -149,7 +189,7 @@ public class ApiClient(private val http: HttpClient) {
         ResponseKind.Json -> ApiJson.decodeFromString(requireNotNull(endpoint.responseSerializer), response.bodyAsText())
         ResponseKind.Raw -> response.bodyAsText() as Res
         ResponseKind.None -> Unit as Res
-        ResponseKind.EventStream -> error("$endpoint streams Server-Sent Events; it has no single body to decode")
+        ResponseKind.EventStream -> error("$endpoint streams Server-Sent Events: use stream()")
     }
 
     private suspend fun failure(response: HttpResponse): ApiException {
@@ -183,6 +223,20 @@ public class ApiClient(private val http: HttpClient) {
     }
 }
 
+/** The payload of an SSE `data:` line, or null for any other line (comments, `event:`, blank separators). */
+internal fun eventData(line: String): String? {
+    if (!line.startsWith(DATA_PREFIX)) return null
+    return line.removePrefix(DATA_PREFIX).trim().takeIf { it.isNotEmpty() }
+}
+
+private fun <T> decodeOrNull(serializer: kotlinx.serialization.KSerializer<T>, json: String): T? = try {
+    ApiJson.decodeFromString(serializer, json)
+} catch (_: SerializationException) {
+    null
+} catch (_: IllegalArgumentException) {
+    null
+}
+
 private fun HttpMethod.toKtor(): KtorMethod = when (this) {
     HttpMethod.Get -> KtorMethod.Get
     HttpMethod.Post -> KtorMethod.Post
@@ -195,6 +249,12 @@ internal const val APP_PLATFORM_HEADER = "X-App-Platform"
 internal const val APP_VERSION_HEADER = "X-App-Version"
 private const val CONNECT_TIMEOUT_MS = 15_000L
 private const val REQUEST_TIMEOUT_MS = 30_000L
+
+// A coach reply can run for minutes; what matters is that bytes keep arriving.
+private const val STREAM_TIMEOUT_MS = 10L * 60 * 1000
+private const val STREAM_IDLE_TIMEOUT_MS = 90_000L
+private const val EVENT_STREAM = "text/event-stream"
+private const val DATA_PREFIX = "data:"
 private const val UNAUTHORIZED = 401
 private const val UPGRADE_REQUIRED = 426
 private val SUCCESS_RANGE = 200..299

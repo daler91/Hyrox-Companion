@@ -17,13 +17,16 @@ import kotlinx.coroutines.launch
 public class UserSession internal constructor(
     public val userId: String,
     public val database: FitaiDatabase,
-    api: ApiClient,
+    /** For the calls a screen makes online only (analytics, AI parsing); cached data goes through the repositories. */
+    public val api: ApiClient,
     now: () -> Long,
     newKey: () -> String,
 ) {
     public val sync: SyncEngine = SyncEngine(database, api, now, newKey)
+    public val cache: CacheStore = CacheStore(database, now)
     public val timeline: TimelineRepository = TimelineRepository(database, api)
     public val workouts: WorkoutRepository = WorkoutRepository(database, api, sync)
+    public val preferences: PreferencesRepository = PreferencesRepository(api, cache)
 
     private var job: Job? = null
 
@@ -36,8 +39,9 @@ public class UserSession internal constructor(
     internal fun start(scope: CoroutineScope, online: Flow<Boolean>) {
         job = scope.launch {
             sync.start(this, online)
-            launch { sync.events.filterIsInstance<SyncEvent.Synced>().collect { refreshTimeline() } }
-            refreshTimeline()
+            launch { sync.events.filterIsInstance<SyncEvent.Synced>().collect { bestEffort { timeline.refresh() } } }
+            bestEffort { preferences.refresh() }
+            bestEffort { timeline.refresh() }
         }
     }
 
@@ -48,9 +52,9 @@ public class UserSession internal constructor(
 
     // A refresh is best effort: offline, the screens keep showing the cache.
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private suspend fun refreshTimeline() {
+    private suspend fun bestEffort(block: suspend () -> Unit) {
         try {
-            timeline.refresh()
+            block()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
