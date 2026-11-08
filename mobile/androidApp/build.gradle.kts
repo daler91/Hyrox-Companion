@@ -28,6 +28,17 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
+    buildTypes {
+        release {
+            // R8 shrinks and obfuscates the release build. The libraries ship
+            // their own keep rules (kotlinx.serialization, Room, Ktor, Koin,
+            // Clerk); proguard-rules.pro holds what they don't cover.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

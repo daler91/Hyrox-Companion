@@ -65,7 +65,7 @@ public class SessionManager(
         auth.signOut()
         lock.withLock {
             closeLocked()
-            if (userId != null) withContext(Dispatchers.IO) { databases.delete(userId) }
+            userId?.let { withContext(Dispatchers.IO) { databases.delete(it) } }
         }
     }
 

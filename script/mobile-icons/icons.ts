@@ -19,10 +19,15 @@ export function lucideLicense(): string {
 /** Each icon's shape nodes, read from lucide-react's ESM build. */
 export async function loadIcons(): Promise<Record<string, IconNode[]>> {
   const icons: Record<string, IconNode[]> = {};
-  for (const [name, file] of Object.entries(ICONS)) {
-    const module = (await import(path.join(LUCIDE, "dist/esm/icons", `${file}.mjs`))) as {
-      __iconData: { node: IconNode[] };
-    };
+  const modules = await Promise.all(
+    Object.entries(ICONS).map(async ([name, file]) => {
+      const module = (await import(path.join(LUCIDE, "dist/esm/icons", `${file}.mjs`))) as {
+        __iconData: { node: IconNode[] };
+      };
+      return [name, module] as const;
+    }),
+  );
+  for (const [name, module] of modules) {
     icons[name] = module.__iconData.node.map(([tag, attrs]) => {
       const { key: _key, ...rest } = attrs;
       return [tag, rest] as IconNode;

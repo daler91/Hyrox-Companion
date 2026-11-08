@@ -30,10 +30,14 @@ public interface OutboxHandler {
     public suspend fun prepareBody(entry: OutboxEntity): String? = entry.body
 
     /** The server accepted [entry], which has left the outbox. Runs in a write transaction. */
-    public suspend fun onSent(entry: OutboxEntity, response: String) {}
+    public suspend fun onSent(entry: OutboxEntity, response: String) {
+        // Nothing by default: a write whose answer changes nothing in the cache.
+    }
 
     /** The server refused [entry] for good (a conflict, or out of retries): restore the server's state. */
-    public suspend fun onRejected(entry: OutboxEntity) {}
+    public suspend fun onRejected(entry: OutboxEntity) {
+        // Nothing by default: a write with no cached state to restore.
+    }
 }
 
 /** Why a write was dropped from the outbox without the server taking it. */
@@ -160,29 +164,34 @@ public class SyncEngine(
                 requestSync()
             }
         }
-        var failedRuns = 0
-        var retry: Job? = null
+        val backoff = Backoff(this)
         requestSync()
         for (ignored in triggers) {
-            if (resetBackoff.getAndUpdate { false }) {
-                failedRuns = 0
-                retry?.cancel()
-            }
-            if (!connected.value) continue
-            val result = sync()
-            if (result.halted) {
-                if (retry?.isActive != true) {
-                    val wait = retryDelay(failedRuns)
-                    retry = launch {
-                        delay(wait)
-                        requestSync()
-                    }
+            if (resetBackoff.getAndUpdate { false }) backoff.reset()
+            if (connected.value) backoff.after(sync())
+        }
+    }
+
+    /** Schedules the retry after a run that stopped on a failure, waiting longer each time in a row. */
+    private inner class Backoff(private val scope: CoroutineScope) {
+        private var failedRuns = 0
+        private var retry: Job? = null
+
+        fun reset() {
+            failedRuns = 0
+            retry?.cancel()
+        }
+
+        fun after(result: SyncResult) {
+            if (!result.halted) return reset()
+            if (retry?.isActive != true) {
+                val wait = retryDelay(failedRuns)
+                retry = scope.launch {
+                    delay(wait)
+                    requestSync()
                 }
-                failedRuns++
-            } else {
-                failedRuns = 0
-                retry?.cancel()
             }
+            failedRuns++
         }
     }
 

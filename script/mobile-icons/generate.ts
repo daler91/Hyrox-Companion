@@ -9,6 +9,8 @@
  * `pnpm mobile:icons`.
  */
 
+import { byCodeUnit } from "../kotlin-models/generate";
+
 /** Kotlin name → lucide-react icon file (dist/esm/icons/<file>.mjs). Names follow the web's imports. */
 export const ICONS: Readonly<Record<string, string>> = {
   CalendarRange: "calendar-range",
@@ -72,7 +74,7 @@ function ellipse(cx: number, cy: number, rx: number, ry: number): string {
 /** The Kotlin source for [icons] (Kotlin name → Lucide nodes). */
 export function generateIconsKotlin(icons: Readonly<Record<string, IconNode[]>>, lucideVersion: string): string {
   const entries = Object.keys(icons)
-    .sort()
+    .sort(byCodeUnit)
     .map((name) => {
       const paths = icons[name].map((node) => `            "${toPathData(node)}",`).join("\n");
       return `    val ${name}: ImageVector by lazy {\n        lucide(\n            "${name}",\n${paths}\n        )\n    }`;

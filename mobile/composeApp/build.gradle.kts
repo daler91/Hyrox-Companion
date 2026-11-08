@@ -62,6 +62,8 @@ dependencies {
     robolectricRuntime(libs.robolectric.android.all)
 }
 val robolectricJars = tasks.register<Sync>("robolectricJars") {
+    group = "verification"
+    description = "Copies the Robolectric Android runtime jar for offline screenshot tests."
     from(robolectricRuntime)
     into(layout.buildDirectory.dir("robolectric-jars"))
 }
