@@ -32,6 +32,7 @@ public class UserSession internal constructor(
     public val nutrition: NutritionRepository = NutritionRepository(api, cache)
     public val analytics: AnalyticsRepository = AnalyticsRepository(api, cache)
     public val account: AccountRepository = AccountRepository(api, cache)
+    public val onboarding: OnboardingRepository = OnboardingRepository(api, cache, preferences, timeline)
 
     private var job: Job? = null
 

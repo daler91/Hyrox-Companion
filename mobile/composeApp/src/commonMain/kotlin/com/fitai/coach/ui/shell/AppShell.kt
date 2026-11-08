@@ -9,9 +9,12 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,9 +27,12 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.fitai.coach.ui.analytics.AnalyticsScreen
 import com.fitai.coach.ui.coach.CoachPanel
+import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.log.LogWorkoutScreen
 import com.fitai.coach.ui.nutrition.NutritionScreen
+import com.fitai.coach.ui.onboarding.OnboardingScreen
+import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.settings.SettingsScreen
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
@@ -40,12 +46,43 @@ import com.fitai.coach.ui.workout.WorkoutDetailScreen
  */
 @Composable
 fun AppShell() {
+    val session = LocalUserSession.current
     val backStack = remember { AppBackStack() }
     var coachOpen by rememberSaveable { mutableStateOf(false) }
+    // Setup (onboarding): opens by itself once for a new account, and again
+    // from Settings. Each opening is a new run, so it starts fresh.
+    var setupOpen by rememberSaveable { mutableStateOf(false) }
+    var setupRun by rememberSaveable { mutableIntStateOf(0) }
+    var setupChecked by rememberSaveable { mutableStateOf(false) }
+    var shellMessage by remember { mutableStateOf<String?>(null) }
+    val toasts = remember { SnackbarHostState() }
     val colors = FitaiTheme.colors
+
+    LaunchedEffect(session.userId) {
+        if (setupChecked) return@LaunchedEffect
+        // Offline or failed: not now. A returning athlete is never shown setup on a guess.
+        if (runCatching { session.onboarding.shouldStart() }.getOrDefault(false)) setupOpen = true
+        setupChecked = true
+    }
+    LaunchedEffect(shellMessage) {
+        shellMessage?.let {
+            toasts.showSnackbar(it)
+            shellMessage = null
+        }
+    }
+
+    if (setupOpen) {
+        OnboardingScreen(run = setupRun) { result ->
+            setupOpen = false
+            if (result.madePlan) backStack.select(TopLevel.Training)
+            shellMessage = result.message
+        }
+        return
+    }
 
     Scaffold(
         containerColor = colors.background,
+        snackbarHost = { FitaiToastHost(toasts) },
         bottomBar = { BottomBar(current = backStack.currentTab, onSelect = backStack::select) },
         floatingActionButton = {
             FloatingActionButton(
@@ -75,7 +112,14 @@ fun AppShell() {
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
                 entry<Route.Nutrition> { NutritionScreen() }
                 entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }
-                entry<Route.Settings> { SettingsScreen() }
+                entry<Route.Settings> {
+                    SettingsScreen(
+                        onRunSetup = {
+                            setupRun++
+                            setupOpen = true
+                        },
+                    )
+                }
             },
         )
     }

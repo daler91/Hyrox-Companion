@@ -28,3 +28,8 @@ fun dayLabel(date: String, today: String): String = when (date) {
 fun shortWeekday(date: String): String = weekdayName(date).take(WEEKDAY_ABBREVIATION)
 
 private const val WEEKDAY_ABBREVIATION = 3
+
+/** "Monday, Nov 9, 2026": a date with its weekday and year, for dates that may be months away. */
+fun longDate(date: String): String = "${weekdayName(date)}, ${shortDate(date)}, ${date.take(YEAR_LENGTH)}"
+
+private const val YEAR_LENGTH = 4

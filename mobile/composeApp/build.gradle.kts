@@ -36,6 +36,7 @@ kotlin {
             implementation(libs.jb.lifecycle.viewmodel.compose)
             implementation(libs.jb.lifecycle.runtime.compose)
             implementation(libs.jb.navigation3.ui)
+            implementation(libs.jb.navigationevent.compose)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
