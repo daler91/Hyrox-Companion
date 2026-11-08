@@ -43,28 +43,23 @@ function statistic(result: BenchmarkResult, measure: string): number | undefined
   return typeof value === "number" ? value : undefined;
 }
 
+function budgetRow(benchmark: string, measure: string, limit: number, result: BenchmarkResult | undefined): BudgetRow {
+  if (!result) return { benchmark, measure, limit, status: "skipped" };
+  const actual = statistic(result, measure);
+  if (actual === undefined) return { benchmark, measure, limit, status: "missing" };
+  return { benchmark, measure, limit, actual, status: actual <= limit ? "pass" : "fail" };
+}
+
 /**
  * Checks every budget against the results. A benchmark that did not run is
  * skipped; one that ran without the budgeted metric is a failure ("missing"),
  * so a renamed metric cannot quietly pass.
  */
 export function checkBudgets(budgets: Budgets, data: readonly BenchmarkData[]): BudgetRow[] {
-  const byName = new Map<string, BenchmarkResult>();
-  for (const file of data) for (const result of file.benchmarks) byName.set(result.name, result);
-  const rows: BudgetRow[] = [];
-  for (const [benchmark, limits] of Object.entries(budgets)) {
-    const result = byName.get(benchmark);
-    for (const [measure, limit] of Object.entries(limits)) {
-      if (!result) {
-        rows.push({ benchmark, measure, limit, status: "skipped" });
-        continue;
-      }
-      const actual = statistic(result, measure);
-      if (actual === undefined) rows.push({ benchmark, measure, limit, status: "missing" });
-      else rows.push({ benchmark, measure, limit, actual, status: actual <= limit ? "pass" : "fail" });
-    }
-  }
-  return rows;
+  const byName = new Map(data.flatMap((file) => file.benchmarks.map((result) => [result.name, result] as const)));
+  return Object.entries(budgets).flatMap(([benchmark, limits]) =>
+    Object.entries(limits).map(([measure, limit]) => budgetRow(benchmark, measure, limit, byName.get(benchmark))),
+  );
 }
 
 const STATUS_LABEL: Record<BudgetRow["status"], string> = {
