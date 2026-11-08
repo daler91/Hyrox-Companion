@@ -19,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
@@ -58,14 +60,24 @@ fun FitaiTextField(
         else -> 1.dp to colors.borderStrong
     }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        Text(label, style = typography.bodySm.copy(fontWeight = typography.button.fontWeight), color = colors.text)
+        // The label is read as the field's own description (below), so a screen
+        // reader announces "email, edit box" rather than an unlabelled field.
+        Text(
+            label,
+            style = typography.bodySm.copy(fontWeight = typography.button.fontWeight),
+            color = colors.text,
+            modifier = Modifier.clearAndSetSemantics {},
+        )
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = Sizes.Input)
-                .semantics { if (error != null) error(error) },
+                .semantics {
+                    contentDescription = label
+                    if (error != null) error(error)
+                },
             enabled = enabled,
             singleLine = singleLine,
             textStyle = typography.body.copy(color = if (enabled) colors.text else colors.textMuted),

@@ -53,6 +53,14 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.ktor.client.mock)
         }
+        // UI tests render the real app on the desktop JVM (no emulator): the
+        // test harness, and Skiko's native runtime for the build machine.
+        jvmTest.dependencies {
+            implementation(libs.compose.ui.test)
+            implementation(compose.desktop.currentOs)
+            // Dispatchers.Main on the desktop (view models' scope).
+            implementation(libs.kotlinx.coroutines.swing)
+        }
         getByName("androidHostTest").dependencies {
             implementation(libs.junit4)
             implementation(libs.robolectric)
