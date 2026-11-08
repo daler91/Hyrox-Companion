@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,6 +26,8 @@ import com.fitai.coach.core.auth.AuthGateway
 import com.fitai.coach.core.auth.AuthState
 import com.fitai.coach.ui.auth.SignInScreen
 import com.fitai.coach.ui.components.NexusMark
+import com.fitai.coach.ui.platform.BrowserUriHandler
+import com.fitai.coach.ui.platform.rememberBrowser
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 import org.koin.compose.koinInject
@@ -51,14 +55,18 @@ fun App() {
         }
     }
 
-    FitaiTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = FitaiTheme.colors.background) {
-            val current = authState
-            when {
-                updateRequired -> UpdateRequiredScreen()
-                current is AuthState.SignedIn -> SignedInRoot(current.userId)
-                current is AuthState.SignedOut -> SignInScreen()
-                else -> Splash()
+    // Every link the UI opens goes to a Custom Tab (or the system browser).
+    val browser = rememberBrowser()
+    CompositionLocalProvider(LocalUriHandler provides remember(browser) { BrowserUriHandler(browser) }) {
+        FitaiTheme {
+            Surface(modifier = Modifier.fillMaxSize(), color = FitaiTheme.colors.background) {
+                val current = authState
+                when {
+                    updateRequired -> UpdateRequiredScreen()
+                    current is AuthState.SignedIn -> SignedInRoot(current.userId)
+                    current is AuthState.SignedOut -> SignInScreen()
+                    else -> Splash()
+                }
             }
         }
     }

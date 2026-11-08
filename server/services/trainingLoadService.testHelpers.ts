@@ -31,6 +31,7 @@ export function makeWorkoutLog(overrides: Partial<WorkoutLog> = {}): WorkoutLog 
     countsAsTraining: true,
     stravaActivityId: null,
     garminActivityId: null,
+    healthConnectId: null,
     calories: null,
     distanceMeters: null,
     elevationGain: null,

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the FileProvider may hand to other apps: a photo the camera app is
+     writing, and a data export being shared. Both live in the cache. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+    <cache-path name="exports" path="exports/" />
+</paths>

@@ -565,6 +565,9 @@ export const workoutLogs = pgTable(
     source: varchar("source", { length: 255 }).default("manual"),
     stravaActivityId: varchar("strava_activity_id", { length: 255 }),
     garminActivityId: varchar("garmin_activity_id", { length: 255 }),
+    // The Health Connect exercise session this row was imported from (the
+    // Android app's sync, server/services/healthConnectImport.ts).
+    healthConnectId: varchar("health_connect_id", { length: 255 }),
     calories: integer("calories"),
     distanceMeters: real("distance_meters"),
     elevationGain: real("elevation_gain"),
@@ -674,6 +677,10 @@ export const workoutLogs = pgTable(
     uniqueIndex("idx_workout_logs_user_garmin_unique")
       .on(table.userId, table.garminActivityId)
       .where(sql`${table.garminActivityId} IS NOT NULL`),
+    // And for Health Connect imports.
+    uniqueIndex("idx_workout_logs_user_health_connect_unique")
+      .on(table.userId, table.healthConnectId)
+      .where(sql`${table.healthConnectId} IS NOT NULL`),
     check(
       "rpe_range_check",
       sql`${table.rpe} IS NULL OR (${table.rpe} >= 1 AND ${table.rpe} <= 10)`,
@@ -1351,6 +1358,7 @@ export const recycleBinItems = pgTable(
     childCount: integer("child_count").notNull().default(0),
     stravaActivityId: varchar("strava_activity_id", { length: 255 }),
     garminActivityId: varchar("garmin_activity_id", { length: 255 }),
+    healthConnectId: varchar("health_connect_id", { length: 255 }),
     payload: jsonb("payload").$type<RecycleBinPayload>().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -1369,6 +1377,9 @@ export const recycleBinItems = pgTable(
     index("idx_recycle_bin_items_user_garmin")
       .on(table.userId, table.garminActivityId)
       .where(sql`${table.garminActivityId} IS NOT NULL`),
+    index("idx_recycle_bin_items_user_health_connect")
+      .on(table.userId, table.healthConnectId)
+      .where(sql`${table.healthConnectId} IS NOT NULL`),
     // A record can sit in the bin at most once. Restore deletes the row, so a
     // later re-delete of the same record inserts a fresh item.
     uniqueIndex("uq_recycle_bin_items_entity").on(table.entityType, table.entityId),

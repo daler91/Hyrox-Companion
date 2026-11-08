@@ -26,6 +26,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,7 +58,7 @@ private sealed interface OpenSheet {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimelineScreen(navigation: TimelineNavigation) {
+fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null, onPlanDayOpened: () -> Unit = {}) {
     val session = LocalUserSession.current
     val vm = viewModel(key = "timeline-${session.userId}") { TimelineViewModel(session.timeline, session.preferences, ::todayIn) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -65,8 +67,15 @@ fun TimelineScreen(navigation: TimelineNavigation) {
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
+    val haptics = LocalHapticFeedback.current
     val allEntries = state.rows.days.flatMap { it.entries }
     val sheetEntry = sheet?.let { open -> allEntries.firstOrNull { it.id == open.entryId } }
+    // A link to a plan day (an email's "Open the session") opens that day once it is on the timeline.
+    LaunchedEffect(openPlanDayId, state.loaded) {
+        if (openPlanDayId == null || !state.loaded) return@LaunchedEffect
+        allEntries.firstOrNull { it.planDayId == openPlanDayId }?.let { sheet = OpenSheet.Surface(it.id) }
+        onPlanDayOpened()
+    }
 
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
@@ -111,6 +120,7 @@ fun TimelineScreen(navigation: TimelineNavigation) {
                     entry,
                     label,
                     onComplete = { rpe, notes ->
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                         vm.markDone(entry, rpe, notes)
                         close()
                     },

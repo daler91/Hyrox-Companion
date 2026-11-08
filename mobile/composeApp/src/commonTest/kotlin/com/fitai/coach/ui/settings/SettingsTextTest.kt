@@ -23,4 +23,11 @@ class SettingsTextTest {
         assertEquals("1 change hasn't reached the server yet. Signing out deletes them from this device.", unsyncedWarning(1))
         assertEquals("3 changes haven't reached the server yet. Signing out deletes them from this device.", unsyncedWarning(3))
     }
+
+    @Test
+    fun healthConnectSyncsCountWorkouts() {
+        assertEquals("No new workouts to import.", healthImported(0))
+        assertEquals("Imported 1 new workout.", healthImported(1))
+        assertEquals("Imported 4 new workouts.", healthImported(4))
+    }
 }

@@ -4,13 +4,26 @@ import com.fitai.coach.core.api.ApiClient
 import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.ConsentType
 import com.fitai.coach.core.api.generated.GetGarminStatusResponse
+import com.fitai.coach.core.api.generated.GetStravaAuthQuery
 import com.fitai.coach.core.api.generated.GetStravaStatusResponse
 import com.fitai.coach.core.api.generated.PostConsentsRequest
 import com.fitai.coach.core.api.generated.PostGarminConnectRequest
 import com.fitai.coach.core.api.generated.PostGarminSyncResponse
+import com.fitai.coach.core.api.generated.PostStravaNativeCompleteRequest
 import com.fitai.coach.core.api.generated.PostStravaSyncResponse
 import com.fitai.coach.core.api.generated.User
+import com.fitai.coach.core.auth.Pkce
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.builtins.serializer
+
+/** The data export's formats, with the file each is shared as. */
+public enum class ExportFormat(public val wireValue: String, public val fileName: String, public val mimeType: String) {
+    Csv("csv", "fitai-training-data.csv", "text/csv"),
+    Json("json", "fitai-training-data.json", "application/json"),
+}
+
+/** Why a native Strava connection didn't finish, in words for the athlete. */
+public class StravaConnectException(message: String) : Exception(message)
 
 /**
  * The account behind Settings: who is signed in, the device integrations,
@@ -32,6 +45,38 @@ public class AccountRepository(private val api: ApiClient, private val cache: Ca
     }
 
     public suspend fun syncStrava(): PostStravaSyncResponse = api.call(ApiEndpoints.PostStravaSync).also { refreshIntegrations() }
+
+    /**
+     * Starts connecting Strava natively (the Phase 1 flow): keeps a fresh
+     * PKCE verifier on the device and returns Strava's consent URL, whose
+     * state carries the challenge. Strava sends the athlete back through the
+     * /strava/mobile-callback App Link to [finishStravaConnect].
+     */
+    public suspend fun startStravaConnect(): String {
+        val pkce = Pkce.create()
+        cache.put(STRAVA_VERIFIER, String.serializer(), pkce.verifier)
+        val query = GetStravaAuthQuery(codeChallenge = pkce.challenge).toQueryParameters()
+        return api.call(ApiEndpoints.GetStravaAuth, query = query).authUrl
+    }
+
+    /**
+     * Finishes the connection Strava sent back: proves the flow is this
+     * device's with the verifier, then refreshes the status. The verifier is
+     * used once, whatever the outcome.
+     *
+     * @throws StravaConnectException when no connection was started here, or the athlete declined.
+     * @throws com.fitai.coach.core.api.ApiException when the server refuses it.
+     */
+    public suspend fun finishStravaConnect(code: String?, state: String?, error: String?) {
+        val verifier = cache.get(STRAVA_VERIFIER, String.serializer())
+            ?: throw StravaConnectException("No Strava connection was started on this device. Try Connect Strava again.")
+        cache.delete(STRAVA_VERIFIER)
+        if (error != null || code.isNullOrEmpty() || state.isNullOrEmpty()) {
+            throw StravaConnectException("Strava wasn't connected. You can try again anytime.")
+        }
+        api.call(ApiEndpoints.PostStravaNativeComplete, PostStravaNativeCompleteRequest(code = code, state = state, verifier = verifier))
+        refreshIntegrations()
+    }
 
     public suspend fun disconnectStrava() {
         api.call(ApiEndpoints.DeleteStravaDisconnect)
@@ -60,6 +105,9 @@ public class AccountRepository(private val api: ApiClient, private val cache: Ca
         api.call(ApiEndpoints.PostConsents, request)
     }
 
+    /** All the athlete's training data, as the server exports it (GET /export, as on the web's Settings). */
+    public suspend fun exportData(format: ExportFormat): String = api.text(ApiEndpoints.GetExport, listOf("format" to format.wireValue))
+
     /** Deletes the account and everything in it on the server. Irreversible. */
     public suspend fun deleteAccount() {
         api.call(ApiEndpoints.DeleteAccount)
@@ -69,5 +117,6 @@ public class AccountRepository(private val api: ApiClient, private val cache: Ca
         const val USER = "auth-user"
         const val STRAVA = "strava-status"
         const val GARMIN = "garmin-status"
+        const val STRAVA_VERIFIER = "strava-connect-verifier"
     }
 }

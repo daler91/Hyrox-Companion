@@ -25,6 +25,9 @@ vi.mock("../storage", () => ({
       listDeviceUnlinkedLogsForDates: vi.fn(),
       createWorkoutLogs: vi.fn(),
       createDeviceActivitySets: vi.fn(),
+      // No Health Connect imports to supersede unless a test says otherwise.
+      listUntouchedHealthConnectLogsForDates: vi.fn().mockResolvedValue([]),
+      binWorkoutLogs: vi.fn().mockResolvedValue(0),
     },
     plans: { listOpenPlanDaysForDates: vi.fn() },
   },

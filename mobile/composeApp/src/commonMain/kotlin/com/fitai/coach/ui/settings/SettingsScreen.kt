@@ -26,16 +26,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.PreferencesResponse
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
+import com.fitai.coach.core.data.ExportFormat
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.health.HealthAvailability
+import com.fitai.coach.core.health.HealthSync
+import com.fitai.coach.core.health.HealthSyncScheduler
+import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBadge
@@ -48,6 +57,11 @@ import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.links.DeepLink
+import com.fitai.coach.ui.platform.rememberBrowser
+import com.fitai.coach.ui.platform.rememberFileSharer
+import com.fitai.coach.ui.platform.rememberHealthConnectAccess
+import com.fitai.coach.ui.platform.rememberNotificationAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -59,13 +73,29 @@ private const val DEFAULT_NOTIFY_HOUR = 7
 private const val DATE_PART = 10
 
 @Composable
-fun SettingsScreen(onRunSetup: (() -> Unit)? = null) {
+fun SettingsScreen(
+    onRunSetup: (() -> Unit)? = null,
+    stravaReturn: DeepLink.StravaReturn? = null,
+    onStravaReturnHandled: () -> Unit = {},
+) {
     val session = LocalUserSession.current
     val sessions = koinInject<SessionManager>()
-    val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions) }
+    val push = koinInject<PushRegistration>()
+    val health = koinInject<HealthSync>()
+    val healthScheduler = koinInject<HealthSyncScheduler>()
+    val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions, push, health, healthScheduler) }
+    // Back from Health Connect's own settings, access may have changed.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshHealth() }
     val state by vm.state.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(stravaReturn) {
+        stravaReturn?.let {
+            vm.finishStrava(it.code, it.state, it.error)
+            onStravaReturnHandled()
+        }
+    }
+    val browser = rememberBrowser()
     var dialog by remember { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize()) {
@@ -80,8 +110,14 @@ fun SettingsScreen(onRunSetup: (() -> Unit)? = null) {
                 Coach(prefs, vm::update)
                 EmailNotifications(prefs, vm::update)
             }
-            Integrations(state, vm, onConnectGarmin = { dialog = GARMIN_FORM }, onDisconnect = { dialog = it })
-            Privacy(state, vm::setErrorReporting)
+            PushNotifications(state, vm)
+            Integrations(state, vm, onConnectStrava = {
+                vm.connectStrava(browser::open)
+            }, onConnectGarmin = { dialog = GARMIN_FORM }, onDisconnect = {
+                dialog =
+                    it
+            })
+            Privacy(state, vm)
             Account(onSignOut = {
                 dialog = if (state.pendingWrites >
                     0
@@ -107,11 +143,15 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    val haptics = LocalHapticFeedback.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
         Switch(
             checked = checked,
-            onCheckedChange = onChange,
+            onCheckedChange = { on ->
+                haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+                onChange(on)
+            },
             enabled = enabled,
             colors = SwitchDefaults.colors(checkedTrackColor = FitaiTheme.colors.primary, checkedThumbColor = FitaiTheme.colors.onPrimary),
         )
@@ -202,7 +242,94 @@ private fun EmailNotifications(prefs: PreferencesResponse, update: (UpdateUserPr
 }
 
 @Composable
-private fun Integrations(state: SettingsUiState, vm: SettingsViewModel, onConnectGarmin: () -> Unit, onDisconnect: (String) -> Unit) {
+private fun PushNotifications(state: SettingsUiState, vm: SettingsViewModel) {
+    val access = rememberNotificationAccess()
+    Section("Notifications on this phone") {
+        if (!state.pushAvailable) {
+            Text(
+                "Push notifications aren't available in this build.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            return@Section
+        }
+        Toggle("Push notifications", state.pushOn, enabled = state.busy != "push") { on ->
+            if (on) access.request { granted -> if (granted) vm.enablePush() else vm.notificationsBlocked() } else vm.disablePush()
+        }
+        Text(
+            "Training reminders, coach messages and nutrition reminders. Mute any of them in your phone's settings.",
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+        )
+        FitaiButton("Choose which notifications", onClick = access::openSettings, variant = ButtonVariant.Ghost)
+    }
+}
+
+@Composable
+private fun HealthConnectCard(state: SettingsUiState, vm: SettingsViewModel) {
+    val access = rememberHealthConnectAccess() ?: return
+    val health = state.health
+    if (health.availability == HealthAvailability.Unsupported) return
+    val busy = state.busy == "health"
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        Text("Health Connect", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+        when {
+            health.accessWithdrawn -> FitaiBadge("Access off", tone = BadgeTone.Warning)
+            health.on -> FitaiBadge("Connected", tone = BadgeTone.Success)
+            else -> FitaiBadge("Not connected")
+        }
+    }
+    val connect = { access.requestPermissions { granted -> if (granted) vm.enableHealth() else vm.healthAccessDenied() } }
+    when {
+        health.availability == HealthAvailability.NeedsInstall -> {
+            Text(
+                "Import workouts from your watch and other fitness apps. Install or update Health Connect first.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            FitaiButton("Get Health Connect", onClick = access::openInstall, variant = ButtonVariant.Secondary)
+        }
+        health.accessWithdrawn -> {
+            Text(
+                "Health Connect access was turned off, so workouts stopped importing. Reconnect to resume.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton("Reconnect", onClick = connect, variant = ButtonVariant.Secondary, loading = busy)
+                FitaiButton("Disconnect", onClick = vm::disconnectHealth, variant = ButtonVariant.Ghost, enabled = !busy)
+            }
+        }
+        health.on -> {
+            Text(
+                "Workouts from Health Connect import automatically every few hours and when you open fitai.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton("Sync now", onClick = vm::syncHealth, variant = ButtonVariant.Secondary, loading = busy)
+                FitaiButton("Disconnect", onClick = vm::disconnectHealth, variant = ButtonVariant.Ghost, enabled = !busy)
+            }
+        }
+        else -> {
+            Text(
+                "Import workouts from your watch and other fitness apps through Health Connect. fitai only reads.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+            FitaiButton("Connect Health Connect", onClick = connect, variant = ButtonVariant.Secondary, loading = busy)
+        }
+    }
+}
+
+@Composable
+private fun Integrations(
+    state: SettingsUiState,
+    vm: SettingsViewModel,
+    onConnectStrava: () -> Unit,
+    onConnectGarmin: () -> Unit,
+    onDisconnect: (String) -> Unit,
+) {
     Section("Integrations") {
         val strava = state.strava
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
@@ -213,23 +340,43 @@ private fun Integrations(state: SettingsUiState, vm: SettingsViewModel, onConnec
                 else -> FitaiBadge("Not connected")
             }
         }
-        if (strava?.connected == true) {
-            Text(
-                strava.lastSyncedAt?.let { "Last synced ${shortDate(it.take(DATE_PART))}" } ?: "Importing your recent activities…",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiButton("Sync now", onClick = vm::syncStrava, variant = ButtonVariant.Secondary, loading = state.busy == "strava-sync")
-                FitaiButton("Disconnect", onClick = { onDisconnect("strava") }, variant = ButtonVariant.Ghost)
+        val connecting = state.busy == "strava-connect"
+        when {
+            strava?.requiresReauth == true -> {
+                Text(
+                    "Strava stopped accepting this connection. Reconnect to keep importing activities.",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+                FitaiButton("Reconnect Strava", onClick = onConnectStrava, variant = ButtonVariant.Secondary, loading = connecting)
             }
-        } else {
-            Text(
-                "Connect Strava from fitai.coach on the web for now; it shows here once connected.",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
-            )
+            strava?.connected == true -> {
+                Text(
+                    strava.lastSyncedAt?.let { "Last synced ${shortDate(it.take(DATE_PART))}" } ?: "Importing your recent activities…",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                    FitaiButton(
+                        "Sync now",
+                        onClick = vm::syncStrava,
+                        variant = ButtonVariant.Secondary,
+                        loading =
+                        state.busy == "strava-sync",
+                    )
+                    FitaiButton("Disconnect", onClick = { onDisconnect("strava") }, variant = ButtonVariant.Ghost)
+                }
+            }
+            else -> {
+                Text(
+                    "Import your runs and rides automatically. You'll approve it on Strava.",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+                FitaiButton("Connect Strava", onClick = onConnectStrava, variant = ButtonVariant.Secondary, loading = connecting)
+            }
         }
+        HealthConnectCard(state, vm)
         val garmin = state.garmin
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             Text("Garmin", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
@@ -259,10 +406,34 @@ private fun Integrations(state: SettingsUiState, vm: SettingsViewModel, onConnec
 }
 
 @Composable
-private fun Privacy(state: SettingsUiState, onErrorReporting: (Boolean) -> Unit) {
+private fun Privacy(state: SettingsUiState, vm: SettingsViewModel) {
     val uri = LocalUriHandler.current
+    val sharer = rememberFileSharer()
     Section("Data & privacy") {
-        Toggle("Send error diagnostics", state.errorReporting == true, enabled = state.errorReporting != null, onChange = onErrorReporting)
+        Toggle(
+            "Send error diagnostics",
+            state.errorReporting == true,
+            enabled = state.errorReporting != null,
+            onChange = vm::setErrorReporting,
+        )
+        sharer?.let {
+            Text("Export your training data", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton(
+                    "CSV",
+                    onClick = { vm.export(ExportFormat.Csv, it::share) },
+                    variant = ButtonVariant.Secondary,
+                    loading = state.busy == "export",
+                )
+                FitaiButton(
+                    "JSON",
+                    onClick = { vm.export(ExportFormat.Json, it::share) },
+                    variant = ButtonVariant.Secondary,
+                    enabled =
+                    state.busy != "export",
+                )
+            }
+        }
         TextButton(onClick = { uri.openUri(PRIVACY_POLICY_URL) }) { Text("Privacy policy", color = FitaiTheme.colors.accent) }
     }
 }

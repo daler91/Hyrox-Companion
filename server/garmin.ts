@@ -38,6 +38,7 @@ import { invalidateAnalyticsCachesForUser } from "./services/analyticsRouteCache
 import {
   dropCrossProviderDuplicates,
   recordingTimingFromLog,
+  supersedeHealthConnectRecordings,
 } from "./services/crossProviderDuplicates";
 import { recordingSetRow } from "./services/deviceActivitySets";
 import {
@@ -870,6 +871,12 @@ async function importGarminActivities(
   if (workoutsToImport.length > 0) {
     const created = await insertGarminLogsWithSets(workoutsToImport, rawActivities, preferences);
     inserted = created.length;
+    // Garmin outranks Health Connect: an import of the same session from
+    // there goes to the bin now that Garmin's recording is here.
+    await supersedeHealthConnectRecordings(
+      userId,
+      created.map((row) => ({ date: row.date, timing: recordingTimingFromLog(row) })),
+    );
   }
   const dedupedByConflict = workoutsToImport.length - inserted;
 

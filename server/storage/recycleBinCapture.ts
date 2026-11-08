@@ -151,6 +151,7 @@ async function insertItems(
         childCount: sql`excluded.child_count`,
         stravaActivityId: sql`excluded.strava_activity_id`,
         garminActivityId: sql`excluded.garmin_activity_id`,
+        healthConnectId: sql`excluded.health_connect_id`,
         payload: sql`excluded.payload`,
         deletedAt: sql`excluded.deleted_at`,
         expiresAt: sql`excluded.expires_at`,
@@ -241,6 +242,7 @@ export async function captureWorkoutLogs(
       childCount: sets.length,
       stravaActivityId: log.stravaActivityId,
       garminActivityId: log.garminActivityId,
+      healthConnectId: log.healthConnectId,
     };
   });
   return insertItems(tx, items);

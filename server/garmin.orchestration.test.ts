@@ -57,6 +57,8 @@ vi.mock("./storage", () => ({
       listDeviceRecordingsForDates: vi.fn(),
       createGarminWorkoutLogs: vi.fn(),
       createDeviceActivitySets: vi.fn(),
+      listUntouchedHealthConnectLogsForDates: vi.fn(),
+      binWorkoutLogs: vi.fn(),
     },
   },
 }));
@@ -182,6 +184,8 @@ beforeEach(() => {
   vi.mocked(storage.users.getUser).mockResolvedValue({ distanceUnit: "km" } as never);
   vi.mocked(storage.workouts.getExistingGarminActivityIds).mockResolvedValue([]);
   vi.mocked(storage.workouts.listDeviceRecordingsForDates).mockResolvedValue([]);
+  vi.mocked(storage.workouts.listUntouchedHealthConnectLogsForDates).mockResolvedValue([]);
+  vi.mocked(storage.workouts.binWorkoutLogs).mockResolvedValue(0);
   vi.mocked(storage.workouts.createGarminWorkoutLogs).mockImplementation(
     async (rows: unknown) => rows as never,
   );

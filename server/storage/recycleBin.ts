@@ -121,7 +121,7 @@ async function ownsWorkoutLog(tx: DbExecutor, userId: string, logId: string): Pr
 async function hasLiveDeviceActivity(
   tx: DbExecutor,
   userId: string,
-  column: typeof workoutLogs.stravaActivityId | typeof workoutLogs.garminActivityId,
+  column: typeof workoutLogs.stravaActivityId | typeof workoutLogs.garminActivityId | typeof workoutLogs.healthConnectId,
   activityId: string,
 ): Promise<boolean> {
   const [row] = await tx
@@ -169,6 +169,7 @@ async function findReimportedDeviceActivity(
   const providers = [
     { name: "Strava", column: workoutLogs.stravaActivityId, activityId: row.stravaActivityId },
     { name: "Garmin", column: workoutLogs.garminActivityId, activityId: row.garminActivityId },
+    { name: "Health Connect", column: workoutLogs.healthConnectId, activityId: row.healthConnectId },
   ] as const;
   for (const { name, column, activityId } of providers) {
     if (activityId && (await hasLiveDeviceActivity(tx, userId, column, activityId))) {
@@ -413,6 +414,7 @@ export class RecycleBinStorage {
         childCount: recycleBinItems.childCount,
         stravaActivityId: recycleBinItems.stravaActivityId,
         garminActivityId: recycleBinItems.garminActivityId,
+        healthConnectId: recycleBinItems.healthConnectId,
         deletedAt: recycleBinItems.deletedAt,
         expiresAt: recycleBinItems.expiresAt,
       })

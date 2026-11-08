@@ -39,6 +39,32 @@ dependency, plugin or target, regenerate it and review the diff:
 ./gradlew --write-verification-metadata sha256 :core:jvmTest
 ```
 
+## Push notifications
+
+Push uses Firebase Cloud Messaging, configured from the build rather than a
+`google-services.json`: set `fitai.firebase.appId`, `fitai.firebase.apiKey`,
+`fitai.firebase.projectId` and `fitai.firebase.senderId` (Gradle properties,
+or `FIREBASE_APP_ID`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID` and
+`FIREBASE_SENDER_ID`) from the Firebase console. A build without them has push
+off, and Settings says so. The athlete turns push on in Settings, which is
+where the notification permission is asked for; no token exists until then.
+The server needs its FCM service account too (`server/fcmServiceAccount.ts`).
+
+## Health Connect
+
+Settings → Integrations connects Health Connect: the athlete grants the read
+permissions (exercise sessions, heart rate, distance, active calories, and
+background reads where Health Connect supports them), and the app reads what
+changed since its last Changes API token and posts it to
+`POST /api/v1/health-connect/sync`, which imports it like a device sync and
+deduplicates it against Strava and Garmin (server/services/healthConnectImport.ts).
+A WorkManager job syncs every few hours and when the app opens. The read is in
+`core/.../health/HealthConnectSource.kt` (androidMain); the token handling and
+upload in `HealthSync` (commonMain), with tests against a fake source.
+
+Before release, Play Console needs the Health Connect permissions declaration;
+the permissions rationale Health Connect shows is `HealthPermissionsRationaleActivity`.
+
 ## API models
 
 `core/src/commonMain/kotlin/com/fitai/coach/core/api/generated/` is generated

@@ -201,6 +201,7 @@ export async function attachStravaActivityToLogInTx(
         eq(workoutLogs.userId, input.userId),
         isNull(workoutLogs.stravaActivityId),
         isNull(workoutLogs.garminActivityId),
+        isNull(workoutLogs.healthConnectId),
       ),
     )
     .for("update");

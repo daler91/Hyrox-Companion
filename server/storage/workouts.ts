@@ -28,6 +28,13 @@ import {
   type MutationOwnerContext,
   type NormalizedSetCreateInput,
 } from "./exerciseSetOwners";
+import {
+  binWorkoutLogs,
+  createHealthConnectWorkoutLogs,
+  findUntouchedHealthConnectLogIds,
+  getExistingHealthConnectIds,
+  listUntouchedHealthConnectLogsForDates,
+} from "./healthConnectLogs";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { captureWorkoutLogs } from "./recycleBinCapture";
 import {
@@ -206,6 +213,12 @@ async function createDeviceActivitySets(
  * The sync passes its transaction as `executor`, so the logs and their
  * synthesised sets commit together (C26, CODEBASE_ANALYSIS_2026-10-03).
  */
+/** The column that holds a provider's activity id. */
+function deviceIdColumn(provider: "strava" | "garmin" | "health_connect") {
+  if (provider === "strava") return workoutLogs.stravaActivityId;
+  return provider === "garmin" ? workoutLogs.garminActivityId : workoutLogs.healthConnectId;
+}
+
 async function createGarminWorkoutLogs(
   logs: (InsertWorkoutLog & { userId: string })[],
   executor: DbExecutor = db,
@@ -520,7 +533,7 @@ export class WorkoutStorage {
   /**
    * The athlete's logs on `dates` that carry no device activity yet — the rows
    * a freshly synced Strava activity may be a recording of (stravaReconciler).
-   * Both device-id columns must be NULL: a row holds at most one recording.
+   * Every device-id column must be NULL: a row holds at most one recording.
    * One query for the whole sync batch, not one per activity.
    */
   async listDeviceUnlinkedLogsForDates(userId: string, dates: readonly string[]): Promise<WorkoutLog[]> {
@@ -534,6 +547,7 @@ export class WorkoutStorage {
           inArray(workoutLogs.date, [...dates]),
           isNull(workoutLogs.stravaActivityId),
           isNull(workoutLogs.garminActivityId),
+          isNull(workoutLogs.healthConnectId),
         ),
       )
       .orderBy(asc(workoutLogs.date), asc(workoutLogs.id));
@@ -549,7 +563,7 @@ export class WorkoutStorage {
   async listDeviceRecordingsForDates(
     userId: string,
     dates: readonly string[],
-    provider: "strava" | "garmin",
+    provider: "strava" | "garmin" | "health_connect",
   ): Promise<Pick<WorkoutLog, "startedAt" | "duration" | "focus" | "deviceActivity">[]> {
     if (dates.length === 0) return [];
     return await db
@@ -564,9 +578,7 @@ export class WorkoutStorage {
         and(
           eq(workoutLogs.userId, userId),
           inArray(workoutLogs.date, [...dates]),
-          isNotNull(
-            provider === "strava" ? workoutLogs.stravaActivityId : workoutLogs.garminActivityId,
-          ),
+          isNotNull(deviceIdColumn(provider)),
         ),
       );
   }
@@ -608,6 +620,13 @@ export class WorkoutStorage {
   // Uses no instance state, so a module function bound here: the
   // storage.workouts.createGarminWorkoutLogs() call and its mocks still work.
   readonly createGarminWorkoutLogs = createGarminWorkoutLogs;
+  // Health Connect imports (storage/healthConnectLogs.ts), bound here so the
+  // sync reaches them as storage.workouts.* like the other providers' rows.
+  readonly createHealthConnectWorkoutLogs = createHealthConnectWorkoutLogs;
+  readonly getExistingHealthConnectIds = getExistingHealthConnectIds;
+  readonly listUntouchedHealthConnectLogsForDates = listUntouchedHealthConnectLogsForDates;
+  readonly findUntouchedHealthConnectLogIds = findUntouchedHealthConnectLogIds;
+  readonly binWorkoutLogs = binWorkoutLogs;
 
   /** Garmin twin of {@link getExistingStravaActivityIds}, bin-aware for the same reason. */
   async getExistingGarminActivityIds(userId: string, garminActivityIds: string[]): Promise<string[]> {

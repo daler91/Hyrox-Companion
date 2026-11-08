@@ -37,6 +37,7 @@ import { db } from "../db";
 import { isUniqueViolation } from "../dbErrors";
 import type { logger } from "../logger";
 import { storage } from "../storage";
+import { recordingTimingFromStrava, supersedeHealthConnectRecordings } from "./crossProviderDuplicates";
 import {
   attachStravaActivityToLogInTx,
   createLogFromPlanDayWithStravaInTx,
@@ -370,9 +371,15 @@ export async function reconcileStravaActivities(
     }
   });
   await insertStandaloneRows(standalone, counts, preferences);
+  // Strava outranks Health Connect: an import of the same session from there
+  // goes to the bin now that Strava's recording is here.
+  const supersededHealthConnect = await supersedeHealthConnectRecordings(
+    userId,
+    items.map((item) => ({ date: item.row.date, timing: recordingTimingFromStrava(item.activity) })),
+  );
 
   // Counts only; no activity data or token material.
   // bearer:disable javascript_lang_logger_leak
-  log.info({ context: "strava", userId, ...counts, total: items.length }, "strava.reconcile.ok");
+  log.info({ context: "strava", userId, ...counts, supersededHealthConnect, total: items.length }, "strava.reconcile.ok");
   return counts;
 }

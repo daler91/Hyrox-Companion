@@ -20,6 +20,7 @@ import planProposalRoutes from "./routes/planProposals";
 import planRecoveryRoutes from "./routes/planRecovery";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
+import healthConnectRoutes from "./routes/healthConnect";
 import pushRoutes from "./routes/push";
 import recycleBinRoutes from "./routes/recycleBin";
 import sessionGradesRoutes from "./routes/sessionGrades";
@@ -83,6 +84,7 @@ export async function registerRoutes(
   app.use(coachingRoutes);
   app.use(consentRoutes);
   app.use(pushRoutes);
+  app.use(healthConnectRoutes);
   app.use(timelineAnnotationsRoutes);
   app.use(athleteFactsRoutes);
   app.use(recycleBinRoutes);

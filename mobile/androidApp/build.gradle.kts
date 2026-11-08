@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,6 +15,20 @@ val clerkPublishableKey: String = providers.gradleProperty("fitai.clerkPublishab
     .getOrElse("")
 val apiBaseUrl: String = providers.gradleProperty("fitai.apiBaseUrl").getOrElse("https://fitai.coach")
 
+// Firebase Cloud Messaging identifies the app by these values from the
+// Firebase console (Project settings → Your apps). They are public, like the
+// Clerk key, but per project, so they come from the build too:
+// `fitai.firebase.<name>` or FIREBASE_<NAME>. Without them push is off and
+// Settings says so.
+fun firebase(name: String, env: String): String =
+    providers.gradleProperty("fitai.firebase.$name").orElse(providers.environmentVariable(env)).getOrElse("")
+val firebaseAppId = firebase("appId", "FIREBASE_APP_ID")
+val firebaseApiKey = firebase("apiKey", "FIREBASE_API_KEY")
+val firebaseProjectId = firebase("projectId", "FIREBASE_PROJECT_ID")
+val firebaseSenderId = firebase("senderId", "FIREBASE_SENDER_ID")
+// The domain whose links open in the app (App Links); the API server's by default.
+val appLinkHost: String = providers.gradleProperty("fitai.appLinkHost").getOrElse(URI(apiBaseUrl).host)
+
 android {
     namespace = "com.fitai.coach"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -26,6 +42,11 @@ android {
         versionName = "0.1.0"
         buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"$clerkPublishableKey\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        manifestPlaceholders["appLinkHost"] = appLinkHost
+        buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"$firebaseSenderId\"")
     }
 
     buildTypes {
@@ -57,4 +78,8 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.koin.android)
     implementation(libs.play.app.update.ktx)
+    implementation(libs.firebase.messaging)
+    implementation(libs.glance.appwidget)
+    implementation(libs.health.connect.client)
+    implementation(libs.work.runtime.ktx)
 }

@@ -25,7 +25,7 @@ import type { StravaActivitySummary, WorkoutLog } from "@shared/schema";
 import { storage } from "../storage";
 import { classifyDeviceSport, type DeviceSportKind } from "./deviceActivityMatcher";
 
-export type DeviceProvider = "strava" | "garmin";
+export type DeviceProvider = "strava" | "garmin" | "health_connect";
 
 /** When a recording started and how long it ran, as either provider reports it. */
 export interface RecordingTiming {
@@ -134,4 +134,33 @@ export async function dropCrossProviderDuplicates<T>(
     else claimed.add(match);
   });
   return { kept, duplicates: incoming.length - kept.length };
+}
+
+/**
+ * Source priority: a Strava or Garmin recording outranks a Health Connect
+ * one, which carries less (no moving time, no laps) and is often a copy the
+ * watch's own app wrote to Health Connect. When a Strava or Garmin sync brings
+ * in a session the Health Connect sync already imported, the Health Connect
+ * row goes to the recycle bin (restorable), so the session counts once.
+ *
+ * Only rows the athlete has not taken over move: one they linked to a plan day
+ * or rated stays (listUntouchedHealthConnectLogsForDates). Returns how many
+ * rows were binned.
+ */
+export async function supersedeHealthConnectRecordings(
+  userId: string,
+  recordings: readonly IncomingRecording[],
+): Promise<number> {
+  if (recordings.length === 0) return 0;
+  const dates = Array.from(new Set(recordings.map((r) => r.date)));
+  const candidates = await storage.workouts.listUntouchedHealthConnectLogsForDates(userId, dates);
+  if (candidates.length === 0) return 0;
+  const superseded = new Set<string>();
+  for (const recording of recordings) {
+    const match = candidates.find(
+      (row) => !superseded.has(row.id) && isSameRecording(recording.timing, recordingTimingFromLog(row)),
+    );
+    if (match) superseded.add(match.id);
+  }
+  return await storage.workouts.binWorkoutLogs(userId, [...superseded]);
 }

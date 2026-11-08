@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status-bar icon: Lucide "activity", white on transparent as Android requires.
+     The namespace declaration is an XML name, not a URL anything fetches. -->
+<vector
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    xmlns:android="http://schemas.android.com/apk/res/android"> <!-- DevSkim: ignore DS137138 -->
+    <path
+        android:pathData="M22,12h-4l-3,9L9,3l-3,9H2"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
