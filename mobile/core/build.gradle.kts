@@ -19,10 +19,14 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(libs.kotlinx.serialization.json)
+            api(libs.kotlinx.serialization.json)
+            api(libs.kotlinx.coroutines.core)
+            api(libs.ktor.client.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
         }
     }
 }

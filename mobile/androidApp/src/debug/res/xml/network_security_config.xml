@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: a local server over plain HTTP, from the emulator
+     (10.0.2.2 is the host machine) or a device on adb reverse (localhost).
+     Release builds keep the default, HTTPS-only policy. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>
