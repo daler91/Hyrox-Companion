@@ -68,7 +68,9 @@ jobs:
       - name: Install Maestro
         working-directory: ${{ runner.temp }}
         run: |
-          curl -fsSL -o maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          # HTTPS only, redirects included (the release asset redirects to GitHub's CDN).
+          curl --proto '=https' --tlsv1.2 -fsSL -o maestro.zip \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
           echo "${MAESTRO_SHA256}  maestro.zip" | sha256sum -c -
           unzip -q maestro.zip
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"

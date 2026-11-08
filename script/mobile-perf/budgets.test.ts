@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { type BenchmarkData, type Budgets, budgetsFailed, checkBudgets, formatBudgetTable } from "./budgets";
+import { type BenchmarkData, type Budgets, budgetsFailed, checkBudgets, formatBudgetTable, resolveInside } from "./budgets";
 
 const startup: BenchmarkData = {
   benchmarks: [
@@ -64,6 +64,23 @@ describe("formatBudgetTable", () => {
     ]);
     expect(table).toContain("| browsingTabs | frameDurationCpuMs.P90 | 16 | 14.3 | ✅ within budget |");
     expect(table).toContain("| browsingTabs | frameDurationCpuMs.P95 | 16 | — | ⏭️ did not run |");
+  });
+});
+
+describe("resolveInside", () => {
+  const root = path.resolve("/repo");
+
+  it("resolves a directory inside the root, relative or absolute", () => {
+    expect(resolveInside(root, "mobile/baselineprofile/build/outputs")).toBe(path.join(root, "mobile/baselineprofile/build/outputs"));
+    expect(resolveInside(root, path.join(root, "mobile"))).toBe(path.join(root, "mobile"));
+    expect(resolveInside(root, ".")).toBe(root);
+  });
+
+  it("refuses a directory outside the root", () => {
+    expect(resolveInside(root, "..")).toBeNull();
+    expect(resolveInside(root, "mobile/../../etc")).toBeNull();
+    expect(resolveInside(root, "/etc")).toBeNull();
+    expect(resolveInside(root, "/repo-other/results")).toBeNull();
   });
 });
 

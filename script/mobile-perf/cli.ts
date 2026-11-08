@@ -1,7 +1,7 @@
 /**
  * Checks Macrobenchmark results against mobile/baselineprofile/budgets.json.
  *
- *   pnpm mobile:perf-budgets <directory with *-benchmarkData.json>
+ *   pnpm mobile:perf-budgets <directory with *-benchmarkData.json, inside the repository>
  *
  * Prints a Markdown table (CI appends it to the job summary) and exits 1 when
  * a budget is exceeded or a budgeted metric is missing.
@@ -9,7 +9,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { type BenchmarkData, type Budgets, budgetsFailed, checkBudgets, formatBudgetTable } from "./budgets";
+import { type BenchmarkData, type Budgets, budgetsFailed, checkBudgets, formatBudgetTable, resolveInside } from "./budgets";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const BUDGETS = path.join(ROOT, "mobile/baselineprofile/budgets.json");
@@ -20,9 +20,14 @@ function findResults(directory: string): string[] {
     .map((file) => path.join(directory, file));
 }
 
-const directory = process.argv[2];
-if (!directory) {
+const requested = process.argv[2];
+if (!requested) {
   process.stderr.write("usage: pnpm mobile:perf-budgets <results directory>\n");
+  process.exit(2);
+}
+const directory = resolveInside(ROOT, requested);
+if (!directory) {
+  process.stderr.write(`The results directory must be inside the repository: ${requested}\n`);
   process.exit(2);
 }
 const files = findResults(directory);

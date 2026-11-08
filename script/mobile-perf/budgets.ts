@@ -7,6 +7,8 @@
  * frame timing. Results come from Macrobenchmark's `*-benchmarkData.json`.
  */
 
+import path from "node:path";
+
 /** benchmark name → "metric.statistic" → the most it may be. */
 export type Budgets = Record<string, Record<string, number>>;
 
@@ -84,4 +86,15 @@ export function formatBudgetTable(rows: readonly BudgetRow[]): string {
 
 export function budgetsFailed(rows: readonly BudgetRow[]): boolean {
   return rows.some((row) => row.status === "fail" || row.status === "missing");
+}
+
+/**
+ * [requested] resolved against [root], or null when it points outside it: the
+ * CLI reads results only from inside the repository (CI passes a build
+ * directory), never from wherever an argument leads.
+ */
+export function resolveInside(root: string, requested: string): string | null {
+  const base = path.resolve(root);
+  const resolved = path.resolve(base, requested);
+  return resolved === base || resolved.startsWith(base + path.sep) ? resolved : null;
 }
