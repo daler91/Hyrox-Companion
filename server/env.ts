@@ -283,7 +283,7 @@ if (!parsed.success) {
   console.error(msg);
   // Zod's messages name each failing variable and rule, never its value.
   // bearer:disable javascript_lang_logger_leak
-  console.log(JSON.stringify({ level: "fatal", msg, context: "env" })); // eslint-disable-line no-console
+  console.log(JSON.stringify({ level: "fatal", msg, context: "env" })); /* eslint-disable-line no-console */ // skipcq: JS-0002
   throw new Error(msg);
 }
 

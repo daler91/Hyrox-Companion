@@ -204,7 +204,9 @@ const GARMIN_BREAKER_CACHE_KEY = "garmin:breaker";
 
 function persistBreakerBlock(blockedUntil: number): void {
   if (env.NODE_ENV === "test") return;
-  void setRuntimeCache(GARMIN_BREAKER_CACHE_KEY, { blockedUntil }, GLOBAL_429_COOLDOWN_MS).catch(
+  // Deliberately unawaited (best-effort), in the repo's `void promise.catch()`
+  // idiom for no-floating-promises; DeepSource's no-void check is silenced here.
+  void setRuntimeCache(GARMIN_BREAKER_CACHE_KEY, { blockedUntil }, GLOBAL_429_COOLDOWN_MS).catch( // skipcq
     (err: unknown) => {
       // err is a runtime-cache write error; the row holds only a timestamp.
       // bearer:disable javascript_lang_logger_leak
