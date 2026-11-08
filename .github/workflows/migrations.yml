@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   check-migrations:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,7 +51,7 @@ jobs:
   # errors at apply time (e.g. 0035's ambiguous column reference, which broke
   # every fresh-database bootstrap) was structurally invisible to CI.
   fresh-db-migrate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:

@@ -53,7 +53,7 @@ env:
 jobs:
   core-jvm:
     name: Kotlin core (JVM)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: mobile
@@ -75,7 +75,7 @@ jobs:
 
   android:
     name: Android app (build, test, lint)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: mobile

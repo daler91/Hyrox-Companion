@@ -33,7 +33,7 @@ env:
 jobs:
   performance:
     name: Baseline Profile and benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     defaults:
       run:

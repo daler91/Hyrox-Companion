@@ -34,7 +34,7 @@ env:
 jobs:
   promote:
     name: Promote ${{ inputs.from_track }} → ${{ inputs.to_track }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: play-store
     defaults:
       run:
