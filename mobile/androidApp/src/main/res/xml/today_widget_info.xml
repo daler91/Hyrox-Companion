@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Hourly refresh catches the date rolling over; the app also refreshes the
      widget whenever its stored timeline changes (FitaiApplication).
-     targetCell* size it on Android 12+; earlier versions use minWidth/minHeight. -->
-<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+     targetCell* size it on Android 12+; earlier versions use minWidth/minHeight.
+     The namespace declarations are XML names, not URLs anything fetches. -->
+<appwidget-provider
     android:description="@string/widget_today_description"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="180dp"
@@ -13,4 +13,5 @@
     android:targetCellHeight="2"
     android:updatePeriodMillis="3600000"
     android:widgetCategory="home_screen"
-    tools:ignore="UnusedAttribute" />
+    tools:ignore="UnusedAttribute"
+    xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" /> <!-- DevSkim: ignore DS137138 -->
