@@ -7,8 +7,9 @@ Three modules, in the Android Gradle Plugin 9 layout:
 
 - `androidApp`: the Android entry point only (application `com.fitai.coach`).
 - `composeApp`: the shared Compose Multiplatform UI.
-- `core`: the API models and client, the data layer and the ported logic. It
-  also has a JVM target, so its tests run on any machine without an Android SDK.
+- `core`: the API models and client, the data layer (database, outbox,
+  repositories) and the ported logic. It also has a JVM target, so its tests run
+  on any machine without an Android SDK.
 
 iOS targets join in Phase 7.
 
@@ -80,6 +81,36 @@ Mapping rules worth knowing:
 
 Encode and decode with `ApiJson` (`core/.../api/ApiJson.kt`): it ignores unknown
 response fields, and omits request fields left at their defaults.
+
+## Data and sync
+
+`core/.../data/` is the offline layer. The database (Room, on the bundled
+SQLite driver) is the source of truth: screens read Flows from repositories,
+which serve the cache offline and refresh it from the API.
+
+- **One database per user.** `SessionManager` opens the signed-in user's file
+  (`fitai-<userId>.db`) at sign-in, after deleting any other user's file left
+  on the device, so one athlete's queued writes can never be sent under
+  another's account (the web's version of that bug is in `.jules/sentinel.md`).
+  Signing out from Settings deletes the file; a session the server ends (a 401)
+  keeps it for the same user's next sign-in.
+- **The outbox.** A write changes the database and queues an outbox entry in
+  one transaction. `SyncEngine` sends entries one at a time, oldest first,
+  each with its own `X-Idempotency-Key` on every attempt. Its retry rules match
+  the web's offline queue (`client/src/lib/offlineQueue.ts`); the class comment
+  lists them. It runs when a write is queued, when the network comes back, when
+  the app returns to the foreground, and after a failure with a backoff from
+  5 s to 5 minutes.
+- **Exercise-set edits** carry the optimistic lock
+  (`client/src/lib/exerciseSetVersionLock.ts`): each PATCH sends the version the
+  server last reported as `expectedVersion`. A 409 drops the edits queued for
+  that set and refetches the workout, so the other device's change shows and is
+  never overwritten. A refresh leaves a set with an unsent edit alone.
+
+Rows store the server's JSON, decoded through the generated models, so a new
+response field needs no migration. A change to the tables bumps the database
+version and adds a migration; Room exports each version's schema to
+`core/schemas/`, which is committed.
 
 ## Icons
 

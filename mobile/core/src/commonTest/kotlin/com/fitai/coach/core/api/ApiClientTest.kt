@@ -11,6 +11,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -116,7 +117,7 @@ class ApiClientTest {
         val (api, _) = client {
             respond("""{"error":"Unauthorized","code":"UNAUTHORIZED"}""", HttpStatusCode.Unauthorized, json)
         }
-        val event = async { api.events.first() }
+        val event = async(start = CoroutineStart.UNDISPATCHED) { api.events.first() }
 
         assertFailsWith<ApiException> { api.call(ApiEndpoints.GetTimeline) }
 
@@ -132,7 +133,7 @@ class ApiClientTest {
                 json,
             )
         }
-        val event = async { api.events.first() }
+        val event = async(start = CoroutineStart.UNDISPATCHED) { api.events.first() }
 
         val error = assertFailsWith<ApiException> { api.call(ApiEndpoints.GetTimeline) }
 

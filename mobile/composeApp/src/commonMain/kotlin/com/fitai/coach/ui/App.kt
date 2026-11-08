@@ -43,6 +43,8 @@ fun App() {
     LaunchedEffect(api) {
         api.events.collect { event ->
             when (event) {
+                // The session was lost, not ended by the user: their database
+                // (and any unsent changes) stays for when they sign back in.
                 SessionEvent.SignedOut -> runCatching { auth.signOut() }
                 is SessionEvent.UpdateRequired -> updateRequired = true
             }

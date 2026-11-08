@@ -105,19 +105,43 @@ public class ApiClient(private val http: HttpClient) {
         query: List<Pair<String, String>> = emptyList(),
         idempotencyKey: String? = null,
     ): Res {
+        val serializer = endpoint.requestSerializer
+        val json = if (serializer != null) {
+            requireNotNull(body) { "$endpoint needs a request body" }
+            ApiJson.encodeToString(serializer, body)
+        } else {
+            null
+        }
+        return decode(endpoint, execute(endpoint, path, query, json, idempotencyKey))
+    }
+
+    /**
+     * Sends [endpoint] with a body that is already JSON, and returns the success
+     * body as text: how the offline outbox replays a write it stored earlier.
+     *
+     * @throws ApiException on a non-success status.
+     */
+    public suspend fun send(endpoint: ApiEndpoint<*, *>, path: String, body: String?, idempotencyKey: String?): String =
+        execute(endpoint, path, emptyList(), body, idempotencyKey).bodyAsText()
+
+    private suspend fun execute(
+        endpoint: ApiEndpoint<*, *>,
+        path: String,
+        query: List<Pair<String, String>>,
+        json: String?,
+        idempotencyKey: String?,
+    ): HttpResponse {
         val response = http.request(path) {
             method = endpoint.method.toKtor()
             query.forEach { (name, value) -> parameter(name, value) }
             idempotencyKey?.let { header(IDEMPOTENCY_KEY_HEADER, it) }
-            val serializer = endpoint.requestSerializer
-            if (serializer != null) {
-                requireNotNull(body) { "$endpoint needs a request body" }
+            if (json != null) {
                 contentType(ContentType.Application.Json)
-                setBody(ApiJson.encodeToString(serializer, body))
+                setBody(json)
             }
         }
         if (response.status.value !in SUCCESS_RANGE) throw failure(response)
-        return decode(endpoint, response)
+        return response
     }
 
     @Suppress("UNCHECKED_CAST")

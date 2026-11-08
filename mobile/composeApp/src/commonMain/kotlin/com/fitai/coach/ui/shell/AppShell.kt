@@ -31,7 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
-import com.fitai.coach.core.auth.AuthGateway
+import com.fitai.coach.core.data.SessionManager
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.FitaiBottomSheet
@@ -155,12 +155,17 @@ private fun Placeholder(title: String, message: String) {
 
 @Composable
 private fun SettingsPlaceholder() {
-    val auth = koinInject<AuthGateway>()
+    val sessions = koinInject<SessionManager>()
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             EmptyState(title = "settings", message = "profile, units, notifications and integrations will show here.")
-            FitaiButton(text = "sign out", onClick = { scope.launch { runCatching { auth.signOut() } } }, variant = ButtonVariant.Secondary)
+            // Signing out also deletes this user's data from the device, unsent changes included.
+            FitaiButton(
+                text = "sign out",
+                onClick = { scope.launch { runCatching { sessions.signOut() } } },
+                variant = ButtonVariant.Secondary,
+            )
         }
     }
 }
