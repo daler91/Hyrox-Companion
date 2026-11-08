@@ -1,11 +1,14 @@
 package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
+import com.fitai.coach.core.api.ApiException
 import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
+import com.fitai.coach.core.api.generated.WorkoutLogWithSets
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.serialization.json.JsonPrimitive
@@ -23,10 +26,20 @@ import kotlinx.serialization.json.JsonPrimitive
  * edits queued for it are dropped and the server's row is fetched, never
  * written over.
  */
+/** What became of a logged workout. */
+public sealed interface LogResult {
+    /** The server has it; [workout] is its answer, when that decodes. */
+    public data class Saved(val workout: WorkoutLogWithSets?) : LogResult
+
+    /** No answer: it waits in the outbox and is sent when the network is back. */
+    public data object Queued : LogResult
+}
+
 public class WorkoutRepository(
     private val db: FitaiDatabase,
     private val api: ApiClient,
     private val sync: SyncEngine,
+    private val newKey: () -> String,
 ) {
     private val dao = db.workouts()
     private val outbox = db.outbox()
@@ -100,6 +113,40 @@ public class WorkoutRepository(
         }
         sync.requestSync()
         return key
+    }
+
+    /**
+     * Logs a workout the way the web's runWithOfflineFallback does: the
+     * request goes out at once, so the server's validation answers while the
+     * athlete is still on the screen; only when it gets no answer (offline, a
+     * timeout) is it queued, under the same idempotency key, so a request that
+     * did reach the server isn't applied twice.
+     *
+     * @throws com.fitai.coach.core.api.ApiException when the server refuses it.
+     */
+    public suspend fun logWorkout(request: CreateWorkoutRequest): LogResult {
+        val key = newKey()
+        return try {
+            val body = encode(CreateWorkoutRequest.serializer(), request)
+            val response = api.send(ApiEndpoints.PostWorkouts, ApiEndpoints.PostWorkouts.pathTemplate, body, idempotencyKey = key)
+            // Saved even if the answer doesn't decode: queueing it would log it twice.
+            LogResult.Saved(decodeOrNull(WorkoutLogWithSets.serializer(), response))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ApiException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
+            db.writeTransaction {
+                sync.enqueueWithKey(
+                    ApiEndpoints.PostWorkouts,
+                    ApiEndpoints.PostWorkouts.pathTemplate,
+                    encode(CreateWorkoutRequest.serializer(), request),
+                    key,
+                )
+            }
+            sync.requestSync()
+            LogResult.Queued
+        }
     }
 
     private inner class SetPatchHandler : OutboxHandler {

@@ -128,19 +128,29 @@ public class SyncEngine(
         parentId: String? = null,
     ): String {
         val key = newKey()
-        outbox.insert(
-            OutboxEntity(
-                operation = operationName(endpoint),
-                path = path,
-                body = body,
-                idempotencyKey = key,
-                target = target,
-                parentId = parentId,
-                createdAt = now(),
-            ),
-        )
+        outbox.insert(entry(endpoint, path, body, key).copy(target = target, parentId = parentId))
         return key
     }
+
+    /**
+     * Queues a create under an idempotency key it was already sent with once:
+     * a live request that got no answer is queued under its own key, so the
+     * server applies it once whether or not the first attempt landed.
+     */
+    public suspend fun enqueueWithKey(endpoint: ApiEndpoint<*, *>, path: String, body: String?, key: String): String {
+        outbox.insert(entry(endpoint, path, body, key))
+        return key
+    }
+
+    private fun entry(endpoint: ApiEndpoint<*, *>, path: String, body: String?, key: String) = OutboxEntity(
+        operation = operationName(endpoint),
+        path = path,
+        body = body,
+        idempotencyKey = key,
+        target = null,
+        parentId = null,
+        createdAt = now(),
+    )
 
     /** Asks the running engine ([start]) for a run soon. */
     public fun requestSync() {

@@ -39,6 +39,10 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
         }
+        androidMain.dependencies {
+            // The photo picker and speech recogniser are activity results.
+            implementation(libs.androidx.activity.compose)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)

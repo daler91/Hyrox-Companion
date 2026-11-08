@@ -25,8 +25,9 @@ public class UserSession internal constructor(
     public val sync: SyncEngine = SyncEngine(database, api, now, newKey)
     public val cache: CacheStore = CacheStore(database, now)
     public val timeline: TimelineRepository = TimelineRepository(database, api, sync, cache)
-    public val workouts: WorkoutRepository = WorkoutRepository(database, api, sync)
+    public val workouts: WorkoutRepository = WorkoutRepository(database, api, sync, newKey)
     public val preferences: PreferencesRepository = PreferencesRepository(api, cache)
+    public val parser: WorkoutParser = WorkoutParser(api)
 
     private var job: Job? = null
 
