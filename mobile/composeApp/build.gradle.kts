@@ -43,6 +43,8 @@ kotlin {
         androidMain.dependencies {
             // The photo picker and speech recogniser are activity results.
             implementation(libs.androidx.activity.compose)
+            // Custom Tabs for Strava's consent page and external links.
+            implementation(libs.androidx.browser)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

@@ -48,6 +48,8 @@ import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.links.DeepLink
+import com.fitai.coach.ui.platform.rememberBrowser
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -59,13 +61,24 @@ private const val DEFAULT_NOTIFY_HOUR = 7
 private const val DATE_PART = 10
 
 @Composable
-fun SettingsScreen(onRunSetup: (() -> Unit)? = null) {
+fun SettingsScreen(
+    onRunSetup: (() -> Unit)? = null,
+    stravaReturn: DeepLink.StravaReturn? = null,
+    onStravaReturnHandled: () -> Unit = {},
+) {
     val session = LocalUserSession.current
     val sessions = koinInject<SessionManager>()
     val vm = viewModel(key = "settings-${session.userId}") { SettingsViewModel(session, sessions) }
     val state by vm.state.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(stravaReturn) {
+        stravaReturn?.let {
+            vm.finishStrava(it.code, it.state, it.error)
+            onStravaReturnHandled()
+        }
+    }
+    val browser = rememberBrowser()
     var dialog by remember { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize()) {
@@ -80,7 +93,12 @@ fun SettingsScreen(onRunSetup: (() -> Unit)? = null) {
                 Coach(prefs, vm::update)
                 EmailNotifications(prefs, vm::update)
             }
-            Integrations(state, vm, onConnectGarmin = { dialog = GARMIN_FORM }, onDisconnect = { dialog = it })
+            Integrations(state, vm, onConnectStrava = {
+                vm.connectStrava(browser::open)
+            }, onConnectGarmin = { dialog = GARMIN_FORM }, onDisconnect = {
+                dialog =
+                    it
+            })
             Privacy(state, vm::setErrorReporting)
             Account(onSignOut = {
                 dialog = if (state.pendingWrites >
@@ -202,7 +220,13 @@ private fun EmailNotifications(prefs: PreferencesResponse, update: (UpdateUserPr
 }
 
 @Composable
-private fun Integrations(state: SettingsUiState, vm: SettingsViewModel, onConnectGarmin: () -> Unit, onDisconnect: (String) -> Unit) {
+private fun Integrations(
+    state: SettingsUiState,
+    vm: SettingsViewModel,
+    onConnectStrava: () -> Unit,
+    onConnectGarmin: () -> Unit,
+    onDisconnect: (String) -> Unit,
+) {
     Section("Integrations") {
         val strava = state.strava
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
@@ -213,22 +237,41 @@ private fun Integrations(state: SettingsUiState, vm: SettingsViewModel, onConnec
                 else -> FitaiBadge("Not connected")
             }
         }
-        if (strava?.connected == true) {
-            Text(
-                strava.lastSyncedAt?.let { "Last synced ${shortDate(it.take(DATE_PART))}" } ?: "Importing your recent activities…",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                FitaiButton("Sync now", onClick = vm::syncStrava, variant = ButtonVariant.Secondary, loading = state.busy == "strava-sync")
-                FitaiButton("Disconnect", onClick = { onDisconnect("strava") }, variant = ButtonVariant.Ghost)
+        val connecting = state.busy == "strava-connect"
+        when {
+            strava?.requiresReauth == true -> {
+                Text(
+                    "Strava stopped accepting this connection. Reconnect to keep importing activities.",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+                FitaiButton("Reconnect Strava", onClick = onConnectStrava, variant = ButtonVariant.Secondary, loading = connecting)
             }
-        } else {
-            Text(
-                "Connect Strava from fitai.coach on the web for now; it shows here once connected.",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
-            )
+            strava?.connected == true -> {
+                Text(
+                    strava.lastSyncedAt?.let { "Last synced ${shortDate(it.take(DATE_PART))}" } ?: "Importing your recent activities…",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                    FitaiButton(
+                        "Sync now",
+                        onClick = vm::syncStrava,
+                        variant = ButtonVariant.Secondary,
+                        loading =
+                        state.busy == "strava-sync",
+                    )
+                    FitaiButton("Disconnect", onClick = { onDisconnect("strava") }, variant = ButtonVariant.Ghost)
+                }
+            }
+            else -> {
+                Text(
+                    "Import your runs and rides automatically. You'll approve it on Strava.",
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                )
+                FitaiButton("Connect Strava", onClick = onConnectStrava, variant = ButtonVariant.Secondary, loading = connecting)
+            }
         }
         val garmin = state.garmin
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {

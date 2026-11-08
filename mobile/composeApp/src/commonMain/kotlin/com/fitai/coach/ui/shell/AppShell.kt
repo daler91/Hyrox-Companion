@@ -66,6 +66,7 @@ fun AppShell() {
     val link by deepLinks.current.collectAsStateWithLifecycle()
     var openPlanDayId by rememberSaveable { mutableStateOf<String?>(null) }
     var openNutritionDate by rememberSaveable { mutableStateOf<String?>(null) }
+    var stravaReturn by remember { mutableStateOf<DeepLink.StravaReturn?>(null) }
 
     LaunchedEffect(link) {
         val current = link ?: return@LaunchedEffect
@@ -81,7 +82,11 @@ fun AppShell() {
                 backStack.select(TopLevel.Nutrition)
             }
             DeepLink.Analytics -> backStack.select(TopLevel.Analytics)
-            DeepLink.Settings, is DeepLink.StravaReturn -> backStack.select(TopLevel.Settings)
+            DeepLink.Settings -> backStack.select(TopLevel.Settings)
+            is DeepLink.StravaReturn -> {
+                stravaReturn = current
+                backStack.select(TopLevel.Settings)
+            }
         }
         deepLinks.consumed(current)
     }
@@ -148,6 +153,8 @@ fun AppShell() {
                             setupRun++
                             setupOpen = true
                         },
+                        stravaReturn = stravaReturn,
+                        onStravaReturnHandled = { stravaReturn = null },
                     )
                 }
             },

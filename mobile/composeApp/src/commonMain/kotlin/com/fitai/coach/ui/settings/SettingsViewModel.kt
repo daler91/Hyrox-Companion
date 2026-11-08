@@ -8,6 +8,7 @@ import com.fitai.coach.core.api.generated.PreferencesResponse
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.api.generated.User
 import com.fitai.coach.core.data.SessionManager
+import com.fitai.coach.core.data.StravaConnectException
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.ui.format.userMessage
 import kotlinx.coroutines.CancellationException
@@ -83,6 +84,21 @@ class SettingsViewModel(private val session: UserSession, private val sessions: 
         val result = session.account.syncStrava()
         toasts.send(stravaImported(result.imported))
         runCatching { session.timeline.refresh() }
+    }
+
+    /** Opens Strava's consent page; Strava's App Link brings the athlete back to [finishStrava]. */
+    fun connectStrava(open: (String) -> Unit) = run("strava-connect", "Couldn't start connecting Strava") {
+        open(session.account.startStravaConnect())
+    }
+
+    /** Finishes the connection Strava sent back. */
+    fun finishStrava(code: String?, state: String?, error: String?) = run("strava-connect", "Couldn't connect Strava") {
+        try {
+            session.account.finishStravaConnect(code, state, error)
+            toasts.send("Strava connected. Importing your recent activities…")
+        } catch (e: StravaConnectException) {
+            toasts.send(e.message ?: "Strava wasn't connected.")
+        }
     }
 
     fun disconnectStrava() = run("strava-disconnect", "Couldn't disconnect Strava") {

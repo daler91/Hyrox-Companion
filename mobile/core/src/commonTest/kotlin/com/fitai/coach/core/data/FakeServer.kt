@@ -13,7 +13,7 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 
 /** A request the app sent. */
-data class Sent(val method: String, val path: String, val body: String?, val idempotencyKey: String?)
+data class Sent(val method: String, val path: String, val body: String?, val idempotencyKey: String?, val query: String = "")
 
 /** What the fake server does with a request: answer it, or drop it as if offline. */
 sealed interface Reply {
@@ -47,6 +47,7 @@ class FakeServer {
                 path = request.url.encodedPath,
                 body = (request.body as? TextContent)?.text,
                 idempotencyKey = request.headers[IDEMPOTENCY_KEY_HEADER],
+                query = request.url.encodedQuery,
             )
             requests += sent
             val route = routes.firstOrNull { (method, path) -> method == sent.method && path == sent.path }
