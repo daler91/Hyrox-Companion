@@ -11,7 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.fitai.coach.ui.theme.DarkColors
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.LightColors
 import com.fitai.coach.ui.theme.Radius
 
 /** A modal bottom sheet with the brand's 20 dp sheet corners. */
@@ -77,7 +79,8 @@ fun FitaiToastHost(state: SnackbarHostState, modifier: Modifier = Modifier) {
             shape = Radius.Md,
             containerColor = colors.text,
             contentColor = colors.background,
-            actionColor = colors.accent,
+            // The toast is the inverse surface, so its action takes the other theme's accent.
+            actionColor = if (colors.isDark) LightColors.accentText else DarkColors.accentText,
         )
     }
 }

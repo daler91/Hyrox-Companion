@@ -25,8 +25,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +53,7 @@ import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiDateField
 import com.fitai.coach.ui.components.FitaiDialog
+import com.fitai.coach.ui.components.FitaiSwitchRow
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.NexusMark
@@ -403,17 +402,7 @@ private fun AiPlanForm(form: PlanForm, today: String, edit: ((PlanForm) -> PlanF
         minDate = form.startDate,
         error = form.dateError,
     )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("The end date is race day", style = FitaiTheme.typography.body, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
-        Switch(
-            checked = form.endDateIsRaceDate,
-            onCheckedChange = { on -> edit { it.copy(endDateIsRaceDate = on) } },
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = FitaiTheme.colors.primary,
-                checkedThumbColor = FitaiTheme.colors.onPrimary,
-            ),
-        )
-    }
+    FitaiSwitchRow("The end date is race day", form.endDateIsRaceDate, { on -> edit { it.copy(endDateIsRaceDate = on) } })
     Label("Focus areas (optional)")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         FOCUS_OPTIONS.forEach { option ->

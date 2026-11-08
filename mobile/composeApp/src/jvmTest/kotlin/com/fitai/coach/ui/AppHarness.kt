@@ -4,7 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -185,15 +185,20 @@ class AppHarness(val auth: FakeAuth, val api: FakeApi) : AutoCloseable, ViewMode
     }
 }
 
-/** Runs [block] against the whole app, rendered over a fresh [AppHarness]. */
+/** Runs [block] against the whole app, rendered over a fresh [AppHarness] in a [width] x [height] px window. */
 @OptIn(ExperimentalTestApi::class)
-fun appTest(auth: FakeAuth, api: FakeApi, block: suspend ComposeUiTest.(AppHarness) -> Unit) =
-    AppHarness(auth, api).use { app ->
-        runComposeUiTest {
-            setContent { CompositionLocalProvider(LocalViewModelStoreOwner provides app) { App() } }
-            block(app)
-        }
+fun appTest(
+    auth: FakeAuth,
+    api: FakeApi,
+    width: Int = 1024,
+    height: Int = 768,
+    block: suspend ComposeUiTest.(AppHarness) -> Unit,
+) = AppHarness(auth, api).use { app ->
+    runDesktopComposeUiTest(width, height) {
+        setContent { CompositionLocalProvider(LocalViewModelStoreOwner provides app) { App() } }
+        block(app)
     }
+}
 
 /** Waits (in real time: the server and database run on other threads) until a node matches. */
 @OptIn(ExperimentalTestApi::class)

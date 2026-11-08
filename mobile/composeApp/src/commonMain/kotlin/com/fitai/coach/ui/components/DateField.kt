@@ -90,7 +90,7 @@ fun FitaiDateField(
                 TextButton(onClick = {
                     state.selectedDateMillis?.let { onValueChange(utcMillisToIsoDate(it)) }
                     picking = false
-                }) { Text("OK", color = colors.accent) }
+                }) { Text("OK", color = colors.accentText) }
             },
             dismissButton = { TextButton(onClick = { picking = false }) { Text("Cancel", color = colors.textMuted) } },
             colors = DatePickerDefaults.colors(containerColor = colors.card),
