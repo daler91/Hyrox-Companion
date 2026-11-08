@@ -57,7 +57,9 @@ object Sizes {
     val ButtonSm = 32.dp
     val ButtonMd = 40.dp
     val ButtonLg = 48.dp
-    val Input = 44.dp
+
+    /** Text and date fields: the touch target's height (the web's are 44 px). */
+    val Input = 48.dp
     val Icon = 20.dp
 
     /** The minimum touch target (WCAG 2.5.8; Material's 48 dp). */

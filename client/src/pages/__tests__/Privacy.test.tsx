@@ -63,4 +63,17 @@ describe("Privacy policy", () => {
     expect(back).toHaveAttribute("href", "/");
     expect(within(back).queryByRole("button")).not.toBeInTheDocument();
   });
+
+
+  // Health Connect's policy requires the privacy policy to say what is read and
+  // why, and to carry the Limited Use statement; push in the app goes through FCM.
+  it("describes the Android app's Health Connect reads with the Limited Use statement, and FCM", () => {
+    render(<Privacy />);
+
+    const section = screen.getByRole("heading", { name: "6. Android App" }).parentElement as HTMLElement;
+    expect(section).toHaveTextContent(/exercise sessions/);
+    expect(section).toHaveTextContent(/never writes to Health Connect/);
+    expect(section).toHaveTextContent(/Health Connect Permissions policy, including the Limited Use requirements/);
+    expect(processorRows().find((row) => row.startsWith("Firebase Cloud Messaging"))).toMatch(/Android app/);
+  });
 });

@@ -1,0 +1,24 @@
+# Every tab opens on the signed-in app, and the coach panel opens over them.
+appId: com.fitai.coach
+name: tabs
+tags:
+  - smoke
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "training"
+    timeout: 30000
+- tapOn: "Log Workout"
+- assertVisible: "Continue to exercises"
+- tapOn: "Nutrition"
+- assertVisible: "nutrition"
+- tapOn: "Analytics"
+- assertVisible: "analytics"
+- tapOn: "Settings"
+- assertVisible: "settings"
+- tapOn: "Training"
+- assertVisible: "training"
+- tapOn: "open coach"
+- waitForAnimationToEnd
+- back
+- assertVisible: "training"

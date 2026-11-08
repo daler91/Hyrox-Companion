@@ -1,5 +1,8 @@
 package com.fitai.coach.ui
 
+import android.app.Application
+import android.content.ComponentName
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -12,7 +15,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Density
+import androidx.test.core.app.ApplicationProvider
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
@@ -31,19 +38,25 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
  * Screenshots of the design system in light and dark, at font scales 1.0,
- * 1.5 and 2.0 (docs/mobile-app-plan.md, Phase 3). A render that differs from
- * the committed reference fails `verifyRoborazzi…`.
+ * 1.5 and 2.0 (200%, the largest Android offers). A render that differs from
+ * the committed reference fails `verifyRoborazziAndroidHostTest` in CI;
+ * `recordRoborazziAndroidHostTest` rewrites the references after an intended
+ * change. Colour contrast is checked separately, on the tokens (ContrastTest).
  */
+@OptIn(ExperimentalTestApi::class)
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w400dp-h900dp-xhdpi")
 class DesignSystemScreenshotTest(private val dark: Boolean, private val fontScale: Float) {
     companion object {
+        private const val SPINNER_FRAME_MS = 500L
+
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0} fontScale={1}")
         fun parameters(): List<Array<Any>> = listOf(false, true).flatMap { dark ->
@@ -119,20 +132,38 @@ class DesignSystemScreenshotTest(private val dark: Boolean, private val fontScal
         ErrorState(message = "we lost connection. retry, or keep logging offline.", onRetry = {})
     }
 
+    /**
+     * Renders [content] with the test clock stopped, so infinite animations
+     * (spinners) hold their first frame instead of keeping the UI from ever
+     * going idle, and captures it.
+     */
     private fun capture(name: String, content: @Composable () -> Unit) {
         val theme = if (dark) "dark" else "light"
-        captureRoboImage("src/androidHostTest/snapshots/${name}_${theme}_${fontScale}x.png") {
-            val density = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
-                FitaiTheme(darkTheme = dark) {
-                    Surface(color = FitaiTheme.colors.background) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(Spacing.Lg),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.Md),
-                        ) { content() }
+        registerTestActivity()
+        runComposeUiTest {
+            mainClock.autoAdvance = false
+            setContent {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                    FitaiTheme(darkTheme = dark) {
+                        Surface(color = FitaiTheme.colors.background) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(Spacing.Lg),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.Md),
+                            ) { content() }
+                        }
                     }
                 }
             }
+            // A fixed point into the spinners' cycle, so they read as spinners.
+            mainClock.advanceTimeBy(SPINNER_FRAME_MS)
+            onRoot().captureRoboImage("src/androidHostTest/snapshots/${name}_${theme}_${fontScale}x.png")
         }
+    }
+
+    /** The test hosts the UI in a ComponentActivity, which no manifest of this library declares. */
+    private fun registerTestActivity() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, ComponentActivity::class.java))
     }
 }

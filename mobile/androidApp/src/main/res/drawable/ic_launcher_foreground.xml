@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon's foreground: the Nexus mark (docs/BrandKit/logo-primary.svg,
+     a 96-unit grid) scaled into the adaptive icon's 66 dp safe zone. The top
+     node is a ring cut out of the shape, so the lime background shows through,
+     and the same paths serve as the themed (monochrome) icon.
+     The namespace declaration is an XML name, not a URL anything fetches. -->
+<vector
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108"
+    xmlns:android="http://schemas.android.com/apk/res/android"> <!-- DevSkim: ignore DS137138 -->
+    <group
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:translateX="18"
+        android:translateY="18">
+        <path
+            android:pathData="M24,72L72,72M24,72L48,26M72,72L48,26"
+            android:strokeWidth="5"
+            android:strokeColor="@color/ic_launcher_ink"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="@color/ic_launcher_ink"
+            android:pathData="M16,72a8,8 0,1 0,16 0a8,8 0,1 0,-16 0M64,72a8,8 0,1 0,16 0a8,8 0,1 0,-16 0" />
+        <path
+            android:fillColor="@color/ic_launcher_ink"
+            android:fillType="evenOdd"
+            android:pathData="M38,26a10,10 0,1 0,20 0a10,10 0,1 0,-20 0M44,26a4,4 0,1 0,8 0a4,4 0,1 0,-8 0" />
+    </group>
+</vector>

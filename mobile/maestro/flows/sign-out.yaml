@@ -1,0 +1,29 @@
+# Signing out from Settings returns to sign-in and clears the device's data.
+appId: com.fitai.coach
+name: sign-out
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "training"
+    timeout: 30000
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Sign out"
+- tapOn: "Sign out"
+- waitForAnimationToEnd
+# A write still waiting to sync asks first, with its own confirm button.
+- runFlow:
+    when:
+      visible: "Sign out anyway"
+    commands:
+      - tapOn: "Sign out anyway"
+- runFlow:
+    when:
+      visible: "Your data stays in your account.*"
+    commands:
+      - tapOn:
+          text: "Sign out"
+          below: "Your data stays in your account.*"
+- extendedWaitUntil:
+    visible: "email me a code"
+    timeout: 30000

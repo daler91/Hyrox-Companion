@@ -53,8 +53,18 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.ktor.client.mock)
         }
+        // UI tests render the real app on the desktop JVM (no emulator): the
+        // test harness, and Skiko's native runtime for the build machine.
+        jvmTest.dependencies {
+            implementation(libs.compose.ui.test)
+            implementation(compose.desktop.currentOs)
+            // Dispatchers.Main on the desktop (view models' scope).
+            implementation(libs.kotlinx.coroutines.swing)
+        }
         getByName("androidHostTest").dependencies {
             implementation(libs.junit4)
+            // runComposeUiTest: the screenshots render with the test clock under control.
+            implementation(libs.compose.ui.test)
             implementation(libs.robolectric)
             implementation(libs.roborazzi)
             implementation(libs.roborazzi.compose)
@@ -81,6 +91,9 @@ tasks.withType<Test>().configureEach {
     dependsOn(robolectricJars)
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", robolectricJarsDir.get())
+    // Robolectric's Android runtime and native graphics outgrow the default
+    // 512 MB heap; at that size the screenshot tests spend minutes in GC.
+    maxHeapSize = "2g"
 }
 
 compose.resources {

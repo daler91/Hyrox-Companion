@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The brand's lime and ink (composeApp theme: Lime, Ink). -->
+    <color name="ic_launcher_background">#FFB1F584</color>
+    <color name="ic_launcher_ink">#FF0A0A0A</color>
+</resources>

@@ -1,0 +1,35 @@
+# Logging a workout from a description: the server structures it (the AI
+# parser), then it is saved with an RPE. The app cannot delete workouts, so
+# each run leaves one titled "Maestro check" on the test account.
+appId: com.fitai.coach
+name: log-workout
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "training"
+    timeout: 30000
+- tapOn: "Log Workout"
+- tapOn: "Title (optional)"
+- inputText: "Maestro check"
+- tapOn: "Description"
+- inputText: "5 km easy run"
+- hideKeyboard
+- scrollUntilVisible:
+    element: "Continue to exercises"
+- tapOn: "Continue to exercises"
+- extendedWaitUntil:
+    visible: "Continue to RPE & notes"
+    timeout: 60000
+- scrollUntilVisible:
+    element: "Continue to RPE & notes"
+- tapOn: "Continue to RPE & notes"
+- extendedWaitUntil:
+    visible: "How hard was that?"
+    timeout: 10000
+- tapOn: "6"
+- scrollUntilVisible:
+    element: "Save workout"
+- tapOn: "Save workout"
+- extendedWaitUntil:
+    visible: "Workout logged.*"
+    timeout: 30000

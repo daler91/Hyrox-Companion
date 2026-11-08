@@ -177,7 +177,7 @@ private fun Conversation(state: CoachUiState, vm: CoachViewModel, modifier: Modi
                             state.olderFailed -> "Couldn't load older messages. Try again"
                             else -> "Load older messages"
                         },
-                        color = FitaiTheme.colors.accent,
+                        color = FitaiTheme.colors.accentText,
                     )
                 }
             }
@@ -264,14 +264,14 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
                     Icon(
                         LucideIcons.ThumbsUp,
                         contentDescription = "good reply",
-                        tint = if (item.feedbackUp == true) colors.accent else colors.textMuted,
+                        tint = if (item.feedbackUp == true) colors.accentText else colors.textMuted,
                     )
                 }
                 IconButton(onClick = { vm.rate(item, up = false) }) {
                     Icon(
                         LucideIcons.ThumbsDown,
                         contentDescription = "bad reply",
-                        tint = if (item.feedbackUp == false) colors.accent else colors.textMuted,
+                        tint = if (item.feedbackUp == false) colors.accentText else colors.textMuted,
                     )
                 }
             }

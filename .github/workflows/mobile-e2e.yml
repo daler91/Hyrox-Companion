@@ -1,0 +1,107 @@
+name: Mobile E2E
+
+# The Android app end to end against staging with Maestro (mobile/maestro):
+# sign-in, every tab, logging a workout, sign-out. It builds the debug app
+# with the staging Clerk key and server, boots an emulator (API 34) and runs
+# the flows; the JUnit report and Maestro's screenshots are uploaded. Run it
+# from the Actions tab before a release.
+#
+# Variables (repository → Settings → Secrets and variables → Actions), required:
+#   STAGING_CLERK_PUBLISHABLE_KEY  a Clerk development instance (test accounts work there)
+#   STAGING_API_BASE_URL           the server that instance signs in to
+#   FITAI_TEST_EMAIL               a +clerk_test address (code 424242) whose account
+#                                  finished setup, acknowledged the privacy notice
+#                                  and has a plan
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Maestro's CLI, pinned by version and by the SHA-256 of its release zip
+  # (github.com/mobile-dev-inc/maestro/releases); update both together.
+  MAESTRO_VERSION: 2.12.0
+  MAESTRO_SHA256: a6044a84542f522f434c5dc3d609e60c7446d423f3ed1b2ae513f5c48663ec5e
+  SYSTEM_IMAGE: system-images;android-34;google_apis;x86_64
+
+jobs:
+  maestro:
+    name: Maestro flows against staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CLERK_PUBLISHABLE_KEY: ${{ vars.STAGING_CLERK_PUBLISHABLE_KEY }}
+      STAGING_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL }}
+      FITAI_TEST_EMAIL: ${{ vars.FITAI_TEST_EMAIL }}
+    steps:
+      - name: Check the staging variables
+        working-directory: .
+        run: |
+          missing=0
+          for name in CLERK_PUBLISHABLE_KEY STAGING_API_BASE_URL FITAI_TEST_EMAIL; do
+            if [ -z "${!name}" ]; then echo "::error::Set the repository variable for $name (see the top of mobile-e2e.yml)"; missing=1; fi
+          done
+          exit "$missing"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Cache Gradle downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-e2e-${{ runner.os }}-${{ hashFiles('mobile/gradle/wrapper/gradle-wrapper.properties', 'mobile/gradle/libs.versions.toml', 'mobile/**/*.gradle.kts') }}
+          restore-keys: gradle-e2e-${{ runner.os }}-
+      - name: Build the debug app for staging
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          ./gradlew :androidApp:assembleDebug "-Pfitai.apiBaseUrl=$STAGING_API_BASE_URL" --no-daemon --console=plain
+      - name: Install Maestro
+        working-directory: ${{ runner.temp }}
+        run: |
+          # HTTPS only, redirects included (the release asset redirects to GitHub's CDN).
+          curl --proto '=https' --tlsv1.2 -fsSL -o maestro.zip \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          echo "${MAESTRO_SHA256}  maestro.zip" | sha256sum -c -
+          unzip -q maestro.zip
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Boot the emulator
+        run: |
+          sdk="$ANDROID_HOME"
+          yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --install "$SYSTEM_IMAGE" emulator platform-tools > /dev/null
+          echo no | "$sdk/cmdline-tools/latest/bin/avdmanager" create avd -n e2e -k "$SYSTEM_IMAGE" -d pixel_6
+          nohup "$sdk/emulator/emulator" -avd e2e -no-window -no-audio -no-boot-anim -no-snapshot \
+            -gpu swiftshader_indirect -camera-back none > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          "$sdk/platform-tools/adb" wait-for-device
+          timeout 600 bash -c "until [ \"\$($sdk/platform-tools/adb shell getprop sys.boot_completed | tr -d '\r')\" = 1 ]; do sleep 5; done"
+          # Animations off: steadier waits, as on any UI test device.
+          for scale in window_animation_scale transition_animation_scale animator_duration_scale; do
+            "$sdk/platform-tools/adb" shell settings put global "$scale" 0
+          done
+          "$sdk/platform-tools/adb" install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+      - name: Run the flows
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          mkdir -p build/maestro
+          maestro test maestro \
+            -e TEST_EMAIL="$FITAI_TEST_EMAIL" -e TEST_CODE=424242 \
+            --format junit --output build/maestro/report.xml \
+            --debug-output build/maestro/debug
+      - name: Upload the report and screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: maestro
+          path: |
+            mobile/build/maestro
+            ${{ runner.temp }}/emulator.log
+          if-no-files-found: warn

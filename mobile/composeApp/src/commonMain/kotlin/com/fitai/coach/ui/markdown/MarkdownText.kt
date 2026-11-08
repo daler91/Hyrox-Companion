@@ -78,7 +78,7 @@ private fun Block(block: MdBlock) {
 private fun inlineText(runs: List<MdInline>): AnnotatedString {
     val colors = FitaiTheme.colors
     val mono = FitaiTheme.typography.mono
-    val linkStyles = TextLinkStyles(SpanStyle(color = colors.accent, textDecoration = TextDecoration.Underline))
+    val linkStyles = TextLinkStyles(SpanStyle(color = colors.accentText, textDecoration = TextDecoration.Underline))
     return remember(runs, colors) {
         buildAnnotatedString {
             fun append(run: MdInline) {

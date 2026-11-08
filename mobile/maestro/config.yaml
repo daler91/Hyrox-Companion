@@ -1,0 +1,13 @@
+# Maestro flows against staging (.github/workflows/mobile-e2e.yml): the debug
+# app, built with a Clerk development instance's key, on an emulator. They
+# sign in with that instance's test account and run in this order, since each
+# after sign-in expects a signed-in app.
+flows:
+  - "flows/*"
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - sign-in
+    - tabs
+    - log-workout
+    - sign-out

@@ -14,8 +14,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,8 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -53,6 +49,7 @@ import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiDialog
+import com.fitai.coach.ui.components.FitaiSwitchRow
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.format.shortDate
@@ -142,21 +139,8 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    val haptics = LocalHapticFeedback.current
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
-        Switch(
-            checked = checked,
-            onCheckedChange = { on ->
-                haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                onChange(on)
-            },
-            enabled = enabled,
-            colors = SwitchDefaults.colors(checkedTrackColor = FitaiTheme.colors.primary, checkedThumbColor = FitaiTheme.colors.onPrimary),
-        )
-    }
-}
+private fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
+    FitaiSwitchRow(label, checked, onChange, enabled = enabled)
 
 @Composable
 private fun Profile(state: SettingsUiState, onRunSetup: (() -> Unit)?) {

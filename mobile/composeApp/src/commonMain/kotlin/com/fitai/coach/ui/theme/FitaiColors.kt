@@ -4,10 +4,14 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * The fitai.coach palette (docs/BrandKit/BRAND.md §3), as the web renders it:
- * every value is the HSL token in client/src/index.css converted to sRGB. That
- * includes the web's WCAG adjustments (muted text, success and warning as text,
- * input borders), which deliberately depart from the brand kit's swatches.
+ * The fitai.coach palette (docs/BrandKit/BRAND.md §3), from the HSL tokens in
+ * client/src/index.css converted to sRGB, with the web's WCAG adjustments.
+ *
+ * Where a web value misses WCAG AA, the app's departs from it (checked by
+ * ContrastTest): muted text, input borders, danger and warning are darker in
+ * light mode; dark mode's danger is a lighter red with ink text, as lime is
+ * for the primary action; and [accentText] stands in for lime wherever the
+ * accent is text or an icon, which lime on white could not be.
  *
  * Lime is #B1F584, from `hsl(96 85% 74%)`: what the web and the logo files
  * draw. The brand kit's swatch table lists #C4F37E beside that same HSL, but
@@ -27,6 +31,8 @@ data class FitaiColors(
     val onPrimary: Color,
     val accent: Color,
     val onAccent: Color,
+    /** The accent as text or an icon on the background or a card (links, text buttons). */
+    val accentText: Color,
     val accentSoft: Color,
     val onAccentSoft: Color,
     val danger: Color,
@@ -42,7 +48,7 @@ data class FitaiColors(
 private val Ink = Color(0xFF0A0A0A)
 private val Paper = Color(0xFFFFFFFF)
 private val Lime = Color(0xFFB1F584)
-private val Danger = Color(0xFFEF4343)
+private val ForestGreen = Color(0xFF365F1B)
 
 val LightColors = FitaiColors(
     background = Paper,
@@ -50,22 +56,23 @@ val LightColors = FitaiColors(
     card = Paper,
     muted = Color(0xFFF5F5F5),
     border = Color(0xFFF0F0F0),
-    // --input: the 3:1 border for form fields (WCAG 1.4.11).
-    borderStrong = Color(0xFFA6A6A6),
+    // Form-field borders: 3:1 on every surface (WCAG 1.4.11).
+    borderStrong = Color(0xFF8C8C8C),
     text = Ink,
-    // 4.6:1 on white (WCAG 1.4.3 AA).
-    textMuted = Color(0xFF737373),
+    // 4.5:1 or more on every surface, muted included (WCAG 1.4.3 AA).
+    textMuted = Color(0xFF6E6E6E),
     primary = Ink,
     onPrimary = Paper,
     accent = Lime,
     onAccent = Ink,
+    accentText = ForestGreen,
     accentSoft = Color(0xFFEEF9E7),
-    onAccentSoft = Color(0xFF365F1B),
-    danger = Danger,
+    onAccentSoft = ForestGreen,
+    danger = Color(0xFFC81E1E),
     onDanger = Paper,
     success = Color(0xFF147638),
     onSuccess = Paper,
-    warning = Color(0xFFAA5909),
+    warning = Color(0xFF9E5308),
     onWarning = Paper,
     ring = Ink,
     isDark = false,
@@ -78,17 +85,18 @@ val DarkColors = FitaiColors(
     card = Color(0xFF141414),
     muted = Color(0xFF1C1C1C),
     border = Color(0xFF262626),
-    borderStrong = Color(0xFF616161),
+    borderStrong = Color(0xFF6E6E6E),
     text = Color(0xFFF5F5F5),
     textMuted = Color(0xFF858585),
     primary = Lime,
     onPrimary = Ink,
     accent = Lime,
     onAccent = Ink,
+    accentText = Lime,
     accentSoft = Color(0xFF1C1C1C),
     onAccentSoft = Lime,
-    danger = Danger,
-    onDanger = Paper,
+    danger = Color(0xFFF87171),
+    onDanger = Ink,
     success = Color(0xFF21C45D),
     onSuccess = Ink,
     warning = Color(0xFFFBD350),

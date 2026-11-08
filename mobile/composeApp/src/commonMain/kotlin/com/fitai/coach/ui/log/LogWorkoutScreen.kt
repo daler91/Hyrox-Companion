@@ -233,7 +233,7 @@ private fun ExerciseCard(index: Int, exercise: ParsedExercise, vm: LogWorkoutVie
                 }
             }
         }
-        TextButton(onClick = { vm.addSet(index) }) { Text("+ Add set", color = FitaiTheme.colors.accent) }
+        TextButton(onClick = { vm.addSet(index) }) { Text("+ Add set", color = FitaiTheme.colors.accentText) }
     }
 }
 

@@ -41,6 +41,7 @@ const Settings = lazyWithReload(() => import("@/pages/Settings"));
 const Analytics = lazyWithReload(() => import("@/pages/Analytics"));
 const Landing = lazyWithReload(() => import("@/pages/Landing"));
 const Privacy = lazyWithReload(() => import("@/pages/Privacy"));
+const DeleteAccount = lazyWithReload(() => import("@/pages/DeleteAccount"));
 const Nutrition = lazyWithReload(() => import("@/pages/Nutrition"));
 const Review = lazyWithReload(() => import("@/pages/Review"));
 
@@ -81,6 +82,7 @@ function AuthenticatedRouter() {
         )}
         <Route path="/settings"><FeatureErrorBoundaryWrapper featureName="Settings"><Settings /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/privacy"><Privacy /></Route>
+        <Route path="/delete-account"><DeleteAccount /></Route>
         <Route component={NotFound} />
       </Switch>
     </Suspense>
@@ -226,6 +228,7 @@ function AppContent() {
         <Suspense fallback={<LazyFallback />}>
           <Switch>
             <Route path="/privacy"><Privacy /></Route>
+            <Route path="/delete-account"><DeleteAccount /></Route>
             <Route><Landing /></Route>
           </Switch>
         </Suspense>

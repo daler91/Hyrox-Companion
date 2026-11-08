@@ -72,6 +72,12 @@ export function LandingFooter() {
             >
               Privacy
             </a>
+            <a
+              href="/delete-account"
+              className="rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              Delete account
+            </a>
           </nav>
         </div>
         <p className="mt-6 text-center text-xs text-muted-foreground md:text-left">

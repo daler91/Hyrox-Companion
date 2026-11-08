@@ -20,11 +20,22 @@ Needs JDK 21, and an Android SDK for the Android modules (`ANDROID_HOME`, or
 
 ```sh
 ./gradlew :core:jvmTest                 # core's tests, JVM only
+./gradlew :composeApp:jvmTest           # UI logic, contrast, and the app end to end on the desktop JVM
+./gradlew :composeApp:verifyRoborazziAndroidHostTest   # screenshots against the references
 ./gradlew :androidApp:assembleDebug     # debug APK
 ./gradlew ktlintCheck detekt            # lint (ktlintFormat fixes formatting)
 ```
 
 CI runs these in `.github/workflows/mobile.yml`.
+
+The Compose UI tests (`composeApp/src/jvmTest/.../ui/AppUiTest.kt`) render the
+whole app on the desktop JVM, no emulator, over a real session and database and
+a fake server (`AppHarness.kt`); `AccessibilityUiTest` fails on a control
+without a label or under a 48 dp touch target, and `ContrastTest` on a token
+pair under WCAG AA. The design system's screenshots (light and dark, font
+scales up to 200%) are in `composeApp/src/androidHostTest/snapshots`; after an
+intended change, `./gradlew :composeApp:recordRoborazziAndroidHostTest`
+rewrites them for the commit.
 
 detekt's findings in code written before it was added (the Phase 2 ports, which
 mirror their TypeScript originals) are recorded in `core/detekt-baseline.xml`;
@@ -64,6 +75,62 @@ upload in `HealthSync` (commonMain), with tests against a fake source.
 
 Before release, Play Console needs the Health Connect permissions declaration;
 the permissions rationale Health Connect shows is `HealthPermissionsRationaleActivity`.
+
+## Releasing
+
+Play App Signing holds the app signing key; CI signs bundles with the upload
+key. Tagging a commit `mobile-v<major>.<minor>.<patch>` runs
+`.github/workflows/mobile-release.yml`: it tests, builds the release bundle
+(version name from the tag, version code `major·1,000,000 + minor·1,000 + patch`)
+and uploads it to Play's internal track with Gradle Play Publisher, keeping the
+bundle and its R8 mapping as a workflow artifact.
+
+```sh
+git tag mobile-v1.0.0 && git push origin mobile-v1.0.0
+```
+
+`.github/workflows/mobile-promote.yml` (run by hand) moves a release on:
+internal → alpha (the closed test) → production as a staged rollout (e.g. 0.1,
+then 0.5, then 1.0). Both workflows use the `play-store` environment's secrets
+and variables, listed at the top of mobile-release.yml. Without the upload key a
+release build is unsigned, which is all a local or PR build needs.
+
+Play Console's questionnaires (Data safety, Health Connect, content rating,
+app access) are answered in [docs/mobile-play-console.md](../docs/mobile-play-console.md).
+
+## End-to-end flows (Maestro)
+
+`maestro/` holds flows against staging: sign-in, every tab, logging a workout,
+sign-out. `.github/workflows/mobile-e2e.yml` (run by hand) builds the debug app
+with the staging Clerk key and server, boots an emulator and runs them,
+uploading the JUnit report and screenshots. They sign in with a Clerk
+development instance's test account (a `+clerk_test` address, code 424242)
+whose account has finished setup and has a plan; the repository variables are
+listed at the top of the workflow. Against a local emulator or phone:
+
+```sh
+maestro test maestro -e TEST_EMAIL=you+clerk_test@example.com -e TEST_CODE=424242
+```
+
+## Performance
+
+Release builds are shrunk and optimised by R8 and ship a Baseline Profile
+(`androidApp/src/release/generated/baselineProfiles`), which compiles the code
+startup and the main screens run ahead of time. `baselineprofile/` generates it
+and benchmarks cold startup and scrolling with Macrobenchmark, on a Gradle
+Managed Device; both need a machine that can run an emulator, so CI runs them on
+demand (`.github/workflows/mobile-performance.yml`), checks the results against
+`baselineprofile/budgets.json`, and uploads the profile to commit. Locally:
+
+```sh
+./gradlew :androidApp:generateBaselineProfile
+./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+```
+
+Past the sign-in screen, both sign in with a Clerk development instance's test
+account (`-Pandroid.testInstrumentationRunnerArguments.fitaiTestEmail=you+clerk_test@example.com`,
+code 424242) against a build made with that instance's key.
 
 ## API models
 
