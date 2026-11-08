@@ -1,0 +1,27 @@
+# A new install signs in with an email code. TEST_EMAIL is a +clerk_test
+# address whose account finished setup and acknowledged the privacy notice;
+# Clerk development instances accept TEST_CODE (424242) for it, no email sent.
+appId: com.fitai.coach
+name: sign-in
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "email me a code"
+    timeout: 30000
+- tapOn: "email"
+- inputText: ${TEST_EMAIL}
+- hideKeyboard
+- tapOn: "email me a code"
+- extendedWaitUntil:
+    visible: "check your email"
+    timeout: 30000
+- tapOn: "code"
+- inputText: ${TEST_CODE}
+- hideKeyboard
+- tapOn: "sign in"
+- extendedWaitUntil:
+    visible: "training"
+    timeout: 30000

@@ -98,6 +98,20 @@ release build is unsigned, which is all a local or PR build needs.
 Play Console's questionnaires (Data safety, Health Connect, content rating,
 app access) are answered in [docs/mobile-play-console.md](../docs/mobile-play-console.md).
 
+## End-to-end flows (Maestro)
+
+`maestro/` holds flows against staging: sign-in, every tab, logging a workout,
+sign-out. `.github/workflows/mobile-e2e.yml` (run by hand) builds the debug app
+with the staging Clerk key and server, boots an emulator and runs them,
+uploading the JUnit report and screenshots. They sign in with a Clerk
+development instance's test account (a `+clerk_test` address, code 424242)
+whose account has finished setup and has a plan; the repository variables are
+listed at the top of the workflow. Against a local emulator or phone:
+
+```sh
+maestro test maestro -e TEST_EMAIL=you+clerk_test@example.com -e TEST_CODE=424242
+```
+
 ## Performance
 
 Release builds are shrunk and optimised by R8 and ship a Baseline Profile
