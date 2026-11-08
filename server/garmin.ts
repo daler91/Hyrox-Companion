@@ -909,7 +909,12 @@ async function insertGarminLogsWithSets(
   activities: readonly GarminActivity[],
   preferences: UnitPreferences,
 ): Promise<WorkoutLog[]> {
-  const activitiesById = new Map(activities.map((activity) => [String(activity.activityId), activity]));
+  // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for...of loop to avoid intermediate array allocations
+  const activitiesById = new Map<string, GarminActivity>();
+  for (const activity of activities) {
+    activitiesById.set(String(activity.activityId), activity);
+  }
+
   return await db.transaction(async (tx) => {
     const logs = await storage.workouts.createGarminWorkoutLogs(rows, tx);
     await storage.workouts.createDeviceActivitySets(garminSetRows(logs, activitiesById, preferences), tx);
