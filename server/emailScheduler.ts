@@ -634,6 +634,8 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       storage.users.getUsersWithDueMafBaselineTest(now),
     ]);
     if (markedMissed > 0) {
+      // A count only.
+      // bearer:disable javascript_lang_logger_leak
       logger.info({ context: "email" }, `Marked ${markedMissed} past planned day(s) as missed`);
     }
     if (usersToCheck.length === 0 && dueMafUsers.length === 0) {
@@ -689,6 +691,8 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     settled.forEach((result, idx) => {
       if (result.status === "rejected") {
         const info = meta[idx];
+        // userId is an opaque id; the job payload the error may echo is just { userId }.
+        // bearer:disable javascript_lang_logger_leak
         logger.error(
           { context: "email", userId: info.userId, err: result.reason },
           `Failed to enqueue ${info.jobName} job`,
@@ -701,9 +705,13 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     if (failed > 0) {
       details.push(`Failed: ${failed}`);
     }
+    // Job and user counts only.
+    // bearer:disable javascript_lang_logger_leak
     logger.info({ context: "email" }, `Cron complete: ${detail}`);
     return { usersChecked: usersToCheck.length, emailsSent: fulfilled, details };
   } catch (err) {
+    // err is the queue's enqueue error; job payloads are just { userId }.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ context: "email", err }, "Cron error during email job enqueue");
     throw err;
   }

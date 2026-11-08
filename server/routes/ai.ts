@@ -1079,6 +1079,8 @@ protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter(
     const startedAt = Date.now();
     try {
       const result = await generateTimelineAiSuggestions(userId, log);
+      // userId is an opaque id; the rest are timings and counts.
+      // bearer:disable javascript_lang_logger_leak
       log.info(
         {
           userId,
@@ -1091,6 +1093,8 @@ protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter(
       res.json(result);
       return;
     } catch (err) {
+      // userId is an opaque id, with the timing and the pipeline's error.
+      // bearer:disable javascript_lang_logger_leak
       log.error(
         { err, userId, durationMs: Date.now() - startedAt },
         "[ai] Timeline suggestions failed",

@@ -160,6 +160,8 @@ const garminCircuitBreaker = {
 
   trip(reason: string): void {
     this.blockedUntil = Date.now() + GLOBAL_429_COOLDOWN_MS;
+    // reason is the fixed "<label> returned 429" string; until is a timestamp.
+    // bearer:disable javascript_lang_logger_leak
     logger.error(
       { context: LOG_CTX, reason, until: new Date(this.blockedUntil).toISOString() },
       "Garmin circuit breaker tripped — freezing all Garmin operations",
@@ -195,8 +197,12 @@ const GARMIN_BREAKER_CACHE_KEY = "garmin:breaker";
 
 function persistBreakerBlock(blockedUntil: number): void {
   if (env.NODE_ENV === "test") return;
-  void setRuntimeCache(GARMIN_BREAKER_CACHE_KEY, { blockedUntil }, GLOBAL_429_COOLDOWN_MS).catch(
+  // Deliberately unawaited (best-effort), in the repo's `void promise.catch()`
+  // idiom for no-floating-promises; DeepSource's no-void check is silenced here.
+  void setRuntimeCache(GARMIN_BREAKER_CACHE_KEY, { blockedUntil }, GLOBAL_429_COOLDOWN_MS).catch( // skipcq
     (err: unknown) => {
+      // err is a runtime-cache write error; the row holds only a timestamp.
+      // bearer:disable javascript_lang_logger_leak
       logger.debug({ context: LOG_CTX, err }, "Failed to persist Garmin breaker state");
     },
   );
@@ -210,6 +216,8 @@ async function refreshBreakerFromShared(): Promise<void> {
       garminCircuitBreaker.blockedUntil = shared.blockedUntil;
     }
   } catch (err) {
+    // err is a runtime-cache read error; the row holds only a timestamp.
+    // bearer:disable javascript_lang_logger_leak
     logger.debug({ context: LOG_CTX, err }, "Failed to read shared Garmin breaker state");
   }
 }
@@ -341,6 +349,8 @@ async function claimSharedUserLock(userId: string): Promise<boolean> {
   try {
     return await claimRuntimeCacheKey(userLockKey(userId), USER_LOCK_TTL_MS);
   } catch (err) {
+    // err is a runtime-cache error; the key holds only the opaque userId.
+    // bearer:disable javascript_lang_logger_leak
     logger.debug({ context: LOG_CTX, err }, "Failed to claim shared Garmin user lock");
     return true;
   }
@@ -351,6 +361,8 @@ async function releaseSharedUserLock(userId: string): Promise<void> {
   try {
     await deleteRuntimeCache(userLockKey(userId));
   } catch (err) {
+    // err is a runtime-cache error; the key holds only the opaque userId.
+    // bearer:disable javascript_lang_logger_leak
     logger.debug({ context: LOG_CTX, err }, "Failed to release shared Garmin user lock");
   }
 }

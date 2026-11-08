@@ -139,10 +139,14 @@ async function sendToSubscription(
     const statusCode = (err as { statusCode?: number }).statusCode;
     if (statusCode === 410 || statusCode === 404) {
       // Subscription expired/invalid — clean up
+      // subId is a uuid, no secrets.
+      // bearer:disable javascript_lang_logger_leak
       logger.info({ subId: sub.id }, "[push] Removing stale subscription");
       await storage.push.removeById(sub.id);
       return false;
     }
+    // subId is a uuid; web-push's error carries no subscription keys.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err, subId: sub.id }, "[push] Failed to send notification");
     return false;
   }
