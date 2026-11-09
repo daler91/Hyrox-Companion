@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~2,300 lines, 43 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of fourteen modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `athleteFacts.ts`, `coaching.ts`, `connections.ts`, `planProposals.ts`, `plans.ts`, `recovery.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~2,300 lines, 44 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `deviceActivity.ts` (the `DeviceActivitySnapshot` shape stored in `workout_logs.device_activity`), `sessionStream.ts` (the `SessionStreamSamples` shape stored in `workout_log_streams.samples`), `nutrition.ts` (the nutrition module's request/response contracts), `micros.ts` (micronutrient display metadata, re-exported through `nutrition.ts`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nineteen modules — `ai.ts`, `analytics.ts`, `analyticsRequests.ts`, `annotations.ts`, `athleteFacts.ts`, `coachRequests.ts`, `coaching.ts`, `connections.ts`, `native.ts`, `planProposals.ts`, `plans.ts`, `plansRequests.ts`, `recovery.ts`, `recycleBin.ts`, `requests.ts`, `sessionGrades.ts`, `users.ts`, `workouts.ts`, `workoutsRequests.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -1079,13 +1079,13 @@ The nutrition module's eight tables — `foods`, `food_servings`, `food_log_entr
 
 ## Drizzle Relations
 
-26 of the 43 tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
+27 of the 44 tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
 
 **Defined relations:**
 
 | Relation | Type | Description |
 |---|---|---|
-| `usersRelations` | `many` trainingPlans, workoutLogs, customExercises, chatMessages, coachingMaterials, documentChunks, aiUsageLogs, pushSubscriptions, trainingStyles, mafProfiles, mafTestResults, mafWorkoutAnalyses, analyticsResults, foodLogEntries, foodFavorites, nutritionTargets, recipes; `one` stravaConnection, garminConnection |
+| `usersRelations` | `many` trainingPlans, workoutLogs, customExercises, chatMessages, coachingMaterials, documentChunks, aiUsageLogs, pushSubscriptions, devicePushTokens, trainingStyles, mafProfiles, mafTestResults, mafWorkoutAnalyses, analyticsResults, foodLogEntries, foodFavorites, nutritionTargets, recipes; `one` stravaConnection, garminConnection |
 | `trainingPlansRelations` | `one` user; `many` planDays (`days`), workoutLogs |
 | `planDaysRelations` | `one` trainingPlan (`plan`); `many` workoutLogs, exerciseSets |
 | `workoutLogsRelations` | `one` user, planDay (optional), trainingPlan (`plan`, optional); `many` exerciseSets |
@@ -1104,6 +1104,7 @@ The nutrition module's eight tables — `foods`, `food_servings`, `food_log_entr
 | `mafTestResultsRelations` | `one` user |
 | `mafWorkoutAnalysisRelations` | `one` user, workoutLog |
 | `analyticsResultsRelations` | `one` user |
+| `devicePushTokensRelations` | `one` user |
 | `foodsRelations` | `many` foodServings (`servings`), foodLogEntries (`logEntries`), foodFavorites (`favorites`), recipes, recipeIngredients |
 | `foodServingsRelations` | `one` food |
 | `foodLogEntriesRelations` | `one` user, food |
@@ -1461,7 +1462,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **123 migrations**, `0000` through `0122`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **127 migrations**, `0000` through `0126`:
 
 ```
 migrations/
