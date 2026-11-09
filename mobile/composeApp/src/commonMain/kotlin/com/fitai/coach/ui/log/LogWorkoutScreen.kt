@@ -20,10 +20,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.heading
@@ -56,6 +59,9 @@ import com.fitai.coach.ui.media.rememberSpeechInput
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import com.fitai.coach.ui.workout.ExercisePickerSheet
+import com.fitai.coach.ui.workout.PlanDayOption
+import com.fitai.coach.ui.workout.PlanDayPickerSheet
 import kotlinx.coroutines.launch
 
 @Composable
@@ -64,6 +70,7 @@ fun LogWorkoutScreen(onSaved: () -> Unit) {
     val vm = viewModel(key = "log-${session.userId}") { LogWorkoutViewModel(session, ::todayIn) }
     val state by vm.state.collectAsStateWithLifecycle()
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
+    val planDays by vm.planDays.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val toast: (String) -> Unit = { message -> scope.launch { toasts.showSnackbar(message) } }
@@ -97,7 +104,7 @@ fun LogWorkoutScreen(onSaved: () -> Unit) {
             when (state.step) {
                 LogStep.Capture -> Capture(state, vm, PhotoSources(pickPhoto, takePhoto), dictate)
                 LogStep.Confirm -> Confirm(state, vm, prefs?.weightUnit, prefs?.distanceUnit)
-                LogStep.Reflect -> Reflect(state, vm, dictate)
+                LogStep.Reflect -> Reflect(state, vm, dictate, prefs?.distanceUnit, planDays)
             }
             state.problem?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.danger) }
         }
@@ -151,6 +158,13 @@ private fun DictateButton(input: SpeechInput, label: String, variant: ButtonVari
 private fun Capture(state: LogUiState, vm: LogWorkoutViewModel, photos: PhotoSources, dictate: SpeechInput?) {
     val draft = state.draft
     val yesterday = addDaysToIsoDate(state.today, -1)
+    FitaiButton(
+        "Duplicate last workout",
+        onClick = vm::duplicateLast,
+        variant = ButtonVariant.Ghost,
+        loading = state.duplicating,
+        leadingIcon = LucideIcons.RefreshCw,
+    )
     FitaiTextField(draft.title, { title -> vm.edit { it.copy(title = title) } }, "Title (optional)", placeholder = "e.g., Morning Push")
     Text("Date", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalAlignment = Alignment.CenterVertically) {
@@ -176,6 +190,16 @@ private fun Capture(state: LogUiState, vm: LogWorkoutViewModel, photos: PhotoSou
 
 @Composable
 private fun Confirm(state: LogUiState, vm: LogWorkoutViewModel, weightUnit: String?, distanceUnit: String?) {
+    var picking by remember { mutableStateOf(false) }
+    if (picking) {
+        ExercisePickerSheet(
+            onPick = { name, label ->
+                vm.addExercise(name, label)
+                picking = false
+            },
+            onDismiss = { picking = false },
+        )
+    }
     Text("Confirm exercises", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
     if (state.parsing) {
         LoadingState(message = "Structuring your workout…")
@@ -189,7 +213,17 @@ private fun Confirm(state: LogUiState, vm: LogWorkoutViewModel, weightUnit: Stri
             color = FitaiTheme.colors.textMuted,
         )
     }
-    state.draft.exercises.forEachIndexed { index, exercise -> ExerciseCard(index, exercise, vm, weightUnit, distanceUnit) }
+    val count = state.draft.exercises.size
+    state.draft.exercises.forEachIndexed { index, exercise ->
+        ExerciseCard(index, exercise, vm, Units(weightUnit, distanceUnit), canMoveUp = index > 0, canMoveDown = index < count - 1)
+    }
+    FitaiButton(
+        "Add exercise",
+        onClick = { picking = true },
+        variant = ButtonVariant.Secondary,
+        leadingIcon = LucideIcons.Plus,
+        modifier = Modifier.fillMaxWidth(),
+    )
     if (state.draft.text.isNotBlank()) {
         Text("Your description: ${state.draft.text}", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
     }
@@ -199,18 +233,35 @@ private fun Confirm(state: LogUiState, vm: LogWorkoutViewModel, weightUnit: Stri
     }
 }
 
+/** The athlete's units, which label the set fields. */
+private data class Units(val weight: String?, val distance: String?)
+
 @Composable
-private fun ExerciseCard(index: Int, exercise: ParsedExercise, vm: LogWorkoutViewModel, weightUnit: String?, distanceUnit: String?) {
+private fun ExerciseCard(
+    index: Int,
+    exercise: ParsedExercise,
+    vm: LogWorkoutViewModel,
+    units: Units,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+) {
     val number = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-    val distanceLabel = if (distanceUnit == "miles") "ft" else "m"
+    val distanceLabel = if (units.distance == "miles") "ft" else "m"
+    val weightUnit = units.weight
+    val label = exerciseLabel(exercise.exerciseName, exercise.customLabel)
     FitaiCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                exerciseLabel(exercise.exerciseName, exercise.customLabel),
-                style = FitaiTheme.typography.h3,
-                color = FitaiTheme.colors.text,
-                modifier = Modifier.weight(1f),
-            )
+            Text(label, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+            if (canMoveUp) {
+                IconButton(onClick = { vm.moveExercise(index, -1) }) {
+                    Icon(LucideIcons.ChevronRight, "move $label up", tint = FitaiTheme.colors.textMuted, modifier = Modifier.rotate(UP))
+                }
+            }
+            if (canMoveDown) {
+                IconButton(onClick = { vm.moveExercise(index, 1) }) {
+                    Icon(LucideIcons.ChevronRight, "move $label down", tint = FitaiTheme.colors.textMuted, modifier = Modifier.rotate(DOWN))
+                }
+            }
             IconButton(onClick = { vm.removeExercise(index) }) {
                 Icon(LucideIcons.Trash, contentDescription = "remove ${exercise.exerciseName}", tint = FitaiTheme.colors.textMuted)
             }
@@ -248,8 +299,50 @@ private fun SetValue(
     FitaiTextField(value.orEmpty(), onChange, label, modifier = modifier, keyboardOptions = keyboard)
 }
 
+/** "Connect to a plan": which plan day this workout counts towards, if any. */
 @Composable
-private fun Reflect(state: LogUiState, vm: LogWorkoutViewModel, dictate: SpeechInput?) {
+private fun ConnectToPlan(draft: LogDraft, options: List<PlanDayOption>, onPick: (PlanDayOption?) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    FitaiCard {
+        Text("Connect to a plan", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
+        Text(
+            draft.planDayLabel?.let { "Counts towards $it" } ?: "Optionally link this workout to a plan day so it counts toward your plan.",
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+        )
+        FitaiButton(
+            if (draft.planDayId ==
+                null
+            ) {
+                "Choose a plan day"
+            } else {
+                "Change"
+            },
+            onClick = { picking = true },
+            variant = ButtonVariant.Secondary,
+        )
+    }
+    if (picking) {
+        PlanDayPickerSheet(
+            options = options,
+            selected = draft.planDayId,
+            onPick = { id ->
+                onPick(options.firstOrNull { it.planDayId == id })
+                picking = false
+            },
+            onDismiss = { picking = false },
+        )
+    }
+}
+
+@Composable
+private fun Reflect(
+    state: LogUiState,
+    vm: LogWorkoutViewModel,
+    dictate: SpeechInput?,
+    distanceUnit: String?,
+    planDays: List<PlanDayOption>,
+) {
     val draft = state.draft
     Text("How hard was that?", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
     if (!draft.skipRpe) RpeSelector(draft.rpe, { rpe -> vm.edit { it.copy(rpe = rpe) } })
@@ -258,12 +351,41 @@ private fun Reflect(state: LogUiState, vm: LogWorkoutViewModel, dictate: SpeechI
         selected = draft.skipRpe,
         onClick = { vm.edit { it.copy(skipRpe = !it.skipRpe, rpe = null) } },
     )
+    val wholeNumber = KeyboardOptions(keyboardType = KeyboardType.Number)
+    FitaiTextField(draft.duration, { duration ->
+        vm.edit { it.copy(duration = duration) }
+    }, "Total time (minutes)", keyboardOptions = wholeNumber)
     FitaiTextField(
-        draft.duration,
-        { duration -> vm.edit { it.copy(duration = duration) } },
-        "Total time (minutes)",
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        draft.timeOfDay,
+        { time -> vm.edit { it.copy(timeOfDay = time) } },
+        "Time of day",
+        placeholder = "07:30",
+        supportingText = "When you trained: places your recovery meal at the right time of day.",
     )
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        FitaiTextField(
+            draft.distance,
+            { distance -> vm.edit { it.copy(distance = distance) } },
+            "Distance (${if (distanceUnit == "miles") "miles" else "km"})",
+            modifier = Modifier.weight(1f),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        )
+        FitaiTextField(
+            draft.avgHeartrate,
+            { hr -> vm.edit { it.copy(avgHeartrate = hr) } },
+            "Avg HR",
+            modifier = Modifier.weight(1f),
+            keyboardOptions = wholeNumber,
+        )
+        FitaiTextField(
+            draft.maxHeartrate,
+            { hr -> vm.edit { it.copy(maxHeartrate = hr) } },
+            "Max HR",
+            modifier = Modifier.weight(1f),
+            keyboardOptions = wholeNumber,
+        )
+    }
+    ConnectToPlan(draft, planDays, vm::connectPlanDay)
     FitaiTextField(
         draft.notes,
         { notes -> vm.edit { it.copy(notes = notes) } },
@@ -277,3 +399,6 @@ private fun Reflect(state: LogUiState, vm: LogWorkoutViewModel, dictate: SpeechI
         FitaiButton("Save workout", onClick = vm::save, loading = state.saving, modifier = Modifier.weight(1f))
     }
 }
+
+private const val UP = -90f
+private const val DOWN = 90f

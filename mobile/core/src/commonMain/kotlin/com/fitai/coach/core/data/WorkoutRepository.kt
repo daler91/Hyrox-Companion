@@ -7,11 +7,13 @@ import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryQuery
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
+import com.fitai.coach.core.api.generated.PatchWorkoutsByIdPlanDayRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetOrderRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
 import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
+import com.fitai.coach.core.api.generated.WorkoutLatest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.api.generated.WorkoutLogWithSets
 import kotlinx.coroutines.CancellationException
@@ -196,6 +198,33 @@ public class WorkoutRepository(
             val local = dao.sets(workoutId).associateBy { it.id }
             dao.upsertSets(rows.mapIndexedNotNull { index, row -> local[row.id]?.copy(position = index) })
         }
+    }
+
+    /**
+     * The athlete's most recent workout, to log again ("Duplicate last
+     * workout"); null when they haven't logged one. Online.
+     *
+     * @throws ApiException on any other error response.
+     */
+    public suspend fun latest(): WorkoutLatest? = try {
+        api.call(ApiEndpoints.GetWorkoutsLatest)
+    } catch (e: ApiException) {
+        if (e.status == NOT_FOUND) null else throw e
+    }
+
+    /**
+     * Links the workout to a plan day, or unlinks it (null), then shows the
+     * server's version. Online.
+     *
+     * @throws ApiException on an error response.
+     */
+    public suspend fun linkPlanDay(workoutId: String, planDayId: String?) {
+        api.call(
+            ApiEndpoints.PatchWorkoutsByIdPlanDay,
+            PatchWorkoutsByIdPlanDayRequest(planDayId),
+            ApiEndpoints.PatchWorkoutsByIdPlanDay.path(workoutId),
+        )
+        refresh(workoutId)
     }
 
     /**

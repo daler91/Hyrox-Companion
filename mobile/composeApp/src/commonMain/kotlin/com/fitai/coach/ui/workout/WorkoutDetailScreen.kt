@@ -34,6 +34,7 @@ import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.exercises.NextTarget
+import com.fitai.coach.core.units.metersToUserDistance
 import com.fitai.coach.ui.coach.CoachThread
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
@@ -57,6 +58,7 @@ import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import kotlin.math.roundToInt
 
 /**
  * A logged workout. [onAskCoach] opens its own coach thread; [onDeleted]
@@ -72,6 +74,7 @@ fun WorkoutDetailScreen(
     val session = LocalUserSession.current
     val vm = viewModel(key = "workout-$workoutId") { WorkoutDetailViewModel(session, workoutId) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
     var sheet by remember { mutableStateOf<DetailSheet?>(null) }
@@ -83,24 +86,17 @@ fun WorkoutDetailScreen(
             workout != null -> WorkoutContent(
                 workout = workout,
                 state = state,
+                distanceUnit = prefs?.distanceUnit,
                 actions = object : WorkoutActions {
                     override fun back() = onBack()
 
                     override fun askCoach() = onAskCoach(CoachThread.of(workout))
 
-                    override fun editDetails() {
-                        sheet = DetailSheet.Details
-                    }
-
-                    override fun editSet(set: ExerciseSetRow) {
-                        sheet = DetailSheet.EditSet(set)
+                    override fun open(opened: DetailSheet) {
+                        sheet = opened
                     }
 
                     override fun addSet(sets: List<ExerciseSetRow>) = vm.addSet(sets)
-
-                    override fun addExercise() {
-                        sheet = DetailSheet.AddExercise
-                    }
 
                     override fun useNext(sets: List<ExerciseSetRow>, target: NextTarget) = vm.useNext(sets, target)
 
@@ -145,6 +141,15 @@ fun WorkoutDetailScreen(
                 onDismiss = close,
             )
         }
+        DetailSheet.PlanDay -> PlanDayPickerSheet(
+            options = state.planDayOptions,
+            selected = state.workout?.planDayId,
+            onPick = {
+                vm.linkPlanDay(it)
+                close()
+            },
+            onDismiss = close,
+        )
         DetailSheet.AddExercise -> ExercisePickerSheet(
             onPick = { name, label ->
                 vm.addExercise(name, label)
@@ -185,6 +190,8 @@ fun WorkoutDetailScreen(
 private sealed interface DetailSheet {
     data object Details : DetailSheet
 
+    data object PlanDay : DetailSheet
+
     data object AddExercise : DetailSheet
 
     data class EditSet(val set: ExerciseSetRow) : DetailSheet
@@ -198,13 +205,10 @@ private interface WorkoutActions {
 
     fun askCoach()
 
-    fun editDetails()
-
-    fun editSet(set: ExerciseSetRow)
+    /** Opens a sheet: the details editor, the plan-day picker, a set's editor or the exercise library. */
+    fun open(opened: DetailSheet)
 
     fun addSet(sets: List<ExerciseSetRow>)
-
-    fun addExercise()
 
     fun useNext(sets: List<ExerciseSetRow>, target: NextTarget)
 
@@ -216,7 +220,7 @@ private interface WorkoutActions {
 }
 
 @Composable
-private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState, actions: WorkoutActions) {
+private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState, distanceUnit: String?, actions: WorkoutActions) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     val groups = exerciseGroups(workout.exerciseSets)
@@ -232,7 +236,8 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
             }
             Text(workout.focus, style = type.h1, color = colors.text, modifier = Modifier.semantics { heading() })
         }
-        item { Stats(workout) }
+        item { Stats(workout, distanceUnit) }
+        item { PlanDayRow(state.linkedPlanDay, linked = workout.planDayId != null, onChange = { actions.open(DetailSheet.PlanDay) }) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
                 FitaiButton(
@@ -242,7 +247,9 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
                     size = ButtonSize.Sm,
                     leadingIcon = LucideIcons.MessageSquare,
                 )
-                FitaiButton("Edit details", onClick = actions::editDetails, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+                FitaiButton("Edit details", onClick = {
+                    actions.open(DetailSheet.Details)
+                }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
             }
         }
         state.grade?.let { grade -> item { GradeCard(grade) } }
@@ -266,7 +273,7 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
         item {
             FitaiButton(
                 "Add exercise",
-                onClick = actions::addExercise,
+                onClick = { actions.open(DetailSheet.AddExercise) },
                 variant = ButtonVariant.Secondary,
                 enabled = !state.busy,
                 leadingIcon = LucideIcons.Plus,
@@ -301,7 +308,7 @@ private fun ExerciseCard(
     ExerciseGroupCard(
         group = group,
         busy = busy,
-        onEditSet = actions::editSet,
+        onEditSet = { actions.open(DetailSheet.EditSet(it)) },
         onAddSet = actions::addSet,
         move = move,
     ) {
@@ -335,19 +342,48 @@ private fun GradeCard(grade: SessionGrade) {
 }
 
 @Composable
-private fun Stats(workout: WorkoutLogDetail) {
+private fun Stats(workout: WorkoutLogDetail, distanceUnit: String?) {
     val parts = buildList {
         workout.timeOfDayMin?.let { add(formatTimeOfDay(it)) }
-        workout.duration?.let { add("$it min") }
+        workout.duration?.let { add(if (reportsMovingTime(workout.deviceActivity)) "$it min moving" else "$it min") }
         workout.rpe?.let { add("RPE $it") }
-        workout.distanceMeters?.takeIf { it > 0 }?.let { add("${formatNumber(it / METERS_PER_KM)} km") }
+        workout.distanceMeters?.takeIf { it > 0 }?.let { add(formatDistance(it, distanceUnit)) }
         workout.avgHeartrate?.let { add("avg $it bpm") }
+        workout.maxHeartrate?.let { add("max $it bpm") }
+        workout.calories?.takeIf { it > 0 }?.let { add("$it kcal") }
         if (!workout.countsAsTraining) add("not counted as training")
     }
     if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+    deviceDetails(workout, distanceUnit).takeIf { it.isNotEmpty() }?.let { details ->
+        Text("Recorded: ${details.joinToString(" · ")}", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+    }
 }
 
-private const val METERS_PER_KM = 1000.0
+/** Which plan day the workout counts towards, and changing it (link or unlink). */
+@Composable
+private fun PlanDayRow(linkedDay: PlanDayOption?, linked: Boolean, onChange: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            when {
+                linkedDay != null -> "Counts towards ${linkedDay.label}"
+                linked -> "Counts towards a plan day"
+                else -> "Not part of the plan"
+            },
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+            modifier = Modifier.weight(1f),
+        )
+        FitaiButton(if (linked) "Change" else "Link to plan", onClick = onChange, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+    }
+}
+
+private const val TENTHS = 10.0
+
+/** "10.2 km" or "6.3 mi" from metres. */
+private fun formatDistance(meters: Double, distanceUnit: String?): String {
+    val value = (metersToUserDistance(meters, distanceUnit) * TENTHS).roundToInt() / TENTHS
+    return "${formatNumber(value)} ${if (distanceUnit == "miles") "mi" else "km"}"
+}
 
 /** "10 reps · 80 kg · 400 m · 1:30", from the values a set has. */
 fun setSummary(set: ExerciseSetRow): String = buildList {

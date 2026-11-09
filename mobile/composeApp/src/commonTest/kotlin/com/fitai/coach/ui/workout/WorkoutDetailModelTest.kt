@@ -4,10 +4,14 @@ import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
 import com.fitai.coach.core.api.generated.SessionGradeIntent
 import com.fitai.coach.core.api.generated.SessionGradeVerdict
+import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.NextTargetStep
 import com.fitai.coach.ui.coach.seedMessage
 import com.fitai.coach.ui.components.BadgeTone
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -172,5 +176,72 @@ class WorkoutDetailModelTest {
         assertTrue("custom" !in searchExercises(""))
         assertTrue("custom" !in searchExercises("custom"))
         assertEquals(searchExercises("").size, searchExercises("  ").size)
+    }
+
+    @Test
+    fun paceSpeedAndCadenceReadAsOnTheWeb() {
+        assertEquals("5:00/km", formatPace(1000.0 / 300, "km"))
+        assertEquals("8:03/mi", formatPace(1000.0 / 300, "miles"))
+        assertEquals("-", formatPace(0.0, "km"))
+        assertEquals("30 km/h", formatSpeed(30 / 3.6, "km"))
+        assertEquals("rpm", cadenceUnitFor("VirtualRide"))
+        assertEquals("spm", cadenceUnitFor("Run"))
+        assertEquals("spm", cadenceUnitFor(null))
+    }
+
+    @Test
+    fun aStopOfAMinuteOrMoreMakesTheDurationMovingTime() {
+        val stopped = buildJsonObject {
+            put(
+                "raw",
+                buildJsonObject {
+                    put("moving_time", 3000)
+                    put("elapsed_time", 3090)
+                },
+            )
+        }
+        assertEquals(90, stoppedSeconds(stopped))
+        assertTrue(reportsMovingTime(stopped))
+        val brief = buildJsonObject {
+            put(
+                "raw",
+                buildJsonObject {
+                    put("moving_time", 3000)
+                    put("elapsed_time", 3030)
+                },
+            )
+        }
+        assertFalse(reportsMovingTime(brief))
+        assertNull(stoppedSeconds(JsonNull))
+    }
+
+    private fun day(id: String, date: String, status: TimelineEntry.Status = TimelineEntry.Status.Planned, logged: Boolean = false) =
+        TimelineEntry(
+            id = id,
+            date = date,
+            type = TimelineEntry.Type.Planned,
+            status = status,
+            focus = "Session $id",
+            mainWorkout = "",
+            planDayId = "d-$id",
+            workoutLogId = if (logged) "w-$id" else null,
+        )
+
+    @Test
+    fun aWorkoutCanCountTowardsNearbyPlanDaysWithoutAWorkoutYet() {
+        val entries = listOf(
+            day("far", "2026-11-25"),
+            day("next", "2026-11-11"),
+            day("done", "2026-11-10", TimelineEntry.Status.Completed, logged = true),
+            day("missed", "2026-11-08", TimelineEntry.Status.Missed),
+            day("skipped", "2026-11-09", TimelineEntry.Status.Skipped),
+        )
+
+        val options = planDayOptions(entries, "2026-11-09")
+
+        assertEquals(listOf("d-missed", "d-next"), options.map { it.planDayId })
+        assertEquals("Sun Nov 8 · Session missed", options.first().label)
+        // The day it already counts towards is offered even when done.
+        assertTrue(planDayOptions(entries, "2026-11-09", linked = "d-done").any { it.planDayId == "d-done" })
     }
 }

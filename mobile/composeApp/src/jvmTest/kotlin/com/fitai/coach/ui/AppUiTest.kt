@@ -176,6 +176,29 @@ class AppUiTest {
     }
 
     @Test
+    fun theLastWorkoutCanBeLoggedAgain() {
+        val api = FakeApi().apply {
+            establishedAccount()
+            on(
+                "GET",
+                "/api/v1/workouts/latest",
+                """{"id":"w1","userId":"u1","date":"2026-11-01","focus":"Leg day","mainWorkout":"Squats","countsAsTraining":true,""" +
+                    """"autoLinkRecordingOnly":false,"deviceActivity":null,"structureBlocks":[],"exerciseSets":[""" +
+                    """{"id":"s1","exerciseName":"back_squat","category":"strength","setNumber":1,"reps":5,"weight":100,"version":1}]}""",
+            )
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasContentDescription("Log Workout"))
+            onNodeWithContentDescription("Log Workout").performClick()
+            awaitNode(hasText("Duplicate last workout"))
+            onNodeWithText("Duplicate last workout").performClick()
+
+            awaitNode(hasText("Back Squat"))
+            onNodeWithText("Confirm exercises").assertExists()
+        }
+    }
+
+    @Test
     fun switchingToPoundsInSettingsSavesThePreference() {
         val api = FakeApi().apply {
             establishedAccount()

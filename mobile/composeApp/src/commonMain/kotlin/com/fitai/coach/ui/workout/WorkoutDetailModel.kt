@@ -3,16 +3,25 @@ package com.fitai.coach.ui.workout
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
 import com.fitai.coach.core.api.generated.SessionGradeIntent
 import com.fitai.coach.core.api.generated.SessionGradeVerdict
+import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.exercises.NextTargetStep
 import com.fitai.coach.core.exercises.ProgressionSet
+import com.fitai.coach.core.exercises.isRunningExerciseName
 import com.fitai.coach.core.exercises.suggestNextTarget
+import com.fitai.coach.core.units.KM_TO_MILES
 import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.formatSetDistance
 import com.fitai.coach.ui.format.formatWeight
 import com.fitai.coach.ui.format.shortDate
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.math.roundToInt
 
 private typealias HistorySet = GetExercisesByExerciseNameHistoryResponseItem
 
@@ -127,3 +136,88 @@ fun parseTimeOfDay(text: String): Int? {
 private val CLOCK_TIME = Regex("""(\d{1,2}):(\d{2})""")
 private const val MINUTES_PER_HOUR = 60
 private const val HOURS_PER_DAY = 24
+
+/**
+ * A recorded workout's secondary numbers, on one quiet line
+ * (WorkoutSummaryHeader's buildDeviceDetails): pace for a run or speed
+ * otherwise, cadence, power and relative effort. Only for a workout with a
+ * recording linked.
+ */
+fun deviceDetails(workout: WorkoutLogDetail, distanceUnit: String?): List<String> {
+    if (workout.stravaActivityId == null && workout.source != "strava") return emptyList()
+    val running = workout.exerciseSets.any { isRunningExerciseName(it.exerciseName) }
+    return buildList {
+        workout.avgSpeed?.takeIf {
+            it > 0
+        }?.let { add(if (running) "${formatPace(it, distanceUnit)} pace" else "${formatSpeed(it, distanceUnit)} avg speed") }
+        workout.avgCadence?.takeIf {
+            it > 0
+        }?.let { add("${it.roundToInt()} ${cadenceUnitFor(sportType(workout.deviceActivity))} cadence") }
+        workout.avgWatts?.takeIf { it > 0 }?.let { add("$it W power") }
+        workout.sufferScore?.takeIf { it > 0 }?.let { add("$it relative effort") }
+    }
+}
+
+/**
+ * Seconds the recording ran while the athlete stood still (stoppedSecondsFor):
+ * its elapsed time less its moving time; null with no recording to read.
+ */
+fun stoppedSeconds(deviceActivity: JsonElement): Int? {
+    val raw = recording(deviceActivity)
+    val moving = raw?.get("moving_time")?.jsonPrimitive?.doubleOrNull
+    val elapsed = raw?.get("elapsed_time")?.jsonPrimitive?.doubleOrNull
+    return if (moving == null || elapsed == null) null else (elapsed - moving).roundToInt().coerceAtLeast(0)
+}
+
+/** The recording's own summary in the device snapshot, as the provider sent it. */
+private fun recording(deviceActivity: JsonElement): JsonObject? = (deviceActivity as? JsonObject)?.get("raw") as? JsonObject
+
+/** Whether a session's duration should read as moving time: it stood still a minute or more (MIN_REPORTABLE_STOPPED_SEC). */
+fun reportsMovingTime(deviceActivity: JsonElement): Boolean = (stoppedSeconds(deviceActivity) ?: 0) >= MIN_REPORTABLE_STOPPED_SECONDS
+
+private fun sportType(deviceActivity: JsonElement): String? =
+    recording(deviceActivity)?.let { raw -> (raw["sport_type"] ?: raw["type"])?.jsonPrimitive?.contentOrNull }
+
+/** "4:35/km" from metres per second (formatPace). */
+fun formatPace(metersPerSecond: Double, distanceUnit: String?): String {
+    if (metersPerSecond <= 0) return "-"
+    val perKm = METERS_PER_KM / metersPerSecond
+    val miles = distanceUnit == "miles"
+    val perUnit = if (miles) perKm / KM_TO_MILES else perKm
+    var minutes = (perUnit / SECONDS_PER_MINUTE).toInt()
+    var seconds = (perUnit % SECONDS_PER_MINUTE).roundToInt()
+    if (seconds == SECONDS_PER_MINUTE) {
+        minutes += 1
+        seconds = 0
+    }
+    return "$minutes:${seconds.toString().padStart(2, '0')}${if (miles) "/mi" else "/km"}"
+}
+
+/** "28.4 km/h" from metres per second (formatSpeed). */
+fun formatSpeed(metersPerSecond: Double, distanceUnit: String?): String {
+    val kmPerHour = metersPerSecond * SECONDS_PER_HOUR / METERS_PER_KM
+    return if (distanceUnit ==
+        "miles"
+    ) {
+        "${formatNumber(roundTo1(kmPerHour * KM_TO_MILES))} mph"
+    } else {
+        "${formatNumber(roundTo1(kmPerHour))} km/h"
+    }
+}
+
+/** Pedal "rpm" for a ride, "spm" for everything else (cadenceUnitFor). */
+fun cadenceUnitFor(sportType: String?): String =
+    if (sportType != null && sportType.lowercase().filter { it.isLetterOrDigit() } in CYCLING_SPORTS) "rpm" else "spm"
+
+private fun roundTo1(value: Double) = (value * TENTHS).roundToInt() / TENTHS
+
+private val CYCLING_SPORTS = setOf(
+    "ride", "virtualride", "mountainbikeride", "gravelride", "ebikeride", "emountainbikeride", "handcycle", "velomobile",
+    "cycling", "roadbiking", "mountainbiking", "gravelcycling", "indoorcycling", "virtualcycling", "cyclocross",
+    "trackcycling", "bmx", "ebikefitness", "ebikemountain", "handcycling", "recumbentcycling",
+)
+private const val MIN_REPORTABLE_STOPPED_SECONDS = 60
+private const val METERS_PER_KM = 1000.0
+private const val SECONDS_PER_MINUTE = 60
+private const val SECONDS_PER_HOUR = 3600.0
+private const val TENTHS = 10.0
