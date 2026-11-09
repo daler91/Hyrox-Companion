@@ -109,4 +109,17 @@ class WorkoutEditSyncTest {
 
         assertEquals(listOf("s1"), local()!!.exerciseSets.map { it.id })
     }
+
+    @Test
+    fun reorderedSetsTakeTheServersOrder() = runTest {
+        server.on("GET", W1, 200, Samples.workout("w1", Samples.setRow("s1", 1), Samples.setRow("s2", 1), Samples.setRow("s3", 1)))
+        workouts.refresh("w1")
+        server.on("PATCH", "$W1/set-order", 200, "[${Samples.setRow("s3", 2)},${Samples.setRow("s1", 2)},${Samples.setRow("s2", 2)}]")
+
+        workouts.reorderSets("w1", listOf("s3", "s1", "s2"))
+
+        assertEquals(listOf("s3", "s1", "s2"), local()!!.exerciseSets.map { it.id })
+        val sent = ApiJson.parseToJsonElement(server.sentTo("PATCH", "$W1/set-order").single().body!!).jsonObject
+        assertEquals("[\"s3\",\"s1\",\"s2\"]", sent["setIds"].toString())
+    }
 }

@@ -6,7 +6,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 
 /**
@@ -26,6 +25,7 @@ public class UserSession internal constructor(
     public val cache: CacheStore = CacheStore(database, now)
     public val timeline: TimelineRepository = TimelineRepository(database, api, sync, cache)
     public val workouts: WorkoutRepository = WorkoutRepository(database, api, sync, newKey)
+    public val planDays: PlanDayRepository = PlanDayRepository(api)
     public val preferences: PreferencesRepository = PreferencesRepository(api, cache)
     public val parser: WorkoutParser = WorkoutParser(api)
     public val coach: CoachRepository = CoachRepository(api)
@@ -45,7 +45,8 @@ public class UserSession internal constructor(
     internal fun start(scope: CoroutineScope, online: Flow<Boolean>) {
         job = scope.launch {
             sync.start(this, online)
-            launch { sync.events.filterIsInstance<SyncEvent.Synced>().collect { bestEffort { timeline.refresh() } } }
+            // After writes went (or were dropped), the timeline shows the server's version.
+            launch { sync.events.collect { bestEffort { timeline.refresh() } } }
             bestEffort { preferences.refresh() }
             bestEffort { timeline.refresh() }
             bestEffort { timeline.refreshPlans() }

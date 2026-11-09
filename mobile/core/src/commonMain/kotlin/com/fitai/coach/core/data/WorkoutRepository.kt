@@ -7,6 +7,7 @@ import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryQuery
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
+import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetOrderRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
 import com.fitai.coach.core.api.generated.SessionGrade
@@ -143,15 +144,6 @@ public class WorkoutRepository(
     }
 
     /**
-     * Puts a deleted workout, plan day or plan back from the recycle bin.
-     *
-     * @throws com.fitai.coach.core.api.ApiException on an error response.
-     */
-    public suspend fun restore(recycleBinItemId: String) {
-        api.call(ApiEndpoints.PostRecycleBinByIdRestore, path = ApiEndpoints.PostRecycleBinByIdRestore.path(recycleBinItemId))
-    }
-
-    /**
      * Appends a set (online: the server gives it its id). It shows at once
      * once the server answers.
      *
@@ -185,6 +177,24 @@ public class WorkoutRepository(
         db.writeTransaction {
             outbox.deleteFor(setTarget(setId))
             dao.deleteSets(listOf(setId))
+        }
+    }
+
+    /**
+     * Puts the workout's sets in the order of [setIds] (moving an exercise up
+     * or down). Online; the device takes the server's order.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun reorderSets(workoutId: String, setIds: List<String>) {
+        val rows = api.call(
+            ApiEndpoints.PatchWorkoutsByIdSetOrder,
+            PatchWorkoutsByIdSetOrderRequest(setIds),
+            ApiEndpoints.PatchWorkoutsByIdSetOrder.path(workoutId),
+        )
+        db.writeTransaction {
+            val local = dao.sets(workoutId).associateBy { it.id }
+            dao.upsertSets(rows.mapIndexedNotNull { index, row -> local[row.id]?.copy(position = index) })
         }
     }
 
@@ -301,13 +311,10 @@ public class WorkoutRepository(
     private companion object {
         const val EXPECTED_VERSION = "expectedVersion"
         const val SET_TARGET_PREFIX = "set:"
-        const val WORKOUT_TARGET_PREFIX = "workout:"
         const val NOT_FOUND = 404
 
         /** Three sessions: the last one, the one before it (for the missed-twice deload) and this one. */
         const val HISTORY_SESSIONS = 3
-
-        fun workoutTarget(workoutId: String): String = WORKOUT_TARGET_PREFIX + workoutId
 
         fun setTarget(setId: String): String = SET_TARGET_PREFIX + setId
 
@@ -325,3 +332,8 @@ public class WorkoutRepository(
             decodeOrNull(ExerciseSetRow.serializer(), json)?.let { row -> version?.let { row.copy(version = it) } ?: row }
     }
 }
+
+private const val WORKOUT_TARGET_PREFIX = "workout:"
+
+/** The outbox target of edits to a workout's own fields: one at a time, and a refresh keeps them. */
+internal fun workoutTarget(workoutId: String): String = WORKOUT_TARGET_PREFIX + workoutId

@@ -7,4 +7,6 @@ data class TimelineNavigation(
     val openWorkout: (workoutId: String) -> Unit,
     val askCoach: (TimelineEntry) -> Unit,
     val logWorkout: () -> Unit,
+    /** Edit a planned session: its text, priority and sets. */
+    val editPlanDay: (entryId: String) -> Unit = {},
 )

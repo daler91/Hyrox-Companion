@@ -37,7 +37,8 @@ import com.fitai.coach.ui.theme.Spacing
 
 /**
  * A labelled date (YYYY-MM-DD) chosen from a calendar, styled as a text
- * field. [value] is "" for no date; [minDate] closes the days before it.
+ * field. [value] is "" for no date; [minDate] closes the days before it and
+ * [maxDate] the days after.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +49,7 @@ fun FitaiDateField(
     modifier: Modifier = Modifier,
     placeholder: String = "Pick a date",
     minDate: String? = null,
+    maxDate: String? = null,
     error: String? = null,
     supportingText: String? = null,
 ) {
@@ -78,10 +80,12 @@ fun FitaiDateField(
     }
     if (picking) {
         val min = minDate?.let(::isoDateToUtcMillis)
+        val max = maxDate?.let(::isoDateToUtcMillis)
         val state = rememberDatePickerState(
             initialSelectedDateMillis = isoDateToUtcMillis(value),
             selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long): Boolean = min == null || utcTimeMillis >= min
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    (min == null || utcTimeMillis >= min) && (max == null || utcTimeMillis <= max)
             },
         )
         DatePickerDialog(

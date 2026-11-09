@@ -7,17 +7,17 @@ import com.fitai.coach.core.api.IDEMPOTENCY_KEY_HEADER
 import com.fitai.coach.core.api.createHttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
-import io.ktor.http.headersOf
 
 /** A request the app sent. */
 data class Sent(val method: String, val path: String, val body: String?, val idempotencyKey: String?, val query: String = "")
 
 /** What the fake server does with a request: answer it, or drop it as if offline. */
 sealed interface Reply {
-    data class Respond(val status: Int, val body: String = "{}") : Reply
+    data class Respond(val status: Int, val body: String = "{}", val headers: Map<String, String> = emptyMap()) : Reply
 
     data object NoAnswer : Reply
 }
@@ -56,7 +56,10 @@ class FakeServer {
                 is Reply.Respond -> respond(
                     content = reply.body,
                     status = HttpStatusCode.fromValue(reply.status),
-                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    headers = Headers.build {
+                        append(HttpHeaders.ContentType, "application/json")
+                        reply.headers.forEach { (name, value) -> append(name, value) }
+                    },
                 )
             }
         }

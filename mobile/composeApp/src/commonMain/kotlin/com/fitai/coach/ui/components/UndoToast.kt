@@ -1,4 +1,4 @@
-package com.fitai.coach.ui.shell
+package com.fitai.coach.ui.components
 
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState

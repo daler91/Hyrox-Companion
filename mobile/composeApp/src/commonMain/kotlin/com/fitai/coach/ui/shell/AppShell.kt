@@ -33,12 +33,14 @@ import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.coach.CoachThread
 import com.fitai.coach.ui.coach.CoachThreadSaver
 import com.fitai.coach.ui.components.FitaiToastHost
+import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.links.DeepLinks
 import com.fitai.coach.ui.log.LogWorkoutScreen
 import com.fitai.coach.ui.nutrition.NutritionScreen
 import com.fitai.coach.ui.onboarding.OnboardingScreen
+import com.fitai.coach.ui.planday.PlanDayScreen
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.settings.SettingsScreen
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -154,6 +156,7 @@ fun AppShell() {
                             openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
                             askCoach = { openCoach(CoachThread.of(it)) },
                             logWorkout = { backStack.select(TopLevel.LogWorkout) },
+                            editPlanDay = { backStack.push(Route.PlanDay(it)) },
                         ),
                         openPlanDayId = openPlanDayId,
                         onPlanDayOpened = { openPlanDayId = null },
@@ -167,14 +170,12 @@ fun AppShell() {
                         onDeleted = { binId ->
                             backStack.pop()
                             scope.launch {
-                                offerUndo(toasts, "Workout deleted") {
-                                    session.workouts.restore(binId)
-                                    session.timeline.refresh()
-                                }
+                                offerUndo(toasts, "Workout deleted") { session.timeline.restore(binId) }
                             }
                         },
                     )
                 }
+                entry<Route.PlanDay> { route -> PlanDayScreen(route.entryId, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
                 entry<Route.Nutrition> { NutritionScreen(openDate = openNutritionDate, onDateOpened = { openNutritionDate = null }) }
                 entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }

@@ -164,6 +164,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     /** Deletes the workout; [onDeleted] gets the recycle-bin item that undoes it. */
     fun delete(onDeleted: (recycleBinItemId: String) -> Unit) = online("Couldn't delete this workout") {
         val binId = session.workouts.deleteWorkout(workoutId)
+        session.timeline.forgetWorkout(workoutId)
         runCatching { session.timeline.refresh() }
         onDeleted(binId)
     }
@@ -223,6 +224,12 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
                 )
             }
         }
+    }
+
+    /** Moves an exercise up ([offset] -1) or down (1) the workout. */
+    fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int) {
+        val order = reorderedSetIds(groups, index, offset) ?: return
+        online("Couldn't move that exercise") { session.workouts.reorderSets(workoutId, order) }
     }
 
     /** Reopens the plan day this workout completed; the server deletes the workout. */
@@ -295,10 +302,6 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
         const val CUSTOM_CATEGORY = "conditioning"
-
-        fun String.toIntPatch(): Patch<Int> = if (isBlank()) Patch.clear() else Patch.of(trim().toDouble().toInt())
-
-        fun String.toDoublePatch(): Patch<Double> = if (isBlank()) Patch.clear() else Patch.of(trim().toDouble())
     }
 }
 

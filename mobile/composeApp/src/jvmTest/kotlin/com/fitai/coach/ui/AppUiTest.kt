@@ -7,9 +7,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import com.fitai.coach.core.auth.AuthState
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.links.DeepLinks
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -103,6 +105,73 @@ class AppUiTest {
             assertEquals(1, api.sent("DELETE", "/api/v1/workouts/w1").size)
             onNodeWithText("Undo").performClick()
             waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/recycle-bin/rb1/restore").isNotEmpty() }
+        }
+    }
+
+    @Test
+    fun aSessionMovesFromItsCardMenu() {
+        val tomorrow = LocalDate.parse(FakeApi.today).plusDays(1).toString()
+        val api = FakeApi().apply {
+            establishedAccount(FakeApi.plannedToday("Tempo intervals"))
+            on("PATCH", "/api/v1/plans/days/d1", "{}")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasContentDescription("Move Tempo intervals to another day"))
+            onNodeWithContentDescription("Move Tempo intervals to another day").performClick()
+            onNodeWithText("Move to tomorrow").performClick()
+
+            waitUntil(timeoutMillis = 10_000) { api.sent("PATCH", "/api/v1/plans/days/d1").isNotEmpty() }
+            assertTrue(api.sent("PATCH", "/api/v1/plans/days/d1").single().body.orEmpty().contains("\"scheduledDate\":\"$tomorrow\""))
+        }
+    }
+
+    @Test
+    fun aSkippedDayIsDeletedFromThePlanAndCanComeBack() {
+        val api = FakeApi().apply {
+            establishedAccount(FakeApi.plannedToday("Long run").replace("\"status\":\"planned\"", "\"status\":\"skipped\""))
+            on("DELETE", "/api/v1/plans/days/d1", """{"success":true,"recycleBinItemId":"rb1"}""")
+            on("POST", "/api/v1/recycle-bin/rb1/restore", """{"ok":true,"entityType":"plan_day","entityId":"d1","warnings":[]}""")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            // The filter narrows to skipped sessions, and says when none match.
+            awaitNode(hasText("Completed"))
+            onNodeWithText("Completed").performClick()
+            awaitNode(hasText("No completed workouts."))
+            onNodeWithText("Skipped").performClick()
+
+            onNodeWithText("Long run").performClick()
+            onNodeWithText("Delete from plan").performClick()
+            onNodeWithText("Delete").performClick()
+
+            awaitNode(hasText("Undo"))
+            assertEquals(1, api.sent("DELETE", "/api/v1/plans/days/d1").size)
+            onNodeWithText("Undo").performClick()
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/recycle-bin/rb1/restore").isNotEmpty() }
+        }
+    }
+
+    @Test
+    fun aPlannedSessionIsEditedOnItsOwnScreen() {
+        val api = FakeApi().apply {
+            establishedAccount(FakeApi.plannedToday("Tempo intervals"))
+            on(
+                "GET",
+                "/api/v1/plans/days/d1/sets",
+                """[{"id":"s1","planDayId":"d1","exerciseName":"back_squat","category":"strength","setNumber":1,"reps":5,"version":1}]""",
+            )
+            on("PATCH", "/api/v1/plans/days/d1", "{}")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Tempo intervals"))
+            onNodeWithText("Tempo intervals").performClick()
+            onNodeWithText("Edit session").performClick()
+
+            awaitNode(hasText("Back Squat"))
+            onNodeWithContentDescription("Title").performTextReplacement("Track intervals")
+            onNodeWithText("Save").performClick()
+
+            waitUntil(timeoutMillis = 10_000) { api.sent("PATCH", "/api/v1/plans/days/d1").isNotEmpty() }
+            assertTrue(api.sent("PATCH", "/api/v1/plans/days/d1").single().body.orEmpty().contains("\"focus\":\"Track intervals\""))
         }
     }
 

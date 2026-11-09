@@ -58,7 +58,12 @@ class TimelineRowsTest {
 
     @Test
     fun aPlanFilterKeepsOnlyThatPlansEntries() {
-        val rows = buildTimelineRows(listOf(entry("a", today, planId = "p1"), entry("b", today, planId = "p2")), today, planId = "p2")
+        val rows =
+            buildTimelineRows(
+                listOf(entry("a", today, planId = "p1"), entry("b", today, planId = "p2")),
+                today,
+                TimelineFilter(planId = "p2"),
+            )
 
         assertEquals(listOf("b"), rows.days.single().entries.map { it.id })
     }
@@ -97,5 +102,51 @@ class TimelineRowsTest {
         assertEquals("My move", exerciseLabel("custom:my_move"))
         assertEquals("My burpees", exerciseLabel("burpee_broad_jump", "My burpees"))
         assertEquals("Not in catalogue", exerciseLabel("not_in_catalogue", customLabel = "2x"))
+    }
+
+    @Test
+    fun aStatusFilterKeepsOnlyThoseEntriesAndAddsNoEmptyToday() {
+        val entries = listOf(
+            entry("a", "2026-11-06", TimelineEntry.Status.Skipped),
+            entry("b", "2026-11-07", TimelineEntry.Status.Completed, workoutLogId = "w"),
+            entry("c", "2026-11-10"),
+        )
+
+        val skipped = buildTimelineRows(entries, today, TimelineFilter(status = TimelineEntry.Status.Skipped))
+
+        assertEquals(listOf("2026-11-06"), skipped.days.map { it.date })
+        assertEquals(-1, skipped.todayIndex)
+        assertTrue(buildTimelineRows(entries, today, TimelineFilter(status = TimelineEntry.Status.Missed)).days.isEmpty())
+    }
+
+    @Test
+    fun quickMovesOfferOnlyDaysTheSessionCanGo() {
+        assertEquals(
+            listOf("Move to today", "Move to tomorrow", "Move to next week"),
+            quickMoves(entry("a", "2026-11-12"), today).map { it.label },
+        )
+        // Already today: no "today".
+        assertEquals(listOf("2026-11-09", "2026-11-15"), quickMoves(entry("a", today), today).map { it.date })
+        // A logged workout goes no later than tomorrow.
+        assertEquals(
+            listOf("Move to today", "Move to tomorrow"),
+            quickMoves(entry("a", "2026-11-01", TimelineEntry.Status.Completed, workoutLogId = "w"), today).map { it.label },
+        )
+    }
+
+    @Test
+    fun aMoveNeedsAnotherDayInsideTheWindow() {
+        val planned = entry("a", "2026-11-10")
+        val logged = entry("b", "2026-11-01", TimelineEntry.Status.Completed, planDayId = null, workoutLogId = "w")
+        val tomorrow = "2026-11-09"
+
+        assertTrue(canMoveTo(planned, "2027-03-01", tomorrow))
+        assertFalse(canMoveTo(planned, "2026-11-10", tomorrow), "the day it is already on")
+        assertFalse(canMoveTo(planned, "0202-11-10", tomorrow), "a half-typed year")
+        assertFalse(canMoveTo(planned, "", tomorrow))
+        assertTrue(canMoveTo(logged, tomorrow, tomorrow))
+        assertFalse(canMoveTo(logged, "2026-11-10", tomorrow), "a workout logged after tomorrow")
+        assertFalse(canMove(entry("c", today, planDayId = null)))
+        assertEquals(listOf("2026-11-09", "2026-11-15"), skipMoves(today).map { it.date })
     }
 }
