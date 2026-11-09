@@ -5,6 +5,7 @@ import com.fitai.coach.core.api.ApiConfig
 import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.AppIdentity
 import com.fitai.coach.core.api.createHttpClient
+import com.fitai.coach.core.data.ChatFocus
 import com.fitai.coach.core.data.CoachRepository
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
@@ -42,6 +43,7 @@ class CoachViewModelTest {
     /** path → (status, body); a null status means no answer. */
     private val routes = mutableMapOf<String, Pair<Int?, String>>()
     private val sent = mutableListOf<Pair<String, JsonObject?>>()
+    private val queries = mutableMapOf<String, String>()
     private var planChanges = 0
     private var ids = 0
 
@@ -51,7 +53,7 @@ class CoachViewModelTest {
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun TestScope.viewModel(): CoachViewModel {
+    private fun TestScope.viewModel(focus: ChatFocus? = null): CoachViewModel {
         val engine = MockEngine(
             MockEngineConfig().apply {
                 this.dispatcher = this@CoachViewModelTest.dispatcher
@@ -59,6 +61,7 @@ class CoachViewModelTest {
                     val key = "${request.method.value} ${request.url.encodedPath}"
                     val body = (request.body as? TextContent)?.text?.let { ApiJson.parseToJsonElement(it).jsonObject }
                     sent += key to body
+                    queries[key] = request.url.encodedQuery
                     val (status, reply) = routes[key] ?: (404 to """{"error":"Not found"}""")
                     if (status == null) throw Offline()
                     respond(reply, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
@@ -72,6 +75,7 @@ class CoachViewModelTest {
             enableAi = {},
             onPlanChanged = { planChanges++ },
             newId = { "id-${++ids}" },
+            focus = focus,
         ).also { advanceUntilIdle() }
     }
 
@@ -161,6 +165,28 @@ class CoachViewModelTest {
         )
         assertEquals(1, planChanges)
         assertNull(sent.single { it.first == "POST /api/v1/plan-proposals/pp1/apply" }.second!!["planDayIds"])
+    }
+
+    @Test
+    fun aWorkoutThreadKeepsToItsOwnHistory() = runTest(dispatcher) {
+        routes["GET /api/v1/chat/history"] = 200 to
+            """[{"id":"m1","userId":"u1","role":"user","content":"Was that too fast?","kind":"text"}]"""
+        routes["POST /api/v1/chat/stream"] = 200 to stream("""{"text":"A touch."}""", """{"done":true}""")
+        routes["POST /api/v1/chat/message"] = 200 to """{"id":"m9","role":"assistant","content":"x"}"""
+        val vm = viewModel(ChatFocus(planDayId = "d1", workoutLogId = "w1"))
+
+        assertEquals(listOf(THREAD_WELCOME, "Was that too fast?"), vm.state.value.items.map { it.content })
+        assertTrue(vm.state.value.quickActions.isEmpty())
+        assertTrue(sent.none { it.first == "GET /api/v1/chat/welcome" })
+        val query = queries.getValue("GET /api/v1/chat/history")
+        assertTrue("focusWorkoutLogId=w1" in query && "focusPlanDayId=d1" in query, query)
+
+        vm.send("and the pacing?")
+        advanceUntilIdle()
+
+        val body = sent.single { it.first == "POST /api/v1/chat/stream" }.second!!
+        assertEquals("w1", body["focusWorkoutLogId"]!!.jsonPrimitive.content)
+        assertEquals("d1", body["focusPlanDayId"]!!.jsonPrimitive.content)
     }
 
     @Test

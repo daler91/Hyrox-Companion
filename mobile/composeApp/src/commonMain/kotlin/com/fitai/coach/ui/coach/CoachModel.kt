@@ -37,6 +37,9 @@ data class ChatItem(
 
 const val WELCOME_ID = "welcome"
 const val DEFAULT_WELCOME = "Hi! I'm your coach. Ask me about today's session, your plan or your recovery."
+
+/** The greeting in a workout's own thread. */
+const val THREAD_WELCOME = "Ask me anything about this workout: how it went, what it was for, or how to change it."
 const val PHOTO_ONLY_PROMPT = "What do you make of this photo?"
 const val GENERIC_FAILURE = "Something went wrong on our side. Please try again."
 
