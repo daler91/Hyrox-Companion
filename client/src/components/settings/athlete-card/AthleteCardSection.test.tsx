@@ -19,7 +19,11 @@ vi.mock("@/lib/queryClient", async (importOriginal) => ({
 
 installRadixPointerMocks();
 
-const FRESH = createMockAthleteFact({ id: "f-fresh", fact: "No sled at my gym", reviewOn: "2999-01-01" });
+const FRESH = createMockAthleteFact({
+  id: "f-fresh",
+  fact: "No sled at my gym",
+  reviewOn: "2999-01-01",
+});
 const DUE = createMockAthleteFact({
   id: "f-due",
   fact: "Bad left knee: no deep lunges",
@@ -27,11 +31,19 @@ const DUE = createMockAthleteFact({
   category: "constraint",
   reviewOn: "2020-01-01",
 });
-const RETIRED = createMockAthleteFact({ id: "f-old", fact: "Sore shoulder", dedupeKey: "sore shoulder", active: false });
+const RETIRED = createMockAthleteFact({
+  id: "f-old",
+  fact: "Sore shoulder",
+  dedupeKey: "sore shoulder",
+  active: false,
+});
 
 function serve(facts: readonly AthleteFact[]) {
   vi.mocked(apiRequest).mockImplementation((method: string, url: string) => {
-    const body = method === "GET" && url === "/api/v1/athlete-facts" ? facts : { success: true, added: 1, skipped: 0 };
+    const body =
+      method === "GET" && url === "/api/v1/athlete-facts"
+        ? facts
+        : { success: true, added: 1, skipped: 0 };
     return Promise.resolve(new Response(JSON.stringify(body)));
   });
 }
@@ -76,6 +88,15 @@ describe("AthleteCardSection", () => {
     renderCard();
 
     await user.click(await screen.findByRole("button", { name: `Retire "${FRESH.fact}"` }));
+    const retireDialog = await screen.findByRole("alertdialog");
+    expect(retireDialog).toHaveTextContent(FRESH.fact);
+    expect(apiRequest).not.toHaveBeenCalledWith(
+      "PATCH",
+      "/api/v1/athlete-facts/f-fresh",
+      { active: false },
+      expect.anything(),
+    );
+    await user.click(screen.getByTestId("confirm-retire-fact"));
     await expectRequest("PATCH", "/api/v1/athlete-facts/f-fresh", { active: false });
 
     await user.click(screen.getByRole("button", { name: "Retired (1)" }));
@@ -85,7 +106,12 @@ describe("AthleteCardSection", () => {
     await user.click(screen.getByRole("button", { name: `Delete "${RETIRED.fact}"` }));
     const confirm = await screen.findByRole("alertdialog");
     expect(confirm).toHaveTextContent(`"${RETIRED.fact}" will be permanently deleted`);
-    expect(apiRequest).not.toHaveBeenCalledWith("DELETE", "/api/v1/athlete-facts/f-old", undefined, expect.anything());
+    expect(apiRequest).not.toHaveBeenCalledWith(
+      "DELETE",
+      "/api/v1/athlete-facts/f-old",
+      undefined,
+      expect.anything(),
+    );
     await user.click(screen.getByTestId("confirm-delete-retired-fact"));
     await expectRequest("DELETE", "/api/v1/athlete-facts/f-old");
   });
@@ -101,7 +127,12 @@ describe("AthleteCardSection", () => {
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
-    expect(apiRequest).not.toHaveBeenCalledWith("DELETE", "/api/v1/athlete-facts/f-old", undefined, expect.anything());
+    expect(apiRequest).not.toHaveBeenCalledWith(
+      "DELETE",
+      "/api/v1/athlete-facts/f-old",
+      undefined,
+      expect.anything(),
+    );
   });
 
   it("rewords a fact, sending only what changed", async () => {
@@ -114,7 +145,9 @@ describe("AthleteCardSection", () => {
     await user.type(input, "No sled or rower at my gym");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    await expectRequest("PATCH", "/api/v1/athlete-facts/f-fresh", { fact: "No sled or rower at my gym" });
+    await expectRequest("PATCH", "/api/v1/athlete-facts/f-fresh", {
+      fact: "No sled or rower at my gym",
+    });
   });
 
   it("adds a fact, about an injury or limit unless the athlete says otherwise", async () => {
@@ -124,13 +157,21 @@ describe("AthleteCardSection", () => {
     await user.type(await screen.findByLabelText("Add a fact"), "  Night shifts on Tuesdays ");
     await user.click(screen.getByRole("button", { name: "Add" }));
 
-    await expectRequest("POST", "/api/v1/athlete-facts", { fact: "Night shifts on Tuesdays", category: "constraint" });
+    await expectRequest("POST", "/api/v1/athlete-facts", {
+      fact: "Night shifts on Tuesdays",
+      category: "constraint",
+    });
   });
 
   it("stops adding, and restoring, once the card is full", async () => {
     serve([
       ...Array.from({ length: 20 }, (_, i) =>
-        createMockAthleteFact({ id: `f-${i}`, fact: `Fact ${i}`, dedupeKey: `fact ${i}`, reviewOn: "2999-01-01" }),
+        createMockAthleteFact({
+          id: `f-${i}`,
+          fact: `Fact ${i}`,
+          dedupeKey: `fact ${i}`,
+          reviewOn: "2999-01-01",
+        }),
       ),
       RETIRED,
     ]);
@@ -171,6 +212,8 @@ describe("AthleteCardSection", () => {
     renderCard("   ");
 
     await screen.findByRole("list", { name: "Facts your coach reads" });
-    expect(screen.queryByRole("region", { name: "Your older injuries note" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Your older injuries note" }),
+    ).not.toBeInTheDocument();
   });
 });
