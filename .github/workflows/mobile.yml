@@ -114,7 +114,8 @@ jobs:
           fi
       - name: Build the debug APK, test and lint
         env:
-          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+          # A variable is the documented place; a secret of the same name works too (it's a common slip).
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY || secrets.CLERK_PUBLISHABLE_KEY }}
           FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
           FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
           FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
@@ -124,7 +125,7 @@ jobs:
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export FITAI_BUILD_LABEL="test build #${GITHUB_RUN_NUMBER} (${HEAD_SHA::7})"
           if [ -z "$CLERK_PUBLISHABLE_KEY" ]; then
-            echo "::warning::No CLERK_PUBLISHABLE_KEY variable: the test APK builds, but signing in will fail"
+            echo "::warning::No CLERK_PUBLISHABLE_KEY repository variable or secret (an environment's isn't read here): the test APK builds, but signing in will fail"
           fi
           ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease :composeApp:verifyRoborazziAndroidHostTest \
             :androidApp:lintDebug ktlintCheck detekt --no-daemon --console=plain
