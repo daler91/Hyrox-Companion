@@ -35,7 +35,15 @@ data class TimelineUiState(
     /** The last refresh failed and there is nothing cached to show. */
     val loadFailed: Boolean = false,
     val hasAnyEntries: Boolean = false,
+    /** The status filter; null shows everything. */
+    val statusFilter: TimelineEntry.Status? = null,
+    /** Older history can be loaded from the server. */
+    val hasOlder: Boolean = false,
+    val loadingOlder: Boolean = false,
 )
+
+/** A done thing the athlete can take back from its toast (a delete's Undo). */
+class UndoOffer(val message: String, val undo: suspend () -> Unit)
 
 /** The recovery sheet for a missed day: loading, the options, or why they couldn't load. */
 sealed interface RecoveryState {
@@ -59,9 +67,12 @@ class TimelineViewModel(
     private val selectedPlan = MutableStateFlow<String?>(null)
     private val expanded = MutableStateFlow(INITIAL_DAYS to INITIAL_DAYS)
     private val status = MutableStateFlow(RefreshStatus())
+    private val filter = MutableStateFlow(Filter())
     private val toasts = Channel<String>(Channel.BUFFERED)
+    private val undoOffers = Channel<UndoOffer>(Channel.BUFFERED)
 
     val messages: Flow<String> = toasts.receiveAsFlow()
+    val undos: Flow<UndoOffer> = undoOffers.receiveAsFlow()
 
     private val _recovery = MutableStateFlow<RecoveryState?>(null)
     val recovery: StateFlow<RecoveryState?> = _recovery
@@ -70,20 +81,29 @@ class TimelineViewModel(
         timeline.entries,
         combine(timeline.plans, timeline.weekSummary, ::Pair),
         preferences.preferences,
-        combine(selectedPlan, expanded, ::Pair),
+        combine(selectedPlan, expanded, filter, timeline.olderCursor, ::Shown),
         status,
-    ) { entries, (plans, summary), prefs, (planId, days), refresh ->
+    ) { entries, (plans, summary), prefs, shown, refresh ->
         val today = todayIn(prefs?.userTimezone)
         TimelineUiState(
             loaded = true,
             today = today,
-            rows = buildTimelineRows(entries, today, planId, days.first, days.second),
-            plans = plans.orEmpty().filter { it.retiredOn == null || it.id == planId },
-            selectedPlanId = planId,
+            rows = buildTimelineRows(
+                entries,
+                today,
+                TimelineFilter(planId = shown.planId, status = shown.filter.status),
+                pastDays = shown.days.first,
+                upcomingDays = shown.days.second,
+            ),
+            plans = plans.orEmpty().filter { it.retiredOn == null || it.id == shown.planId },
+            selectedPlanId = shown.planId,
             summary = summary,
             refreshing = refresh.refreshing,
             loadFailed = refresh.failed && entries.isEmpty(),
             hasAnyEntries = entries.isNotEmpty(),
+            statusFilter = shown.filter.status,
+            hasOlder = shown.olderCursor != null,
+            loadingOlder = shown.filter.loadingOlder,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())
 
@@ -109,6 +129,45 @@ class TimelineViewModel(
     fun showMorePast() = expanded.update { (past, upcoming) -> past + INITIAL_DAYS to upcoming }
 
     fun showMoreUpcoming() = expanded.update { (past, upcoming) -> past to upcoming + INITIAL_DAYS }
+
+    fun filterBy(status: TimelineEntry.Status?) = filter.update { it.copy(status = status) }
+
+    /** Loads the next page of older history and shows it. */
+    fun loadOlder() {
+        if (filter.value.loadingOlder) return
+        filter.update { it.copy(loadingOlder = true) }
+        viewModelScope.launch {
+            try {
+                val added = timeline.loadOlder()
+                if (added.isEmpty()) {
+                    toasts.send("No older workouts")
+                } else {
+                    val dates = added.map { it.date }.distinct().size
+                    expanded.update { (past, upcoming) -> past + dates to upcoming }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toasts.send(e.userMessage("Couldn't load older workouts"))
+            } finally {
+                filter.update { it.copy(loadingOlder = false) }
+            }
+        }
+    }
+
+    /** Moves a session to [date]: a quick move from its card, a picked date, or "move instead" of skipping. */
+    fun move(entry: TimelineEntry, date: String) = act("Couldn't move workout") {
+        val today = state.value.today
+        if (!canMoveTo(entry, date, addDaysToIsoDate(today, 1))) return@act
+        timeline.move(entry, date, today)
+        toasts.send("Workout moved")
+    }
+
+    /** Removes a skipped plan day from its plan; the toast can undo it. */
+    fun deletePlanDay(entry: TimelineEntry) = act("Couldn't delete that workout") {
+        val binId = timeline.deletePlanDay(requireNotNull(entry.planDayId))
+        undoOffers.send(UndoOffer("Workout removed from plan") { timeline.restore(binId) })
+    }
 
     fun markDone(entry: TimelineEntry, rpe: Int? = null, notes: String? = null) = act("Couldn't log that workout") {
         timeline.markDone(entry, rpe, notes?.takeIf { it.isNotBlank() })
@@ -197,6 +256,11 @@ class TimelineViewModel(
     }
 
     private data class RefreshStatus(val refreshing: Boolean = false, val failed: Boolean = false)
+
+    private data class Filter(val status: TimelineEntry.Status? = null, val loadingOlder: Boolean = false)
+
+    /** What the list shows: the plan, how many days each way, the filter, and where older history starts. */
+    private data class Shown(val planId: String?, val days: Pair<Int, Int>, val filter: Filter, val olderCursor: String?)
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

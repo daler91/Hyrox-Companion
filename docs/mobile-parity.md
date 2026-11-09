@@ -24,11 +24,11 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [ ] Device detail: pace, cadence, power, calories, moving time.
 
 ### Timeline
-- [ ] Move a session from a menu: Today / Tomorrow / +7 days / Pick date. A planned day uses `PATCH /plans/days/{id}` with `scheduledDate`; a logged one uses `PATCH /workouts/{id}` with `date`.
-- [ ] Skip dialog: **Move instead** — Tomorrow / Next week / pick date.
-- [ ] Delete a skipped plan day, with undo — `DELETE /plans/days/{id}`, then restore.
-- [ ] **Load older workouts**: cursor paging with `GET /timeline?before=`.
-- [ ] Status filter: All / Completed / Planned / Missed / Skipped.
+- [x] Move a session from a menu: Today / Tomorrow / +7 days / Pick date. A planned day uses `PATCH /plans/days/{id}` with `scheduledDate`; a logged one uses `PATCH /workouts/{id}` with `date`.
+- [x] Skip dialog: **Move instead** — Tomorrow / Next week / pick date.
+- [x] Delete a skipped plan day, with undo — `DELETE /plans/days/{id}`, then restore.
+- [x] **Load older workouts**: cursor paging with `GET /timeline?before=`.
+- [x] Status filter: All / Completed / Planned / Missed / Skipped.
 - [ ] Annotations (injury, illness, travel, rest block): day cards, plus create, edit and delete — `/timeline-annotations`.
 - [ ] "This week" card: today's session, plan week and phase, race countdown, station radar.
 - [ ] PR trophies on exercise chips — `GET /personal-records`.

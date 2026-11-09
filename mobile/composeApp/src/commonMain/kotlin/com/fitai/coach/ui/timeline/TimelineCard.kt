@@ -7,10 +7,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -22,6 +30,7 @@ import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.format.shortDate
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 
@@ -39,8 +48,19 @@ fun statusBadge(entry: TimelineEntry): Pair<String, BadgeTone> = when {
     else -> "—" to BadgeTone.Neutral
 }
 
+/** What a card can do besides opening: complete, undo a recovery, and move. */
+class CardActions(
+    val onComplete: () -> Unit,
+    val onUndoRecovery: () -> Unit,
+    /** Where the card's menu can move it; empty with no menu. */
+    val moves: List<QuickMove>,
+    val onMove: (date: String) -> Unit,
+    /** "Pick date…"; null when the session can't move. */
+    val onPickDate: (() -> Unit)?,
+)
+
 @Composable
-fun TimelineCard(entry: TimelineEntry, quickComplete: Boolean, onOpen: () -> Unit, onComplete: () -> Unit, onUndoRecovery: () -> Unit) {
+fun TimelineCard(entry: TimelineEntry, quickComplete: Boolean, onOpen: () -> Unit, actions: CardActions) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     FitaiCard(onClick = onOpen) {
@@ -60,12 +80,50 @@ fun TimelineCard(entry: TimelineEntry, quickComplete: Boolean, onOpen: () -> Uni
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(note, style = type.bodySm, color = colors.textMuted, modifier = Modifier.weight(1f))
                         if (entry.recoveryUndoable == true || entry.recovery == TimelineEntry.Recovery.LetGo) {
-                            TextButton(onClick = onUndoRecovery) { Text("Undo", style = type.label, color = colors.accent) }
+                            TextButton(onClick = actions.onUndoRecovery) { Text("Undo", style = type.label, color = colors.accent) }
                         }
                     }
                 }
             }
-            if (quickComplete) CompleteCircle(entry.focus, onComplete)
+            actions.onPickDate?.let { pickDate -> MoveMenu(entry.focus, actions.moves, actions.onMove, pickDate) }
+            if (quickComplete) CompleteCircle(entry.focus, actions.onComplete)
+        }
+    }
+}
+
+/** The card's "move to another day" menu (MoveEntryMenu): quick moves, then "Pick date…". */
+@Composable
+private fun MoveMenu(focus: String, moves: List<QuickMove>, onMove: (String) -> Unit, onPickDate: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val colors = FitaiTheme.colors
+    Box {
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier.semantics {
+                contentDescription =
+                    "Move ${focus.ifBlank { "workout" }} to another day"
+            },
+        ) {
+            Icon(LucideIcons.CalendarRange, contentDescription = null, tint = colors.textMuted)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = colors.card) {
+            moves.forEach { move ->
+                DropdownMenuItem(
+                    text = { Text(move.label, style = FitaiTheme.typography.body, color = colors.text) },
+                    onClick = {
+                        open = false
+                        onMove(move.date)
+                    },
+                )
+            }
+            if (moves.isNotEmpty()) HorizontalDivider(color = colors.border)
+            DropdownMenuItem(
+                text = { Text("Pick date…", style = FitaiTheme.typography.body, color = colors.text) },
+                onClick = {
+                    open = false
+                    onPickDate()
+                },
+            )
         }
     }
 }

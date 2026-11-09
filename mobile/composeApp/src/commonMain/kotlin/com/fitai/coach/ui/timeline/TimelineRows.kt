@@ -1,6 +1,7 @@
 package com.fitai.coach.ui.timeline
 
 import com.fitai.coach.core.api.generated.TimelineEntry
+import com.fitai.coach.core.dates.addDaysToIsoDate
 
 /** One date on the timeline. */
 data class TimelineDay(val date: String, val entries: List<TimelineEntry>, val isToday: Boolean) {
@@ -15,22 +16,28 @@ data class TimelineRows(val days: List<TimelineDay>, val hiddenPast: Int, val hi
 /** How many past and upcoming days show before "show more" (the web shows 7 each way). */
 const val INITIAL_DAYS = 7
 
+/** What the timeline narrows to: one plan's entries, and entries in one state; null for any. */
+data class TimelineFilter(val planId: String? = null, val status: TimelineEntry.Status? = null) {
+    fun matches(entry: TimelineEntry): Boolean = (planId == null || entry.planId == planId) && (status == null || entry.status == status)
+}
+
 /**
  * Groups [entries] by date as the web's timeline does: today always has a
- * row; the [pastDays] most recent past dates and the first [upcomingDays]
- * dates from today on are shown, oldest first; within a date the server's
- * order is kept. With [planId], only that plan's entries count.
+ * row (unless a status filter is on: an empty "today" says nothing about
+ * skipped sessions); the [pastDays] most recent past dates and the first
+ * [upcomingDays] dates from today on are shown, oldest first; within a date
+ * the server's order is kept. Only entries [filter] matches count.
  */
 fun buildTimelineRows(
     entries: List<TimelineEntry>,
     today: String,
-    planId: String? = null,
+    filter: TimelineFilter = TimelineFilter(),
     pastDays: Int = INITIAL_DAYS,
     upcomingDays: Int = INITIAL_DAYS,
 ): TimelineRows {
     val byDate = linkedMapOf<String, MutableList<TimelineEntry>>()
-    entries.filter { planId == null || it.planId == planId }.forEach { byDate.getOrPut(it.date) { mutableListOf() } += it }
-    byDate.getOrPut(today) { mutableListOf() }
+    entries.filter(filter::matches).forEach { byDate.getOrPut(it.date) { mutableListOf() } += it }
+    if (filter.status == null) byDate.getOrPut(today) { mutableListOf() }
 
     val past = byDate.keys.filter { it < today }.sortedDescending()
     val upcoming = byDate.keys.filter { it >= today }.sorted()
@@ -43,6 +50,55 @@ fun buildTimelineRows(
         hiddenUpcoming = upcoming.drop(upcomingDays).sumOf { byDate.getValue(it).size },
     )
 }
+
+/** The timeline's status filter (the web's All / Completed / Planned / Missed / Skipped). */
+val STATUS_FILTERS: List<Pair<TimelineEntry.Status?, String>> = listOf(
+    null to "All",
+    TimelineEntry.Status.Completed to "Completed",
+    TimelineEntry.Status.Planned to "Planned",
+    TimelineEntry.Status.Missed to "Missed",
+    TimelineEntry.Status.Skipped to "Skipped",
+)
+
+/** The earliest date a session can be moved to: a year typed digit by digit passes through 0002 (MoveEntryMenu). */
+const val MIN_MOVE_DATE = "2000-01-01"
+
+/** Where a session can be moved: a plan day or a logged workout. */
+fun canMove(entry: TimelineEntry): Boolean = entry.planDayId != null || entry.workoutLogId != null
+
+/**
+ * The latest date a session can move to: a logged workout no later than
+ * tomorrow (the server refuses a workout dated after it); a plan day any time.
+ */
+fun latestMoveDate(entry: TimelineEntry, tomorrow: String): String? = if (entry.workoutLogId != null) tomorrow else null
+
+/** Whether [date] is somewhere [entry] can go: another day, in the allowed window. */
+fun canMoveTo(entry: TimelineEntry, date: String, tomorrow: String): Boolean =
+    date.length == ISO_DATE_LENGTH && date != entry.date && date >= MIN_MOVE_DATE &&
+        latestMoveDate(entry, tomorrow).let { it == null || date <= it }
+
+/** A quick move from the card's menu: its label and date. */
+data class QuickMove(val label: String, val date: String)
+
+/**
+ * The card menu's quick moves (MoveEntryMenu): today, tomorrow and, for a
+ * plan day, next week; each only when it is somewhere the session can go.
+ */
+fun quickMoves(entry: TimelineEntry, today: String): List<QuickMove> {
+    val tomorrow = addDaysToIsoDate(today, 1)
+    return listOfNotNull(
+        QuickMove("Move to today", today),
+        QuickMove("Move to tomorrow", tomorrow),
+        QuickMove("Move to next week", addDaysToIsoDate(today, DAYS_PER_WEEK)).takeIf { entry.workoutLogId == null },
+    ).filter { canMoveTo(entry, it.date, tomorrow) }
+}
+
+/** "Instead of skipping": tomorrow or next week (SkipConfirmDialog's quick moves). */
+fun skipMoves(today: String): List<QuickMove> =
+    listOf(QuickMove("Tomorrow", addDaysToIsoDate(today, 1)), QuickMove("Next week", addDaysToIsoDate(today, DAYS_PER_WEEK)))
+
+private const val ISO_DATE_LENGTH = 10
+private const val DAYS_PER_WEEK = 7
 
 /** What tapping an entry opens, by its state (the web's useTimelineSurfaceSelection). */
 enum class EntrySurface { WorkoutDetail, Skipped, Preview, Log, None }

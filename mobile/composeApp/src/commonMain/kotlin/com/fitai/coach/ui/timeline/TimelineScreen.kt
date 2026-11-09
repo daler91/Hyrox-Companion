@@ -42,6 +42,7 @@ import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
+import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -54,6 +55,8 @@ private sealed interface OpenSheet {
     data class Surface(override val entryId: String) : OpenSheet
 
     data class Skip(override val entryId: String) : OpenSheet
+
+    data class PickDate(override val entryId: String) : OpenSheet
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,6 +68,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     val recovery by vm.recovery.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it.message, it.undo) } }
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
     val haptics = LocalHapticFeedback.current
@@ -83,7 +87,13 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                 !state.loaded -> LoadingState(Modifier.fillMaxSize())
                 state.loadFailed -> ErrorState("Couldn't load your timeline", Modifier.fillMaxSize(), onRetry = vm::refresh)
                 !state.hasAnyEntries && state.plans.isEmpty() && !state.refreshing -> Welcome(navigation.logWorkout)
-                else -> TimelineList(state, vm, onOpen = { sheet = OpenSheet.Surface(it.id) }, navigation = navigation)
+                else -> TimelineList(
+                    state,
+                    vm,
+                    onOpen = { sheet = OpenSheet.Surface(it.id) },
+                    onPickDate = { sheet = OpenSheet.PickDate(it.id) },
+                    navigation = navigation,
+                )
             }
         }
         FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
@@ -93,8 +103,23 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     when (val open = sheet) {
         null -> Unit
         is OpenSheet.Skip -> sheetEntry?.let { entry ->
-            SkipSheet(entry, onConfirm = { reason ->
-                vm.skip(entry, reason)
+            SkipSheet(
+                entry,
+                today,
+                onConfirm = { reason ->
+                    vm.skip(entry, reason)
+                    sheet = null
+                },
+                onMove = { date ->
+                    vm.move(entry, date)
+                    sheet = null
+                },
+                onDismiss = { sheet = null },
+            )
+        }
+        is OpenSheet.PickDate -> sheetEntry?.let { entry ->
+            MoveDateSheet(entry, today, onMove = { date ->
+                vm.move(entry, date)
                 sheet = null
             }, onDismiss = { sheet = null })
         }
@@ -146,6 +171,10 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                         close()
                         navigation.askCoach(entry)
                     },
+                    onDelete = {
+                        close()
+                        vm.deletePlanDay(entry)
+                    },
                     onDismiss = close,
                 )
                 EntrySurface.None -> LaunchedEffect(open) { close() }
@@ -156,10 +185,16 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
 }
 
 @Composable
-private fun TimelineList(state: TimelineUiState, vm: TimelineViewModel, onOpen: (TimelineEntry) -> Unit, navigation: TimelineNavigation) {
+private fun TimelineList(
+    state: TimelineUiState,
+    vm: TimelineViewModel,
+    onOpen: (TimelineEntry) -> Unit,
+    onPickDate: (TimelineEntry) -> Unit,
+    navigation: TimelineNavigation,
+) {
     val listState = rememberLazyListState()
     var scrolledToToday by rememberSaveable { mutableStateOf(false) }
-    val header = 1 + (if (state.rows.hiddenPast > 0) 1 else 0)
+    val header = 1 + (if (state.rows.hiddenPast > 0 || state.hasOlder) 1 else 0)
     LaunchedEffect(state.rows.todayIndex) {
         if (!scrolledToToday && state.rows.todayIndex >= 0) {
             listState.scrollToItem(state.rows.todayIndex + header)
@@ -173,11 +208,18 @@ private fun TimelineList(state: TimelineUiState, vm: TimelineViewModel, onOpen: 
         contentPadding = PaddingValues(horizontal = Spacing.Lg, vertical = Spacing.Md),
         verticalArrangement = Arrangement.spacedBy(Spacing.Md),
     ) {
-        item(key = "header") { Header(state, vm::selectPlan) }
+        item(key = "header") { Header(state, vm::selectPlan, vm::filterBy) }
         if (state.rows.hiddenPast > 0) {
             item(key = "more-past") {
                 MoreButton("Show ${state.rows.hiddenPast} more past ${plural(state.rows.hiddenPast)}", vm::showMorePast)
             }
+        } else if (state.hasOlder) {
+            item(key = "more-past") {
+                MoreButton(if (state.loadingOlder) "Loading older workouts…" else "Load older workouts", vm::loadOlder)
+            }
+        }
+        if (state.rows.days.isEmpty() && state.statusFilter != null) {
+            item(key = "no-matches") { NoMatches(state, onShowAll = { vm.filterBy(null) }) }
         }
         items(state.rows.days, key = { "day-${it.date}" }) { day ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
@@ -190,8 +232,13 @@ private fun TimelineList(state: TimelineUiState, vm: TimelineViewModel, onOpen: 
                         entry = entry,
                         quickComplete = canQuickComplete(entry, tomorrow),
                         onOpen = { onOpen(entry) },
-                        onComplete = { vm.markDone(entry) },
-                        onUndoRecovery = { vm.undoRecovery(entry) },
+                        actions = CardActions(
+                            onComplete = { vm.markDone(entry) },
+                            onUndoRecovery = { vm.undoRecovery(entry) },
+                            moves = quickMoves(entry, state.today),
+                            onMove = { date -> vm.move(entry, date) },
+                            onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
+                        ),
                     )
                 }
             }
@@ -207,8 +254,22 @@ private fun TimelineList(state: TimelineUiState, vm: TimelineViewModel, onOpen: 
 
 private fun plural(count: Int) = if (count == 1) "workout" else "workouts"
 
+/**
+ * Nothing loaded matches the filter (TimelineContent's NoLoadedMatches):
+ * older history may, so offer it, and a way back to everything.
+ */
 @Composable
-private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit) {
+private fun NoMatches(state: TimelineUiState, onShowAll: () -> Unit) {
+    val what = STATUS_FILTERS.firstOrNull { it.first == state.statusFilter }?.second?.lowercase() ?: ""
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        val loaded = if (state.hasOlder) " in the sessions loaded so far. Older sessions may match." else "."
+        Text("No $what workouts$loaded", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+        MoreButton("Show all", onShowAll)
+    }
+}
+
+@Composable
+private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit, onFilter: (TimelineEntry.Status?) -> Unit) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
@@ -230,6 +291,11 @@ private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit) {
             }
             state.plans.firstOrNull { it.id == state.selectedPlanId }?.let { plan ->
                 Text(plan.goal?.takeIf { it.isNotBlank() } ?: "No plan goal set", style = type.bodySm, color = colors.textMuted)
+            }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+            items(STATUS_FILTERS, key = { it.second }) { (status, label) ->
+                FitaiChip(label, selected = state.statusFilter == status, onClick = { onFilter(status) })
             }
         }
     }

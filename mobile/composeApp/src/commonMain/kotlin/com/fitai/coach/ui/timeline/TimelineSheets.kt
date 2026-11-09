@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,15 +25,20 @@ import com.fitai.coach.core.api.generated.PlanDayRecoveryMoveOption
 import com.fitai.coach.core.api.generated.PlanDayRecoveryPreview
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.data.RecoveryAction
+import com.fitai.coach.core.dates.addDaysToIsoDate
+import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiChip
+import com.fitai.coach.ui.components.FitaiDateField
+import com.fitai.coach.ui.components.FitaiDialog
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.RpeSelector
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.format.shortWeekday
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 
@@ -113,9 +119,17 @@ private fun recoveryPrompt(entry: TimelineEntry): String = when {
     else -> "Fit it back in, or let it go?"
 }
 
-/** A skipped session: put it back on the plan. */
+/** A skipped session: put it back on the plan, or take it off the plan altogether. */
 @Composable
-fun SkippedSheet(entry: TimelineEntry, dayLabel: String, onUndo: () -> Unit, onAskCoach: () -> Unit, onDismiss: () -> Unit) {
+fun SkippedSheet(
+    entry: TimelineEntry,
+    dayLabel: String,
+    onUndo: () -> Unit,
+    onAskCoach: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var confirmDelete by remember(entry.id) { mutableStateOf(false) }
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         SheetBody {
             EntrySummary(entry, dayLabel)
@@ -123,6 +137,55 @@ fun SkippedSheet(entry: TimelineEntry, dayLabel: String, onUndo: () -> Unit, onA
                 FitaiButton("Undo skip", onClick = onUndo)
                 FitaiButton("Ask coach", onClick = onAskCoach, variant = ButtonVariant.Secondary)
             }
+            FitaiButton(
+                "Delete from plan",
+                onClick = { confirmDelete = true },
+                variant = ButtonVariant.Ghost,
+                leadingIcon = LucideIcons.Trash,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+    if (confirmDelete) {
+        FitaiDialog(
+            title = "Remove this workout from your plan?",
+            text = "\"${entry.focus}\" is deleted from the plan. You can undo straight after.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+            onDismiss = { confirmDelete = false },
+            destructive = true,
+        )
+    }
+}
+
+/** "Pick a new date" for a session (MoveDateForm): the move waits for Move, so browsing the calendar moves nothing. */
+@Composable
+fun MoveDateSheet(entry: TimelineEntry, today: String, onMove: (String) -> Unit, onDismiss: () -> Unit) {
+    val tomorrow = addDaysToIsoDate(today, 1)
+    var date by remember(entry.id) { mutableStateOf(entry.date) }
+    FitaiBottomSheet(onDismissRequest = onDismiss) {
+        SheetBody {
+            Text(
+                "Pick a new date",
+                style = FitaiTheme.typography.h2,
+                color = FitaiTheme.colors.text,
+                modifier = Modifier.semantics {
+                    heading()
+                },
+            )
+            FitaiDateField(
+                value = date,
+                onValueChange = { date = it },
+                label = "New date for ${entry.focus}",
+                minDate = MIN_MOVE_DATE,
+                maxDate = latestMoveDate(entry, tomorrow),
+                supportingText = if (entry.workoutLogId != null) "A logged workout can move up to tomorrow." else null,
+            )
+            FitaiButton("Move", onClick = { onMove(date) }, enabled = canMoveTo(entry, date, tomorrow), modifier = Modifier.fillMaxWidth())
+            FitaiButton("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -134,11 +197,16 @@ private val SKIP_REASONS = listOf(
     SkipReason.LowEnergy to "Low energy",
 )
 
-/** "Skip this workout?" with an optional reason. */
+/**
+ * "Skip this workout?" with an optional reason, and moving it instead: most
+ * skips are a scheduling problem (SkipConfirmDialog).
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SkipSheet(entry: TimelineEntry, onConfirm: (SkipReason?) -> Unit, onDismiss: () -> Unit) {
+fun SkipSheet(entry: TimelineEntry, today: String, onConfirm: (SkipReason?) -> Unit, onMove: (String) -> Unit, onDismiss: () -> Unit) {
     var reason by remember(entry.id) { mutableStateOf<SkipReason?>(null) }
+    var pickedDate by remember(entry.id) { mutableStateOf("") }
+    val tomorrow = addDaysToIsoDate(today, 1)
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         SheetBody {
             Text(
@@ -161,6 +229,23 @@ fun SkipSheet(entry: TimelineEntry, onConfirm: (SkipReason?) -> Unit, onDismiss:
                 }
             }
             FitaiButton("Skip workout", onClick = { onConfirm(reason) }, variant = ButtonVariant.Danger, modifier = Modifier.fillMaxWidth())
+            if (entry.planDayId != null) {
+                HorizontalDivider(color = FitaiTheme.colors.border)
+                Text("Instead of skipping", style = FitaiTheme.typography.label, color = FitaiTheme.colors.text)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                    skipMoves(today).filter { canMoveTo(entry, it.date, tomorrow) }.forEach { move ->
+                        FitaiButton(move.label, onClick = { onMove(move.date) }, variant = ButtonVariant.Secondary, size = ButtonSize.Sm)
+                    }
+                }
+                FitaiDateField(pickedDate, { pickedDate = it }, "Move to a specific date", minDate = MIN_MOVE_DATE)
+                FitaiButton(
+                    "Move",
+                    onClick = { onMove(pickedDate) },
+                    variant = ButtonVariant.Secondary,
+                    enabled = canMoveTo(entry, pickedDate, tomorrow),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             FitaiButton("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, modifier = Modifier.fillMaxWidth())
         }
     }

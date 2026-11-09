@@ -33,6 +33,7 @@ import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.coach.CoachThread
 import com.fitai.coach.ui.coach.CoachThreadSaver
 import com.fitai.coach.ui.components.FitaiToastHost
+import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.links.DeepLinks
@@ -167,10 +168,7 @@ fun AppShell() {
                         onDeleted = { binId ->
                             backStack.pop()
                             scope.launch {
-                                offerUndo(toasts, "Workout deleted") {
-                                    session.workouts.restore(binId)
-                                    session.timeline.refresh()
-                                }
+                                offerUndo(toasts, "Workout deleted") { session.timeline.restore(binId) }
                             }
                         },
                     )

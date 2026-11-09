@@ -164,6 +164,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     /** Deletes the workout; [onDeleted] gets the recycle-bin item that undoes it. */
     fun delete(onDeleted: (recycleBinItemId: String) -> Unit) = online("Couldn't delete this workout") {
         val binId = session.workouts.deleteWorkout(workoutId)
+        session.timeline.forgetWorkout(workoutId)
         runCatching { session.timeline.refresh() }
         onDeleted(binId)
     }

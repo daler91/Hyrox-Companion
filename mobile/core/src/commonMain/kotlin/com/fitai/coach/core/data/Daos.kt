@@ -33,8 +33,28 @@ public interface TimelineDao {
     @Query("SELECT * FROM timeline_entries WHERE id = :id")
     public suspend fun get(id: String): TimelineEntryEntity?
 
+    @Query("SELECT * FROM timeline_entries")
+    public suspend fun all(): List<TimelineEntryEntity>
+
+    @Query("SELECT MIN(date) FROM timeline_entries")
+    public suspend fun oldestDate(): String?
+
+    @Query("SELECT MAX(position) FROM timeline_entries")
+    public suspend fun lastPosition(): Int?
+
     @Query("DELETE FROM timeline_entries")
     public suspend fun clear()
+
+    /** Clears the dates a page covers: [from] on, up to (not including) [before] when given. */
+    @Query("DELETE FROM timeline_entries WHERE date >= :from AND (:before IS NULL OR date < :before)")
+    public suspend fun clearDates(from: String, before: String?)
+
+    /** Clears every date before [before]: a last page reaches the start of the history. */
+    @Query("DELETE FROM timeline_entries WHERE date < :before")
+    public suspend fun clearBefore(before: String)
+
+    @Query("DELETE FROM timeline_entries WHERE id IN (:ids)")
+    public suspend fun delete(ids: List<String>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     public suspend fun insertAll(rows: List<TimelineEntryEntity>)
