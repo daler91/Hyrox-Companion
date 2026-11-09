@@ -1,8 +1,11 @@
 package com.fitai.coach.ui
 
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -67,7 +70,7 @@ class AppUiTest {
         }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Tempo intervals"))
-            onNodeWithText("Tempo intervals").performClick()
+            openCard("Tempo intervals")
             awaitNode(hasText("Complete workout"))
             onNodeWithText("Complete workout").performClick()
 
@@ -95,7 +98,7 @@ class AppUiTest {
         }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Leg day"))
-            onNodeWithText("Leg day").performClick()
+            openCard("Leg day")
             awaitNode(hasText("Delete workout"))
             onNodeWithText("Delete workout").performClick()
             onNodeWithText("Delete").performClick()
@@ -139,7 +142,7 @@ class AppUiTest {
             awaitNode(hasText("No completed workouts."))
             onNodeWithText("Skipped").performClick()
 
-            onNodeWithText("Long run").performClick()
+            openCard("Long run")
             onNodeWithText("Delete from plan").performClick()
             onNodeWithText("Delete").performClick()
 
@@ -163,7 +166,7 @@ class AppUiTest {
         }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasText("Tempo intervals"))
-            onNodeWithText("Tempo intervals").performClick()
+            openCard("Tempo intervals")
             onNodeWithText("Edit session").performClick()
 
             awaitNode(hasText("Back Squat"))
@@ -226,4 +229,52 @@ class AppUiTest {
             awaitNode(hasText("nutrition"))
         }
     }
+
+    @Test
+    fun aTrainingNoteShowsOnItsDayAndAStravaImportLinksToTheSuggestedSession() {
+        val today = FakeApi.today
+        val api = FakeApi().apply {
+            establishedAccount(
+                FakeApi.plannedToday("Easy Run"),
+                """{"id":"log-w9","date":"$today","type":"logged","status":"completed","focus":"Morning Run","mainWorkout":"",""" +
+                    """"workoutLogId":"w9","source":"strava","stravaActivityId":"123","suggestedPlanDayId":"d1"}""",
+            )
+            on(
+                "GET",
+                "/api/v1/timeline-annotations",
+                """[{"id":"a1","userId":"u1","startDate":"$today","endDate":"$today","type":"injury","note":"Calf strain"}]""",
+            )
+            on("POST", "/api/v1/workouts/w9/device-link", """{"id":"w9"}""")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Calf strain"))
+            awaitNode(hasText("Was this your Easy Run?"))
+            onNodeWithText("Link").performClick()
+
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/workouts/w9/device-link").isNotEmpty() }
+            assertEquals("""{"planDayId":"d1"}""", api.sent("POST", "/api/v1/workouts/w9/device-link").single().body)
+        }
+    }
+
+    @Test
+    fun theCoachReviewingBannerShowsUntilTheReviewEnds() {
+        val reviewing = """{"id":"u1","userTimezone":"UTC","onboardingCompleted":true,"isAutoCoaching":true}"""
+        val api = FakeApi().apply {
+            establishedAccount(FakeApi.plannedToday("Tempo intervals"))
+            on("GET", "/api/v1/auth/user", reviewing)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Coach is reviewing your workout"))
+
+            api.on("GET", "/api/v1/auth/user", reviewing.replace("\"isAutoCoaching\":true", "\"isAutoCoaching\":false"))
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Coach is reviewing your workout").fetchSemanticsNodes().isEmpty() }
+        }
+    }
 }
+
+/**
+ * Taps today's session on the timeline. The "This week" card above names it
+ * too, so the timeline's card is the last of the two.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.openCard(focus: String) = onAllNodesWithText(focus).onLast().performClick()

@@ -36,6 +36,11 @@ export const ICONS: Readonly<Record<string, string>> = {
   RefreshCw: "refresh-cw",
   ThumbsUp: "thumbs-up",
   ThumbsDown: "thumbs-down",
+  Trophy: "trophy",
+  StickyNote: "sticky-note",
+  Sparkles: "sparkles",
+  Pencil: "pencil",
+  ChevronDown: "chevron-down",
 };
 
 export type IconNode = [tag: string, attrs: Record<string, string>];

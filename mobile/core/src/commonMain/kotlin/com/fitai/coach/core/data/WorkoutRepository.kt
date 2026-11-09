@@ -10,6 +10,7 @@ import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryRespo
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdPlanDayRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetOrderRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
+import com.fitai.coach.core.api.generated.PostWorkoutsByIdDeviceLinkRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
 import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
@@ -225,6 +226,33 @@ public class WorkoutRepository(
             ApiEndpoints.PatchWorkoutsByIdPlanDay.path(workoutId),
         )
         refresh(workoutId)
+    }
+
+    /**
+     * Links a Strava import to the plan day or logged workout it recorded
+     * ("Was this your Easy Run?"). Online; refresh the timeline after.
+     *
+     * @throws ApiException on an error response.
+     */
+    public suspend fun linkDevice(workoutId: String, planDayId: String? = null, workoutLogId: String? = null) {
+        api.call(
+            ApiEndpoints.PostWorkoutsByIdDeviceLink,
+            PostWorkoutsByIdDeviceLinkRequest(planDayId = planDayId, workoutLogId = workoutLogId),
+            ApiEndpoints.PostWorkoutsByIdDeviceLink.path(workoutId),
+        )
+    }
+
+    /** Splits a linked recording back into its own workout. @throws ApiException on an error response. */
+    public suspend fun unlinkDevice(workoutId: String) {
+        api.call(ApiEndpoints.DeleteWorkoutsByIdDeviceLink, path = ApiEndpoints.DeleteWorkoutsByIdDeviceLink.path(workoutId))
+    }
+
+    /** "Not this one": drops the sync's suggested match for good. @throws ApiException on an error response. */
+    public suspend fun dismissDeviceSuggestion(workoutId: String) {
+        api.call(
+            ApiEndpoints.DeleteWorkoutsByIdDeviceLinkSuggestion,
+            path = ApiEndpoints.DeleteWorkoutsByIdDeviceLinkSuggestion.path(workoutId),
+        )
     }
 
     /**

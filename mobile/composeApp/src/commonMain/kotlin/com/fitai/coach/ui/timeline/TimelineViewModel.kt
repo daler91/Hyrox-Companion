@@ -3,22 +3,30 @@ package com.fitai.coach.ui.timeline
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStatusRequest
+import com.fitai.coach.core.api.generated.PersonalRecord
 import com.fitai.coach.core.api.generated.PlanDayRecoveryPreview
+import com.fitai.coach.core.api.generated.TimelineAnnotation
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.api.generated.TrainingOverviewSummary
 import com.fitai.coach.core.api.generated.TrainingPlan
-import com.fitai.coach.core.data.PreferencesRepository
+import com.fitai.coach.core.data.AnalyticsRange
+import com.fitai.coach.core.data.AnnotationDraft
 import com.fitai.coach.core.data.RecoveryAction
 import com.fitai.coach.core.data.TimelineRepository
+import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.ui.format.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -37,6 +45,12 @@ data class TimelineUiState(
     val hasAnyEntries: Boolean = false,
     /** The status filter; null shows everything. */
     val statusFilter: TimelineEntry.Status? = null,
+    /** The "This week" card; null before there is anything to show. */
+    val week: WeekSummary? = null,
+    /** All-time personal records, for the trophies on exercise chips. */
+    val records: Map<String, PersonalRecord> = emptyMap(),
+    /** The auto-coach is reviewing a workout and may change upcoming sessions. */
+    val coachReviewing: Boolean = false,
     /** Older history can be loaded from the server. */
     val hasOlder: Boolean = false,
     val loadingOlder: Boolean = false,
@@ -58,12 +72,9 @@ sealed interface RecoveryState {
  * The training timeline: entries grouped by day from the device's cache,
  * refreshed from the server, with the actions on a plan day.
  */
-@Suppress("TooGenericExceptionCaught")
-class TimelineViewModel(
-    private val timeline: TimelineRepository,
-    preferences: PreferencesRepository,
-    private val todayIn: (String?) -> String,
-) : ViewModel() {
+@Suppress("TooGenericExceptionCaught", "TooManyFunctions")
+class TimelineViewModel(private val session: UserSession, private val todayIn: (String?) -> String) : ViewModel() {
+    private val timeline: TimelineRepository = session.timeline
     private val selectedPlan = MutableStateFlow<String?>(null)
     private val expanded = MutableStateFlow(INITIAL_DAYS to INITIAL_DAYS)
     private val status = MutableStateFlow(RefreshStatus())
@@ -77,13 +88,19 @@ class TimelineViewModel(
     private val _recovery = MutableStateFlow<RecoveryState?>(null)
     val recovery: StateFlow<RecoveryState?> = _recovery
 
+    private val extras = combine(
+        session.annotations.annotations,
+        session.analytics.records(AnalyticsRange.All),
+        session.account.user,
+    ) { annotations, records, user -> Extras(annotations.orEmpty(), records.orEmpty(), user?.isAutoCoaching == true) }
+
     val state: StateFlow<TimelineUiState> = combine(
-        timeline.entries,
+        combine(timeline.entries, extras, ::Pair),
         combine(timeline.plans, timeline.weekSummary, ::Pair),
-        preferences.preferences,
+        session.preferences.preferences,
         combine(selectedPlan, expanded, filter, timeline.olderCursor, ::Shown),
         status,
-    ) { entries, (plans, summary), prefs, shown, refresh ->
+    ) { (entries, more), (plans, summary), prefs, shown, refresh ->
         val today = todayIn(prefs?.userTimezone)
         TimelineUiState(
             loaded = true,
@@ -94,7 +111,10 @@ class TimelineViewModel(
                 TimelineFilter(planId = shown.planId, status = shown.filter.status),
                 pastDays = shown.days.first,
                 upcomingDays = shown.days.second,
-            ),
+            ).withAnnotations(more.annotations, today),
+            week = weekSummary(entries, plans.orEmpty(), shown.planId, summary, today),
+            records = more.records,
+            coachReviewing = more.coachReviewing,
             plans = plans.orEmpty().filter { it.retiredOn == null || it.id == shown.planId },
             selectedPlanId = shown.planId,
             summary = summary,
@@ -109,6 +129,7 @@ class TimelineViewModel(
 
     init {
         refresh()
+        watchCoach()
     }
 
     fun refresh() {
@@ -118,8 +139,66 @@ class TimelineViewModel(
             val ok = attempt { timeline.refresh() }
             attempt { timeline.refreshPlans() }
             attempt { timeline.refreshSummary() }
+            attempt { session.annotations.refresh() }
+            attempt { session.analytics.refreshRecords(AnalyticsRange.All, state.value.today.ifEmpty { todayIn(null) }) }
+            attempt { session.account.refreshUser() }
             status.value = RefreshStatus(refreshing = false, failed = !ok)
         }
+    }
+
+    /**
+     * While the auto-coach reviews a workout (it can take a few minutes),
+     * asks again every few seconds, as the web does, and shows the changed
+     * sessions once it's done.
+     */
+    private fun watchCoach() {
+        viewModelScope.launch {
+            session.account.user.map { it?.isAutoCoaching == true }.distinctUntilChanged().collectLatest { reviewing ->
+                if (!reviewing) return@collectLatest
+                repeat(MAX_COACH_POLLS) {
+                    delay(COACH_POLL_MS)
+                    attempt { session.account.refreshUser() }
+                }
+            }
+        }
+        viewModelScope.launch {
+            var wasReviewing = false
+            session.account.user.map { it?.isAutoCoaching == true }.distinctUntilChanged().collect { reviewing ->
+                if (wasReviewing && !reviewing) attempt { timeline.refresh() }
+                wasReviewing = reviewing
+            }
+        }
+    }
+
+    /** Adds a training note, or (with [id]) changes one. */
+    fun saveAnnotation(id: String?, draft: AnnotationDraft) = act("Couldn't save that note") {
+        session.annotations.save(id, draft)
+        toasts.send(if (id == null) "Note added" else "Note updated")
+    }
+
+    fun deleteAnnotation(id: String) = act("Couldn't delete that note") {
+        session.annotations.delete(id)
+        toasts.send("Note deleted")
+    }
+
+    /** Links a Strava recording to a session on its day ("Was this your …?"). */
+    fun linkRecording(entry: TimelineEntry, target: DeviceLinkOption) = act("Couldn't link that activity") {
+        session.workouts.linkDevice(requireNotNull(entry.workoutLogId), target.planDayId, target.workoutLogId)
+        timeline.refresh()
+        toasts.send("Linked to ${target.label}")
+    }
+
+    /** Splits a linked recording back into its own workout. */
+    fun unlinkRecording(entry: TimelineEntry) = act("Couldn't unlink that activity") {
+        session.workouts.unlinkDevice(requireNotNull(entry.workoutLogId))
+        timeline.refresh()
+        toasts.send("Strava activity unlinked")
+    }
+
+    /** "Not this one": drops the suggested match for good. */
+    fun dismissSuggestion(entry: TimelineEntry) = act("Couldn't dismiss that suggestion") {
+        session.workouts.dismissDeviceSuggestion(requireNotNull(entry.workoutLogId))
+        timeline.refresh()
     }
 
     fun selectPlan(planId: String?) {
@@ -259,10 +338,20 @@ class TimelineViewModel(
 
     private data class Filter(val status: TimelineEntry.Status? = null, val loadingOlder: Boolean = false)
 
+    private data class Extras(
+        val annotations: List<TimelineAnnotation>,
+        val records: Map<String, PersonalRecord>,
+        val coachReviewing: Boolean,
+    )
+
     /** What the list shows: the plan, how many days each way, the filter, and where older history starts. */
     private data class Shown(val planId: String?, val days: Pair<Int, Int>, val filter: Filter, val olderCursor: String?)
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
+
+        /** Every 3 seconds for up to 5 minutes, the longest a review takes. */
+        const val COACH_POLL_MS = 3_000L
+        const val MAX_COACH_POLLS = 100
     }
 }

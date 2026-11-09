@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,17 +19,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStatusRequest.SkipReason
 import com.fitai.coach.core.api.generated.PlanDayRecoveryMoveOption
 import com.fitai.coach.core.api.generated.PlanDayRecoveryPreview
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.data.RecoveryAction
 import com.fitai.coach.core.dates.addDaysToIsoDate
+import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
+import com.fitai.coach.ui.components.FitaiBadge
 import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiChip
@@ -59,8 +65,47 @@ private fun EntrySummary(entry: TimelineEntry, dayLabel: String) {
     if (entry.mainWorkout.isNotBlank()) Text(entry.mainWorkout, style = type.body, color = colors.text)
     entry.accessory?.takeIf { it.isNotBlank() }?.let { Labelled("Accessory", it) }
     entry.notes?.takeIf { it.isNotBlank() }?.let { Labelled("Notes", it) }
-    entry.aiRationale?.takeIf { it.isNotBlank() }?.let { Labelled("Why this workout", it) }
+    entry.aiRationale?.takeIf { it.isNotBlank() }?.let { CoachNote(entry, it) }
 }
+
+/**
+ * The coach's note on a session (CoachNote): why it looks as it does, what
+ * an auto-progression moved, what it replaced, and what the coach went on.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CoachNote(entry: TimelineEntry, rationale: String) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    val inputs = entry.aiInputsUsed
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalAlignment = Alignment.CenterVertically) {
+            Icon(LucideIcons.Sparkles, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+            val updated = entry.aiNoteUpdatedAt?.take(ISO_DATE_LENGTH)?.let { " · updated ${shortDate(it)}" }.orEmpty()
+            Text("Coach's note$updated", style = type.label, color = colors.textMuted)
+        }
+        Text(rationale, style = type.body, color = colors.text)
+        progressionChanges(inputs).forEach { Text(it, style = type.bodySm, color = colors.text) }
+        inputs?.replacedPrescription?.let { original ->
+            val main = original.mainWorkout.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty()
+            Text("Originally planned: ${original.focus}$main", style = type.bodySm, color = colors.textMuted)
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            FitaiBadge(coachSourceLabel(entry.aiSource) ?: "Coach", tone = BadgeTone.Accent)
+            val chips = basedOnChips(inputs)
+            if (chips.isNotEmpty()) {
+                Text("Based on:", style = type.bodySm, color = colors.textMuted)
+                chips.forEach { FitaiBadge(it) }
+            }
+        }
+    }
+}
+
+private const val ISO_DATE_LENGTH = 10
 
 @Composable
 private fun Labelled(label: String, text: String) {
