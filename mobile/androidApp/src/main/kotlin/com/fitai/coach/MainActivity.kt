@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -17,6 +18,8 @@ import com.fitai.coach.ui.App
 import com.fitai.coach.ui.links.DeepLinks
 import com.fitai.coach.ui.links.LinkSource
 import com.fitai.coach.ui.links.parseDeepLink
+import com.fitai.coach.ui.platform.AppBuild
+import com.fitai.coach.ui.platform.LocalAppBuild
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -47,7 +50,8 @@ class MainActivity : ComponentActivity() {
         }
         // A recreated activity (rotation, process restore) already handled its intent.
         if (savedInstanceState == null) openLink(intent)
-        setContent { App() }
+        val build = AppBuild(version = BuildConfig.VERSION_NAME, label = BuildConfig.BUILD_LABEL)
+        setContent { CompositionLocalProvider(LocalAppBuild provides build) { App() } }
     }
 
     override fun onNewIntent(intent: Intent) {

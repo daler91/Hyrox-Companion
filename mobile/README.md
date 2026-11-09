@@ -50,6 +50,23 @@ dependency, plugin or target, regenerate it and review the diff:
 ./gradlew --write-verification-metadata sha256 :core:jvmTest
 ```
 
+## Try a test build on a phone
+
+Every run of the Mobile Core workflow keeps the debug APK. A run on `main` holds what's merged, and a run on a PR holds that PR. The APK talks to the production server.
+
+1. One-time setup: add the `CLERK_PUBLISHABLE_KEY` repository variable (Settings → Secrets and variables → Actions → Variables) so the build can sign in. Push also needs the `FIREBASE_*` variables.
+2. On the phone, open the repository's Actions tab, pick the latest **Mobile Core** run, and download `fitai-test-<run>.apk` from the run summary's Artifacts. It's a plain APK, not a zip, and is kept for 14 days.
+3. Open the file and allow your browser to install unknown apps when Android asks.
+
+Settings → the foot of the page shows `Version 0.1.0 · test build #<run> (<commit>)`. A newer run number is a newer build.
+
+Updating to a newer build depends on the signing key:
+
+- **Without a shared key** (the default), each runner signs with its own debug key. Uninstall the old test build before installing the next. Your data lives on the server, so you only sign in again.
+- **To install over the last build instead**, add a debug keystore as the `ANDROID_TEST_KEYSTORE_BASE64` secret: `keytool -genkeypair -keystore test.keystore -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -validity 10000`, then `base64 -w0 test.keystore`.
+
+The test build can't be updated in place by a Play release, which is signed with another key. Uninstall it before switching to the Play version.
+
 ## Push notifications
 
 Push uses Firebase Cloud Messaging, configured from the build rather than a

@@ -18,6 +18,16 @@ name: Mobile Core
 #   linters (ktlint, detekt, Android lint). The runner image ships an Android
 #   SDK with its licences accepted; the Android Gradle Plugin installs a
 #   missing platform.
+# - The debug APK is kept as a test build to install on a phone: the run's
+#   summary page lists it as fitai-test-<run number>.apk (a plain APK, not a
+#   zip). Settings shows "test build #<run number> (<commit>)" under the
+#   version. It talks to the production server and signs in with the
+#   CLERK_PUBLISHABLE_KEY repository variable (Settings → Secrets and
+#   variables → Actions → Variables); push needs the FIREBASE_* variables too.
+#   With the optional ANDROID_TEST_KEYSTORE_BASE64 secret (a debug keystore:
+#   store password "android", alias "androiddebugkey") every build is signed
+#   alike and installs over the last; without it each runner makes its own
+#   debug key, so the previous test build has to be uninstalled first.
 #
 # iOS targets join in Phase 7, compiled on a macOS runner.
 on:
@@ -89,11 +99,40 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-android-${{ runner.os }}-${{ hashFiles('mobile/gradle/wrapper/gradle-wrapper.properties', 'mobile/gradle/libs.versions.toml', 'mobile/**/*.gradle.kts') }}
           restore-keys: gradle-android-${{ runner.os }}-
+      - name: Use the shared test signing key
+        env:
+          TEST_KEYSTORE_BASE64: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$TEST_KEYSTORE_BASE64" ]; then
+            mkdir -p ~/.android
+            echo "$TEST_KEYSTORE_BASE64" | base64 --decode > ~/.android/debug.keystore
+          else
+            echo "::notice::No ANDROID_TEST_KEYSTORE_BASE64 secret: uninstall the previous test build before installing this one"
+          fi
       - name: Build the debug APK, test and lint
+        env:
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+          FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_SENDER_ID: ${{ vars.FIREBASE_SENDER_ID }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
+          export FITAI_BUILD_LABEL="test build #${GITHUB_RUN_NUMBER} (${HEAD_SHA::7})"
+          if [ -z "$CLERK_PUBLISHABLE_KEY" ]; then
+            echo "::warning::No CLERK_PUBLISHABLE_KEY variable: the test APK builds, but signing in will fail"
+          fi
           ./gradlew :androidApp:assembleDebug :androidApp:bundleRelease :composeApp:verifyRoborazziAndroidHostTest \
             :androidApp:lintDebug ktlintCheck detekt --no-daemon --console=plain
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "$RUNNER_TEMP/fitai-test-${GITHUB_RUN_NUMBER}.apk"
+      - name: Keep the test APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/fitai-test-${{ github.run_number }}.apk
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
       # After an intended UI change: ./gradlew :composeApp:recordRoborazziAndroidHostTest, and commit the images.
       - name: Upload screenshot differences
         if: failure()

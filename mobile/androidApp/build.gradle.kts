@@ -35,6 +35,13 @@ val firebaseSenderId = firebase("senderId", "FIREBASE_SENDER_ID")
 val appVersionName: String = providers.gradleProperty("fitai.versionName")
     .orElse(providers.environmentVariable("APP_VERSION_NAME"))
     .getOrElse("0.1.0")
+// A CI test build's label, shown after the version in Settings ("test build
+// #42 (abc1234)") so testers can tell installs apart; empty for a release.
+// The version itself stays MAJOR.MINOR.PATCH: the server's version gate reads it.
+val buildLabel: String = providers.gradleProperty("fitai.buildLabel")
+    .orElse(providers.environmentVariable("FITAI_BUILD_LABEL"))
+    .getOrElse("")
+    .filter { it.isLetterOrDigit() || it in " #().-_·" }
 val appVersionCode: Int = providers.gradleProperty("fitai.versionCode")
     .orElse(providers.environmentVariable("APP_VERSION_CODE"))
     .getOrElse("1")
@@ -60,6 +67,7 @@ android {
         versionName = appVersionName
         buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"$clerkPublishableKey\"")
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        buildConfigField("String", "BUILD_LABEL", "\"$buildLabel\"")
         manifestPlaceholders["appLinkHost"] = appLinkHost
         buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
