@@ -53,6 +53,9 @@ on:
       - script/mobile-fixtures/**
       - shared/**
       - .github/workflows/mobile.yml
+  # A fresh test build on demand (Actions → Mobile Core → Run workflow), e.g.
+  # after changing the CLERK_PUBLISHABLE_KEY variable.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -131,6 +134,8 @@ jobs:
         with:
           path: ${{ runner.temp }}/fitai-test-${{ github.run_number }}.apk
           archive: false
+          # A re-run of the same run replaces its APK instead of failing on the name.
+          overwrite: true
           retention-days: 14
           if-no-files-found: error
       # After an intended UI change: ./gradlew :composeApp:recordRoborazziAndroidHostTest, and commit the images.

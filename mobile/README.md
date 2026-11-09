@@ -54,7 +54,7 @@ dependency, plugin or target, regenerate it and review the diff:
 
 Every run of the Mobile Core workflow keeps the debug APK. A run on `main` holds what's merged, and a run on a PR holds that PR. The APK talks to the production server.
 
-1. One-time setup: add the `CLERK_PUBLISHABLE_KEY` repository variable (Settings → Secrets and variables → Actions → Variables) so the build can sign in. Push also needs the `FIREBASE_*` variables.
+1. One-time setup: add the `CLERK_PUBLISHABLE_KEY` repository variable (Settings → Secrets and variables → Actions → Variables) so the build can sign in. Push also needs the `FIREBASE_*` variables. A build only picks up a variable when it starts, so after changing one, start a fresh build: Actions → Mobile Core → **Run workflow** on `main`.
 2. On the phone, open the repository's Actions tab, pick the latest **Mobile Core** run, and download `fitai-test-<run>.apk` from the run summary's Artifacts. It's a plain APK, not a zip, and is kept for 14 days.
 3. Open the file and allow your browser to install unknown apps when Android asks.
 
