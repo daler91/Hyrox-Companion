@@ -1,10 +1,17 @@
 package com.fitai.coach.ui.timeline
 
+import com.fitai.coach.core.api.generated.TimelineAnnotation
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.addDaysToIsoDate
 
 /** One date on the timeline. */
-data class TimelineDay(val date: String, val entries: List<TimelineEntry>, val isToday: Boolean) {
+data class TimelineDay(
+    val date: String,
+    val entries: List<TimelineEntry>,
+    val isToday: Boolean,
+    /** Training notes that start this day (injury, illness, travel, rest). */
+    val annotations: List<TimelineAnnotation> = emptyList(),
+) {
     val weekNumber: Int? get() = entries.firstNotNullOfOrNull { it.weekNumber }
 }
 

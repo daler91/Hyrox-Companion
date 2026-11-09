@@ -142,4 +142,25 @@ class WorkoutEditSyncTest {
         assertEquals("d9", local()?.planDayId)
         assertEquals("""{"planDayId":"d9"}""", server.sentTo("PATCH", "$W1/plan-day").single().body)
     }
+
+    @Test
+    fun aRecordingIsLinkedToTheSessionPicked() = runTest {
+        server.on("POST", "$W1/device-link", 200, Samples.workout("w2"))
+
+        workouts.linkDevice("w1", planDayId = "d9")
+
+        assertEquals("""{"planDayId":"d9"}""", server.sentTo("POST", "$W1/device-link").single().body)
+    }
+
+    @Test
+    fun aRecordingIsUnlinkedAndASuggestionDismissed() = runTest {
+        server.on("DELETE", "$W1/device-link", 200, """{"log":null,"standalone":${Samples.workout("w1")}}""")
+        server.on("DELETE", "$W1/device-link/suggestion", 200, Samples.workout("w1"))
+
+        workouts.unlinkDevice("w1")
+        workouts.dismissDeviceSuggestion("w1")
+
+        assertEquals(1, server.sentTo("DELETE", "$W1/device-link").size)
+        assertEquals(1, server.sentTo("DELETE", "$W1/device-link/suggestion").size)
+    }
 }

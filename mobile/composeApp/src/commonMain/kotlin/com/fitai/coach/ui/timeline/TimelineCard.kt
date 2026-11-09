@@ -4,7 +4,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -32,6 +37,7 @@ import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 
 private const val RACE_FOCUS = "race"
@@ -60,7 +66,14 @@ class CardActions(
 )
 
 @Composable
-fun TimelineCard(entry: TimelineEntry, quickComplete: Boolean, onOpen: () -> Unit, actions: CardActions) {
+fun TimelineCard(
+    entry: TimelineEntry,
+    quickComplete: Boolean,
+    onOpen: () -> Unit,
+    actions: CardActions,
+    chips: List<ExerciseChip> = emptyList(),
+    strava: StravaControls? = null,
+) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     FitaiCard(onClick = onOpen) {
@@ -70,9 +83,12 @@ fun TimelineCard(entry: TimelineEntry, quickComplete: Boolean, onOpen: () -> Uni
                     val (label, tone) = statusBadge(entry)
                     FitaiBadge(label, tone = tone)
                     tierBadge(entry)?.let { FitaiBadge(it, tone = BadgeTone.Neutral) }
+                    strava?.let { StravaBadge(entry, it) }
                 }
                 Text(entry.focus, style = type.h3, color = colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (entry.mainWorkout.isNotBlank()) {
+                if (chips.isNotEmpty()) {
+                    ExerciseChipRow(chips)
+                } else if (entry.mainWorkout.isNotBlank()) {
                     Text(entry.mainWorkout, style = type.body, color = colors.textMuted, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 metricsLine(entry)?.let { Text(it, style = type.bodySm, color = colors.textMuted) }
@@ -87,6 +103,10 @@ fun TimelineCard(entry: TimelineEntry, quickComplete: Boolean, onOpen: () -> Uni
             }
             actions.onPickDate?.let { pickDate -> MoveMenu(entry.focus, actions.moves, actions.onMove, pickDate) }
             if (quickComplete) CompleteCircle(entry.focus, actions.onComplete)
+        }
+        strava?.options?.suggestion?.let { suggestion ->
+            Spacer(Modifier.height(Spacing.Sm))
+            LinkSuggestion(suggestion, strava)
         }
     }
 }
@@ -163,4 +183,36 @@ private fun recoveryNote(entry: TimelineEntry): String? = when (entry.recovery) 
         ?: "Moved here after you missed it."
     TimelineEntry.Recovery.Shortened -> "Shortened after you missed it."
     else -> null
+}
+
+/** The exercises on a logged session, a trophy on each that set a record. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ExerciseChipRow(chips: List<ExerciseChip>) {
+    val colors = FitaiTheme.colors
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        chips.forEach { chip ->
+            val shape = Radius.Sm
+            Row(
+                Modifier
+                    .border(1.dp, if (chip.personalRecord) colors.warning else colors.border, shape)
+                    .padding(horizontal = Spacing.Sm, vertical = 2.dp)
+                    .semantics(mergeDescendants = true) {
+                        if (chip.personalRecord) contentDescription = "${chip.text}, personal record"
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (chip.personalRecord) {
+                    Icon(
+                        LucideIcons.Trophy,
+                        contentDescription = null,
+                        tint = colors.warning,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+                Text(chip.text, style = FitaiTheme.typography.bodySm, color = colors.text, maxLines = 1)
+            }
+        }
+    }
 }

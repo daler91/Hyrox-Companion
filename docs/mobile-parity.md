@@ -29,12 +29,12 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Delete a skipped plan day, with undo — `DELETE /plans/days/{id}`, then restore.
 - [x] **Load older workouts**: cursor paging with `GET /timeline?before=`.
 - [x] Status filter: All / Completed / Planned / Missed / Skipped.
-- [ ] Annotations (injury, illness, travel, rest block): day cards, plus create, edit and delete — `/timeline-annotations`.
-- [ ] "This week" card: today's session, plan week and phase, race countdown, station radar.
-- [ ] PR trophies on exercise chips — `GET /personal-records`.
-- [ ] Coach note with its "based on" chips.
-- [ ] "Coach reviewing" banner while the auto-coach runs.
-- [ ] Strava badge:
+- [x] Annotations (injury, illness, travel, rest block): day cards, plus create, edit and delete — `/timeline-annotations`.
+- [x] "This week" card: today's session, plan week and phase, race countdown, station radar.
+- [x] PR trophies on exercise chips — `GET /personal-records`.
+- [x] Coach note with its "based on" chips.
+- [x] "Coach reviewing" banner while the auto-coach runs.
+- [x] Strava badge:
   - link or unlink an activity — `POST`/`DELETE /workouts/{id}/device-link`;
   - "Was this your …?" suggestion — `DELETE …/device-link/suggestion`.
 

@@ -5,14 +5,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,14 +31,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.todayIn
-import com.fitai.coach.ui.components.BadgeTone
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.ErrorState
 import com.fitai.coach.ui.components.FitaiBadge
@@ -44,6 +48,7 @@ import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
@@ -59,11 +64,14 @@ private sealed interface OpenSheet {
     data class PickDate(override val entryId: String) : OpenSheet
 }
 
+/** The training-note editor: a new note from [startDate], or the note [editingId]. */
+private data class NoteSheet(val startDate: String, val editingId: String? = null)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null, onPlanDayOpened: () -> Unit = {}) {
     val session = LocalUserSession.current
-    val vm = viewModel(key = "timeline-${session.userId}") { TimelineViewModel(session.timeline, session.preferences, ::todayIn) }
+    val vm = viewModel(key = "timeline-${session.userId}") { TimelineViewModel(session, ::todayIn) }
     val state by vm.state.collectAsStateWithLifecycle()
     val recovery by vm.recovery.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
@@ -71,6 +79,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it.message, it.undo) } }
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
+    var noteSheet by remember { mutableStateOf<NoteSheet?>(null) }
     val haptics = LocalHapticFeedback.current
     val allEntries = state.rows.days.flatMap { it.entries }
     val sheetEntry = sheet?.let { open -> allEntries.firstOrNull { it.id == open.entryId } }
@@ -92,6 +101,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                     vm,
                     onOpen = { sheet = OpenSheet.Surface(it.id) },
                     onPickDate = { sheet = OpenSheet.PickDate(it.id) },
+                    onNote = { date, id -> noteSheet = NoteSheet(date, id) },
                     navigation = navigation,
                 )
             }
@@ -190,6 +200,13 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
         }
     }
     recovery?.let { RecoverySheet(it, onAction = vm::recover, onDismiss = vm::closeRecovery) }
+    noteSheet?.let { open ->
+        val editing = open.editingId?.let { id -> state.rows.days.flatMap { it.annotations }.firstOrNull { it.id == id } }
+        AnnotationSheet(editing, open.startDate, onSave = { draft ->
+            vm.saveAnnotation(open.editingId, draft)
+            noteSheet = null
+        }, onDismiss = { noteSheet = null })
+    }
 }
 
 @Composable
@@ -198,6 +215,7 @@ private fun TimelineList(
     vm: TimelineViewModel,
     onOpen: (TimelineEntry) -> Unit,
     onPickDate: (TimelineEntry) -> Unit,
+    onNote: (date: String, editingId: String?) -> Unit,
     navigation: TimelineNavigation,
 ) {
     val listState = rememberLazyListState()
@@ -231,8 +249,15 @@ private fun TimelineList(
         }
         items(state.rows.days, key = { "day-${it.date}" }) { day ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                DayHeader(day, state.today)
-                if (day.entries.isEmpty()) {
+                DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
+                day.annotations.forEach { annotation ->
+                    AnnotationCard(
+                        annotation,
+                        onEdit = { onNote(annotation.startDate, annotation.id) },
+                        onDelete = { vm.deleteAnnotation(annotation.id) },
+                    )
+                }
+                if (day.entries.isEmpty() && day.annotations.isEmpty()) {
                     Text("Rest day — nothing scheduled.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
                 }
                 day.entries.forEach { entry ->
@@ -246,6 +271,14 @@ private fun TimelineList(
                             moves = quickMoves(entry, state.today),
                             onMove = { date -> vm.move(entry, date) },
                             onPickDate = if (canMove(entry)) ({ onPickDate(entry) }) else null,
+                        ),
+                        chips = remember(entry, state.records) { exerciseChips(entry, state.records) },
+                        strava = stravaControls(
+                            entry,
+                            day.entries,
+                            onLink = { target -> vm.linkRecording(entry, target) },
+                            onUnlink = { vm.unlinkRecording(entry) },
+                            onDismissSuggestion = { vm.dismissSuggestion(entry) },
                         ),
                     )
                 }
@@ -282,12 +315,8 @@ private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit, onFi
     val type = FitaiTheme.typography
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
         Text("training", style = type.h1, color = colors.text, modifier = Modifier.semantics { heading() })
-        state.summary?.let { summary ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                FitaiBadge("${summary.weeklyCompletedWorkouts} of ${summary.weeklyGoal} this week", tone = BadgeTone.Accent)
-                if (summary.currentStreak > 0) FitaiBadge("${summary.currentStreak}-day streak")
-            }
-        }
+        if (state.coachReviewing) CoachReviewingBanner()
+        state.week?.let { WeekCard(it) }
         if (state.plans.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                 item { FitaiChip("All plans", selected = state.selectedPlanId == null, onClick = { onSelectPlan(null) }) }
@@ -310,15 +339,23 @@ private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit, onFi
 }
 
 @Composable
-private fun DayHeader(day: TimelineDay, today: String) {
+private fun DayHeader(day: TimelineDay, today: String, onAddNote: () -> Unit) {
+    val label = dayLabel(day.date, today)
+    val colors = FitaiTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
         Text(
-            dayLabel(day.date, today),
+            label,
             style = FitaiTheme.typography.h3,
-            color = if (day.isToday) FitaiTheme.colors.accent else FitaiTheme.colors.text,
-            modifier = Modifier.semantics { heading() },
+            color = if (day.isToday) colors.accent else colors.text,
+            modifier = Modifier.weight(1f, fill = false).semantics { heading() },
         )
         day.weekNumber?.let { FitaiBadge("Week $it") }
+        Spacer(Modifier.weight(1f))
+        // Today's row spells it out: it's where new athletes learn notes exist (TimelineDateHeader).
+        TextButton(onClick = onAddNote, modifier = Modifier.semantics { contentDescription = "Log a note for $label" }) {
+            Icon(LucideIcons.StickyNote, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
+            if (day.isToday) Text(" Note", style = FitaiTheme.typography.label, color = colors.textMuted)
+        }
     }
 }
 
