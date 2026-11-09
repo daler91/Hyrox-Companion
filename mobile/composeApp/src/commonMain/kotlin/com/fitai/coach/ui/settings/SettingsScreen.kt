@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +56,7 @@ import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
+import com.fitai.coach.ui.platform.LocalAppBuild
 import com.fitai.coach.ui.platform.rememberBrowser
 import com.fitai.coach.ui.platform.rememberFileSharer
 import com.fitai.coach.ui.platform.rememberHealthConnectAccess
@@ -124,6 +126,15 @@ fun SettingsScreen(
                     "sign-out"
                 }
             }, onDelete = { dialog = "delete" })
+            LocalAppBuild.current.description.takeIf { it.isNotEmpty() }?.let { build ->
+                Text(
+                    build,
+                    style = FitaiTheme.typography.bodySm,
+                    color = FitaiTheme.colors.textMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
     }
