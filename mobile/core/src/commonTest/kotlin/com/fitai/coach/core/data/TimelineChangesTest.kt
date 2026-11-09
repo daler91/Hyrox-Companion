@@ -1,6 +1,8 @@
 package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiJson
+import com.fitai.coach.core.api.Patch
+import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
 import com.fitai.coach.core.api.generated.TimelineEntry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -164,5 +166,30 @@ class TimelineChangesTest {
         timeline.forgetWorkout("w-l1")
 
         assertEquals(listOf("p1"), ids())
+    }
+
+    @Test
+    fun aPlanDayEditShowsAtOnceAndSendsOnlyWhatChanged() = runTest {
+        server.on("GET", TIMELINE) { page(planned("p1", "2026-11-10")) }
+        timeline.refresh()
+        server.on("PATCH", "/api/v1/plans/days/d-p1", 200, "{}")
+
+        timeline.editPlanDay(
+            entry("p1"),
+            PatchPlansDaysByDayIdRequest(
+                focus = "Hill reps",
+                notes = Patch.of("Walk the downhills"),
+                priority = Patch.of(PatchPlansDaysByDayIdRequest.Priority.Key),
+            ),
+        )
+
+        val edited = entry("p1")
+        assertEquals("Hill reps", edited.focus)
+        assertEquals("6 x 800 m", edited.mainWorkout)
+        assertEquals("Walk the downhills", edited.notes)
+        assertEquals(TimelineEntry.Priority.Key, edited.priority)
+        sync.sync()
+        val body = ApiJson.parseToJsonElement(server.sentTo("PATCH", "/api/v1/plans/days/d-p1").single().body!!).jsonObject
+        assertEquals(setOf("focus", "notes", "priority"), body.keys)
     }
 }

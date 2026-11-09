@@ -1,6 +1,5 @@
 package com.fitai.coach.ui.workout
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -26,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,7 +34,6 @@ import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.exercises.NextTarget
-import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
 import com.fitai.coach.ui.coach.CoachThread
 import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.ButtonVariant
@@ -51,7 +48,6 @@ import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.RpeSelector
-import com.fitai.coach.ui.format.exerciseLabel
 import com.fitai.coach.ui.format.formatClock
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.formatSetDistance
@@ -108,6 +104,8 @@ fun WorkoutDetailScreen(
 
                     override fun useNext(sets: List<ExerciseSetRow>, target: NextTarget) = vm.useNext(sets, target)
 
+                    override fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int) = vm.moveExercise(groups, index, offset)
+
                     override fun reopen() {
                         confirm = Confirm.Reopen
                     }
@@ -125,7 +123,7 @@ fun WorkoutDetailScreen(
 
     val close = { sheet = null }
     when (val open = sheet) {
-        is DetailSheet.EditSet -> SetEditor(
+        is DetailSheet.EditSet -> SetEditorSheet(
             set = open.set,
             onSave = {
                 vm.saveSet(open.set.id, it)
@@ -210,6 +208,8 @@ private interface WorkoutActions {
 
     fun useNext(sets: List<ExerciseSetRow>, target: NextTarget)
 
+    fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int)
+
     fun reopen()
 
     fun delete()
@@ -219,7 +219,7 @@ private interface WorkoutActions {
 private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState, actions: WorkoutActions) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
-    val groups = workout.exerciseSets.groupBy { it.exerciseName to it.customLabel }.toList()
+    val groups = exerciseGroups(workout.exerciseSets)
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(Spacing.Lg),
@@ -251,13 +251,16 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
         if (groups.isEmpty()) {
             item { Text("No structured sets for this workout.", style = type.body, color = colors.textMuted) }
         }
-        items(groups, key = { "${it.first.first}|${it.first.second}" }) { (key, sets) ->
+        itemsIndexed(groups, key = { _, group -> group.key }) { index, group ->
             ExerciseCard(
-                label = exerciseLabel(key.first, key.second),
-                sets = sets,
-                history = state.histories[key.first].takeIf { key.first != CUSTOM_EXERCISE },
+                group = group,
+                history = state.histories[group.exerciseName].takeIf { group.exerciseName != CUSTOM_EXERCISE },
                 busy = state.busy,
                 actions = actions,
+                move = GroupMove(
+                    up = if (index > 0) ({ actions.moveExercise(groups, index, -1) }) else null,
+                    down = if (index < groups.lastIndex) ({ actions.moveExercise(groups, index, 1) }) else null,
+                ),
             )
         }
         item {
@@ -287,16 +290,21 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
 
 @Composable
 private fun ExerciseCard(
-    label: String,
-    sets: List<ExerciseSetRow>,
+    group: ExerciseGroup,
     history: ExerciseHistory?,
     busy: Boolean,
     actions: WorkoutActions,
+    move: GroupMove,
 ) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
-    FitaiCard {
-        Text(label, style = type.h3, color = colors.text)
+    ExerciseGroupCard(
+        group = group,
+        busy = busy,
+        onEditSet = actions::editSet,
+        onAddSet = actions::addSet,
+        move = move,
+    ) {
         history?.lastTime?.let { Text("Last time · $it", style = type.bodySm, color = colors.textMuted) }
         history?.next?.let { next ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -306,29 +314,9 @@ private fun ExerciseCard(
                     color = colors.text,
                     modifier = Modifier.weight(1f),
                 )
-                FitaiButton("Use", onClick = { actions.useNext(sets, next) }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
+                FitaiButton("Use", onClick = { actions.useNext(group.sets, next) }, variant = ButtonVariant.Ghost, size = ButtonSize.Sm)
             }
         }
-        sets.forEach { set ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(role = Role.Button, onClickLabel = "edit set ${set.setNumber}") { actions.editSet(set) }
-                    .padding(vertical = Spacing.Sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Set ${set.setNumber}", style = type.label, color = colors.textMuted, modifier = Modifier.weight(SET_LABEL_WEIGHT))
-                Text(setSummary(set), style = type.body, color = colors.text, modifier = Modifier.weight(1f))
-            }
-        }
-        FitaiButton(
-            "Add set",
-            onClick = { actions.addSet(sets) },
-            variant = ButtonVariant.Ghost,
-            size = ButtonSize.Sm,
-            enabled = !busy,
-            leadingIcon = LucideIcons.Plus,
-        )
     }
 }
 
@@ -360,7 +348,6 @@ private fun Stats(workout: WorkoutLogDetail) {
 }
 
 private const val METERS_PER_KM = 1000.0
-private const val SET_LABEL_WEIGHT = 0.3f
 
 /** "10 reps · 80 kg · 400 m · 1:30", from the values a set has. */
 fun setSummary(set: ExerciseSetRow): String = buildList {
@@ -394,55 +381,6 @@ private fun DetailsEditor(workout: WorkoutLogDetail, onSave: (DetailsEdit) -> Un
             FitaiTextField(edit.notes, { edit = edit.copy(notes = it) }, "Notes", singleLine = false)
             FitaiSwitchRow("Counts as training", edit.countsAsTraining, { edit = edit.copy(countsAsTraining = it) })
             FitaiButton("Save", onClick = { onSave(edit) }, enabled = edit.isValid(), modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun SetEditor(set: ExerciseSetRow, onSave: (SetEdit) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
-    var edit by remember(set.id) {
-        mutableStateOf(
-            SetEdit(
-                reps = set.reps?.toString().orEmpty(),
-                weight = editableNumber(set.weight),
-                distance = editableNumber(set.distance),
-                time = editableNumber(set.time),
-            ),
-        )
-    }
-    // The fields the exercise logs, plus any the set already has a value for.
-    val logged = EXERCISE_DEFINITIONS[set.exerciseName]?.fields
-    val shows = { field: String, value: String -> logged == null || field in logged || value.isNotBlank() }
-    val number = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-    FitaiBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = Spacing.Lg), verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
-            Text(
-                "${exerciseLabel(set.exerciseName, set.customLabel)} · set ${set.setNumber}",
-                style = FitaiTheme.typography.h3,
-                color = FitaiTheme.colors.text,
-            )
-            if (shows("reps", edit.reps)) {
-                FitaiTextField(edit.reps, {
-                    edit = edit.copy(reps = it)
-                }, "Reps", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            }
-            if (shows("weight", edit.weight)) {
-                FitaiTextField(edit.weight, {
-                    edit = edit.copy(weight = it)
-                }, "Weight (${set.weightUnit ?: "kg"})", keyboardOptions = number)
-            }
-            if (shows("distance", edit.distance)) {
-                FitaiTextField(edit.distance, {
-                    edit = edit.copy(distance = it)
-                }, "Distance (${if (set.distanceUnit == "ft") "ft" else "m"})", keyboardOptions = number)
-            }
-            if (shows("time", edit.time)) {
-                FitaiTextField(edit.time, { edit = edit.copy(time = it) }, "Time (min)", keyboardOptions = number)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm), verticalAlignment = Alignment.CenterVertically) {
-                FitaiButton("Delete set", onClick = onDelete, variant = ButtonVariant.Ghost, leadingIcon = LucideIcons.Trash)
-                FitaiButton("Save", onClick = { onSave(edit) }, enabled = edit.isValid(), modifier = Modifier.weight(1f))
-            }
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import com.fitai.coach.core.auth.AuthState
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.links.DeepLinks
@@ -146,6 +147,31 @@ class AppUiTest {
             assertEquals(1, api.sent("DELETE", "/api/v1/plans/days/d1").size)
             onNodeWithText("Undo").performClick()
             waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/recycle-bin/rb1/restore").isNotEmpty() }
+        }
+    }
+
+    @Test
+    fun aPlannedSessionIsEditedOnItsOwnScreen() {
+        val api = FakeApi().apply {
+            establishedAccount(FakeApi.plannedToday("Tempo intervals"))
+            on(
+                "GET",
+                "/api/v1/plans/days/d1/sets",
+                """[{"id":"s1","planDayId":"d1","exerciseName":"back_squat","category":"strength","setNumber":1,"reps":5,"version":1}]""",
+            )
+            on("PATCH", "/api/v1/plans/days/d1", "{}")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Tempo intervals"))
+            onNodeWithText("Tempo intervals").performClick()
+            onNodeWithText("Edit session").performClick()
+
+            awaitNode(hasText("Back Squat"))
+            onNodeWithContentDescription("Title").performTextReplacement("Track intervals")
+            onNodeWithText("Save").performClick()
+
+            waitUntil(timeoutMillis = 10_000) { api.sent("PATCH", "/api/v1/plans/days/d1").isNotEmpty() }
+            assertTrue(api.sent("PATCH", "/api/v1/plans/days/d1").single().body.orEmpty().contains("\"focus\":\"Track intervals\""))
         }
     }
 

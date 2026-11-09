@@ -21,6 +21,9 @@ sealed interface Route : NavKey {
 
     /** A logged workout and its sets. */
     @Serializable data class WorkoutDetail(val workoutId: String) : Route
+
+    /** Editing a planned session, by its timeline entry. */
+    @Serializable data class PlanDay(val entryId: String) : Route
 }
 
 /**

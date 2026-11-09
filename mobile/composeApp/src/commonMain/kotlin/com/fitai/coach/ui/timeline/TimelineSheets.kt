@@ -70,14 +70,22 @@ private fun Labelled(label: String, text: String) {
     }
 }
 
-/** A session still to come: read only, with skip and ask-the-coach. */
+/** A session still to come: skip it, ask the coach, or edit it. */
 @Composable
-fun PreviewSheet(entry: TimelineEntry, dayLabel: String, onSkip: () -> Unit, onAskCoach: () -> Unit, onDismiss: () -> Unit) {
+fun PreviewSheet(
+    entry: TimelineEntry,
+    dayLabel: String,
+    onSkip: () -> Unit,
+    onAskCoach: () -> Unit,
+    onEdit: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         SheetBody {
             EntrySummary(entry, dayLabel)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
                 FitaiButton("Ask coach", onClick = onAskCoach, variant = ButtonVariant.Secondary)
+                FitaiButton("Edit session", onClick = onEdit, variant = ButtonVariant.Secondary)
                 FitaiButton("Skip", onClick = onSkip, variant = ButtonVariant.Ghost)
             }
         }
@@ -92,6 +100,7 @@ fun LogSheet(
     onComplete: (rpe: Int?, notes: String) -> Unit,
     onSkip: () -> Unit,
     onRecover: (() -> Unit)?,
+    onEdit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var rpe by rememberSaveable(entry.id) { mutableStateOf<Int?>(null) }
@@ -107,7 +116,10 @@ fun LogSheet(
             RpeSelector(rpe, { rpe = it })
             FitaiTextField(value = notes, onValueChange = { notes = it }, label = "Notes", singleLine = false)
             FitaiButton("Complete workout", onClick = { onComplete(rpe, notes) }, modifier = Modifier.fillMaxWidth())
-            FitaiButton("Skip", onClick = onSkip, variant = ButtonVariant.Ghost, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton("Edit session", onClick = onEdit, variant = ButtonVariant.Secondary, modifier = Modifier.weight(1f))
+                FitaiButton("Skip", onClick = onSkip, variant = ButtonVariant.Ghost, modifier = Modifier.weight(1f))
+            }
         }
     }
 }

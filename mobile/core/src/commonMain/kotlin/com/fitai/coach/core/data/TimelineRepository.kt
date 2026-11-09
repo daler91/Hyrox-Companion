@@ -198,6 +198,24 @@ public class TimelineRepository(
     }
 
     /**
+     * Changes a plan day's own fields: its title, text or priority. It shows
+     * at once and goes through the outbox, so it works offline; a change the
+     * server refuses for good shows its version again.
+     */
+    public suspend fun editPlanDay(entry: TimelineEntry, edit: PatchPlansDaysByDayIdRequest) {
+        val planDayId = requireNotNull(entry.planDayId) { "${entry.id} is not a plan day" }
+        db.writeTransaction {
+            updateLocal(entry.id) { it.edited(edit) }
+            sync.enqueue(
+                ApiEndpoints.PatchPlansDaysByDayId,
+                ApiEndpoints.PatchPlansDaysByDayId.path(planDayId),
+                encode(PatchPlansDaysByDayIdRequest.serializer(), edit),
+            )
+        }
+        sync.requestSync()
+    }
+
+    /**
      * Removes a plan day from its plan (a skipped session's Delete). Online:
      * the server keeps it in the recycle bin.
      *
@@ -321,6 +339,22 @@ public class TimelineRepository(
             )
         }
     }
+}
+
+/** The entry with a plan-day edit applied: what was sent changes, what wasn't stays. */
+internal fun TimelineEntry.edited(edit: PatchPlansDaysByDayIdRequest): TimelineEntry = copy(
+    focus = edit.focus ?: focus,
+    mainWorkout = edit.mainWorkout ?: mainWorkout,
+    accessory = edit.accessory.applyTo(accessory),
+    notes = edit.notes.applyTo(notes),
+    priority = (edit.priority as? Patch.Value)?.value
+        ?.let { sent -> TimelineEntry.Priority.entries.firstOrNull { it.wireValue == sent.wireValue } }
+        ?: priority,
+)
+
+private fun Patch<String>.applyTo(current: String?): String? = when (this) {
+    is Patch.Value -> value
+    Patch.Absent -> current
 }
 
 /**

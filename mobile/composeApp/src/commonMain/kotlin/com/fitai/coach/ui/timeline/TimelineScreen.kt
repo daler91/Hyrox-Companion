@@ -139,6 +139,10 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                         close()
                         navigation.askCoach(entry)
                     },
+                    onEdit = {
+                        close()
+                        navigation.editPlanDay(entry.id)
+                    },
                     onDismiss = close,
                 )
                 EntrySurface.Log -> LogSheet(
@@ -157,6 +161,10 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                         }
                     } else {
                         null
+                    },
+                    onEdit = {
+                        close()
+                        navigation.editPlanDay(entry.id)
                     },
                     onDismiss = close,
                 )

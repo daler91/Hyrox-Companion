@@ -7,6 +7,7 @@ import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryQuery
 import com.fitai.coach.core.api.generated.GetExercisesByExerciseNameHistoryResponseItem
+import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetOrderRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
 import com.fitai.coach.core.api.generated.SessionGrade
@@ -176,6 +177,24 @@ public class WorkoutRepository(
         db.writeTransaction {
             outbox.deleteFor(setTarget(setId))
             dao.deleteSets(listOf(setId))
+        }
+    }
+
+    /**
+     * Puts the workout's sets in the order of [setIds] (moving an exercise up
+     * or down). Online; the device takes the server's order.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun reorderSets(workoutId: String, setIds: List<String>) {
+        val rows = api.call(
+            ApiEndpoints.PatchWorkoutsByIdSetOrder,
+            PatchWorkoutsByIdSetOrderRequest(setIds),
+            ApiEndpoints.PatchWorkoutsByIdSetOrder.path(workoutId),
+        )
+        db.writeTransaction {
+            val local = dao.sets(workoutId).associateBy { it.id }
+            dao.upsertSets(rows.mapIndexedNotNull { index, row -> local[row.id]?.copy(position = index) })
         }
     }
 

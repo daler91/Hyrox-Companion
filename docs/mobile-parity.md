@@ -16,7 +16,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Delete, with an undo toast — `DELETE /workouts/{id}`, then `POST /recycle-bin/{id}/restore`.
 - [x] Add and delete sets — `POST /workouts/{id}/sets`, `DELETE /workouts/{id}/sets/{setId}`.
 - [x] Add an exercise from the library (the catalogue is already in `core`).
-- [ ] Reorder exercises — `PATCH /workouts/{id}/set-order`.
+- [x] Reorder exercises — `PATCH /workouts/{id}/set-order`.
 - [x] **Last time** and **next target** rows per exercise — `GET /exercises/{name}/history`.
 - [x] Session grade card ("did the session do its job") — `GET /workouts/{id}/session-grade`.
 - [ ] Link to a plan day, or unlink — `PATCH /workouts/{id}/plan-day`.
@@ -39,11 +39,11 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - "Was this your …?" suggestion — `DELETE …/device-link/suggestion`.
 
 ### Plan day (log and preview sheets)
-- [ ] Edit the prescription text (main, accessory, notes) — `PATCH /plans/days/{id}`.
-- [ ] Re-parse from text or a photo — `POST /plans/days/{id}/reparse`, `…/reparse-from-image`.
-- [ ] Sets table: edit, add, delete, reorder — `/plans/days/{id}/sets`, `…/set-order`.
-- [ ] Session priority (Key / Supporting / Optional) — `PATCH /plans/days/{id}`.
-- [ ] Rename the title — `PATCH /plans/days/{id}` with `focus`.
+- [x] Edit the prescription text (main, accessory, notes) — `PATCH /plans/days/{id}`.
+- [x] Re-parse from text or a photo — `POST /plans/days/{id}/reparse`, `…/reparse-from-image`.
+- [x] Sets table: edit, add, delete, reorder — `/plans/days/{id}/sets`, `…/set-order`.
+- [x] Session priority (Key / Supporting / Optional) — `PATCH /plans/days/{id}`.
+- [x] Rename the title — `PATCH /plans/days/{id}` with `focus`.
 
 ### Log workout
 - [ ] Add an exercise by hand from the library; reorder exercises.
