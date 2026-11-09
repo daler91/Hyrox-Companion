@@ -43,7 +43,12 @@ data class WorkoutDetailState(
     val histories: Map<String, ExerciseHistory> = emptyMap(),
     /** A write that must reach the server first (a delete, a new set) is in flight. */
     val busy: Boolean = false,
-)
+    /** Plan days it could count towards, the linked one included. */
+    val planDayOptions: List<PlanDayOption> = emptyList(),
+) {
+    /** The plan day it counts towards, when the timeline has it. */
+    val linkedPlanDay: PlanDayOption? get() = workout?.planDayId?.let { id -> planDayOptions.firstOrNull { it.planDayId == id } }
+}
 
 /** Values typed into the set editor; blank clears a value. */
 data class SetEdit(val reps: String, val weight: String, val distance: String, val time: String)
@@ -99,6 +104,7 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             grade = more.grade,
             histories = more.histories,
             busy = more.busy,
+            planDayOptions = workout?.let { planDayOptions(entries, it.date, linked = it.planDayId) }.orEmpty(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WorkoutDetailState())
 
@@ -230,6 +236,16 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int) {
         val order = reorderedSetIds(groups, index, offset) ?: return
         online("Couldn't move that exercise") { session.workouts.reorderSets(workoutId, order) }
+    }
+
+    /** Counts the workout towards a plan day, or (null) takes it off the plan. */
+    fun linkPlanDay(planDayId: String?) {
+        if (planDayId == state.value.workout?.planDayId) return
+        online("Couldn't change the plan day") {
+            session.workouts.linkPlanDay(workoutId, planDayId)
+            runCatching { session.timeline.refresh() }
+            loadGrade()
+        }
     }
 
     /** Reopens the plan day this workout completed; the server deletes the workout. */

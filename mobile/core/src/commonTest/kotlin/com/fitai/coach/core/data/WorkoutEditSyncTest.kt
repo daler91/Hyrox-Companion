@@ -122,4 +122,24 @@ class WorkoutEditSyncTest {
         val sent = ApiJson.parseToJsonElement(server.sentTo("PATCH", "$W1/set-order").single().body!!).jsonObject
         assertEquals("[\"s3\",\"s1\",\"s2\"]", sent["setIds"].toString())
     }
+
+    @Test
+    fun theLatestWorkoutIsNullBeforeAnyIsLogged() = runTest {
+        server.on("GET", "/api/v1/workouts/latest", 404, """{"error":"Workout not found","code":"NOT_FOUND"}""")
+        assertNull(workouts.latest())
+
+        server.on("GET", "/api/v1/workouts/latest", 200, Samples.workout("w7"))
+        assertEquals("w7", workouts.latest()?.id)
+    }
+
+    @Test
+    fun linkingAPlanDaySendsItAndShowsTheServersWorkout() = runTest {
+        server.on("PATCH", "$W1/plan-day", 200, Samples.workout("w1"))
+        server.on("GET", W1, 200, Samples.workout("w1").replace("\"mainWorkout\"", "\"planDayId\":\"d9\",\"mainWorkout\""))
+
+        workouts.linkPlanDay("w1", "d9")
+
+        assertEquals("d9", local()?.planDayId)
+        assertEquals("""{"planDayId":"d9"}""", server.sentTo("PATCH", "$W1/plan-day").single().body)
+    }
 }

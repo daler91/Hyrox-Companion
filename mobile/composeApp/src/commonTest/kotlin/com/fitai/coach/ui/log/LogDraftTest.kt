@@ -3,10 +3,14 @@ package com.fitai.coach.ui.log
 import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.CreateWorkoutRequest
+import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.ParsedExercise
+import com.fitai.coach.core.api.generated.WorkoutLatest
+import kotlinx.serialization.json.JsonNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LogDraftTest {
     private val today = "2026-11-08"
@@ -50,5 +54,91 @@ class LogDraftTest {
         // Encodes without the unset fields.
         val json = ApiJson.encodeToString(CreateWorkoutRequest.serializer(), request)
         assertEquals(false, json.contains("planDayId"))
+    }
+
+    @Test
+    fun theExtraFieldsMustReadAsNumbersAndAClockTime() {
+        val ok = LogDraft(date = today, text = "5 km run", rpe = 6)
+        assertNull(ok.copy(timeOfDay = "7:30", distance = "5.2", avgHeartrate = "145", maxHeartrate = "178").saveProblem(today))
+        assertEquals("Time of day must be a clock time, like 07:30.", ok.copy(timeOfDay = "half seven").saveProblem(today))
+        assertEquals("Distance must be a number.", ok.copy(distance = "far").saveProblem(today))
+        assertEquals("Heart rate must be a whole number between 20 and 250 bpm.", ok.copy(maxHeartrate = "300").saveProblem(today))
+    }
+
+    @Test
+    fun theExtrasGoInTheRequestWithTheDistanceInMetres() {
+        val draft = LogDraft(
+            date = today,
+            text = "Run",
+            rpe = 5,
+            timeOfDay = "07:30",
+            distance = "5",
+            avgHeartrate = "145",
+            maxHeartrate = "178",
+            planDayId = "d1",
+        )
+
+        val request = draft.toRequest(distanceUnit = "km")
+
+        assertEquals(Patch.of(450), request.timeOfDayMin)
+        assertEquals(Patch.of(5000.0), request.distanceMeters)
+        assertEquals(Patch.of(145), request.avgHeartrate)
+        assertEquals(Patch.of(178), request.maxHeartrate)
+        assertEquals(Patch.of("d1"), request.planDayId)
+        assertEquals(Patch.of(8047.0), draft.toRequest(distanceUnit = "miles").distanceMeters)
+    }
+
+    private fun latest(sets: List<ExerciseSetRow>, mainWorkout: String = "Squats") = WorkoutLatest(
+        id = "w1",
+        userId = "u1",
+        date = "2026-11-01",
+        focus = "Leg day",
+        mainWorkout = mainWorkout,
+        notes = "felt strong",
+        rpe = 8,
+        duration = 50,
+        countsAsTraining = true,
+        autoLinkRecordingOnly = false,
+        deviceActivity = JsonNull,
+        exerciseSets = sets,
+        structureBlocks = emptyList(),
+    )
+
+    private fun set(id: String, exercise: String, weight: Double?, unit: String?) =
+        ExerciseSetRow(
+            id = id,
+            exerciseName = exercise,
+            category = "strength",
+            setNumber = 1,
+            reps = 5,
+            weight = weight,
+            weightUnit = unit,
+            version = 1,
+        )
+
+    @Test
+    fun theLastWorkoutBecomesTodaysDraftInTheAthletesUnits() {
+        val draft = draftFrom(
+            latest(listOf(set("a", "back_squat", 100.0, "kg"), set("b", "lunges", null, null), set("c", "back_squat", 100.0, "kg"))),
+            today,
+            weightUnit = "lbs",
+        )
+
+        assertEquals(today, draft.date)
+        assertEquals("Leg day", draft.title)
+        assertEquals("felt strong", draft.notes)
+        assertEquals("", draft.text, "the rows stand for the text")
+        assertNull(draft.rpe, "effort is this session's")
+        assertEquals(listOf("back_squat", "lunges"), draft.exercises.map { it.exerciseName })
+        assertEquals(listOf(1L, 2L), draft.exercises.first().sets.map { it.setNumber })
+        assertEquals(220.5, draft.exercises.first().sets.first().weight)
+    }
+
+    @Test
+    fun aWorkoutLoggedAsTextComesBackAsItsText() {
+        val draft = draftFrom(latest(emptyList(), mainWorkout = "5 x 1 km at threshold"), today, weightUnit = "kg")
+
+        assertEquals("5 x 1 km at threshold", draft.text)
+        assertTrue(draft.exercises.isEmpty())
     }
 }

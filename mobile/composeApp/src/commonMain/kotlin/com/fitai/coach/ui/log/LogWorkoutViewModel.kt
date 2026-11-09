@@ -11,21 +11,31 @@ import com.fitai.coach.core.data.LogResult
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.data.toCreateBlock
 import com.fitai.coach.core.data.toCreateExercise
+import com.fitai.coach.core.exercises.generated.EXERCISE_DEFINITIONS
+import com.fitai.coach.core.units.userDistanceToMeters
 import com.fitai.coach.ui.format.userMessage
+import com.fitai.coach.ui.workout.CUSTOM_EXERCISE
+import com.fitai.coach.ui.workout.PlanDayOption
+import com.fitai.coach.ui.workout.parseTimeOfDay
+import com.fitai.coach.ui.workout.planDayOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.roundToLong
 
 enum class LogStep { Capture, Confirm, Reflect }
 
@@ -39,6 +49,8 @@ data class LogUiState(
     val saving: Boolean = false,
     val restored: Boolean = false,
     val problem: String? = null,
+    /** "Duplicate last workout" is fetching it. */
+    val duplicating: Boolean = false,
 )
 
 /** A set field the confirm step edits. */
@@ -59,6 +71,11 @@ class LogWorkoutViewModel(private val session: UserSession, todayIn: (String?) -
     val messages: Flow<String> = toasts.receiveAsFlow()
 
     private val done = Channel<Unit>(Channel.CONFLATED)
+
+    /** Plan days near the workout's date it could count towards. */
+    val planDays: StateFlow<List<PlanDayOption>> = combine(session.timeline.entries, _state) { entries, state ->
+        planDayOptions(entries, state.draft.date, linked = state.draft.planDayId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     /** Fires when the workout is saved (or queued): leave the screen. */
     val saved: Flow<Unit> = done.receiveAsFlow()
@@ -154,6 +171,63 @@ class LogWorkoutViewModel(private val session: UserSession, todayIn: (String?) -
 
     fun removeExercise(exercise: Int) = edit { draft -> draft.copy(exercises = draft.exercises.filterIndexed { i, _ -> i != exercise }) }
 
+    /** Adds an exercise by hand, from the library or as a custom one, with one set to fill in. */
+    fun addExercise(exerciseName: String, customLabel: String?) = edit { draft ->
+        val definition = EXERCISE_DEFINITIONS[exerciseName]
+        val added = ParsedExercise(
+            exerciseName = if (definition != null) exerciseName else CUSTOM_EXERCISE,
+            category = definition?.category ?: CUSTOM_CATEGORY,
+            customLabel = customLabel,
+            sets = listOf(ParsedExercise.SetsItem(setNumber = 1)),
+        )
+        draft.copy(exercises = draft.exercises + added)
+    }
+
+    /** Moves an exercise up ([offset] -1) or down (1) the list. */
+    fun moveExercise(exercise: Int, offset: Int) = edit { draft ->
+        val target = exercise + offset
+        if (exercise !in draft.exercises.indices || target !in draft.exercises.indices) {
+            draft
+        } else {
+            draft.copy(exercises = draft.exercises.toMutableList().apply { add(target, removeAt(exercise)) })
+        }
+    }
+
+    /** Counts the workout towards a plan day, or (null) not. */
+    fun connectPlanDay(option: PlanDayOption?) = edit { it.copy(planDayId = option?.planDayId, planDayLabel = option?.label) }
+
+    /** Starts from the last workout logged: its exercises, title and notes, dated today. */
+    fun duplicateLast() {
+        if (_state.value.duplicating) return
+        _state.update { it.copy(duplicating = true) }
+        viewModelScope.launch {
+            try {
+                val latest = session.workouts.latest()
+                if (latest == null) {
+                    toasts.send("No previous workout. Log your first workout to enable quick duplication.")
+                } else {
+                    val draft = draftFrom(latest, _state.value.today, session.preferences.preferences.first()?.weightUnit)
+                    _state.update {
+                        it.copy(
+                            draft = draft,
+                            step = if (draft.exercises.isEmpty()) LogStep.Capture else LogStep.Confirm,
+                            restored = false,
+                            problem = null,
+                            parseNote = null,
+                        )
+                    }
+                    toasts.send("Duplicated ${latest.focus.ifBlank { "workout" }}, dated today")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toasts.send(e.userMessage("Couldn't duplicate workout"))
+            } finally {
+                _state.update { it.copy(duplicating = false) }
+            }
+        }
+    }
+
     fun save() {
         val current = _state.value
         current.draft.saveProblem(current.today)?.let { problem ->
@@ -163,7 +237,8 @@ class LogWorkoutViewModel(private val session: UserSession, todayIn: (String?) -
         _state.update { it.copy(saving = true, problem = null) }
         viewModelScope.launch {
             try {
-                when (val result = session.workouts.logWorkout(current.draft.toRequest())) {
+                val distanceUnit = session.preferences.preferences.first()?.distanceUnit
+                when (val result = session.workouts.logWorkout(current.draft.toRequest(distanceUnit))) {
                     is LogResult.Saved -> {
                         val prs = result.workout?.newPersonalRecords.orEmpty().size
                         toasts.send(if (prs > 0) "Workout logged — ${if (prs == 1) "new PR!" else "$prs new PRs!"}" else "Workout logged")
@@ -216,6 +291,8 @@ class LogWorkoutViewModel(private val session: UserSession, todayIn: (String?) -
 
     private companion object {
         const val DRAFT_KEY = "log-draft"
+        const val STOP_TIMEOUT_MS = 5_000L
+        const val CUSTOM_CATEGORY = "conditioning"
         const val DRAFT_DEBOUNCE_MS = 400L
         const val MIN_CONFIDENCE = 80
         const val FULL_CONFIDENCE = 100
@@ -223,14 +300,25 @@ class LogWorkoutViewModel(private val session: UserSession, todayIn: (String?) -
     }
 }
 
-/** The create request for a finished draft (validated by [saveProblem] first). */
-fun LogDraft.toRequest(): CreateWorkoutRequest = CreateWorkoutRequest(
+/**
+ * The create request for a finished draft (validated by [saveProblem] first).
+ * The distance is in [distanceUnit] and goes to the server in metres.
+ */
+fun LogDraft.toRequest(distanceUnit: String? = null): CreateWorkoutRequest = CreateWorkoutRequest(
     date = date,
     focus = title.trim().ifEmpty { "Workout" },
     mainWorkout = text.trim().ifEmpty { summarize(exercises) },
-    notes = notes.trim().takeIf { it.isNotEmpty() }?.let { Patch.of(it) } ?: Patch.Absent,
-    rpe = rpe?.let { Patch.of(it) } ?: Patch.Absent,
-    duration = duration.trim().toIntOrNull()?.let { Patch.of(it) } ?: Patch.Absent,
+    notes = notes.trim().ifEmpty { null }.sent(),
+    rpe = rpe.sent(),
+    duration = duration.trim().toIntOrNull().sent(),
+    timeOfDayMin = parseTimeOfDay(timeOfDay).sent(),
+    distanceMeters = distance.trim().toDoubleOrNull()?.let { userDistanceToMeters(it, distanceUnit).roundToLong().toDouble() }.sent(),
+    avgHeartrate = avgHeartrate.trim().toIntOrNull().sent(),
+    maxHeartrate = maxHeartrate.trim().toIntOrNull().sent(),
+    planDayId = planDayId.sent(),
     exercises = exercises.takeIf { it.isNotEmpty() }?.map { it.toCreateExercise() },
     structureBlocks = blocks.takeIf { it.isNotEmpty() }?.map { it.toCreateBlock() },
 )
+
+/** A value to send, or left out of the request when there is none. */
+private fun <T : Any> T?.sent(): Patch<T> = this?.let { Patch.of(it) } ?: Patch.Absent

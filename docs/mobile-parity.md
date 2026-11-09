@@ -19,9 +19,9 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Reorder exercises — `PATCH /workouts/{id}/set-order`.
 - [x] **Last time** and **next target** rows per exercise — `GET /exercises/{name}/history`.
 - [x] Session grade card ("did the session do its job") — `GET /workouts/{id}/session-grade`.
-- [ ] Link to a plan day, or unlink — `PATCH /workouts/{id}/plan-day`.
+- [x] Link to a plan day, or unlink — `PATCH /workouts/{id}/plan-day`.
 - [x] Counts-as-training switch — `PATCH /workouts/{id}`.
-- [ ] Device detail: pace, cadence, power, calories, moving time.
+- [x] Device detail: pace, cadence, power, calories, moving time.
 
 ### Timeline
 - [x] Move a session from a menu: Today / Tomorrow / +7 days / Pick date. A planned day uses `PATCH /plans/days/{id}` with `scheduledDate`; a logged one uses `PATCH /workouts/{id}` with `date`.
@@ -46,10 +46,10 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Rename the title — `PATCH /plans/days/{id}` with `focus`.
 
 ### Log workout
-- [ ] Add an exercise by hand from the library; reorder exercises.
-- [ ] **Duplicate last workout** — `GET /workouts/latest`.
-- [ ] Connect to a plan day — `GET /plans/{id}`, then `planDayId` on save.
-- [ ] Extra fields: time of day, distance, average and max heart rate.
+- [x] Add an exercise by hand from the library; reorder exercises.
+- [x] **Duplicate last workout** — `GET /workouts/latest`.
+- [x] Connect to a plan day — `GET /plans/{id}`, then `planDayId` on save.
+- [x] Extra fields: time of day, distance, average and max heart rate.
 
 ## Wave 2: weekly review and analytics
 
