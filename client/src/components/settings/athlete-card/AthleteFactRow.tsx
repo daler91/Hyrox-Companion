@@ -3,6 +3,7 @@ import type { AthleteFact, UpdateAthleteFact } from "@shared/schema";
 import { Archive, Pencil } from "lucide-react";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +83,7 @@ interface AthleteFactRowProps {
 /** One fact the coach reads, with its "Still true?" check once it is due. */
 export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
   const [editing, setEditing] = useState(false);
+  const [pendingRetire, setPendingRetire] = useState(false);
   const update = useUpdateAthleteFact();
   const retire = () => {
     update.mutate({ id: fact.id, changes: { active: false } });
@@ -130,7 +132,7 @@ export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
                   variant="ghost"
                   size="icon"
                   aria-label={`Retire "${fact.fact}"`}
-                  onClick={retire}
+                  onClick={() => setPendingRetire(true)}
                   disabled={update.isPending}
                 >
                   <Archive className="h-4 w-4" aria-hidden="true" />
@@ -164,6 +166,22 @@ export function AthleteFactRow({ fact, due }: AthleteFactRowProps) {
           </div>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={pendingRetire}
+        onOpenChange={setPendingRetire}
+        title="Retire this fact?"
+        description={`"${fact.fact}" will be moved to your retired list. Your coach will no longer read it.`}
+        confirmText="Retire"
+        isPending={update.isPending}
+        cancelTestId="cancel-retire-fact"
+        confirmTestId="confirm-retire-fact"
+        onConfirm={() => {
+          update.mutate(
+            { id: fact.id, changes: { active: false } },
+            { onSettled: () => setPendingRetire(false) },
+          );
+        }}
+      />
     </li>
   );
 }
