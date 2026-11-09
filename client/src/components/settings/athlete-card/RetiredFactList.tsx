@@ -133,7 +133,17 @@ function DeleteFactButton({ fact, disabled, onClick }: DeleteFactButtonProps) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button size="icon" variant="ghost" aria-label={`Delete "${fact.fact}"`} onClick={onClick} disabled={disabled}>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Delete "${fact.fact}"`}
+            onClick={(e) => {
+              if (disabled) e.preventDefault();
+              else onClick();
+            }}
+            aria-disabled={disabled}
+            className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+          >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
           </Button>
         </TooltipTrigger>
