@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -29,6 +30,8 @@ import androidx.navigation3.ui.NavDisplay
 import com.fitai.coach.core.push.PushRegistration
 import com.fitai.coach.ui.analytics.AnalyticsScreen
 import com.fitai.coach.ui.coach.CoachPanel
+import com.fitai.coach.ui.coach.CoachThread
+import com.fitai.coach.ui.coach.CoachThreadSaver
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
@@ -43,6 +46,7 @@ import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.timeline.TimelineNavigation
 import com.fitai.coach.ui.timeline.TimelineScreen
 import com.fitai.coach.ui.workout.WorkoutDetailScreen
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
@@ -54,6 +58,12 @@ fun AppShell() {
     val session = LocalUserSession.current
     val backStack = remember { AppBackStack() }
     var coachOpen by rememberSaveable { mutableStateOf(false) }
+    // "Ask coach" on a workout opens its own thread; the floating button, the main conversation.
+    var coachThread by rememberSaveable(stateSaver = CoachThreadSaver) { mutableStateOf<CoachThread?>(null) }
+    val openCoach: (CoachThread?) -> Unit = {
+        coachThread = it
+        coachOpen = true
+    }
     // Setup (onboarding): opens by itself once for a new account, and again
     // from Settings. Each opening is a new run, so it starts fresh.
     var setupOpen by rememberSaveable { mutableStateOf(false) }
@@ -61,6 +71,7 @@ fun AppShell() {
     var setupChecked by rememberSaveable { mutableStateOf(false) }
     var shellMessage by remember { mutableStateOf<String?>(null) }
     val toasts = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val colors = FitaiTheme.colors
     // Links from emails and notifications: the tab, and what to open on it.
     val deepLinks = koinInject<DeepLinks>()
@@ -124,7 +135,7 @@ fun AppShell() {
         bottomBar = { BottomBar(current = backStack.currentTab, onSelect = backStack::select) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { coachOpen = true },
+                onClick = { openCoach(null) },
                 shape = Radius.Lg,
                 containerColor = colors.primary,
                 contentColor = colors.onPrimary,
@@ -141,14 +152,29 @@ fun AppShell() {
                     TimelineScreen(
                         TimelineNavigation(
                             openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
-                            askCoach = { coachOpen = true },
+                            askCoach = { openCoach(CoachThread.of(it)) },
                             logWorkout = { backStack.select(TopLevel.LogWorkout) },
                         ),
                         openPlanDayId = openPlanDayId,
                         onPlanDayOpened = { openPlanDayId = null },
                     )
                 }
-                entry<Route.WorkoutDetail> { route -> WorkoutDetailScreen(route.workoutId, onBack = { backStack.pop() }) }
+                entry<Route.WorkoutDetail> { route ->
+                    WorkoutDetailScreen(
+                        route.workoutId,
+                        onBack = { backStack.pop() },
+                        onAskCoach = { openCoach(it) },
+                        onDeleted = { binId ->
+                            backStack.pop()
+                            scope.launch {
+                                offerUndo(toasts, "Workout deleted") {
+                                    session.workouts.restore(binId)
+                                    session.timeline.refresh()
+                                }
+                            }
+                        },
+                    )
+                }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
                 entry<Route.Nutrition> { NutritionScreen(openDate = openNutritionDate, onDateOpened = { openNutritionDate = null }) }
                 entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }
@@ -166,7 +192,7 @@ fun AppShell() {
         )
     }
 
-    if (coachOpen) CoachPanel(onClose = { coachOpen = false })
+    if (coachOpen) CoachPanel(onClose = { coachOpen = false }, thread = coachThread)
 }
 
 @Composable

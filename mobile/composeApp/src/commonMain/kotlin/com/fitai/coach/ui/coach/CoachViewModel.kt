@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.generated.ChatFactProposal
 import com.fitai.coach.core.api.generated.PlanProposal
+import com.fitai.coach.core.data.ChatFocus
+import com.fitai.coach.core.data.ChatTurnIds
 import com.fitai.coach.core.data.CoachRepository
 import com.fitai.coach.core.data.EncodedImage
 import com.fitai.coach.core.data.MAX_CHAT_MESSAGE
@@ -55,6 +57,8 @@ class CoachViewModel(
     /** After the plan changed (a proposal applied or undone): refresh the timeline. */
     private val onPlanChanged: suspend () -> Unit,
     private val newId: () -> String,
+    /** A workout's own thread (Ask coach on a workout); null for the main conversation. */
+    private val focus: ChatFocus? = null,
 ) : ViewModel() {
     private val local = MutableStateFlow(CoachUiState())
     private val toasts = Channel<String>(Channel.BUFFERED)
@@ -75,26 +79,11 @@ class CoachViewModel(
 
     private fun load() {
         viewModelScope.launch {
-            val greeting = try {
-                coach.welcome().also { welcome ->
-                    local.update { s ->
-                        s.copy(
-                            quickActions = welcome.quickActions.take(MAX_QUICK_ACTIONS).map {
-                                QuickAction(
-                                    it.label,
-                                    it.message ?: it.label,
-                                )
-                            },
-                        )
-                    }
-                }.greeting
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                DEFAULT_WELCOME
-            }
+            // A workout's thread has no general greeting or quick actions: the
+            // athlete came to ask about that workout.
+            val greeting = if (focus != null) THREAD_WELCOME else loadWelcome()
             try {
-                val page = coach.history()
+                val page = coach.history(focus = focus)
                 older = page.before?.let { b -> page.beforeId?.let { b to it } }
                 val pending = runCatching { coach.pendingProposal() }.getOrNull()
                 local.update { s ->
@@ -115,12 +104,25 @@ class CoachViewModel(
         }
     }
 
+    /** The server's greeting, with its quick actions; the default greeting when it can't be had. */
+    private suspend fun loadWelcome(): String = try {
+        val welcome = coach.welcome()
+        local.update { s ->
+            s.copy(quickActions = welcome.quickActions.take(MAX_QUICK_ACTIONS).map { QuickAction(it.label, it.message ?: it.label) })
+        }
+        welcome.greeting
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        DEFAULT_WELCOME
+    }
+
     fun loadOlder() {
         val (before, beforeId) = older ?: return
         local.update { it.copy(loadingOlder = true, olderFailed = false) }
         viewModelScope.launch {
             try {
-                val page = coach.history(before, beforeId)
+                val page = coach.history(before, beforeId, focus = focus)
                 older = page.before?.let { b -> page.beforeId?.let { b to it } }
                 local.update { s ->
                     val known = s.items.map { it.id }.toSet()
@@ -202,7 +204,7 @@ class CoachViewModel(
         }
         sendJob = viewModelScope.launch {
             try {
-                coach.send(message, userId, assistantId, photo, replaceAssistantId).collect { event ->
+                coach.send(message, ChatTurnIds(userId, assistantId, replaceAssistantId), photo, focus).collect { event ->
                     local.update { s ->
                         val label = when {
                             event.status != null -> statusLabel(event.status)
@@ -350,7 +352,9 @@ class CoachViewModel(
 
     private suspend fun say(text: String, save: Boolean) {
         local.update { s -> s.copy(items = s.items + ChatItem(newId(), ChatRole.Assistant, text)) }
-        if (save) runCatching { coach.saveAssistantMessage(text) }
+        // The saved-turn endpoint writes to the main conversation only, so a
+        // workout's thread shows the note without saving it (as on the web).
+        if (save && focus == null) runCatching { coach.saveAssistantMessage(text) }
     }
 
     private suspend fun planChanged() {

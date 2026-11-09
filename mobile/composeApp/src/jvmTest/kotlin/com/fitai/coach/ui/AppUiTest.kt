@@ -75,6 +75,38 @@ class AppUiTest {
     }
 
     @Test
+    fun aDeletedWorkoutComesBackWithUndo() {
+        val today = FakeApi.today
+        val api = FakeApi().apply {
+            establishedAccount(
+                """{"id":"log-w1","date":"$today","type":"logged","status":"completed",""" +
+                    """"focus":"Leg day","mainWorkout":"","workoutLogId":"w1"}""",
+            )
+            on(
+                "GET",
+                "/api/v1/workouts/w1",
+                """{"id":"w1","userId":"u1","date":"$today","focus":"Leg day","mainWorkout":"","countsAsTraining":true,""" +
+                    """"autoLinkRecordingOnly":false,"deviceActivity":{},"exerciseSets":[],"structureBlocks":[]}""",
+            )
+            on("DELETE", "/api/v1/workouts/w1", """{"success":true,"recycleBinItemId":"rb1"}""")
+            on("POST", "/api/v1/recycle-bin/rb1/restore", """{"ok":true,"entityType":"workout_log","entityId":"w1","warnings":[]}""")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
+            awaitNode(hasText("Leg day"))
+            onNodeWithText("Leg day").performClick()
+            awaitNode(hasText("Delete workout"))
+            onNodeWithText("Delete workout").performClick()
+            onNodeWithText("Delete").performClick()
+
+            // Back on the timeline, with the chance to take it back.
+            awaitNode(hasText("Undo"))
+            assertEquals(1, api.sent("DELETE", "/api/v1/workouts/w1").size)
+            onNodeWithText("Undo").performClick()
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/recycle-bin/rb1/restore").isNotEmpty() }
+        }
+    }
+
+    @Test
     fun switchingToPoundsInSettingsSavesThePreference() {
         val api = FakeApi().apply {
             establishedAccount()

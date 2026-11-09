@@ -21,6 +21,19 @@ public data class HistoryPage(val messages: List<ChatHistoryMessage>, val before
     val hasOlder: Boolean get() = before != null && beforeId != null
 }
 
+/**
+ * The ids a chat turn is saved under: the athlete's message, the reply, and
+ * the failed reply a retry replaces, if any.
+ */
+public data class ChatTurnIds(val user: String, val assistant: String, val replacing: String? = null)
+
+/**
+ * A workout's own thread with the coach: the plan day and/or logged workout
+ * it is about. The coach sees that workout, and "make this day easier"
+ * resolves to its plan day.
+ */
+public data class ChatFocus(val planDayId: String? = null, val workoutLogId: String? = null)
+
 /** The longest message the coach takes (shared/schema/types/requests.ts). */
 public const val MAX_CHAT_MESSAGE: Int = 4000
 
@@ -36,9 +49,23 @@ public class CoachRepository(private val api: ApiClient) {
     /** The greeting and quick actions for an opening panel. */
     public suspend fun welcome(): GetChatWelcomeResponse = api.call(ApiEndpoints.GetChatWelcome)
 
-    /** A page of the main conversation; the server's rolling summaries are left out. */
-    public suspend fun history(before: String? = null, beforeId: String? = null, limit: Int = PAGE_SIZE): HistoryPage {
-        val query = GetChatHistoryQuery(limit = limit, before = before, beforeId = beforeId).toQueryParameters()
+    /**
+     * A page of the conversation: the main one, or [focus]'s thread. The
+     * server's rolling summaries are left out.
+     */
+    public suspend fun history(
+        before: String? = null,
+        beforeId: String? = null,
+        limit: Int = PAGE_SIZE,
+        focus: ChatFocus? = null,
+    ): HistoryPage {
+        val query = GetChatHistoryQuery(
+            limit = limit,
+            before = before,
+            beforeId = beforeId,
+            focusPlanDayId = focus?.planDayId,
+            focusWorkoutLogId = focus?.workoutLogId,
+        ).toQueryParameters()
         val response = api.callWithHeaders(ApiEndpoints.GetChatHistory, query = query)
         return HistoryPage(
             messages = response.body.filter { it.kind != ChatHistoryMessage.Kind.Rolling },
@@ -48,23 +75,24 @@ public class CoachRepository(private val api: ApiClient) {
     }
 
     /**
-     * Sends [message] and streams the reply's events. With the two ids the
-     * server reads the conversation itself and saves both turns under them;
-     * [replaceAssistantId] retries a failed reply in place.
+     * Sends [message] and streams the reply's events. With the turn's [ids]
+     * the server reads the conversation itself and saves both turns under
+     * them; [focus] puts both turns in that workout's thread.
      */
     public fun send(
         message: String,
-        userMessageId: String,
-        assistantMessageId: String,
+        ids: ChatTurnIds,
         photo: EncodedImage? = null,
-        replaceAssistantId: String? = null,
+        focus: ChatFocus? = null,
     ): Flow<ChatStreamEvent> = api.stream(
         ApiEndpoints.PostChatStream,
         PostChatStreamRequest(
             message = message,
-            userMessageId = userMessageId,
-            assistantMessageId = assistantMessageId,
-            replaceAssistantId = replaceAssistantId,
+            userMessageId = ids.user,
+            assistantMessageId = ids.assistant,
+            replaceAssistantId = ids.replacing,
+            focusPlanDayId = focus?.planDayId,
+            focusWorkoutLogId = focus?.workoutLogId,
             photo = photo?.let {
                 PostChatStreamRequest.Photo(
                     mimeType = PostChatStreamRequest.Photo.MimeType.entries.firstOrNull { m -> m.wireValue == it.mimeType }

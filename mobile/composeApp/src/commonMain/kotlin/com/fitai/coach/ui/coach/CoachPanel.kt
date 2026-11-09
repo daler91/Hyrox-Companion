@@ -69,17 +69,22 @@ import kotlinx.coroutines.launch
 private const val PANEL_HEIGHT = 0.92f
 private const val COUNTER_FROM = 0.8
 
-/** The coach, as a panel over any screen (CoachPanel.tsx). */
+/**
+ * The coach, as a panel over any screen (CoachPanel.tsx). With [thread] it is
+ * that workout's own conversation (the web's embedded workout chat).
+ */
 @Composable
-fun CoachPanel(onClose: () -> Unit) {
+fun CoachPanel(onClose: () -> Unit, thread: CoachThread? = null) {
     val session = LocalUserSession.current
-    val vm = viewModel(key = "coach-${session.userId}") {
+    val key = thread?.let { "coach-${session.userId}-${it.focus.planDayId}-${it.focus.workoutLogId}" } ?: "coach-${session.userId}"
+    val vm = viewModel(key = key) {
         CoachViewModel(
             coach = session.coach,
             aiEnabled = session.preferences.preferences.map { it?.aiCoachEnabled },
             enableAi = { session.preferences.update(UpdateUserPreferences(aiCoachEnabled = true)) },
             onPlanChanged = { session.timeline.refresh() },
             newId = ::newIdempotencyKey,
+            focus = thread?.focus,
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -93,13 +98,19 @@ fun CoachPanel(onClose: () -> Unit) {
     FitaiBottomSheet(onDismissRequest = onClose) {
         Box(Modifier.fillMaxHeight(PANEL_HEIGHT).imePadding()) {
             Column(Modifier.fillMaxWidth()) {
-                Header(canClear = state.items.size > 1, onClear = { confirmClear = true }, onClose = onClose)
+                // Clearing deletes every thread, so it is offered from the main conversation only.
+                Header(
+                    title = thread?.title,
+                    canClear = thread == null && state.items.size > 1,
+                    onClear = { confirmClear = true },
+                    onClose = onClose,
+                )
                 HorizontalDivider(color = FitaiTheme.colors.border)
                 if (state.aiEnabled == false) {
                     Consent(state.enablingAi, vm::enableAiCoach)
                 } else {
                     Conversation(state, vm, Modifier.weight(1f))
-                    Composer(state, vm, pickPhoto, takePhoto)
+                    Composer(state, vm, pickPhoto, takePhoto, seed = thread?.seed.orEmpty())
                 }
             }
             FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
@@ -121,18 +132,17 @@ fun CoachPanel(onClose: () -> Unit) {
 }
 
 @Composable
-private fun Header(canClear: Boolean, onClear: () -> Unit, onClose: () -> Unit) {
+private fun Header(title: String?, canClear: Boolean, onClear: () -> Unit, onClose: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg, vertical = Spacing.Sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(LucideIcons.MessageSquare, contentDescription = null, tint = FitaiTheme.colors.text)
-        Text(
-            "coach",
-            style = FitaiTheme.typography.h3,
-            color = FitaiTheme.colors.text,
-            modifier = Modifier.weight(1f).padding(start = Spacing.Sm).semantics { heading() },
-        )
+        Column(Modifier.weight(1f).padding(start = Spacing.Sm)) {
+            Text("coach", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
+            // In a workout's thread: which workout the conversation is about.
+            title?.let { Text("About: $it", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted, maxLines = 1) }
+        }
         if (canClear) {
             IconButton(onClick = onClear) {
                 Icon(LucideIcons.Trash, contentDescription = "clear chat history", tint = FitaiTheme.colors.textMuted)
@@ -280,8 +290,8 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
 }
 
 @Composable
-private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> Unit)?, takePhoto: (() -> Unit)?) {
-    var text by rememberSaveable { mutableStateOf("") }
+private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> Unit)?, takePhoto: (() -> Unit)?, seed: String) {
+    var text by rememberSaveable(seed) { mutableStateOf(seed) }
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg, vertical = Spacing.Sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.Xs),

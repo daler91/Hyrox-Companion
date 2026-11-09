@@ -54,8 +54,17 @@ public interface WorkoutDao {
     @Query("SELECT * FROM exercise_sets WHERE id = :id")
     public suspend fun set(id: String): ExerciseSetEntity?
 
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    public suspend fun get(id: String): WorkoutEntity?
+
     @Upsert
     public suspend fun upsert(workout: WorkoutEntity)
+
+    @Query("DELETE FROM workouts WHERE id = :id")
+    public suspend fun delete(id: String)
+
+    @Query("DELETE FROM exercise_sets WHERE workoutId = :workoutId")
+    public suspend fun deleteSetsOf(workoutId: String)
 
     @Upsert
     public suspend fun upsertSets(rows: List<ExerciseSetEntity>)
