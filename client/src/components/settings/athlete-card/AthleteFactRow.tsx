@@ -6,6 +6,7 @@ import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CharacterCount } from "@/components/ui/character-count";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,6 +26,7 @@ function AthleteFactEditor({ fact, onDone }: AthleteFactEditorProps) {
   const update = useUpdateAthleteFact();
   const trimmed = text.trim();
   const inputId = `edit-athlete-fact-${fact.id}`;
+  const countId = `${inputId}-count`;
   // Focus the wording when the form opens, as an inline edit should; done
   // here rather than with autoFocus, which also fires on every remount.
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +61,7 @@ function AthleteFactEditor({ fact, onDone }: AthleteFactEditorProps) {
             setText(event.target.value);
           }}
           maxLength={ATHLETE_FACT_MAX_LENGTH}
+          aria-describedby={countId}
         />
         <div className="flex flex-wrap items-center gap-2">
           <CategorySelect id={`${inputId}-category`} value={category} onValueChange={setCategory} />
@@ -68,6 +71,12 @@ function AthleteFactEditor({ fact, onDone }: AthleteFactEditorProps) {
           <Button type="button" size="sm" variant="ghost" onClick={onDone}>
             Cancel
           </Button>
+          <CharacterCount
+            id={countId}
+            value={text}
+            max={ATHLETE_FACT_MAX_LENGTH}
+            className="ml-auto"
+          />
         </div>
       </form>
     </li>
