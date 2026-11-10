@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -22,13 +23,24 @@ import com.fitai.coach.ui.theme.FitaiTheme
 private const val BAR_GAP = 0.25f
 private const val DASH = 8f
 
+/** A run of bars, [from] to [to] inclusive, shaded behind in [color] (an annotation's weeks). */
+data class Shade(val from: Int, val to: Int, val color: Color)
+
 /**
  * A bar chart drawn on a canvas: bars scaled to the largest value (or the
  * [goal], when higher), an optional dashed goal line, and bars that reach
- * the goal in the success colour. Its description reads out the values.
+ * the goal in the success colour, over any [shading]. Its description reads
+ * out the values.
  */
 @Composable
-fun BarChart(bars: List<Bar>, label: String, modifier: Modifier = Modifier, goal: Double? = null, unit: String = "") {
+fun BarChart(
+    bars: List<Bar>,
+    label: String,
+    modifier: Modifier = Modifier,
+    goal: Double? = null,
+    unit: String = "",
+    shading: List<Shade> = emptyList(),
+) {
     val colors = FitaiTheme.colors
     val max = maxOf(bars.maxOfOrNull { it.value } ?: 0.0, goal ?: 0.0).takeIf { it > 0 } ?: 1.0
     val description = "$label: " + bars.joinToString { "${shortDate(it.date)} ${formatNumber(it.value)}$unit" }
@@ -37,6 +49,9 @@ fun BarChart(bars: List<Bar>, label: String, modifier: Modifier = Modifier, goal
             if (bars.isEmpty()) return@Canvas
             val slot = size.width / bars.size
             val barWidth = slot * (1 - BAR_GAP)
+            shading.forEach { shade ->
+                drawRect(shade.color, Offset(shade.from * slot, 0f), Size((shade.to - shade.from + 1) * slot, size.height))
+            }
             bars.forEachIndexed { i, bar ->
                 val h = (bar.value / max * size.height).toFloat()
                 drawRoundRect(

@@ -9,6 +9,7 @@ import kotlin.test.assertNull
 
 private const val PREDICTION = "/api/v1/race-prediction"
 private const val INSIGHTS = "/api/v1/coach-insights"
+private const val CHART_ANALYSIS = "/api/v1/overview-analysis"
 
 internal fun racePredictionJson(totalSeconds: Int = 5025, aiUsed: Boolean = false) =
     """{"totalFinishSeconds":$totalSeconds,"segments":[{"index":0,"kind":"run","exerciseName":"running","label":"Run 1",""" +
@@ -73,5 +74,27 @@ class AnalyticsInsightsTest {
         analytics.regenerateCoachInsights()
 
         assertEquals("## On track", analytics.coachInsights.first()?.insights)
+    }
+
+    @Test
+    fun theChartReadingIsKeptPerRangeAndNamesTheRangeAsTheWebDoes() = runTest {
+        server.on("GET", CHART_ANALYSIS, 200, """{"sections":null,"ragInfo":null,"generatedAt":null}""")
+        analytics.refreshOverviewAnalysis(AnalyticsRange.Quarter)
+        assertNull(analytics.overviewAnalysis(AnalyticsRange.Quarter).first()?.sections)
+
+        server.on(
+            "POST",
+            CHART_ANALYSIS,
+            200,
+            """{"sections":{"trainingLoad":"Load is steady.","bodySystems":null,"formMonotony":null,"objectiveLoad":null,""" +
+                """"weeklyWorkouts":null,"rpeDuration":null,"consistency":null},"ragInfo":null,""" +
+                """"generatedAt":"2026-11-10T09:30:00.000Z","rangeDays":null,"stale":false}""",
+        )
+        analytics.regenerateOverviewAnalysis(AnalyticsRange.All)
+
+        assertEquals("range=90", server.sentTo("GET", CHART_ANALYSIS).single().query)
+        assertEquals("range=all", server.sentTo("POST", CHART_ANALYSIS).single().query)
+        assertEquals("Load is steady.", analytics.overviewAnalysis(AnalyticsRange.All).first()?.sections?.trainingLoad)
+        assertNull(analytics.overviewAnalysis(AnalyticsRange.Quarter).first()?.sections)
     }
 }

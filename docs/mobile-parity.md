@@ -61,10 +61,11 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Analytics **Session quality** — `GET /session-grades`.
 - [x] Analytics **Coach insights**: generate and regenerate — `/coach-insights`.
 - [x] Analytics **Breakdown**: categories, movement patterns, muscle map (all already in the overview response).
-- [ ] Overview:
+- [x] Overview:
   - AI chart explanations — `/overview-analysis`;
   - charts for the ACWR trend, form and monotony, body-system load, the consistency heatmap, and RPE, duration and mileage trends;
   - annotation bands on the charts.
+  - Left out: the body-system card's "Show as table" view. Instead, each tile's bars read their weekly values aloud.
 - [ ] **MAF trend** for MAF-style athletes — `GET /maf-tests`.
 - [ ] **Fuelling** tab: intake against training load — `GET /nutrition/block`.
 
