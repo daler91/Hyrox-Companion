@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 /** The tabs, in the web's order; the last three ignore the date range (each is its own window). */
 enum class AnalyticsTab(val label: String, val usesRange: Boolean = true) {
     Overview("Overview"),
+    Breakdown("Breakdown"),
     Records("Records"),
     Progression("Progression"),
     Sessions("Session quality", usesRange = false),
@@ -54,7 +55,7 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
         status,
     ) { s, (overview, records, exercises), st ->
         val hasData = when (s.tab) {
-            AnalyticsTab.Overview -> overview != null
+            AnalyticsTab.Overview, AnalyticsTab.Breakdown -> overview != null
             AnalyticsTab.Records -> records != null
             AnalyticsTab.Progression -> records != null && exercises != null
             // These panels load themselves.
@@ -84,7 +85,7 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
             status.value = Status(loading = true)
             val ok = try {
                 when (current.tab) {
-                    AnalyticsTab.Overview -> analytics.refreshOverview(current.range, today)
+                    AnalyticsTab.Overview, AnalyticsTab.Breakdown -> analytics.refreshOverview(current.range, today)
                     AnalyticsTab.Records -> analytics.refreshRecords(current.range, today)
                     AnalyticsTab.Progression -> {
                         analytics.refreshRecords(current.range, today)

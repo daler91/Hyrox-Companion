@@ -98,6 +98,7 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
                 state.loading -> item { LoadingState() }
                 else -> when (state.tab) {
                     AnalyticsTab.Overview -> state.overview?.let { overview(it, units, onLogWorkout) }
+                    AnalyticsTab.Breakdown -> state.overview?.let { breakdown(it, onLogWorkout) }
                     AnalyticsTab.Records -> records(state, vm, units, today, onLogWorkout)
                     AnalyticsTab.Progression -> progression(state, vm, units, onLogWorkout)
                     AnalyticsTab.Sessions -> item { SessionGradesPanel(navigation.openWorkout) }
