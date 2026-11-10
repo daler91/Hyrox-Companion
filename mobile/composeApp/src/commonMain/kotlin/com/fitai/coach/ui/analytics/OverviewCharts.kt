@@ -57,6 +57,8 @@ import kotlin.math.roundToInt
 private const val SHADE_ALPHA = 0.18f
 private const val FUTURE_ALPHA = 0.4f
 private const val HALF_TURN = 180f
+private const val FORM_TITLE = "Form (TSB)"
+private const val STRAIN_TITLE = "Strain (Foster)"
 
 /** The AI header above the charts (OverviewAnalysisHeader): generate, when, and why not. */
 @Composable
@@ -224,8 +226,8 @@ fun FormMonotonyCard(trend: List<TrainingOverview.TrainingLoad.TrendItem>, expla
     if (!form.isLine() && !monotony.isLine()) return
     ChartCard {
         if (form.isLine()) {
-            ChartLabel("Form (TSB)")
-            LineChart(listOf(LineSeries("Form (TSB)", form, SeriesColor.Purple)), "Form (TSB)", references = listOf(FORM_REFERENCE))
+            ChartLabel(FORM_TITLE)
+            LineChart(listOf(LineSeries(FORM_TITLE, form, SeriesColor.Purple)), FORM_TITLE, references = listOf(FORM_REFERENCE))
         }
         if (monotony.isLine()) {
             ChartLabel("Monotony")
@@ -276,8 +278,8 @@ fun ObjectiveLoadCard(load: TrainingOverview.TrainingLoad, explanation: String?)
             LineChart(fitness, "Fitness & Fatigue")
         }
         if (strain.isLine()) {
-            ChartLabel("Strain (Foster)")
-            LineChart(listOf(LineSeries("Strain (Foster)", strain, SeriesColor.Red)), "Strain (Foster)")
+            ChartLabel(STRAIN_TITLE)
+            LineChart(listOf(LineSeries(STRAIN_TITLE, strain, SeriesColor.Red)), STRAIN_TITLE)
         }
         ChartExplanation(explanation)
     }

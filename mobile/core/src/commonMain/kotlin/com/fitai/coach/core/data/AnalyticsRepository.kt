@@ -117,12 +117,12 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
 
     /** The AI's reading of the Overview charts for [range], kept on the device per range. */
     public fun overviewAnalysis(range: AnalyticsRange): Flow<OverviewAnalysis?> =
-        cache.observe(key("overview-analysis", range), OverviewAnalysis.serializer())
+        cache.observe(key(OVERVIEW_ANALYSIS, range), OverviewAnalysis.serializer())
 
     /** Fetches the stored chart reading for [range], without spending AI. @throws com.fitai.coach.core.api.ApiException */
     public suspend fun refreshOverviewAnalysis(range: AnalyticsRange) {
         val query = GetOverviewAnalysisQuery(range = range.wire()).toQueryParameters()
-        cache.put(key("overview-analysis", range), OverviewAnalysis.serializer(), api.call(ApiEndpoints.GetOverviewAnalysis, query = query))
+        cache.put(key(OVERVIEW_ANALYSIS, range), OverviewAnalysis.serializer(), api.call(ApiEndpoints.GetOverviewAnalysis, query = query))
     }
 
     /**
@@ -135,7 +135,7 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
         val query = PostOverviewAnalysisQuery(range = range.wire()).toQueryParameters()
         val result = api.call(ApiEndpoints.PostOverviewAnalysis, query = query)
         cache.put(
-            key("overview-analysis", range),
+            key(OVERVIEW_ANALYSIS, range),
             OverviewAnalysis.serializer(),
             OverviewAnalysis(result.sections, result.ragInfo, result.generatedAt, result.rangeDays, result.stale),
         )
@@ -143,6 +143,7 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
 
     private companion object {
         const val RACE_PREDICTION = "analytics:race-prediction"
+        const val OVERVIEW_ANALYSIS = "overview-analysis"
         const val COACH_INSIGHTS = "analytics:coach-insights"
         val RECORDS = MapSerializer(String.serializer(), PersonalRecord.serializer())
         val EXERCISES = MapSerializer(String.serializer(), ListSerializer(GetExerciseAnalyticsResponseValueItem.serializer()))
