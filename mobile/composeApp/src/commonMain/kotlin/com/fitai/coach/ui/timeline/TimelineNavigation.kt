@@ -9,4 +9,6 @@ data class TimelineNavigation(
     val logWorkout: () -> Unit,
     /** Edit a planned session: its text, priority and sets. */
     val editPlanDay: (entryId: String) -> Unit = {},
+    /** The weekly review of the week starting [weekStart]. */
+    val openReview: (weekStart: String) -> Unit = {},
 )

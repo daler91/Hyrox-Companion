@@ -3,12 +3,14 @@ package com.fitai.coach.ui
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import com.fitai.coach.core.auth.AuthState
@@ -268,6 +270,42 @@ class AppUiTest {
 
             api.on("GET", "/api/v1/auth/user", reviewing.replace("\"isAutoCoaching\":true", "\"isAutoCoaching\":false"))
             waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Coach is reviewing your workout").fetchSemanticsNodes().isEmpty() }
+        }
+    }
+
+    @Test
+    fun aReviewLinkOpensTheWeekAndSavesNextWeeksLine() {
+        val review = """{"weekStart":"2026-11-02","weekEnd":"2026-11-08","timezone":"UTC","isCurrentWeek":false,"weeklyGoal":4,""" +
+            """"hasPlan":true,"current":{"sessionsLogged":3,"sessionsPlanned":4,"plannedCompleted":3,"missed":1,"skipped":0,""" +
+            """"outstanding":0,"excused":0,"letGo":0,"totalDurationMin":150,"avgRpe":7},"previous":{"sessionsLogged":2,""" +
+            """"sessionsPlanned":4,"plannedCompleted":2,"missed":2,"skipped":0,"outstanding":0,"excused":0,"letGo":0,""" +
+            """"totalDurationMin":100,"avgRpe":null},"deltas":{"sessionsLogged":1,"totalDurationMin":50},""" +
+            """"sessions":[{"workoutLogId":"w1","date":"2026-11-03","focus":"Hill repeats","durationMin":50,"rpe":8,""" +
+            """"source":"manual","planDayId":null}],"plannedDays":[{"planDayId":"d4","date":"2026-11-06","focus":"Sled work",""" +
+            """"status":"missed","excused":false}],"personalRecords":[],"annotations":[],"intent":null,"previousIntent":"Sleep more"}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/weekly-review", review)
+            on("POST", "/api/v1/weekly-review/intent", """{"weekStart":"2026-11-02","intent":"Three runs"}""")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Review("2026-11-05"))
+
+            awaitNode(hasText("Nov 2–8, 2026"))
+            assertTrue(api.sent("GET", "/api/v1/weekly-review").isNotEmpty())
+            onNodeWithText("1 missed").assertExists()
+            onNode(hasScrollAction()).performScrollToNode(hasText("Sleep more"))
+            onNodeWithContentDescription("One thing to carry into next week").performTextInput("Three runs")
+            onNodeWithText("Save").performClick()
+
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/weekly-review/intent").isNotEmpty() }
+            val sent = api.sent("POST", "/api/v1/weekly-review/intent").single().body.orEmpty()
+            assertTrue(sent.contains("\"week\":\"2026-11-02\"") && sent.contains("\"intent\":\"Three runs\""), sent)
+            onNode(hasScrollAction()).performScrollToNode(hasText("Hill repeats"))
+            onNodeWithText("OFF PLAN").assertExists() // badges are uppercase (brand kit §6)
+            onNode(hasScrollAction()).performScrollToNode(hasText("What didn't happen"))
+            onNodeWithText("Sled work").assertExists()
         }
     }
 }

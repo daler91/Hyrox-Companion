@@ -50,8 +50,8 @@
             </intent-filter>
             <!-- App Links (verified by server/bootstrap/wellKnown.ts): the paths
                  emails and Strava's return use that the app has a screen for.
-                 Anything else on the domain (the weekly review, unsubscribe
-                 links) keeps opening in the browser. -->
+                 Anything else on the domain (unsubscribe links, the account
+                 deletion page) keeps opening in the browser. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -62,6 +62,7 @@
                 <data android:path="/log" />
                 <data android:path="/nutrition" />
                 <data android:path="/analytics" />
+                <data android:path="/review" />
                 <data android:path="/settings" />
                 <data android:path="/strava/mobile-callback" />
             </intent-filter>

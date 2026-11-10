@@ -15,7 +15,10 @@ import com.fitai.coach.core.data.RecoveryAction
 import com.fitai.coach.core.data.TimelineRepository
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.dates.addDaysToIsoDate
+import com.fitai.coach.core.dates.currentHourIn
 import com.fitai.coach.ui.format.userMessage
+import com.fitai.coach.ui.review.ReviewPrompt
+import com.fitai.coach.ui.review.reviewPrompt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -51,6 +54,8 @@ data class TimelineUiState(
     val records: Map<String, PersonalRecord> = emptyMap(),
     /** The auto-coach is reviewing a workout and may change upcoming sessions. */
     val coachReviewing: Boolean = false,
+    /** Sunday evening to Tuesday: the nudge into last week's review, unless dismissed for that week. */
+    val reviewPrompt: ReviewPrompt? = null,
     /** Older history can be loaded from the server. */
     val hasOlder: Boolean = false,
     val loadingOlder: Boolean = false,
@@ -73,7 +78,11 @@ sealed interface RecoveryState {
  * refreshed from the server, with the actions on a plan day.
  */
 @Suppress("TooGenericExceptionCaught", "TooManyFunctions")
-class TimelineViewModel(private val session: UserSession, private val todayIn: (String?) -> String) : ViewModel() {
+class TimelineViewModel(
+    private val session: UserSession,
+    private val todayIn: (String?) -> String,
+    private val hourIn: (String?) -> Int = ::currentHourIn,
+) : ViewModel() {
     private val timeline: TimelineRepository = session.timeline
     private val selectedPlan = MutableStateFlow<String?>(null)
     private val expanded = MutableStateFlow(INITIAL_DAYS to INITIAL_DAYS)
@@ -92,7 +101,10 @@ class TimelineViewModel(private val session: UserSession, private val todayIn: (
         session.annotations.annotations,
         session.analytics.records(AnalyticsRange.All),
         session.account.user,
-    ) { annotations, records, user -> Extras(annotations.orEmpty(), records.orEmpty(), user?.isAutoCoaching == true) }
+        session.reviews.dismissedPrompt,
+    ) { annotations, records, user, dismissed ->
+        Extras(annotations.orEmpty(), records.orEmpty(), user?.isAutoCoaching == true, dismissed)
+    }
 
     val state: StateFlow<TimelineUiState> = combine(
         combine(timeline.entries, extras, ::Pair),
@@ -115,6 +127,7 @@ class TimelineViewModel(private val session: UserSession, private val todayIn: (
             week = weekSummary(entries, plans.orEmpty(), shown.planId, summary, today),
             records = more.records,
             coachReviewing = more.coachReviewing,
+            reviewPrompt = reviewPrompt(today, hourIn(prefs?.userTimezone))?.takeIf { it.weekStart != more.dismissedPrompt },
             plans = plans.orEmpty().filter { it.retiredOn == null || it.id == shown.planId },
             selectedPlanId = shown.planId,
             summary = summary,
@@ -168,6 +181,11 @@ class TimelineViewModel(private val session: UserSession, private val todayIn: (
                 wasReviewing = reviewing
             }
         }
+    }
+
+    /** Hides the weekly review prompt for [weekStart]'s window; it returns for the next week. */
+    fun dismissReviewPrompt(weekStart: String) {
+        viewModelScope.launch { attempt { session.reviews.dismissPrompt(weekStart) } }
     }
 
     /** Adds a training note, or (with [id]) changes one. */
@@ -342,6 +360,7 @@ class TimelineViewModel(private val session: UserSession, private val todayIn: (
         val annotations: List<TimelineAnnotation>,
         val records: Map<String, PersonalRecord>,
         val coachReviewing: Boolean,
+        val dismissedPrompt: String?,
     )
 
     /** What the list shows: the plan, how many days each way, the filter, and where older history starts. */
