@@ -24,6 +24,9 @@ sealed interface Route : NavKey {
 
     /** Editing a planned session, by its timeline entry. */
     @Serializable data class PlanDay(val entryId: String) : Route
+
+    /** The weekly review of the week holding [week] (any date in it); the last completed week when null. */
+    @Serializable data class WeeklyReview(val week: String? = null) : Route
 }
 
 /**

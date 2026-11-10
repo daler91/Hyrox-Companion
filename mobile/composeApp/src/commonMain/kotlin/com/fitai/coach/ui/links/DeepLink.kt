@@ -20,6 +20,9 @@ sealed interface DeepLink {
 
     data object Analytics : DeepLink
 
+    /** The weekly review of the week holding [week]; the last completed week when null. */
+    data class Review(val week: String? = null) : DeepLink
+
     data object Settings : DeepLink
 
     /** Strava sending its consent back (the native connect flow's App Link). */
@@ -55,6 +58,7 @@ private fun screenFor(url: Url, source: LinkSource): DeepLink? {
         "/log" -> DeepLink.LogWorkout
         "/nutrition" -> DeepLink.Nutrition(query["date"]?.takeIf(::isIsoCalendarDate))
         "/analytics" -> DeepLink.Analytics
+        "/review" -> DeepLink.Review(query["week"]?.takeIf(::isIsoCalendarDate))
         "/settings" -> DeepLink.Settings
         STRAVA_CALLBACK_PATH -> DeepLink.StravaReturn(query["code"], query["state"], query["error"]).takeIf { source == LinkSource.AppLink }
         else -> null

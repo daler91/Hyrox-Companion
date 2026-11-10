@@ -29,9 +29,12 @@ import com.fitai.coach.core.data.AnalyticsRange
 import com.fitai.coach.core.dates.todayIn
 import com.fitai.coach.core.units.metersToUserDistance
 import com.fitai.coach.ui.components.BadgeTone
+import com.fitai.coach.ui.components.ButtonSize
+import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.ErrorState
 import com.fitai.coach.ui.components.FitaiBadge
+import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.LoadingState
@@ -47,7 +50,7 @@ private data class Units(val weight: String, val distance: String?)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnalyticsScreen(onLogWorkout: () -> Unit) {
+fun AnalyticsScreen(onLogWorkout: () -> Unit, onOpenReview: () -> Unit = {}) {
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val vm = viewModel(key = "analytics-${session.userId}") { AnalyticsViewModel(session.analytics, todayIn(prefs?.userTimezone)) }
@@ -71,6 +74,8 @@ fun AnalyticsScreen(onLogWorkout: () -> Unit) {
                     },
                 )
             }
+            // A link rather than a tab: the review is one Monday-to-Sunday week, this page the range below (Analytics.tsx).
+            item { FitaiButton("Weekly review", onClick = onOpenReview, variant = ButtonVariant.Secondary, size = ButtonSize.Sm) }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                     items(AnalyticsTab.entries) { tab ->

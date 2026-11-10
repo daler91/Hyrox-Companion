@@ -20,12 +20,16 @@ class DeepLinkTest {
         assertEquals(DeepLink.Nutrition(), push("/nutrition?date=yesterday"))
         assertEquals(DeepLink.Analytics, push("/analytics"))
         assertEquals(DeepLink.Settings, push("/settings/"))
+        assertEquals(DeepLink.Review("2026-11-02"), push("/review?week=2026-11-02"))
+        assertEquals(DeepLink.Review(), push("/review?week=last"))
+        assertEquals(DeepLink.Review(), push("/review"))
     }
 
     @Test
     fun emailLinksOnTheAppsOwnOriginOpenTheirScreens() {
         assertEquals(DeepLink.LogWorkout, appLink("https://fitai.coach/log"))
         assertEquals(DeepLink.Training("pd-2"), appLink("https://FITAI.coach/?workout=pd-2"))
+        assertEquals(DeepLink.Review("2026-11-02"), appLink("https://fitai.coach/review?week=2026-11-02"))
     }
 
     @Test
@@ -34,7 +38,7 @@ class DeepLinkTest {
         assertEquals(DeepLink.Training(), push("https://evil.example/log"))
         assertEquals(DeepLink.Training(), push("http://fitai.coach/log"))
         assertEquals(DeepLink.Training(), push("//evil.example/log"))
-        assertEquals(DeepLink.Training(), push("/review?week=2026-11-02"))
+        assertEquals(DeepLink.Training(), push("/unsubscribe?token=abc"))
         assertEquals(DeepLink.Training(), push("javascript:alert(1)"))
     }
 

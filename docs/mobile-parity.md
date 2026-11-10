@@ -53,7 +53,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
 
 ## Wave 2: weekly review and analytics
 
-- [ ] **Weekly review** screen:
+- [x] **Weekly review** screen:
   - summary, highlights, sessions and next-week intent — `GET /weekly-review`, `POST /weekly-review/intent`;
   - a timeline prompt from Sunday evening to Tuesday;
   - the `/review` link from emails and push.

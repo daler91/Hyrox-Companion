@@ -41,6 +41,7 @@ import com.fitai.coach.ui.log.LogWorkoutScreen
 import com.fitai.coach.ui.nutrition.NutritionScreen
 import com.fitai.coach.ui.onboarding.OnboardingScreen
 import com.fitai.coach.ui.planday.PlanDayScreen
+import com.fitai.coach.ui.review.WeeklyReviewScreen
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.settings.SettingsScreen
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -96,6 +97,10 @@ fun AppShell() {
                 backStack.select(TopLevel.Nutrition)
             }
             DeepLink.Analytics -> backStack.select(TopLevel.Analytics)
+            is DeepLink.Review -> {
+                backStack.select(TopLevel.Training)
+                backStack.push(Route.WeeklyReview(current.week))
+            }
             DeepLink.Settings -> backStack.select(TopLevel.Settings)
             is DeepLink.StravaReturn -> {
                 stravaReturn = current
@@ -157,6 +162,7 @@ fun AppShell() {
                             askCoach = { openCoach(CoachThread.of(it)) },
                             logWorkout = { backStack.select(TopLevel.LogWorkout) },
                             editPlanDay = { backStack.push(Route.PlanDay(it)) },
+                            openReview = { backStack.push(Route.WeeklyReview(it)) },
                         ),
                         openPlanDayId = openPlanDayId,
                         onPlanDayOpened = { openPlanDayId = null },
@@ -176,9 +182,15 @@ fun AppShell() {
                     )
                 }
                 entry<Route.PlanDay> { route -> PlanDayScreen(route.entryId, onBack = { backStack.pop() }) }
+                entry<Route.WeeklyReview> { route -> WeeklyReviewScreen(route.week, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
                 entry<Route.Nutrition> { NutritionScreen(openDate = openNutritionDate, onDateOpened = { openNutritionDate = null }) }
-                entry<Route.Analytics> { AnalyticsScreen(onLogWorkout = { backStack.select(TopLevel.LogWorkout) }) }
+                entry<Route.Analytics> {
+                    AnalyticsScreen(
+                        onLogWorkout = { backStack.select(TopLevel.LogWorkout) },
+                        onOpenReview = { backStack.push(Route.WeeklyReview()) },
+                    )
+                }
                 entry<Route.Settings> {
                     SettingsScreen(
                         onRunSetup = {

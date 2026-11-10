@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,15 +41,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.todayIn
+import com.fitai.coach.ui.components.ButtonSize
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.ErrorState
 import com.fitai.coach.ui.components.FitaiBadge
+import com.fitai.coach.ui.components.FitaiButton
+import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
@@ -234,7 +239,14 @@ private fun TimelineList(
         contentPadding = PaddingValues(horizontal = Spacing.Lg, vertical = Spacing.Md),
         verticalArrangement = Arrangement.spacedBy(Spacing.Md),
     ) {
-        item(key = "header") { Header(state, vm::selectPlan, vm::filterBy) }
+        item(key = "header") {
+            Header(state, vm::selectPlan, vm::filterBy)
+            state.reviewPrompt?.let { prompt ->
+                ReviewPromptCard(prompt, onOpen = {
+                    navigation.openReview(prompt.weekStart)
+                }, onDismiss = { vm.dismissReviewPrompt(prompt.weekStart) })
+            }
+        }
         if (state.rows.hiddenPast > 0) {
             item(key = "more-past") {
                 MoreButton("Show ${state.rows.hiddenPast} more past ${plural(state.rows.hiddenPast)}", vm::showMorePast)
@@ -333,6 +345,41 @@ private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit, onFi
         LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             items(STATUS_FILTERS, key = { it.second }) { (status, label) ->
                 FitaiChip(label, selected = state.statusFilter == status, onClick = { onFilter(status) })
+            }
+        }
+    }
+}
+
+/**
+ * The Sunday-evening-to-Tuesday nudge into the weekly review
+ * (WeeklyReviewPrompt): open it, or dismiss it until next week's.
+ */
+@Composable
+private fun ReviewPromptCard(prompt: ReviewPrompt, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    FitaiCard(Modifier.fillMaxWidth().padding(top = Spacing.Md)) {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            Icon(LucideIcons.CalendarRange, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(20.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Text(
+                    if (prompt.wrappingUp) "Your training week is wrapping up" else "Last week is ready to review",
+                    style = type.label,
+                    color = colors.text,
+                )
+                Text(
+                    if (prompt.wrappingUp) {
+                        "See how it went and what changed against the week before."
+                    } else {
+                        "What you planned, what you did, and what changed."
+                    },
+                    style = type.bodySm,
+                    color = colors.textMuted,
+                )
+                FitaiButton("Open review", onClick = onOpen, size = ButtonSize.Sm)
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(LucideIcons.X, contentDescription = "Dismiss weekly review prompt", tint = colors.textMuted)
             }
         }
     }
