@@ -101,7 +101,11 @@ export async function importHealthConnectSessions(userId: string, input: HealthC
 
 /** The rows and their synthesised sets, in one transaction (as the Garmin sync, C26). */
 async function insertWithSets(items: readonly Pending[], preferences: UnitPreferences): Promise<WorkoutLog[]> {
-  const sessionsById = new Map(items.map((item) => [item.session.id, item.session]));
+  // ⚡ Bolt Optimization: Replaced new Map(array.map(...)) with a loop to prevent intermediate array allocations.
+  const sessionsById = new Map<string, HealthConnectSessionInput>();
+  for (const item of items) {
+    sessionsById.set(item.session.id, item.session);
+  }
   return await db.transaction(async (tx) => {
     const logs = await storage.workouts.createHealthConnectWorkoutLogs(
       items.map((item) => item.row),
