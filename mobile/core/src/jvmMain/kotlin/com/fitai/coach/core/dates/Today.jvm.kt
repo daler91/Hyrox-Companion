@@ -37,3 +37,9 @@ public actual fun formatInstant(iso: String, timeZone: String?): String? = try {
 } catch (_: DateTimeParseException) {
     null
 }
+
+public actual fun localDateOf(iso: String, timeZone: String?): String? = try {
+    ZonedDateTime.parse(iso).withZoneSameInstant(zoneOf(timeZone)).toLocalDate().toString()
+} catch (_: DateTimeParseException) {
+    null
+}

@@ -97,4 +97,27 @@ class AnalyticsInsightsTest {
         assertEquals("Load is steady.", analytics.overviewAnalysis(AnalyticsRange.All).first()?.sections?.trainingLoad)
         assertNull(analytics.overviewAnalysis(AnalyticsRange.Quarter).first()?.sections)
     }
+
+    @Test
+    fun mafTestsAreKeptOnTheDevice() = runTest {
+        server.on("GET", "/api/v1/maf-tests", 200, """{"tests":[],"analysis":[],"workoutDates":{"w1":"2026-11-02"}}""")
+
+        analytics.refreshMafTests()
+
+        assertEquals(mapOf("w1" to "2026-11-02"), analytics.mafTests.first()?.workoutDates)
+    }
+
+    @Test
+    fun theFuellingBlockCoversTheRangeAndAllTimeIsHeldToAYear() = runTest {
+        server.on("GET", "/api/v1/nutrition/block", 200, """{"from":"2026-08-13","to":"2026-11-10","points":[]}""")
+
+        analytics.refreshNutritionBlock(AnalyticsRange.Quarter, "2026-11-10")
+        analytics.refreshNutritionBlock(AnalyticsRange.All, "2026-11-10")
+
+        assertEquals(
+            listOf("from=2026-08-13&to=2026-11-10", "from=2025-11-10&to=2026-11-10"),
+            server.sentTo("GET", "/api/v1/nutrition/block").map { it.query },
+        )
+        assertEquals("2026-08-13", analytics.nutritionBlock(AnalyticsRange.Quarter).first()?.from)
+    }
 }

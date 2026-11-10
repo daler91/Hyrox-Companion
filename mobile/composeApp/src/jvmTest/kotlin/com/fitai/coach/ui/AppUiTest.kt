@@ -1,7 +1,9 @@
 package com.fitai.coach.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -433,6 +435,52 @@ class AppUiTest {
             page.performScrollToNode(hasContentDescription("Workout activity heatmap", substring = true))
         }
     }
+
+    @Test
+    fun aMafAthleteSeesTheirMafTrendAndFuellingComparesCarbDays() {
+        val user = """{"id":"u1","userTimezone":"UTC","onboardingCompleted":true,"trainingStyleId":"maf_method"}"""
+        fun mafTest(id: String, workout: String, metres: Int) = """{"id":"$id","userId":"u1","protocolType":"distance","version":1,""" +
+            """"conditions":{"source":"workout_tag","workoutLogId":"$workout"},"metrics":{"durationSeconds":2880,""" +
+            """"distanceMeters":$metres,"avgHeartRate":141,"mafCeilingUsed":145},"createdAt":"2026-11-09T08:00:00Z"}"""
+        fun scored(workout: String, pct: Int, classification: String) =
+            """{"id":"a-$workout","userId":"u1","workoutLogId":"$workout","compliancePct":$pct,""" +
+                """"classification":"$classification","version":1}"""
+        val maf = """{"tests":[${mafTest("t2", "w2", 8400)},${mafTest("t1", "w1", 8000)}],""" +
+            """"analysis":[${scored("w2", 92, "compliant")},${scored("w1", 80, "mostly_compliant")}],""" +
+            """"workoutDates":{"w1":"2026-11-02","w2":"2026-11-08"}}"""
+        fun day(date: String, carb: Int, rpe: Double) = """{"date":"$date","calories":2400,"protein":150,"carb":$carb,"fat":80,""" +
+            """"fiber":30,"utss":60,"carbTargetG":300,"avgRpe":$rpe}"""
+        val block = """{"from":"2026-08-13","to":"2026-11-10","points":[${day("2026-11-01", 290, 6.0)},${day("2026-11-02", 280, 7.0)},""" +
+            """${day(
+                "2026-11-03",
+                300,
+                6.5,
+            )},${day("2026-11-04", 150, 8.0)},${day("2026-11-05", 160, 7.5)},${day("2026-11-06", 100, 8.5)}]}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/auth/user", user)
+            on("GET", "/api/v1/maf-tests", maf)
+            on("GET", "/api/v1/nutrition/block", block)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Analytics)
+            awaitNode(hasText("analytics"))
+            // The MAF trend tab shows for a MAF athlete only.
+            openAnalyticsTab("MAF trend")
+            awaitNode(hasText("2 MAF TESTS"))
+            onNodeWithText("LATEST: 92% · COMPLIANT").assertExists()
+            onNodeWithText("Last updated Nov 8, 2026.").assertExists()
+            val page = onAllNodes(hasScrollAction()).onFirst()
+            page.performScrollToNode(hasText("5:43/km · 48:00 · 141 bpm"))
+            onNodeWithText("Nov 2, 2026").assertExists()
+
+            openAnalyticsTab("Fuelling")
+            awaitNode(hasText("Intake vs training load"))
+            page.performScrollToNode(hasText("6.5 on carb-hit days (3) vs 8 missed (3) — 1.5 lower (felt easier)"))
+            assertTrue(api.sent("GET", "/api/v1/nutrition/block").isNotEmpty())
+        }
+    }
 }
 
 /**
@@ -441,3 +489,20 @@ class AppUiTest {
  */
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openCard(focus: String) = onAllNodesWithText(focus).onLast().performClick()
+
+/** A list that scrolls sideways. */
+private val scrollsSideways = SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
+
+/**
+ * Scrolls the Analytics tab row (the page's first sideways list; the range
+ * chips are the second) to [label] and taps it. The row is rebuilt when the
+ * athlete's training style arrives (it decides the MAF tab), so the scroll is
+ * retried until the row has settled.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.openAnalyticsTab(label: String) {
+    waitUntil(timeoutMillis = 10_000) {
+        runCatching { onAllNodes(scrollsSideways).onFirst().performScrollToNode(hasText(label)) }.isSuccess
+    }
+    onNodeWithText(label).performClick()
+}

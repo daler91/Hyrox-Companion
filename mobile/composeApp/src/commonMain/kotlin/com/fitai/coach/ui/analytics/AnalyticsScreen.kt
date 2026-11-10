@@ -55,6 +55,7 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
     val onLogWorkout = navigation.logWorkout
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
+    val user by session.account.user.collectAsStateWithLifecycle(null)
     val vm = viewModel(key = "analytics-${session.userId}") { AnalyticsViewModel(session.analytics, todayIn(prefs?.userTimezone)) }
     val state by vm.state.collectAsStateWithLifecycle()
     val units = Units(weight = prefs?.weightUnit ?: "kg", distance = prefs?.distanceUnit)
@@ -93,7 +94,7 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
             item { FitaiButton("Weekly review", onClick = navigation.openReview, variant = ButtonVariant.Secondary, size = ButtonSize.Sm) }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                    items(AnalyticsTab.entries) { tab ->
+                    items(analyticsTabs(user?.trainingStyleId)) { tab ->
                         FitaiChip(tab.label, selected = state.tab == tab, onClick = { vm.selectTab(tab) })
                     }
                 }
@@ -108,7 +109,12 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
                 }
             }
             when {
-                state.failed -> item { ErrorState("Couldn't load your analytics", onRetry = vm::refresh) }
+                state.failed -> item {
+                    ErrorState(
+                        if (state.tab == AnalyticsTab.Fuelling) "Couldn't load your fuelling data" else "Couldn't load your analytics",
+                        onRetry = vm::refresh,
+                    )
+                }
                 state.loading -> item { LoadingState() }
                 else -> when (state.tab) {
                     AnalyticsTab.Overview -> state.overview?.let { overview(it, units, charts, onLogWorkout) }
@@ -118,6 +124,8 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
                     AnalyticsTab.Sessions -> item { SessionGradesPanel(navigation.openWorkout) }
                     AnalyticsTab.Insights -> item { CoachInsightsPanel(prefs?.userTimezone, navigation.openSettings) }
                     AnalyticsTab.Predictor -> item { RacePredictorPanel(prefs?.userTimezone, navigation.openSettings) }
+                    AnalyticsTab.Maf -> item { MafTrendPanel(prefs?.userTimezone, units.distance) }
+                    AnalyticsTab.Fuelling -> state.block?.let { fuelling(it) }
                 }
             }
         }

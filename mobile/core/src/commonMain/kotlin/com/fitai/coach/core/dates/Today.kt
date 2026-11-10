@@ -24,3 +24,9 @@ public expect fun loggedAtFor(date: String, today: String, timeZone: String?): S
  * doesn't parse. The analytics "Last updated" lines use it.
  */
 public expect fun formatInstant(iso: String, timeZone: String?): String?
+
+/**
+ * The calendar day (YYYY-MM-DD) an ISO-8601 instant falls on in [timeZone]
+ * (the device's when null or unknown); null when it doesn't parse.
+ */
+public expect fun localDateOf(iso: String, timeZone: String?): String?

@@ -5,6 +5,9 @@ import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.CoachInsights
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsQuery
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsResponseValueItem
+import com.fitai.coach.core.api.generated.GetMafTestsResponse
+import com.fitai.coach.core.api.generated.GetNutritionBlockQuery
+import com.fitai.coach.core.api.generated.GetNutritionBlockResponse
 import com.fitai.coach.core.api.generated.GetOverviewAnalysisQuery
 import com.fitai.coach.core.api.generated.GetPersonalRecordsQuery
 import com.fitai.coach.core.api.generated.GetRacePredictionQuery
@@ -141,7 +144,39 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
         )
     }
 
+    /** MAF tests and their compliance, newest first; not tied to the range. */
+    public val mafTests: Flow<GetMafTestsResponse?> = cache.observe(MAF_TESTS, GetMafTestsResponse.serializer())
+
+    /** @throws com.fitai.coach.core.api.ApiException */
+    public suspend fun refreshMafTests() {
+        cache.put(MAF_TESTS, GetMafTestsResponse.serializer(), api.call(ApiEndpoints.GetMafTests))
+    }
+
+    /** Daily intake against training load over [range], kept on the device per range. */
+    public fun nutritionBlock(range: AnalyticsRange): Flow<GetNutritionBlockResponse?> =
+        cache.observe(key(NUTRITION_BLOCK, range), GetNutritionBlockResponse.serializer())
+
+    /**
+     * Fetches [range]'s intake against training. "All" is held to the last
+     * [MAX_BLOCK_DAYS] days, so years of empty days don't crowd the chart
+     * (useFuellingAnalytics).
+     *
+     * @throws com.fitai.coach.core.api.ApiException
+     */
+    public suspend fun refreshNutritionBlock(range: AnalyticsRange, today: String) {
+        val from = range.bounds(today)?.first ?: addDaysToIsoDate(today, -MAX_BLOCK_DAYS)
+        val query = GetNutritionBlockQuery(from = from, to = today).toQueryParameters()
+        cache.put(
+            key(NUTRITION_BLOCK, range),
+            GetNutritionBlockResponse.serializer(),
+            api.call(ApiEndpoints.GetNutritionBlock, query = query),
+        )
+    }
+
     private companion object {
+        const val MAF_TESTS = "analytics:maf-tests"
+        const val NUTRITION_BLOCK = "nutrition-block"
+        const val MAX_BLOCK_DAYS = 365
         const val RACE_PREDICTION = "analytics:race-prediction"
         const val OVERVIEW_ANALYSIS = "overview-analysis"
         const val COACH_INSIGHTS = "analytics:coach-insights"
