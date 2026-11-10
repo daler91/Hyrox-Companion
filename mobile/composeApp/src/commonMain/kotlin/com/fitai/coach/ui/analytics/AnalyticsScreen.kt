@@ -50,7 +50,8 @@ private data class Units(val weight: String, val distance: String?)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnalyticsScreen(onLogWorkout: () -> Unit, onOpenReview: () -> Unit = {}) {
+fun AnalyticsScreen(navigation: AnalyticsNavigation) {
+    val onLogWorkout = navigation.logWorkout
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val vm = viewModel(key = "analytics-${session.userId}") { AnalyticsViewModel(session.analytics, todayIn(prefs?.userTimezone)) }
@@ -75,7 +76,7 @@ fun AnalyticsScreen(onLogWorkout: () -> Unit, onOpenReview: () -> Unit = {}) {
                 )
             }
             // A link rather than a tab: the review is one Monday-to-Sunday week, this page the range below (Analytics.tsx).
-            item { FitaiButton("Weekly review", onClick = onOpenReview, variant = ButtonVariant.Secondary, size = ButtonSize.Sm) }
+            item { FitaiButton("Weekly review", onClick = navigation.openReview, variant = ButtonVariant.Secondary, size = ButtonSize.Sm) }
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                     items(AnalyticsTab.entries) { tab ->
@@ -83,10 +84,12 @@ fun AnalyticsScreen(onLogWorkout: () -> Unit, onOpenReview: () -> Unit = {}) {
                     }
                 }
             }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                    items(AnalyticsRange.entries) { range ->
-                        FitaiChip(range.label, selected = state.range == range, onClick = { vm.selectRange(range) })
+            if (state.tab.usesRange) {
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                        items(AnalyticsRange.entries) { range ->
+                            FitaiChip(range.label, selected = state.range == range, onClick = { vm.selectRange(range) })
+                        }
                     }
                 }
             }
@@ -97,6 +100,9 @@ fun AnalyticsScreen(onLogWorkout: () -> Unit, onOpenReview: () -> Unit = {}) {
                     AnalyticsTab.Overview -> state.overview?.let { overview(it, units, onLogWorkout) }
                     AnalyticsTab.Records -> records(state, vm, units, today, onLogWorkout)
                     AnalyticsTab.Progression -> progression(state, vm, units, onLogWorkout)
+                    AnalyticsTab.Sessions -> item { SessionGradesPanel(navigation.openWorkout) }
+                    AnalyticsTab.Insights -> item { CoachInsightsPanel(prefs?.userTimezone, navigation.openSettings) }
+                    AnalyticsTab.Predictor -> item { RacePredictorPanel(prefs?.userTimezone, navigation.openSettings) }
                 }
             }
         }

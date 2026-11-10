@@ -2,11 +2,16 @@ package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
 import com.fitai.coach.core.api.generated.ApiEndpoints
+import com.fitai.coach.core.api.generated.CoachInsights
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsQuery
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsResponseValueItem
 import com.fitai.coach.core.api.generated.GetPersonalRecordsQuery
+import com.fitai.coach.core.api.generated.GetRacePredictionQuery
+import com.fitai.coach.core.api.generated.GetSessionGradesQuery
 import com.fitai.coach.core.api.generated.GetTrainingOverviewQuery
 import com.fitai.coach.core.api.generated.PersonalRecord
+import com.fitai.coach.core.api.generated.RacePrediction
+import com.fitai.coach.core.api.generated.SessionGradesResponse
 import com.fitai.coach.core.api.generated.TrainingOverview
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +70,50 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
         cache.put(key("exercises", range), EXERCISES, api.call(ApiEndpoints.GetExerciseAnalytics, query = query))
     }
 
+    /** The last race prediction, kept so the tab paints at once (useRacePrediction's snapshot). */
+    public val racePrediction: Flow<RacePrediction?> = cache.observe(RACE_PREDICTION, RacePrediction.serializer())
+
+    /**
+     * Fetches the race prediction: the stored one (no AI spend), or with
+     * [regenerate] a fresh one, which may spend AI budget.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun refreshRacePrediction(regenerate: Boolean = false) {
+        val query = GetRacePredictionQuery(refresh = "1".takeIf { regenerate }).toQueryParameters()
+        cache.put(RACE_PREDICTION, RacePrediction.serializer(), api.call(ApiEndpoints.GetRacePrediction, query = query))
+    }
+
+    /**
+     * Every graded run of [planId]'s plan (the active plan when null), by week
+     * and block. Computed on read, so online.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun sessionGrades(planId: String? = null): SessionGradesResponse =
+        api.call(ApiEndpoints.GetSessionGrades, query = GetSessionGradesQuery(planId = planId).toQueryParameters())
+
+    /** The last Coach Insights, kept on the device. */
+    public val coachInsights: Flow<CoachInsights?> = cache.observe(COACH_INSIGHTS, CoachInsights.serializer())
+
+    /** Fetches the stored Coach Insights, without spending AI. @throws com.fitai.coach.core.api.ApiException */
+    public suspend fun refreshCoachInsights() {
+        cache.put(COACH_INSIGHTS, CoachInsights.serializer(), api.call(ApiEndpoints.GetCoachInsights))
+    }
+
+    /** Runs the AI analysis now (tens of seconds) and keeps it. @throws com.fitai.coach.core.api.ApiException */
+    public suspend fun regenerateCoachInsights() {
+        val result = api.call(ApiEndpoints.PostCoachInsights)
+        cache.put(
+            COACH_INSIGHTS,
+            CoachInsights.serializer(),
+            CoachInsights(insights = result.insights, ragInfo = result.ragInfo, generatedAt = result.generatedAt, stale = result.stale),
+        )
+    }
+
     private companion object {
+        const val RACE_PREDICTION = "analytics:race-prediction"
+        const val COACH_INSIGHTS = "analytics:coach-insights"
         val RECORDS = MapSerializer(String.serializer(), PersonalRecord.serializer())
         val EXERCISES = MapSerializer(String.serializer(), ListSerializer(GetExerciseAnalyticsResponseValueItem.serializer()))
 
