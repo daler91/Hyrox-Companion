@@ -5,11 +5,14 @@ import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.CoachInsights
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsQuery
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsResponseValueItem
+import com.fitai.coach.core.api.generated.GetOverviewAnalysisQuery
 import com.fitai.coach.core.api.generated.GetPersonalRecordsQuery
 import com.fitai.coach.core.api.generated.GetRacePredictionQuery
 import com.fitai.coach.core.api.generated.GetSessionGradesQuery
 import com.fitai.coach.core.api.generated.GetTrainingOverviewQuery
+import com.fitai.coach.core.api.generated.OverviewAnalysis
 import com.fitai.coach.core.api.generated.PersonalRecord
+import com.fitai.coach.core.api.generated.PostOverviewAnalysisQuery
 import com.fitai.coach.core.api.generated.RacePrediction
 import com.fitai.coach.core.api.generated.SessionGradesResponse
 import com.fitai.coach.core.api.generated.TrainingOverview
@@ -18,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonPrimitive
 
 /** The analytics date ranges (Analytics.tsx): the last N days, or everything. */
 // The day counts are the ranges themselves.
@@ -111,12 +115,42 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
         )
     }
 
+    /** The AI's reading of the Overview charts for [range], kept on the device per range. */
+    public fun overviewAnalysis(range: AnalyticsRange): Flow<OverviewAnalysis?> =
+        cache.observe(key(OVERVIEW_ANALYSIS, range), OverviewAnalysis.serializer())
+
+    /** Fetches the stored chart reading for [range], without spending AI. @throws com.fitai.coach.core.api.ApiException */
+    public suspend fun refreshOverviewAnalysis(range: AnalyticsRange) {
+        val query = GetOverviewAnalysisQuery(range = range.wire()).toQueryParameters()
+        cache.put(key(OVERVIEW_ANALYSIS, range), OverviewAnalysis.serializer(), api.call(ApiEndpoints.GetOverviewAnalysis, query = query))
+    }
+
+    /**
+     * Reads the Overview charts for [range] with the AI now (tens of seconds)
+     * and keeps it; the server keeps one range at a time.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun regenerateOverviewAnalysis(range: AnalyticsRange) {
+        val query = PostOverviewAnalysisQuery(range = range.wire()).toQueryParameters()
+        val result = api.call(ApiEndpoints.PostOverviewAnalysis, query = query)
+        cache.put(
+            key(OVERVIEW_ANALYSIS, range),
+            OverviewAnalysis.serializer(),
+            OverviewAnalysis(result.sections, result.ragInfo, result.generatedAt, result.rangeDays, result.stale),
+        )
+    }
+
     private companion object {
         const val RACE_PREDICTION = "analytics:race-prediction"
+        const val OVERVIEW_ANALYSIS = "overview-analysis"
         const val COACH_INSIGHTS = "analytics:coach-insights"
         val RECORDS = MapSerializer(String.serializer(), PersonalRecord.serializer())
         val EXERCISES = MapSerializer(String.serializer(), ListSerializer(GetExerciseAnalyticsResponseValueItem.serializer()))
 
         fun key(kind: String, range: AnalyticsRange) = "analytics:$kind:${range.name}"
+
+        /** "90" or "all", as the analysis routes name a range. */
+        fun AnalyticsRange.wire() = JsonPrimitive(days?.toString() ?: "all")
     }
 }

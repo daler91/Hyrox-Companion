@@ -16,6 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
@@ -58,6 +59,19 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
     val state by vm.state.collectAsStateWithLifecycle()
     val units = Units(weight = prefs?.weightUnit ?: "kg", distance = prefs?.distanceUnit)
     val today = todayIn(prefs?.userTimezone)
+    val analysisVm = viewModel(key = "overview-analysis-${session.userId}") {
+        OverviewAnalysisViewModel(session.analytics, session.account.user, session.annotations, state.range)
+    }
+    val analysis by analysisVm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(state.range) { analysisVm.select(state.range) }
+    val charts = OverviewContext(
+        analysis = analysis,
+        onGenerate = analysisVm::generate,
+        today = today,
+        rangeStart = state.range.bounds(today)?.first,
+        timeZone = prefs?.userTimezone,
+        openSettings = navigation.openSettings,
+    )
 
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -97,7 +111,7 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
                 state.failed -> item { ErrorState("Couldn't load your analytics", onRetry = vm::refresh) }
                 state.loading -> item { LoadingState() }
                 else -> when (state.tab) {
-                    AnalyticsTab.Overview -> state.overview?.let { overview(it, units, onLogWorkout) }
+                    AnalyticsTab.Overview -> state.overview?.let { overview(it, units, charts, onLogWorkout) }
                     AnalyticsTab.Breakdown -> state.overview?.let { breakdown(it, onLogWorkout) }
                     AnalyticsTab.Records -> records(state, vm, units, today, onLogWorkout)
                     AnalyticsTab.Progression -> progression(state, vm, units, onLogWorkout)
@@ -110,8 +124,21 @@ fun AnalyticsScreen(navigation: AnalyticsNavigation) {
     }
 }
 
-private fun LazyListScope.overview(overview: TrainingOverview, units: Units, onLogWorkout: () -> Unit) {
-    if (overview.weeklySummaries.isEmpty() && overview.currentStats.totalWorkouts == 0L) {
+/** What the Overview's charts need beyond the overview itself: the AI's reading, the day, the range. */
+private data class OverviewContext(
+    val analysis: OverviewAnalysisState,
+    val onGenerate: () -> Unit,
+    val today: String,
+    /** The range's first day; null for all time. */
+    val rangeStart: String?,
+    val timeZone: String?,
+    val openSettings: () -> Unit,
+)
+
+/** The Overview tab, in the web's order (TrainingOverviewTab), each chart with the AI's reading under it. */
+private fun LazyListScope.overview(overview: TrainingOverview, units: Units, charts: OverviewContext, onLogWorkout: () -> Unit) {
+    val load = overview.trainingLoad
+    if (overview.weeklySummaries.isEmpty() && load.trend.none { it.utss > 0 }) {
         item {
             EmptyState(
                 title = "No workout data yet",
@@ -122,18 +149,16 @@ private fun LazyListScope.overview(overview: TrainingOverview, units: Units, onL
         }
         return
     }
+    val sections = charts.analysis.sections
+    item { OverviewAnalysisHeader(charts.analysis, charts.onGenerate, charts.timeZone, charts.openSettings) }
     item { StatGrid(overview, units) }
-    item { LoadCard(overview.trainingLoad) }
-    item {
-        FitaiCard {
-            Text("Weekly workouts", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
-            BarChart(
-                overview.weeklySummaries.map { Bar(it.weekStart, it.workoutCount.toDouble()) },
-                label = "Workouts per week",
-                goal = overview.weeklyGoal.takeIf { it > 0 }?.toDouble(),
-            )
-        }
-    }
+    item { GovernorCard(load, sections?.trainingLoad) }
+    overview.bodySystemLoad?.takeIf(::hasBodySystemLoad)?.let { item { BodySystemLoadCard(it, sections?.bodySystems) } }
+    item { FormMonotonyCard(load.trend, sections?.formMonotony) }
+    item { ObjectiveLoadCard(load, sections?.objectiveLoad) }
+    item { WeeklyWorkoutsCard(overview, charts.analysis.annotations, sections?.weeklyWorkouts) }
+    item { WeeklyTrendsCard(overview.weeklySummaries, units.distance, sections?.rpeDuration) }
+    item { ConsistencyCard(overview.workoutDates, charts.today, charts.rangeStart, sections?.consistency) }
 }
 
 @Composable
@@ -174,26 +199,6 @@ private fun StatGrid(overview: TrainingOverview, units: Units) {
                 Modifier.weight(1f),
             )
         }
-    }
-}
-
-@Composable
-private fun LoadCard(load: TrainingOverview.TrainingLoad) {
-    FitaiCard {
-        Text("Training load", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
-        Text(
-            "UTSS ${formatNumber(
-                load.currentUtss,
-            )} · ACWR ${load.acwr?.let(::formatNumber) ?: "—"} · ${load.zone.wireValue.replace('_', ' ')}",
-            style = FitaiTheme.typography.body,
-            color = FitaiTheme.colors.text,
-        )
-        Text(
-            "Acute ${formatNumber(load.acuteAvg)} · chronic ${formatNumber(load.chronicAvg)}" +
-                (load.tsb?.let { " · TSB ${formatNumber(it)}" } ?: ""),
-            style = FitaiTheme.typography.bodySm,
-            color = FitaiTheme.colors.textMuted,
-        )
     }
 }
 

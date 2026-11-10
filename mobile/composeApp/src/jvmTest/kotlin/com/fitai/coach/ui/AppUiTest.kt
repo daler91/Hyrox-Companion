@@ -376,6 +376,63 @@ class AppUiTest {
             page.performScrollToNode(hasText("Next focus: Add Hinge; it has no logged sessions in this range."))
         }
     }
+
+    @Test
+    fun theOverviewChartsReadTheLoadAndTheAiExplainsThem() {
+        val trend = """[{"date":"2026-11-08","utss":60,"acwr":1.05,"zone":"sweet_spot","tsb":-4,"monotony":1.2},""" +
+            """{"date":"2026-11-09","utss":80,"acwr":1.12,"zone":"sweet_spot","tsb":-8,"monotony":1.3}]"""
+        val systems = """[{"system":"leg_muscle","current":1300,"baseline":1000,"ratio":1.31,"status":"high","sixWeekHigh":true,""" +
+            """"previousPeak":1200,"weekly":[900,1000,1100,1000,1000,1300]},{"system":"aerobic","current":800,"baseline":800,""" +
+            """"ratio":1.0,"status":"normal","sixWeekHigh":false,"weekly":[700,800,800,900,800,800]}]"""
+        val overview = """{"weeklySummaries":[{"weekStart":"2026-10-26","workoutCount":3,"totalDuration":150,"avgRpe":7,""" +
+            """"categoryBreakdown":{},"workoutsWithDuration":3,"rpeCount":3,"runningMeters":8000},{"weekStart":"2026-11-02",""" +
+            """"workoutCount":4,"totalDuration":200,"avgRpe":6.5,"categoryBreakdown":{},"workoutsWithDuration":4,"rpeCount":4,""" +
+            """"runningMeters":12000}],"workoutDates":["2026-11-02"],"categoryTotals":{},"stationCoverage":[],""" +
+            """"movementPatternCoverage":[],"muscleGroupCoverage":[],"currentStreak":1,"weeklyCompletedWorkouts":1,"weeklyGoal":4,""" +
+            """"currentStats":{"totalWorkouts":7,"avgPerWeek":3.5,"totalDuration":350,"avgDuration":50,"totalRunningMeters":20000},""" +
+            """"trainingLoad":{"currentUtss":80,"acuteAvg":70,"chronicAvg":62,"acwr":1.12,"zone":"sweet_spot","tsb":-8,""" +
+            """"monotony":1.3,"monotonyZone":"ok","hrZones":[],"powerTssEstimated":false,"flaggedVectors":[],""" +
+            """"activeRestrictions":[],"trend":$trend},"bodySystemLoad":{"asOf":"2026-11-09","weeks":[],"systems":$systems,""" +
+            """"sessionCount":7,"estimatedSessions":0,"unattributedSessions":0,"unscoredSessions":0}}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/training-overview", overview)
+            on("GET", "/api/v1/overview-analysis", """{"sections":null}""")
+            on(
+                "POST",
+                "/api/v1/overview-analysis",
+                """{"sections":{"trainingLoad":"Your load is in the sweet spot.","bodySystems":null,"formMonotony":null,""" +
+                    """"objectiveLoad":null,"weeklyWorkouts":null,"rpeDuration":null,"consistency":null},""" +
+                    """"generatedAt":"2026-11-10T09:30:00.000Z","stale":false}""",
+            )
+            on(
+                "GET",
+                "/api/v1/timeline-annotations",
+                """[{"id":"a1","userId":"u1","startDate":"2026-11-01","endDate":"2026-11-02","type":"injury"}]""",
+            )
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Analytics)
+            awaitNode(hasText("AI Chart Analysis"))
+            onNodeWithText("Generate analysis").performClick()
+            awaitNode(hasText("Regenerate"))
+            assertEquals(1, api.sent("POST", "/api/v1/overview-analysis").size)
+
+            // The page's list; the tab row and range chips scroll sideways too.
+            val page = onAllNodes(hasScrollAction()).onFirst()
+            page.performScrollToNode(hasText("UTSS 80 - ACWR 1.12"))
+            onNodeWithText("SWEET SPOT").assertExists()
+            onNodeWithContentDescription("Acute-to-chronic workload ratio over 2 days", substring = true).assertExists()
+            page.performScrollToNode(hasText("Your load is in the sweet spot."))
+            page.performScrollToNode(
+                hasText("Leg muscle load is at a six-week high (31% above your usual week), while aerobic load is normal."),
+            )
+            // The injury's two days span both weeks on the chart.
+            page.performScrollToNode(hasText("Injury"))
+            page.performScrollToNode(hasContentDescription("Workout activity heatmap", substring = true))
+        }
+    }
 }
 
 /**

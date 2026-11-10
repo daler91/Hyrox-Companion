@@ -441,7 +441,7 @@ fun CoachInsightsPanel(timeZone: String?, openSettings: () -> Unit) {
 // --- Shared pieces ---
 
 @Composable
-private fun PanelTitle(text: String, icon: ImageVector? = null) {
+internal fun PanelTitle(text: String, icon: ImageVector? = null) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         icon?.let { Icon(it, contentDescription = null, tint = FitaiTheme.colors.accentText, modifier = Modifier.size(18.dp)) }
         Text(text, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
@@ -449,14 +449,14 @@ private fun PanelTitle(text: String, icon: ImageVector? = null) {
 }
 
 @Composable
-private fun LastUpdated(generatedAt: String?, stale: Boolean?, timeZone: String?) {
+internal fun LastUpdated(generatedAt: String?, stale: Boolean?, timeZone: String?) {
     lastUpdatedNote(generatedAt?.let { formatInstant(it, timeZone) }, stale)?.let {
         Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
     }
 }
 
 @Composable
-private fun Notice(text: String, action: @Composable () -> Unit = {}) {
+internal fun Notice(text: String, action: @Composable () -> Unit = {}) {
     val colors = FitaiTheme.colors
     Row(
         Modifier.fillMaxWidth().background(colors.muted, Radius.Md).padding(Spacing.Md),
