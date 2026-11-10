@@ -17,3 +17,10 @@ public expect fun currentHourIn(timeZone: String?): Int
  * stamps them (pages/nutrition/utils.ts).
  */
 public expect fun loggedAtFor(date: String, today: String, timeZone: String?): String
+
+/**
+ * "Nov 10, 2026 at 9:30 AM" for an ISO-8601 instant (with its offset or Z),
+ * shown in [timeZone] (the device's when null or unknown); null when it
+ * doesn't parse. The analytics "Last updated" lines use it.
+ */
+public expect fun formatInstant(iso: String, timeZone: String?): String?

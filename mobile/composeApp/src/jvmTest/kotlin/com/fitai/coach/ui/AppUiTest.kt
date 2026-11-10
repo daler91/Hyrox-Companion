@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -306,6 +307,73 @@ class AppUiTest {
             onNodeWithText("OFF PLAN").assertExists() // badges are uppercase (brand kit §6)
             onNode(hasScrollAction()).performScrollToNode(hasText("What didn't happen"))
             onNodeWithText("Sled work").assertExists()
+        }
+    }
+
+    @Test
+    fun theRacePredictorShowsTheFinishAndCoachInsightsGenerate() {
+        val prediction = """{"totalFinishSeconds":5025,"segments":[{"index":0,"kind":"run","exerciseName":"running","label":"Run 1",""" +
+            """"estimatedSeconds":290,"basis":"logged","confidence":"medium","sampleSize":6}],"transitionSeconds":300,"aiUsed":false,""" +
+            """"aiUnavailableReason":"ai_consent_off","overallConfidence":"medium","division":"open","gender":"male",""" +
+            """"genderAssumed":false,"ageGroup":"30-34","ageGroupAssumed":false,"dataCompleteness":{"stationsWithData":6,""" +
+            """"totalStations":8,"hasRunData":true},"generatedAt":"2026-11-10T09:30:00.000Z","stale":false}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/race-prediction", prediction)
+            on("GET", "/api/v1/coach-insights", """{"insights":null}""")
+            on(
+                "POST",
+                "/api/v1/coach-insights",
+                """{"insights":"You're on track for sub-90.","ragInfo":{"source":"none","chunkCount":0},""" +
+                    """"generatedAt":"2026-11-10T09:30:00.000Z","stale":false}""",
+            )
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Analytics)
+            awaitNode(hasText("analytics"))
+
+            onNodeWithText("Race predictor").performClick()
+            awaitNode(hasText("1:23:45"))
+            onNodeWithText("Open · Men · 30-34 · 6/8 stations logged").assertExists()
+            assertTrue(api.sent("GET", "/api/v1/race-prediction").isNotEmpty())
+
+            onNodeWithText("Coach insights").performClick()
+            awaitNode(hasText("Generate insights"))
+            onNodeWithText("Generate insights").performClick()
+            awaitNode(hasText("on track for sub-90", substring = true))
+            assertEquals(1, api.sent("POST", "/api/v1/coach-insights").size)
+        }
+    }
+
+    @Test
+    fun theBreakdownTabDrawsTheMixTheMuscleMapAndPatterns() {
+        val overview = """{"weeklySummaries":[],"workoutDates":[],"categoryTotals":{"functional":{"count":3,"totalSets":20},""" +
+            """"running":{"count":1,"totalSets":0}},"stationCoverage":[],"movementPatternCoverage":[{"pattern":"squat",""" +
+            """"label":"Squat","sessionCount":2,"totalSets":8,"lastTrained":"2026-11-08","daysSince":2},{"pattern":"hinge",""" +
+            """"label":"Hinge","sessionCount":0,"totalSets":0,"lastTrained":null,"daysSince":null}],"muscleGroupCoverage":[""" +
+            """{"muscle":"quads","bodyRegion":"lower","label":"Quads","sessionCount":2,"totalSets":8,"lastTrained":"2026-11-08",""" +
+            """"daysSince":2},{"muscle":"core","bodyRegion":"core","label":"Core","sessionCount":1,"totalSets":2,""" +
+            """"lastTrained":"2026-11-01","daysSince":9}],"currentStreak":1,"weeklyCompletedWorkouts":1,"weeklyGoal":4,""" +
+            """"currentStats":{"totalWorkouts":4,"avgPerWeek":1,"totalDuration":200,"avgDuration":50,"totalRunningMeters":5000},""" +
+            """"trainingLoad":{"currentUtss":0,"acuteAvg":0,"chronicAvg":0,"zone":"insufficient_data","monotonyZone":"ok",""" +
+            """"hrZones":[],"powerTssEstimated":false,"flaggedVectors":[],"activeRestrictions":[],"trend":[]}}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/training-overview", overview)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Analytics)
+            awaitNode(hasText("analytics"))
+
+            onNodeWithText("Breakdown").performClick()
+            awaitNode(hasText("Functional 75% · 3 sessions"))
+            // The page's list; the tab row and range chips scroll sideways too.
+            val page = onAllNodes(hasScrollAction()).onFirst()
+            page.performScrollToNode(hasContentDescription("Front muscle heat map", substring = true))
+            onNodeWithContentDescription("Front muscle heat map: Quads peak set volume, Core light set volume").assertExists()
+            page.performScrollToNode(hasText("Next focus: Add Hinge; it has no logged sessions in this range."))
         }
     }
 }

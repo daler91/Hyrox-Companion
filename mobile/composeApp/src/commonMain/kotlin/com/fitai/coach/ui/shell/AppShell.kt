@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.fitai.coach.core.push.PushRegistration
+import com.fitai.coach.ui.analytics.AnalyticsNavigation
 import com.fitai.coach.ui.analytics.AnalyticsScreen
 import com.fitai.coach.ui.coach.CoachPanel
 import com.fitai.coach.ui.coach.CoachThread
@@ -187,8 +188,12 @@ fun AppShell() {
                 entry<Route.Nutrition> { NutritionScreen(openDate = openNutritionDate, onDateOpened = { openNutritionDate = null }) }
                 entry<Route.Analytics> {
                     AnalyticsScreen(
-                        onLogWorkout = { backStack.select(TopLevel.LogWorkout) },
-                        onOpenReview = { backStack.push(Route.WeeklyReview()) },
+                        AnalyticsNavigation(
+                            logWorkout = { backStack.select(TopLevel.LogWorkout) },
+                            openReview = { backStack.push(Route.WeeklyReview()) },
+                            openWorkout = { backStack.push(Route.WorkoutDetail(it)) },
+                            openSettings = { backStack.select(TopLevel.Settings) },
+                        ),
                     )
                 }
                 entry<Route.Settings> {

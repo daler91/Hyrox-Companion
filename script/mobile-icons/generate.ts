@@ -41,6 +41,11 @@ export const ICONS: Readonly<Record<string, string>> = {
   Sparkles: "sparkles",
   Pencil: "pencil",
   ChevronDown: "chevron-down",
+  Timer: "timer",
+  Gauge: "gauge",
+  Footprints: "footprints",
+  Dumbbell: "dumbbell",
+  Info: "info",
 };
 
 export type IconNode = [tag: string, attrs: Record<string, string>];

@@ -17,7 +17,16 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class AnalyticsTab(val label: String) { Overview("Overview"), Records("Records"), Progression("Progression") }
+/** The tabs, in the web's order; the last three ignore the date range (each is its own window). */
+enum class AnalyticsTab(val label: String, val usesRange: Boolean = true) {
+    Overview("Overview"),
+    Breakdown("Breakdown"),
+    Records("Records"),
+    Progression("Progression"),
+    Sessions("Session quality", usesRange = false),
+    Insights("Coach insights", usesRange = false),
+    Predictor("Race predictor", usesRange = false),
+}
 
 data class AnalyticsUiState(
     val tab: AnalyticsTab = AnalyticsTab.Overview,
@@ -46,9 +55,11 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
         status,
     ) { s, (overview, records, exercises), st ->
         val hasData = when (s.tab) {
-            AnalyticsTab.Overview -> overview != null
+            AnalyticsTab.Overview, AnalyticsTab.Breakdown -> overview != null
             AnalyticsTab.Records -> records != null
             AnalyticsTab.Progression -> records != null && exercises != null
+            // These panels load themselves.
+            AnalyticsTab.Sessions, AnalyticsTab.Insights, AnalyticsTab.Predictor -> true
         }
         AnalyticsUiState(
             tab = s.tab,
@@ -69,16 +80,18 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
 
     fun refresh() {
         val current = selection.value
+        if (!current.tab.usesRange) return
         viewModelScope.launch {
             status.value = Status(loading = true)
             val ok = try {
                 when (current.tab) {
-                    AnalyticsTab.Overview -> analytics.refreshOverview(current.range, today)
+                    AnalyticsTab.Overview, AnalyticsTab.Breakdown -> analytics.refreshOverview(current.range, today)
                     AnalyticsTab.Records -> analytics.refreshRecords(current.range, today)
                     AnalyticsTab.Progression -> {
                         analytics.refreshRecords(current.range, today)
                         analytics.refreshExercises(current.range, today)
                     }
+                    AnalyticsTab.Sessions, AnalyticsTab.Insights, AnalyticsTab.Predictor -> Unit
                 }
                 true
             } catch (e: CancellationException) {
