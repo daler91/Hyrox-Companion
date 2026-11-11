@@ -39,7 +39,7 @@ fun mafClassification(classification: String?): Pair<String, BadgeTone> = when (
 private fun testDate(workoutLogId: String?, createdAt: String?, response: GetMafTestsResponse, timeZone: String?): String? =
     workoutLogId?.let { response.workoutDates[it] } ?: createdAt?.let { localDateOf(it, timeZone) }
 
-private class DatedTest(val test: MafTestResult, val date: String?)
+private data class DatedTest(val test: MafTestResult, val date: String?)
 
 /** Each test, newest workout first (same-day tests by when they were tagged), with its compliance (buildTestRows). */
 fun mafRows(response: GetMafTestsResponse, timeZone: String?): List<MafRow> {
