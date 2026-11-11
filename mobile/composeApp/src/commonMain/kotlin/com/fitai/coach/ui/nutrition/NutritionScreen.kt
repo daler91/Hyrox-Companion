@@ -1,5 +1,6 @@
 package com.fitai.coach.ui.nutrition
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +47,7 @@ import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiDialog
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
+import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.icons.generated.LucideIcons
@@ -83,10 +86,13 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
     val targets by vm.targets.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
+    val quickAdd by vm.quickAdd.collectAsStateWithLifecycle()
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val toast: (String) -> Unit = { message -> scope.launch { toasts.showSnackbar(message) } }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it) } }
     LaunchedEffect(capture) { capture.messages.collect { toasts.showSnackbar(it) } }
     val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
@@ -122,27 +128,46 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                     summary == null -> item { LoadingState() }
                     else -> {
                         item { Totals(summary, onSetTargets = vm::openTargets) }
+                        if (quickAdd.hasFoods) {
+                            item {
+                                QuickAddRows(quickAdd, state.quickLogging, onFavorite = vm::quickAddFavorite, onRecent = vm::quickAddRecent)
+                            }
+                        }
                         val meals = summary.visibleMeals()
+                        // With no history there's nothing to repeat, so the shortcuts stay hidden (Nutrition.tsx isFirstRun).
+                        val canRepeat = !quickAdd.firstRun
                         if (meals.isEmpty()) {
                             item {
-                                Text(
-                                    "Nothing logged for ${dayLabel(state.date, state.today).lowercase()}.",
-                                    style = FitaiTheme.typography.body,
-                                    color = FitaiTheme.colors.textMuted,
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                                    Text(
+                                        "Nothing logged for ${dayLabel(state.date, state.today).lowercase()}.",
+                                        style = FitaiTheme.typography.body,
+                                        color = FitaiTheme.colors.textMuted,
+                                    )
+                                    if (canRepeat) RepeatPreviousDay(state.repeating, vm::repeatPreviousDay)
+                                }
                             }
                         }
                         items(meals, key = { it.wireValue }) { meal ->
                             MealSection(
                                 summary,
                                 meal,
-                                onAdd = {
-                                    searching = meal
-                                    searchOpen = true
-                                },
-                                onEdit = vm::startEdit,
-                                onDelete = { deleting = it },
+                                MealActions(
+                                    vm,
+                                    state,
+                                    favoriteIds,
+                                    canRepeat = canRepeat,
+                                    onAdd = {
+                                        searching = meal
+                                        searchOpen = true
+                                    },
+                                    onDelete = { deleting = it },
+                                ),
                             )
+                        }
+                        // Meals shown for their targets, nothing in them yet: the day can still be repeated.
+                        if (meals.isNotEmpty() && summary.isEmptyDay() && canRepeat) {
+                            item { RepeatPreviousDay(state.repeating, vm::repeatPreviousDay) }
                         }
                         item {
                             // One way in (LogFoodActions); it shows a photo is still being read.
@@ -163,7 +188,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
 
     if (searchOpen) {
         val search by vm.search.collectAsStateWithLifecycle()
-        SearchSheet(search, onQuery = vm::searchFor, onPick = { food ->
+        SearchSheet(search, favoriteIds, onToggleFavorite = vm::toggleFavorite, onQuery = vm::searchFor, onPick = { food ->
             searchOpen = false
             vm.startLog(food, searching)
         }, onDismiss = {
@@ -191,7 +216,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
         MealReviewSheet(review, search, capture, state.date)
     }
     if (captured.consentOpen) AiConsentDialog(onAccept = capture::acceptAi, onDecline = capture::declineAi)
-    logSheet?.let { LogSheet(it, vm) }
+    logSheet?.let { LogSheet(it, favorite = it.food.id in favoriteIds, vm) }
     targets?.let { TargetsSheet(it, vm) }
     deleting?.let { entry ->
         FitaiDialog(
@@ -268,14 +293,35 @@ private fun Macro(label: String, value: Double, target: Double?, unit: String) {
 
 private fun Double.roundToWhole(): Double = kotlin.math.round(this)
 
+/** "Repeat previous day": the day before, copied onto this one. */
 @Composable
-private fun MealSection(
-    summary: GetNutritionSummaryResponse,
-    meal: Meal,
-    onAdd: () -> Unit,
-    onEdit: (NutritionLogEntryWithNutrition) -> Unit,
-    onDelete: (NutritionLogEntryWithNutrition) -> Unit,
-) {
+private fun RepeatPreviousDay(repeating: Boolean, onRepeat: () -> Unit) {
+    FitaiButton(
+        if (repeating) "Repeating…" else "Repeat previous day",
+        onClick = onRepeat,
+        variant = ButtonVariant.Secondary,
+        loading = repeating,
+        leadingIcon = LucideIcons.CopyPlus,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/**
+ * What a meal section can do, and the state its buttons wait on. [canRepeat]
+ * is false with no history to copy; [onAdd] and [onDelete] go through the
+ * screen (search, then the delete confirmation).
+ */
+private class MealActions(
+    val vm: NutritionViewModel,
+    val state: NutritionUiState,
+    val favoriteIds: Set<String>,
+    val canRepeat: Boolean,
+    val onAdd: () -> Unit,
+    val onDelete: (NutritionLogEntryWithNutrition) -> Unit,
+)
+
+@Composable
+private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, actions: MealActions) {
     val entries = summary.entries(meal)
     val target = summary.target(meal)
     val logged = entries.sumOf { it.nutrition.calories }
@@ -291,10 +337,27 @@ private fun MealSection(
         target?.rationale?.takeIf {
             it.isNotBlank()
         }?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
-        if (entries.isEmpty()) Text("Nothing logged yet.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+        if (entries.isEmpty()) {
+            Text("Nothing logged yet.", style = FitaiTheme.typography.body, color = FitaiTheme.colors.textMuted)
+            if (actions.canRepeat) {
+                FitaiButton(
+                    "Copy yesterday's ${meal.label.lowercase()}",
+                    onClick = { actions.vm.repeatPreviousDay(meal) },
+                    variant = ButtonVariant.Ghost,
+                    enabled = !actions.state.repeating,
+                    leadingIcon = LucideIcons.CopyPlus,
+                )
+            }
+        }
         entries.forEach { entry ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                // Tapping the entry edits it; its quick actions sit beside it.
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clickable(onClickLabel = "Edit") { actions.vm.startEdit(entry) }
+                        .padding(vertical = Spacing.Xs),
+                ) {
                     Text(entry.name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
                     Text(
                         "${formatNumber(entry.quantityG)} g · ${formatNumber(entry.nutrition.calories.roundToWhole())} kcal · " +
@@ -306,12 +369,15 @@ private fun MealSection(
                         color = FitaiTheme.colors.textMuted,
                     )
                 }
-                TextButton(onClick = { onEdit(entry) }) { Text("Edit", color = FitaiTheme.colors.accent) }
-                IconButton(onClick = { onDelete(entry) }) {
+                FavoriteStar(entry.foodId, entry.name, entry.foodId in actions.favoriteIds, actions.vm::toggleFavorite)
+                IconButton(onClick = { actions.vm.logAgain(entry) }, enabled = !actions.state.quickLogging) {
+                    Icon(LucideIcons.RotateCw, contentDescription = "log ${entry.name} again today", tint = FitaiTheme.colors.textMuted)
+                }
+                IconButton(onClick = { actions.onDelete(entry) }) {
                     Icon(LucideIcons.Trash, contentDescription = "delete ${entry.name}", tint = FitaiTheme.colors.textMuted)
                 }
             }
         }
-        FitaiButton("Add to ${meal.label.lowercase()}", onClick = onAdd, variant = ButtonVariant.Ghost)
+        FitaiButton("Add to ${meal.label.lowercase()}", onClick = actions.onAdd, variant = ButtonVariant.Ghost)
     }
 }

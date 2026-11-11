@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { generateIconsKotlin, toPathData } from "./generate";
+import { generateIconsKotlin, type IconNode, toPathData } from "./generate";
 import { ICONS_KT, LICENSE_TXT, loadIcons, lucideLicense, lucideVersion } from "./icons";
 
 describe("committed Lucide icons", () => {
@@ -12,6 +12,17 @@ describe("committed Lucide icons", () => {
 
   it("ship Lucide's licence", () => {
     expect(readFileSync(LICENSE_TXT, "utf8")).toBe(lucideLicense());
+  });
+});
+
+describe("generateIconsKotlin", () => {
+  it("fills only the icons marked filled", () => {
+    const star: IconNode[] = [["path", { d: "M1 1h2" }]];
+    const kotlin = generateIconsKotlin({ Star: star, StarFilled: star }, "0.0.0");
+    expect(kotlin).toContain(`val Star: ImageVector by lazy {\n        lucide(\n            "Star",\n            "M1 1h2",\n        )`);
+    expect(kotlin).toContain(
+      `val StarFilled: ImageVector by lazy {\n        lucide(\n            "StarFilled",\n            "M1 1h2",\n            filled = true,\n        )`,
+    );
   });
 });
 

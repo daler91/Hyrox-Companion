@@ -74,9 +74,9 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] **Describe a meal** (AI) — `POST /nutrition/parse/text`. **Snap a meal** — `…/parse/photo`. Both open a review sheet, then `POST /nutrition/logs/batch`.
 - [ ] **Barcode** scan or entry — `POST /nutrition/foods/barcode`. Scanning needs a camera barcode library.
 - [ ] **Nutrition label** scan — `POST /nutrition/parse/label`, which pre-fills a custom food.
-- [ ] Favourites and recent quick-add — `/nutrition/favorites`, `GET /nutrition/foods/recent`.
-- [ ] Remember the usual portion for each food.
-- [ ] Log again today; copy yesterday's meal; repeat the previous day — `POST /nutrition/logs/repeat`.
+- [x] Favourites and recent quick-add — `/nutrition/favorites`, `GET /nutrition/foods/recent`.
+- [x] Remember the usual portion for each food.
+- [x] Log again today; copy yesterday's meal; repeat the previous day — `POST /nutrition/logs/repeat`.
 - [ ] Custom foods and named portions — `/nutrition/foods`, `…/servings`.
 - [ ] Recipes — `/nutrition/recipes`.
 - [ ] Per-meal target overrides — `/nutrition/meal-targets`.

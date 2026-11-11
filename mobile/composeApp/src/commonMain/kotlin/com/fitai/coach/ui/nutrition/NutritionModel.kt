@@ -73,6 +73,9 @@ fun GetNutritionSummaryResponse.target(meal: Meal): NutritionMealFuelTarget? = m
     }
 }
 
+/** Nothing logged in any meal. */
+fun GetNutritionSummaryResponse.isEmptyDay(): Boolean = Meal.entries.all { entries(it).isEmpty() }
+
 /** The meals to show: those with entries or a target (MealSection.tsx hides the rest). */
 fun GetNutritionSummaryResponse.visibleMeals(): List<Meal> = Meal.entries.filter { entries(it).isNotEmpty() || target(it) != null }
 

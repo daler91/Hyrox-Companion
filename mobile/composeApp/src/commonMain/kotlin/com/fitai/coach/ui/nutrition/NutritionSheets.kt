@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -33,7 +34,14 @@ import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 
 @Composable
-fun SearchSheet(state: SearchState, onQuery: (String) -> Unit, onPick: (NutritionFood) -> Unit, onDismiss: () -> Unit) {
+fun SearchSheet(
+    state: SearchState,
+    favoriteIds: Set<String>,
+    onToggleFavorite: (String) -> Unit,
+    onQuery: (String) -> Unit,
+    onPick: (NutritionFood) -> Unit,
+    onDismiss: () -> Unit,
+) {
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = Spacing.Lg), verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
             Text("Add food", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
@@ -55,19 +63,9 @@ fun SearchSheet(state: SearchState, onQuery: (String) -> Unit, onPick: (Nutritio
             }
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 items(state.results, key = { it.id }) { food ->
-                    TextButton(onClick = { onPick(food) }, modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth()) {
-                            Text(food.name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
-                            Text(
-                                listOfNotNull(
-                                    food.brand,
-                                    "${food.caloriesPer100g?.let { formatNumber(it) } ?: "—"} kcal/100g",
-                                    food.proteinPer100g?.let { "P ${formatNumber(it)}" },
-                                ).joinToString(" · "),
-                                style = FitaiTheme.typography.bodySm,
-                                color = FitaiTheme.colors.textMuted,
-                            )
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SearchResult(food, onPick, Modifier.weight(1f))
+                        FavoriteStar(food.id, food.name, food.id in favoriteIds, onToggleFavorite)
                     }
                 }
             }
@@ -75,15 +73,36 @@ fun SearchSheet(state: SearchState, onQuery: (String) -> Unit, onPick: (Nutritio
     }
 }
 
+@Composable
+private fun SearchResult(food: NutritionFood, onPick: (NutritionFood) -> Unit, modifier: Modifier) {
+    TextButton(onClick = { onPick(food) }, modifier = modifier) {
+        Column(Modifier.fillMaxWidth()) {
+            Text(food.name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
+            Text(
+                listOfNotNull(
+                    food.brand,
+                    "${food.caloriesPer100g?.let { formatNumber(it) } ?: "—"} kcal/100g",
+                    food.proteinPer100g?.let { "P ${formatNumber(it)}" },
+                ).joinToString(" · "),
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LogSheet(state: LogSheetState, vm: NutritionViewModel) {
+fun LogSheet(state: LogSheetState, favorite: Boolean, vm: NutritionViewModel) {
     FitaiBottomSheet(onDismissRequest = vm::closeLog) {
         Column(
             Modifier.padding(horizontal = Spacing.Lg).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(Spacing.Sm),
         ) {
-            Text(state.food.name, style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(state.food.name, style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+                FavoriteStar(state.food.id, state.food.name, favorite, vm::toggleFavorite)
+            }
             state.food.brand?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
             FitaiTextField(
                 state.amount,

@@ -81,7 +81,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     val recovery by vm.recovery.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
-    LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it.message, it.undo) } }
+    LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it) } }
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
     var noteSheet by remember { mutableStateOf<NoteSheet?>(null) }
