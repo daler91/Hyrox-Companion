@@ -52,11 +52,17 @@ describe("AnnotationsDialog", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the empty state when there are no annotations", async () => {
-    mockApi.list.mockResolvedValue([]);
-    renderDialog();
-    expect(await screen.findByTestId("annotations-empty")).toHaveTextContent(/no annotations yet/i);
-  }, DIALOG_TIMEOUT_MS);
+  it(
+    "renders the empty state when there are no annotations",
+    async () => {
+      mockApi.list.mockResolvedValue([]);
+      renderDialog();
+      expect(await screen.findByTestId("annotations-empty")).toHaveTextContent(
+        /no annotations yet/i,
+      );
+    },
+    DIALOG_TIMEOUT_MS,
+  );
 
   it("lists existing annotations", async () => {
     const annotations: TimelineAnnotation[] = [
@@ -76,7 +82,7 @@ describe("AnnotationsDialog", () => {
 
     const item = await screen.findByTestId("annotation-item-a1");
     expect(item).toHaveTextContent(/injury/i);
-    expect(item).toHaveTextContent("2026-03-01 — 2026-03-07");
+    expect(item).toHaveTextContent("Mar 1, 2026 – Mar 7, 2026 · 7 days");
     expect(item).toHaveTextContent("Calf strain during sled push");
   });
 
@@ -113,7 +119,11 @@ describe("AnnotationsDialog", () => {
     await waitFor(() => {
       expect(mockApi.create).toHaveBeenCalled();
     });
-    const arg = mockApi.create.mock.calls[0][0] as { type: string; startDate: string; endDate: string };
+    const arg = mockApi.create.mock.calls[0][0] as {
+      type: string;
+      startDate: string;
+      endDate: string;
+    };
     expect(arg).toMatchObject({
       type: "injury",
       startDate: "2026-05-01",
@@ -145,7 +155,12 @@ describe("AnnotationsDialog", () => {
         </QueryClientProvider>
       );
       const result = render(view(editingAnnotation));
-      return { ...result, rerenderWith: (editing: TimelineAnnotation | null) => { result.rerender(view(editing)); } };
+      return {
+        ...result,
+        rerenderWith: (editing: TimelineAnnotation | null) => {
+          result.rerender(view(editing));
+        },
+      };
     }
 
     it("loads the annotation and saves changes to it instead of adding one", async () => {
