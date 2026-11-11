@@ -1,6 +1,21 @@
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Suspense } from "react";
+
+import { lazyWithReload } from "@/lib/lazyWithReload";
 
 import type { MacroEnergyShares } from "./utils";
+
+// ⚡ Bolt: the donut is the only recharts use on the Nutrition route. Loading
+// it lazily stops the Nutrition chunk from statically importing the shared
+// `vendor-charts` chunk (~411 kB raw / ~115 kB gzip), which used to download
+// on every Nutrition visit even though the ring only appears inside the
+// log-food dialog. The legend and calorie label below stay eager, and the
+// fallback is the same muted ring the zero-energy case draws, so nothing
+// shifts while the chunk loads.
+const MacroDonut = lazyWithReload(() => import("./MacroDonut"));
+
+const EMPTY_RING = (
+  <div className="absolute inset-[18px] rounded-full border-[16px] border-muted" aria-hidden="true" />
+);
 
 /** Macro slice colours (chart tokens) — reused by MacroRows' bars for consistency. */
 export const MACRO_COLORS = {
@@ -48,27 +63,11 @@ export function CalorieBreakdownRing({
         data-testid="calorie-ring"
       >
         {hasEnergy ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={48}
-                outerRadius={64}
-                paddingAngle={data.length > 1 ? 2 : 0}
-                dataKey="value"
-                stroke="none"
-                isAnimationActive={false}
-              >
-                {data.map((d) => (
-                  <Cell key={d.name} fill={d.fill} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+          <Suspense fallback={EMPTY_RING}>
+            <MacroDonut data={data} />
+          </Suspense>
         ) : (
-          <div className="absolute inset-[18px] rounded-full border-[16px] border-muted" aria-hidden="true" />
+          EMPTY_RING
         )}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-xl font-semibold leading-none tabular-nums">{calories}</span>
