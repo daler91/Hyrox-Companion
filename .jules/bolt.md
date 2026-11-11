@@ -284,3 +284,7 @@ A scripted sweep of all 40 `pgTable`s in `shared/schema/tables.ts` (pair up ever
 
 **Learning:** `idx_push_subscriptions_user_id (user_id)` was shadowed by the `uniqueIndex` `idx_push_subscriptions_user_endpoint (user_id, endpoint)`. Caller-grepped `server/storage/push.ts`: every `userId` predicate is bare or ANDed with `endpoint`, and the cross-user `endpoint = $1 AND user_id <> $2` lookup is served by neither index. Not in `EXPECTED_INDEXES`, so only `docs/database.md` needed editing.
 **Action:** Remaining from the queue: check `meal_targets.idx_meal_targets_user_effective` vs `uq_meal_targets_user_meal_effective` (prefix `user_id` only if the unique leads with `user_id, meal_type`; the plain index's `effective_from` second column means it is likely NOT shadowed — verify queries before dropping).
+
+## 2026-11-11 - Replace new Map(array.map(...)) with single for...of loops
+**Learning:** When creating Maps by mapping arrays, `new Map(arr.map(x => [key, x]))` introduces intermediate array allocations causing a measurable performance hit.
+**Action:** Replaced `new Map(array.map(...))` with single loops in `server/garmin.ts`, `server/storage/athleteFacts.ts`, `client/src/hooks/useSetOrderSave.ts` and `server/prompts/workoutEngine.ts`.

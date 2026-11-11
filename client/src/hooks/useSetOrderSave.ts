@@ -60,11 +60,21 @@ function withSortOrders(sets: readonly ExerciseSet[], sortOrderById: SortOrderBy
 }
 
 function positionsOf(setIds: readonly string[]): SortOrderById {
-  return new Map(setIds.map((setId, position) => [setId, position]));
+  // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for loop
+  const map = new Map<string, number>();
+  for (let i = 0; i < setIds.length; i++) {
+    map.set(setIds[i], i);
+  }
+  return map;
 }
 
 function storedPositions(saved: readonly ExerciseSet[]): SortOrderById {
-  return new Map(saved.map((set) => [set.id, set.sortOrder ?? 0]));
+  // ⚡ Bolt Optimization: Replace new Map(array.map(...)) with single for...of loop
+  const map = new Map<string, number>();
+  for (const set of saved) {
+    map.set(set.id, set.sortOrder ?? 0);
+  }
+  return map;
 }
 
 function requireRequest(request: SaveSetOrderRequest | undefined): SaveSetOrderRequest {
