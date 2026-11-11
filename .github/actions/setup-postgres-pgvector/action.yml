@@ -23,11 +23,14 @@ runs:
       run: |
         set -euo pipefail
         keyring=/usr/share/keyrings/postgresql.gpg
-        curl -fsSL --retry 3 --retry-all-errors https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        # --proto =https: HTTPS only, redirects included.
+        curl -fsSL --proto '=https' --retry 3 --retry-all-errors https://www.postgresql.org/media/keys/ACCC4CF8.asc \
           | sudo gpg --batch --yes --dearmor -o "$keyring"
-        # Refuse a key that isn't the repository's.
-        gpg --no-default-keyring --keyring "$keyring" --with-colons --fingerprint \
-          | grep -q "^fpr:::::::::${PGDG_KEY_FINGERPRINT}:" \
+        # Refuse a key that isn't the repository's. Captured first rather than
+        # piped into `grep -q`, which under pipefail could fail the check on
+        # gpg's SIGPIPE.
+        fingerprints=$(gpg --no-default-keyring --keyring "$keyring" --with-colons --fingerprint)
+        grep -q "^fpr:::::::::${PGDG_KEY_FINGERPRINT}:" <<< "$fingerprints" \
           || { echo "::error::Unexpected apt.postgresql.org signing key"; exit 1; }
         echo "deb [signed-by=$keyring] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
           | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
