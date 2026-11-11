@@ -3,6 +3,7 @@ package com.fitai.coach.ui.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsResponseValueItem
+import com.fitai.coach.core.api.generated.GetNutritionBlockResponse
 import com.fitai.coach.core.api.generated.PersonalRecord
 import com.fitai.coach.core.api.generated.TrainingOverview
 import com.fitai.coach.core.data.AnalyticsRange
@@ -17,7 +18,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** The tabs, in the web's order; the last three ignore the date range (each is its own window). */
+/** The tabs, in the web's order; those that don't use the date range are each their own window. */
 enum class AnalyticsTab(val label: String, val usesRange: Boolean = true) {
     Overview("Overview"),
     Breakdown("Breakdown"),
@@ -26,7 +27,13 @@ enum class AnalyticsTab(val label: String, val usesRange: Boolean = true) {
     Sessions("Session quality", usesRange = false),
     Insights("Coach insights", usesRange = false),
     Predictor("Race predictor", usesRange = false),
+    Maf("MAF trend", usesRange = false),
+    Fuelling("Fuelling"),
 }
+
+/** The tabs this athlete sees: the MAF trend only for MAF-style training (Analytics.tsx). */
+fun analyticsTabs(trainingStyleId: String?): List<AnalyticsTab> =
+    AnalyticsTab.entries.filter { it != AnalyticsTab.Maf || trainingStyleId == MAF_TRAINING_STYLE }
 
 data class AnalyticsUiState(
     val tab: AnalyticsTab = AnalyticsTab.Overview,
@@ -34,13 +41,14 @@ data class AnalyticsUiState(
     val overview: TrainingOverview? = null,
     val records: Map<String, PersonalRecord>? = null,
     val exercises: Map<String, List<GetExerciseAnalyticsResponseValueItem>>? = null,
+    val block: GetNutritionBlockResponse? = null,
     val category: String = "All",
     val exercise: String? = null,
     val loading: Boolean = true,
     val failed: Boolean = false,
 )
 
-/** Analytics, v1 scope of /analytics: overview, personal records, exercise progression. */
+/** Analytics (/analytics): the range-driven tabs; the others load their own panels. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooGenericExceptionCaught")
 class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val today: String) : ViewModel() {
@@ -50,23 +58,30 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
     val state: StateFlow<AnalyticsUiState> = combine(
         selection,
         selection.flatMapLatest { s ->
-            combine(analytics.overview(s.range), analytics.records(s.range), analytics.exercises(s.range)) { o, r, e -> Triple(o, r, e) }
+            combine(
+                analytics.overview(s.range),
+                analytics.records(s.range),
+                analytics.exercises(s.range),
+                analytics.nutritionBlock(s.range),
+            ) { o, r, e, b -> RangeData(o, r, e, b) }
         },
         status,
-    ) { s, (overview, records, exercises), st ->
+    ) { s, data, st ->
         val hasData = when (s.tab) {
-            AnalyticsTab.Overview, AnalyticsTab.Breakdown -> overview != null
-            AnalyticsTab.Records -> records != null
-            AnalyticsTab.Progression -> records != null && exercises != null
+            AnalyticsTab.Overview, AnalyticsTab.Breakdown -> data.overview != null
+            AnalyticsTab.Records -> data.records != null
+            AnalyticsTab.Progression -> data.records != null && data.exercises != null
+            AnalyticsTab.Fuelling -> data.block != null
             // These panels load themselves.
-            AnalyticsTab.Sessions, AnalyticsTab.Insights, AnalyticsTab.Predictor -> true
+            AnalyticsTab.Sessions, AnalyticsTab.Insights, AnalyticsTab.Predictor, AnalyticsTab.Maf -> true
         }
         AnalyticsUiState(
             tab = s.tab,
             range = s.range,
-            overview = overview,
-            records = records,
-            exercises = exercises,
+            overview = data.overview,
+            records = data.records,
+            exercises = data.exercises,
+            block = data.block,
             category = s.category,
             exercise = s.exercise,
             loading = !hasData && st.loading,
@@ -91,7 +106,8 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
                         analytics.refreshRecords(current.range, today)
                         analytics.refreshExercises(current.range, today)
                     }
-                    AnalyticsTab.Sessions, AnalyticsTab.Insights, AnalyticsTab.Predictor -> Unit
+                    AnalyticsTab.Fuelling -> analytics.refreshNutritionBlock(current.range, today)
+                    AnalyticsTab.Sessions, AnalyticsTab.Insights, AnalyticsTab.Predictor, AnalyticsTab.Maf -> Unit
                 }
                 true
             } catch (e: CancellationException) {
@@ -129,6 +145,13 @@ class AnalyticsViewModel(private val analytics: AnalyticsRepository, private val
     )
 
     private data class Status(val loading: Boolean = false, val failed: Boolean = false)
+
+    private data class RangeData(
+        val overview: TrainingOverview?,
+        val records: Map<String, PersonalRecord>?,
+        val exercises: Map<String, List<GetExerciseAnalyticsResponseValueItem>>?,
+        val block: GetNutritionBlockResponse?,
+    )
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

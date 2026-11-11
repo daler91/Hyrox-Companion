@@ -59,6 +59,7 @@ private const val FUTURE_ALPHA = 0.4f
 private const val HALF_TURN = 180f
 private const val FORM_TITLE = "Form (TSB)"
 private const val STRAIN_TITLE = "Strain (Foster)"
+private const val MONOTONY_TITLE = "Monotony"
 
 /** The AI header above the charts (OverviewAnalysisHeader): generate, when, and why not. */
 @Composable
@@ -230,10 +231,10 @@ fun FormMonotonyCard(trend: List<TrainingOverview.TrainingLoad.TrendItem>, expla
             LineChart(listOf(LineSeries(FORM_TITLE, form, SeriesColor.Purple)), FORM_TITLE, references = listOf(FORM_REFERENCE))
         }
         if (monotony.isLine()) {
-            ChartLabel("Monotony")
+            ChartLabel(MONOTONY_TITLE)
             LineChart(
-                listOf(LineSeries("Monotony", monotony, SeriesColor.Amber)),
-                "Monotony",
+                listOf(LineSeries(MONOTONY_TITLE, monotony, SeriesColor.Amber)),
+                MONOTONY_TITLE,
                 references = listOf(MONOTONY_REFERENCE),
                 format = ::fixed2,
             )
@@ -341,7 +342,7 @@ fun WeeklyWorkoutsCard(overview: TrainingOverview, annotations: List<TimelineAnn
         ChartTitle("Weekly Workouts")
         BarChart(
             weeks.map { Bar(it.weekStart, it.workoutCount.toDouble()) },
-            label = "Workouts per week over ${weeks.size} weeks" + (goal?.let { ", against a goal of $it per week" } ?: ""),
+            label = "Workouts per week over ${weeks.size} weeks" + goal?.let { ", against a goal of $it per week" }.orEmpty(),
             goal = goal?.toDouble(),
             shading = bands.map { Shade(it.from, it.to, annotationColor(it.type).copy(alpha = SHADE_ALPHA)) },
         )

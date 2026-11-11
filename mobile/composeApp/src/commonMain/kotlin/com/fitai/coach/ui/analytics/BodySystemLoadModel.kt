@@ -92,7 +92,7 @@ private fun notablePhrase(system: SystemLoad): String {
     val above = system.ratio?.let(::percentChange)?.takeIf { it > 0 }?.let { "$it% above your usual week" }
     return when {
         system.status == SystemStatus.New -> "${noun(system.system)} load jumped from almost none in the previous four weeks"
-        system.sixWeekHigh -> "${noun(system.system)} load is at a six-week high" + (above?.let { " ($it)" } ?: "")
+        system.sixWeekHigh -> "${noun(system.system)} load is at a six-week high" + above?.let { " ($it)" }.orEmpty()
         else -> "${noun(system.system)} load is ${above ?: "above your usual week"}"
     }
 }

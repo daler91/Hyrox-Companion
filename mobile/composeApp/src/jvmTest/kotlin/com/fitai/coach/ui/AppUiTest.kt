@@ -1,9 +1,13 @@
 package com.fitai.coach.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -11,6 +15,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -433,6 +438,106 @@ class AppUiTest {
             page.performScrollToNode(hasContentDescription("Workout activity heatmap", substring = true))
         }
     }
+
+    @Test
+    fun aMafAthleteSeesTheirMafTrendAndFuellingComparesCarbDays() {
+        val user = """{"id":"u1","userTimezone":"UTC","onboardingCompleted":true,"trainingStyleId":"maf_method"}"""
+        fun mafTest(id: String, workout: String, metres: Int) = """{"id":"$id","userId":"u1","protocolType":"distance","version":1,""" +
+            """"conditions":{"source":"workout_tag","workoutLogId":"$workout"},"metrics":{"durationSeconds":2880,""" +
+            """"distanceMeters":$metres,"avgHeartRate":141,"mafCeilingUsed":145},"createdAt":"2026-11-09T08:00:00Z"}"""
+        fun scored(workout: String, pct: Int, classification: String) =
+            """{"id":"a-$workout","userId":"u1","workoutLogId":"$workout","compliancePct":$pct,""" +
+                """"classification":"$classification","version":1}"""
+        val maf = """{"tests":[${mafTest("t2", "w2", 8400)},${mafTest("t1", "w1", 8000)}],""" +
+            """"analysis":[${scored("w2", 92, "compliant")},${scored("w1", 80, "mostly_compliant")}],""" +
+            """"workoutDates":{"w1":"2026-11-02","w2":"2026-11-08"}}"""
+        fun day(date: String, carb: Int, rpe: Double) = """{"date":"$date","calories":2400,"protein":150,"carb":$carb,"fat":80,""" +
+            """"fiber":30,"utss":60,"carbTargetG":300,"avgRpe":$rpe}"""
+        val block = """{"from":"2026-08-13","to":"2026-11-10","points":[${day("2026-11-01", 290, 6.0)},${day("2026-11-02", 280, 7.0)},""" +
+            """${day(
+                "2026-11-03",
+                300,
+                6.5,
+            )},${day("2026-11-04", 150, 8.0)},${day("2026-11-05", 160, 7.5)},${day("2026-11-06", 100, 8.5)}]}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/auth/user", user)
+            on("GET", "/api/v1/maf-tests", maf)
+            on("GET", "/api/v1/nutrition/block", block)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Analytics)
+            awaitNode(hasText("analytics"))
+            // The MAF trend tab shows for a MAF athlete only.
+            openAnalyticsTab("MAF trend")
+            awaitNode(hasText("2 MAF TESTS"))
+            onNodeWithText("LATEST: 92% · COMPLIANT").assertExists()
+            onNodeWithText("Last updated Nov 8, 2026.").assertExists()
+            val page = onAllNodes(hasScrollAction()).onFirst()
+            page.performScrollToNode(hasText("5:43/km · 48:00 · 141 bpm"))
+            onNodeWithText("Nov 2, 2026").assertExists()
+
+            openAnalyticsTab("Fuelling")
+            awaitNode(hasText("Intake vs training load"))
+            page.performScrollToNode(hasText("6.5 on carb-hit days (3) vs 8 missed (3) — 1.5 lower (felt easier)"))
+            assertTrue(api.sent("GET", "/api/v1/nutrition/block").isNotEmpty())
+        }
+    }
+
+    @Test
+    fun aDescribedMealIsReviewedThenLoggedInOneBatchAfterTurningOnTheAi() {
+        val today = FakeApi.today
+        val summary = """{"logDate":"$today","totals":{"calories":0,"protein":0,"carb":0,"fat":0,"fiber":0},"meals":{"breakfast":[],""" +
+            """"lunch":[],"dinner":[],"snack":[],"snack_pm":[],"pre_workout":[],"post_workout":[]}}"""
+        val egg = """{"id":"f1","source":"usda","name":"Egg, scrambled","caloriesPer100g":150,"proteinPer100g":10,"carbPer100g":2,""" +
+            """"fatPer100g":11,"isPublic":true,"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z"}"""
+        val parsed = """{"items":[{"name":"scrambled eggs","quantityG":120.4,"displayAmount":"2 scrambled eggs","mealType":"breakfast",""" +
+            """"confidence":0.9,"foodId":"f1","food":$egg},{"name":"mystery sauce","quantityG":30,"displayAmount":"a splash of sauce",""" +
+            """"confidence":0.3}],"warnings":["Portions are estimates."],"rawInput":"2 scrambled eggs and a splash of sauce"}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/nutrition/summary", summary)
+            on("POST", "/api/v1/nutrition/parse/text", parsed)
+            on(
+                "PATCH",
+                "/api/v1/preferences",
+                """{"userTimezone":"UTC","onboardingCompleted":true,"weightUnit":"kg","distanceUnit":"km","aiCoachEnabled":true}""",
+            )
+            on("POST", "/api/v1/nutrition/logs/batch", """{"created":1,"logDate":"$today"}""")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Nutrition())
+            // The day's totals, then the Log food button below them.
+            awaitNode(hasText("Set targets"))
+            onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Log food"))
+            onNodeWithText("Log food").performClick()
+            awaitNode(hasText("Describe a meal"))
+            onNodeWithText("Describe a meal").performClick()
+            awaitNode(hasContentDescription("Describe your meal"))
+            onNode(
+                hasSetTextAction() and hasContentDescription("Describe your meal"),
+            ).performTextInput("2 scrambled eggs and a splash of sauce")
+            onNodeWithText("Review foods").performClick()
+
+            // The AI isn't on yet: consent first, then the same description is read.
+            awaitNode(hasText("Not now"))
+            onNode(hasText("Enable AI Coach") and hasClickAction()).performClick()
+            awaitNode(hasText("Review parsed foods"))
+            assertEquals("""{"aiCoachEnabled":true}""", api.sent("PATCH", "/api/v1/preferences").single().body)
+            onNodeWithText("Portions are estimates.").assertExists()
+            onNodeWithText("No match — choose a food to log this.").assertExists()
+            onNodeWithText("1 item needs a match and won't be logged.").assertExists()
+
+            onNodeWithText("Log 1 item").performScrollTo().performClick()
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/nutrition/logs/batch").isNotEmpty() }
+            val batch = api.sent("POST", "/api/v1/nutrition/logs/batch").single().body.orEmpty()
+            assertTrue(""""entryMethod":"nl"""" in batch, batch)
+            assertTrue(""""items":[{"foodId":"f1","quantityG":120.0,"mealType":"breakfast","parseConfidence":0.9}]""" in batch, batch)
+            awaitNode(hasText("Logged 1 item"))
+        }
+    }
 }
 
 /**
@@ -441,3 +546,20 @@ class AppUiTest {
  */
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.openCard(focus: String) = onAllNodesWithText(focus).onLast().performClick()
+
+/** A list that scrolls sideways. */
+private val scrollsSideways = SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
+
+/**
+ * Scrolls the Analytics tab row (the page's first sideways list; the range
+ * chips are the second) to [label] and taps it. The row is rebuilt when the
+ * athlete's training style arrives (it decides the MAF tab), so the scroll is
+ * retried until the row has settled.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.openAnalyticsTab(label: String) {
+    waitUntil(timeoutMillis = 10_000) {
+        runCatching { onAllNodes(scrollsSideways).onFirst().performScrollToNode(hasText(label)) }.isSuccess
+    }
+    onNodeWithText(label).performClick()
+}

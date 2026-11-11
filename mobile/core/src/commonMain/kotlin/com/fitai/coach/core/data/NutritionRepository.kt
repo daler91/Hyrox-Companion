@@ -9,9 +9,13 @@ import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchQuery
 import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchResponse
 import com.fitai.coach.core.api.generated.GetNutritionSummaryQuery
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
+import com.fitai.coach.core.api.generated.NutritionParseMealResponse
 import com.fitai.coach.core.api.generated.NutritionTarget
 import com.fitai.coach.core.api.generated.PatchNutritionLogsByIdRequest
+import com.fitai.coach.core.api.generated.PostNutritionLogsBatchRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsRequest
+import com.fitai.coach.core.api.generated.PostNutritionParsePhotoRequest
+import com.fitai.coach.core.api.generated.PostNutritionParseTextRequest
 import com.fitai.coach.core.api.generated.PostNutritionTargetsRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonNull
@@ -29,6 +33,12 @@ public enum class Meal(public val wireValue: String, public val label: String) {
     PreWorkout("pre_workout", "Pre-workout"),
     PostWorkout("post_workout", "Post-workout"),
 }
+
+/** How a reviewed meal was captured: described in words, or from a photo. */
+public enum class MealEntryMethod { Described, Photo }
+
+/** One reviewed food to log: [confidence] is the parser's, kept with the entry. */
+public data class MealItem(val foodId: String, val quantityG: Double, val meal: Meal, val confidence: Double?)
 
 /** Daily macro targets as the athlete types them; a null field is not targeted. */
 public data class MacroTargets(val calories: Double?, val proteinG: Double?, val carbG: Double?, val fatG: Double?)
@@ -93,6 +103,48 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
         refreshDay(date)
     }
 
+    /**
+     * The AI's reading of a described meal: suggested foods and portions to
+     * review. Nothing is logged.
+     *
+     * @throws ApiException 403 AI_COACH_DISABLED without AI consent, 429 over the budget.
+     */
+    public suspend fun parseMealText(text: String): NutritionParseMealResponse =
+        api.call(ApiEndpoints.PostNutritionParseText, PostNutritionParseTextRequest(text = text.trim().take(MAX_MEAL_TEXT)))
+
+    /** As [parseMealText], from a photo of the meal. */
+    public suspend fun parseMealPhoto(image: EncodedImage): NutritionParseMealResponse {
+        val mime = PostNutritionParsePhotoRequest.MimeType.entries.firstOrNull { it.wireValue == image.mimeType }
+            ?: PostNutritionParsePhotoRequest.MimeType.ImageJpeg
+        return api.call(ApiEndpoints.PostNutritionParsePhoto, PostNutritionParsePhotoRequest(mimeType = mime, imageBase64 = image.base64))
+    }
+
+    /**
+     * Logs reviewed foods in one write, all at [loggedAt] (the confirm step
+     * after a parse), then refreshes [date]. Returns how many were logged.
+     */
+    public suspend fun logMeal(method: MealEntryMethod, rawInput: String?, loggedAt: String, items: List<MealItem>, date: String): Long {
+        val request = PostNutritionLogsBatchRequest(
+            entryMethod = when (method) {
+                MealEntryMethod.Described -> PostNutritionLogsBatchRequest.EntryMethod.Nl
+                MealEntryMethod.Photo -> PostNutritionLogsBatchRequest.EntryMethod.Photo
+            },
+            rawInput = rawInput,
+            loggedAt = loggedAt,
+            items = items.map { item ->
+                PostNutritionLogsBatchRequest.ItemsItem(
+                    foodId = item.foodId,
+                    quantityG = item.quantityG,
+                    mealType = PostNutritionLogsBatchRequest.ItemsItem.MealType.entries.first { it.wireValue == item.meal.wireValue },
+                    parseConfidence = item.confidence,
+                )
+            },
+        )
+        val created = api.call(ApiEndpoints.PostNutritionLogsBatch, request).created
+        refreshDay(date)
+        return created
+    }
+
     public suspend fun currentTargets(): NutritionTarget? = api.call(ApiEndpoints.GetNutritionTargets).current
 
     /**
@@ -127,6 +179,9 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
 
     private companion object {
         const val DAY_PREFIX = "nutrition:"
+
+        /** The longest description the parser takes (DescribeMealDialog's limit). */
+        const val MAX_MEAL_TEXT = 2000
         val NOT_CARRIED = setOf("id", "userId", "effectiveFrom", "createdAt", "updatedAt")
 
         fun dayKey(date: String) = DAY_PREFIX + date

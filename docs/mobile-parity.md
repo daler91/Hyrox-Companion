@@ -66,12 +66,12 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - charts for the ACWR trend, form and monotony, body-system load, the consistency heatmap, and RPE, duration and mileage trends;
   - annotation bands on the charts.
   - Left out: the body-system card's "Show as table" view. Instead, each tile's bars read their weekly values aloud.
-- [ ] **MAF trend** for MAF-style athletes — `GET /maf-tests`.
-- [ ] **Fuelling** tab: intake against training load — `GET /nutrition/block`.
+- [x] **MAF trend** for MAF-style athletes — `GET /maf-tests`.
+- [x] **Fuelling** tab: intake against training load — `GET /nutrition/block`.
 
 ## Wave 3: nutrition
 
-- [ ] **Describe a meal** (AI) — `POST /nutrition/parse/text`. **Snap a meal** — `…/parse/photo`. Both open a review sheet, then `POST /nutrition/logs/batch`.
+- [x] **Describe a meal** (AI) — `POST /nutrition/parse/text`. **Snap a meal** — `…/parse/photo`. Both open a review sheet, then `POST /nutrition/logs/batch`.
 - [ ] **Barcode** scan or entry — `POST /nutrition/foods/barcode`. Scanning needs a camera barcode library.
 - [ ] **Nutrition label** scan — `POST /nutrition/parse/label`, which pre-fills a custom food.
 - [ ] Favourites and recent quick-add — `/nutrition/favorites`, `GET /nutrition/foods/recent`.
