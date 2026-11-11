@@ -51,19 +51,16 @@ jobs:
   # errors at apply time (e.g. 0035's ambiguous column reference, which broke
   # every fresh-database bootstrap) was structurally invisible to CI.
   fresh-db-migrate:
-    # Pinned: Ubuntu 26.04 (now ubuntu-latest) ships no postgresql-16-pgvector,
-    # the Postgres 16 + pgvector this job installs.
+    # Pinned: the ubuntu-24.04 image ships the PostgreSQL 16 this job runs
+    # (see .github/actions/setup-postgres-pgvector).
     runs-on: ubuntu-24.04
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
-      - name: Install PostgreSQL and pgvector
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-16-pgvector
-          sudo systemctl start postgresql
-          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up PostgreSQL 16 with pgvector
+        uses: ./.github/actions/setup-postgres-pgvector
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

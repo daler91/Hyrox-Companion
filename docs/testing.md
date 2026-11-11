@@ -563,7 +563,7 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Cypress Tests
 - **Triggers:** Every push **and** every pull request, so a fork/PR branch gets the same end-to-end gate as a push to a branch in this repository. Secrets are unavailable on fork PRs, so every secret-backed value has an inert fallback the suite can run against.
-- **Database:** PostgreSQL 16 with pgvector on port 5432, installed on the runner by the job's first step (`apt-get install postgresql-16-pgvector`, start the service, set the `postgres` password) rather than pulled as a `pgvector/pgvector:pg16` service container, whose unauthenticated Docker Hub pulls were failing runs with `toomanyrequests`
+- **Database:** PostgreSQL 16 with pgvector on port 5432. The runner's preinstalled PostgreSQL 16 is started by the shared `.github/actions/setup-postgres-pgvector` step, which installs `postgresql-16-pgvector` from the PostgreSQL project's apt repository (apt.postgresql.org, the one the runner image installs PostgreSQL from) and refreshes only that repository, so an outage of Ubuntu's archive mirrors can't fail the job. It is not pulled as a `pgvector/pgvector:pg16` service container, whose unauthenticated Docker Hub pulls were failing runs with `toomanyrequests`
 - **Parallelism:** Decided once by a `plan` job: with a `CYPRESS_RECORD_KEY`, two containers split the specs; without it, a single container runs everything (two unrecorded containers would each run the full suite).
 - **Steps:**
   1. Install dependencies and Cypress binary (cached), then patch the Cypress bundled dependencies

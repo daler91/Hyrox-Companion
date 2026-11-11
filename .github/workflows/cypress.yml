@@ -43,7 +43,8 @@ jobs:
 
   cypress-run:
     needs: plan
-    # Pinned: Ubuntu 26.04 (now ubuntu-latest) ships no postgresql-16-pgvector.
+    # Pinned: the ubuntu-24.04 image ships the PostgreSQL 16 this job runs
+    # (see .github/actions/setup-postgres-pgvector).
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -52,14 +53,11 @@ jobs:
       matrix:
         containers: ${{ fromJSON(needs.plan.outputs.containers) }}
     steps:
-      - name: Install PostgreSQL and pgvector
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-16-pgvector
-          sudo systemctl start postgresql
-          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up PostgreSQL 16 with pgvector
+        uses: ./.github/actions/setup-postgres-pgvector
 
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1

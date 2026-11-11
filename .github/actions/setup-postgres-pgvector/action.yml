@@ -1,0 +1,45 @@
+name: Set up PostgreSQL 16 with pgvector
+description: >
+  Starts the runner's preinstalled PostgreSQL 16 with the pgvector extension
+  available, and the postgres user's password set to "postgres".
+
+# pgvector comes from the PostgreSQL project's apt repository
+# (apt.postgresql.org): the same one the ubuntu-24.04 image installs its
+# PostgreSQL 16 from, and then removes again. Only that one repository is
+# refreshed. Before this, the jobs ran `apt-get update` over Ubuntu's archive
+# mirrors too and installed Ubuntu's build of the package, so an outage of
+# those mirrors ("Temporary failure resolving 'azure.archive.ubuntu.com'",
+# 2026-11-11) failed every Postgres job before a test ran. The Docker Hub
+# pgvector image, the other obvious source, was tried and dropped for its
+# anonymous pull limit ("toomanyrequests").
+runs:
+  using: composite
+  steps:
+    - name: Install pgvector from apt.postgresql.org and start PostgreSQL
+      shell: bash
+      env:
+        # The PostgreSQL Debian/Ubuntu repository signing key (ACCC4CF8).
+        PGDG_KEY_FINGERPRINT: B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+      run: |
+        set -euo pipefail
+        keyring=/usr/share/keyrings/postgresql.gpg
+        # --proto =https: HTTPS only, redirects included.
+        curl -fsSL --proto '=https' --retry 3 --retry-all-errors https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+          | sudo gpg --batch --yes --dearmor -o "$keyring"
+        # Refuse a key that isn't the repository's. Captured first rather than
+        # piped into `grep -q`, which under pipefail could fail the check on
+        # gpg's SIGPIPE.
+        fingerprints=$(gpg --no-default-keyring --keyring "$keyring" --with-colons --fingerprint)
+        grep -q "^fpr:::::::::${PGDG_KEY_FINGERPRINT}:" <<< "$fingerprints" \
+          || { echo "::error::Unexpected apt.postgresql.org signing key"; exit 1; }
+        echo "deb [signed-by=$keyring] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+        # This repository only: Ubuntu's mirrors are neither read nor needed.
+        sudo apt-get update \
+          -o Dir::Etc::sourcelist=sources.list.d/pgdg.list \
+          -o Dir::Etc::sourceparts=- \
+          -o APT::Get::List-Cleanup=0 \
+          -o Acquire::Retries=3
+        sudo apt-get install -y --no-install-recommends postgresql-16-pgvector
+        sudo systemctl start postgresql
+        sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
