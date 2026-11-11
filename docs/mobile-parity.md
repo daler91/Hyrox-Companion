@@ -71,7 +71,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
 
 ## Wave 3: nutrition
 
-- [ ] **Describe a meal** (AI) — `POST /nutrition/parse/text`. **Snap a meal** — `…/parse/photo`. Both open a review sheet, then `POST /nutrition/logs/batch`.
+- [x] **Describe a meal** (AI) — `POST /nutrition/parse/text`. **Snap a meal** — `…/parse/photo`. Both open a review sheet, then `POST /nutrition/logs/batch`.
 - [ ] **Barcode** scan or entry — `POST /nutrition/foods/barcode`. Scanning needs a camera barcode library.
 - [ ] **Nutrition label** scan — `POST /nutrition/parse/label`, which pre-fills a custom food.
 - [ ] Favourites and recent quick-add — `/nutrition/favorites`, `GET /nutrition/foods/recent`.

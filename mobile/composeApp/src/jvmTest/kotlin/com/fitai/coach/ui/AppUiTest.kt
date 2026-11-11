@@ -4,8 +4,10 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -13,6 +15,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -479,6 +482,60 @@ class AppUiTest {
             awaitNode(hasText("Intake vs training load"))
             page.performScrollToNode(hasText("6.5 on carb-hit days (3) vs 8 missed (3) — 1.5 lower (felt easier)"))
             assertTrue(api.sent("GET", "/api/v1/nutrition/block").isNotEmpty())
+        }
+    }
+
+    @Test
+    fun aDescribedMealIsReviewedThenLoggedInOneBatchAfterTurningOnTheAi() {
+        val today = FakeApi.today
+        val summary = """{"logDate":"$today","totals":{"calories":0,"protein":0,"carb":0,"fat":0,"fiber":0},"meals":{"breakfast":[],""" +
+            """"lunch":[],"dinner":[],"snack":[],"snack_pm":[],"pre_workout":[],"post_workout":[]}}"""
+        val egg = """{"id":"f1","source":"usda","name":"Egg, scrambled","caloriesPer100g":150,"proteinPer100g":10,"carbPer100g":2,""" +
+            """"fatPer100g":11,"isPublic":true,"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z"}"""
+        val parsed = """{"items":[{"name":"scrambled eggs","quantityG":120.4,"displayAmount":"2 scrambled eggs","mealType":"breakfast",""" +
+            """"confidence":0.9,"foodId":"f1","food":$egg},{"name":"mystery sauce","quantityG":30,"displayAmount":"a splash of sauce",""" +
+            """"confidence":0.3}],"warnings":["Portions are estimates."],"rawInput":"2 scrambled eggs and a splash of sauce"}"""
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/nutrition/summary", summary)
+            on("POST", "/api/v1/nutrition/parse/text", parsed)
+            on(
+                "PATCH",
+                "/api/v1/preferences",
+                """{"userTimezone":"UTC","onboardingCompleted":true,"weightUnit":"kg","distanceUnit":"km","aiCoachEnabled":true}""",
+            )
+            on("POST", "/api/v1/nutrition/logs/batch", """{"created":1,"logDate":"$today"}""")
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Nutrition())
+            // The day's totals, then the Log food button below them.
+            awaitNode(hasText("Set targets"))
+            onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Log food"))
+            onNodeWithText("Log food").performClick()
+            awaitNode(hasText("Describe a meal"))
+            onNodeWithText("Describe a meal").performClick()
+            awaitNode(hasContentDescription("Describe your meal"))
+            onNode(
+                hasSetTextAction() and hasContentDescription("Describe your meal"),
+            ).performTextInput("2 scrambled eggs and a splash of sauce")
+            onNodeWithText("Review foods").performClick()
+
+            // The AI isn't on yet: consent first, then the same description is read.
+            awaitNode(hasText("Not now"))
+            onNode(hasText("Enable AI Coach") and hasClickAction()).performClick()
+            awaitNode(hasText("Review parsed foods"))
+            assertEquals("""{"aiCoachEnabled":true}""", api.sent("PATCH", "/api/v1/preferences").single().body)
+            onNodeWithText("Portions are estimates.").assertExists()
+            onNodeWithText("No match — choose a food to log this.").assertExists()
+            onNodeWithText("1 item needs a match and won't be logged.").assertExists()
+
+            onNodeWithText("Log 1 item").performScrollTo().performClick()
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/nutrition/logs/batch").isNotEmpty() }
+            val batch = api.sent("POST", "/api/v1/nutrition/logs/batch").single().body.orEmpty()
+            assertTrue(""""entryMethod":"nl"""" in batch, batch)
+            assertTrue(""""items":[{"foodId":"f1","quantityG":120.0,"mealType":"breakfast","parseConfidence":0.9}]""" in batch, batch)
+            awaitNode(hasText("Logged 1 item"))
         }
     }
 }

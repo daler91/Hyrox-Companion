@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
+import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.dates.currentHourIn
 import com.fitai.coach.core.dates.loggedAtFor
@@ -46,9 +48,13 @@ import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.media.rememberCamera
+import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,11 +70,27 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
             loggedAt = { date -> loggedAtFor(date, todayIn(timeZone), timeZone) },
         )
     }
+    val capture = viewModel(key = "meal-capture-${session.userId}") {
+        MealCaptureViewModel(
+            nutrition = session.nutrition,
+            aiEnabled = session.preferences.preferences.map { it?.aiCoachEnabled },
+            enableAi = { session.preferences.update(UpdateUserPreferences(aiCoachEnabled = true)) },
+            currentHour = { currentHourIn(timeZone) },
+            loggedAt = { date -> loggedAtFor(date, todayIn(timeZone), timeZone) },
+        )
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
     val targets by vm.targets.collectAsStateWithLifecycle()
+    val captured by capture.state.collectAsStateWithLifecycle()
     val toasts = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val toast: (String) -> Unit = { message -> scope.launch { toasts.showSnackbar(message) } }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(capture) { capture.messages.collect { toasts.showSnackbar(it) } }
+    val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
+    val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
+    var logFoodOpen by remember { mutableStateOf(false) }
     LaunchedEffect(openDate) {
         openDate?.let {
             vm.goTo(it)
@@ -123,13 +145,12 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                             )
                         }
                         item {
+                            // One way in (LogFoodActions); it shows a photo is still being read.
                             FitaiButton(
-                                "Add food",
-                                onClick = {
-                                    searching = null
-                                    searchOpen = true
-                                },
+                                if (captured.readingPhoto) "Reading your meal…" else "Log food",
+                                onClick = { logFoodOpen = true },
                                 leadingIcon = LucideIcons.Plus,
+                                loading = captured.readingPhoto,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -150,6 +171,26 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
             vm.clearSearch()
         })
     }
+    if (logFoodOpen) {
+        LogFoodSheet(
+            LogFoodMethods(
+                search = {
+                    searching = null
+                    searchOpen = true
+                },
+                describe = capture::openDescribe,
+                takePhoto = takePhoto,
+                choosePhoto = choosePhoto,
+            ),
+            onDismiss = { logFoodOpen = false },
+        )
+    }
+    captured.describe?.let { DescribeMealSheet(it, capture) }
+    captured.review?.let { review ->
+        val search by capture.search.collectAsStateWithLifecycle()
+        MealReviewSheet(review, search, capture, state.date)
+    }
+    if (captured.consentOpen) AiConsentDialog(onAccept = capture::acceptAi, onDecline = capture::declineAi)
     logSheet?.let { LogSheet(it, vm) }
     targets?.let { TargetsSheet(it, vm) }
     deleting?.let { entry ->

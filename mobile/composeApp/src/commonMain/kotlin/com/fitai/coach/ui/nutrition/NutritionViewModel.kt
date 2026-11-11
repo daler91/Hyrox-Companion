@@ -14,10 +14,7 @@ import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.ui.format.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,14 +34,6 @@ data class NutritionUiState(
     val loading: Boolean = true,
     val loadFailed: Boolean = false,
     val featureOff: Boolean = false,
-)
-
-data class SearchState(
-    val query: String = "",
-    val searching: Boolean = false,
-    val results: List<NutritionFood> = emptyList(),
-    val searched: Boolean = false,
-    val degraded: Boolean = false,
 )
 
 /** The log sheet: a new entry for [food], or an edit of [editing]. */
@@ -70,7 +59,7 @@ data class TargetsSheetState(
 )
 
 /** The food log for a day, as /nutrition does on the web (v1: log, search, targets). */
-@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooGenericExceptionCaught", "TooManyFunctions")
 class NutritionViewModel(
     private val nutrition: NutritionRepository,
@@ -94,9 +83,8 @@ class NutritionViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), NutritionUiState(date = today, today = today))
 
-    private val _search = MutableStateFlow(SearchState())
-    val search: StateFlow<SearchState> = _search.asStateFlow()
-    private var searchJob: Job? = null
+    private val searcher = FoodSearcher(viewModelScope, nutrition::search) { toasts.send(it) }
+    val search: StateFlow<SearchState> = searcher.state
 
     private val _logSheet = MutableStateFlow<LogSheetState?>(null)
     val logSheet: StateFlow<LogSheetState?> = _logSheet.asStateFlow()
@@ -142,33 +130,10 @@ class NutritionViewModel(
         refresh()
     }
 
-    /** Searches as the athlete types: 300 ms after they stop, from 2 characters (FoodSearch.tsx). */
-    fun searchFor(query: String) {
-        _search.update { it.copy(query = query) }
-        searchJob?.cancel()
-        if (query.trim().length < MIN_QUERY) {
-            _search.update { it.copy(results = emptyList(), searching = false, searched = false) }
-            return
-        }
-        searchJob = viewModelScope.launch {
-            delay(SEARCH_DEBOUNCE_MS)
-            _search.update { it.copy(searching = true) }
-            try {
-                val result = nutrition.search(query)
-                _search.update { it.copy(results = result.results, degraded = result.apiDegraded, searching = false, searched = true) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _search.update { it.copy(searching = false, searched = true, results = emptyList()) }
-                toasts.send(e.userMessage("Couldn't search foods"))
-            }
-        }
-    }
+    /** Searches as the athlete types (FoodSearch.tsx). */
+    fun searchFor(query: String) = searcher.searchFor(query)
 
-    fun clearSearch() {
-        searchJob?.cancel()
-        _search.value = SearchState()
-    }
+    fun clearSearch() = searcher.clear()
 
     /** Opens the log sheet for a new entry of [food]. */
     fun startLog(food: NutritionFood, meal: Meal? = null) {
@@ -296,8 +261,6 @@ class NutritionViewModel(
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
-        const val MIN_QUERY = 2
-        const val SEARCH_DEBOUNCE_MS = 300L
         const val GRAM_EPSILON = 0.001
     }
 }

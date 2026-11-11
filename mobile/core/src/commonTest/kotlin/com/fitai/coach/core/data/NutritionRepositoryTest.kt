@@ -73,4 +73,43 @@ class NutritionRepositoryTest {
 
         assertTrue(error.isNutritionOff())
     }
+
+    @Test
+    fun aDescriptionIsCappedAndAPhotoKeepsItsTypeForTheParser() = runTest {
+        val parsed = """{"items":[],"warnings":[],"rawInput":"eggs"}"""
+        server.on("POST", "/api/v1/nutrition/parse/text", 200, parsed)
+        server.on("POST", "/api/v1/nutrition/parse/photo", 200, parsed)
+
+        nutrition.parseMealText("  " + "e".repeat(2500) + "  ")
+        nutrition.parseMealPhoto(EncodedImage("abc", "image/png"))
+
+        val text = ApiJson.parseToJsonElement(server.sentTo("POST", "/api/v1/nutrition/parse/text").single().body!!).jsonObject
+        assertEquals(2000, text["text"]!!.jsonPrimitive.content.length)
+        val photo = ApiJson.parseToJsonElement(server.sentTo("POST", "/api/v1/nutrition/parse/photo").single().body!!).jsonObject
+        assertEquals("image/png", photo["mimeType"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun aReviewedMealIsLoggedInOneBatchAndItsDayRefreshed() = runTest {
+        server.on("POST", "/api/v1/nutrition/logs/batch", 201, """{"created":2,"logDate":"2026-11-08"}""")
+        server.on("GET", "/api/v1/nutrition/summary", 200, summary(420))
+
+        val created = nutrition.logMeal(
+            MealEntryMethod.Photo,
+            rawInput = null,
+            loggedAt = "2026-11-08T12:00:00Z",
+            items = listOf(MealItem("f1", 120.0, Meal.Lunch, 0.9), MealItem("f2", 30.0, Meal.Lunch, null)),
+            date = "2026-11-08",
+        )
+
+        assertEquals(2, created)
+        assertEquals(420.0, nutrition.day("2026-11-08").first()!!.totals.calories)
+        val batch = ApiJson.parseToJsonElement(server.sentTo("POST", "/api/v1/nutrition/logs/batch").single().body!!).jsonObject
+        assertEquals("photo", batch["entryMethod"]!!.jsonPrimitive.content)
+        assertEquals(
+            """[{"foodId":"f1","quantityG":120.0,"mealType":"lunch","parseConfidence":0.9},""" +
+                """{"foodId":"f2","quantityG":30.0,"mealType":"lunch"}]""",
+            batch["items"].toString(),
+        )
+    }
 }
