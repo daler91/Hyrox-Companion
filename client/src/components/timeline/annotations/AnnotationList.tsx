@@ -1,4 +1,5 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
+import { differenceInDays, format, parseISO } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -9,6 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const start = parseISO(startDate);
+  const end = parseISO(endDate);
+  const days = differenceInDays(end, start) + 1;
+  const dayLabel = days === 1 ? "1 day" : `${days} days`;
+  const startStr = format(start, "MMM d, yyyy");
+  if (startDate === endDate) return `${startStr} · ${dayLabel}`;
+  const endStr = format(end, "MMM d, yyyy");
+  return `${startStr} – ${endStr} · ${dayLabel}`;
+}
 
 interface AnnotationListProps {
   readonly annotations: TimelineAnnotation[] | undefined;
@@ -59,7 +71,7 @@ export function AnnotationList({
                     {TYPE_LABELS[annotationType]}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
-                    {annotation.startDate} {"\u2014"} {annotation.endDate}
+                    {formatDateRange(annotation.startDate, annotation.endDate)}
                   </span>
                 </div>
                 {annotation.note ? (
