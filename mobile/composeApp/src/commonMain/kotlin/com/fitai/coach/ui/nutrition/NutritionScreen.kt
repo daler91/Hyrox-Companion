@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
+fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, openSettings: () -> Unit = {}) {
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val timeZone = prefs?.userTimezone
@@ -97,11 +97,12 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()
-    val customFoods by myFoods.customFoods.collectAsStateWithLifecycle()
-    val recipes by myFoods.recipes.collectAsStateWithLifecycle()
     val customFoodSheet by myFoods.customFood.collectAsStateWithLifecycle()
     val recipeSheet by myFoods.recipe.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
+    val reports = viewModel(key = "nutrition-reports-${session.userId}") {
+        NutritionReportsViewModel(session.nutrition.reports, session.account.user)
+    }
     val dailyTargets by targetsVm.daily.collectAsStateWithLifecycle()
     val mealTarget by targetsVm.meal.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
@@ -118,6 +119,8 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
     var logFoodOpen by remember { mutableStateOf(false) }
+    // A day's micros follow what's logged on it: fetched for the day on screen, again when its totals change.
+    LaunchedEffect(state.date, state.summary?.totals) { reports.showMicros(state.date, state.summary) }
     LaunchedEffect(openDate) {
         openDate?.let {
             vm.goTo(it)
@@ -154,6 +157,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                     summary == null -> item { LoadingState() }
                     else -> {
                         item { Totals(summary, onSetTargets = targetsVm::openDaily) }
+                        summary.energy?.let { energy -> item { EnergyBalanceCard(energy) } }
                         if (quickAdd.hasFoods) {
                             item {
                                 QuickAddRows(quickAdd, state.quickLogging, onFavorite = vm::quickAddFavorite, onRecent = vm::quickAddRecent)
@@ -200,22 +204,12 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                             item { RepeatPreviousDay(state.repeating, vm::repeatPreviousDay) }
                         }
                         item {
-                            // One way in (LogFoodActions); it shows a photo is still being read.
-                            FitaiButton(
-                                if (captured.readingPhoto) "Reading your meal…" else "Log food",
-                                onClick = { logFoodOpen = true },
-                                leadingIcon = LucideIcons.Plus,
-                                loading = captured.readingPhoto,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        val ownFoods = customFoods.orEmpty()
-                        val ownRecipes = recipes.orEmpty()
-                        if (ownFoods.isNotEmpty() || ownRecipes.isNotEmpty()) {
-                            item {
-                                MyFoodsSection(
-                                    ownFoods,
-                                    ownRecipes,
+                            DayFooter(
+                                summary,
+                                readingPhoto = captured.readingPhoto,
+                                onLogFood = { logFoodOpen = true },
+                                ownFoods = OwnFoods(
+                                    myFoods,
                                     favoriteIds,
                                     onToggleFavorite = vm::toggleFavorite,
                                     MyFoodsActions(
@@ -224,8 +218,11 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                         editRecipe = myFoods::editRecipe,
                                         deleteRecipe = { deletingRecipe = it },
                                     ),
-                                )
-                            }
+                                ),
+                                reports = reports,
+                                timeZone = timeZone,
+                                openSettings = openSettings,
+                            )
                         }
                     }
                 }
@@ -312,6 +309,44 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
             onDismiss = { deleting = null },
             destructive = true,
         )
+    }
+}
+
+/**
+ * Below the meals (Nutrition.tsx): one way in to logging food, then the
+ * day's micronutrients when anything is logged, the athlete's own foods when
+ * there are any, and the AI's insights.
+ */
+@Composable
+private fun DayFooter(
+    summary: GetNutritionSummaryResponse,
+    readingPhoto: Boolean,
+    onLogFood: () -> Unit,
+    ownFoods: OwnFoods,
+    reports: NutritionReportsViewModel,
+    timeZone: String?,
+    openSettings: () -> Unit,
+) {
+    val customFoods by ownFoods.myFoods.customFoods.collectAsStateWithLifecycle()
+    val recipes by ownFoods.myFoods.recipes.collectAsStateWithLifecycle()
+    val micros by reports.micros.collectAsStateWithLifecycle()
+    val insights by reports.insights.collectAsStateWithLifecycle()
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
+        // One way in (LogFoodActions); it shows a photo is still being read.
+        FitaiButton(
+            if (readingPhoto) "Reading your meal…" else "Log food",
+            onClick = onLogFood,
+            leadingIcon = LucideIcons.Plus,
+            loading = readingPhoto,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!summary.isEmptyDay()) MicronutrientPanel(micros)
+        val foods = customFoods.orEmpty()
+        val ownRecipes = recipes.orEmpty()
+        if (foods.isNotEmpty() || ownRecipes.isNotEmpty()) {
+            MyFoodsSection(foods, ownRecipes, ownFoods.favoriteIds, ownFoods.onToggleFavorite, ownFoods.actions)
+        }
+        NutritionInsightsPanel(insights, timeZone, onGenerate = reports::generateInsights, openSettings = openSettings)
     }
 }
 

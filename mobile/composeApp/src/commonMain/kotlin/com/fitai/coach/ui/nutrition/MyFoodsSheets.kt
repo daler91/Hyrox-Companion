@@ -177,6 +177,14 @@ class MyFoodsActions(
     val deleteRecipe: (GetNutritionRecipesResponseItem) -> Unit,
 )
 
+/** The My foods section's lists (from [myFoods]), the favourite stars, and what its rows do. */
+class OwnFoods(
+    val myFoods: MyFoodsViewModel,
+    val favoriteIds: Set<String>,
+    val onToggleFavorite: (String) -> Unit,
+    val actions: MyFoodsActions,
+)
+
 @Composable
 private fun MyFoodRow(name: String, onEdit: () -> Unit, onDelete: () -> Unit, leading: @Composable () -> Unit = {}) {
     Row(verticalAlignment = Alignment.CenterVertically) {

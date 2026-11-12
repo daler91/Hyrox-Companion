@@ -81,7 +81,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Recipes — `/nutrition/recipes`.
 - [x] Per-meal target overrides — `/nutrition/meal-targets`.
 - [x] Targets: calculate from the profile; scale carbs by training load; adaptive targets.
-- [ ] Energy balance card (already in the summary response); micronutrients (`GET /nutrition/micros`); AI insights (`/nutrition/insights`).
+- [x] Energy balance card (already in the summary response); micronutrients (`GET /nutrition/micros`); AI insights (`/nutrition/insights`).
 - [ ] Session fuelling:
   - before a planned session — `GET /nutrition/planned-session-estimate/{planDayId}`;
   - around a logged one — `GET /nutrition/session-fuelling/{workoutId}`;
