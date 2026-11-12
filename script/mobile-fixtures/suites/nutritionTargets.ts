@@ -31,7 +31,6 @@ const profile = (
   activityLevel: ActivityLevel,
   goalDirection: WeightGoalDirection,
   goalRateKgPerWeek: number,
-  extra: Partial<NutritionTargetInput> = {},
 ): NutritionTargetInput => ({
   bodyweightKg,
   heightCm,
@@ -40,7 +39,6 @@ const profile = (
   activityLevel,
   goalDirection,
   goalRateKgPerWeek,
-  ...extra,
 });
 
 /** Every sex, activity level and goal, at two body sizes. */
@@ -70,9 +68,9 @@ const EDGES: NutritionTargetInput[] = [
   profile(150, 150, 80, "male", "sedentary", "lose", 1.5),
   profile(120, 160, 60, null, "sedentary", "maintain", 0),
   // Custom g/kg anchors.
-  profile(70, 175, 30, "male", "active", "maintain", 0, { proteinGPerKg: 2.2, fatGPerKg: 0.8 }),
-  profile(70, 175, 30, "male", "active", "maintain", 0, { proteinGPerKg: 1.6 }),
-  profile(70, 175, 30, "female", "light", "lose", 0.25, { fatGPerKg: 1.2 }),
+  { ...profile(70, 175, 30, "male", "active", "maintain", 0), proteinGPerKg: 2.2, fatGPerKg: 0.8 },
+  { ...profile(70, 175, 30, "male", "active", "maintain", 0), proteinGPerKg: 1.6 },
+  { ...profile(70, 175, 30, "female", "light", "lose", 0.25), fatGPerKg: 1.2 },
   // Fractional profiles: rounding ties and JS number formatting in the explanation.
   profile(72.5, 178.3, 29, "male", "moderate", "lose", 0.25),
   profile(63.35, 165.25, 33, "female", "active", "gain", 0.2),
