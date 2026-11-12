@@ -81,7 +81,11 @@ fun AppShell() {
     val deepLinks = koinInject<DeepLinks>()
     val link by deepLinks.current.collectAsStateWithLifecycle()
     var openPlanDayId by rememberSaveable { mutableStateOf<String?>(null) }
-    var openNutritionDate by rememberSaveable { mutableStateOf<String?>(null) }
+    var openNutrition by remember { mutableStateOf<DeepLink.Nutrition?>(null) }
+    val showNutrition: (DeepLink.Nutrition) -> Unit = {
+        openNutrition = it
+        backStack.select(TopLevel.Nutrition)
+    }
     var stravaReturn by remember { mutableStateOf<DeepLink.StravaReturn?>(null) }
 
     LaunchedEffect(link) {
@@ -93,10 +97,7 @@ fun AppShell() {
                 backStack.select(TopLevel.Training)
             }
             DeepLink.LogWorkout -> backStack.select(TopLevel.LogWorkout)
-            is DeepLink.Nutrition -> {
-                openNutritionDate = current.date
-                backStack.select(TopLevel.Nutrition)
-            }
+            is DeepLink.Nutrition -> showNutrition(current)
             DeepLink.Analytics -> backStack.select(TopLevel.Analytics)
             is DeepLink.Review -> {
                 backStack.select(TopLevel.Training)
@@ -164,6 +165,7 @@ fun AppShell() {
                             logWorkout = { backStack.select(TopLevel.LogWorkout) },
                             editPlanDay = { backStack.push(Route.PlanDay(it)) },
                             openReview = { backStack.push(Route.WeeklyReview(it)) },
+                            openNutrition = { showNutrition(DeepLink.Nutrition(it)) },
                         ),
                         openPlanDayId = openPlanDayId,
                         onPlanDayOpened = { openPlanDayId = null },
@@ -174,6 +176,7 @@ fun AppShell() {
                         route.workoutId,
                         onBack = { backStack.pop() },
                         onAskCoach = { openCoach(it) },
+                        onOpenNutrition = { date, meal -> showNutrition(DeepLink.Nutrition(date, meal)) },
                         onDeleted = { binId ->
                             backStack.pop()
                             scope.launch {
@@ -187,8 +190,8 @@ fun AppShell() {
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
                 entry<Route.Nutrition> {
                     NutritionScreen(
-                        openDate = openNutritionDate,
-                        onDateOpened = { openNutritionDate = null },
+                        open = openNutrition,
+                        onOpened = { openNutrition = null },
                         openSettings = { backStack.select(TopLevel.Settings) },
                     )
                 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.ExerciseSetRow
+import com.fitai.coach.core.api.generated.GetNutritionSessionFuellingByWorkoutIdResponse
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
 import com.fitai.coach.core.api.generated.SessionGrade
@@ -45,6 +46,10 @@ data class WorkoutDetailState(
     val busy: Boolean = false,
     /** Plan days it could count towards, the linked one included. */
     val planDayOptions: List<PlanDayOption> = emptyList(),
+    /** What was eaten around the session against its targets; null until it loads. */
+    val fuelling: GetNutritionSessionFuellingByWorkoutIdResponse? = null,
+    /** The fuelling panel shows: loaded, or loading. It hides when it can't load (nutrition off, offline with nothing kept). */
+    val showsFuelling: Boolean = false,
 ) {
     /** The plan day it counts towards, when the timeline has it. */
     val linkedPlanDay: PlanDayOption? get() = workout?.planDayId?.let { id -> planDayOptions.firstOrNull { it.planDayId == id } }
@@ -90,12 +95,16 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
     private val requestedHistory = mutableSetOf<String>()
     val messages: Flow<String> = toasts.receiveAsFlow()
 
+    private val fuellingLoading = MutableStateFlow(false)
+    private val fuelling = combine(session.nutrition.fuelling.aroundWorkout(workoutId), fuellingLoading, ::Pair)
+
     val state: StateFlow<WorkoutDetailState> = combine(
         session.workouts.workout(workoutId),
         session.timeline.entries,
         status,
         extras,
-    ) { workout, entries, current, more ->
+        fuelling,
+    ) { workout, entries, current, more, (around, aroundLoading) ->
         WorkoutDetailState(
             workout = workout,
             loading = workout == null && current.loading,
@@ -105,6 +114,8 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             histories = more.histories,
             busy = more.busy,
             planDayOptions = workout?.let { planDayOptions(entries, it.date, linked = it.planDayId) }.orEmpty(),
+            fuelling = around,
+            showsFuelling = around != null || aroundLoading,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), WorkoutDetailState())
 
@@ -139,6 +150,26 @@ class WorkoutDetailViewModel(private val session: UserSession, private val worko
             }
             status.value = Status(loading = false, failed = failed)
             if (!failed) loadGrade()
+        }
+    }
+
+    /**
+     * Fetches what was eaten around the session: each time the screen shows,
+     * so a recovery meal logged meanwhile counts. A failure keeps what's kept.
+     */
+    fun refreshFuelling() {
+        if (fuellingLoading.value) return
+        fuellingLoading.value = true
+        viewModelScope.launch {
+            try {
+                session.nutrition.fuelling.refreshAroundWorkout(workoutId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The panel shows what's on the device, or hides.
+            } finally {
+                fuellingLoading.value = false
+            }
         }
     }
 

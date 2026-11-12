@@ -11,4 +11,6 @@ data class TimelineNavigation(
     val editPlanDay: (entryId: String) -> Unit = {},
     /** The weekly review of the week starting [weekStart]. */
     val openReview: (weekStart: String) -> Unit = {},
+    /** Nutrition on [date] (a day's fuelling chip). */
+    val openNutrition: (date: String) -> Unit = {},
 )

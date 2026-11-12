@@ -52,6 +52,9 @@ import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
+import com.fitai.coach.ui.fuelling.FuellingDayChip
+import com.fitai.coach.ui.fuelling.PlanFuelling
+import com.fitai.coach.ui.fuelling.timelineFuellingWindow
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.session.LocalUserSession
@@ -87,6 +90,12 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     var noteSheet by remember { mutableStateOf<NoteSheet?>(null) }
     val haptics = LocalHapticFeedback.current
     val allEntries = state.rows.days.flatMap { it.entries }
+    // The fuelling chips cover the days on screen; asked for again each time the timeline shows.
+    val fuellingWindow = remember(state.rows, state.today) {
+        timelineFuellingWindow(state.rows.days.filter { it.entries.isNotEmpty() || it.isToday }.map { it.date }, state.today)
+    }
+    LaunchedEffect(fuellingWindow) { fuellingWindow?.let(vm::showFuelling) }
+    val planFuelling = PlanFuelling(state.bodyweightKg, vm::plannedEstimate, vm::saveExpectedSession)
     val sheetEntry = sheet?.let { open -> allEntries.firstOrNull { it.id == open.entryId } }
     // A link to a plan day (an email's "Open the session") opens that day once it is on the timeline.
     LaunchedEffect(openPlanDayId, state.loaded) {
@@ -149,6 +158,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                 EntrySurface.Preview -> PreviewSheet(
                     entry,
                     label,
+                    planFuelling,
                     onSkip = { sheet = OpenSheet.Skip(entry.id) },
                     onAskCoach = {
                         close()
@@ -163,6 +173,7 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
                 EntrySurface.Log -> LogSheet(
                     entry,
                     label,
+                    planFuelling,
                     onComplete = { rpe, notes ->
                         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                         vm.markDone(entry, rpe, notes)
@@ -262,6 +273,7 @@ private fun TimelineList(
         items(state.rows.days, key = { "day-${it.date}" }) { day ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
                 DayHeader(day, state.today, onAddNote = { onNote(day.date, null) })
+                state.fuelling[day.date]?.let { fuelling -> FuellingDayChip(fuelling, onClick = { navigation.openNutrition(day.date) }) }
                 day.annotations.forEach { annotation ->
                     AnnotationCard(
                         annotation,

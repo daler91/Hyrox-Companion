@@ -33,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitai.coach.core.api.generated.ExerciseSetRow
 import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
+import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.exercises.NextTarget
 import com.fitai.coach.core.units.metersToUserDistance
 import com.fitai.coach.ui.coach.CoachThread
@@ -54,6 +55,7 @@ import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.format.formatSetDistance
 import com.fitai.coach.ui.format.formatWeight
 import com.fitai.coach.ui.format.shortDate
+import com.fitai.coach.ui.fuelling.FuellingAroundSessionPanel
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -70,6 +72,7 @@ fun WorkoutDetailScreen(
     onBack: () -> Unit,
     onAskCoach: (CoachThread) -> Unit,
     onDeleted: (recycleBinItemId: String) -> Unit,
+    onOpenNutrition: (date: String, meal: Meal?) -> Unit = { _, _ -> },
 ) {
     val session = LocalUserSession.current
     val vm = viewModel(key = "workout-$workoutId") { WorkoutDetailViewModel(session, workoutId) }
@@ -77,6 +80,8 @@ fun WorkoutDetailScreen(
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
+    // Each time the workout shows, so a recovery meal logged since counts.
+    LaunchedEffect(vm) { vm.refreshFuelling() }
     var sheet by remember { mutableStateOf<DetailSheet?>(null) }
     var confirm by remember { mutableStateOf<Confirm?>(null) }
 
@@ -91,6 +96,8 @@ fun WorkoutDetailScreen(
                     override fun back() = onBack()
 
                     override fun askCoach() = onAskCoach(CoachThread.of(workout))
+
+                    override fun logRecoveryMeal(date: String) = onOpenNutrition(date, Meal.PostWorkout)
 
                     override fun open(opened: DetailSheet) {
                         sheet = opened
@@ -205,6 +212,9 @@ private interface WorkoutActions {
 
     fun askCoach()
 
+    /** Nutrition on [date], adding to the post-workout meal. */
+    fun logRecoveryMeal(date: String)
+
     /** Opens a sheet: the details editor, the plan-day picker, a set's editor or the exercise library. */
     fun open(opened: DetailSheet)
 
@@ -253,6 +263,11 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
             }
         }
         state.grade?.let { grade -> item { GradeCard(grade) } }
+        if (state.showsFuelling) {
+            item {
+                FuellingAroundSessionPanel(state.fuelling) { state.fuelling?.let { actions.logRecoveryMeal(it.date) } }
+            }
+        }
         if (workout.mainWorkout.isNotBlank()) item { Text(workout.mainWorkout, style = type.body, color = colors.text) }
         workout.notes?.takeIf { it.isNotBlank() }?.let { notes -> item { Text(notes, style = type.body, color = colors.textMuted) } }
         if (groups.isEmpty()) {

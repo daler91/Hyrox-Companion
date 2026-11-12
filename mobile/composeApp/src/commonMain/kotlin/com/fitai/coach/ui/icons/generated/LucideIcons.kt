@@ -135,6 +135,13 @@ object LucideIcons {
         )
     }
 
+    val Flame: ImageVector by lazy {
+        lucide(
+            "Flame",
+            "M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4",
+        )
+    }
+
     val Footprints: ImageVector by lazy {
         lucide(
             "Footprints",
@@ -184,6 +191,13 @@ object LucideIcons {
             "M12 19v3",
             "M19 10v2a7 7 0 0 1-14 0v-2",
             "M12 2H12A3 3 0 0 1 15 5V12A3 3 0 0 1 12 15H12A3 3 0 0 1 9 12V5A3 3 0 0 1 12 2Z",
+        )
+    }
+
+    val Minus: ImageVector by lazy {
+        lucide(
+            "Minus",
+            "M5 12h14",
         )
     }
 
@@ -373,6 +387,16 @@ object LucideIcons {
             "M4 22h16",
             "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z",
             "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3",
+        )
+    }
+
+    val UtensilsCrossed: ImageVector by lazy {
+        lucide(
+            "UtensilsCrossed",
+            "m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8",
+            "M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7",
+            "m2.1 21.8 6.4-6.3",
+            "m19 5-7 7",
         )
     }
 

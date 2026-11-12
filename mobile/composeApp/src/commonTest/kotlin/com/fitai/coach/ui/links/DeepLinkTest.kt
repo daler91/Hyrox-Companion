@@ -1,5 +1,6 @@
 package com.fitai.coach.ui.links
 
+import com.fitai.coach.core.data.Meal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -16,7 +17,9 @@ class DeepLinkTest {
         assertEquals(DeepLink.Training(), push("/"))
         assertEquals(DeepLink.Training("pd-1"), push("/?workout=pd-1"))
         assertEquals(DeepLink.LogWorkout, push("/log"))
-        assertEquals(DeepLink.Nutrition("2026-11-08"), push("/nutrition?date=2026-11-08&meal=post_workout"))
+        // "Log recovery meal" names the meal to add to; a meal the app doesn't know is left out.
+        assertEquals(DeepLink.Nutrition("2026-11-08", Meal.PostWorkout), push("/nutrition?date=2026-11-08&meal=post_workout"))
+        assertEquals(DeepLink.Nutrition("2026-11-08"), push("/nutrition?date=2026-11-08&meal=elevenses"))
         assertEquals(DeepLink.Nutrition(), push("/nutrition?date=yesterday"))
         assertEquals(DeepLink.Analytics, push("/analytics"))
         assertEquals(DeepLink.Settings, push("/settings/"))
