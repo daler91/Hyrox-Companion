@@ -109,9 +109,10 @@ private fun NamedServings(portions: List<PortionDraft>, onChange: (List<PortionD
             FitaiTextField(
                 portion.label,
                 { v -> onChange(portions.mapIndexed { j, p -> if (j == i) p.copy(label = v) else p }) },
-                "Serving ${i + 1} name",
+                "Name",
                 Modifier.weight(1f),
                 placeholder = "e.g. 1 cup",
+                description = "Serving ${i + 1} name",
             )
             FitaiTextField(
                 portion.grams,
@@ -119,6 +120,7 @@ private fun NamedServings(portions: List<PortionDraft>, onChange: (List<PortionD
                 "Grams",
                 Modifier.weight(SERVING_GRAMS_WEIGHT),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                description = "Serving ${i + 1} weight in grams",
             )
             IconButton(onClick = { onChange(portions.filterIndexed { j, _ -> j != i }) }) {
                 Icon(LucideIcons.Trash, contentDescription = "Remove serving ${i + 1}", tint = FitaiTheme.colors.textMuted)

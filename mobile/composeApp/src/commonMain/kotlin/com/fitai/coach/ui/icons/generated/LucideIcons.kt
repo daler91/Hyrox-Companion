@@ -67,6 +67,16 @@ object LucideIcons {
         )
     }
 
+    val ChefHat: ImageVector by lazy {
+        lucide(
+            "ChefHat",
+            "M10 11v5",
+            "M14 11v5",
+            "M6 12.65c0-.457-.316-.844-.727-1.041A4 4 0 017.52 4.034a1.53 1.53 0 001.367-.547 4 4 0 016.225 0 1.53 1.53 0 001.367.547 4 4 0 012.248 7.575c-.411.197-.727.584-.727 1.04V19a2 2 0 01-2 2H8a2 2 0 01-2-2z",
+            "M6 16h12",
+        )
+    }
+
     val ChevronDown: ImageVector by lazy {
         lucide(
             "ChevronDown",

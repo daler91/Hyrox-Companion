@@ -85,12 +85,13 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
         )
     }
     val myFoods = viewModel(key = "my-foods-${session.userId}") {
-        MyFoodsViewModel(session.nutrition.myFoods, openDate = { vm.state.value.date })
+        MyFoodsViewModel(session.nutrition.myFoods, search = session.nutrition::search, openDate = { vm.state.value.date })
     }
     val state by vm.state.collectAsStateWithLifecycle()
     val customFoods by myFoods.customFoods.collectAsStateWithLifecycle()
     val recipes by myFoods.recipes.collectAsStateWithLifecycle()
     val customFoodSheet by myFoods.customFood.collectAsStateWithLifecycle()
+    val recipeSheet by myFoods.recipe.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
     val targets by vm.targets.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
@@ -168,14 +169,17 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                 meal,
                                 MealActions(
                                     vm,
+                                    myFoods,
                                     state,
                                     favoriteIds,
                                     canRepeat = canRepeat,
-                                    onAdd = {
-                                        searching = meal
-                                        searchOpen = true
-                                    },
-                                    onDelete = { deleting = it },
+                                    asks = MealAsks(
+                                        add = {
+                                            searching = it
+                                            searchOpen = true
+                                        },
+                                        delete = { deleting = it },
+                                    ),
                                 ),
                             )
                         }
@@ -205,7 +209,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                     MyFoodsActions(
                                         editFood = myFoods::editCustomFood,
                                         deleteFood = { deletingFood = it },
-                                        editRecipe = {},
+                                        editRecipe = myFoods::editRecipe,
                                         deleteRecipe = { deletingRecipe = it },
                                     ),
                                 )
@@ -239,6 +243,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                 takePhoto = takePhoto,
                 choosePhoto = choosePhoto,
                 customFood = myFoods::newCustomFood,
+                recipe = myFoods::newRecipe,
             ),
             onDismiss = { logFoodOpen = false },
         )
@@ -252,6 +257,10 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     logSheet?.let { LogSheet(it, favorite = it.food.id in favoriteIds, vm) }
     targets?.let { TargetsSheet(it, vm) }
     customFoodSheet?.let { CustomFoodSheet(it, myFoods) }
+    recipeSheet?.let { sheet ->
+        val ingredientSearch by myFoods.ingredientSearch.collectAsStateWithLifecycle()
+        RecipeSheet(sheet, ingredientSearch, myFoods)
+    }
     deletingFood?.let { food ->
         FitaiDialog(
             title = "Delete custom food?",
@@ -368,17 +377,21 @@ private fun RepeatPreviousDay(repeating: Boolean, onRepeat: () -> Unit) {
 
 /**
  * What a meal section can do, and the state its buttons wait on. [canRepeat]
- * is false with no history to copy; [onAdd] and [onDelete] go through the
- * screen (search, then the delete confirmation).
+ * is false with no history to copy.
  */
 private class MealActions(
     val vm: NutritionViewModel,
+    val myFoods: MyFoodsViewModel,
     val state: NutritionUiState,
     val favoriteIds: Set<String>,
     val canRepeat: Boolean,
-    val onAdd: () -> Unit,
-    val onDelete: (NutritionLogEntryWithNutrition) -> Unit,
+    val asks: MealAsks,
 )
+
+private const val MIN_RECIPE_ENTRIES = 2
+
+/** What a meal section asks of the screen: search for a food to add, or confirm a delete. */
+private class MealAsks(val add: (Meal) -> Unit, val delete: (NutritionLogEntryWithNutrition) -> Unit)
 
 @Composable
 private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, actions: MealActions) {
@@ -393,6 +406,16 @@ private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, action
                 style = FitaiTheme.typography.bodySm,
                 color = FitaiTheme.colors.textMuted,
             )
+            // "My usual breakfast" in one action: the meal's entries seed a recipe.
+            if (entries.size >= MIN_RECIPE_ENTRIES) {
+                IconButton(onClick = { actions.myFoods.saveMealAsRecipe(meal, entries) }) {
+                    Icon(
+                        LucideIcons.ChefHat,
+                        contentDescription = "Save ${meal.label.lowercase()} as a recipe",
+                        tint = FitaiTheme.colors.textMuted,
+                    )
+                }
+            }
         }
         target?.rationale?.takeIf {
             it.isNotBlank()
@@ -433,11 +456,11 @@ private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, action
                 IconButton(onClick = { actions.vm.logAgain(entry) }, enabled = !actions.state.quickLogging) {
                     Icon(LucideIcons.RotateCw, contentDescription = "log ${entry.name} again today", tint = FitaiTheme.colors.textMuted)
                 }
-                IconButton(onClick = { actions.onDelete(entry) }) {
+                IconButton(onClick = { actions.asks.delete(entry) }) {
                     Icon(LucideIcons.Trash, contentDescription = "delete ${entry.name}", tint = FitaiTheme.colors.textMuted)
                 }
             }
         }
-        FitaiButton("Add to ${meal.label.lowercase()}", onClick = actions.onAdd, variant = ButtonVariant.Ghost)
+        FitaiButton("Add to ${meal.label.lowercase()}", onClick = { actions.asks.add(meal) }, variant = ButtonVariant.Ghost)
     }
 }

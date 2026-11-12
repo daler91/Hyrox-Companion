@@ -9,7 +9,9 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelected
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import com.fitai.coach.core.auth.AuthState
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.links.DeepLinks
@@ -252,6 +255,77 @@ class NutritionUiTest {
             waitUntil(timeoutMillis = 10_000) { api.sent("DELETE", "/api/v1/nutrition/foods/f1/servings/s1").isNotEmpty() }
             // Back to grams, carrying the 35 g.
             onNode(hasSetTextAction() and hasContentDescription("Amount")).assert(hasText("35"))
+        }
+    }
+
+    @Test
+    fun aRecipeIsBuiltThenEditedAndAMealIsSavedAsOne() {
+        val today = FakeApi.today
+        val oats = """{"id":"f1","source":"usda","name":"Rolled oats","servingSizeG":40,"caloriesPer100g":380,"isPublic":true,""" +
+            """"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z"}"""
+        val recipe = """{"id":"r1","name":"Overnight oats","servings":2,"foodId":"rf1","totalGrams":80,""" +
+            """"perServing":{"calories":152,"protein":0,"carb":0,"fat":0,"fiber":0},"ingredients":[{"id":"i1","foodId":"f1",""" +
+            """"name":"Rolled oats","quantityG":80,"position":0,"nutrition":{"calories":304,"protein":0,"carb":0,"fat":0,"fiber":0}}]}"""
+        fun entry(id: String, foodId: String, name: String, grams: Int, calories: Int) =
+            """{"id":"$id","foodId":"$foodId","name":"$name","loggedAt":"${today}T08:00:00Z","logDate":"$today","quantityG":$grams,""" +
+                """"mealType":"breakfast","entryMethod":"manual",""" +
+                """"nutrition":{"calories":$calories,"protein":0,"carb":0,"fat":0,"fiber":0},"per100g":{}}"""
+        val breakfast = entry("e1", "f1", "Rolled oats", 40, 152) + "," + entry("e2", "f2", "Milk", 200, 128)
+        val api = FakeApi().apply {
+            establishedAccount()
+            on("GET", "/api/v1/nutrition/summary", daySummary(today, breakfast = breakfast))
+            on("GET", "/api/v1/nutrition/foods/search", """{"results":[$oats],"apiDegraded":false}""")
+            on("GET", "/api/v1/nutrition/recipes", "[]")
+            on("POST", "/api/v1/nutrition/recipes", recipe, status = 201)
+            on("GET", "/api/v1/nutrition/recipes/r1", recipe)
+            on("PATCH", "/api/v1/nutrition/recipes/r1", recipe)
+        }
+        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
+            awaitNode(hasText("training"))
+            app.get<DeepLinks>().open(DeepLink.Nutrition())
+            awaitNode(hasText("Set targets"))
+            onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Log food"))
+            onNodeWithText("Log food").performClick()
+            awaitNode(hasText("Recipe"))
+            onNodeWithText("Recipe").performClick()
+            awaitNode(hasText("New recipe"))
+            onNode(hasSetTextAction() and hasContentDescription("Recipe name")).performTextInput("Overnight oats")
+            onNode(hasSetTextAction() and hasContentDescription("Servings")).performTextReplacement("2")
+            onNode(hasSetTextAction() and hasContentDescription("Add an ingredient")).performTextInput("oats")
+            // Breakfast already has Rolled oats on the page behind; the result is the sheet's, the last.
+            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Rolled oats").fetchSemanticsNodes().size == 2 }
+            onAllNodesWithText("Rolled oats").onLast().performScrollTo().performClick()
+            // One serving of it to start, and the recipe's serving previewed: 152 kcal over 2.
+            awaitNode(hasSetTextAction() and hasContentDescription("Grams of Rolled oats"))
+            onNode(hasSetTextAction() and hasContentDescription("Grams of Rolled oats")).assert(hasText("40"))
+            onNode(hasText("76 kcal", substring = true)).assertExists()
+            api.on("GET", "/api/v1/nutrition/recipes", """[{"id":"r1","name":"Overnight oats","servings":2,"foodId":"rf1"}]""")
+            onNodeWithText("Create recipe").performScrollTo().performClick()
+            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/nutrition/recipes").isNotEmpty() }
+            assertEquals(
+                """{"name":"Overnight oats","servings":2.0,"ingredients":[{"foodId":"f1","quantityG":40.0}]}""",
+                api.sent("POST", "/api/v1/nutrition/recipes").single().body,
+            )
+            awaitNode(hasText("Recipe saved"))
+
+            // Edited from My foods: it opens on what was saved.
+            onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("My foods & recipes"))
+            onNodeWithContentDescription("Edit Overnight oats").performSemanticsAction(SemanticsActions.OnClick)
+            awaitNode(hasText("Edit recipe"))
+            awaitNode(hasSetTextAction() and hasContentDescription("Grams of Rolled oats"))
+            onNode(hasSetTextAction() and hasContentDescription("Grams of Rolled oats")).assert(hasText("80"))
+            onNode(hasSetTextAction() and hasContentDescription("Servings")).performTextReplacement("4")
+            onNodeWithText("Save").performScrollTo().performClick()
+            waitUntil(timeoutMillis = 10_000) { api.sent("PATCH", "/api/v1/nutrition/recipes/r1").isNotEmpty() }
+            assertTrue(""""servings":4.0""" in api.sent("PATCH", "/api/v1/nutrition/recipes/r1").single().body.orEmpty())
+            awaitNode(hasText("Recipe updated"))
+
+            // Breakfast's two entries seed a new one.
+            onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasContentDescription("Save breakfast as a recipe"))
+            onNodeWithContentDescription("Save breakfast as a recipe").performSemanticsAction(SemanticsActions.OnClick)
+            awaitNode(hasText("New recipe"))
+            onNode(hasSetTextAction() and hasContentDescription("Recipe name")).assert(hasText("Breakfast"))
+            onNode(hasSetTextAction() and hasContentDescription("Grams of Milk")).assert(hasText("200"))
         }
     }
 }

@@ -97,4 +97,34 @@ class MyFoodsTest {
 
         assertEquals(emptyList(), myFoods.customFoods().first())
     }
+
+    @Test
+    fun aRecipeIsCreatedReplacedAndDeletedWithItsListRefreshed() = runTest {
+        val recipe = """{"id":"r1","name":"Overnight oats","servings":2,"foodId":"rf1","totalGrams":300,""" +
+            """"perServing":{"calories":300,"protein":12,"carb":45,"fat":8,"fiber":5},"ingredients":[]}"""
+        server.on("POST", "/api/v1/nutrition/recipes", 201, recipe)
+        server.on("GET", "/api/v1/nutrition/recipes", 200, """[{"id":"r1","name":"Overnight oats","servings":2,"foodId":"rf1"}]""")
+
+        val draft = RecipeDraft("Overnight oats", 2.0, listOf(RecipeDraft.Ingredient("f1", 80.0), RecipeDraft.Ingredient("f2", 220.0)))
+        assertEquals("rf1", myFoods.createRecipe(draft).foodId)
+
+        assertEquals(
+            """{"name":"Overnight oats","servings":2.0,"ingredients":""" +
+                """[{"foodId":"f1","quantityG":80.0},{"foodId":"f2","quantityG":220.0}]}""",
+            server.sentTo("POST", "/api/v1/nutrition/recipes").single().body,
+        )
+        assertEquals(listOf("Overnight oats"), myFoods.recipes().first()!!.map { it.name })
+
+        // A replaced recipe changes what its entries add up to, on any day.
+        server.on("PATCH", "/api/v1/nutrition/recipes/r1", 200, recipe)
+        server.on("GET", "/api/v1/nutrition/summary", 200, summary(600))
+        myFoods.updateRecipe("r1", draft.copy(servings = 3.0), "2026-11-08")
+        assertEquals(1, server.sentTo("PATCH", "/api/v1/nutrition/recipes/r1").size)
+        assertEquals(600.0, nutrition.day("2026-11-08").first()!!.totals.calories)
+
+        server.on("DELETE", "/api/v1/nutrition/recipes/r1", 200, """{"success":true}""")
+        server.on("GET", "/api/v1/nutrition/recipes", 200, "[]")
+        myFoods.deleteRecipe("r1")
+        assertEquals(emptyList(), myFoods.recipes().first())
+    }
 }

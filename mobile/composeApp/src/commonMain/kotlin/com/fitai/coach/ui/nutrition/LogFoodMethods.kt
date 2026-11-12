@@ -25,6 +25,8 @@ data class LogFoodMethods(
     val choosePhoto: (() -> Unit)?,
     /** Makes a food of the athlete's own. */
     val customFood: () -> Unit,
+    /** Builds a recipe from foods. */
+    val recipe: () -> Unit,
 )
 
 /** The Log food sheet: the fastest way to capture what the athlete ate. */
@@ -51,6 +53,13 @@ fun LogFoodSheet(methods: LogFoodMethods, onDismiss: () -> Unit) {
                 onClick = then(methods.customFood),
                 variant = ButtonVariant.Ghost,
                 leadingIcon = LucideIcons.Plus,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            FitaiButton(
+                "Recipe",
+                onClick = then(methods.recipe),
+                variant = ButtonVariant.Ghost,
+                leadingIcon = LucideIcons.ChefHat,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
