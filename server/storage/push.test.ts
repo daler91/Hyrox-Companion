@@ -138,6 +138,52 @@ describe("PushStorage.saveDeviceToken", () => {
     expect(mock.delete).toHaveBeenCalledWith(devicePushTokens);
   });
 
+  it("deletes nothing when the over-cap lookup finds no rows left to evict", async () => {
+    const mock = makeDb();
+    mock.queue(undefined, [{ total: MAX_DEVICE_PUSH_TOKENS_PER_USER + 1 }], []);
+    Object.assign(db, mock);
+
+    await storage.saveDeviceToken("u1", device);
+
+    expect(mock.limit).toHaveBeenCalledWith(1);
+    expect(mock.delete).not.toHaveBeenCalled();
+  });
+
+  it("evicts only the athlete's own stale installs", async () => {
+    const mock = makeDb();
+    mock.queue(undefined, [{ total: MAX_DEVICE_PUSH_TOKENS_PER_USER + 1 }], [{ id: "old-1" }], undefined);
+    Object.assign(db, mock);
+
+    await storage.saveDeviceToken("u1", device);
+
+    const evict = dialect.sqlToQuery(mock.where.mock.calls.at(-1)![0] as SQL);
+    expect(evict.sql).toBe('("device_push_tokens"."user_id" = $1 and "device_push_tokens"."id" in ($2))');
+    expect(evict.params).toEqual(["u1", "old-1"]);
+  });
+
+  it.each([
+    ["no row matched", { rowCount: 0 }],
+    ["the driver reported no row count", { rowCount: null }],
+  ])("reports nothing unregistered when %s", async (_label, result) => {
+    const mock = makeDb();
+    mock.queue(result);
+    Object.assign(db, mock);
+
+    expect(await storage.removeDeviceToken("u1", "tok-unknown")).toBe(false);
+  });
+
+  it("reads only the athlete's own installs to send to", async () => {
+    const mock = makeDb();
+    const rows = [{ id: "d1", platform: "android", token: "tok-1" }];
+    mock.queue(rows);
+    Object.assign(db, mock);
+
+    expect(await storage.getDeviceTokensForUser("u1")).toEqual(rows);
+    const where = dialect.sqlToQuery(mock.where.mock.calls[0][0] as SQL);
+    expect(where.sql).toBe('"device_push_tokens"."user_id" = $1');
+    expect(where.params).toEqual(["u1"]);
+  });
+
   it("scopes unregistering to the athlete, so nobody can remove another athlete's install", async () => {
     const mock = makeDb();
     mock.queue({ rowCount: 1 });

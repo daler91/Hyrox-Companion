@@ -230,6 +230,62 @@ describe("sendFcmMessage", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("fails without caching anything when the token endpoint answers 200 with no access_token", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { token_type: "Bearer" }))
+      .mockResolvedValueOnce(accessTokenResponse())
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+
+    expect(await sendFcmMessage("row-1", "tok", { title: "T", body: "B" })).toBe("failed");
+    // The malformed answer was not cached: the next send asks again, then sends.
+    expect(await sendFcmMessage("row-1", "tok", { title: "T", body: "B" })).toBe("sent");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([TOKEN_URL, TOKEN_URL, SEND_URL]);
+  });
+
+  it("fails without throwing when the token endpoint's error body cannot be read", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      text: () => Promise.reject(new Error("stream aborted")),
+    });
+
+    expect(await sendFcmMessage("row-1", "tok", { title: "T", body: "B" })).toBe("failed");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats an access token with no expires_in as good for the default hour", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-11-12T08:00:00Z"));
+      fetchMock.mockImplementation((url: string) =>
+        Promise.resolve(url === TOKEN_URL ? jsonResponse(200, { access_token: "ya29.access" }) : jsonResponse(200, {})),
+      );
+
+      await sendFcmMessage("row-1", "tok", { title: "T", body: "B" });
+      vi.setSystemTime(new Date("2026-11-12T08:50:00Z"));
+      await sendFcmMessage("row-1", "tok", { title: "T", body: "B" });
+      expect(fetchMock.mock.calls.filter(([url]) => url === TOKEN_URL)).toHaveLength(1);
+
+      vi.setSystemTime(new Date("2026-11-12T09:00:00Z"));
+      await sendFcmMessage("row-1", "tok", { title: "T", body: "B" });
+      expect(fetchMock.mock.calls.filter(([url]) => url === TOKEN_URL)).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a rejection with an unreadable body as failed, not stale, and keeps the access token", async () => {
+    fetchMock
+      .mockResolvedValueOnce(accessTokenResponse())
+      .mockResolvedValueOnce(new Response("<html>Bad Gateway</html>", { status: 502 }))
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+
+    expect(await sendFcmMessage("row-1", "tok", { title: "T", body: "B" })).toBe("failed");
+    // Only a 401 drops the cached token; a 502 is FCM's problem, not the token's.
+    expect(await sendFcmMessage("row-1", "tok", { title: "T", body: "B" })).toBe("sent");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([TOKEN_URL, SEND_URL, SEND_URL]);
+  });
+
   it("fails without throwing when the send itself errors", async () => {
     fetchMock.mockResolvedValueOnce(accessTokenResponse()).mockRejectedValueOnce(new Error("socket hang up"));
 
