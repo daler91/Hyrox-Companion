@@ -42,3 +42,13 @@ interface SpeechInput {
  */
 @Composable
 expect fun rememberSpeechInput(onText: (String) -> Unit, onError: (String) -> Unit): SpeechInput?
+
+/**
+ * Remembers a launcher for the platform's barcode scanner, for the codes on
+ * food packets (EAN-13, EAN-8, UPC-A, UPC-E). The scanned digits arrive
+ * through [onScanned]; [onError] gets a sentence to show. A cancelled scan
+ * calls neither. Null where there is no scanner: typing the number works
+ * everywhere.
+ */
+@Composable
+expect fun rememberBarcodeScanner(onScanned: (String) -> Unit, onError: (String) -> Unit): (() -> Unit)?

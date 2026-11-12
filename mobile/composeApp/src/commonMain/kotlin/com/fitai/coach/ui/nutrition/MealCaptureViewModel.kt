@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionParseMealResponse
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelResponse
 import com.fitai.coach.core.data.EncodedImage
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.data.MealEntryMethod
@@ -29,11 +30,21 @@ data class MealCaptureState(
     val describe: DescribeState? = null,
     /** A photo is with the AI (5–15 s). */
     val readingPhoto: Boolean = false,
+    /** A nutrition label photo is with the AI. */
+    val readingLabel: Boolean = false,
     /** The parsed meal under review, open when set. */
     val review: MealReview? = null,
     /** The AI consent dialog, before the first AI parse. */
     val consentOpen: Boolean = false,
-)
+) {
+    /** What the Log food button says while a photo is with the AI; null when none is. */
+    val reading: String?
+        get() = when {
+            readingPhoto -> "Reading your meal…"
+            readingLabel -> "Reading the label…"
+            else -> null
+        }
+}
 
 /**
  * Logging a meal with the AI (FR-4.1): describe it or photograph it, review
@@ -59,6 +70,11 @@ class MealCaptureViewModel(
     /** Finding a food for a review row: a swap, or a match for an item the parser couldn't place. */
     private val searcher = FoodSearcher(viewModelScope, nutrition::search) { toasts.send(it) }
     val search: StateFlow<SearchState> = searcher.state
+
+    private val scannedLabels = Channel<PostNutritionParseLabelResponse>(Channel.BUFFERED)
+
+    /** A label that was read, for the custom food sheet to open on for review. */
+    val labels: Flow<PostNutritionParseLabelResponse> = scannedLabels.receiveAsFlow()
 
     private val ai = aiEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     private var pending: (() -> Unit)? = null
@@ -118,6 +134,35 @@ class MealCaptureViewModel(
             } catch (e: Exception) {
                 _state.update { it.copy(readingPhoto = false) }
                 toasts.send(e.userMessage("Couldn't read that photo"))
+            }
+        }
+    }
+
+    // --- Label ---
+
+    /**
+     * Reads the printed values off a nutrition label photo (ScanLabelButton):
+     * the custom food sheet opens on them for review. Nothing is saved yet.
+     */
+    fun parseLabel(image: EncodedImage) = requireAi { readLabel(image) }
+
+    private fun readLabel(image: EncodedImage) {
+        if (_state.value.readingLabel) return
+        _state.update { it.copy(readingLabel = true) }
+        viewModelScope.launch {
+            try {
+                val result = nutrition.parseLabel(image)
+                _state.update { it.copy(readingLabel = false) }
+                if (result.label == null) {
+                    toasts.send("No nutrition label found. Try a closer, well-lit photo of the nutrition facts panel.")
+                } else {
+                    scannedLabels.send(result)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(readingLabel = false) }
+                toasts.send(e.userMessage("Couldn't read that label"))
             }
         }
     }

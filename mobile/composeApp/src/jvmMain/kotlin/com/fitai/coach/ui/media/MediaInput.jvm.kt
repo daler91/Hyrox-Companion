@@ -12,3 +12,6 @@ actual fun rememberCamera(onPicked: (EncodedImage) -> Unit, onError: (String) ->
 
 @Composable
 actual fun rememberSpeechInput(onText: (String) -> Unit, onError: (String) -> Unit): SpeechInput? = null
+
+@Composable
+actual fun rememberBarcodeScanner(onScanned: (String) -> Unit, onError: (String) -> Unit): (() -> Unit)? = null

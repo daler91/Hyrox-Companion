@@ -131,6 +131,21 @@ class NutritionRepositoryTest {
     }
 
     @Test
+    fun aBarcodeIsLookedUpByItsDigitsAndALabelPhotoKeepsItsType() = runTest {
+        server.on("POST", "/api/v1/nutrition/foods/barcode", 200, food("f1"))
+        server.on("POST", "/api/v1/nutrition/parse/label", 200, """{"label":null,"suggestion":null,"warnings":[]}""")
+
+        assertEquals("f1", nutrition.lookUpBarcode("3017620422003").id)
+        assertEquals("""{"code":"3017620422003"}""", server.sentTo("POST", "/api/v1/nutrition/foods/barcode").single().body)
+
+        val read = nutrition.parseLabel(EncodedImage("abc", "image/webp"))
+        assertNull(read.label)
+        val photo = ApiJson.parseToJsonElement(server.sentTo("POST", "/api/v1/nutrition/parse/label").single().body!!).jsonObject
+        assertEquals("image/webp", photo["mimeType"]!!.jsonPrimitive.content)
+        assertEquals("abc", photo["imageBase64"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun aReviewedMealIsLoggedInOneBatchAndItsDayRefreshed() = runTest {
         server.on("POST", "/api/v1/nutrition/logs/batch", 201, """{"created":2,"logDate":"2026-11-08"}""")
         server.on("GET", "/api/v1/nutrition/summary", 200, summary(420))

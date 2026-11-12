@@ -30,6 +30,8 @@ androidx-browser = "1.10.0"
 firebase-messaging = "26.0.1"
 glance = "1.2.0"
 health-connect = "1.1.0"
+# Google's code scanner: Play services shows the camera, so no camera permission.
+play-services-code-scanner = "16.1.0"
 work = "2.12.0"
 play-publisher = "4.1.1"
 clerk = "1.4.1"
@@ -87,6 +89,7 @@ androidx-browser = { module = "androidx.browser:browser", version.ref = "android
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebase-messaging" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 health-connect-client = { module = "androidx.health.connect:connect-client", version.ref = "health-connect" }
+play-services-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "play-services-code-scanner" }
 work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 clerk-android-api = { module = "com.clerk:clerk-android-api", version.ref = "clerk" }
 clerk-android-ui = { module = "com.clerk:clerk-android-ui", version.ref = "clerk" }

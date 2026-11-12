@@ -1,10 +1,13 @@
 package com.fitai.coach.ui.nutrition
 
 import com.fitai.coach.core.api.generated.NutritionFood
+import com.fitai.coach.core.api.generated.NutritionLabelMacroSet
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
 import com.fitai.coach.core.api.generated.NutritionMacroTotals
 import com.fitai.coach.core.api.generated.NutritionMealType
 import com.fitai.coach.core.api.generated.NutritionRecipe
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelResponse
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelResponse.Suggestion
 import com.fitai.coach.core.data.CustomFoodDraft
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.data.Portion
@@ -183,5 +186,59 @@ class MyFoodsModelTest {
         assertEquals("40", ingredientFor(food).grams)
         assertEquals("100", ingredientFor(food.copy(servingSizeG = null)).grams)
         assertEquals(macros(380.0, 0.0, 0.0, 0.0, 0.0), ingredientFor(food).per100g)
+    }
+
+    private fun label(perServing: NutritionLabelMacroSet?, servingSizeText: String?) = PostNutritionParseLabelResponse.Label(
+        productName = "Protein bar",
+        perServing = perServing,
+        servingSizeText = servingSizeText,
+        basis = PostNutritionParseLabelResponse.Label.Basis.Per100g,
+        confidence = 90.0,
+    )
+
+    @Test
+    fun aScannedLabelFillsInTheFoodAndThePortionsThePackageImplies() {
+        val result = PostNutritionParseLabelResponse(
+            label = label(perServing = null, servingSizeText = "1 bar (40 g)"),
+            suggestion = Suggestion(
+                name = "Protein bar",
+                brand = "Grenade",
+                caloriesPer100g = 450.0,
+                proteinPer100g = 20.5,
+                carbPer100g = 50.0,
+                fatPer100g = 18.0,
+                servingSizeG = 40.0,
+                servings = listOf(Suggestion.ServingsItem("1 bar", 40.0), Suggestion.ServingsItem("Whole package", 480.0)),
+            ),
+            warnings = listOf("Energy converted from kJ."),
+        )
+
+        val sheet = customFoodFromLabel(result)
+
+        assertEquals("Protein bar", sheet.name)
+        assertEquals("Grenade", sheet.brand)
+        assertEquals("450", sheet.calories)
+        assertEquals("20.5", sheet.protein)
+        // Not printed: left blank, unknown.
+        assertEquals("", sheet.fiber)
+        assertEquals("40", sheet.servingSize)
+        assertEquals(listOf(PortionDraft("1 bar", "40"), PortionDraft("Whole package", "480")), sheet.portions)
+        assertEquals(listOf("Energy converted from kJ."), sheet.label?.warnings)
+        // Per 100 g came through, so there's nothing printed per serving to convert.
+        assertNull(sheet.label?.perServing)
+        assertNull(sheet.editing)
+    }
+
+    @Test
+    fun aPerServingLabelWithNoWeightShowsThePrintedValuesToConvert() {
+        val result = PostNutritionParseLabelResponse(
+            label = label(NutritionLabelMacroSet(calories = 180.0, protein = 8.0, carb = 20.5), servingSizeText = "1 bar"),
+            suggestion = Suggestion(name = "Protein bar", servings = emptyList()),
+            warnings = emptyList(),
+        )
+
+        val printed = customFoodFromLabel(result).label?.perServing
+
+        assertEquals(PrintedServing("Printed per serving (1 bar)", "180 kcal · 8 g protein · 20.5 g carbs"), printed)
     }
 }

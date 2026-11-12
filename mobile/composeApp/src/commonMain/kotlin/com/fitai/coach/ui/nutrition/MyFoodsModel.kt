@@ -4,6 +4,7 @@ import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
 import com.fitai.coach.core.api.generated.NutritionMacroTotals
 import com.fitai.coach.core.api.generated.NutritionRecipe
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelResponse
 import com.fitai.coach.core.data.CustomFoodDraft
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.data.Portion
@@ -12,6 +13,7 @@ import com.fitai.coach.core.js.jsRound
 import com.fitai.coach.core.nutrition.addInto
 import com.fitai.coach.core.nutrition.emptyTotals
 import com.fitai.coach.core.nutrition.roundMacros
+import com.fitai.coach.ui.format.formatNumber
 
 /** A named portion as typed: a label and its grams. */
 data class PortionDraft(val label: String = "", val grams: String = "") {
@@ -38,6 +40,8 @@ data class CustomFoodSheetState(
     /** Named portions, offered when creating. */
     val portions: List<PortionDraft> = emptyList(),
     val saving: Boolean = false,
+    /** Filled in from a nutrition label photo, to check against the package before saving. */
+    val label: ScannedLabel? = null,
 ) {
     val valid: Boolean get() = name.isNotBlank()
 
@@ -55,6 +59,61 @@ data class CustomFoodSheetState(
 
     /** The named portions worth saving: a label and a weight above zero. */
     fun completePortions(): List<Portion> = portions.mapNotNull { it.portion() }
+}
+
+/**
+ * What a label scan adds to the custom food sheet: the reader's caveats
+ * ("converted from kJ"), and the values printed per serving when they
+ * couldn't be made per 100 g (a per-serving label with no gram weight), for
+ * the athlete to convert by hand.
+ */
+data class ScannedLabel(val warnings: List<String>, val perServing: PrintedServing? = null)
+
+/** "Printed per serving (1 bar, 40 g)" and "180 kcal · 8 g protein · 20 g carbs". */
+data class PrintedServing(val title: String, val values: String)
+
+/**
+ * A new custom food filled in from a scanned label (CustomFoodDialog.tsx's
+ * prefill): its per-100 g suggestion, and the portions the package implies.
+ */
+fun customFoodFromLabel(result: PostNutritionParseLabelResponse): CustomFoodSheetState {
+    val suggestion = result.suggestion
+    return CustomFoodSheetState(
+        name = suggestion?.name.orEmpty(),
+        brand = suggestion?.brand.orEmpty(),
+        calories = suggestion?.caloriesPer100g.typed(),
+        protein = suggestion?.proteinPer100g.typed(),
+        carb = suggestion?.carbPer100g.typed(),
+        fat = suggestion?.fatPer100g.typed(),
+        fiber = suggestion?.fiberPer100g.typed(),
+        servingSize = suggestion?.servingSizeG.typed(),
+        portions = suggestion?.servings.orEmpty().map { PortionDraft(it.label, it.grams.typed()) },
+        label = ScannedLabel(result.warnings, printedServing(result)),
+    )
+}
+
+private fun printedServing(result: PostNutritionParseLabelResponse): PrintedServing? {
+    val suggestion = result.suggestion
+    val perServing = result.label?.perServing
+    val noPer100g = suggestion != null &&
+        listOf(
+            suggestion.caloriesPer100g,
+            suggestion.proteinPer100g,
+            suggestion.carbPer100g,
+            suggestion.fatPer100g,
+            suggestion.fiberPer100g,
+        )
+            .all { it == null }
+    if (perServing == null || !noPer100g) return null
+    val values = listOfNotNull(
+        perServing.calories?.let { "${formatNumber(it)} kcal" },
+        perServing.protein?.let { "${formatNumber(it)} g protein" },
+        perServing.carb?.let { "${formatNumber(it)} g carbs" },
+        perServing.fat?.let { "${formatNumber(it)} g fat" },
+        perServing.fiber?.let { "${formatNumber(it)} g fiber" },
+    ).joinToString(" · ")
+    val size = result.label?.servingSizeText?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+    return PrintedServing("Printed per serving$size", values).takeIf { values.isNotEmpty() }
 }
 
 /** The sheet on an existing custom food. */

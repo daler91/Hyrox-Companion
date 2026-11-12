@@ -56,6 +56,8 @@ export const ICONS: Readonly<Record<string, string>> = {
   Minus: "minus",
   Flame: "flame",
   UtensilsCrossed: "utensils-crossed",
+  ScanLine: "scan-line",
+  ScanText: "scan-text",
   StarFilled: "star",
 };
 

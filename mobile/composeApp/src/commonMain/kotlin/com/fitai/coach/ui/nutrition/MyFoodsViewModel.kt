@@ -6,6 +6,7 @@ import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchResponse
 import com.fitai.coach.core.api.generated.GetNutritionRecipesResponseItem
 import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelResponse
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.data.MyFoods
 import com.fitai.coach.ui.format.userMessage
@@ -51,6 +52,11 @@ class MyFoodsViewModel(
 
     private val searcher = FoodSearcher(viewModelScope, search) { toasts.send(it) }
 
+    private val created = Channel<NutritionFood>(Channel.BUFFERED)
+
+    /** A food just made from a label, to log ("Save & log"). */
+    val toLog: Flow<NutritionFood> = created.receiveAsFlow()
+
     /** Foods found for a recipe's next ingredient. */
     val ingredientSearch: StateFlow<SearchState> = searcher.state
 
@@ -70,6 +76,11 @@ class MyFoodsViewModel(
         _customFood.value = CustomFoodSheetState()
     }
 
+    /** A new custom food filled in from a scanned nutrition label, to check and save. */
+    fun reviewLabel(result: PostNutritionParseLabelResponse) {
+        _customFood.value = customFoodFromLabel(result)
+    }
+
     fun editCustomFood(food: NutritionFood) {
         _customFood.value = customFoodSheet(food)
     }
@@ -80,15 +91,17 @@ class MyFoodsViewModel(
         _customFood.value = null
     }
 
-    fun saveCustomFood() {
+    /** Saves the sheet; with [logAfter] (a scanned label's "Save & log"), the new food then opens for logging. */
+    fun saveCustomFood(logAfter: Boolean = false) {
         val sheet = _customFood.value?.takeIf { it.valid && !it.saving } ?: return
         _customFood.value = sheet.copy(saving = true)
         viewModelScope.launch {
             val editing = sheet.editing
             try {
                 if (editing == null) {
-                    myFoods.createFood(sheet.draft(), sheet.completePortions())
+                    val food = myFoods.createFood(sheet.draft(), sheet.completePortions())
                     toasts.send("Custom food saved")
+                    if (logAfter) created.send(food)
                 } else {
                     myFoods.updateFood(editing.id, sheet.draft(), sheet.isPublic, openDate())
                     toasts.send("Custom food updated")
