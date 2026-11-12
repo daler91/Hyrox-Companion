@@ -347,12 +347,15 @@ internal fun TimelineEntry.edited(edit: PatchPlansDaysByDayIdRequest): TimelineE
     mainWorkout = edit.mainWorkout ?: mainWorkout,
     accessory = edit.accessory.applyTo(accessory),
     notes = edit.notes.applyTo(notes),
+    expectedDurationMin = edit.expectedDurationMin.applyTo(expectedDurationMin),
+    expectedRpe = edit.expectedRpe.applyTo(expectedRpe),
+    plannedTimeOfDayMin = edit.plannedTimeOfDayMin.applyTo(plannedTimeOfDayMin),
     priority = (edit.priority as? Patch.Value)?.value
         ?.let { sent -> TimelineEntry.Priority.entries.firstOrNull { it.wireValue == sent.wireValue } }
         ?: priority,
 )
 
-private fun Patch<String>.applyTo(current: String?): String? = when (this) {
+private fun <T : Any> Patch<T>.applyTo(current: T?): T? = when (this) {
     is Patch.Value -> value
     Patch.Absent -> current
 }

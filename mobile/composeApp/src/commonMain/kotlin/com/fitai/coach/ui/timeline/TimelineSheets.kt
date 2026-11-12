@@ -44,6 +44,8 @@ import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.components.RpeSelector
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.format.shortWeekday
+import com.fitai.coach.ui.fuelling.FuellingPlanPanel
+import com.fitai.coach.ui.fuelling.PlanFuelling
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
@@ -120,6 +122,7 @@ private fun Labelled(label: String, text: String) {
 fun PreviewSheet(
     entry: TimelineEntry,
     dayLabel: String,
+    fuelling: PlanFuelling,
     onSkip: () -> Unit,
     onAskCoach: () -> Unit,
     onEdit: () -> Unit,
@@ -128,6 +131,7 @@ fun PreviewSheet(
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         SheetBody {
             EntrySummary(entry, dayLabel)
+            FuellingPlanPanel(entry, fuelling)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
                 FitaiButton("Ask coach", onClick = onAskCoach, variant = ButtonVariant.Secondary)
                 FitaiButton("Edit session", onClick = onEdit, variant = ButtonVariant.Secondary)
@@ -142,6 +146,7 @@ fun PreviewSheet(
 fun LogSheet(
     entry: TimelineEntry,
     dayLabel: String,
+    fuelling: PlanFuelling,
     onComplete: (rpe: Int?, notes: String) -> Unit,
     onSkip: () -> Unit,
     onRecover: (() -> Unit)?,
@@ -157,6 +162,8 @@ fun LogSheet(
                 Text(recoveryPrompt(entry), style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
                 FitaiButton("Fit it back in or let it go", onClick = onRecover, variant = ButtonVariant.Secondary)
             }
+            // Read before training, so above logging it.
+            FuellingPlanPanel(entry, fuelling)
             Text("Effort & notes", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
             RpeSelector(rpe, { rpe = it })
             FitaiTextField(value = notes, onValueChange = { notes = it }, label = "Notes", singleLine = false)

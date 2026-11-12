@@ -1,5 +1,6 @@
 package com.fitai.coach.ui.links
 
+import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.dates.isIsoCalendarDate
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
@@ -15,8 +16,11 @@ sealed interface DeepLink {
 
     data object LogWorkout : DeepLink
 
-    /** Nutrition, on [date] when the link names a real one. */
-    data class Nutrition(val date: String? = null) : DeepLink
+    /**
+     * Nutrition, on [date] when the link names a real one; with [meal]
+     * ("Log recovery meal"), adding food to that meal opens.
+     */
+    data class Nutrition(val date: String? = null, val meal: Meal? = null) : DeepLink
 
     data object Analytics : DeepLink
 
@@ -56,7 +60,10 @@ private fun screenFor(url: Url, source: LinkSource): DeepLink? {
     return when (url.encodedPath.trimEnd('/').ifEmpty { "/" }) {
         "/" -> DeepLink.Training(query["workout"]?.takeIf { it.isNotBlank() })
         "/log" -> DeepLink.LogWorkout
-        "/nutrition" -> DeepLink.Nutrition(query["date"]?.takeIf(::isIsoCalendarDate))
+        "/nutrition" -> DeepLink.Nutrition(
+            query["date"]?.takeIf(::isIsoCalendarDate),
+            query["meal"]?.let { wire -> Meal.entries.firstOrNull { it.wireValue == wire } },
+        )
         "/analytics" -> DeepLink.Analytics
         "/review" -> DeepLink.Review(query["week"]?.takeIf(::isIsoCalendarDate))
         "/settings" -> DeepLink.Settings

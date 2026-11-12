@@ -2,6 +2,8 @@ package com.fitai.coach.ui.timeline
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fitai.coach.core.api.ApiException
+import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdStatusRequest
 import com.fitai.coach.core.api.generated.PersonalRecord
 import com.fitai.coach.core.api.generated.PlanDayRecoveryPreview
@@ -18,9 +20,15 @@ import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.currentHourIn
 import com.fitai.coach.ui.components.UndoOffer
 import com.fitai.coach.ui.format.userMessage
+import com.fitai.coach.ui.fuelling.DateRange
+import com.fitai.coach.ui.fuelling.DayFuelling
+import com.fitai.coach.ui.fuelling.EstimateResult
+import com.fitai.coach.ui.fuelling.then
 import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.review.reviewPrompt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +43,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class TimelineUiState(
     val loaded: Boolean = false,
@@ -60,6 +69,10 @@ data class TimelineUiState(
     /** Older history can be loaded from the server. */
     val hasOlder: Boolean = false,
     val loadingOlder: Boolean = false,
+    /** Each day's fuelling chip, by date; days without one are absent. */
+    val fuelling: Map<String, DayFuelling> = emptyMap(),
+    /** For the planned-session fuelling targets; null without one in the profile. */
+    val bodyweightKg: Double? = null,
 )
 
 /** The recovery sheet for a missed day: loading, the options, or why they couldn't load. */
@@ -92,6 +105,9 @@ class TimelineViewModel(
     val messages: Flow<String> = toasts.receiveAsFlow()
     val undos: Flow<UndoOffer> = undoOffers.receiveAsFlow()
 
+    private val pendingSessionEdits = mutableMapOf<String, PatchPlansDaysByDayIdRequest>()
+    private val sessionSaves = mutableMapOf<String, Job>()
+
     private val _recovery = MutableStateFlow<RecoveryState?>(null)
     val recovery: StateFlow<RecoveryState?> = _recovery
 
@@ -104,13 +120,17 @@ class TimelineViewModel(
         Extras(annotations.orEmpty(), records.orEmpty(), user?.isAutoCoaching == true, dismissed)
     }
 
+    private val fuellingDays = session.nutrition.fuelling.days.map { range ->
+        range?.days.orEmpty().mapNotNull(DayFuelling::of).associateBy { it.date }
+    }
+
     val state: StateFlow<TimelineUiState> = combine(
-        combine(timeline.entries, extras, ::Pair),
+        combine(timeline.entries, extras, fuellingDays, ::Triple),
         combine(timeline.plans, timeline.weekSummary, ::Pair),
         session.preferences.preferences,
         combine(selectedPlan, expanded, filter, timeline.olderCursor, ::Shown),
         status,
-    ) { (entries, more), (plans, summary), prefs, shown, refresh ->
+    ) { (entries, more, fuelling), (plans, summary), prefs, shown, refresh ->
         val today = todayIn(prefs?.userTimezone)
         TimelineUiState(
             loaded = true,
@@ -135,6 +155,8 @@ class TimelineViewModel(
             statusFilter = shown.filter.status,
             hasOlder = shown.olderCursor != null,
             loadingOlder = shown.filter.loadingOlder,
+            fuelling = fuelling,
+            bodyweightKg = prefs?.bodyweightKg,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), TimelineUiState())
 
@@ -329,6 +351,48 @@ class TimelineViewModel(
 
     fun tomorrow(today: String): String = addDaysToIsoDate(today, 1)
 
+    /**
+     * Fetches the fuelling chips for [window], the days on screen. A failure
+     * (offline, nutrition off) keeps what's on the device, or shows no chips.
+     */
+    fun showFuelling(window: DateRange) {
+        viewModelScope.launch { attempt { session.nutrition.fuelling.refreshDays(window.from, window.to) } }
+    }
+
+    /** The server's duration and effort for a planned session, for its fuelling panel. */
+    suspend fun plannedEstimate(planDayId: String): EstimateResult = try {
+        EstimateResult.Ready(session.nutrition.fuelling.plannedEstimate(planDayId))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ApiException) {
+        if (e.status == NOT_FOUND) EstimateResult.NotFound else EstimateResult.Failed
+    } catch (_: Exception) {
+        EstimateResult.Failed
+    }
+
+    /**
+     * Saves a planned session's expected duration, effort or start time, half
+     * a second after the last change, so a run of stepper taps (and changes
+     * to different fields) go out as one edit. A save waiting when the sheet
+     * closes still goes.
+     */
+    fun saveExpectedSession(entry: TimelineEntry, edit: PatchPlansDaysByDayIdRequest) {
+        pendingSessionEdits[entry.id] = pendingSessionEdits[entry.id]?.then(edit) ?: edit
+        sessionSaves[entry.id]?.cancel()
+        sessionSaves[entry.id] = viewModelScope.launch {
+            delay(SESSION_SAVE_DEBOUNCE_MS)
+            val pending = pendingSessionEdits.remove(entry.id) ?: return@launch
+            // Once it's sent, a newer change waits for it rather than cutting it off.
+            withContext(NonCancellable) {
+                try {
+                    timeline.editPlanDay(entry, pending)
+                } catch (e: Exception) {
+                    toasts.send(e.userMessage("Couldn't save your expected session details"))
+                }
+            }
+        }
+    }
+
     private fun act(failure: String, block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
@@ -370,5 +434,10 @@ class TimelineViewModel(
         /** Every 3 seconds for up to 5 minutes, the longest a review takes. */
         const val COACH_POLL_MS = 3_000L
         const val MAX_COACH_POLLS = 100
+
+        /** How long a planned session's expected values wait for another change before saving. */
+        const val SESSION_SAVE_DEBOUNCE_MS = 500L
+
+        const val NOT_FOUND = 404
     }
 }

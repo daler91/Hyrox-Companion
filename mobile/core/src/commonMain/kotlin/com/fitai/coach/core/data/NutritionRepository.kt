@@ -67,6 +67,9 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
     /** Each day's micronutrients and the AI's nutrition insights. */
     public val reports: NutritionReports = NutritionReports(api, cache)
 
+    /** Fuelling around sessions, planned and logged, and each day's for the timeline. */
+    public val fuelling: SessionFuelling = SessionFuelling(api, cache)
+
     public fun day(date: String): Flow<GetNutritionSummaryResponse?> = cache.observe(dayKey(date), GetNutritionSummaryResponse.serializer())
 
     /** @throws ApiException on an error response ([isNutritionOff] when the feature is off). */

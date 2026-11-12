@@ -192,4 +192,29 @@ class TimelineChangesTest {
         val body = ApiJson.parseToJsonElement(server.sentTo("PATCH", "/api/v1/plans/days/d-p1").single().body!!).jsonObject
         assertEquals(setOf("focus", "notes", "priority"), body.keys)
     }
+
+    @Test
+    fun aSessionsExpectedDurationEffortAndStartTimeShowAtOnceAndClear() = runTest {
+        server.on("GET", TIMELINE) { page(planned("p1", "2026-11-10")) }
+        timeline.refresh()
+        server.on("PATCH", "/api/v1/plans/days/d-p1", 200, "{}")
+
+        timeline.editPlanDay(
+            entry("p1"),
+            PatchPlansDaysByDayIdRequest(
+                expectedDurationMin = Patch.of(70),
+                expectedRpe = Patch.of(6),
+                plannedTimeOfDayMin = Patch.of(405),
+            ),
+        )
+        assertEquals(70, entry("p1").expectedDurationMin)
+        assertEquals(6, entry("p1").expectedRpe)
+        assertEquals(405, entry("p1").plannedTimeOfDayMin)
+
+        timeline.editPlanDay(entry("p1"), PatchPlansDaysByDayIdRequest(plannedTimeOfDayMin = Patch.clear()))
+        assertEquals(70, entry("p1").expectedDurationMin)
+        assertEquals(null, entry("p1").plannedTimeOfDayMin)
+        sync.sync()
+        assertEquals("""{"plannedTimeOfDayMin":null}""", server.sentTo("PATCH", "/api/v1/plans/days/d-p1").last().body)
+    }
 }

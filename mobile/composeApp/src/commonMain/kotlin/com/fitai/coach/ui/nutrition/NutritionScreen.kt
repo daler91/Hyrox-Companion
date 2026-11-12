@@ -54,6 +54,7 @@ import com.fitai.coach.ui.components.offerUndo
 import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.media.rememberCamera
 import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
@@ -65,7 +66,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, openSettings: () -> Unit = {}) {
+fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {}, openSettings: () -> Unit = {}) {
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val timeZone = prefs?.userTimezone
@@ -121,14 +122,12 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, ope
     var logFoodOpen by remember { mutableStateOf(false) }
     // A day's micros follow what's logged on it: fetched for the day on screen, again when its totals change.
     LaunchedEffect(state.date, state.summary?.totals) { reports.showMicros(state.date, state.summary) }
-    LaunchedEffect(openDate) {
-        openDate?.let {
-            vm.goTo(it)
-            onDateOpened()
-        }
-    }
     var searching by remember { mutableStateOf<Meal?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
+    OpenLink(open, goTo = vm::goTo, onOpened = onOpened) { meal ->
+        searching = meal
+        searchOpen = true
+    }
     var deleting by remember { mutableStateOf<NutritionLogEntryWithNutrition?>(null) }
     var deletingFood by remember { mutableStateOf<NutritionFood?>(null) }
     var deletingRecipe by remember { mutableStateOf<GetNutritionRecipesResponseItem?>(null) }
@@ -527,5 +526,16 @@ private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, action
             }
         }
         FitaiButton("Add to ${meal.label.lowercase()}", onClick = { actions.asks.add(meal) }, variant = ButtonVariant.Ghost)
+    }
+}
+
+/** A link to a day opens it; with a meal ("Log recovery meal"), adding food to that meal opens too. */
+@Composable
+private fun OpenLink(open: DeepLink.Nutrition?, goTo: (String) -> Unit, onOpened: () -> Unit, addTo: (Meal) -> Unit) {
+    LaunchedEffect(open) {
+        if (open == null) return@LaunchedEffect
+        open.date?.let(goTo)
+        open.meal?.let(addTo)
+        onOpened()
     }
 }

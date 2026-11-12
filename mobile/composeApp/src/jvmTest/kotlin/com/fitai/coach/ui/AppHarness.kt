@@ -66,7 +66,7 @@ class FakeAuth(initial: AuthState, private val userId: String = "u1") : AuthGate
 
 /** The server, faked: answers by method and path; 404 for anything else. Records every request. */
 class FakeApi {
-    data class Sent(val method: String, val path: String, val body: String?)
+    data class Sent(val method: String, val path: String, val body: String?, val query: String = "")
 
     val requests = CopyOnWriteArrayList<Sent>()
     private val routes = ConcurrentHashMap<String, Pair<Int, String>>()
@@ -80,7 +80,8 @@ class FakeApi {
     val client: ApiClient = ApiClient(
         createHttpClient(
             MockEngine { request ->
-                val sent = Sent(request.method.value, request.url.encodedPath, (request.body as? TextContent)?.text)
+                val sent =
+                    Sent(request.method.value, request.url.encodedPath, (request.body as? TextContent)?.text, request.url.encodedQuery)
                 requests += sent
                 val (status, body) = routes["${sent.method} ${sent.path}"] ?: (404 to """{"error":"Not found","code":"NOT_FOUND"}""")
                 respond(body, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
