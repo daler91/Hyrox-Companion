@@ -38,6 +38,22 @@ object LucideIcons {
         )
     }
 
+    val Calculator: ImageVector by lazy {
+        lucide(
+            "Calculator",
+            "M6 2H18A2 2 0 0 1 20 4V20A2 2 0 0 1 18 22H6A2 2 0 0 1 4 20V4A2 2 0 0 1 6 2Z",
+            "M8 6L16 6",
+            "M16 14L16 18",
+            "M16 10h.01",
+            "M12 10h.01",
+            "M8 10h.01",
+            "M12 14h.01",
+            "M8 14h.01",
+            "M12 18h.01",
+            "M8 18h.01",
+        )
+    }
+
     val CalendarRange: ImageVector by lazy {
         lucide(
             "CalendarRange",
@@ -206,6 +222,14 @@ object LucideIcons {
         )
     }
 
+    val RotateCcw: ImageVector by lazy {
+        lucide(
+            "RotateCcw",
+            "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",
+            "M3 3v5h5",
+        )
+    }
+
     val RotateCw: ImageVector by lazy {
         lucide(
             "RotateCw",
@@ -235,6 +259,21 @@ object LucideIcons {
             "Settings",
             "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",
             "M9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z",
+        )
+    }
+
+    val SlidersHorizontal: ImageVector by lazy {
+        lucide(
+            "SlidersHorizontal",
+            "M10 5H3",
+            "M12 19H3",
+            "M14 3v4",
+            "M16 17v4",
+            "M21 12h-9",
+            "M21 19h-5",
+            "M21 5h-7",
+            "M8 10v4",
+            "M8 12H3",
         )
     }
 

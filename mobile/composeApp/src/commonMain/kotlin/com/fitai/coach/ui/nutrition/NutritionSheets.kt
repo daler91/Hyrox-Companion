@@ -31,7 +31,6 @@ import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiTextField
-import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -212,33 +211,3 @@ private fun Portions(state: LogSheetState, vm: NutritionViewModel) {
 }
 
 private const val PORTION_GRAMS_WEIGHT = 0.6f
-
-@Composable
-fun TargetsSheet(state: TargetsSheetState, vm: NutritionViewModel) {
-    val number = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-    FitaiBottomSheet(onDismissRequest = vm::closeTargets) {
-        Column(Modifier.padding(horizontal = Spacing.Lg), verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-            Text("Daily targets", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
-            if (state.loading) {
-                LoadingState()
-                return@Column
-            }
-            Text(
-                "Set any you want to track; leave the rest blank. Your training-load settings stay as they are.",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
-            )
-            FitaiTextField(state.calories, { v -> vm.editTargets { it.copy(calories = v) } }, "Calories (kcal)", keyboardOptions = number)
-            FitaiTextField(state.protein, { v -> vm.editTargets { it.copy(protein = v) } }, "Protein (g)", keyboardOptions = number)
-            FitaiTextField(state.carb, { v -> vm.editTargets { it.copy(carb = v) } }, "Carbs (g)", keyboardOptions = number)
-            FitaiTextField(state.fat, { v -> vm.editTargets { it.copy(fat = v) } }, "Fat (g)", keyboardOptions = number)
-            FitaiButton(
-                "Save targets",
-                onClick = vm::saveTargets,
-                enabled = state.toTargets() != null,
-                loading = state.saving,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}

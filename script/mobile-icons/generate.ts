@@ -49,6 +49,9 @@ export const ICONS: Readonly<Record<string, string>> = {
   RotateCw: "rotate-cw",
   CopyPlus: "copy-plus",
   ChefHat: "chef-hat",
+  Calculator: "calculator",
+  RotateCcw: "rotate-ccw",
+  SlidersHorizontal: "sliders-horizontal",
   StarFilled: "star",
 };
 

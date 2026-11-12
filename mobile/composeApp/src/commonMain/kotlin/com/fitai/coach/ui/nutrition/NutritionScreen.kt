@@ -36,6 +36,7 @@ import com.fitai.coach.core.api.generated.GetNutritionRecipesResponseItem
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
 import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
+import com.fitai.coach.core.api.generated.NutritionMealFuelTarget
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.dates.currentHourIn
@@ -58,6 +59,7 @@ import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -87,13 +89,21 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     val myFoods = viewModel(key = "my-foods-${session.userId}") {
         MyFoodsViewModel(session.nutrition.myFoods, search = session.nutrition::search, openDate = { vm.state.value.date })
     }
+    val targetsVm = viewModel(key = "targets-${session.userId}") {
+        TargetsViewModel(
+            session.nutrition.targets,
+            profile = { session.preferences.preferences.first() ?: session.preferences.refresh() },
+            openDate = { vm.state.value.date },
+        )
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     val customFoods by myFoods.customFoods.collectAsStateWithLifecycle()
     val recipes by myFoods.recipes.collectAsStateWithLifecycle()
     val customFoodSheet by myFoods.customFood.collectAsStateWithLifecycle()
     val recipeSheet by myFoods.recipe.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
-    val targets by vm.targets.collectAsStateWithLifecycle()
+    val dailyTargets by targetsVm.daily.collectAsStateWithLifecycle()
+    val mealTarget by targetsVm.meal.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
     val quickAdd by vm.quickAdd.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
@@ -104,6 +114,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it) } }
     LaunchedEffect(capture) { capture.messages.collect { toasts.showSnackbar(it) } }
     LaunchedEffect(myFoods) { myFoods.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(targetsVm) { targetsVm.messages.collect { toasts.showSnackbar(it) } }
     val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
     var logFoodOpen by remember { mutableStateOf(false) }
@@ -142,7 +153,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                     summary == null && state.loadFailed -> item { ErrorState("Couldn't load this day's food log", onRetry = vm::refresh) }
                     summary == null -> item { LoadingState() }
                     else -> {
-                        item { Totals(summary, onSetTargets = vm::openTargets) }
+                        item { Totals(summary, onSetTargets = targetsVm::openDaily) }
                         if (quickAdd.hasFoods) {
                             item {
                                 QuickAddRows(quickAdd, state.quickLogging, onFavorite = vm::quickAddFavorite, onRecent = vm::quickAddRecent)
@@ -179,6 +190,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                             searchOpen = true
                                         },
                                         delete = { deleting = it },
+                                        adjustTarget = targetsVm::openMeal,
                                     ),
                                 ),
                             )
@@ -255,7 +267,8 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     }
     if (captured.consentOpen) AiConsentDialog(onAccept = capture::acceptAi, onDecline = capture::declineAi)
     logSheet?.let { LogSheet(it, favorite = it.food.id in favoriteIds, vm) }
-    targets?.let { TargetsSheet(it, vm) }
+    dailyTargets?.let { TargetsSheet(it, targetsVm) }
+    mealTarget?.let { MealTargetSheet(it, targetsVm) }
     customFoodSheet?.let { CustomFoodSheet(it, myFoods) }
     recipeSheet?.let { sheet ->
         val ingredientSearch by myFoods.ingredientSearch.collectAsStateWithLifecycle()
@@ -390,8 +403,12 @@ private class MealActions(
 
 private const val MIN_RECIPE_ENTRIES = 2
 
-/** What a meal section asks of the screen: search for a food to add, or confirm a delete. */
-private class MealAsks(val add: (Meal) -> Unit, val delete: (NutritionLogEntryWithNutrition) -> Unit)
+/** What a meal section asks of the screen: search for a food to add, confirm a delete, or adjust its target. */
+private class MealAsks(
+    val add: (Meal) -> Unit,
+    val delete: (NutritionLogEntryWithNutrition) -> Unit,
+    val adjustTarget: (Meal, NutritionMealFuelTarget) -> Unit,
+)
 
 @Composable
 private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, actions: MealActions) {
@@ -400,7 +417,11 @@ private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, action
     val logged = entries.sumOf { it.nutrition.calories }
     FitaiCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(meal.label, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+            // The caption sits under the name: beside it, a phone's width wraps it a letter at a time.
+            Column(Modifier.weight(1f)) {
+                Text(meal.label, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
+                target?.caption()?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.accentText) }
+            }
             Text(
                 "${formatNumber(logged.roundToWhole())}${target?.let { " / ${formatNumber(it.calories.roundToWhole())}" } ?: ""} kcal",
                 style = FitaiTheme.typography.bodySm,
@@ -412,6 +433,15 @@ private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, action
                     Icon(
                         LucideIcons.ChefHat,
                         contentDescription = "Save ${meal.label.lowercase()} as a recipe",
+                        tint = FitaiTheme.colors.textMuted,
+                    )
+                }
+            }
+            target?.let {
+                IconButton(onClick = { actions.asks.adjustTarget(meal, it) }) {
+                    Icon(
+                        LucideIcons.SlidersHorizontal,
+                        contentDescription = "Adjust ${meal.label.lowercase()} target",
                         tint = FitaiTheme.colors.textMuted,
                     )
                 }

@@ -2,7 +2,6 @@ package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
 import com.fitai.coach.core.api.ApiException
-import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.GetNutritionFoodsByIdResponse
 import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchQuery
@@ -10,19 +9,13 @@ import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchResponse
 import com.fitai.coach.core.api.generated.GetNutritionSummaryQuery
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
 import com.fitai.coach.core.api.generated.NutritionParseMealResponse
-import com.fitai.coach.core.api.generated.NutritionTarget
 import com.fitai.coach.core.api.generated.PatchNutritionLogsByIdRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsBatchRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsRepeatRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsRequest
 import com.fitai.coach.core.api.generated.PostNutritionParsePhotoRequest
 import com.fitai.coach.core.api.generated.PostNutritionParseTextRequest
-import com.fitai.coach.core.api.generated.PostNutritionTargetsRequest
 import kotlinx.coroutines.flow.Flow
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 
 /** The meals of a day, in the web's order (shared/schema/enums.ts MEAL_TYPES). */
 public enum class Meal(public val wireValue: String, public val label: String) {
@@ -67,6 +60,9 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
 
     /** The athlete's custom foods, portions and recipes. */
     public val myFoods: MyFoods = MyFoods(api, cache) { date -> refreshAllDays(date) }
+
+    /** The daily and per-meal targets. */
+    public val targets: TargetSettings = TargetSettings(api) { date -> refreshAllDays(date) }
 
     public fun day(date: String): Flow<GetNutritionSummaryResponse?> = cache.observe(dayKey(date), GetNutritionSummaryResponse.serializer())
 
@@ -180,32 +176,6 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
         return created
     }
 
-    public suspend fun currentTargets(): NutritionTarget? = api.call(ApiEndpoints.GetNutritionTargets).current
-
-    /**
-     * Saves the daily macro targets. The athlete's training-load settings on
-     * the current target (periodisation, recovery, preload) are carried over
-     * unchanged, so editing a macro never resets them. Refreshes [date].
-     */
-    public suspend fun saveTargets(targets: MacroTargets, date: String) {
-        val current = currentTargets()
-        // The new targets take effect now: the old target's start date stays behind.
-        val carried = current?.let { ApiJson.encodeToJsonElement(NutritionTarget.serializer(), it).jsonObject - NOT_CARRIED }.orEmpty()
-        val macros = mapOf(
-            "calories" to targets.calories,
-            "proteinG" to targets.proteinG,
-            "carbG" to targets.carbG,
-            "fatG" to targets.fatG,
-        ).mapValues { (_, v) -> v?.let(::JsonPrimitive) ?: JsonNull }
-        val request = ApiJson.decodeFromJsonElement(PostNutritionTargetsRequest.serializer(), JsonObject(carried + macros))
-        write(
-            ApiEndpoints.PostNutritionTargets,
-            ApiEndpoints.PostNutritionTargets.pathTemplate,
-            encode(PostNutritionTargetsRequest.serializer(), request),
-        )
-        refreshAllDays(date)
-    }
-
     // A change every day's entries read (a target, a food's nutrition): the
     // cached days are dropped and [date] is fetched again.
     private suspend fun refreshAllDays(date: String) {
@@ -223,7 +193,6 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
 
         /** The longest description the parser takes (DescribeMealDialog's limit). */
         const val MAX_MEAL_TEXT = 2000
-        val NOT_CARRIED = setOf("id", "userId", "effectiveFrom", "createdAt", "updatedAt")
 
         fun dayKey(date: String) = DAY_PREFIX + date
     }

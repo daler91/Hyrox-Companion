@@ -1,0 +1,3253 @@
+{
+  "suite": "nutritionTargets.calculateNutritionTarget",
+  "description": "A calorie and macro target from the profile: BMR, TDEE, goal adjustment, floors, the carb clamp, reason codes and the explanation.",
+  "cases": [
+    {
+      "input": {
+        "bodyweightKg": 45,
+        "heightCm": 150,
+        "ageYears": 70,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1
+      },
+      "output": {
+        "bmr": 877,
+        "tdee": 1052,
+        "calories": 1200,
+        "proteinG": 81,
+        "carbG": 117.8,
+        "fatG": 45,
+        "goalCalorieDelta": -1100,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1200 kcal for safety.",
+        "explanation": "BMR 877 kcal (Mifflin–St Jeor), TDEE 1052 kcal (×1.2), goal -1100 kcal → 1200 kcal. Protein 81g + fat 45g anchored to 45kg; carbs 117.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 45,
+        "heightCm": 150,
+        "ageYears": 70,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1
+      },
+      "output": {
+        "bmr": 1043,
+        "tdee": 1251,
+        "calories": 1500,
+        "proteinG": 81,
+        "carbG": 192.8,
+        "fatG": 45,
+        "goalCalorieDelta": -1100,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1043 kcal (Mifflin–St Jeor), TDEE 1251 kcal (×1.2), goal -1100 kcal → 1500 kcal. Protein 81g + fat 45g anchored to 45kg; carbs 192.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 45,
+        "heightCm": 150,
+        "ageYears": 70,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1
+      },
+      "output": {
+        "bmr": 960,
+        "tdee": 1151,
+        "calories": 1500,
+        "proteinG": 81,
+        "carbG": 192.8,
+        "fatG": 45,
+        "goalCalorieDelta": -1100,
+        "reasonCodes": [
+          "sex_neutral_bmr",
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 960 kcal (Mifflin–St Jeor), TDEE 1151 kcal (×1.2), goal -1100 kcal → 1500 kcal. Protein 81g + fat 45g anchored to 45kg; carbs 192.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 150,
+        "heightCm": 150,
+        "ageYears": 80,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1.5
+      },
+      "output": {
+        "bmr": 1877,
+        "tdee": 2252,
+        "calories": 2430,
+        "proteinG": 270,
+        "carbG": 0,
+        "fatG": 150,
+        "goalCalorieDelta": -1650,
+        "reasonCodes": [
+          "calorie_floor_applied",
+          "carbs_clamped_zero"
+        ],
+        "warning": "Calorie target floored at 1200 kcal for safety.",
+        "explanation": "BMR 1877 kcal (Mifflin–St Jeor), TDEE 2252 kcal (×1.2), goal -1650 kcal → 2430 kcal. Protein 270g + fat 150g anchored to 150kg; carbs 0g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 150,
+        "heightCm": 150,
+        "ageYears": 80,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1.5
+      },
+      "output": {
+        "bmr": 2043,
+        "tdee": 2451,
+        "calories": 2430,
+        "proteinG": 270,
+        "carbG": 0,
+        "fatG": 150,
+        "goalCalorieDelta": -1650,
+        "reasonCodes": [
+          "calorie_floor_applied",
+          "carbs_clamped_zero"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 2043 kcal (Mifflin–St Jeor), TDEE 2451 kcal (×1.2), goal -1650 kcal → 2430 kcal. Protein 270g + fat 150g anchored to 150kg; carbs 0g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 120,
+        "heightCm": 160,
+        "ageYears": 60,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1822,
+        "tdee": 2186,
+        "calories": 2186,
+        "proteinG": 216,
+        "carbG": 60.6,
+        "fatG": 120,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1822 kcal (Mifflin–St Jeor), TDEE 2186 kcal (×1.2), goal +0 kcal → 2186 kcal. Protein 216g + fat 120g anchored to 120kg; carbs 60.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0,
+        "proteinGPerKg": 2.2,
+        "fatGPerKg": 0.8
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2844,
+        "calories": 2844,
+        "proteinG": 154,
+        "carbG": 431,
+        "fatG": 56,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2844 kcal (×1.725), goal +0 kcal → 2844 kcal. Protein 154g + fat 56g anchored to 70kg; carbs 431g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0,
+        "proteinGPerKg": 1.6
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2844,
+        "calories": 2844,
+        "proteinG": 112,
+        "carbG": 441.5,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2844 kcal (×1.725), goal +0 kcal → 2844 kcal. Protein 112g + fat 70g anchored to 70kg; carbs 441.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25,
+        "fatGPerKg": 1.2
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2039,
+        "calories": 1764,
+        "proteinG": 126,
+        "carbG": 125.9,
+        "fatG": 84,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2039 kcal (×1.375), goal -275 kcal → 1764 kcal. Protein 126g + fat 84g anchored to 70kg; carbs 125.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 72.5,
+        "heightCm": 178.3,
+        "ageYears": 29,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1699,
+        "tdee": 2634,
+        "calories": 2359,
+        "proteinG": 130.5,
+        "carbG": 296.1,
+        "fatG": 72.5,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1699 kcal (Mifflin–St Jeor), TDEE 2634 kcal (×1.55), goal -275 kcal → 2359 kcal. Protein 130.5g + fat 72.5g anchored to 72.5kg; carbs 296.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 63.35,
+        "heightCm": 165.25,
+        "ageYears": 33,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.2
+      },
+      "output": {
+        "bmr": 1340,
+        "tdee": 2312,
+        "calories": 2532,
+        "proteinG": 114,
+        "carbG": 376.4,
+        "fatG": 63.4,
+        "goalCalorieDelta": 220,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1340 kcal (Mifflin–St Jeor), TDEE 2312 kcal (×1.725), goal +220 kcal → 2532 kcal. Protein 114g + fat 63.4g anchored to 63.35kg; carbs 376.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 0.30000000000000004,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 952,
+        "tdee": 1475,
+        "calories": 1500,
+        "proteinG": 0.5,
+        "carbG": 373.8,
+        "fatG": 0.3,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 952 kcal (Mifflin–St Jeor), TDEE 1475 kcal (×1.55), goal +0 kcal → 1500 kcal. Protein 0.5g + fat 0.3g anchored to 0.30000000000000004kg; carbs 373.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 88.88,
+        "heightCm": 190.1,
+        "ageYears": 19,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.4
+      },
+      "output": {
+        "bmr": 1904,
+        "tdee": 3617,
+        "calories": 4057,
+        "proteinG": 160,
+        "carbG": 654.4,
+        "fatG": 88.9,
+        "goalCalorieDelta": 440,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1904 kcal (Mifflin–St Jeor), TDEE 3617 kcal (×1.9), goal +440 kcal → 4057 kcal. Protein 160g + fat 88.9g anchored to 88.88kg; carbs 654.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 101.25,
+        "heightCm": 185,
+        "ageYears": 52,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.75
+      },
+      "output": {
+        "bmr": 1914,
+        "tdee": 2631,
+        "calories": 1806,
+        "proteinG": 182.3,
+        "carbG": 41.5,
+        "fatG": 101.3,
+        "goalCalorieDelta": -825,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1914 kcal (Mifflin–St Jeor), TDEE 2631 kcal (×1.375), goal -825 kcal → 1806 kcal. Protein 182.3g + fat 101.3g anchored to 101.25kg; carbs 41.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 66.66666666666667,
+        "heightCm": 170,
+        "ageYears": 27,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1433,
+        "tdee": 2221,
+        "calories": 2221,
+        "proteinG": 120,
+        "carbG": 285.4,
+        "fatG": 66.7,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1433 kcal (Mifflin–St Jeor), TDEE 2221 kcal (×1.55), goal +0 kcal → 2221 kcal. Protein 120g + fat 66.7g anchored to 66.66666666666667kg; carbs 285.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 50.05,
+        "heightCm": 155.55,
+        "ageYears": 45,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1087,
+        "tdee": 1304,
+        "calories": 1304,
+        "proteinG": 90.1,
+        "carbG": 123.3,
+        "fatG": 50.1,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1087 kcal (Mifflin–St Jeor), TDEE 1304 kcal (×1.2), goal +0 kcal → 1304 kcal. Protein 90.1g + fat 50.1g anchored to 50.05kg; carbs 123.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30.5,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.3
+      },
+      "output": {
+        "bmr": 1646,
+        "tdee": 2552,
+        "calories": 2222,
+        "proteinG": 126,
+        "carbG": 271.9,
+        "fatG": 70,
+        "goalCalorieDelta": -330,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1646 kcal (Mifflin–St Jeor), TDEE 2552 kcal (×1.55), goal -330 kcal → 2222 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 271.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 1979,
+        "calories": 1704,
+        "proteinG": 126,
+        "carbG": 142.4,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 1979 kcal (×1.2), goal -275 kcal → 1704 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 142.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 1680,
+        "calories": 1500,
+        "proteinG": 105.1,
+        "carbG": 138.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 1680 kcal (×1.2), goal -550 kcal → 1500 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 138.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 1979,
+        "calories": 1979,
+        "proteinG": 126,
+        "carbG": 211.1,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 1979 kcal (×1.2), goal +0 kcal → 1979 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 211.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 1680,
+        "calories": 1680,
+        "proteinG": 105.1,
+        "carbG": 183.4,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 1680 kcal (×1.2), goal +0 kcal → 1680 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 183.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 1979,
+        "calories": 2254,
+        "proteinG": 126,
+        "carbG": 279.9,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 1979 kcal (×1.2), goal +275 kcal → 2254 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 279.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "sedentary",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 1680,
+        "calories": 2230,
+        "proteinG": 105.1,
+        "carbG": 320.9,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 1680 kcal (×1.2), goal +550 kcal → 2230 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 320.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2267,
+        "calories": 1992,
+        "proteinG": 126,
+        "carbG": 214.5,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2267 kcal (×1.375), goal -275 kcal → 1992 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 214.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 1924,
+        "calories": 1500,
+        "proteinG": 105.1,
+        "carbG": 138.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 1924 kcal (×1.375), goal -550 kcal → 1500 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 138.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2267,
+        "calories": 2267,
+        "proteinG": 126,
+        "carbG": 283.3,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2267 kcal (×1.375), goal +0 kcal → 2267 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 283.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 1924,
+        "calories": 1924,
+        "proteinG": 105.1,
+        "carbG": 244.6,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 1924 kcal (×1.375), goal +0 kcal → 1924 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 244.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2267,
+        "calories": 2542,
+        "proteinG": 126,
+        "carbG": 352,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2267 kcal (×1.375), goal +275 kcal → 2542 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 352g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "light",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 1924,
+        "calories": 2474,
+        "proteinG": 105.1,
+        "carbG": 382.1,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 1924 kcal (×1.375), goal +550 kcal → 2474 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 382.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2556,
+        "calories": 2281,
+        "proteinG": 126,
+        "carbG": 286.6,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2556 kcal (×1.55), goal -275 kcal → 2281 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 286.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2169,
+        "calories": 1619,
+        "proteinG": 105.1,
+        "carbG": 168.3,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2169 kcal (×1.55), goal -550 kcal → 1619 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 168.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2556,
+        "calories": 2556,
+        "proteinG": 126,
+        "carbG": 355.4,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2556 kcal (×1.55), goal +0 kcal → 2556 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 355.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2169,
+        "calories": 2169,
+        "proteinG": 105.1,
+        "carbG": 305.8,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2169 kcal (×1.55), goal +0 kcal → 2169 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 305.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2556,
+        "calories": 2831,
+        "proteinG": 126,
+        "carbG": 424.1,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2556 kcal (×1.55), goal +275 kcal → 2831 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 424.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2169,
+        "calories": 2719,
+        "proteinG": 105.1,
+        "carbG": 443.3,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2169 kcal (×1.55), goal +550 kcal → 2719 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 443.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2844,
+        "calories": 2569,
+        "proteinG": 126,
+        "carbG": 358.8,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2844 kcal (×1.725), goal -275 kcal → 2569 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 358.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2414,
+        "calories": 1864,
+        "proteinG": 105.1,
+        "carbG": 229.6,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2414 kcal (×1.725), goal -550 kcal → 1864 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 229.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2844,
+        "calories": 2844,
+        "proteinG": 126,
+        "carbG": 427.5,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2844 kcal (×1.725), goal +0 kcal → 2844 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 427.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2414,
+        "calories": 2414,
+        "proteinG": 105.1,
+        "carbG": 367.1,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2414 kcal (×1.725), goal +0 kcal → 2414 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 367.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 2844,
+        "calories": 3119,
+        "proteinG": 126,
+        "carbG": 496.3,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 2844 kcal (×1.725), goal +275 kcal → 3119 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 496.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2414,
+        "calories": 2964,
+        "proteinG": 105.1,
+        "carbG": 504.6,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2414 kcal (×1.725), goal +550 kcal → 2964 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 504.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "very_active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 3133,
+        "calories": 2858,
+        "proteinG": 126,
+        "carbG": 430.9,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 3133 kcal (×1.9), goal -275 kcal → 2858 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 430.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "very_active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2659,
+        "calories": 2109,
+        "proteinG": 105.1,
+        "carbG": 290.8,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2659 kcal (×1.9), goal -550 kcal → 2109 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 290.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "very_active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 3133,
+        "calories": 3133,
+        "proteinG": 126,
+        "carbG": 499.7,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 3133 kcal (×1.9), goal +0 kcal → 3133 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 499.7g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "very_active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2659,
+        "calories": 2659,
+        "proteinG": 105.1,
+        "carbG": 428.3,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2659 kcal (×1.9), goal +0 kcal → 2659 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 428.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "male",
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1649,
+        "tdee": 3133,
+        "calories": 3408,
+        "proteinG": 126,
+        "carbG": 568.4,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1649 kcal (Mifflin–St Jeor), TDEE 3133 kcal (×1.9), goal +275 kcal → 3408 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 568.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "male",
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1400,
+        "tdee": 2659,
+        "calories": 3209,
+        "proteinG": 105.1,
+        "carbG": 565.8,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1400 kcal (Mifflin–St Jeor), TDEE 2659 kcal (×1.9), goal +550 kcal → 3209 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 565.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 1779,
+        "calories": 1504,
+        "proteinG": 126,
+        "carbG": 92.6,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 1779 kcal (×1.2), goal -275 kcal → 1504 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 92.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1480,
+        "calories": 1200,
+        "proteinG": 105.1,
+        "carbG": 63.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1200 kcal for safety.",
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1480 kcal (×1.2), goal -550 kcal → 1200 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 63.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 1779,
+        "calories": 1779,
+        "proteinG": 126,
+        "carbG": 161.3,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 1779 kcal (×1.2), goal +0 kcal → 1779 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 161.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1480,
+        "calories": 1480,
+        "proteinG": 105.1,
+        "carbG": 133.6,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1480 kcal (×1.2), goal +0 kcal → 1480 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 133.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 1779,
+        "calories": 2054,
+        "proteinG": 126,
+        "carbG": 230.1,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 1779 kcal (×1.2), goal +275 kcal → 2054 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 230.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "sedentary",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1480,
+        "calories": 2030,
+        "proteinG": 105.1,
+        "carbG": 271.1,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1480 kcal (×1.2), goal +550 kcal → 2030 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 271.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2039,
+        "calories": 1764,
+        "proteinG": 126,
+        "carbG": 157.4,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2039 kcal (×1.375), goal -275 kcal → 1764 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 157.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1696,
+        "calories": 1200,
+        "proteinG": 105.1,
+        "carbG": 63.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1200 kcal for safety.",
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1696 kcal (×1.375), goal -550 kcal → 1200 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 63.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2039,
+        "calories": 2039,
+        "proteinG": 126,
+        "carbG": 226.2,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2039 kcal (×1.375), goal +0 kcal → 2039 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 226.2g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1696,
+        "calories": 1696,
+        "proteinG": 105.1,
+        "carbG": 187.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1696 kcal (×1.375), goal +0 kcal → 1696 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 187.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2039,
+        "calories": 2314,
+        "proteinG": 126,
+        "carbG": 294.9,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2039 kcal (×1.375), goal +275 kcal → 2314 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 294.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "light",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1696,
+        "calories": 2246,
+        "proteinG": 105.1,
+        "carbG": 325,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1696 kcal (×1.375), goal +550 kcal → 2246 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 325g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2298,
+        "calories": 2023,
+        "proteinG": 126,
+        "carbG": 222.3,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2298 kcal (×1.55), goal -275 kcal → 2023 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 222.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1912,
+        "calories": 1362,
+        "proteinG": 105.1,
+        "carbG": 104,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1912 kcal (×1.55), goal -550 kcal → 1362 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 104g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2298,
+        "calories": 2298,
+        "proteinG": 126,
+        "carbG": 291.1,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2298 kcal (×1.55), goal +0 kcal → 2298 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 291.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1912,
+        "calories": 1912,
+        "proteinG": 105.1,
+        "carbG": 241.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1912 kcal (×1.55), goal +0 kcal → 1912 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 241.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2298,
+        "calories": 2573,
+        "proteinG": 126,
+        "carbG": 359.8,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2298 kcal (×1.55), goal +275 kcal → 2573 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 359.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 1912,
+        "calories": 2462,
+        "proteinG": 105.1,
+        "carbG": 379,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 1912 kcal (×1.55), goal +550 kcal → 2462 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 379g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2558,
+        "calories": 2283,
+        "proteinG": 126,
+        "carbG": 287.2,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2558 kcal (×1.725), goal -275 kcal → 2283 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 287.2g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 2128,
+        "calories": 1578,
+        "proteinG": 105.1,
+        "carbG": 158,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 2128 kcal (×1.725), goal -550 kcal → 1578 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 158g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2558,
+        "calories": 2558,
+        "proteinG": 126,
+        "carbG": 355.9,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2558 kcal (×1.725), goal +0 kcal → 2558 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 355.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 2128,
+        "calories": 2128,
+        "proteinG": 105.1,
+        "carbG": 295.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 2128 kcal (×1.725), goal +0 kcal → 2128 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 295.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2558,
+        "calories": 2833,
+        "proteinG": 126,
+        "carbG": 424.7,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2558 kcal (×1.725), goal +275 kcal → 2833 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 424.7g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 2128,
+        "calories": 2678,
+        "proteinG": 105.1,
+        "carbG": 433,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 2128 kcal (×1.725), goal +550 kcal → 2678 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 433g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "very_active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2817,
+        "calories": 2542,
+        "proteinG": 126,
+        "carbG": 352.1,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2817 kcal (×1.9), goal -275 kcal → 2542 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 352.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "very_active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 2344,
+        "calories": 1794,
+        "proteinG": 105.1,
+        "carbG": 212,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 2344 kcal (×1.9), goal -550 kcal → 1794 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 212g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "very_active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2817,
+        "calories": 2817,
+        "proteinG": 126,
+        "carbG": 420.8,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2817 kcal (×1.9), goal +0 kcal → 2817 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 420.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "very_active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 2344,
+        "calories": 2344,
+        "proteinG": 105.1,
+        "carbG": 349.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 2344 kcal (×1.9), goal +0 kcal → 2344 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 349.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": "female",
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1483,
+        "tdee": 2817,
+        "calories": 3092,
+        "proteinG": 126,
+        "carbG": 489.6,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1483 kcal (Mifflin–St Jeor), TDEE 2817 kcal (×1.9), goal +275 kcal → 3092 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 489.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": "female",
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1234,
+        "tdee": 2344,
+        "calories": 2894,
+        "proteinG": 105.1,
+        "carbG": 487,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1234 kcal (Mifflin–St Jeor), TDEE 2344 kcal (×1.9), goal +550 kcal → 2894 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 487g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 1879,
+        "calories": 1604,
+        "proteinG": 126,
+        "carbG": 117.5,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 1879 kcal (×1.2), goal -275 kcal → 1604 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 117.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 1580,
+        "calories": 1500,
+        "proteinG": 105.1,
+        "carbG": 138.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "sex_neutral_bmr",
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 1580 kcal (×1.2), goal -550 kcal → 1500 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 138.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 1879,
+        "calories": 1879,
+        "proteinG": 126,
+        "carbG": 186.2,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 1879 kcal (×1.2), goal +0 kcal → 1879 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 186.2g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 1580,
+        "calories": 1580,
+        "proteinG": 105.1,
+        "carbG": 158.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 1580 kcal (×1.2), goal +0 kcal → 1580 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 158.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 1879,
+        "calories": 2154,
+        "proteinG": 126,
+        "carbG": 255,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 1879 kcal (×1.2), goal +275 kcal → 2154 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 255g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "sedentary",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 1580,
+        "calories": 2130,
+        "proteinG": 105.1,
+        "carbG": 296,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 1580 kcal (×1.2), goal +550 kcal → 2130 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 296g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2153,
+        "calories": 1878,
+        "proteinG": 126,
+        "carbG": 186,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2153 kcal (×1.375), goal -275 kcal → 1878 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 186g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "light",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 1810,
+        "calories": 1500,
+        "proteinG": 105.1,
+        "carbG": 138.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "sex_neutral_bmr",
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 1810 kcal (×1.375), goal -550 kcal → 1500 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 138.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "light",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2153,
+        "calories": 2153,
+        "proteinG": 126,
+        "carbG": 254.7,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2153 kcal (×1.375), goal +0 kcal → 2153 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 254.7g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "light",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 1810,
+        "calories": 1810,
+        "proteinG": 105.1,
+        "carbG": 216.1,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 1810 kcal (×1.375), goal +0 kcal → 1810 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 216.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "light",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2153,
+        "calories": 2428,
+        "proteinG": 126,
+        "carbG": 323.5,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2153 kcal (×1.375), goal +275 kcal → 2428 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 323.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "light",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 1810,
+        "calories": 2360,
+        "proteinG": 105.1,
+        "carbG": 353.6,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 1810 kcal (×1.375), goal +550 kcal → 2360 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 353.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2427,
+        "calories": 2152,
+        "proteinG": 126,
+        "carbG": 254.5,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2427 kcal (×1.55), goal -275 kcal → 2152 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 254.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2041,
+        "calories": 1500,
+        "proteinG": 105.1,
+        "carbG": 138.5,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "sex_neutral_bmr",
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2041 kcal (×1.55), goal -550 kcal → 1500 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 138.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2427,
+        "calories": 2427,
+        "proteinG": 126,
+        "carbG": 323.2,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2427 kcal (×1.55), goal +0 kcal → 2427 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 323.2g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2041,
+        "calories": 2041,
+        "proteinG": 105.1,
+        "carbG": 273.7,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2041 kcal (×1.55), goal +0 kcal → 2041 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 273.7g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2427,
+        "calories": 2702,
+        "proteinG": 126,
+        "carbG": 392,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2427 kcal (×1.55), goal +275 kcal → 2702 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 392g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2041,
+        "calories": 2591,
+        "proteinG": 105.1,
+        "carbG": 411.2,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2041 kcal (×1.55), goal +550 kcal → 2591 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 411.2g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2701,
+        "calories": 2426,
+        "proteinG": 126,
+        "carbG": 323,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2701 kcal (×1.725), goal -275 kcal → 2426 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 323g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2271,
+        "calories": 1721,
+        "proteinG": 105.1,
+        "carbG": 193.8,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2271 kcal (×1.725), goal -550 kcal → 1721 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 193.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2701,
+        "calories": 2701,
+        "proteinG": 126,
+        "carbG": 391.7,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2701 kcal (×1.725), goal +0 kcal → 2701 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 391.7g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2271,
+        "calories": 2271,
+        "proteinG": 105.1,
+        "carbG": 331.3,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2271 kcal (×1.725), goal +0 kcal → 2271 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 331.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2701,
+        "calories": 2976,
+        "proteinG": 126,
+        "carbG": 460.5,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2701 kcal (×1.725), goal +275 kcal → 2976 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 460.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2271,
+        "calories": 2821,
+        "proteinG": 105.1,
+        "carbG": 468.8,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2271 kcal (×1.725), goal +550 kcal → 2821 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 468.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2975,
+        "calories": 2700,
+        "proteinG": 126,
+        "carbG": 391.5,
+        "fatG": 70,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2975 kcal (×1.9), goal -275 kcal → 2700 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 391.5g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2502,
+        "calories": 1952,
+        "proteinG": 105.1,
+        "carbG": 251.4,
+        "fatG": 58.4,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2502 kcal (×1.9), goal -550 kcal → 1952 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 251.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2975,
+        "calories": 2975,
+        "proteinG": 126,
+        "carbG": 460.2,
+        "fatG": 70,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2975 kcal (×1.9), goal +0 kcal → 2975 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 460.2g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2502,
+        "calories": 2502,
+        "proteinG": 105.1,
+        "carbG": 388.9,
+        "fatG": 58.4,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2502 kcal (×1.9), goal +0 kcal → 2502 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 388.9g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 70,
+        "heightCm": 175,
+        "ageYears": 30,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1566,
+        "tdee": 2975,
+        "calories": 3250,
+        "proteinG": 126,
+        "carbG": 529,
+        "fatG": 70,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1566 kcal (Mifflin–St Jeor), TDEE 2975 kcal (×1.9), goal +275 kcal → 3250 kcal. Protein 126g + fat 70g anchored to 70kg; carbs 529g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 58.4,
+        "heightCm": 162.5,
+        "ageYears": 41,
+        "sex": null,
+        "activityLevel": "very_active",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1317,
+        "tdee": 2502,
+        "calories": 3052,
+        "proteinG": 105.1,
+        "carbG": 526.4,
+        "fatG": 58.4,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [
+          "sex_neutral_bmr"
+        ],
+        "warning": null,
+        "explanation": "BMR 1317 kcal (Mifflin–St Jeor), TDEE 2502 kcal (×1.9), goal +550 kcal → 3052 kcal. Protein 105.1g + fat 58.4g anchored to 58.4kg; carbs 526.4g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.1
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2610,
+        "proteinG": 144,
+        "carbG": 328.6,
+        "fatG": 80,
+        "goalCalorieDelta": -110,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -110 kcal → 2610 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 328.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.1
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2830,
+        "proteinG": 144,
+        "carbG": 383.6,
+        "fatG": 80,
+        "goalCalorieDelta": 110,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +110 kcal → 2830 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 383.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.1
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2445,
+        "proteinG": 144,
+        "carbG": 287.3,
+        "fatG": 80,
+        "goalCalorieDelta": -275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -275 kcal → 2445 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 287.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2995,
+        "proteinG": 144,
+        "carbG": 424.8,
+        "fatG": 80,
+        "goalCalorieDelta": 275,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +275 kcal → 2995 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 424.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.25
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.33
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2357,
+        "proteinG": 144,
+        "carbG": 265.3,
+        "fatG": 80,
+        "goalCalorieDelta": -363,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -363 kcal → 2357 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 265.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.33
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 3083,
+        "proteinG": 144,
+        "carbG": 446.8,
+        "fatG": 80,
+        "goalCalorieDelta": 363,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +363 kcal → 3083 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 446.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.33
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2170,
+        "proteinG": 144,
+        "carbG": 218.6,
+        "fatG": 80,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -550 kcal → 2170 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 218.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 3270,
+        "proteinG": 144,
+        "carbG": 493.6,
+        "fatG": 80,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +550 kcal → 3270 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 493.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 0.75
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 1895,
+        "proteinG": 144,
+        "carbG": 149.8,
+        "fatG": 80,
+        "goalCalorieDelta": -825,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -825 kcal → 1895 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 149.8g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 0.75
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 3545,
+        "proteinG": 144,
+        "carbG": 562.3,
+        "fatG": 80,
+        "goalCalorieDelta": 825,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +825 kcal → 3545 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 562.3g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 0.75
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 1620,
+        "proteinG": 144,
+        "carbG": 81.1,
+        "fatG": 80,
+        "goalCalorieDelta": -1100,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -1100 kcal → 1620 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 81.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 1
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 3820,
+        "proteinG": 144,
+        "carbG": 631.1,
+        "fatG": 80,
+        "goalCalorieDelta": 1100,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +1100 kcal → 3820 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 631.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 1
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": -0.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2170,
+        "proteinG": 144,
+        "carbG": 218.6,
+        "fatG": 80,
+        "goalCalorieDelta": -550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -550 kcal → 2170 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 218.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": -0.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 3270,
+        "proteinG": 144,
+        "carbG": 493.6,
+        "fatG": 80,
+        "goalCalorieDelta": 550,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +550 kcal → 3270 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 493.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": -0.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "lose",
+        "goalRateKgPerWeek": 1.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 1500,
+        "proteinG": 144,
+        "carbG": 51,
+        "fatG": 80,
+        "goalCalorieDelta": -1650,
+        "reasonCodes": [
+          "calorie_floor_applied"
+        ],
+        "warning": "Calorie target floored at 1500 kcal for safety.",
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal -1650 kcal → 1500 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 51g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "gain",
+        "goalRateKgPerWeek": 1.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 4370,
+        "proteinG": 144,
+        "carbG": 768.6,
+        "fatG": 80,
+        "goalCalorieDelta": 1650,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +1650 kcal → 4370 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 768.6g fill the remainder."
+      }
+    },
+    {
+      "input": {
+        "bodyweightKg": 80,
+        "heightCm": 180,
+        "ageYears": 35,
+        "sex": "male",
+        "activityLevel": "moderate",
+        "goalDirection": "maintain",
+        "goalRateKgPerWeek": 1.5
+      },
+      "output": {
+        "bmr": 1755,
+        "tdee": 2720,
+        "calories": 2720,
+        "proteinG": 144,
+        "carbG": 356.1,
+        "fatG": 80,
+        "goalCalorieDelta": 0,
+        "reasonCodes": [],
+        "warning": null,
+        "explanation": "BMR 1755 kcal (Mifflin–St Jeor), TDEE 2720 kcal (×1.55), goal +0 kcal → 2720 kcal. Protein 144g + fat 80g anchored to 80kg; carbs 356.1g fill the remainder."
+      }
+    }
+  ]
+}

@@ -4,7 +4,6 @@ import com.fitai.coach.core.api.ApiException
 import com.fitai.coach.core.api.ApiJson
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.AfterTest
@@ -105,29 +104,6 @@ class NutritionRepositoryTest {
         )
         val error = assertFailsWith<ApiException> { nutrition.repeat("2026-11-06", "2026-11-07") }
         assertTrue(error.isNothingToRepeat())
-    }
-
-    @Test
-    fun savingTargetsCarriesTheTrainingLoadSettingsOver() = runTest {
-        server.on(
-            "GET",
-            "/api/v1/nutrition/targets",
-            200,
-            """{"current":{"id":"t1","userId":"u1","calories":2400,"proteinG":150,"periodizationEnabled":true,"referenceUtss":60,""" +
-                """"recoveryEnabled":true,"phaseAware":false,"effectiveFrom":"2026-10-01"},"history":[]}""",
-        )
-        server.on("POST", "/api/v1/nutrition/targets", 201)
-        server.on("GET", "/api/v1/nutrition/summary", 200, summary(0))
-
-        nutrition.saveTargets(MacroTargets(calories = 2600.0, proteinG = null, carbG = 300.0, fatG = 80.0), "2026-11-08")
-
-        val sent = ApiJson.parseToJsonElement(server.sentTo("POST", "/api/v1/nutrition/targets").single().body!!).jsonObject
-        assertEquals(2600.0, sent["calories"]!!.jsonPrimitive.content.toDouble())
-        assertEquals(JsonNull, sent["proteinG"])
-        assertEquals("true", sent["periodizationEnabled"]!!.jsonPrimitive.content)
-        assertEquals(60.0, sent["referenceUtss"]!!.jsonPrimitive.content.toDouble())
-        assertNull(sent["id"])
-        assertNull(sent["effectiveFrom"])
     }
 
     @Test

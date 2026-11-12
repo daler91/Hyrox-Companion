@@ -2,7 +2,6 @@ package com.fitai.coach.ui.nutrition
 
 import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionFoodServing
-import com.fitai.coach.core.data.MacroTargets
 import com.fitai.coach.core.data.Meal
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,16 +65,5 @@ class NutritionModelTest {
         assertFalse(MacroProgress(2000.0, 2000.0).over)
         assertNull(MacroProgress(500.0, null).fraction)
         assertNull(MacroProgress(500.0, 0.0).fraction)
-    }
-
-    @Test
-    fun targetsNeedOneNumberAndNoBadOnes() {
-        assertNull(TargetsSheetState(loading = false).toTargets())
-        assertNull(TargetsSheetState(calories = "abc", loading = false).toTargets())
-        assertNull(TargetsSheetState(calories = "-5", loading = false).toTargets())
-        assertEquals(
-            MacroTargets(2400.0, null, 300.0, null),
-            TargetsSheetState(calories = "2400", carb = " 300 ", loading = false).toTargets(),
-        )
     }
 }
