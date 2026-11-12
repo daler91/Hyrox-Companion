@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.ApiException
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
 import com.fitai.coach.core.api.generated.NutritionFood
+import com.fitai.coach.core.api.generated.NutritionFoodServing
 import com.fitai.coach.core.api.generated.NutritionFoodWithPortionMemory
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
 import com.fitai.coach.core.data.MacroTargets
@@ -43,16 +44,23 @@ data class NutritionUiState(
     val repeating: Boolean = false,
 )
 
-/** The log sheet: a new entry for [food], or an edit of [editing]. */
+/**
+ * The log sheet: a new entry for [food], or an edit of [editing]. [servings]
+ * are the food's named portions, shared and the athlete's own; [newPortion]
+ * is the add-a-portion form while it's open.
+ */
 data class LogSheetState(
     val food: NutritionFood,
-    val units: List<PortionUnit>,
+    val servings: List<NutritionFoodServing>,
     val unit: PortionUnit,
     val amount: String,
     val meal: Meal,
     val editing: NutritionLogEntryWithNutrition? = null,
     val saving: Boolean = false,
+    val newPortion: PortionDraft? = null,
+    val addingPortion: Boolean = false,
 ) {
+    val units: List<PortionUnit> get() = portionUnits(food, servings)
     val quantityG: Double? get() = amount.trim().toDoubleOrNull()?.takeIf { it > 0 }?.let { it * unit.grams }
 }
 
@@ -189,7 +197,7 @@ class NutritionViewModel(
             val (unit, amount) = remembered?.let { units.first() to it.quantityG } ?: defaultPortion(units)
             _logSheet.value = LogSheetState(
                 food = food,
-                units = units,
+                servings = servings,
                 unit = unit,
                 amount = trim(amount),
                 meal = meal ?: remembered?.meal ?: preferredMeal ?: mealForHour(currentHour()),
@@ -276,11 +284,10 @@ class NutritionViewModel(
         viewModelScope.launch {
             try {
                 val detail = nutrition.food(entry.foodId)
-                val units = portionUnits(detail.food, detail.servings)
                 _logSheet.value = LogSheetState(
                     food = detail.food,
-                    units = units,
-                    unit = units.first(),
+                    servings = detail.servings,
+                    unit = portionUnits(detail.food, detail.servings).first(),
                     amount = trim(entry.quantityG),
                     meal = Meal.entries.firstOrNull { it.wireValue == entry.mealType.wireValue } ?: Meal.Snack,
                     editing = entry,
@@ -294,6 +301,74 @@ class NutritionViewModel(
     }
 
     fun editLog(change: (LogSheetState) -> LogSheetState) = _logSheet.update { it?.let(change) }
+
+    /** Opens, edits or closes the log sheet's add-a-portion form (null closes it). */
+    fun editNewPortion(change: (PortionDraft?) -> PortionDraft?) = editLog { it.copy(newPortion = change(it.newPortion)) }
+
+    /**
+     * Saves the new portion as one of the athlete's own, then logs one of it
+     * (LogFoodDialog.tsx handlePortionAdded).
+     */
+    fun saveNewPortion() {
+        val sheet = _logSheet.value?.takeIf { !it.addingPortion } ?: return
+        val portion = sheet.newPortion?.portion() ?: return
+        _logSheet.value = sheet.copy(addingPortion = true)
+        viewModelScope.launch {
+            try {
+                val serving = nutrition.myFoods.addPortion(sheet.food.id, portion)
+                _logSheet.update { current ->
+                    current?.takeIf { it.food.id == sheet.food.id }?.let { open ->
+                        val servings = open.servings.filterNot { it.id == serving.id } + serving
+                        open.copy(
+                            servings = servings,
+                            unit = portionUnits(open.food, servings).first { it.serving?.id == serving.id },
+                            amount = "1",
+                            newPortion = null,
+                            addingPortion = false,
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _logSheet.update { it?.copy(addingPortion = false) }
+                toasts.send(e.userMessage("Couldn't add that portion"))
+            }
+        }
+    }
+
+    /**
+     * Removes one of the athlete's own portions. When it's the one picked, the
+     * amount carries over in grams rather than reading the count as grams.
+     */
+    fun removePortion(unit: PortionUnit) {
+        val sheet = _logSheet.value ?: return
+        val serving = unit.serving?.takeIf { unit.own } ?: return
+        val picked = sheet.unit == unit
+        _logSheet.value = sheet.copy(
+            servings = sheet.servings - serving,
+            unit = if (picked) sheet.units.first() else sheet.unit,
+            amount = if (picked) sheet.quantityG?.let { trim(kotlin.math.round(it)) } ?: sheet.amount else sheet.amount,
+        )
+        viewModelScope.launch {
+            try {
+                nutrition.myFoods.removePortion(sheet.food.id, serving.id)
+                toasts.send("Portion removed")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _logSheet.update { current ->
+                    current?.takeIf { it.food.id == sheet.food.id }?.let {
+                        it.copy(
+                            servings =
+                            it.servings + serving,
+                        )
+                    }
+                }
+                toasts.send(e.userMessage("Couldn't remove that portion"))
+            }
+        }
+    }
 
     fun closeLog() {
         _logSheet.value = null

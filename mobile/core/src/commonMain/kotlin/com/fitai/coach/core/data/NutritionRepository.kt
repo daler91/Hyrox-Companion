@@ -65,6 +65,9 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
     /** The recent and favourite foods, which each log refreshes. */
     public val shortcuts: FoodShortcuts = FoodShortcuts(api, cache)
 
+    /** The athlete's custom foods, portions and recipes. */
+    public val myFoods: MyFoods = MyFoods(api, cache) { date -> refreshAllDays(date) }
+
     public fun day(date: String): Flow<GetNutritionSummaryResponse?> = cache.observe(dayKey(date), GetNutritionSummaryResponse.serializer())
 
     /** @throws ApiException on an error response ([isNutritionOff] when the feature is off). */
@@ -200,6 +203,12 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
             ApiEndpoints.PostNutritionTargets.pathTemplate,
             encode(PostNutritionTargetsRequest.serializer(), request),
         )
+        refreshAllDays(date)
+    }
+
+    // A change every day's entries read (a target, a food's nutrition): the
+    // cached days are dropped and [date] is fetched again.
+    private suspend fun refreshAllDays(date: String) {
         cache.deletePrefix(DAY_PREFIX)
         refreshDay(date)
     }

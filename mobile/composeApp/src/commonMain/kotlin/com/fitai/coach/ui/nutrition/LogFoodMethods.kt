@@ -23,6 +23,8 @@ data class LogFoodMethods(
     val takePhoto: (() -> Unit)?,
     /** Null where there's no photo picker. */
     val choosePhoto: (() -> Unit)?,
+    /** Makes a food of the athlete's own. */
+    val customFood: () -> Unit,
 )
 
 /** The Log food sheet: the fastest way to capture what the athlete ate. */
@@ -43,6 +45,14 @@ fun LogFoodSheet(methods: LogFoodMethods, onDismiss: () -> Unit) {
             MethodButton("Describe a meal", LucideIcons.Sparkles, then(methods.describe))
             methods.takePhoto?.let { MethodButton("Snap a meal", LucideIcons.Camera, then(it)) }
             methods.choosePhoto?.let { MethodButton("Choose a meal photo", LucideIcons.Image, then(it)) }
+            Text("Make your own", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
+            FitaiButton(
+                "Custom food",
+                onClick = then(methods.customFood),
+                variant = ButtonVariant.Ghost,
+                leadingIcon = LucideIcons.Plus,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

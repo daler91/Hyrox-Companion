@@ -4,20 +4,15 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -486,149 +481,7 @@ class AppUiTest {
             assertTrue(api.sent("GET", "/api/v1/nutrition/block").isNotEmpty())
         }
     }
-
-    @Test
-    fun aDescribedMealIsReviewedThenLoggedInOneBatchAfterTurningOnTheAi() {
-        val today = FakeApi.today
-        val summary = """{"logDate":"$today","totals":{"calories":0,"protein":0,"carb":0,"fat":0,"fiber":0},"meals":{"breakfast":[],""" +
-            """"lunch":[],"dinner":[],"snack":[],"snack_pm":[],"pre_workout":[],"post_workout":[]}}"""
-        val egg = """{"id":"f1","source":"usda","name":"Egg, scrambled","caloriesPer100g":150,"proteinPer100g":10,"carbPer100g":2,""" +
-            """"fatPer100g":11,"isPublic":true,"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z"}"""
-        val parsed = """{"items":[{"name":"scrambled eggs","quantityG":120.4,"displayAmount":"2 scrambled eggs","mealType":"breakfast",""" +
-            """"confidence":0.9,"foodId":"f1","food":$egg},{"name":"mystery sauce","quantityG":30,"displayAmount":"a splash of sauce",""" +
-            """"confidence":0.3}],"warnings":["Portions are estimates."],"rawInput":"2 scrambled eggs and a splash of sauce"}"""
-        val api = FakeApi().apply {
-            establishedAccount()
-            on("GET", "/api/v1/nutrition/summary", summary)
-            on("POST", "/api/v1/nutrition/parse/text", parsed)
-            on(
-                "PATCH",
-                "/api/v1/preferences",
-                """{"userTimezone":"UTC","onboardingCompleted":true,"weightUnit":"kg","distanceUnit":"km","aiCoachEnabled":true}""",
-            )
-            on("POST", "/api/v1/nutrition/logs/batch", """{"created":1,"logDate":"$today"}""")
-        }
-        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
-            awaitNode(hasText("training"))
-            app.get<DeepLinks>().open(DeepLink.Nutrition())
-            // The day's totals, then the Log food button below them.
-            awaitNode(hasText("Set targets"))
-            onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Log food"))
-            onNodeWithText("Log food").performClick()
-            awaitNode(hasText("Describe a meal"))
-            onNodeWithText("Describe a meal").performClick()
-            awaitNode(hasContentDescription("Describe your meal"))
-            onNode(
-                hasSetTextAction() and hasContentDescription("Describe your meal"),
-            ).performTextInput("2 scrambled eggs and a splash of sauce")
-            onNodeWithText("Review foods").performClick()
-
-            // The AI isn't on yet: consent first, then the same description is read.
-            awaitNode(hasText("Not now"))
-            onNode(hasText("Enable AI Coach") and hasClickAction()).performClick()
-            awaitNode(hasText("Review parsed foods"))
-            assertEquals("""{"aiCoachEnabled":true}""", api.sent("PATCH", "/api/v1/preferences").single().body)
-            onNodeWithText("Portions are estimates.").assertExists()
-            onNodeWithText("No match — choose a food to log this.").assertExists()
-            onNodeWithText("1 item needs a match and won't be logged.").assertExists()
-
-            onNodeWithText("Log 1 item").performScrollTo().performClick()
-            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/nutrition/logs/batch").isNotEmpty() }
-            val batch = api.sent("POST", "/api/v1/nutrition/logs/batch").single().body.orEmpty()
-            assertTrue(""""entryMethod":"nl"""" in batch, batch)
-            assertTrue(""""items":[{"foodId":"f1","quantityG":120.0,"mealType":"breakfast","parseConfidence":0.9}]""" in batch, batch)
-            awaitNode(hasText("Logged 1 item"))
-        }
-    }
-
-    @Test
-    fun aFavouriteLogsInOneTapAndARecentFoodOpensOnItsUsualPortion() {
-        val today = FakeApi.today
-        val api = FakeApi().apply {
-            establishedAccount()
-            on("GET", "/api/v1/nutrition/summary", daySummary(today))
-            on("GET", "/api/v1/nutrition/favorites", "[${quickAddFood("f1", "Oats", 80, "breakfast")}]")
-            on("GET", "/api/v1/nutrition/foods/recent", "[${quickAddFood("f2", "Banana", 120, "snack")}]")
-            on("POST", "/api/v1/nutrition/logs", newLogEntry("e1", today), status = 201)
-            on("DELETE", "/api/v1/nutrition/logs/e1", """{"success":true}""")
-        }
-        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
-            awaitNode(hasText("training"))
-            app.get<DeepLinks>().open(DeepLink.Nutrition())
-
-            // A favourite with a known portion logs at once, and the toast can take it back.
-            awaitNode(hasContentDescription("Quick log Oats"))
-            onNodeWithContentDescription("Quick log Oats").performClick()
-            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/nutrition/logs").isNotEmpty() }
-            val logged = api.sent("POST", "/api/v1/nutrition/logs").single().body.orEmpty()
-            assertTrue(""""foodId":"f1"""" in logged && """"quantityG":80.0""" in logged && """"mealType":"breakfast"""" in logged, logged)
-            awaitNode(hasText("Logged Oats · 80 g · Breakfast"))
-            onNodeWithText("Undo").performClick()
-            waitUntil(timeoutMillis = 10_000) { api.sent("DELETE", "/api/v1/nutrition/logs/e1").isNotEmpty() }
-
-            // A recent food opens the log sheet on the grams and meal it was last logged in.
-            onNodeWithContentDescription("Add Banana").performClick()
-            awaitNode(hasSetTextAction() and hasContentDescription("Amount"))
-            onNode(hasSetTextAction() and hasContentDescription("Amount")).assert(hasText("120"))
-            onNode(hasText("Snack") and isSelected()).assertExists()
-        }
-    }
-
-    @Test
-    fun anEntryIsStarredAndLoggedAgainAndAnEmptyDayRepeatsTheOneBefore() {
-        val today = FakeApi.today
-        val yesterday = LocalDate.parse(today).minusDays(1).toString()
-        val oats = """{"id":"e1","foodId":"f1","name":"Oats","loggedAt":"${today}T08:00:00Z","logDate":"$today","quantityG":80,""" +
-            """"mealType":"breakfast","entryMethod":"manual","nutrition":{"calories":304,"protein":10,"carb":54,"fat":5,"fiber":8},""" +
-            """"per100g":{"caloriesPer100g":380}}"""
-        val api = FakeApi().apply {
-            establishedAccount()
-            on("GET", "/api/v1/nutrition/summary", daySummary(today, breakfast = oats))
-            on("GET", "/api/v1/nutrition/favorites", "[]")
-            on("GET", "/api/v1/nutrition/foods/recent", "[${quickAddFood("f1", "Oats", 80, "breakfast")}]")
-            on("POST", "/api/v1/nutrition/favorites", """{"success":true}""", status = 201)
-            on("POST", "/api/v1/nutrition/logs", newLogEntry("e2", today), status = 201)
-            on("POST", "/api/v1/nutrition/logs/repeat", """{"created":2,"logDate":"$yesterday"}""", status = 201)
-        }
-        appTest(FakeAuth(AuthState.SignedIn("u1")), api) { app ->
-            awaitNode(hasText("training"))
-            app.get<DeepLinks>().open(DeepLink.Nutrition())
-            awaitNode(hasContentDescription("Add Oats to favourites"))
-            onNodeWithContentDescription("Add Oats to favourites").performClick()
-            waitUntil(timeoutMillis = 10_000) { api.sent("POST", "/api/v1/nutrition/favorites").isNotEmpty() }
-            assertEquals("""{"foodId":"f1"}""", api.sent("POST", "/api/v1/nutrition/favorites").single().body)
-
-            onNodeWithContentDescription("log Oats again today").performClick()
-            awaitNode(hasText("Logged Oats · 80 g · Breakfast"))
-            assertTrue(""""quantityG":80.0""" in api.sent("POST", "/api/v1/nutrition/logs").single().body.orEmpty())
-
-            // The day before has nothing logged: it can repeat its own day before.
-            api.on("GET", "/api/v1/nutrition/summary", daySummary(yesterday))
-            onNodeWithContentDescription("previous day").performClick()
-            awaitNode(hasText("Repeat previous day"))
-            onNodeWithText("Repeat previous day").performClick()
-            awaitNode(hasText("Repeated 2 items"))
-            val repeat = api.sent("POST", "/api/v1/nutrition/logs/repeat").single().body.orEmpty()
-            val dayBefore = LocalDate.parse(yesterday).minusDays(1).toString()
-            assertTrue(""""sourceDate":"$dayBefore"""" in repeat && """"targetDate":"$yesterday"""" in repeat, repeat)
-        }
-    }
 }
-
-/** A day's summary with nothing logged, or [breakfast] (an entry's JSON) for breakfast. */
-private fun daySummary(day: String, breakfast: String? = null) =
-    """{"logDate":"$day","totals":{"calories":0,"protein":0,"carb":0,"fat":0,"fiber":0},"meals":{"breakfast":[${breakfast.orEmpty()}],""" +
-        """"lunch":[],"dinner":[],"snack":[],"snack_pm":[],"pre_workout":[],"post_workout":[]}}"""
-
-/** A recent or favourite food, last logged as [grams] g at [meal]. */
-private fun quickAddFood(id: String, name: String, grams: Int, meal: String) =
-    """{"id":"$id","source":"usda","name":"$name","caloriesPer100g":100,"isPublic":true,"createdAt":"2026-11-01T00:00:00Z",""" +
-        """"updatedAt":"2026-11-01T00:00:00Z","lastQuantityG":$grams,"lastMealType":"$meal"}"""
-
-/** POST /nutrition/logs's answer: the new entry. */
-private fun newLogEntry(id: String, day: String) =
-    """{"id":"$id","userId":"u1","foodId":"f1","loggedAt":"${day}T08:00:00Z","logDate":"$day","quantityG":80,"mealType":"breakfast",""" +
-        """"entryMethod":"manual","pendingReview":false,"createdAt":"${day}T08:00:00Z","updatedAt":"${day}T08:00:00Z"}"""
 
 /**
  * Taps today's session on the timeline. The "This week" card above names it

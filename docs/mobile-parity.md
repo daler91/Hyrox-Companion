@@ -77,7 +77,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] Favourites and recent quick-add — `/nutrition/favorites`, `GET /nutrition/foods/recent`.
 - [x] Remember the usual portion for each food.
 - [x] Log again today; copy yesterday's meal; repeat the previous day — `POST /nutrition/logs/repeat`.
-- [ ] Custom foods and named portions — `/nutrition/foods`, `…/servings`.
+- [x] Custom foods and named portions — `/nutrition/foods`, `…/servings`.
 - [ ] Recipes — `/nutrition/recipes`.
 - [ ] Per-meal target overrides — `/nutrition/meal-targets`.
 - [ ] Targets: calculate from the profile; scale carbs by training load; adaptive targets.

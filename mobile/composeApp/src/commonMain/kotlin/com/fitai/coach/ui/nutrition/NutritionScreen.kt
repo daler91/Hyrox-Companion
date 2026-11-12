@@ -32,7 +32,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fitai.coach.core.api.generated.GetNutritionRecipesResponseItem
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
+import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.Meal
@@ -82,7 +84,13 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
             loggedAt = { date -> loggedAtFor(date, todayIn(timeZone), timeZone) },
         )
     }
+    val myFoods = viewModel(key = "my-foods-${session.userId}") {
+        MyFoodsViewModel(session.nutrition.myFoods, openDate = { vm.state.value.date })
+    }
     val state by vm.state.collectAsStateWithLifecycle()
+    val customFoods by myFoods.customFoods.collectAsStateWithLifecycle()
+    val recipes by myFoods.recipes.collectAsStateWithLifecycle()
+    val customFoodSheet by myFoods.customFood.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
     val targets by vm.targets.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
@@ -94,6 +102,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
     LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it) } }
     LaunchedEffect(capture) { capture.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(myFoods) { myFoods.messages.collect { toasts.showSnackbar(it) } }
     val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
     var logFoodOpen by remember { mutableStateOf(false) }
@@ -106,11 +115,16 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     var searching by remember { mutableStateOf<Meal?>(null) }
     var searchOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<NutritionLogEntryWithNutrition?>(null) }
+    var deletingFood by remember { mutableStateOf<NutritionFood?>(null) }
+    var deletingRecipe by remember { mutableStateOf<GetNutritionRecipesResponseItem?>(null) }
 
     Box(Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = state.loading && state.summary != null,
-            onRefresh = vm::refresh,
+            onRefresh = {
+                vm.refresh()
+                myFoods.refresh()
+            },
             modifier = Modifier.fillMaxSize(),
         ) {
             LazyColumn(
@@ -179,6 +193,24 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
+                        val ownFoods = customFoods.orEmpty()
+                        val ownRecipes = recipes.orEmpty()
+                        if (ownFoods.isNotEmpty() || ownRecipes.isNotEmpty()) {
+                            item {
+                                MyFoodsSection(
+                                    ownFoods,
+                                    ownRecipes,
+                                    favoriteIds,
+                                    onToggleFavorite = vm::toggleFavorite,
+                                    MyFoodsActions(
+                                        editFood = myFoods::editCustomFood,
+                                        deleteFood = { deletingFood = it },
+                                        editRecipe = {},
+                                        deleteRecipe = { deletingRecipe = it },
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -206,6 +238,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                 describe = capture::openDescribe,
                 takePhoto = takePhoto,
                 choosePhoto = choosePhoto,
+                customFood = myFoods::newCustomFood,
             ),
             onDismiss = { logFoodOpen = false },
         )
@@ -218,6 +251,33 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     if (captured.consentOpen) AiConsentDialog(onAccept = capture::acceptAi, onDecline = capture::declineAi)
     logSheet?.let { LogSheet(it, favorite = it.food.id in favoriteIds, vm) }
     targets?.let { TargetsSheet(it, vm) }
+    customFoodSheet?.let { CustomFoodSheet(it, myFoods) }
+    deletingFood?.let { food ->
+        FitaiDialog(
+            title = "Delete custom food?",
+            text = "\"${food.name}\" will be permanently deleted. This cannot be undone.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                myFoods.deleteCustomFood(food)
+                deletingFood = null
+            },
+            onDismiss = { deletingFood = null },
+            destructive = true,
+        )
+    }
+    deletingRecipe?.let { recipe ->
+        FitaiDialog(
+            title = "Delete recipe?",
+            text = "\"${recipe.name}\" will be permanently deleted. This cannot be undone.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                myFoods.deleteRecipe(recipe)
+                deletingRecipe = null
+            },
+            onDismiss = { deletingRecipe = null },
+            destructive = true,
+        )
+    }
     deleting?.let { entry ->
         FitaiDialog(
             title = "Delete this entry?",
