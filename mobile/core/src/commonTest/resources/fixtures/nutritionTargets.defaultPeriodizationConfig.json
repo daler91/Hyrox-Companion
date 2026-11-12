@@ -1,0 +1,1842 @@
+{
+  "suite": "nutritionTargets.defaultPeriodizationConfig",
+  "description": "Periodisation defaults from a carb baseline and the athlete's typical daily load, and whether the reference is measured.",
+  "cases": [
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 0,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 1,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 0,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 0.8,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 1.7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.9,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 0.8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 99.9,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 0.4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 74.9,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 2.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 1.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.6,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 150,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 0.6,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 112.5,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 2.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 2.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 2.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 4.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 4.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 4.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 4.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 4.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 3.7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.9,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 2.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 1.8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.9,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 223.4,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 0.9,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 167.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 6,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 6,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 6,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 6,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 6,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 2.4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 300,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 1.3,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.7,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 225,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3.5,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 5.9,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 3.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 2.8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 351.5,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 1.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.8,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 263.6,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 8,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 6.7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 3.4,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 3.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.6,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 400,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 1.7,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 0.9,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 300,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": null
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 5.1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.6,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 0
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 5.1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.6,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": -5
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 5.1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.6,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "assumed"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 0.5
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 10.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 5.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 10
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 10.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 5.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 24.9
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 10.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 5.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 25
+      },
+      "output": {
+        "referenceUtss": 25,
+        "carbGramsPerUtss": 10.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 5.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 25.05
+      },
+      "output": {
+        "referenceUtss": 25.1,
+        "carbGramsPerUtss": 10.2,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 5.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 30
+      },
+      "output": {
+        "referenceUtss": 30,
+        "carbGramsPerUtss": 8.5,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 4.3,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 50
+      },
+      "output": {
+        "referenceUtss": 50,
+        "carbGramsPerUtss": 5.1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2.6,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 63.33
+      },
+      "output": {
+        "referenceUtss": 63.3,
+        "carbGramsPerUtss": 4,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 2,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    },
+    {
+      "input": {
+        "baselineCarbG": 512.25,
+        "recentAvgDailyUtss": 120
+      },
+      "output": {
+        "referenceUtss": 120,
+        "carbGramsPerUtss": 2.1,
+        "recoveryEnabled": true,
+        "recoveryProteinBumpFrac": 0.15,
+        "preloadCarbGramsPerUtss": 1.1,
+        "preloadDaysAhead": 1,
+        "phaseAware": true,
+        "maxCarbDeltaG": 384.2,
+        "referenceBasis": "measured"
+      }
+    }
+  ]
+}

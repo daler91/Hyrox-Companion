@@ -47,6 +47,7 @@ fun FitaiTextField(
     supportingText: String? = null,
     error: String? = null,
     enabled: Boolean = true,
+    readOnly: Boolean = false,
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
@@ -82,8 +83,9 @@ fun FitaiTextField(
                     if (error != null) error(error)
                 },
             enabled = enabled,
+            readOnly = readOnly,
             singleLine = singleLine,
-            textStyle = typography.body.copy(color = if (enabled) colors.text else colors.textMuted),
+            textStyle = typography.body.copy(color = if (enabled && !readOnly) colors.text else colors.textMuted),
             cursorBrush = SolidColor(colors.ring),
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,

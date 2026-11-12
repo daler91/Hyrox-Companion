@@ -8,7 +8,6 @@ import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionFoodServing
 import com.fitai.coach.core.api.generated.NutritionFoodWithPortionMemory
 import com.fitai.coach.core.api.generated.NutritionLogEntryWithNutrition
-import com.fitai.coach.core.data.MacroTargets
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.data.NutritionRepository
 import com.fitai.coach.core.data.isNothingToRepeat
@@ -64,15 +63,6 @@ data class LogSheetState(
     val quantityG: Double? get() = amount.trim().toDoubleOrNull()?.takeIf { it > 0 }?.let { it * unit.grams }
 }
 
-data class TargetsSheetState(
-    val calories: String = "",
-    val protein: String = "",
-    val carb: String = "",
-    val fat: String = "",
-    val loading: Boolean = true,
-    val saving: Boolean = false,
-)
-
 /** The food log for a day, as /nutrition does on the web (v1: log, search, targets). */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooGenericExceptionCaught", "TooManyFunctions")
@@ -123,9 +113,6 @@ class NutritionViewModel(
 
     private val _logSheet = MutableStateFlow<LogSheetState?>(null)
     val logSheet: StateFlow<LogSheetState?> = _logSheet.asStateFlow()
-
-    private val _targets = MutableStateFlow<TargetsSheetState?>(null)
-    val targets: StateFlow<TargetsSheetState?> = _targets.asStateFlow()
 
     /** The meal new entries go to until the athlete picks another. */
     var preferredMeal: Meal? = null
@@ -414,44 +401,6 @@ class NutritionViewModel(
         }
     }
 
-    fun openTargets() {
-        _targets.value = TargetsSheetState()
-        viewModelScope.launch {
-            val current = runCatching { nutrition.currentTargets() }.getOrNull()
-            _targets.value = TargetsSheetState(
-                calories = current?.calories?.let(::trim).orEmpty(),
-                protein = current?.proteinG?.let(::trim).orEmpty(),
-                carb = current?.carbG?.let(::trim).orEmpty(),
-                fat = current?.fatG?.let(::trim).orEmpty(),
-                loading = false,
-            )
-        }
-    }
-
-    fun editTargets(change: (TargetsSheetState) -> TargetsSheetState) = _targets.update { it?.let(change) }
-
-    fun closeTargets() {
-        _targets.value = null
-    }
-
-    fun saveTargets() {
-        val sheet = _targets.value ?: return
-        val targets = sheet.toTargets() ?: return
-        _targets.value = sheet.copy(saving = true)
-        viewModelScope.launch {
-            try {
-                nutrition.saveTargets(targets, date.value)
-                _targets.value = null
-                toasts.send("Targets saved")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _targets.value = sheet.copy(saving = false)
-                toasts.send(e.userMessage("Couldn't save your targets"))
-            }
-        }
-    }
-
     private data class Status(val loading: Boolean = false, val failed: Boolean = false, val featureOff: Boolean = false)
 
     private data class Busy(val quickLogging: Boolean = false, val repeating: Boolean = false)
@@ -462,13 +411,7 @@ class NutritionViewModel(
     }
 }
 
-/** The typed targets, or null while none is set or one doesn't parse as a number ≥ 0 (macroTargetForm.tsx). */
-fun TargetsSheetState.toTargets(): MacroTargets? {
-    val fields = listOf(calories, protein, carb, fat).map { it.trim() }
-    val parsed = fields.map { field -> if (field.isEmpty()) null else field.toDoubleOrNull()?.takeIf { it >= 0 } ?: return null }
-    val (calories, protein, carb) = parsed
-    return if (parsed.all { it == null }) null else MacroTargets(calories, protein, carb, parsed.last())
-}
+private fun trim(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
 
 @Suppress("TooGenericExceptionCaught", "SwallowedException")
 private suspend fun ignoringFailure(block: suspend () -> Unit) {
@@ -480,5 +423,3 @@ private suspend fun ignoringFailure(block: suspend () -> Unit) {
         // The caller carries on without it.
     }
 }
-
-private fun trim(value: Double): String = if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()

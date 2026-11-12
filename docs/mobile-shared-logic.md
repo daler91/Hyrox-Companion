@@ -62,13 +62,13 @@ How it was checked:
 | `nutritionScaling` | 170 | port | `scaleNutrition`, `roundMacros`, `totalNutrition`, `emptyTotals`, `addInto`, `KCAL_PER_G*` | The food log works offline from Room. The quantity-edit preview must equal what the server stores (audit M22) |
 | `mealFuelling` | 757 | port | `mergeMealOverride` only | The meal-target editor previews the merged figures as the athlete types. The server's `applyMealTargetOverrides` uses the same function |
 | `sessionFuellingTargets` | 126 | port | `computeSessionFuellingTarget` | The fuelling panel recomputes on every duration or RPE stepper tap. The server returns the same calculation from `/session-fuelling/{workoutId}` |
+| `nutritionTargets` | 756 | port | `calculateNutritionTarget`, `defaultPeriodizationConfig`, `nextPeriodizationSettings` | The targets editor fills its goals from the profile and saves the periodisation columns the web saves. The server stores whatever it is sent, so both clients must compute the same version; a port pinned by fixtures does that without a server change |
 | `progression` | 304 | port | `suggestNextTarget`, `unmetPrescription`, `epley` | The "Next" chip appears while logging, often offline at the gym. It must equal the target the workout engine writes into the plan |
 | `exerciseEquipment` | 172 | port (dependency) | `implementFor`, `loadIncrement` | The client imports it only in a test, but `progression` needs it at runtime |
 | `planPhase` | 141 | port | `computeCurrentWeek`, `computePlanPhase`, `PLAN_PHASE_ORDER` | "Week 6 of 12 · Build" depends on the device's today, so it must work offline. The coach's prompts use the same function |
 | `notifyHours` | 75 | port | `resolveNotifyHour`, `fallbackNotifyHour`, `isValidNotifyHour`, `DEFAULT_NOTIFY_HOUR`, `BRIEF_TOMORROW_FROM_HOUR`, `NOTIFY_HOUR_FIELD` | Settings copy changes as the athlete picks an hour, and it must agree with the email scheduler |
 | `schema*` | ~10.5k (dir) | port (mixed) | `schema/exercises`: `EXERCISE_DEFINITIONS`, `EXERCISE_NAME_ALIASES`, `normalizeExerciseName`, `isRunningExerciseName`, `knownExerciseLabel`. `schema/structureLint`: `lintWorkoutStructure`. `schema/micros`: `MICRO_DISPLAY_DEFS` (data, deferred). The barrel and `schema/enums`: render | The composer needs the exercise catalogue offline, and the outbox must not queue a structure the server will reject with a 400. The barrel is type-only in client code |
 | `plannedSessionEstimate` | 519 | api | `GET /api/v1/timeline`: `sessionEstimate` on planned entries | The server already computes it per day, personalised by run pace. A port would also need the exercise catalogue and the athlete's run history |
-| `nutritionTargets` | 756 | api | New `POST /api/v1/nutrition/targets/suggest`. `POST /api/v1/nutrition/targets` takes the periodisation choice | These functions run only in the browser today. The server stores whatever numbers it is sent |
 | `maf` | 224 | api | `PATCH /api/v1/preferences` derives `mafHr`. `mafCompliance` on timeline and workout entries | The server already runs `calculateMafHr` on every preferences save, but stores the client's number |
 | `fuellingCorrelation` | 152 | api | `GET /api/v1/nutrition/block`: `correlation` | Pure analytics over the response's own points. No server file imports it |
 | `bodySystemLoad` | 163 | api | `GET /api/v1/training-overview`: `bodySystemLoad.divergence` | The server already builds the sentence for the AI analysis. Labels are render |
@@ -105,6 +105,7 @@ All in `mobile/core/src/commonMain/kotlin/com/fitai/coach/core/`, pure common Ko
 | `planPhase` | `plans` | `planPhase.*` (270) |
 | `notifyHours` | `notifications` | `notifyHours.*` (222) |
 | `nutritionScaling`, `mealFuelling.mergeMealOverride`, `sessionFuellingTargets` | `nutrition` | 8 suites (1,035) |
+| `nutritionTargets` (3 functions) | `nutrition` | `nutritionTargets.*` (501) |
 | `progression`, `exerciseEquipment`, `schema/exercises` | `exercises` | 8 suites (5,158) |
 | `schema/structureLint` | `structure` | `structureLint.lintWorkoutStructure` (184) |
 | JS number and string semantics the ports share | `js` | `js.*` |
@@ -401,6 +402,30 @@ and this port can wait.
 - Assert the `explanation` string as well. It interpolates numbers with JS formatting: `"70kg"`,
   `"72.5kg"`, `"30.5-min"`.
 
+### `shared/nutritionTargets.ts`
+
+**Functions:** `calculateNutritionTarget` (with `calculateBmr`), `defaultPeriodizationConfig` and
+`nextPeriodizationSettings`. Not `effectiveTarget*`: the server applies load scaling and returns
+the day's effective target in the summary.
+
+**Depends on:** the Atwater factors from `nutritionScaling`.
+
+**Notes:** "Calculate from profile" and the save payload of the targets editor
+(`pages/nutrition/TargetsDialog.tsx`). `defaultPeriodizationConfig`'s `referenceBasis` is a
+Boolean, `referenceMeasured`, in Kotlin; the fixture test maps it back.
+
+**Fixture inputs:**
+
+- Every sex (including none), activity level and goal, at two body sizes.
+- Goal rates 0, -0, 0.33, 1, -0.5 and 1.5 for every goal.
+- The calorie floors (1200 female, 1500 otherwise) and the carb clamp at 0.
+- Custom g/kg anchors.
+- Fractional profiles, for rounding and JS number formatting in the explanation.
+- Carb baselines from 0 to 512.25 against typical loads null, 0, negative, below and at the
+  25 UTSS floor, and above it.
+- Seven saved versions (none, flat, calibrated, half-filled, no carb baseline, a 0 g baseline)
+  against every choice of carb goal, load scaling and adaptivity.
+
 ### `shared/progression.ts` and `shared/exerciseEquipment.ts`
 
 **Functions:**
@@ -606,8 +631,7 @@ server's `GET /api/v1/nutrition/micros`.
 | # | Module | Endpoint | Field or change | Does the server already have the value? |
 | --- | --- | --- | --- | --- |
 | 1 | `plannedSessionEstimate` | `GET /api/v1/timeline`, planned entries | `sessionEstimate: {durationMin, rpe, source, clamped}` | **Yes**, one day at a time: `getPlannedSessionEstimate` (`server/services/sessionEstimate/plannedSessionEstimate.ts:196`) serves `GET /api/v1/nutrition/planned-session-estimate/{planDayId}`. For the batch, call `estimatePlannedSession` with `getRunPaceRatio` and leave out the per-day AI nudge |
-| 2a | `nutritionTargets` | New `POST /api/v1/nutrition/targets/suggest` (body: `bodyweightKg`, `heightCm`, `ageYears`, `sex`, `activityLevel`, `goalDirection`, `goalRateKgPerWeek`) | Returns `NutritionTargetResult` | **No.** `calculateNutritionTarget` runs only in `components/onboarding/FuellingStep.tsx:269`, `hooks/useOnboardingWizard.ts:432` and `pages/nutrition/TargetsDialog.tsx:92`. The server never calls it |
-| 2b | `nutritionTargets` | `POST /api/v1/nutrition/targets` | Accept `{periodize, recoveryEnabled, phaseAware}`, and let the server fill the nine periodisation columns with `nextPeriodizationSettings` / `carryPeriodizationForward` | **No**, but the server has both inputs: the current version and `trainingLoad.chronicAvg`. The client computes this today (`pages/nutrition/TargetsDialog.tsx:115`, `hooks/useOnboardingWizard.ts:130`) |
+| 2 | `nutritionTargets` | `POST /api/v1/nutrition/targets` | **Not needed.** The app ports the three functions instead (see the summary table) | — |
 | 3a | `maf` | `PATCH /api/v1/preferences` | The server writes `users.mafHr` from `calculateMafHr` and returns it. The app stops sending `mafHr` | **Computed, not stored.** `server/storage/users.ts:336` computes it on every save for the `maf_profile` snapshot, but the column keeps the client's value (`hooks/useOnboardingWizard.ts:334`, `pages/settings/usePreferencesForm.tsx:344`) |
 | 3b | `maf` | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}` | `mafCompliance: {compliancePct, classification, nextAction, avgOverBy}` on completed sessions with an average HR, for MAF-method athletes | **Partly.** `computeMafCompliance` runs in `server/services/mafTestService.ts:71`, but only for tagged MAF tests. The web computes it for every session in `lib/mafFormat.ts:55` |
 | 4 | `fuellingCorrelation` | `GET /api/v1/nutrition/block` | `correlation: FuellingCorrelationResult` | **No.** No server file imports the module. Its inputs are the response's own `points` (`components/analytics/FuellingCorrelationCard.tsx:70`) |
@@ -791,6 +815,8 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
     `hooks/useOnboardingWizard.ts`, `pages/nutrition/TargetsDialog.tsx`.
   - **Exports used:** `calculateNutritionTarget`, `carryPeriodizationForward`,
     `nextPeriodizationSettings`, and types.
+  - **Now a port:** the app's targets editor needs the same three numbers the web computes, so
+    they are ported rather than moved to the server. See `shared/nutritionTargets.ts` above.
 - **`maf`.** 224 lines. The server uses it in `server/storage/users.ts`,
   `server/services/mafTestService.ts` and `server/storage/mafTests.ts`.
   - **Client use:** computes `mafHr` before save, the MAF tile on workout detail, and speed in the
