@@ -150,6 +150,23 @@ describe('strava service state signing', () => {
       expect(verifySignedState(tamperedState)).toBeNull();
     });
 
+    it('round-trips a native PKCE challenge inside the signed state', () => {
+      const challenge = 'A'.repeat(43);
+      expect(verifySignedState(createSignedState('user_123', challenge))).toStrictEqual({
+        userId: 'user_123',
+        codeChallenge: challenge,
+      });
+    });
+
+    it.each([
+      ['too short', 'A'.repeat(42)],
+      ['too long', 'A'.repeat(44)],
+      ['outside base64url', `${'A'.repeat(42)}+`],
+    ])('returns null for a correctly signed state whose code challenge is %s', (_label, challenge) => {
+      // Signed with the real secret, so only the challenge-shape check can reject it.
+      expect(verifySignedState(createSignedState('user_123', challenge))).toBeNull();
+    });
+
     it('returns null if state is expired', () => {
       // STATE_MAX_AGE_MS is 10 * 60 * 1000 = 600,000ms
       const state = createSignedState('user_123');

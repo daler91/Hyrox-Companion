@@ -95,3 +95,50 @@ describe("importHealthConnectSessions", () => {
     expect(result).toEqual({ imported: 0, skipped: 0, deleted: 1 });
   });
 });
+
+describe("importHealthConnectSessions edge cases", () => {
+  it("leaves Garmin Connect's sessions to the Garmin sync once Garmin is connected", async () => {
+    vi.mocked(storage.users.getGarminConnection).mockResolvedValue({ userId: USER } as never);
+    const result = await importHealthConnectSessions(USER, {
+      sessions: [
+        session("from-garmin", { dataOrigin: PROVIDER_APP_PACKAGES.garmin }),
+        session("from-strava", { dataOrigin: PROVIDER_APP_PACKAGES.strava, startTime: "2026-11-08T18:00:00Z", endTime: "2026-11-08T18:40:00Z" }),
+      ],
+      deletedIds: [],
+    });
+    expect(createdRows().map((row) => row.healthConnectId)).toEqual(["from-strava"]);
+    expect(result).toEqual({ imported: 1, skipped: 1, deleted: 0 });
+  });
+
+  it("counts only the rows the insert kept when a concurrent sync already wrote one, and gives sets only to those", async () => {
+    // The (user_id, health_connect_id) unique index dropped "hc-raced": insert returns just the other row.
+    vi.mocked(storage.workouts.createHealthConnectWorkoutLogs).mockImplementation(async (rows) =>
+      rows
+        .filter((row) => row.healthConnectId !== "hc-raced")
+        .map((row, i) => ({ ...row, id: `log-${i}` }) as unknown as WorkoutLog),
+    );
+    const result = await importHealthConnectSessions(USER, {
+      sessions: [session("hc-kept"), session("hc-raced", { startTime: "2026-11-07T07:00:00Z", endTime: "2026-11-07T07:45:00Z" })],
+      deletedIds: [],
+    });
+    expect(result).toEqual({ imported: 1, skipped: 1, deleted: 0 });
+    const sets = vi.mocked(storage.workouts.createDeviceActivitySets).mock.calls[0][0];
+    expect(sets.map((set) => set.workoutLogId)).toEqual(["log-0"]);
+  });
+
+  it("writes nothing when every session is filtered out", async () => {
+    vi.mocked(storage.workouts.getExistingHealthConnectIds).mockResolvedValue(["hc-1"]);
+    const result = await importHealthConnectSessions(USER, { sessions: [session("hc-1")], deletedIds: [] });
+    expect(result).toEqual({ imported: 0, skipped: 1, deleted: 0 });
+    expect(storage.workouts.createHealthConnectWorkoutLogs).not.toHaveBeenCalled();
+    expect(storage.workouts.createDeviceActivitySets).not.toHaveBeenCalled();
+  });
+
+  it("still imports for an athlete with no saved profile, in kilometres", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
+    const result = await importHealthConnectSessions(USER, { sessions: [session("hc-1")], deletedIds: [] });
+    expect(result.imported).toBe(1);
+    expect(createdRows()[0]).toMatchObject({ healthConnectId: "hc-1", userId: USER });
+    expect(createdRows()[0].mainWorkout).toMatch(/km/);
+  });
+});
