@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { CalorieBreakdownRing } from "./CalorieBreakdownRing";
@@ -19,6 +19,16 @@ describe("CalorieBreakdownRing", () => {
       "Calorie breakdown: protein 24%, carbs 48%, fat 27%",
     );
     expect(screen.getByText("165")).toBeInTheDocument();
+  });
+
+  it("loads the recharts donut lazily, inside the ring", async () => {
+    const shares = macroEnergyShares({ protein: 10, carb: 20, fat: 5 });
+    render(<CalorieBreakdownRing shares={shares} calories={165} />);
+
+    const ring = screen.getByTestId("calorie-ring");
+    await waitFor(() =>
+      expect(ring.querySelector(".recharts-responsive-container")).not.toBeNull(),
+    );
   });
 
   it("renders a zero-energy serving without error", () => {
