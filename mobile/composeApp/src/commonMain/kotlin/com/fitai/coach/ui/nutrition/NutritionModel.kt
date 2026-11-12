@@ -9,8 +9,14 @@ import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.nutrition.Per100gMacros
 import kotlin.math.abs
 
-/** A portion the log sheet offers: grams, a named serving, or the food's own serving size. */
-data class PortionUnit(val label: String, val grams: Double)
+/**
+ * A portion the log sheet offers: grams, a named serving, or the food's own
+ * serving size. [serving] is the named serving it came from.
+ */
+data class PortionUnit(val label: String, val grams: Double, val serving: NutritionFoodServing? = null) {
+    /** The athlete's own portion, which they can remove (shared ones can't be). */
+    val own: Boolean get() = serving?.createdByUserId != null
+}
 
 private const val SERVING_MATCH_TOLERANCE_G = 0.5
 private const val DEFAULT_GRAMS = 100.0
@@ -22,7 +28,7 @@ private const val DEFAULT_GRAMS = 100.0
  */
 fun portionUnits(food: NutritionFood, servings: List<NutritionFoodServing>): List<PortionUnit> = buildList {
     add(PortionUnit("g", 1.0))
-    servings.sortedBy { it.grams }.forEach { add(PortionUnit("${it.label} (${trimGrams(it.grams)} g)", it.grams)) }
+    servings.sortedBy { it.grams }.forEach { add(PortionUnit("${it.label} (${trimGrams(it.grams)} g)", it.grams, it)) }
     food.servingSizeG?.takeIf { size -> size > 0 && servings.none { abs(it.grams - size) <= SERVING_MATCH_TOLERANCE_G } }?.let {
         add(PortionUnit("1 serving (${trimGrams(it)} g)", it))
     }
@@ -72,6 +78,9 @@ fun GetNutritionSummaryResponse.target(meal: Meal): NutritionMealFuelTarget? = m
         Meal.PostWorkout -> it.postWorkout
     }
 }
+
+/** Nothing logged in any meal. */
+fun GetNutritionSummaryResponse.isEmptyDay(): Boolean = Meal.entries.all { entries(it).isEmpty() }
 
 /** The meals to show: those with entries or a target (MealSection.tsx hides the rest). */
 fun GetNutritionSummaryResponse.visibleMeals(): List<Meal> = Meal.entries.filter { entries(it).isNotEmpty() || target(it) != null }

@@ -13,6 +13,7 @@ import com.fitai.coach.core.api.generated.NutritionParseMealResponse
 import com.fitai.coach.core.api.generated.NutritionTarget
 import com.fitai.coach.core.api.generated.PatchNutritionLogsByIdRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsBatchRequest
+import com.fitai.coach.core.api.generated.PostNutritionLogsRepeatRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsRequest
 import com.fitai.coach.core.api.generated.PostNutritionParsePhotoRequest
 import com.fitai.coach.core.api.generated.PostNutritionParseTextRequest
@@ -43,6 +44,12 @@ public data class MealItem(val foodId: String, val quantityG: Double, val meal: 
 /** Daily macro targets as the athlete types them; a null field is not targeted. */
 public data class MacroTargets(val calories: Double?, val proteinG: Double?, val carbG: Double?, val fatG: Double?)
 
+/**
+ * Nothing to copy: the day (or meal) asked to be repeated has no entries. Only
+ * [NutritionRepository.repeat] answers with this 404; elsewhere it means [isNutritionOff].
+ */
+public fun ApiException.isNothingToRepeat(): Boolean = status == NOT_FOUND
+
 /** Nutrition is switched off on the server (every /nutrition call is a 404 NOT_FOUND). */
 public fun ApiException.isNutritionOff(): Boolean = status == NOT_FOUND && code == "NOT_FOUND"
 
@@ -50,10 +57,17 @@ private const val NOT_FOUND = 404
 
 /**
  * The food log: each day's summary (totals, meals, targets) is cached, so a
- * day already seen shows offline. Searching and changes are online; each
- * change refreshes its day.
+ * day already seen shows offline, and so are the recent and favourite foods
+ * ([shortcuts]).
+ * Searching and changes are online; each change refreshes its day.
  */
 public class NutritionRepository(private val api: ApiClient, private val cache: CacheStore) {
+    /** The recent and favourite foods, which each log refreshes. */
+    public val shortcuts: FoodShortcuts = FoodShortcuts(api, cache)
+
+    /** The athlete's custom foods, portions and recipes. */
+    public val myFoods: MyFoods = MyFoods(api, cache) { date -> refreshAllDays(date) }
+
     public fun day(date: String): Flow<GetNutritionSummaryResponse?> = cache.observe(dayKey(date), GetNutritionSummaryResponse.serializer())
 
     /** @throws ApiException on an error response ([isNutritionOff] when the feature is off). */
@@ -68,20 +82,22 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
     public suspend fun food(id: String): GetNutritionFoodsByIdResponse =
         api.call(ApiEndpoints.GetNutritionFoodsById, path = ApiEndpoints.GetNutritionFoodsById.path(id))
 
-    /** Logs [quantityG] grams of a food to [meal] on [date]; [loggedAt] is an ISO timestamp the server dates by the athlete's timezone. */
-    public suspend fun log(foodId: String, quantityG: Double, meal: Meal, loggedAt: String, date: String) {
+    /**
+     * Logs [quantityG] grams of a food to [meal] on [date]; [loggedAt] is an
+     * ISO timestamp the server dates by the athlete's timezone. Returns the new
+     * entry's id (for an undo).
+     */
+    public suspend fun log(foodId: String, quantityG: Double, meal: Meal, loggedAt: String, date: String): String {
         val request = PostNutritionLogsRequest(
             foodId = foodId,
             quantityG = quantityG,
             mealType = PostNutritionLogsRequest.MealType.entries.first { it.wireValue == meal.wireValue },
             loggedAt = loggedAt,
         )
-        write(
-            ApiEndpoints.PostNutritionLogs,
-            ApiEndpoints.PostNutritionLogs.pathTemplate,
-            encode(PostNutritionLogsRequest.serializer(), request),
-        )
+        val entry = api.call(ApiEndpoints.PostNutritionLogs, request)
         refreshDay(date)
+        shortcuts.refreshRecentFoodsAfterLogging()
+        return entry.id
     }
 
     /** Changes an entry's meal, and its amount when [quantityG] is set. */
@@ -142,6 +158,25 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
         )
         val created = api.call(ApiEndpoints.PostNutritionLogsBatch, request).created
         refreshDay(date)
+        shortcuts.refreshRecentFoodsAfterLogging()
+        return created
+    }
+
+    /**
+     * Copies [sourceDate]'s entries (only [meal]'s, when set) onto
+     * [targetDate], then refreshes it. Returns how many were copied.
+     *
+     * @throws ApiException [isNothingToRepeat] when there is nothing to copy.
+     */
+    public suspend fun repeat(sourceDate: String, targetDate: String, meal: Meal? = null): Long {
+        val request = PostNutritionLogsRepeatRequest(
+            sourceDate = sourceDate,
+            mealType = meal?.let { m -> PostNutritionLogsRepeatRequest.MealType.entries.first { it.wireValue == m.wireValue } },
+            targetDate = targetDate,
+        )
+        val created = api.call(ApiEndpoints.PostNutritionLogsRepeat, request).created
+        refreshDay(targetDate)
+        shortcuts.refreshRecentFoodsAfterLogging()
         return created
     }
 
@@ -168,6 +203,12 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
             ApiEndpoints.PostNutritionTargets.pathTemplate,
             encode(PostNutritionTargetsRequest.serializer(), request),
         )
+        refreshAllDays(date)
+    }
+
+    // A change every day's entries read (a target, a food's nutrition): the
+    // cached days are dropped and [date] is fetched again.
+    private suspend fun refreshAllDays(date: String) {
         cache.deletePrefix(DAY_PREFIX)
         refreshDay(date)
     }

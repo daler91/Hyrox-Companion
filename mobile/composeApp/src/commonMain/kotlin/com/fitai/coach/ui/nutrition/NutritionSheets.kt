@@ -13,9 +13,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -23,17 +26,26 @@ import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.data.Meal
 import com.fitai.coach.core.nutrition.roundMacros
 import com.fitai.coach.core.nutrition.scaleNutrition
+import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiBottomSheet
 import com.fitai.coach.ui.components.FitaiButton
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.LoadingState
 import com.fitai.coach.ui.format.formatNumber
+import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 
 @Composable
-fun SearchSheet(state: SearchState, onQuery: (String) -> Unit, onPick: (NutritionFood) -> Unit, onDismiss: () -> Unit) {
+fun SearchSheet(
+    state: SearchState,
+    favoriteIds: Set<String>,
+    onToggleFavorite: (String) -> Unit,
+    onQuery: (String) -> Unit,
+    onPick: (NutritionFood) -> Unit,
+    onDismiss: () -> Unit,
+) {
     FitaiBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = Spacing.Lg), verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
             Text("Add food", style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
@@ -55,19 +67,9 @@ fun SearchSheet(state: SearchState, onQuery: (String) -> Unit, onPick: (Nutritio
             }
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 items(state.results, key = { it.id }) { food ->
-                    TextButton(onClick = { onPick(food) }, modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth()) {
-                            Text(food.name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
-                            Text(
-                                listOfNotNull(
-                                    food.brand,
-                                    "${food.caloriesPer100g?.let { formatNumber(it) } ?: "—"} kcal/100g",
-                                    food.proteinPer100g?.let { "P ${formatNumber(it)}" },
-                                ).joinToString(" · "),
-                                style = FitaiTheme.typography.bodySm,
-                                color = FitaiTheme.colors.textMuted,
-                            )
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SearchResult(food, onPick, Modifier.weight(1f))
+                        FavoriteStar(food.id, food.name, food.id in favoriteIds, onToggleFavorite)
                     }
                 }
             }
@@ -75,15 +77,36 @@ fun SearchSheet(state: SearchState, onQuery: (String) -> Unit, onPick: (Nutritio
     }
 }
 
+@Composable
+private fun SearchResult(food: NutritionFood, onPick: (NutritionFood) -> Unit, modifier: Modifier) {
+    TextButton(onClick = { onPick(food) }, modifier = modifier) {
+        Column(Modifier.fillMaxWidth()) {
+            Text(food.name, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text)
+            Text(
+                listOfNotNull(
+                    food.brand,
+                    "${food.caloriesPer100g?.let { formatNumber(it) } ?: "—"} kcal/100g",
+                    food.proteinPer100g?.let { "P ${formatNumber(it)}" },
+                ).joinToString(" · "),
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LogSheet(state: LogSheetState, vm: NutritionViewModel) {
+fun LogSheet(state: LogSheetState, favorite: Boolean, vm: NutritionViewModel) {
     FitaiBottomSheet(onDismissRequest = vm::closeLog) {
         Column(
             Modifier.padding(horizontal = Spacing.Lg).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(Spacing.Sm),
         ) {
-            Text(state.food.name, style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(state.food.name, style = FitaiTheme.typography.h2, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+                FavoriteStar(state.food.id, state.food.name, favorite, vm::toggleFavorite)
+            }
             state.food.brand?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
             FitaiTextField(
                 state.amount,
@@ -96,6 +119,7 @@ fun LogSheet(state: LogSheetState, vm: NutritionViewModel) {
                     FitaiChip(unit.label, selected = unit == state.unit, onClick = { vm.editLog { it.copy(unit = unit) } })
                 }
             }
+            Portions(state, vm)
             Text("Meal", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                 Meal.entries.forEach { meal ->
@@ -128,6 +152,66 @@ fun LogSheet(state: LogSheetState, vm: NutritionViewModel) {
 }
 
 private const val MAX_GRAMS = 100_000.0
+
+/**
+ * The athlete's own portions of the food, each removable, and the form that
+ * adds one (LogFoodDialog.tsx AddPortionForm, PersonalPortions).
+ */
+@Composable
+private fun Portions(state: LogSheetState, vm: NutritionViewModel) {
+    val own = state.units.filter { it.own }
+    if (own.isNotEmpty()) {
+        Text("Your portions", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
+        own.forEach { unit ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(unit.label, style = FitaiTheme.typography.body, color = FitaiTheme.colors.text, modifier = Modifier.weight(1f))
+                IconButton(onClick = { vm.removePortion(unit) }) {
+                    Icon(
+                        LucideIcons.Trash,
+                        contentDescription = "Remove ${unit.serving?.label ?: unit.label}",
+                        tint = FitaiTheme.colors.textMuted,
+                    )
+                }
+            }
+        }
+    }
+    val draft = state.newPortion
+    if (draft == null) {
+        FitaiButton("Add portion", onClick = {
+            vm.editNewPortion { PortionDraft() }
+        }, variant = ButtonVariant.Ghost, leadingIcon = LucideIcons.Plus)
+        return
+    }
+    Text("New portion", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        FitaiTextField(
+            draft.label,
+            { label -> vm.editNewPortion { it?.copy(label = label) } },
+            "Portion label",
+            placeholder = "e.g. 1 slice",
+            modifier = Modifier.weight(1f),
+        )
+        FitaiTextField(
+            draft.grams,
+            { grams -> vm.editNewPortion { it?.copy(grams = grams) } },
+            "Grams",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.weight(PORTION_GRAMS_WEIGHT),
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+        FitaiButton("Cancel", onClick = { vm.editNewPortion { null } }, variant = ButtonVariant.Ghost)
+        FitaiButton(
+            if (state.addingPortion) "Adding…" else "Add",
+            onClick = vm::saveNewPortion,
+            variant = ButtonVariant.Secondary,
+            enabled = draft.portion() != null,
+            loading = state.addingPortion,
+        )
+    }
+}
+
+private const val PORTION_GRAMS_WEIGHT = 0.6f
 
 @Composable
 fun TargetsSheet(state: TargetsSheetState, vm: NutritionViewModel) {

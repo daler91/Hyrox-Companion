@@ -16,6 +16,7 @@ import com.fitai.coach.core.data.TimelineRepository
 import com.fitai.coach.core.data.UserSession
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.currentHourIn
+import com.fitai.coach.ui.components.UndoOffer
 import com.fitai.coach.ui.format.userMessage
 import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.review.reviewPrompt
@@ -60,9 +61,6 @@ data class TimelineUiState(
     val hasOlder: Boolean = false,
     val loadingOlder: Boolean = false,
 )
-
-/** A done thing the athlete can take back from its toast (a delete's Undo). */
-class UndoOffer(val message: String, val undo: suspend () -> Unit)
 
 /** The recovery sheet for a missed day: loading, the options, or why they couldn't load. */
 sealed interface RecoveryState {

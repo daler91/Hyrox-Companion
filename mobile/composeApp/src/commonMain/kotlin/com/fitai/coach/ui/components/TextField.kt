@@ -34,6 +34,8 @@ import com.fitai.coach.ui.theme.Spacing
  * A labelled text input (brand kit §6): the label sits above the field, as on
  * the web, and the field has a 1 dp border that becomes a 2 dp ring on focus.
  * [error] replaces [supportingText] and is announced by screen readers.
+ * [description] is what a screen reader calls the field, when the visible
+ * label alone wouldn't say which one it is (a row of ingredients' grams).
  */
 @Composable
 fun FitaiTextField(
@@ -49,6 +51,7 @@ fun FitaiTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    description: String = label,
 ) {
     val colors = FitaiTheme.colors
     val typography = FitaiTheme.typography
@@ -75,7 +78,7 @@ fun FitaiTextField(
                 .fillMaxWidth()
                 .heightIn(min = Sizes.Input)
                 .semantics {
-                    contentDescription = label
+                    contentDescription = description
                     if (error != null) error(error)
                 },
             enabled = enabled,

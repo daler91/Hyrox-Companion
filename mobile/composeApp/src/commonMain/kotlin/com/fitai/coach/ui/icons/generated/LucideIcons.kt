@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
-/** The Lucide icons the app uses: 24 dp, 1.5 dp stroke, tinted by Icon's colour (brand kit §8). */
+/** The Lucide icons the app uses: 24 dp, 1.5 dp stroke, tinted by Icon's colour (brand kit §8). A filled icon is also filled in that colour. */
 object LucideIcons {
     val Apple: ImageVector by lazy {
         lucide(
@@ -67,6 +67,16 @@ object LucideIcons {
         )
     }
 
+    val ChefHat: ImageVector by lazy {
+        lucide(
+            "ChefHat",
+            "M10 11v5",
+            "M14 11v5",
+            "M6 12.65c0-.457-.316-.844-.727-1.041A4 4 0 017.52 4.034a1.53 1.53 0 001.367-.547 4 4 0 016.225 0 1.53 1.53 0 001.367.547 4 4 0 012.248 7.575c-.411.197-.727.584-.727 1.04V19a2 2 0 01-2 2H8a2 2 0 01-2-2z",
+            "M6 16h12",
+        )
+    }
+
     val ChevronDown: ImageVector by lazy {
         lucide(
             "ChevronDown",
@@ -85,6 +95,16 @@ object LucideIcons {
         lucide(
             "ChevronRight",
             "m9 18 6-6-6-6",
+        )
+    }
+
+    val CopyPlus: ImageVector by lazy {
+        lucide(
+            "CopyPlus",
+            "M15 12L15 18",
+            "M12 15L18 15",
+            "M10 8H20A2 2 0 0 1 22 10V20A2 2 0 0 1 20 22H10A2 2 0 0 1 8 20V10A2 2 0 0 1 10 8Z",
+            "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",
         )
     }
 
@@ -186,6 +206,14 @@ object LucideIcons {
         )
     }
 
+    val RotateCw: ImageVector by lazy {
+        lucide(
+            "RotateCw",
+            "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8",
+            "M21 3v5h-5",
+        )
+    }
+
     val Search: ImageVector by lazy {
         lucide(
             "Search",
@@ -231,6 +259,14 @@ object LucideIcons {
         lucide(
             "Star",
             "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z",
+        )
+    }
+
+    val StarFilled: ImageVector by lazy {
+        lucide(
+            "StarFilled",
+            "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z",
+            filled = true,
         )
     }
 
@@ -299,7 +335,7 @@ object LucideIcons {
     }
 }
 
-private fun lucide(name: String, vararg paths: String): ImageVector = ImageVector.Builder(
+private fun lucide(name: String, vararg paths: String, filled: Boolean = false): ImageVector = ImageVector.Builder(
     name = name,
     defaultWidth = 24.dp,
     defaultHeight = 24.dp,
@@ -309,7 +345,7 @@ private fun lucide(name: String, vararg paths: String): ImageVector = ImageVecto
     for (path in paths) {
         addPath(
             pathData = PathParser().parsePathString(path).toNodes(),
-            fill = null,
+            fill = if (filled) SolidColor(Color.Black) else null,
             stroke = SolidColor(Color.Black),
             strokeLineWidth = 1.5f,
             strokeLineCap = StrokeCap.Round,
