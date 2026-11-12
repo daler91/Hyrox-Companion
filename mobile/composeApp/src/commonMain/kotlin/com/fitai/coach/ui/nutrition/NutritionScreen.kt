@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
+fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, openSettings: () -> Unit = {}) {
     val session = LocalUserSession.current
     val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val timeZone = prefs?.userTimezone
@@ -102,6 +102,11 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     val customFoodSheet by myFoods.customFood.collectAsStateWithLifecycle()
     val recipeSheet by myFoods.recipe.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
+    val reports = viewModel(key = "nutrition-reports-${session.userId}") {
+        NutritionReportsViewModel(session.nutrition.reports, session.account.user)
+    }
+    val micros by reports.micros.collectAsStateWithLifecycle()
+    val insights by reports.insights.collectAsStateWithLifecycle()
     val dailyTargets by targetsVm.daily.collectAsStateWithLifecycle()
     val mealTarget by targetsVm.meal.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
@@ -118,6 +123,11 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
     val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
     var logFoodOpen by remember { mutableStateOf(false) }
+    // A day's micros follow what's logged on it: fetched for the day on screen, again when its totals change.
+    val shownSummary = state.summary
+    LaunchedEffect(state.date, shownSummary?.totals) {
+        if (shownSummary != null && !shownSummary.isEmptyDay()) reports.showMicros(state.date)
+    }
     LaunchedEffect(openDate) {
         openDate?.let {
             vm.goTo(it)
@@ -154,6 +164,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                     summary == null -> item { LoadingState() }
                     else -> {
                         item { Totals(summary, onSetTargets = targetsVm::openDaily) }
+                        summary.energy?.let { energy -> item { EnergyBalanceCard(energy) } }
                         if (quickAdd.hasFoods) {
                             item {
                                 QuickAddRows(quickAdd, state.quickLogging, onFavorite = vm::quickAddFavorite, onRecent = vm::quickAddRecent)
@@ -209,6 +220,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
+                        if (!summary.isEmptyDay()) item { MicronutrientPanel(micros) }
                         val ownFoods = customFoods.orEmpty()
                         val ownRecipes = recipes.orEmpty()
                         if (ownFoods.isNotEmpty() || ownRecipes.isNotEmpty()) {
@@ -226,6 +238,9 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}) {
                                     ),
                                 )
                             }
+                        }
+                        item {
+                            NutritionInsightsPanel(insights, timeZone, onGenerate = reports::generateInsights, openSettings = openSettings)
                         }
                     }
                 }

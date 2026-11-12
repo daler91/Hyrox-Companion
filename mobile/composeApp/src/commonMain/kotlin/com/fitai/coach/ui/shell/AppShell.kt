@@ -185,7 +185,13 @@ fun AppShell() {
                 entry<Route.PlanDay> { route -> PlanDayScreen(route.entryId, onBack = { backStack.pop() }) }
                 entry<Route.WeeklyReview> { route -> WeeklyReviewScreen(route.week, onBack = { backStack.pop() }) }
                 entry<Route.LogWorkout> { LogWorkoutScreen(onSaved = { backStack.select(TopLevel.Training) }) }
-                entry<Route.Nutrition> { NutritionScreen(openDate = openNutritionDate, onDateOpened = { openNutritionDate = null }) }
+                entry<Route.Nutrition> {
+                    NutritionScreen(
+                        openDate = openNutritionDate,
+                        onDateOpened = { openNutritionDate = null },
+                        openSettings = { backStack.select(TopLevel.Settings) },
+                    )
+                }
                 entry<Route.Analytics> {
                     AnalyticsScreen(
                         AnalyticsNavigation(
