@@ -417,13 +417,10 @@ private fun MealSection(summary: GetNutritionSummaryResponse, meal: Meal, action
     val logged = entries.sumOf { it.nutrition.calories }
     FitaiCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.Sm),
-            ) {
+            // The caption sits under the name: beside it, a phone's width wraps it a letter at a time.
+            Column(Modifier.weight(1f)) {
                 Text(meal.label, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
-                target?.caption()?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.accent) }
+                target?.caption()?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.accentText) }
             }
             Text(
                 "${formatNumber(logged.roundToWhole())}${target?.let { " / ${formatNumber(it.calories.roundToWhole())}" } ?: ""} kcal",

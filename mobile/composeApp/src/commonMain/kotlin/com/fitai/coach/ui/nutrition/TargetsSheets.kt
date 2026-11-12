@@ -125,24 +125,22 @@ fun MealTargetSheet(state: MealTargetSheetState, vm: TargetsViewModel) {
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-                if (state.overridden) {
-                    FitaiButton(
-                        "Reset to suggested",
-                        onClick = vm::resetMeal,
-                        variant = ButtonVariant.Ghost,
-                        enabled = !state.busy,
-                        loading = state.resetting,
-                        leadingIcon = LucideIcons.RotateCcw,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+            FitaiButton(
+                "Save",
+                onClick = vm::saveMeal,
+                enabled = state.pins() != null && !state.busy,
+                loading = state.saving,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (state.overridden) {
                 FitaiButton(
-                    "Save",
-                    onClick = vm::saveMeal,
-                    enabled = state.pins() != null && !state.busy,
-                    loading = state.saving,
-                    modifier = Modifier.weight(1f),
+                    "Reset to suggested",
+                    onClick = vm::resetMeal,
+                    variant = ButtonVariant.Ghost,
+                    enabled = !state.busy,
+                    loading = state.resetting,
+                    leadingIcon = LucideIcons.RotateCcw,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
