@@ -6,6 +6,7 @@ import { ChevronDown, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RpeSelector } from "@/components/RpeSelector";
+import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 import { NumberStepper } from "@/components/ui/number-stepper";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
@@ -201,11 +202,17 @@ function EntryFuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) {
 
       {hint && (
         <p
-          className="text-[11px] text-muted-foreground"
+          className="flex items-center gap-1 text-[11px] text-muted-foreground"
           data-testid={hint.testId}
-          title={serverEstimate?.refined ? (serverEstimate.rationale ?? undefined) : undefined}
         >
           {hint.text}
+          {serverEstimate?.refined && serverEstimate.rationale && (
+            <ExplanationTooltip
+              subject="Session estimate"
+              explanation={serverEstimate.rationale}
+              testId="fuelling-plan-rationale"
+            />
+          )}
         </p>
       )}
 
