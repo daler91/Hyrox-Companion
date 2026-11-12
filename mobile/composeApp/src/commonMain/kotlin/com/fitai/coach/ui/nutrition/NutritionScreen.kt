@@ -97,16 +97,12 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, ope
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()
-    val customFoods by myFoods.customFoods.collectAsStateWithLifecycle()
-    val recipes by myFoods.recipes.collectAsStateWithLifecycle()
     val customFoodSheet by myFoods.customFood.collectAsStateWithLifecycle()
     val recipeSheet by myFoods.recipe.collectAsStateWithLifecycle()
     val logSheet by vm.logSheet.collectAsStateWithLifecycle()
     val reports = viewModel(key = "nutrition-reports-${session.userId}") {
         NutritionReportsViewModel(session.nutrition.reports, session.account.user)
     }
-    val micros by reports.micros.collectAsStateWithLifecycle()
-    val insights by reports.insights.collectAsStateWithLifecycle()
     val dailyTargets by targetsVm.daily.collectAsStateWithLifecycle()
     val mealTarget by targetsVm.meal.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
@@ -124,10 +120,7 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, ope
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
     var logFoodOpen by remember { mutableStateOf(false) }
     // A day's micros follow what's logged on it: fetched for the day on screen, again when its totals change.
-    val shownSummary = state.summary
-    LaunchedEffect(state.date, shownSummary?.totals) {
-        if (shownSummary != null && !shownSummary.isEmptyDay()) reports.showMicros(state.date)
-    }
+    LaunchedEffect(state.date, state.summary?.totals) { reports.showMicros(state.date, state.summary) }
     LaunchedEffect(openDate) {
         openDate?.let {
             vm.goTo(it)
@@ -211,23 +204,12 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, ope
                             item { RepeatPreviousDay(state.repeating, vm::repeatPreviousDay) }
                         }
                         item {
-                            // One way in (LogFoodActions); it shows a photo is still being read.
-                            FitaiButton(
-                                if (captured.readingPhoto) "Reading your meal…" else "Log food",
-                                onClick = { logFoodOpen = true },
-                                leadingIcon = LucideIcons.Plus,
-                                loading = captured.readingPhoto,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        if (!summary.isEmptyDay()) item { MicronutrientPanel(micros) }
-                        val ownFoods = customFoods.orEmpty()
-                        val ownRecipes = recipes.orEmpty()
-                        if (ownFoods.isNotEmpty() || ownRecipes.isNotEmpty()) {
-                            item {
-                                MyFoodsSection(
-                                    ownFoods,
-                                    ownRecipes,
+                            DayFooter(
+                                summary,
+                                readingPhoto = captured.readingPhoto,
+                                onLogFood = { logFoodOpen = true },
+                                ownFoods = OwnFoods(
+                                    myFoods,
                                     favoriteIds,
                                     onToggleFavorite = vm::toggleFavorite,
                                     MyFoodsActions(
@@ -236,11 +218,11 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, ope
                                         editRecipe = myFoods::editRecipe,
                                         deleteRecipe = { deletingRecipe = it },
                                     ),
-                                )
-                            }
-                        }
-                        item {
-                            NutritionInsightsPanel(insights, timeZone, onGenerate = reports::generateInsights, openSettings = openSettings)
+                                ),
+                                reports = reports,
+                                timeZone = timeZone,
+                                openSettings = openSettings,
+                            )
                         }
                     }
                 }
@@ -327,6 +309,44 @@ fun NutritionScreen(openDate: String? = null, onDateOpened: () -> Unit = {}, ope
             onDismiss = { deleting = null },
             destructive = true,
         )
+    }
+}
+
+/**
+ * Below the meals (Nutrition.tsx): one way in to logging food, then the
+ * day's micronutrients when anything is logged, the athlete's own foods when
+ * there are any, and the AI's insights.
+ */
+@Composable
+private fun DayFooter(
+    summary: GetNutritionSummaryResponse,
+    readingPhoto: Boolean,
+    onLogFood: () -> Unit,
+    ownFoods: OwnFoods,
+    reports: NutritionReportsViewModel,
+    timeZone: String?,
+    openSettings: () -> Unit,
+) {
+    val customFoods by ownFoods.myFoods.customFoods.collectAsStateWithLifecycle()
+    val recipes by ownFoods.myFoods.recipes.collectAsStateWithLifecycle()
+    val micros by reports.micros.collectAsStateWithLifecycle()
+    val insights by reports.insights.collectAsStateWithLifecycle()
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
+        // One way in (LogFoodActions); it shows a photo is still being read.
+        FitaiButton(
+            if (readingPhoto) "Reading your meal…" else "Log food",
+            onClick = onLogFood,
+            leadingIcon = LucideIcons.Plus,
+            loading = readingPhoto,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!summary.isEmptyDay()) MicronutrientPanel(micros)
+        val foods = customFoods.orEmpty()
+        val ownRecipes = recipes.orEmpty()
+        if (foods.isNotEmpty() || ownRecipes.isNotEmpty()) {
+            MyFoodsSection(foods, ownRecipes, ownFoods.favoriteIds, ownFoods.onToggleFavorite, ownFoods.actions)
+        }
+        NutritionInsightsPanel(insights, timeZone, onGenerate = reports::generateInsights, openSettings = openSettings)
     }
 }
 

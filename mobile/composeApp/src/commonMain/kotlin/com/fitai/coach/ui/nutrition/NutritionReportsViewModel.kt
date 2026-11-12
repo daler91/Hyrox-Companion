@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitai.coach.core.api.generated.GetNutritionInsightsResponse
 import com.fitai.coach.core.api.generated.GetNutritionMicrosResponse
+import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
 import com.fitai.coach.core.api.generated.User
 import com.fitai.coach.core.data.NutritionReports
 import com.fitai.coach.ui.analytics.describeAiFailure
@@ -69,10 +70,12 @@ class NutritionReportsViewModel(private val reports: NutritionReports, user: Flo
     }
 
     /**
-     * Shows [date]'s micros, fetching them again: called when the day on
-     * screen or what's logged on it changes. A failure keeps what's cached.
+     * Shows [date]'s micros, fetching them again when [day] has anything
+     * logged: called when the day on screen or what's logged on it changes. A
+     * failure keeps what's cached.
      */
-    fun showMicros(date: String) {
+    fun showMicros(date: String, day: GetNutritionSummaryResponse?) {
+        if (day == null || day.isEmptyDay()) return
         microsDate.value = date
         microsLoading.value = true
         viewModelScope.launch {
