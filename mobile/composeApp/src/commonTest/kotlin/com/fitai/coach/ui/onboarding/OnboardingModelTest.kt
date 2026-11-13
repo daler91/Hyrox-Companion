@@ -4,6 +4,7 @@ import com.fitai.coach.core.api.ApiJson
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.PostPlansGenerateRequest
 import com.fitai.coach.core.api.generated.PreferencesResponse
+import com.fitai.coach.core.api.generated.TrainingPlan
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
@@ -130,4 +131,58 @@ class OnboardingModelTest {
         assertEquals(5, stepNumber(SetupStep.Schedule))
         assertEquals(5, stepNumber(SetupStep.Generating))
     }
+
+    @Test
+    fun onlyLivePlansWithTrainingLeftOverlap() {
+        val plans = listOf(
+            plan("live", "2026-11-02", "2026-12-27"),
+            plan("ended", "2026-09-01", "2026-11-07"),
+            plan("archived", "2026-11-02", "2026-12-27", retiredOn = "2026-11-05"),
+            plan("unscheduled", null, null),
+            plan("later", "2027-03-01", "2027-04-25"),
+        )
+
+        val overlapping = findOverlappingPlans(plans, "2026-11-09", "2027-01-04", today = "2026-11-08")
+
+        assertEquals(listOf("live"), overlapping.map { it.id })
+        assertTrue(findOverlappingPlans(plans, "", "2027-01-04", today = "2026-11-08").isEmpty())
+    }
+
+    @Test
+    fun overlappingPlansAreArchivedUnlessKept() {
+        val overlapping = listOf(plan("a", "2026-11-02", "2026-12-27"), plan("b", "2026-11-02", "2026-12-27"))
+        val form = PlanForm.initial("Goal", "2026-11-08", null)
+
+        assertEquals(listOf("a", "b"), form.supersedeIds(overlapping))
+        val keepB = form.toggleSupersede("b")
+        assertEquals(listOf("a"), keepB.supersedeIds(overlapping))
+        assertEquals(listOf("a", "b"), keepB.toggleSupersede("b").supersedeIds(overlapping))
+
+        assertEquals(listOf("a"), keepB.toRequest(keepB.supersedeIds(overlapping)).supersedePlanIds)
+        // None to archive sends none, as an older client would.
+        assertNull(form.toRequest(emptyList()).supersedePlanIds)
+    }
+
+    @Test
+    fun theOlderNoteIsPrefilledAndAClearedBoxStillDropsIt() {
+        val form = PlanForm.initial("Goal", "2026-11-08", null)
+        assertEquals(form, form.withRememberedNote(" "))
+
+        val remembered = form.withRememberedNote(" Sore left knee ")
+        assertEquals("Sore left knee", remembered.injuries)
+        assertEquals("Sore left knee", remembered.toRequest().injuries)
+        // Cleared, it is still sent, empty, so the server forgets the note.
+        assertEquals("", remembered.copy(injuries = "  ").toRequest().injuries)
+    }
+
+    private fun plan(id: String, start: String?, end: String?, retiredOn: String? = null) = TrainingPlan(
+        id = id,
+        userId = "u1",
+        name = id,
+        totalWeeks = 8,
+        startDate = start,
+        endDate = end,
+        retiredOn = retiredOn,
+        generationStatus = TrainingPlan.GenerationStatus.Ready,
+    )
 }

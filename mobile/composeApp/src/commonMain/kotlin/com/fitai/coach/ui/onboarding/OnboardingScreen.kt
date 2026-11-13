@@ -44,8 +44,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
-import com.fitai.coach.core.api.generated.PostPlansGenerateRequest.ExperienceLevel
-import com.fitai.coach.core.dates.PLAN_WEEKDAYS
 import com.fitai.coach.core.dates.todayIn
 import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.FitaiButton
@@ -53,7 +51,6 @@ import com.fitai.coach.ui.components.FitaiCard
 import com.fitai.coach.ui.components.FitaiChip
 import com.fitai.coach.ui.components.FitaiDateField
 import com.fitai.coach.ui.components.FitaiDialog
-import com.fitai.coach.ui.components.FitaiSwitchRow
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.components.NexusMark
@@ -181,7 +178,9 @@ private fun StepContent(state: OnboardingUiState, vm: OnboardingViewModel) {
         SetupStep.Goal -> Goal(state, vm)
         SetupStep.Coach -> Coach(state.profile.aiCoachEnabled) { on -> vm.edit { it.copy(aiCoachEnabled = on) } }
         SetupStep.Plan -> PlanChoice(state.aiCoachSaved, vm)
-        SetupStep.AiPlan -> state.planForm?.let { AiPlanForm(it, state.today, vm::editPlan) }
+        SetupStep.AiPlan -> state.planForm?.let { form ->
+            AiPlanFields(form, state.today, vm::editPlan, overlapping = state.overlapping(form))
+        }
         SetupStep.Generating -> Generating()
         SetupStep.Schedule -> Schedule(state, vm::setStartDate)
     }
@@ -222,11 +221,11 @@ private fun Welcome() {
 }
 
 @Composable
-private fun Label(text: String) = Text(text, style = FitaiTheme.typography.label, color = FitaiTheme.colors.text)
+internal fun Label(text: String) = Text(text, style = FitaiTheme.typography.label, color = FitaiTheme.colors.text)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Options(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+internal fun Options(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
         options.forEach { (value, label) -> FitaiChip(label, selected = value == selected, onClick = { onSelect(value) }) }
     }
@@ -355,68 +354,6 @@ private fun PlanOption(title: String, description: String, primary: Boolean, onC
         )
         Text(description, style = FitaiTheme.typography.bodySm, color = colors.textMuted)
     }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun AiPlanForm(form: PlanForm, today: String, edit: ((PlanForm) -> PlanForm) -> Unit) {
-    FitaiTextField(form.goal, { v -> edit { it.copy(goal = v) } }, "Goal", singleLine = false)
-    Label("Training days per week")
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        IconButton(onClick = { edit { it.withDaysPerWeek(it.daysPerWeek - 1) } }, enabled = form.daysPerWeek > MIN_DAYS_PER_WEEK) {
-            Icon(LucideIcons.ChevronLeft, contentDescription = "fewer days", tint = FitaiTheme.colors.text)
-        }
-        Text("${form.daysPerWeek} days", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text)
-        IconButton(onClick = { edit { it.withDaysPerWeek(it.daysPerWeek + 1) } }, enabled = form.daysPerWeek < MAX_DAYS_PER_WEEK) {
-            Icon(LucideIcons.ChevronRight, contentDescription = "more days", tint = FitaiTheme.colors.text)
-        }
-    }
-    if (form.requiredRestDays > 0) {
-        Text(
-            "Rest days: pick ${form.requiredRestDays} (${form.restDays.size} chosen)",
-            style = FitaiTheme.typography.bodySm,
-            color = if (form.hasRestDays) FitaiTheme.colors.textMuted else FitaiTheme.colors.danger,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-            PLAN_WEEKDAYS.forEach { day ->
-                FitaiChip(day.take(3), selected = day in form.restDays, onClick = { edit { it.toggleRestDay(day) } })
-            }
-        }
-    }
-    Label("Experience")
-    Options(
-        listOf(ExperienceLevel.Beginner, ExperienceLevel.Intermediate, ExperienceLevel.Advanced).map { it.wireValue to it.name },
-        form.experience.wireValue,
-    ) { v -> edit { f -> f.copy(experience = ExperienceLevel.entries.first { it.wireValue == v }) } }
-    FitaiDateField(
-        form.startDate,
-        { v -> edit { it.copy(startDate = v) } },
-        "Start date",
-        minDate = today,
-        supportingText = aiWeekOneStartNote(form.startDate),
-    )
-    FitaiDateField(
-        form.endDate,
-        { v -> edit { it.copy(endDate = v) } },
-        if (form.endDateIsRaceDate) "Race date" else "End date",
-        minDate = form.startDate,
-        error = form.dateError,
-    )
-    FitaiSwitchRow("The end date is race day", form.endDateIsRaceDate, { on -> edit { it.copy(endDateIsRaceDate = on) } })
-    Label("Focus areas (optional)")
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs), verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-        FOCUS_OPTIONS.forEach { option ->
-            FitaiChip(option.label, selected = option.value in form.focusAreas, onClick = { edit { it.toggleFocus(option.value) } })
-        }
-    }
-    FitaiTextField(
-        form.injuries,
-        { v -> edit { it.copy(injuries = v) } },
-        "Injuries or limits (optional)",
-        placeholder = "e.g. sore left knee, no running on Tuesdays",
-        supportingText = "Saved to your athlete card, so the coach remembers it.",
-        singleLine = false,
-    )
 }
 
 @Composable

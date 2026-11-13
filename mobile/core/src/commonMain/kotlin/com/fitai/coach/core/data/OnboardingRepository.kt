@@ -48,7 +48,8 @@ public val MAX_STATUS_OUTAGE: Duration = 30.seconds
 /**
  * First-run setup: whether to show it, the athlete's first plan (the 8-week
  * template or an AI plan) and marking it done, as the web's
- * useOnboarding, useOnboardingWizard and usePlanGeneration do.
+ * useOnboarding, useOnboardingWizard and usePlanGeneration do. Its AI plan
+ * generation also serves a new plan from the timeline.
  */
 @Suppress("TooGenericExceptionCaught")
 public class OnboardingRepository(
