@@ -1,3 +1,4 @@
+import type { User } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, BellOff, Loader2, Send } from "lucide-react";
 import { useState } from "react";
@@ -9,20 +10,19 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import {
-  api,
-  QUERY_KEYS,
-  type UpdateUserPreferencesPayload,
-  type UserPreferences,
-} from "@/lib/api";
+import { api, QUERY_KEYS, type UpdateUserPreferencesPayload } from "@/lib/api";
 import { featureFlags } from "@/lib/featureFlags";
 
-/** The two opt-in nutrition push reminders, shown once push is enabled. */
+/**
+ * The two opt-in nutrition push reminders, shown once push is enabled. They
+ * are read from the auth user: GET /preferences doesn't return them, so a
+ * preferences read showed both switches off after every reload.
+ */
 function NutritionReminderToggles() {
-  const { data: prefs } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
+  const { data: prefs } = useQuery<User>({ queryKey: QUERY_KEYS.authUser });
   const update = useApiMutation<unknown, Error, UpdateUserPreferencesPayload>({
     mutationFn: (data) => api.preferences.update(data),
-    invalidateQueries: [QUERY_KEYS.preferences],
+    invalidateQueries: [QUERY_KEYS.preferences, QUERY_KEYS.authUser],
     errorToast: "Couldn't update reminder settings",
   });
 

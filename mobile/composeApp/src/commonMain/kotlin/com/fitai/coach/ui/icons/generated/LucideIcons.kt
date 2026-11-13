@@ -150,6 +150,18 @@ object LucideIcons {
         )
     }
 
+    val ClipboardList: ImageVector by lazy {
+        lucide(
+            "ClipboardList",
+            "M9 2H15A1 1 0 0 1 16 3V5A1 1 0 0 1 15 6H9A1 1 0 0 1 8 5V3A1 1 0 0 1 9 2Z",
+            "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2",
+            "M12 11h4",
+            "M12 16h4",
+            "M8 11h.01",
+            "M8 16h.01",
+        )
+    }
+
     val CopyPlus: ImageVector by lazy {
         lucide(
             "CopyPlus",

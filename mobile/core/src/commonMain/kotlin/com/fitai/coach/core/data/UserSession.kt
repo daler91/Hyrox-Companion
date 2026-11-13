@@ -36,6 +36,7 @@ public class UserSession internal constructor(
     public val analytics: AnalyticsRepository = AnalyticsRepository(api, cache)
     public val account: AccountRepository = AccountRepository(api, cache)
     public val athleteCard: AthleteCardRepository = AthleteCardRepository(api, cache)
+    public val recycleBin: RecycleBinRepository = RecycleBinRepository(api, cache)
     public val onboarding: OnboardingRepository = OnboardingRepository(api, cache, preferences, timeline)
 
     private var job: Job? = null

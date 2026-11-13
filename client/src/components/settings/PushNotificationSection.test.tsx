@@ -22,19 +22,21 @@ vi.mock("@/hooks/usePushNotifications", () => ({
 
 vi.mock("@/lib/api", () => ({
   api: { preferences: { update: vi.fn() } },
-  QUERY_KEYS: { preferences: ["/api/v1/preferences"] },
+  QUERY_KEYS: { preferences: ["/api/v1/preferences"], authUser: ["/api/v1/auth/user"] },
 }));
 
 vi.mock("@/lib/featureFlags", () => ({
   featureFlags: { nutritionEnabled: true, emomBuilderEnabled: false },
 }));
 
-function renderSection(prefs: Record<string, unknown> | undefined = {}) {
+function renderSection(user: Record<string, unknown> | undefined = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (prefs) {
+  // GET /preferences never carries the reminder switches; the auth user does.
+  queryClient.setQueryData(["/api/v1/preferences"], { weightUnit: "kg", distanceUnit: "km" });
+  if (user) {
     queryClient.setQueryData(
-      ["/api/v1/preferences"],
-      { pushRefuelReminder: false, pushLoggingReminder: false, ...prefs },
+      ["/api/v1/auth/user"],
+      { id: "u1", pushRefuelReminder: false, pushLoggingReminder: false, ...user },
     );
   }
   render(
@@ -50,7 +52,7 @@ describe("PushNotificationSection nutrition reminders", () => {
     pushState.isSubscribed = true;
   });
 
-  it("shows both reminder toggles reflecting saved preferences", () => {
+  it("shows both reminder toggles as the user record has them", () => {
     renderSection({ pushLoggingReminder: true });
     expect(screen.getByTestId("switch-push-refuel-reminder")).not.toBeChecked();
     expect(screen.getByTestId("switch-push-logging-reminder")).toBeChecked();
