@@ -38,6 +38,12 @@ or used for advertising. All traffic is HTTPS (`usesCleartextTraffic="false"`).
 Answer "Yes" to: data is encrypted in transit; users can request deletion
 (both in the app and through the web link above).
 
+Barcode scanning uses Google's code scanner (ML Kit, through Play services).
+The scan runs on the phone and only the digits reach fitai.coach. Google's own
+SDK may send device and usage diagnostics to Google. Check its current data
+disclosure (ML Kit's "Data disclosure" page) before submitting the form, and
+add what it lists to the rows above.
+
 ## Health Connect declaration
 
 Permissions requested (androidApp/src/main/AndroidManifest.xml), each read-only:

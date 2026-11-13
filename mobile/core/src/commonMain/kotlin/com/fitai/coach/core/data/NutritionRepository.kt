@@ -8,11 +8,15 @@ import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchQuery
 import com.fitai.coach.core.api.generated.GetNutritionFoodsSearchResponse
 import com.fitai.coach.core.api.generated.GetNutritionSummaryQuery
 import com.fitai.coach.core.api.generated.GetNutritionSummaryResponse
+import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.core.api.generated.NutritionParseMealResponse
 import com.fitai.coach.core.api.generated.PatchNutritionLogsByIdRequest
+import com.fitai.coach.core.api.generated.PostNutritionFoodsBarcodeRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsBatchRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsRepeatRequest
 import com.fitai.coach.core.api.generated.PostNutritionLogsRequest
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelRequest
+import com.fitai.coach.core.api.generated.PostNutritionParseLabelResponse
 import com.fitai.coach.core.api.generated.PostNutritionParsePhotoRequest
 import com.fitai.coach.core.api.generated.PostNutritionParseTextRequest
 import kotlinx.coroutines.flow.Flow
@@ -135,6 +139,28 @@ public class NutritionRepository(private val api: ApiClient, private val cache: 
         val mime = PostNutritionParsePhotoRequest.MimeType.entries.firstOrNull { it.wireValue == image.mimeType }
             ?: PostNutritionParsePhotoRequest.MimeType.ImageJpeg
         return api.call(ApiEndpoints.PostNutritionParsePhoto, PostNutritionParsePhotoRequest(mimeType = mime, imageBase64 = image.base64))
+    }
+
+    /**
+     * The food behind a packet's barcode (8 to 14 digits), from Open Food
+     * Facts by way of the server's cache. Nothing is logged.
+     *
+     * @throws ApiException 404 when the barcode isn't recognised.
+     */
+    public suspend fun lookUpBarcode(code: String): NutritionFood =
+        api.call(ApiEndpoints.PostNutritionFoodsBarcode, PostNutritionFoodsBarcodeRequest(code = code))
+
+    /**
+     * The values printed on a nutrition label photo, and a custom food to
+     * review from them (ScanLabelButton.tsx). Nothing is saved. The label is
+     * null when none could be read.
+     *
+     * @throws ApiException 403 AI_COACH_DISABLED without AI consent, 429 over the budget.
+     */
+    public suspend fun parseLabel(image: EncodedImage): PostNutritionParseLabelResponse {
+        val mime = PostNutritionParseLabelRequest.MimeType.entries.firstOrNull { it.wireValue == image.mimeType }
+            ?: PostNutritionParseLabelRequest.MimeType.ImageJpeg
+        return api.call(ApiEndpoints.PostNutritionParseLabel, PostNutritionParseLabelRequest(mimeType = mime, imageBase64 = image.base64))
     }
 
     /**

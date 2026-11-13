@@ -37,6 +37,11 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- Play services fetches the barcode scanner's module at install, so
+             the first "Scan with camera" opens straight away. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
         <!-- singleTask: an App Link brings the app forward and closes what was
              opened above it, such as the Custom Tab of the Strava connect flow. -->
         <activity

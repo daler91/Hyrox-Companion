@@ -55,6 +55,7 @@ import com.fitai.coach.ui.format.dayLabel
 import com.fitai.coach.ui.format.formatNumber
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
+import com.fitai.coach.ui.media.rememberBarcodeScanner
 import com.fitai.coach.ui.media.rememberCamera
 import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
@@ -104,6 +105,8 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
     val reports = viewModel(key = "nutrition-reports-${session.userId}") {
         NutritionReportsViewModel(session.nutrition.reports, session.account.user)
     }
+    val barcode = viewModel(key = "barcode-${session.userId}") { BarcodeViewModel(session.nutrition::lookUpBarcode) }
+    val barcodeSheet by barcode.state.collectAsStateWithLifecycle()
     val dailyTargets by targetsVm.daily.collectAsStateWithLifecycle()
     val mealTarget by targetsVm.meal.collectAsStateWithLifecycle()
     val captured by capture.state.collectAsStateWithLifecycle()
@@ -117,8 +120,16 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
     LaunchedEffect(capture) { capture.messages.collect { toasts.showSnackbar(it) } }
     LaunchedEffect(myFoods) { myFoods.messages.collect { toasts.showSnackbar(it) } }
     LaunchedEffect(targetsVm) { targetsVm.messages.collect { toasts.showSnackbar(it) } }
+    LaunchedEffect(barcode) { barcode.messages.collect { toasts.showSnackbar(it) } }
+    // A barcode's food, or one just made from a label ("Save & log"), opens for logging.
+    LaunchedEffect(barcode) { barcode.found.collect { vm.startLog(it) } }
+    LaunchedEffect(myFoods) { myFoods.toLog.collect { vm.startLog(it) } }
+    LaunchedEffect(capture) { capture.labels.collect(myFoods::reviewLabel) }
     val choosePhoto = rememberPhotoPicker(onPicked = capture::parsePhoto, onError = toast)
     val takePhoto = rememberCamera(onPicked = capture::parsePhoto, onError = toast)
+    val scanBarcode = rememberBarcodeScanner(onScanned = barcode::scanned, onError = toast)
+    val photographLabel = rememberCamera(onPicked = capture::parseLabel, onError = toast)
+    val chooseLabel = rememberPhotoPicker(onPicked = capture::parseLabel, onError = toast)
     var logFoodOpen by remember { mutableStateOf(false) }
     // A day's micros follow what's logged on it: fetched for the day on screen, again when its totals change.
     LaunchedEffect(state.date, state.summary?.totals) { reports.showMicros(state.date, state.summary) }
@@ -205,7 +216,7 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
                         item {
                             DayFooter(
                                 summary,
-                                readingPhoto = captured.readingPhoto,
+                                reading = captured.reading,
                                 onLogFood = { logFoodOpen = true },
                                 ownFoods = OwnFoods(
                                     myFoods,
@@ -250,6 +261,8 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
                 describe = capture::openDescribe,
                 takePhoto = takePhoto,
                 choosePhoto = choosePhoto,
+                scanBarcode = barcode::open,
+                scanLabel = photographLabel ?: chooseLabel,
                 customFood = myFoods::newCustomFood,
                 recipe = myFoods::newRecipe,
             ),
@@ -266,6 +279,7 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
     dailyTargets?.let { TargetsSheet(it, targetsVm) }
     mealTarget?.let { MealTargetSheet(it, targetsVm) }
     customFoodSheet?.let { CustomFoodSheet(it, myFoods) }
+    barcodeSheet?.let { BarcodeSheet(it, scanBarcode, barcode) }
     recipeSheet?.let { sheet ->
         val ingredientSearch by myFoods.ingredientSearch.collectAsStateWithLifecycle()
         RecipeSheet(sheet, ingredientSearch, myFoods)
@@ -319,7 +333,8 @@ fun NutritionScreen(open: DeepLink.Nutrition? = null, onOpened: () -> Unit = {},
 @Composable
 private fun DayFooter(
     summary: GetNutritionSummaryResponse,
-    readingPhoto: Boolean,
+    /** What the AI is reading ("Reading your meal…"), while it is. */
+    reading: String?,
     onLogFood: () -> Unit,
     ownFoods: OwnFoods,
     reports: NutritionReportsViewModel,
@@ -333,10 +348,10 @@ private fun DayFooter(
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Md)) {
         // One way in (LogFoodActions); it shows a photo is still being read.
         FitaiButton(
-            if (readingPhoto) "Reading your meal…" else "Log food",
+            reading ?: "Log food",
             onClick = onLogFood,
             leadingIcon = LucideIcons.Plus,
-            loading = readingPhoto,
+            loading = reading != null,
             modifier = Modifier.fillMaxWidth(),
         )
         if (!summary.isEmptyDay()) MicronutrientPanel(micros)

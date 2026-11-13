@@ -1,5 +1,7 @@
 package com.fitai.coach.ui.nutrition
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import com.fitai.coach.core.api.generated.GetNutritionRecipesResponseItem
 import com.fitai.coach.core.api.generated.NutritionFood
 import com.fitai.coach.ui.components.ButtonVariant
@@ -27,6 +30,7 @@ import com.fitai.coach.ui.components.FitaiSwitchRow
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.theme.FitaiTheme
+import com.fitai.coach.ui.theme.Radius
 import com.fitai.coach.ui.theme.Spacing
 
 /** A new custom food, or an edit of one (CustomFoodDialog.tsx). Nutrition is per 100 g. */
@@ -40,10 +44,15 @@ fun CustomFoodSheet(state: CustomFoodSheetState, vm: MyFoodsViewModel) {
             verticalArrangement = Arrangement.spacedBy(Spacing.Sm),
         ) {
             Text(
-                if (state.editing == null) "New custom food" else "Edit custom food",
+                when {
+                    state.label != null -> "Review label"
+                    state.editing == null -> "New custom food"
+                    else -> "Edit custom food"
+                },
                 style = FitaiTheme.typography.h2,
                 color = FitaiTheme.colors.text,
             )
+            state.label?.let { LabelNotes(it) }
             FitaiTextField(state.name, { v -> edit { it.copy(name = v) } }, "Name")
             FitaiTextField(state.brand, { v -> edit { it.copy(brand = v) } }, "Brand (optional)")
             Text("Nutrition per 100 g", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
@@ -83,11 +92,48 @@ fun CustomFoodSheet(state: CustomFoodSheetState, vm: MyFoodsViewModel) {
             }
             FitaiButton(
                 if (state.editing == null) "Save food" else "Save",
-                onClick = vm::saveCustomFood,
+                onClick = { vm.saveCustomFood() },
+                variant = if (state.label != null) ButtonVariant.Secondary else ButtonVariant.Primary,
                 enabled = state.valid,
                 loading = state.saving,
                 modifier = Modifier.fillMaxWidth(),
             )
+            // A scanned label is usually for logging now: save and open it for logging in one go.
+            if (state.label != null) {
+                FitaiButton(
+                    "Save & log",
+                    onClick = { vm.saveCustomFood(logAfter = true) },
+                    enabled = state.valid && !state.saving,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+/** Above a scanned label's values: check them against the package, the reader's caveats, and per-serving values to convert. */
+@Composable
+private fun LabelNotes(label: ScannedLabel) {
+    val colors = FitaiTheme.colors
+    val type = FitaiTheme.typography
+    Column(
+        Modifier.fillMaxWidth().background(colors.muted, Radius.Md).padding(Spacing.Md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        Text(
+            "Read from the label photo. Check the values against the package before saving.",
+            style = type.bodySm,
+            color = colors.textMuted,
+        )
+        label.warnings.forEach { Text(it, style = type.bodySm, color = colors.textMuted) }
+    }
+    label.perServing?.let { printed ->
+        Column(
+            Modifier.fillMaxWidth().border(1.dp, colors.border, Radius.Md).padding(Spacing.Md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
+        ) {
+            Text(printed.title, style = type.label, color = colors.text)
+            Text(printed.values, style = type.bodySm, color = colors.textMuted)
         }
     }
 }

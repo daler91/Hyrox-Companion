@@ -23,6 +23,10 @@ data class LogFoodMethods(
     val takePhoto: (() -> Unit)?,
     /** Null where there's no photo picker. */
     val choosePhoto: (() -> Unit)?,
+    /** Scan or type a packet's barcode: typing works everywhere. */
+    val scanBarcode: () -> Unit,
+    /** Photograph a nutrition label (or pick a photo of one); null with neither camera nor picker. */
+    val scanLabel: (() -> Unit)?,
     /** Makes a food of the athlete's own. */
     val customFood: () -> Unit,
     /** Builds a recipe from foods. */
@@ -47,6 +51,8 @@ fun LogFoodSheet(methods: LogFoodMethods, onDismiss: () -> Unit) {
             MethodButton("Describe a meal", LucideIcons.Sparkles, then(methods.describe))
             methods.takePhoto?.let { MethodButton("Snap a meal", LucideIcons.Camera, then(it)) }
             methods.choosePhoto?.let { MethodButton("Choose a meal photo", LucideIcons.Image, then(it)) }
+            MethodButton("Scan a barcode", LucideIcons.ScanLine, then(methods.scanBarcode))
+            methods.scanLabel?.let { MethodButton("Scan label", LucideIcons.ScanText, then(it)) }
             Text("Make your own", style = FitaiTheme.typography.label, color = FitaiTheme.colors.textMuted)
             FitaiButton(
                 "Custom food",

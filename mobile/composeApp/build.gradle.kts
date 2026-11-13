@@ -47,6 +47,8 @@ kotlin {
             implementation(libs.androidx.browser)
             // Health Connect's permission request (an activity result).
             implementation(libs.health.connect.client)
+            // Scanning a food's barcode (Google's code scanner, from Play services).
+            implementation(libs.play.services.code.scanner)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
