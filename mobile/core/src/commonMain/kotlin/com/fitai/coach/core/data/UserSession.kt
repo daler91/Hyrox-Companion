@@ -81,7 +81,8 @@ public class UserSession internal constructor(
 
     internal suspend fun close() {
         job?.cancelAndJoin()
-        database.close()
+        // A screen's queries may still be running; see closeWhenIdle.
+        database.closeWhenIdle()
     }
 
     // A refresh is best effort: offline, the screens keep showing the cache.

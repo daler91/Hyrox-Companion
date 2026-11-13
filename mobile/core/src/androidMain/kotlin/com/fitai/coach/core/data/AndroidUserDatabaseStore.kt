@@ -9,7 +9,7 @@ public class AndroidUserDatabaseStore(context: Context) : UserDatabaseStore {
 
     override fun open(userId: String): FitaiDatabase {
         val file = context.getDatabasePath(databaseFileName(userId))
-        return Room.databaseBuilder<FitaiDatabase>(context, file.absolutePath).configured().build()
+        return Room.databaseBuilder<FitaiDatabase>(context, file.absolutePath).buildConfigured()
     }
 
     // deleteDatabase also removes the journal, write-ahead log and shared-memory files.

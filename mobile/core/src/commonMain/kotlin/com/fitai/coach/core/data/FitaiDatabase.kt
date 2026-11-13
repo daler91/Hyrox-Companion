@@ -10,6 +10,8 @@ import androidx.room.useWriterConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 
 /**
  * The on-device cache and outbox of one signed-in user. Each user has their
@@ -37,6 +39,9 @@ public abstract class FitaiDatabase : RoomDatabase() {
     public abstract fun outbox(): OutboxDao
 
     public abstract fun cache(): CacheDao
+
+    // The parent of every query Room runs on this database; see buildConfigured.
+    internal var queries: Job? = null
 }
 
 /** Room generates the actual implementations of this for each target. */
@@ -45,9 +50,30 @@ public expect object FitaiDatabaseConstructor : RoomDatabaseConstructor<FitaiDat
     override fun initialize(): FitaiDatabase
 }
 
-/** The driver and query dispatcher every platform builds the database with. */
-public fun RoomDatabase.Builder<FitaiDatabase>.configured(): RoomDatabase.Builder<FitaiDatabase> =
-    setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO)
+/**
+ * Builds the database with the driver and query dispatcher every platform
+ * uses. Room runs each query as a child of the job in that context, so
+ * [closeWhenIdle] can wait for the ones still running.
+ */
+public fun RoomDatabase.Builder<FitaiDatabase>.buildConfigured(): FitaiDatabase {
+    val queries = Job()
+    return setDriver(BundledSQLiteDriver())
+        .setQueryCoroutineContext(Dispatchers.IO + queries)
+        .build()
+        .also { it.queries = queries }
+}
+
+/**
+ * Closes the database once no query is running on it. Room's own close shuts
+ * the connections at once, even under a statement another thread is still
+ * running (a screen's, say, that was just cancelled), and SQLite then
+ * crashes the process. The queries are cancelled first; a statement already
+ * in SQLite finishes, and only then do the connections close.
+ */
+public suspend fun FitaiDatabase.closeWhenIdle() {
+    queries?.cancelAndJoin()
+    close()
+}
 
 /** Runs [block] in one write transaction: its changes land together or not at all. */
 public suspend fun <T> FitaiDatabase.writeTransaction(block: suspend () -> T): T =

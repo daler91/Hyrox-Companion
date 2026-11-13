@@ -8,8 +8,7 @@ public class JvmUserDatabaseStore(private val directory: File) : UserDatabaseSto
     override fun open(userId: String): FitaiDatabase {
         directory.mkdirs()
         return Room.databaseBuilder<FitaiDatabase>(name = File(directory, databaseFileName(userId)).absolutePath)
-            .configured()
-            .build()
+            .buildConfigured()
     }
 
     override fun delete(userId: String) {
