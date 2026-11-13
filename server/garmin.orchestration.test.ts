@@ -552,6 +552,20 @@ describe("getGarminClient token strategy", () => {
 
     await expect(__testing.getGarminClient("user-1", logger)).rejects.toThrow(/no longer stored/);
   });
+
+  it("never echoes an unexpected internal error message from client setup", async () => {
+    // Preflight read succeeds; the read inside getGarminClient fails the way a
+    // DB or decryption error would, with internal detail in its message.
+    vi.mocked(storage.users.getGarminConnection)
+      .mockResolvedValueOnce(conn())
+      .mockRejectedValueOnce(new Error("decrypt failed: key v2 at db-internal:5432"));
+
+    const res = await request(app).post("/api/v1/garmin/sync");
+
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("GARMIN_AUTH_FAILED");
+    expect(JSON.stringify(res.body)).not.toMatch(/decrypt|db-internal|5432/);
+  });
 });
 
 describe("circuit breaker integration", () => {
