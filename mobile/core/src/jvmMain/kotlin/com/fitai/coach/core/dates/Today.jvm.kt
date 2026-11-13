@@ -5,7 +5,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -44,15 +43,3 @@ public actual fun localDateOf(iso: String, timeZone: String?): String? = try {
 } catch (_: DateTimeParseException) {
     null
 }
-
-public actual fun deviceTimeZone(): String? = when (val zone = ZoneId.systemDefault()) {
-    is ZoneOffset -> if (zone == ZoneOffset.UTC) "UTC" else null
-    else -> zone.id.takeIf { it.isNotBlank() }
-}
-
-public actual fun sameTimeZone(a: String, b: String): Boolean = a == b ||
-    try {
-        ZoneId.of(a).normalized().rules == ZoneId.of(b).normalized().rules
-    } catch (_: DateTimeException) {
-        false
-    }

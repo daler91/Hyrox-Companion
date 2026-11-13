@@ -30,13 +30,3 @@ public expect fun formatInstant(iso: String, timeZone: String?): String?
  * (the device's when null or unknown); null when it doesn't parse.
  */
 public expect fun localDateOf(iso: String, timeZone: String?): String?
-
-/**
- * The phone's timezone, as a name the server accepts ("Europe/London",
- * "UTC"); null when the system reports only a fixed offset, which the server
- * may refuse.
- */
-public expect fun deviceTimeZone(): String?
-
-/** Whether two timezone names keep the same time ("UTC" and "Etc/UTC" do); names that don't parse match only themselves. */
-public expect fun sameTimeZone(a: String, b: String): Boolean

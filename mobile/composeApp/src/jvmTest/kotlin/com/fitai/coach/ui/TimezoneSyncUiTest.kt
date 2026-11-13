@@ -6,6 +6,7 @@ import com.fitai.coach.core.auth.AuthState
 import com.fitai.coach.core.dates.deviceTimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 /**
  * The phone's timezone becomes the athlete's when the saved one keeps
@@ -16,19 +17,20 @@ import kotlin.test.assertEquals
 class TimezoneSyncUiTest {
     @Test
     fun aStaleSavedTimezoneIsReplacedByThePhonesOnce() {
-        val phone = deviceTimeZone()!!
+        val phone = assertNotNull(deviceTimeZone())
         val api = FakeApi().apply {
             establishedAccount()
-            on("GET", "/api/v1/preferences", PREFS.format("Pacific/Kiritimati"))
-            on("PATCH", "/api/v1/preferences", PREFS.format(phone))
+            on("GET", PREFERENCES, PREFS.format("Pacific/Kiritimati"))
+            on("PATCH", PREFERENCES, PREFS.format(phone))
         }
         appTest(FakeAuth(AuthState.SignedIn("u1")), api) {
             awaitNode(hasContentDescription("Settings"))
-            waitUntil(timeoutMillis = 10_000) { api.sent("PATCH", "/api/v1/preferences").isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { api.sent("PATCH", PREFERENCES).isNotEmpty() }
             waitForIdle()
-            assertEquals(listOf("""{"userTimezone":"$phone"}"""), api.sent("PATCH", "/api/v1/preferences").map { it.body })
+            assertEquals(listOf("""{"userTimezone":"$phone"}"""), api.sent("PATCH", PREFERENCES).map { it.body })
         }
     }
 }
 
+private const val PREFERENCES = "/api/v1/preferences"
 private const val PREFS = """{"userTimezone":"%s","onboardingCompleted":true,"weightUnit":"kg","distanceUnit":"km"}"""
