@@ -42,7 +42,11 @@ data class SettingsUiState(
     val health: HealthState = HealthState(),
     /** Which action is in flight ("strava-sync", "garmin-connect", "delete", …). */
     val busy: String? = null,
-)
+    /** Reminder switches flipped here, shown at once while the user record catches up. */
+    val reminderOverrides: Map<PushReminder, Boolean> = emptyMap(),
+) {
+    fun reminderOn(reminder: PushReminder): Boolean = reminderOverrides[reminder] ?: reminder.isOn(user)
+}
 
 /** Settings, v1 scope: profile and units, AI coach, notifications, integrations, privacy, account. */
 /** The Health Connect card: what the phone offers, and whether the sync is on for this athlete. */
@@ -90,6 +94,7 @@ class SettingsViewModel(
                 accessWithdrawn = healthUser == session.userId && !access.second,
             ),
             busy = l.busy,
+            reminderOverrides = l.reminders,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
 
@@ -223,6 +228,29 @@ class SettingsViewModel(
 
     fun disablePush() = run("push", "Couldn't turn off notifications") { push.disable() }
 
+    /** Sends a test push to every device the athlete registered, this phone included. */
+    fun testPush() = run("push-test", "Failed to send test notification") {
+        toasts.send(testPushMessage(session.account.sendTestPush()))
+    }
+
+    /** Turns a nutrition push reminder on or off; the switch moves at once and moves back if the save fails. */
+    fun setReminder(reminder: PushReminder, on: Boolean) {
+        local.update { it.copy(reminders = it.reminders + (reminder to on)) }
+        viewModelScope.launch {
+            try {
+                session.preferences.update(reminder.patch(on))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                local.update { it.copy(reminders = it.reminders - reminder) }
+                toasts.send(e.userMessage("Couldn't update reminder settings"))
+                return@launch
+            }
+            // The reminders live on the user record; GET /preferences doesn't carry them.
+            runCatching { session.account.refreshUser() }
+        }
+    }
+
     /** The system refused the permission: only its settings can grant it now. */
     fun notificationsBlocked() {
         viewModelScope.launch { toasts.send("Notifications are blocked for fitai. Allow them in your phone's settings.") }
@@ -258,7 +286,11 @@ class SettingsViewModel(
         }
     }
 
-    private data class Local(val errorReporting: Boolean? = null, val busy: String? = null)
+    private data class Local(
+        val errorReporting: Boolean? = null,
+        val busy: String? = null,
+        val reminders: Map<PushReminder, Boolean> = emptyMap(),
+    )
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L

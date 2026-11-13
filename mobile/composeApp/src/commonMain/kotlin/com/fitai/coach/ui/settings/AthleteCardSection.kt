@@ -88,7 +88,12 @@ fun AthleteCardSection(toasts: SnackbarHostState) {
 @Composable
 private fun LoadFailed(retry: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        Text("Couldn't load your athlete card.", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+        Text(
+            "Couldn't load your athlete card.",
+            style = FitaiTheme.typography.bodySm,
+            color = FitaiTheme.colors.textMuted,
+            modifier = Modifier.weight(1f),
+        )
         FitaiButton("Try again", onClick = retry, variant = ButtonVariant.Secondary, size = ButtonSize.Sm)
     }
 }
