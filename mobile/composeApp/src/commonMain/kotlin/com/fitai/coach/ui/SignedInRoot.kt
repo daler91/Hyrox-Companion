@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
@@ -18,7 +17,6 @@ import com.fitai.coach.ui.privacy.PrivacyNoticeState
 import com.fitai.coach.ui.privacy.PrivacyNoticeViewModel
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.shell.AppShell
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -40,8 +38,7 @@ fun SignedInRoot(userId: String) {
     }
     // Back in the foreground, perhaps after a flight: the server dates the
     // athlete's days in their saved timezone, so keep it the phone's.
-    val scope = rememberCoroutineScope()
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { runCatching { current.syncTimezone() } } }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { current.resumed() }
     CompositionLocalProvider(LocalUserSession provides current) {
         val privacy = koinViewModel<PrivacyNoticeViewModel>(key = "privacy-$userId")
         val state by privacy.state.collectAsStateWithLifecycle()
