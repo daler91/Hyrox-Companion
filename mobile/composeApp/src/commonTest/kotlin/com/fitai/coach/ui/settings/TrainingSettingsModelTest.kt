@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -77,7 +78,7 @@ class TrainingSettingsModelTest {
 
         assertEquals("Enter a valid age and select your category.", MafSetup("15", MafCategory.ConsistentUpTo2y, null).error)
         assertEquals("Enter a valid age and select your category.", MafSetup("40", null, null).error)
-        val answers = MafSetup("40", MafCategory.TrainingInterrupted, true).patch()!!.json()
+        val answers = assertNotNull(MafSetup("40", MafCategory.TrainingInterrupted, true).patch()).json()
         assertEquals("135", answers["mafHr"].toString())
         assertEquals("\"training_interrupted\"", answers["mafCategory"].toString())
         assertEquals("true", answers["mafHrDataAvailable"].toString())
