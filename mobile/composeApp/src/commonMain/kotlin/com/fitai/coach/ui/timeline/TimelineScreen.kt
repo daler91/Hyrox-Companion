@@ -42,6 +42,7 @@ import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.todayIn
 import com.fitai.coach.ui.components.ButtonSize
+import com.fitai.coach.ui.components.ButtonVariant
 import com.fitai.coach.ui.components.EmptyState
 import com.fitai.coach.ui.components.ErrorState
 import com.fitai.coach.ui.components.FitaiBadge
@@ -56,6 +57,8 @@ import com.fitai.coach.ui.fuelling.FuellingDayChip
 import com.fitai.coach.ui.fuelling.PlanFuelling
 import com.fitai.coach.ui.fuelling.timelineFuellingWindow
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.plans.GeneratePlanSheet
+import com.fitai.coach.ui.plans.GeneratePlanViewModel
 import com.fitai.coach.ui.review.ReviewPrompt
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
@@ -85,6 +88,9 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
     val toasts = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
     LaunchedEffect(vm) { vm.undos.collect { offerUndo(toasts, it) } }
+    val generator = viewModel(key = "generate-plan-${session.userId}") { GeneratePlanViewModel(session, ::todayIn) }
+    val generatorState by generator.state.collectAsStateWithLifecycle()
+    LaunchedEffect(generator) { generator.messages.collect { toasts.showSnackbar(it) } }
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
     var noteSheet by remember { mutableStateOf<NoteSheet?>(null) }
@@ -109,19 +115,21 @@ fun TimelineScreen(navigation: TimelineNavigation, openPlanDayId: String? = null
             when {
                 !state.loaded -> LoadingState(Modifier.fillMaxSize())
                 state.loadFailed -> ErrorState("Couldn't load your timeline", Modifier.fillMaxSize(), onRetry = vm::refresh)
-                !state.hasAnyEntries && state.plans.isEmpty() && !state.refreshing -> Welcome(navigation.logWorkout)
+                !state.hasAnyEntries && state.plans.isEmpty() && !state.refreshing -> Welcome(generator::open, navigation.logWorkout)
                 else -> TimelineList(
                     state,
                     vm,
                     onOpen = { sheet = OpenSheet.Surface(it.id) },
                     onPickDate = { sheet = OpenSheet.PickDate(it.id) },
                     onNote = { date, id -> noteSheet = NoteSheet(date, id) },
+                    onNewAiPlan = generator::open,
                     navigation = navigation,
                 )
             }
         }
         FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
     }
+    GeneratePlanSheet(generatorState, generator)
 
     val today = state.today
     when (val open = sheet) {
@@ -232,6 +240,7 @@ private fun TimelineList(
     onOpen: (TimelineEntry) -> Unit,
     onPickDate: (TimelineEntry) -> Unit,
     onNote: (date: String, editingId: String?) -> Unit,
+    onNewAiPlan: () -> Unit,
     navigation: TimelineNavigation,
 ) {
     val listState = rememberLazyListState()
@@ -256,6 +265,7 @@ private fun TimelineList(
                 vm::selectPlan,
                 vm::filterBy,
                 PlanToolActions(vm::renamePlan, vm::setPlanGoal, vm::schedulePlan, vm::setPlanArchived, vm::deletePlan),
+                onNewAiPlan,
             )
             state.reviewPrompt?.let { prompt ->
                 ReviewPromptCard(prompt, onOpen = {
@@ -344,11 +354,21 @@ private fun Header(
     onSelectPlan: (String?) -> Unit,
     onFilter: (TimelineEntry.Status?) -> Unit,
     planTools: PlanToolActions,
+    onNewAiPlan: () -> Unit,
 ) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
-        Text("training", style = type.h1, color = colors.text, modifier = Modifier.semantics { heading() })
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("training", style = type.h1, color = colors.text, modifier = Modifier.weight(1f).semantics { heading() })
+            FitaiButton(
+                "New AI plan",
+                onClick = onNewAiPlan,
+                variant = ButtonVariant.Secondary,
+                size = ButtonSize.Sm,
+                leadingIcon = LucideIcons.Sparkles,
+            )
+        }
         if (state.coachReviewing) CoachReviewingBanner()
         state.week?.let { WeekCard(it) }
         if (state.plans.isNotEmpty()) {
@@ -434,13 +454,18 @@ private fun MoreButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Welcome(logWorkout: () -> Unit) {
-    Box(Modifier.fillMaxSize().padding(Spacing.Lg), contentAlignment = Alignment.Center) {
+private fun Welcome(generatePlan: () -> Unit, logWorkout: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(Spacing.Lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.Md, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         EmptyState(
             title = "Welcome to fitai.coach",
-            message = "Your plan and logged workouts will show here, day by day. Start by logging a workout.",
-            actionLabel = "Log a workout",
-            onAction = logWorkout,
+            message = "Your plan and logged workouts will show here, day by day. Start with an AI plan built around your goal, " +
+                "or log a workout.",
         )
+        FitaiButton("Generate an AI plan", onClick = generatePlan, leadingIcon = LucideIcons.Sparkles)
+        FitaiButton("Log a workout", onClick = logWorkout, variant = ButtonVariant.Secondary)
     }
 }

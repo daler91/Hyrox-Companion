@@ -2,6 +2,7 @@ package com.fitai.coach.ui.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fitai.coach.core.api.generated.TrainingPlan
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.data.GenerationOutcome
 import com.fitai.coach.core.data.UserSession
@@ -40,7 +41,12 @@ data class OnboardingUiState(
     /** The AI Coach choice as the server has it: AI plans need it on. */
     val aiCoachSaved: Boolean = false,
     val busy: Boolean = false,
-)
+    /** The athlete's plans: "Run setup again" is where an established athlete switches plans. */
+    val plans: List<TrainingPlan> = emptyList(),
+) {
+    /** The live plans an AI plan from [form]'s dates would run over. */
+    fun overlapping(form: PlanForm): List<TrainingPlan> = findOverlappingPlans(plans, form.startDate, form.endDate, today)
+}
 
 /** Why setup closed, with what to tell the athlete. */
 data class SetupResult(val message: String, val madePlan: Boolean)
@@ -63,6 +69,9 @@ class OnboardingViewModel(private val session: UserSession, private val todayIn:
     private var saved = SetupProfile()
     private var timeZone: String? = null
 
+    /** The older free-text injuries note, prefilled into the AI plan form while the athlete has one. */
+    private var rememberedNote: String? = null
+
     /** A template created whose schedule then failed: a retry reuses it, any other way out deletes it. */
     private var unscheduledPlanId: String? = null
     private var generation: Job? = null
@@ -74,6 +83,8 @@ class OnboardingViewModel(private val session: UserSession, private val todayIn:
             saved = SetupProfile.from(prefs)
             mutableState.update { it.copy(profile = saved, today = todayIn(timeZone), aiCoachSaved = saved.aiCoachEnabled) }
         }
+        viewModelScope.launch { rememberedNote = session.account.user.first()?.trainingConstraints }
+        viewModelScope.launch { session.timeline.plans.collect { plans -> mutableState.update { it.copy(plans = plans.orEmpty()) } } }
     }
 
     fun edit(change: (SetupProfile) -> SetupProfile) = mutableState.update { it.copy(profile = change(it.profile), ageError = null) }
@@ -113,7 +124,12 @@ class OnboardingViewModel(private val session: UserSession, private val todayIn:
         val s = state.value
         if (!saved.aiCoachEnabled) return
         val goal = describeOnboardingGoal(s.goalId, s.profile.division, s.raceDate)
-        mutableState.update { it.copy(planForm = it.planForm ?: PlanForm.initial(goal, todayNow(), s.raceDate), step = SetupStep.AiPlan) }
+        mutableState.update {
+            it.copy(
+                planForm = it.planForm ?: PlanForm.initial(goal, todayNow(), s.raceDate).withRememberedNote(rememberedNote),
+                step = SetupStep.AiPlan,
+            )
+        }
     }
 
     fun chooseTemplate() = mutableState.update {
@@ -139,11 +155,12 @@ class OnboardingViewModel(private val session: UserSession, private val todayIn:
     /** Starts the AI plan and waits for it, showing the wait. */
     fun generate() {
         val form = state.value.planForm?.takeIf { it.canGenerate } ?: return
+        val supersede = form.supersedeIds(state.value.overlapping(form))
         if (generation?.isActive == true) return
         generation = viewModelScope.launch {
             mutableState.update { it.copy(busy = true) }
             val planId = try {
-                session.onboarding.generate(form.toRequest())
+                session.onboarding.generate(form.toRequest(supersede))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

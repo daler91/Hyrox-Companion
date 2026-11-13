@@ -99,7 +99,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - reschedule — `POST /plans/{id}/schedule`;
   - archive or restore — `…/retirement`;
   - delete, with undo.
-- [ ] Generate an AI plan outside onboarding, including "supersede the current plan".
+- [x] Generate an AI plan outside onboarding, including "supersede the current plan".
 - [ ] Coach:
   - workout suggestions with Apply — `/timeline/ai-suggestions`;
   - voice dictation;

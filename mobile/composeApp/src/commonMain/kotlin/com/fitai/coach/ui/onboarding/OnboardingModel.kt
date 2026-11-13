@@ -4,6 +4,7 @@ import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.PostPlansGenerateRequest
 import com.fitai.coach.core.api.generated.PostPlansGenerateRequest.ExperienceLevel
 import com.fitai.coach.core.api.generated.PreferencesResponse
+import com.fitai.coach.core.api.generated.TrainingPlan
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
 import com.fitai.coach.core.dates.MAX_PLAN_WEEKS
 import com.fitai.coach.core.dates.MIN_PLAN_WEEKS
@@ -134,6 +135,27 @@ fun planDateError(startDate: String, endDate: String, endDateIsRaceDate: Boolean
     }
 }
 
+/** The longest goal, and injuries note, the server takes. */
+const val MAX_PLAN_TEXT = 500
+
+/** The most plans one generation can archive. */
+const val MAX_SUPERSEDED_PLANS = 5
+
+/**
+ * Live plans whose days overlap [startDate]..[endDate] and still have
+ * training left (findOverlappingPlans): the plans the athlete is switching
+ * away from. Ended, archived and unscheduled plans are left alone. ISO dates
+ * compare as strings.
+ */
+fun findOverlappingPlans(plans: List<TrainingPlan>, startDate: String, endDate: String, today: String): List<TrainingPlan> {
+    if (startDate.isEmpty() || endDate.isEmpty()) return emptyList()
+    return plans.filter { plan ->
+        val start = plan.startDate
+        val end = plan.endDate
+        plan.retiredOn == null && start != null && end != null && end >= today && start <= endDate && end >= startDate
+    }
+}
+
 /** The AI plan form: one screen on the phone for the web dialog's three steps. */
 data class PlanForm(
     val goal: String,
@@ -145,6 +167,10 @@ data class PlanForm(
     val restDays: List<String>,
     val focusAreas: List<String> = emptyList(),
     val injuries: String = "",
+    /** The box started with the older free-text note, so it is always sent: clearing it drops the note. */
+    val clearsNote: Boolean = false,
+    /** Overlapping plans the athlete chose to keep; the rest are archived once the new plan is ready. */
+    val keptPlanIds: Set<String> = emptySet(),
 ) {
     val requiredRestDays: Int get() = DAYS_IN_WEEK - daysPerWeek
     val dateError: String? get() = planDateError(startDate, endDate, endDateIsRaceDate)
@@ -166,13 +192,29 @@ data class PlanForm(
 
     fun toggleFocus(value: String): PlanForm = copy(focusAreas = if (value in focusAreas) focusAreas - value else focusAreas + value)
 
+    /** Archive or keep an overlapping plan. Archiving is the default: switching is why the athlete is here. */
+    fun toggleSupersede(planId: String): PlanForm = copy(
+        keptPlanIds = if (planId in
+            keptPlanIds
+        ) {
+            keptPlanIds - planId
+        } else {
+            keptPlanIds + planId
+        },
+    )
+
+    /** Of the plans this one overlaps, those to archive. */
+    fun supersedeIds(overlapping: List<TrainingPlan>): List<String> =
+        overlapping.map { it.id }.filterNot { it in keptPlanIds }.take(MAX_SUPERSEDED_PLANS)
+
     /**
      * The request. endDateIsRaceDate is always sent, so the server never
-     * guesses. The injuries box goes only when filled in: the server moves
-     * what it holds onto the athlete card, and an empty one would drop an
-     * older note that is not there yet.
+     * guesses. The server moves the injuries box onto the athlete card, and
+     * an empty one drops the older note: so it goes when filled in, or when
+     * it started with that note ([clearsNote]). The plans to archive go only
+     * when there are some.
      */
-    fun toRequest(): PostPlansGenerateRequest = PostPlansGenerateRequest(
+    fun toRequest(supersedePlanIds: List<String> = emptyList()): PostPlansGenerateRequest = PostPlansGenerateRequest(
         goal = goal.trim(),
         daysPerWeek = daysPerWeek.toDouble(),
         experienceLevel = experience,
@@ -182,8 +224,19 @@ data class PlanForm(
         restDays = restDays.takeIf { daysPerWeek < MAX_DAYS_PER_WEEK && it.isNotEmpty() }
             ?.map { day -> PostPlansGenerateRequest.RestDaysItem.entries.first { it.wireValue == day } },
         focusAreas = focusAreas.takeIf { it.isNotEmpty() },
-        injuries = injuries.trim().takeIf { it.isNotEmpty() },
+        injuries = injuries.trim().takeIf { it.isNotEmpty() || clearsNote },
+        supersedePlanIds = supersedePlanIds.takeIf { it.isNotEmpty() },
     )
+
+    /**
+     * Prefills the injuries box with the older free-text note, while the
+     * athlete still has one: generating moves the box onto the athlete card
+     * and drops the note, so clearing the box forgets it.
+     */
+    fun withRememberedNote(note: String?): PlanForm {
+        val text = note?.trim().orEmpty()
+        return if (text.isEmpty()) this else copy(injuries = text.take(MAX_PLAN_TEXT), clearsNote = true)
+    }
 
     companion object {
         /** Starts on the next Monday (today when it is one) and runs 8 weeks, or to the race. */

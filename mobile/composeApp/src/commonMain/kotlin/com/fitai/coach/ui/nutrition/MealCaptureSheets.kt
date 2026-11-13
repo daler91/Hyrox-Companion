@@ -251,16 +251,20 @@ private fun SwapSearch(search: SearchState, vm: MealCaptureViewModel) {
     }
 }
 
+/** What turning the AI Coach on sends and why (AiConsentDetails), for every place that asks. */
+const val AI_CONSENT_TEXT: String =
+    "The AI Coach uses the configured AI provider to analyze your training and provide personalized coaching. " +
+        "To do this, your recent workout history, training plan, performance metrics, the chat messages you send the coach, " +
+        "and the meal descriptions and photos you submit for AI food logging are sent for processing. " +
+        "Your data is used solely by this app to generate coaching responses. You can disable the AI Coach at any time in " +
+        "Settings. By enabling, you consent to this data processing."
+
 /** AI consent before the first AI parse (AIConsentDialog): what is sent, and that it can be turned off. */
 @Composable
 fun AiConsentDialog(onAccept: () -> Unit, onDecline: () -> Unit) {
     FitaiDialog(
         title = "Enable AI Coach",
-        text = "The AI Coach uses the configured AI provider to analyze your training and provide personalized coaching. " +
-            "To do this, your recent workout history, training plan, performance metrics, the chat messages you send the coach, " +
-            "and the meal descriptions and photos you submit for AI food logging are sent for processing. " +
-            "Your data is used solely by this app to generate coaching responses. You can disable the AI Coach at any time in " +
-            "Settings. By enabling, you consent to this data processing.",
+        text = AI_CONSENT_TEXT,
         confirmLabel = "Enable AI Coach",
         onConfirm = onAccept,
         onDismiss = onDecline,
