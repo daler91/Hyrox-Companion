@@ -251,7 +251,12 @@ private fun TimelineList(
         verticalArrangement = Arrangement.spacedBy(Spacing.Md),
     ) {
         item(key = "header") {
-            Header(state, vm::selectPlan, vm::filterBy)
+            Header(
+                state,
+                vm::selectPlan,
+                vm::filterBy,
+                PlanToolActions(vm::renamePlan, vm::setPlanGoal, vm::schedulePlan, vm::setPlanArchived, vm::deletePlan),
+            )
             state.reviewPrompt?.let { prompt ->
                 ReviewPromptCard(prompt, onOpen = {
                     navigation.openReview(prompt.weekStart)
@@ -334,7 +339,12 @@ private fun NoMatches(state: TimelineUiState, onShowAll: () -> Unit) {
 }
 
 @Composable
-private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit, onFilter: (TimelineEntry.Status?) -> Unit) {
+private fun Header(
+    state: TimelineUiState,
+    onSelectPlan: (String?) -> Unit,
+    onFilter: (TimelineEntry.Status?) -> Unit,
+    planTools: PlanToolActions,
+) {
     val colors = FitaiTheme.colors
     val type = FitaiTheme.typography
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
@@ -345,14 +355,12 @@ private fun Header(state: TimelineUiState, onSelectPlan: (String?) -> Unit, onFi
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                 item { FitaiChip("All plans", selected = state.selectedPlanId == null, onClick = { onSelectPlan(null) }) }
                 items(state.plans, key = { it.id }) { plan ->
-                    FitaiChip("${plan.name} (${plan.totalWeeks} wk)", selected = state.selectedPlanId == plan.id, onClick = {
+                    FitaiChip(planChipLabel(plan), selected = state.selectedPlanId == plan.id, onClick = {
                         onSelectPlan(plan.id)
                     })
                 }
             }
-            state.plans.firstOrNull { it.id == state.selectedPlanId }?.let { plan ->
-                Text(plan.goal?.takeIf { it.isNotBlank() } ?: "No plan goal set", style = type.bodySm, color = colors.textMuted)
-            }
+            state.plans.firstOrNull { it.id == state.selectedPlanId }?.let { plan -> PlanToolsRow(plan, state.today, planTools) }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
             items(STATUS_FILTERS, key = { it.second }) { (status, label) ->

@@ -26,6 +26,7 @@ public class UserSession internal constructor(
     public val timeline: TimelineRepository = TimelineRepository(database, api, sync, cache)
     public val workouts: WorkoutRepository = WorkoutRepository(database, api, sync, newKey)
     public val planDays: PlanDayRepository = PlanDayRepository(api)
+    public val plans: PlanTools = PlanTools(api, timeline)
     public val annotations: AnnotationRepository = AnnotationRepository(api, cache)
     public val reviews: ReviewRepository = ReviewRepository(api, cache)
     public val preferences: PreferencesRepository = PreferencesRepository(api, cache)

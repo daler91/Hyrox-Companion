@@ -58,6 +58,11 @@ export const ICONS: Readonly<Record<string, string>> = {
   UtensilsCrossed: "utensils-crossed",
   ScanLine: "scan-line",
   ScanText: "scan-text",
+  Ellipsis: "ellipsis",
+  Target: "target",
+  Archive: "archive",
+  ArchiveRestore: "archive-arrow-up",
+  CalendarDays: "calendar-days",
   StarFilled: "star",
 };
 
