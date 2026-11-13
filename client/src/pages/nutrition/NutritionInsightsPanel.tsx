@@ -1,6 +1,5 @@
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
+import { lazy, Suspense } from "react";
 
 import { LastUpdatedNote } from "@/components/analytics/LastUpdatedNote";
 import { AiCoachOffNotice } from "@/components/coach/AiCoachOffNotice";
@@ -10,6 +9,19 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/hooks/useAuth";
 import { useNutritionInsights, useRegenerateNutritionInsights } from "@/hooks/useNutrition";
 import { describeAiError } from "@/lib/describeAiError";
+
+/** The insights as plain text: while the markdown chunk loads, and if it cannot. */
+function PlainInsights({ content }: { readonly content: string }) {
+  return <p className="whitespace-pre-wrap">{content}</p>;
+}
+
+// The markdown stack (react-markdown + rehype-sanitize) is its own chunk, loaded
+// only when stored insights are shown, so /nutrition no longer downloads it for
+// users who have none. A chunk that fails to load (a tab left open across a
+// deploy) falls back to plain text, as ChatMessage does for coach replies.
+const InsightsMarkdown = lazy(() =>
+  import("./InsightsMarkdown").catch(() => ({ default: PlainInsights })),
+);
 
 function describeError(error: unknown): string {
   return describeAiError(error, {
@@ -96,9 +108,9 @@ export function NutritionInsightsPanel() {
             className="prose prose-sm max-w-none dark:prose-invert prose-headings:my-3 prose-p:my-2 prose-ul:my-2 prose-li:my-1"
             data-testid="nutrition-insights-content"
           >
-            {/* AI output rendered as Markdown; rehype-sanitize strips scripts and
-                unsafe URLs so a compromised provider can't run JS in the session. */}
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{data?.insights ?? ""}</ReactMarkdown>
+            <Suspense fallback={<PlainInsights content={data?.insights ?? ""} />}>
+              <InsightsMarkdown content={data?.insights ?? ""} />
+            </Suspense>
           </div>
         </div>
       );
