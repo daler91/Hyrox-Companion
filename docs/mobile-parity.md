@@ -114,7 +114,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - adherence-insights toggle;
   - training style, including MAF setup.
 - [x] **Athlete card**: list, add, edit, retire and restore, "still true?" — `/athlete-facts`.
-- [ ] Notifications:
+- [x] Notifications:
   - a send hour for each email;
   - push refuel and logging reminders;
   - a **test notification** button.

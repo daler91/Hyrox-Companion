@@ -11,8 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,21 +52,17 @@ import com.fitai.coach.ui.components.FitaiSwitchRow
 import com.fitai.coach.ui.components.FitaiTextField
 import com.fitai.coach.ui.components.FitaiToastHost
 import com.fitai.coach.ui.format.shortDate
-import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.links.DeepLink
 import com.fitai.coach.ui.platform.LocalAppBuild
 import com.fitai.coach.ui.platform.rememberBrowser
 import com.fitai.coach.ui.platform.rememberFileSharer
 import com.fitai.coach.ui.platform.rememberHealthConnectAccess
-import com.fitai.coach.ui.platform.rememberNotificationAccess
 import com.fitai.coach.ui.privacy.PRIVACY_POLICY_URL
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 import org.koin.compose.koinInject
 
-private const val HOURS_IN_DAY = 24
-private const val DEFAULT_NOTIFY_HOUR = 7
 private const val DATE_PART = 10
 
 @Composable
@@ -143,7 +137,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+internal fun Section(title: String, content: @Composable () -> Unit) {
     FitaiCard {
         Text(title, style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
         content()
@@ -151,7 +145,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
+internal fun Toggle(label: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
     FitaiSwitchRow(label, checked, onChange, enabled = enabled)
 
 @Composable
@@ -202,62 +196,6 @@ private fun Coach(prefs: PreferencesResponse, update: (UpdateUserPreferences) ->
         ) {
             update(UpdateUserPreferences(coachAutoApplyPlanChanges = it))
         }
-    }
-}
-
-@Composable
-private fun EmailNotifications(prefs: PreferencesResponse, update: (UpdateUserPreferences) -> Unit) {
-    val on = prefs.emailNotifications == true
-    val hour = prefs.notifyHour ?: DEFAULT_NOTIFY_HOUR
-    Section("Email notifications") {
-        Toggle("Receive email", on) { update(UpdateUserPreferences(emailNotifications = it)) }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Send at ${hourLabel(hour)}",
-                style = FitaiTheme.typography.body,
-                color = FitaiTheme.colors.text,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { update(UpdateUserPreferences(notifyHour = (hour + HOURS_IN_DAY - 1) % HOURS_IN_DAY)) }, enabled = on) {
-                Icon(LucideIcons.ChevronLeft, contentDescription = "earlier", tint = FitaiTheme.colors.text)
-            }
-            IconButton(onClick = { update(UpdateUserPreferences(notifyHour = (hour + 1) % HOURS_IN_DAY)) }, enabled = on) {
-                Icon(LucideIcons.ChevronRight, contentDescription = "later", tint = FitaiTheme.colors.text)
-            }
-        }
-        Toggle("Weekly summary", prefs.emailWeeklySummary == true, on) { update(UpdateUserPreferences(emailWeeklySummary = it)) }
-        Toggle("Missed workout reminders", prefs.emailMissedReminder == true, on) {
-            update(UpdateUserPreferences(emailMissedReminder = it))
-        }
-        Toggle("Weekly review reminder", prefs.emailWeeklyReviewReminder == true, on) {
-            update(UpdateUserPreferences(emailWeeklyReviewReminder = it))
-        }
-        Toggle("Today's session", prefs.emailTodaySession == true, on) { update(UpdateUserPreferences(emailTodaySession = it)) }
-        Toggle("Analysis digest", prefs.emailAnalysisDigest == true, on) { update(UpdateUserPreferences(emailAnalysisDigest = it)) }
-    }
-}
-
-@Composable
-private fun PushNotifications(state: SettingsUiState, vm: SettingsViewModel) {
-    val access = rememberNotificationAccess()
-    Section("Notifications on this phone") {
-        if (!state.pushAvailable) {
-            Text(
-                "Push notifications aren't available in this build.",
-                style = FitaiTheme.typography.bodySm,
-                color = FitaiTheme.colors.textMuted,
-            )
-            return@Section
-        }
-        Toggle("Push notifications", state.pushOn, enabled = state.busy != "push") { on ->
-            if (on) access.request { granted -> if (granted) vm.enablePush() else vm.notificationsBlocked() } else vm.disablePush()
-        }
-        Text(
-            "Training reminders, coach messages and nutrition reminders. Mute any of them in your phone's settings.",
-            style = FitaiTheme.typography.bodySm,
-            color = FitaiTheme.colors.textMuted,
-        )
-        FitaiButton("Choose which notifications", onClick = access::openSettings, variant = ButtonVariant.Ghost)
     }
 }
 

@@ -22,6 +22,7 @@ import com.fitai.coach.core.health.HealthSyncScheduler
 import com.fitai.coach.core.health.HealthSyncStore
 import com.fitai.coach.core.push.PushPreference
 import com.fitai.coach.core.push.PushRegistration
+import com.fitai.coach.core.push.PushTokens
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
@@ -121,8 +122,13 @@ class FakeApi {
     }
 }
 
-private class MemoryPush : PushPreference {
-    override var enabledFor: String? = null
+private class MemoryPush(override var enabledFor: String? = null) : PushPreference
+
+/** A push token source for a build with push, so Settings shows its push controls. */
+private object FakePushTokens : PushTokens {
+    override suspend fun current() = "test-push-token"
+
+    override suspend fun delete() = Unit
 }
 
 private class MemoryHealth : HealthSyncStore {
@@ -146,7 +152,7 @@ private object NoScheduler : HealthSyncScheduler {
  * fake auth gateway and server and a real SessionManager over a temporary
  * SQLite directory.
  */
-class AppHarness(val auth: FakeAuth, val api: FakeApi) : AutoCloseable, ViewModelStoreOwner {
+class AppHarness(val auth: FakeAuth, val api: FakeApi, pushOnFor: String? = null) : AutoCloseable, ViewModelStoreOwner {
     private val directory = Files.createTempDirectory("fitai-ui").toFile()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val sessions = SessionManager(auth, JvmUserDatabaseStore(directory), api.client)
@@ -156,7 +162,10 @@ class AppHarness(val auth: FakeAuth, val api: FakeApi) : AutoCloseable, ViewMode
                 single<AuthGateway> { auth }
                 single { api.client }
                 single { sessions }
-                single { PushRegistration(api.client, null, MemoryPush()) }
+                single {
+                    // With [pushOnFor], a build with push in which that user already turned it on.
+                    PushRegistration(api.client, pushOnFor?.let { FakePushTokens }, MemoryPush(pushOnFor))
+                }
                 single { HealthSync(api.client, null, MemoryHealth()) }
                 single<HealthSyncScheduler> { NoScheduler }
             },
@@ -186,15 +195,19 @@ class AppHarness(val auth: FakeAuth, val api: FakeApi) : AutoCloseable, ViewMode
     }
 }
 
-/** Runs [block] against the whole app, rendered over a fresh [AppHarness] in a [width] x [height] px window. */
+/**
+ * Runs [block] against the whole app, rendered over a fresh [AppHarness] in a
+ * [width] x [height] px window; with [pushOnFor], push is on for that user.
+ */
 @OptIn(ExperimentalTestApi::class)
 fun appTest(
     auth: FakeAuth,
     api: FakeApi,
     width: Int = 1024,
     height: Int = 768,
+    pushOnFor: String? = null,
     block: suspend ComposeUiTest.(AppHarness) -> Unit,
-) = AppHarness(auth, api).use { app ->
+) = AppHarness(auth, api, pushOnFor).use { app ->
     runDesktopComposeUiTest(width, height) {
         setContent { CompositionLocalProvider(LocalViewModelStoreOwner provides app) { App() } }
         block(app)

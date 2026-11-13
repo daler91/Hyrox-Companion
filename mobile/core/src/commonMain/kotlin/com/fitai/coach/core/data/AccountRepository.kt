@@ -44,6 +44,14 @@ public class AccountRepository(private val api: ApiClient, private val cache: Ca
         cache.put(GARMIN, GetGarminStatusResponse.serializer(), api.call(ApiEndpoints.GetGarminStatus))
     }
 
+    /**
+     * Sends a test push to every device and browser the athlete registered.
+     * Returns how many accepted it; 0 means none, this phone included, got it.
+     *
+     * @throws com.fitai.coach.core.api.ApiException
+     */
+    public suspend fun sendTestPush(): Long = api.call(ApiEndpoints.PostPushTest).sent
+
     public suspend fun syncStrava(): PostStravaSyncResponse = api.call(ApiEndpoints.PostStravaSync).also { refreshIntegrations() }
 
     /**
