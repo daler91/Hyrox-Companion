@@ -26,6 +26,7 @@ export const ICONS: Readonly<Record<string, string>> = {
   Camera: "camera",
   Image: "image",
   Mic: "mic",
+  Lightbulb: "lightbulb",
   Send: "send",
   Square: "square",
   Trash: "trash",

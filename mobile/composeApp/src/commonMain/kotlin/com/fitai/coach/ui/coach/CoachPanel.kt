@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -40,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fitai.coach.core.api.generated.AiSuggestion
 import com.fitai.coach.core.api.generated.ChatFactProposal
 import com.fitai.coach.core.api.generated.ChatSafetyNotice
 import com.fitai.coach.core.api.generated.UpdateUserPreferences
@@ -59,6 +61,7 @@ import com.fitai.coach.ui.icons.generated.LucideIcons
 import com.fitai.coach.ui.markdown.MarkdownText
 import com.fitai.coach.ui.media.rememberCamera
 import com.fitai.coach.ui.media.rememberPhotoPicker
+import com.fitai.coach.ui.media.rememberSpeechInput
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Radius
@@ -88,6 +91,7 @@ fun CoachPanel(onClose: () -> Unit, thread: CoachThread? = null) {
         )
     }
     val state by vm.state.collectAsStateWithLifecycle()
+    val prefs by session.preferences.preferences.collectAsStateWithLifecycle(null)
     val toasts = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(vm) { vm.messages.collect { toasts.showSnackbar(it) } }
@@ -101,6 +105,8 @@ fun CoachPanel(onClose: () -> Unit, thread: CoachThread? = null) {
                 // Clearing deletes every thread, so it is offered from the main conversation only.
                 Header(
                     title = thread?.title,
+                    // The style the coach plans and answers in (the web panel's "Active style" badge).
+                    styleLabel = prefs?.takeIf { thread == null }?.let { trainingStyleLabel(it.trainingStyleId) },
                     canClear = thread == null && state.items.size > 1,
                     onClear = { confirmClear = true },
                     onClose = onClose,
@@ -110,7 +116,14 @@ fun CoachPanel(onClose: () -> Unit, thread: CoachThread? = null) {
                     Consent(state.enablingAi, vm::enableAiCoach)
                 } else {
                     Conversation(state, vm, Modifier.weight(1f))
-                    Composer(state, vm, pickPhoto, takePhoto, seed = thread?.seed.orEmpty())
+                    Composer(
+                        state,
+                        vm,
+                        ComposerInputs(pickPhoto, takePhoto) {
+                            scope.launch { toasts.showSnackbar(it) }
+                        },
+                        thread?.seed.orEmpty(),
+                    )
                 }
             }
             FitaiToastHost(toasts, Modifier.align(Alignment.BottomCenter))
@@ -132,7 +145,7 @@ fun CoachPanel(onClose: () -> Unit, thread: CoachThread? = null) {
 }
 
 @Composable
-private fun Header(title: String?, canClear: Boolean, onClear: () -> Unit, onClose: () -> Unit) {
+private fun Header(title: String?, styleLabel: String?, canClear: Boolean, onClear: () -> Unit, onClose: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg, vertical = Spacing.Sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -142,6 +155,7 @@ private fun Header(title: String?, canClear: Boolean, onClear: () -> Unit, onClo
             Text("coach", style = FitaiTheme.typography.h3, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
             // In a workout's thread: which workout the conversation is about.
             title?.let { Text("About: $it", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted, maxLines = 1) }
+            styleLabel?.let { FitaiBadge("Active style: $it") }
         }
         if (canClear) {
             IconButton(onClick = onClear) {
@@ -202,6 +216,15 @@ private fun Conversation(state: CoachUiState, vm: CoachViewModel, modifier: Modi
                 item.role == ChatRole.User -> UserBubble(item)
                 else -> AssistantBubble(item, state, vm)
             }
+        }
+        items(state.suggestions.size, key = { "suggestion-$it-${state.suggestions[it].workoutId}" }) { index ->
+            val suggestion = state.suggestions[index]
+            SuggestionCard(
+                suggestion,
+                applying = state.applying == suggestion,
+                onApply = { vm.applySuggestion(suggestion) },
+                onDismiss = { vm.dismissSuggestion(suggestion) },
+            )
         }
         item(key = "progress") {
             state.progress?.let { Text(it, style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
@@ -289,14 +312,61 @@ private fun AssistantBubble(item: ChatItem, state: CoachUiState, vm: CoachViewMo
     }
 }
 
+/** A coach suggestion for a plan day (SuggestionCard): what it changes and why, with Apply and Dismiss. */
 @Composable
-private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> Unit)?, takePhoto: (() -> Unit)?, seed: String) {
+private fun SuggestionCard(suggestion: AiSuggestion, applying: Boolean, onApply: () -> Unit, onDismiss: () -> Unit) {
+    val colors = FitaiTheme.colors
+    FitaiCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                Icon(LucideIcons.Lightbulb, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+                Text("Coaching suggestion", style = FitaiTheme.typography.label, color = colors.accentText)
+            }
+            Text(suggestion.focus, style = FitaiTheme.typography.h3, color = colors.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+                FitaiBadge(suggestion.date)
+                FitaiBadge(
+                    suggestion.priority.wireValue.ifEmpty { "low" },
+                    tone = when (suggestion.priority) {
+                        AiSuggestion.Priority.High -> BadgeTone.Danger
+                        AiSuggestion.Priority.Medium -> BadgeTone.Warning
+                        else -> BadgeTone.Neutral
+                    },
+                )
+            }
+            Text(suggestion.actionLabel(), style = FitaiTheme.typography.bodySm, color = colors.textMuted)
+            Text(suggestion.recommendation, style = FitaiTheme.typography.body, color = colors.text)
+            Text(suggestion.rationale, style = FitaiTheme.typography.bodySm, color = colors.textMuted)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+                FitaiButton(
+                    if (applying) "Applying…" else "Apply",
+                    onClick = onApply,
+                    loading = applying,
+                    enabled = !applying,
+                    leadingIcon = LucideIcons.Check,
+                )
+                FitaiButton("Dismiss", onClick = onDismiss, variant = ButtonVariant.Ghost, enabled = !applying, leadingIcon = LucideIcons.X)
+            }
+        }
+    }
+}
+
+/** The composer's extra ways in: a photo from the gallery or camera, and where dictation errors go. */
+private class ComposerInputs(val pickPhoto: (() -> Unit)?, val takePhoto: (() -> Unit)?, val onError: (String) -> Unit)
+
+@Composable
+private fun Composer(state: CoachUiState, vm: CoachViewModel, inputs: ComposerInputs, seed: String) {
     var text by rememberSaveable(seed) { mutableStateOf(seed) }
+    // Dictation adds to what is typed, as the web's voice input does.
+    val dictate = rememberSpeechInput(
+        onText = { spoken -> text = listOf(text.trimEnd(), spoken.trim()).filter { it.isNotEmpty() }.joinToString(" ") },
+        onError = inputs.onError,
+    )
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.Lg, vertical = Spacing.Sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.Xs),
     ) {
-        if (!state.sending && state.quickActions.isNotEmpty()) {
+        if (!state.busy && state.quickActions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
                 items(state.quickActions, key = {
                     it.label
@@ -312,12 +382,12 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> 
             }
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-            takePhoto?.let {
+            inputs.takePhoto?.let {
                 IconButton(onClick = it, enabled = state.photo == null) {
                     Icon(LucideIcons.Camera, contentDescription = "take a photo", tint = FitaiTheme.colors.text)
                 }
             }
-            pickPhoto?.let {
+            inputs.pickPhoto?.let {
                 IconButton(onClick = it, enabled = state.photo == null) {
                     Icon(LucideIcons.Image, contentDescription = "attach a photo", tint = FitaiTheme.colors.text)
                 }
@@ -331,10 +401,24 @@ private fun Composer(state: CoachUiState, vm: CoachViewModel, pickPhoto: (() -> 
                 supportingText = if (text.length > MAX_CHAT_MESSAGE * COUNTER_FROM) "${text.length}/$MAX_CHAT_MESSAGE" else null,
                 error = if (text.length > MAX_CHAT_MESSAGE) "Too long to send" else null,
             )
+            dictate?.let { input ->
+                if (input.listening) {
+                    IconButton(onClick = input::stop) {
+                        Icon(LucideIcons.Square, contentDescription = "stop dictating", tint = FitaiTheme.colors.accent)
+                    }
+                } else {
+                    IconButton(onClick = input::start, enabled = !state.busy) {
+                        Icon(LucideIcons.Mic, contentDescription = "dictate a message", tint = FitaiTheme.colors.text)
+                    }
+                }
+            }
             if (state.sending) {
                 IconButton(onClick = vm::stop) { Icon(LucideIcons.Square, contentDescription = "stop", tint = FitaiTheme.colors.text) }
             } else {
-                IconButton(onClick = { if (vm.send(text)) text = "" }, enabled = text.isNotBlank() || state.photo != null) {
+                IconButton(
+                    onClick = { if (vm.send(text)) text = "" },
+                    enabled = !state.suggesting && (text.isNotBlank() || state.photo != null),
+                ) {
                     Icon(LucideIcons.Send, contentDescription = "send", tint = FitaiTheme.colors.accent)
                 }
             }
