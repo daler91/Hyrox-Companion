@@ -3,9 +3,12 @@ package com.fitai.coach.ui.fuelling
 import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.GetNutritionSummaryRangeResponse
 import com.fitai.coach.core.api.generated.PatchPlansDaysByDayIdRequest
+import com.fitai.coach.core.api.generated.TimelineEntry
 import com.fitai.coach.core.data.SessionFuelling
 import com.fitai.coach.core.dates.addDaysToIsoDate
 import com.fitai.coach.core.dates.dayDiff
+import com.fitai.coach.core.nutrition.SessionFuellingTargetInput
+import com.fitai.coach.core.nutrition.computeSessionFuellingTarget
 import com.fitai.coach.ui.format.formatNumber
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -151,4 +154,33 @@ fun timelineFuellingWindow(dates: List<String>, today: String): DateRange? {
     val oldest = sorted.firstOrNull() ?: return null
     val newest = sorted.last()
     return fuellingRangeWindow(blockStart(oldest), addDaysToIsoDate(blockStart(newest), FUELLING_BLOCK_DAYS - 1), today)
+}
+
+/**
+ * The fuel plan on a planned session's card (FuellingTargetChip.tsx): carbs
+ * before when the session warrants them, and recovery carbs and protein
+ * after. Worked out from the athlete's expected duration and effort, else the
+ * server's estimate from the prescription (an hour at moderate effort without
+ * either), as the session's sheet starts from.
+ */
+data class FuellingTarget(val preCarbG: Double, val postCarbG: Double, val postProteinG: Double, val explanation: String) {
+    val hasPre: Boolean get() = preCarbG > 0
+    val hasPost: Boolean get() = postCarbG > 0 || postProteinG > 0
+
+    companion object {
+        /** Null off an upcoming planned day, or when the session warrants no target at all. */
+        fun of(entry: TimelineEntry, bodyweightKg: Double?): FuellingTarget? {
+            if (entry.status != TimelineEntry.Status.Planned || entry.planDayId.isNullOrEmpty()) return null
+            val estimate = entry.sessionEstimate
+            val target = computeSessionFuellingTarget(
+                SessionFuellingTargetInput(
+                    durationMin = entry.expectedDurationMin?.toDouble() ?: estimate?.durationMin,
+                    rpe = entry.expectedRpe?.toDouble() ?: estimate?.rpe,
+                    bodyweightKg = bodyweightKg,
+                ),
+            )
+            return FuellingTarget(target.preCarbG, target.postCarbG, target.postProteinG, target.explanation)
+                .takeIf { it.hasPre || it.hasPost }
+        }
+    }
 }

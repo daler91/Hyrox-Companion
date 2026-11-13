@@ -128,6 +128,7 @@ public data class TimelineEntry(
      */
     public val exerciseSets: List<ExerciseSetRow>? = null,
     public val structureBlocks: List<WorkoutStructureBlock>? = null,
+    public val sessionEstimate: TimelineSessionEstimate? = null,
 ) {
     @Serializable(with = Type.Serializer::class)
     public enum class Type(override val wireValue: String) : WireEnum {

@@ -9703,6 +9703,42 @@
         ],
         "description": "A coaching material without its text"
       },
+      "TimelineSessionEstimate": {
+        "type": "object",
+        "properties": {
+          "durationMin": {
+            "type": "number",
+            "nullable": true,
+            "description": "Estimated minutes; null when the prescription has nothing to estimate from"
+          },
+          "rpe": {
+            "type": "number",
+            "nullable": true,
+            "description": "Estimated effort, 1-10; null when nothing signals it"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "structure",
+              "sets",
+              "structure_and_sets",
+              "none"
+            ],
+            "description": "What the duration was estimated from"
+          },
+          "clamped": {
+            "type": "boolean",
+            "description": "The duration hit the 10 or 180 minute bound, so it is a bound rather than an estimate"
+          }
+        },
+        "required": [
+          "durationMin",
+          "rpe",
+          "source",
+          "clamped"
+        ],
+        "description": "On upcoming planned days: the duration and effort the prescription implies, personalised by the athlete's recent run pace. What a fuelling target uses when the athlete hasn't set expectedDurationMin or expectedRpe. Not AI-refined; GET /api/v1/nutrition/planned-session-estimate/{planDayId} is."
+      },
       "TimelineEntry": {
         "type": "object",
         "properties": {
@@ -10047,6 +10083,9 @@
             "items": {
               "$ref": "#/components/schemas/WorkoutStructureBlock"
             }
+          },
+          "sessionEstimate": {
+            "$ref": "#/components/schemas/TimelineSessionEstimate"
           }
         },
         "required": [

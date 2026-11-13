@@ -86,10 +86,9 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - before a planned session — `GET /nutrition/planned-session-estimate/{planDayId}`;
   - around a logged one — `GET /nutrition/session-fuelling/{workoutId}`;
   - a fuelling chip on each timeline day — `GET /nutrition/summary-range`.
-- [ ] The fuelling target chip on each planned session's timeline card (FuellingTargetChip). It needs each session's
-  duration and effort, which waits on the server adding `sessionEstimate` to planned timeline entries
+- [x] The fuelling target chip on each planned session's timeline card (FuellingTargetChip). Its duration and effort
+  come from the athlete's expected values, else `sessionEstimate` on planned timeline entries
   ([mobile-shared-logic.md](mobile-shared-logic.md) serves `plannedSessionEstimate` from the API rather than porting it).
-  The panel in the session's sheet asks for one day's estimate instead.
 
 ## Wave 4: plans, coach extras, settings
 

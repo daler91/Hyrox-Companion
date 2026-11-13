@@ -3,6 +3,7 @@ import { type Request, type Response, Router } from "express";
 import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_TIMELINE_LIMIT, DEFAULT_TIMELINE_PAGE_SIZE } from "../../constants";
 import { asyncHandler, parsePagination, rateLimiter } from "../../routeUtils";
+import { withSessionEstimates } from "../../services/sessionEstimate/timelineSessionEstimates";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 
@@ -18,7 +19,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * client echoes it back as `?before=`. The first page (no `before`) is
  * anchored on the athlete's today, see `TimelineStorage.getTimelinePage`.
  * `offset` is the pre-cursor contract and still windows the flat merge with
- * no cursor header, so nothing that sends it breaks.
+ * no cursor header, so nothing that sends it breaks. Upcoming planned entries
+ * carry `sessionEstimate` (see withSessionEstimates).
  */
 export function registerWorkoutTimelineRoutes(router: Router): void {
   router.get("/api/v1/timeline", isAuthenticated, rateLimiter("timeline", 60), asyncHandler(async (req: TimelineRequest, res: Response) => {
@@ -29,7 +31,7 @@ export function registerWorkoutTimelineRoutes(router: Router): void {
     const limit = Math.min(pagination.limit, DEFAULT_TIMELINE_LIMIT);
 
     if (pagination.offset !== undefined) {
-      res.json(await storage.timeline.getTimeline(userId, planId, limit, pagination.offset));
+      res.json(await withSessionEstimates(userId, await storage.timeline.getTimeline(userId, planId, limit, pagination.offset)));
       return;
     }
     if (before !== undefined && !ISO_DATE.test(before)) {
@@ -39,6 +41,6 @@ export function registerWorkoutTimelineRoutes(router: Router): void {
 
     const page = await storage.timeline.getTimelinePage(userId, { planId, limit, before });
     if (page.nextCursor) res.setHeader("X-Next-Cursor", page.nextCursor);
-    res.json(page.entries);
+    res.json(await withSessionEstimates(userId, page.entries));
   }));
 }

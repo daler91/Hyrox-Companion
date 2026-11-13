@@ -2,6 +2,7 @@ package com.fitai.coach.ui.fuelling
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -234,6 +235,46 @@ internal fun ExplainedLine(text: String, open: Boolean, showLabel: String, hideL
         IconButton(onClick = onToggle) {
             Icon(LucideIcons.Info, contentDescription = if (open) hideLabel else showLabel, tint = FitaiTheme.colors.textMuted)
         }
+    }
+}
+
+/**
+ * A planned session's fuel plan on its timeline card (FuellingTargetChip.tsx).
+ * Reads out how the targets were worked out; a tap opens the card, whose
+ * sheet holds the full panel.
+ */
+@Composable
+fun FuellingTargetChip(target: FuellingTarget) {
+    val colors = FitaiTheme.colors
+    Row(
+        Modifier
+            .clearAndSetSemantics { contentDescription = target.explanation }
+            .border(1.dp, colors.border, Radius.Md)
+            .background(colors.card, Radius.Md)
+            .padding(horizontal = Spacing.Sm, vertical = Spacing.Xxs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.Xs),
+    ) {
+        Icon(LucideIcons.UtensilsCrossed, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
+        Text(fuellingTargetText(target, colors.text), style = FitaiTheme.typography.bodySm, color = colors.textMuted)
+    }
+}
+
+/** "Fuel ~40g carbs before · ~60g C + 25g P after", the figures in [emphasis]. */
+internal fun fuellingTargetText(target: FuellingTarget, emphasis: Color): AnnotatedString = buildAnnotatedString {
+    append("Fuel ")
+    if (target.hasPre) {
+        append("~")
+        strong(emphasis, "${grams(target.preCarbG)}g")
+        append(" carbs before")
+    }
+    if (target.hasPre && target.hasPost) append(" · ")
+    if (target.hasPost) {
+        append("~")
+        strong(emphasis, "${grams(target.postCarbG)}g")
+        append(" C + ")
+        strong(emphasis, "${grams(target.postProteinG)}g")
+        append(" P after")
     }
 }
 

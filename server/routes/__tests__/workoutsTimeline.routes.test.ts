@@ -15,6 +15,8 @@ vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
     timeline: ["getTimeline", "getTimelinePage"],
+    users: ["getUser"],
+    analytics: ["getWorkoutLogsByDateRange"],
   }),
 );
 
@@ -95,6 +97,29 @@ describe("GET /api/v1/timeline", () => {
       expect(res.headers["x-next-cursor"]).toBeUndefined();
       expect(storage.timeline.getTimeline).toHaveBeenCalledWith("test_user_id", undefined, 10, 5);
       expect(storage.timeline.getTimelinePage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("session estimates", () => {
+    it("adds each upcoming planned day's estimated duration and effort", async () => {
+      const planned = {
+        id: "plan-d1",
+        date: "2026-11-20",
+        type: "planned",
+        status: "planned",
+        planDayId: "d1",
+        exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+        structureBlocks: [],
+      };
+      vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({ entries: [planned, ...mockEntries], nextCursor: null } as never);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ distanceUnit: "km" } as never);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+
+      const res = await request(app).get("/api/v1/timeline");
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].sessionEstimate).toEqual({ durationMin: expect.any(Number), rpe: expect.any(Number), source: "sets", clamped: false });
+      expect(res.body[1]).toEqual(mockEntries[0]);
     });
   });
 

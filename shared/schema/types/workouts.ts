@@ -1,4 +1,5 @@
-﻿import type {
+﻿import type { PlannedSessionEstimate } from "../../plannedSessionEstimate";
+import type {
   DeviceLinkSource,
   PlanDayPriority,
   PlanDayRecovery,
@@ -466,6 +467,8 @@ export type TimelineEntry = {
   aiInputsUsed?: CoachNoteInputs | null;
   exerciseSets?: ExerciseSet[];
   structureBlocks?: StructureBlockInput[];
+  /** Upcoming planned days only: the prescription's estimated duration and RPE (GET /api/v1/timeline). */
+  sessionEstimate?: PlannedSessionEstimate;
   calories?: number | null;
   distanceMeters?: number | null;
   elevationGain?: number | null;
