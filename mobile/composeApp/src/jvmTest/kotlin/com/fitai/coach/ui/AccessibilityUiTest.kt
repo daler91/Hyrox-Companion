@@ -61,7 +61,7 @@ class AccessibilityUiTest {
     private companion object {
         // Pixels at the desktop test's density of 1.
         const val PHONE_WIDTH = 412
-        const val TALL = 3000
+        const val TALL = 6000
     }
 
     private fun ComposeUiTest.assertAccessible(screen: String) {

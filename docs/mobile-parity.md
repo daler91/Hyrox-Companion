@@ -105,7 +105,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - voice dictation;
   - AI budget warning;
   - training-style badge.
-- [ ] Settings → Training:
+- [x] Settings → Training:
   - race profile: division, gender, age;
   - body composition;
   - resting and max heart rate, FTP;

@@ -104,8 +104,9 @@ fun SettingsScreen(
         ) {
             Text("settings", style = FitaiTheme.typography.h1, color = FitaiTheme.colors.text, modifier = Modifier.semantics { heading() })
             Profile(state, onRunSetup)
+            state.preferences?.let { prefs -> Units(prefs, vm::update) }
+            TrainingSettings(toasts)
             state.preferences?.let { prefs ->
-                Units(prefs, vm::update)
                 Coach(prefs, vm::update)
                 EmailNotifications(prefs, vm::update)
             }
