@@ -181,7 +181,7 @@ function EntryFuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) {
       data-testid="fuelling-plan-panel"
     >
       <div className="flex items-center gap-2">
-        <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
+        <UtensilsCrossed className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <h3 className="text-sm font-semibold">Fuel for this session</h3>
       </div>
 
