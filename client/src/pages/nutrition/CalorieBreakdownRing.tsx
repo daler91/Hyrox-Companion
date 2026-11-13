@@ -1,6 +1,20 @@
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { lazy, Suspense } from "react";
 
 import type { MacroEnergyShares } from "./utils";
+
+/** The empty track: shown for a zero-energy serving and while the donut loads. */
+function EmptyTrack() {
+  return <div className="absolute inset-[18px] rounded-full border-[16px] border-muted" aria-hidden="true" />;
+}
+
+/**
+ * recharts is only needed once the Log Food dialog opens, so the donut is a
+ * lazy chunk: the Nutrition route no longer statically imports vendor-charts
+ * (~411 kB raw / ~115 kB gzip). The empty track is the same size, so nothing
+ * shifts while it loads, and a chunk that fails to load (a tab left open
+ * across a deploy) keeps the empty track rather than reloading the page.
+ */
+const MacroDonut = lazy(() => import("./MacroDonut").catch(() => ({ default: EmptyTrack })));
 
 /** Macro slice colours (chart tokens) — reused by MacroRows' bars for consistency. */
 export const MACRO_COLORS = {
@@ -48,27 +62,11 @@ export function CalorieBreakdownRing({
         data-testid="calorie-ring"
       >
         {hasEnergy ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={48}
-                outerRadius={64}
-                paddingAngle={data.length > 1 ? 2 : 0}
-                dataKey="value"
-                stroke="none"
-                isAnimationActive={false}
-              >
-                {data.map((d) => (
-                  <Cell key={d.name} fill={d.fill} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<EmptyTrack />}>
+            <MacroDonut data={data} />
+          </Suspense>
         ) : (
-          <div className="absolute inset-[18px] rounded-full border-[16px] border-muted" aria-hidden="true" />
+          <EmptyTrack />
         )}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-xl font-semibold leading-none tabular-nums">{calories}</span>
