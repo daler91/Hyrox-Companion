@@ -151,7 +151,11 @@ private fun CardFacts(facts: List<String>) {
                 modifier = Modifier.semantics { heading() },
             )
             facts.forEach { Text("• $it", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted) }
-            Text("Every plan is written around these.", style = FitaiTheme.typography.bodySm, color = FitaiTheme.colors.textMuted)
+            Text(
+                "Every plan is written around these. Change them in Settings, under Athlete card.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
         }
     }
 }

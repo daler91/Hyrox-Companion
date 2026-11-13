@@ -46,7 +46,7 @@ import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
 
-/** Settings → Training: the web Training tab's cards, in its order. */
+/** Settings → Training: the web Training tab's cards, in its order, the athlete card included. */
 @Composable
 fun TrainingSettings(toasts: SnackbarHostState) {
     val session = LocalUserSession.current
@@ -76,6 +76,7 @@ fun TrainingSettings(toasts: SnackbarHostState) {
         WEEKLY_GOALS.map { it to "$it" },
         prefs.weeklyGoal,
     ) { vm.choose(UpdateUserPreferences(weeklyGoal = it)) }
+    AthleteCardSection(toasts)
     TrainingStyle(state, prefs, vm)
     TrainingCard("Workout review", "Control adherence indicators on the timeline and workout details.") {
         FitaiSwitchRow("Show adherence insights", prefs.showAdherenceInsights == true, {
