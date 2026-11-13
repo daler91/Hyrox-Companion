@@ -111,6 +111,7 @@ fun SettingsScreen(
                 dialog =
                     it
             })
+            RecycleBinSection(toasts)
             Privacy(state, vm)
             Account(onSignOut = {
                 dialog = if (state.pendingWrites >
