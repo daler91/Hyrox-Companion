@@ -1,6 +1,7 @@
 package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
+import com.fitai.coach.core.dates.deviceTimeZone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -40,6 +41,7 @@ public class UserSession internal constructor(
     public val onboarding: OnboardingRepository = OnboardingRepository(api, cache, preferences, timeline)
 
     private var job: Job? = null
+    private var scope: CoroutineScope? = null
 
     /** Sends queued writes, then refreshes the timeline. */
     public suspend fun refresh() {
@@ -47,12 +49,31 @@ public class UserSession internal constructor(
         timeline.refresh()
     }
 
+    /**
+     * Saves the phone's timezone as the athlete's when it changed, as the web
+     * does once a visit. Runs at session start and whenever the app comes back
+     * to the foreground. @throws com.fitai.coach.core.api.ApiException
+     */
+    public suspend fun syncTimezone(): Boolean = preferences.syncTimezone(deviceTimeZone())
+
+    /**
+     * The app came back to the foreground, perhaps after a flight: checks the
+     * timezone again. Part of the session's own work, so closing the session
+     * waits for it rather than closing the database under it.
+     */
+    public fun resumed() {
+        val running = job ?: return
+        scope?.launch(running) { bestEffort { syncTimezone() } }
+    }
+
     internal fun start(scope: CoroutineScope, online: Flow<Boolean>) {
+        this.scope = scope
         job = scope.launch {
             sync.start(this, online)
             // After writes went (or were dropped), the timeline shows the server's version.
             launch { sync.events.collect { bestEffort { timeline.refresh() } } }
             bestEffort { preferences.refresh() }
+            bestEffort { syncTimezone() }
             bestEffort { timeline.refresh() }
             bestEffort { timeline.refreshPlans() }
         }

@@ -4,17 +4,22 @@ import com.fitai.coach.core.api.generated.CreateWorkoutRequest
 import com.fitai.coach.core.auth.AuthException
 import com.fitai.coach.core.auth.AuthGateway
 import com.fitai.coach.core.auth.AuthState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 private class FakeAuth : AuthGateway {
     override val state = MutableStateFlow<AuthState>(AuthState.Loading)
@@ -125,4 +130,32 @@ class SessionManagerTest {
         assertTrue(other.database.outbox().all().isEmpty())
         assertEquals(leftBehind, server.sentTo("POST", "/api/v1/workouts").size)
     }
+
+    @Test
+    fun comingBackToTheAppChecksTheTimezoneOnlyWhileTheSessionIsOpen() = runTest {
+        // The server keeps a zone that is never the phone's, so every check sends one.
+        val stale = """{"userTimezone":"Pacific/Kiritimati","onboardingCompleted":true}"""
+        server.on("GET", PREFERENCES, 200, stale)
+        server.on("PATCH", PREFERENCES, 200, stale)
+        val manager = manager()
+        val session = signIn(manager, "user_a")
+        awaitPatches(1) // The session start's.
+
+        session.resumed()
+        awaitPatches(2)
+
+        // Closed, its database is gone: a late resume touches nothing.
+        manager.signOut()
+        session.resumed()
+        testScheduler.advanceUntilIdle()
+        assertEquals(2, server.sentTo("PATCH", PREFERENCES).size)
+    }
+
+    private suspend fun awaitPatches(count: Int) = withContext(Dispatchers.Default) {
+        withTimeout(10.seconds) {
+            while (server.sentTo("PATCH", PREFERENCES).size < count) delay(10)
+        }
+    }
 }
+
+private const val PREFERENCES = "/api/v1/preferences"
