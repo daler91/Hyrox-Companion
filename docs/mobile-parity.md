@@ -119,7 +119,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - push refuel and logging reminders;
   - a **test notification** button.
 - [x] **Recycle bin**: restore, delete forever, empty — `/recycle-bin`.
-- [ ] Automatic timezone sync — `PATCH /preferences` with `userTimezone`.
+- [x] Automatic timezone sync — `PATCH /preferences` with `userTimezone`.
 
 ## Staying on the web (decided in docs/mobile-app-plan.md)
 

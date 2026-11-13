@@ -1,6 +1,7 @@
 package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
+import com.fitai.coach.core.dates.deviceTimeZone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -47,12 +48,20 @@ public class UserSession internal constructor(
         timeline.refresh()
     }
 
+    /**
+     * Saves the phone's timezone as the athlete's when it changed, as the web
+     * does once a visit. Runs at session start and whenever the app comes back
+     * to the foreground. @throws com.fitai.coach.core.api.ApiException
+     */
+    public suspend fun syncTimezone(): Boolean = preferences.syncTimezone(deviceTimeZone())
+
     internal fun start(scope: CoroutineScope, online: Flow<Boolean>) {
         job = scope.launch {
             sync.start(this, online)
             // After writes went (or were dropped), the timeline shows the server's version.
             launch { sync.events.collect { bestEffort { timeline.refresh() } } }
             bestEffort { preferences.refresh() }
+            bestEffort { syncTimezone() }
             bestEffort { timeline.refresh() }
             bestEffort { timeline.refreshPlans() }
         }
