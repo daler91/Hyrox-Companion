@@ -93,7 +93,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
 
 ## Wave 4: plans, coach extras, settings
 
-- [ ] Plan tools:
+- [x] Plan tools:
   - rename — `PATCH /plans/{id}`;
   - goal — `…/goal`;
   - reschedule — `POST /plans/{id}/schedule`;

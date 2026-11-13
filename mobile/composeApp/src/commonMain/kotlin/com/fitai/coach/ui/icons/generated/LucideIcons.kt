@@ -20,6 +20,26 @@ object LucideIcons {
         )
     }
 
+    val Archive: ImageVector by lazy {
+        lucide(
+            "Archive",
+            "M3 3H21A1 1 0 0 1 22 4V7A1 1 0 0 1 21 8H3A1 1 0 0 1 2 7V4A1 1 0 0 1 3 3Z",
+            "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8",
+            "M10 12h4",
+        )
+    }
+
+    val ArchiveRestore: ImageVector by lazy {
+        lucide(
+            "ArchiveRestore",
+            "M3 3H21A1 1 0 0 1 22 4V7A1 1 0 0 1 21 8H3A1 1 0 0 1 2 7V4A1 1 0 0 1 3 3Z",
+            "M4 8v11a2 2 0 0 0 2 2h2",
+            "M20 8v11a2 2 0 0 1-2 2h-2",
+            "m9 15 3-3 3 3",
+            "M12 12v9",
+        )
+    }
+
     val ArrowLeft: ImageVector by lazy {
         lucide(
             "ArrowLeft",
@@ -51,6 +71,22 @@ object LucideIcons {
             "M8 14h.01",
             "M12 18h.01",
             "M8 18h.01",
+        )
+    }
+
+    val CalendarDays: ImageVector by lazy {
+        lucide(
+            "CalendarDays",
+            "M8 2v3",
+            "M16 2v3",
+            "M5 3H19A2 2 0 0 1 21 5V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3Z",
+            "M3 9h18",
+            "M8 13h.01",
+            "M12 13h.01",
+            "M16 13h.01",
+            "M8 17h.01",
+            "M12 17h.01",
+            "M16 17h.01",
         )
     }
 
@@ -132,6 +168,15 @@ object LucideIcons {
             "m20.1 3.9 1.4-1.4",
             "M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z",
             "m9.6 14.4 4.8-4.8",
+        )
+    }
+
+    val Ellipsis: ImageVector by lazy {
+        lucide(
+            "Ellipsis",
+            "M11 12A1 1 0 1 0 13 12A1 1 0 1 0 11 12Z",
+            "M18 12A1 1 0 1 0 20 12A1 1 0 1 0 18 12Z",
+            "M4 12A1 1 0 1 0 6 12A1 1 0 1 0 4 12Z",
         )
     }
 
@@ -363,6 +408,15 @@ object LucideIcons {
             "StickyNote",
             "M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z",
             "M15 3v5a1 1 0 0 0 1 1h5",
+        )
+    }
+
+    val Target: ImageVector by lazy {
+        lucide(
+            "Target",
+            "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
+            "M6 12A6 6 0 1 0 18 12A6 6 0 1 0 6 12Z",
+            "M10 12A2 2 0 1 0 14 12A2 2 0 1 0 10 12Z",
         )
     }
 

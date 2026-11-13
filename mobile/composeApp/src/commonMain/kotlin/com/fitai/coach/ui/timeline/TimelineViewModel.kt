@@ -146,7 +146,8 @@ class TimelineViewModel(
             records = more.records,
             coachReviewing = more.coachReviewing,
             reviewPrompt = reviewPrompt(today, hourIn(prefs?.userTimezone))?.takeIf { it.weekStart != more.dismissedPrompt },
-            plans = plans.orEmpty().filter { it.retiredOn == null || it.id == shown.planId },
+            // Archived plans after the live ones: still there to look back on, or restore.
+            plans = plans.orEmpty().sortedBy { it.retiredOn != null },
             selectedPlanId = shown.planId,
             summary = summary,
             refreshing = refresh.refreshing,
@@ -351,6 +352,55 @@ class TimelineViewModel(
 
     fun tomorrow(today: String): String = addDaysToIsoDate(today, 1)
 
+    // --- Plan tools (PlanToolsMenu) ---
+
+    fun renamePlan(planId: String, name: String) = act("Couldn't rename the plan") {
+        session.plans.rename(planId, name)
+        toasts.send("Plan renamed")
+    }
+
+    /** Saves what the plan trains towards; a blank goal clears it. */
+    fun setPlanGoal(planId: String, goal: String) = act("Couldn't save the goal") {
+        session.plans.setGoal(planId, goal)
+        toasts.send("Goal saved")
+    }
+
+    /** Lays the plan out from [startDate] and shows it. */
+    fun schedulePlan(planId: String, startDate: String) = act("Couldn't schedule the plan") {
+        session.plans.schedule(planId, startDate)
+        selectedPlan.value = planId
+        toasts.send("Training plan scheduled")
+    }
+
+    /** Archives the plan from today, or restores an archived one. */
+    fun setPlanArchived(plan: TrainingPlan, archived: Boolean) {
+        viewModelScope.launch {
+            try {
+                session.plans.setRetirement(plan.id, if (archived) state.value.today.ifEmpty { todayIn(null) } else null)
+                toasts.send(if (archived) "Plan archived" else "Plan restored")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                toasts.send(
+                    if (e.code == PLAN_OVERLAP) {
+                        "Can't restore this plan yet: another plan already covers these dates. Archive that one first."
+                    } else {
+                        e.userMessage("Couldn't update the plan")
+                    },
+                )
+            } catch (e: Exception) {
+                toasts.send(e.userMessage("Couldn't update the plan"))
+            }
+        }
+    }
+
+    /** Deletes the plan and its days; the toast can bring them back. */
+    fun deletePlan(planId: String) = act("Couldn't delete the plan") {
+        val binId = session.plans.delete(planId)
+        if (selectedPlan.value == planId) selectedPlan.value = null
+        undoOffers.send(UndoOffer("Plan deleted") { session.plans.restore(binId) })
+    }
+
     /**
      * Fetches the fuelling chips for [window], the days on screen. A failure
      * (offline, nutrition off) keeps what's on the device, or shows no chips.
@@ -439,5 +489,7 @@ class TimelineViewModel(
         const val SESSION_SAVE_DEBOUNCE_MS = 500L
 
         const val NOT_FOUND = 404
+
+        const val PLAN_OVERLAP = "PLAN_OVERLAP"
     }
 }
