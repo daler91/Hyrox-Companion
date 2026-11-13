@@ -1,12 +1,14 @@
 package com.fitai.coach.ui.coach
 
 import com.fitai.coach.core.api.ApiException
+import com.fitai.coach.core.api.generated.AiSuggestion
 import com.fitai.coach.core.api.generated.ChatFactProposal
 import com.fitai.coach.core.api.generated.ChatHistoryMessage
 import com.fitai.coach.core.api.generated.ChatRagInfo
 import com.fitai.coach.core.api.generated.ChatSafetyNotice
 import com.fitai.coach.core.api.generated.ChatStreamEvent
 import com.fitai.coach.core.api.generated.PlanProposal
+import io.ktor.client.plugins.HttpRequestTimeoutException
 
 enum class ChatRole { User, Assistant }
 
@@ -158,3 +160,51 @@ fun changeRows(change: PlanProposal.ChangesItem): List<Triple<String, String?, S
         new.expectedRpe?.let { add(Triple("RPE", old.expectedRpe?.let { r -> r.toInt().toString() }, it.toString())) }
     }
 }
+
+/** The quick action that asks for suggestions on the upcoming plan days rather than a chat reply. */
+const val SUGGESTIONS_ACTION = "suggestions"
+
+/** "Nearly at today's AI limit" (useBudgetWarning), said once a panel. */
+const val BUDGET_WARNING = "Nearly at today's AI limit. Your AI allowance resets on a rolling 24-hour basis."
+
+/** The coach's line when the suggestions arrive: how many, or why there are none (useSuggestions). */
+fun suggestionsReply(count: Int, serverMessage: String?): String = when {
+    count > 0 ->
+        "I have $count suggestion${if (count > 1) "s" else ""} for your upcoming workouts. " +
+            "Review them below and tap Apply to add them to your plan."
+    // A server reason (a plan that has ended with no next one) says more than the generic line.
+    !serverMessage.isNullOrBlank() -> serverMessage
+    else -> "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now."
+}
+
+/** The plan day field a suggestion writes to, as its card names it. */
+fun AiSuggestion.fieldLabel(): String = when (targetField) {
+    AiSuggestion.TargetField.MainWorkout -> "Main workout"
+    AiSuggestion.TargetField.Accessory -> "Accessory"
+    else -> "Notes"
+}
+
+/** "Replace Main workout" or "Add to Notes". */
+fun AiSuggestion.actionLabel(): String = "${if (action == AiSuggestion.Action.Append) "Add to" else "Replace"} ${fieldLabel()}"
+
+/** The coach's note once a suggestion is in the plan. */
+fun AiSuggestion.appliedNote(): String =
+    "Applied suggestion to $focus ($date). The ${fieldLabel().lowercase()} has been updated."
+
+/** The coach's note when the suggestion's plan day no longer exists. */
+fun AiSuggestion.missingNote(): String = "Could not find the workout for $focus ($date). It may have been removed from your plan."
+
+/** What to say when suggestions can't be had (describeAiError, with the suggestions' own wording). */
+fun suggestionsFailure(error: Throwable): String = when {
+    error is HttpRequestTimeoutException -> "Suggestions are taking longer than expected. Please try again in a moment."
+    error !is ApiException -> "Network error — please check your connection and try again."
+    error.code == "AI_COACH_DISABLED" -> "The AI Coach is turned off. Turn it on to get suggestions."
+    error.code == "AI_BUDGET_EXCEEDED" -> "You've reached your daily AI usage limit. Please try again later."
+    error.code == "RATE_LIMITED" || error.status == TOO_MANY -> "You're sending requests too quickly. Please wait a moment and try again."
+    error.code == "AI_FEATURES_DISABLED" -> "AI coaching is switched off for now. Please try again later."
+    error.code == "AI_GLOBAL_BUDGET_EXCEEDED" -> "The AI coach is very busy right now. Please try again later."
+    else -> "Sorry, I couldn't analyze your workouts right now. Please try again."
+}
+
+/** The coaching style the coach is using, as the panel's badge names it. */
+fun trainingStyleLabel(styleId: String?): String = if (styleId == "maf_method") "MAF Method" else "Balanced"

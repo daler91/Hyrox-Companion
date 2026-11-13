@@ -100,7 +100,7 @@ Every gap below already has a server endpoint, so closing one is client work onl
   - archive or restore — `…/retirement`;
   - delete, with undo.
 - [x] Generate an AI plan outside onboarding, including "supersede the current plan".
-- [ ] Coach:
+- [x] Coach:
   - workout suggestions with Apply — `/timeline/ai-suggestions`;
   - voice dictation;
   - AI budget warning;

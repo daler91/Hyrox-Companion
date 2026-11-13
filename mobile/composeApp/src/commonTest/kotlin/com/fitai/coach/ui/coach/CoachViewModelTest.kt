@@ -17,6 +17,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -42,6 +43,9 @@ class CoachViewModelTest {
 
     /** path → (status, body); a null status means no answer. */
     private val routes = mutableMapOf<String, Pair<Int?, String>>()
+
+    /** path → extra response headers. */
+    private val routeHeaders = mutableMapOf<String, Map<String, String>>()
     private val sent = mutableListOf<Pair<String, JsonObject?>>()
     private val queries = mutableMapOf<String, String>()
     private var planChanges = 0
@@ -64,7 +68,9 @@ class CoachViewModelTest {
                     queries[key] = request.url.encodedQuery
                     val (status, reply) = routes[key] ?: (404 to """{"error":"Not found"}""")
                     if (status == null) throw Offline()
-                    respond(reply, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
+                    val headers = mapOf(HttpHeaders.ContentType to listOf("application/json")) +
+                        routeHeaders[key].orEmpty().mapValues { listOf(it.value) }
+                    respond(reply, HttpStatusCode.fromValue(status), headersOf(*headers.toList().toTypedArray()))
                 }
             },
         )
@@ -202,5 +208,119 @@ class CoachViewModelTest {
             ).failure,
         )
         assertEquals("Checking your plan...", statusLabel(com.fitai.coach.core.api.generated.ChatStreamEvent.Status.DraftingPlan))
+    }
+
+    private fun suggestion(day: String, field: String = "mainWorkout") =
+        """{"workoutId":"$day","date":"2026-11-17","focus":"Tempo run","targetField":"$field","action":"replace",""" +
+            """"recommendation":"6 x 1 km at threshold","rationale":"Builds race pace","priority":"high"}"""
+
+    private fun TestScope.suggestionsPanel(): CoachViewModel {
+        routes["GET /api/v1/chat/welcome"] = 200 to
+            """{"greeting":"Hi","quickActions":[{"id":"suggestions","label":"Get workout suggestions"}]}"""
+        routes["POST /api/v1/chat/message"] = 200 to """{"id":"m1","role":"assistant","content":"x"}"""
+        return viewModel()
+    }
+
+    @Test
+    fun workoutSuggestionsArriveUnderTheReplyForApplyOrDismiss() = runTest(dispatcher) {
+        routes["POST /api/v1/timeline/ai-suggestions"] = 200 to
+            """{"suggestions":[${suggestion("d1")},${suggestion("d2", "notes")}],"ragInfo":{"source":"rag","chunkCount":2}}"""
+        routes["POST /api/v1/timeline/ai-suggestions/apply"] = 200 to """{"applied":true,"structured":false}"""
+        val vm = suggestionsPanel()
+
+        vm.quickAction(vm.state.value.quickActions.single())
+        advanceUntilIdle()
+
+        // The chip asks for suggestions rather than chatting, and both turns are saved.
+        assertTrue(sent.none { it.first == "POST /api/v1/chat/stream" })
+        val saved = sent.filter { it.first == "POST /api/v1/chat/message" }.map { it.second!!["role"]!!.jsonPrimitive.content }
+        assertEquals(listOf("user", "assistant"), saved)
+        assertEquals(
+            listOf("Get workout suggestions", suggestionsReply(2, null)),
+            vm.state.value.items.takeLast(2).map { it.content },
+        )
+        assertEquals(2, vm.state.value.suggestions.size)
+
+        vm.applySuggestion(vm.state.value.suggestions.first())
+        advanceUntilIdle()
+        val applied = sent.single { it.first == "POST /api/v1/timeline/ai-suggestions/apply" }.second!!
+        assertEquals("d1", applied["workoutId"]!!.jsonPrimitive.content)
+        assertEquals("rag", applied["aiSource"]!!.jsonPrimitive.content)
+        assertEquals("Builds race pace", applied["rationale"]!!.jsonPrimitive.content)
+        assertEquals(
+            "Applied suggestion to Tempo run (2026-11-17). The main workout has been updated.",
+            vm.state.value.items.last().content,
+        )
+        assertEquals(1, planChanges)
+
+        vm.dismissSuggestion(vm.state.value.suggestions.single())
+        advanceUntilIdle()
+        assertTrue(vm.state.value.suggestions.isEmpty())
+    }
+
+    @Test
+    fun aSuggestionThatCantBeAppliedSaysWhyAndStays() = runTest(dispatcher) {
+        routes["POST /api/v1/timeline/ai-suggestions"] = 200 to """{"suggestions":[${suggestion("d1")}]}"""
+        routes["POST /api/v1/timeline/ai-suggestions/apply"] = 404 to """{"error":"Plan day not found","code":"NOT_FOUND"}"""
+        val vm = suggestionsPanel()
+        vm.quickAction(vm.state.value.quickActions.single())
+        advanceUntilIdle()
+
+        vm.applySuggestion(vm.state.value.suggestions.single())
+        advanceUntilIdle()
+        assertEquals(
+            "Could not find the workout for Tempo run (2026-11-17). It may have been removed from your plan.",
+            vm.state.value.items.last().content,
+        )
+
+        routes["POST /api/v1/timeline/ai-suggestions/apply"] = 200 to
+            """{"applied":false,"structured":false,"reason":"structured_parse_failed","message":"Couldn't turn that into sets."}"""
+        vm.applySuggestion(vm.state.value.suggestions.single())
+        advanceUntilIdle()
+        assertEquals("Couldn't turn that into sets.", vm.state.value.items.last().content)
+        assertEquals(1, vm.state.value.suggestions.size)
+        assertEquals(0, planChanges)
+    }
+
+    @Test
+    fun noSuggestionsGivesTheServersReasonAndAFailureIsNotSaved() = runTest(dispatcher) {
+        routes["POST /api/v1/timeline/ai-suggestions"] = 200 to
+            """{"suggestions":[],"message":"Your plan has finished. Generate the next one to get suggestions."}"""
+        val vm = suggestionsPanel()
+        vm.quickAction(vm.state.value.quickActions.single())
+        advanceUntilIdle()
+        assertEquals("Your plan has finished. Generate the next one to get suggestions.", vm.state.value.items.last().content)
+
+        routes["POST /api/v1/timeline/ai-suggestions"] = 429 to """{"error":"Budget","code":"AI_BUDGET_EXCEEDED"}"""
+        vm.quickAction(vm.state.value.quickActions.single())
+        advanceUntilIdle()
+        assertEquals("You've reached your daily AI usage limit. Please try again later.", vm.state.value.items.last().content)
+        // Two asks and one answer saved: the failure is said, not kept.
+        assertEquals(3, sent.count { it.first == "POST /api/v1/chat/message" })
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test
+    fun theBudgetWarningIsSaidOncePerPanel() = runTest(dispatcher) {
+        routes["POST /api/v1/chat/stream"] = 200 to stream("""{"text":"Sure."}""", """{"done":true}""")
+        routeHeaders["POST /api/v1/chat/stream"] = mapOf("X-AI-Budget-Warning" to "true")
+        val vm = viewModel()
+        val said = mutableListOf<String>()
+        backgroundScope.launch { vm.messages.collect { said += it } }
+
+        vm.send("hi")
+        advanceUntilIdle()
+        vm.send("and again")
+        advanceUntilIdle()
+
+        assertEquals(listOf(BUDGET_WARNING), said)
+        assertEquals("Sure.", vm.state.value.items.last().content)
+    }
+
+    @Test
+    fun theStyleBadgeNamesTheCoachingStyle() {
+        assertEquals("MAF Method", trainingStyleLabel("maf_method"))
+        assertEquals("Balanced", trainingStyleLabel(null))
+        assertEquals("Balanced", trainingStyleLabel("balanced"))
     }
 }

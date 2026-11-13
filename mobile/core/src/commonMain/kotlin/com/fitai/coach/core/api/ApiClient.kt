@@ -114,7 +114,23 @@ public class ApiClient(private val http: HttpClient) {
         path: String = endpoint.pathTemplate,
         query: List<Pair<String, String>> = emptyList(),
         idempotencyKey: String? = null,
-    ): Res = decode(endpoint, execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey))
+    ): Res = decode(endpoint, execute(endpoint, path, query, encodeBody(endpoint, body), RequestExtras(idempotencyKey)))
+
+    /**
+     * [call] with [timeoutMillis] in place of the usual request timeout, for
+     * an AI request that reasons over the whole training log before it answers.
+     *
+     * @throws ApiException on a non-success status.
+     */
+    public suspend fun <Req, Res> callWithTimeout(
+        endpoint: ApiEndpoint<Req, Res>,
+        timeoutMillis: Long,
+        body: Req? = null,
+        path: String = endpoint.pathTemplate,
+    ): Res = decode(
+        endpoint,
+        execute(endpoint, path, emptyList(), encodeBody(endpoint, body), RequestExtras(timeoutMillis = timeoutMillis)),
+    )
 
     /**
      * [call], also returning the response headers, for endpoints that page
@@ -127,9 +143,8 @@ public class ApiClient(private val http: HttpClient) {
         path: String = endpoint.pathTemplate,
         query: List<Pair<String, String>> = emptyList(),
     ): ApiResponse<Res> {
-        val response = execute(endpoint, path, query, encodeBody(endpoint, body), idempotencyKey = null)
-        val headers = response.headers.entries().associate { (name, values) -> name.lowercase() to values.first() }
-        return ApiResponse(decode(endpoint, response), headers)
+        val response = execute(endpoint, path, query, encodeBody(endpoint, body))
+        return ApiResponse(decode(endpoint, response), response.lowerCaseHeaders())
     }
 
     /**
@@ -137,11 +152,18 @@ public class ApiClient(private val http: HttpClient) {
      * replies) and emits each event's `data:` JSON, decoded, as it arrives.
      * The flow completes when the server closes the stream; cancelling the
      * collector aborts the request. A line that is not an event, or does not
-     * decode, is skipped, as the web's parser does.
+     * decode, is skipped, as the web's parser does. [onHeaders] gets the
+     * response's headers (names lower-cased) once the server accepts the
+     * request, before the first event.
      *
      * @throws ApiException when the server refuses the request before streaming.
      */
-    public fun <Req, Res> stream(endpoint: ApiEndpoint<Req, Res>, body: Req? = null, path: String = endpoint.pathTemplate): Flow<Res> =
+    public fun <Req, Res> stream(
+        endpoint: ApiEndpoint<Req, Res>,
+        body: Req? = null,
+        path: String = endpoint.pathTemplate,
+        onHeaders: (Map<String, String>) -> Unit = {},
+    ): Flow<Res> =
         channelFlow {
             require(endpoint.responseKind == ResponseKind.EventStream) { "$endpoint does not stream" }
             val serializer = requireNotNull(endpoint.responseSerializer)
@@ -159,6 +181,7 @@ public class ApiClient(private val http: HttpClient) {
                 }
             }.execute { response ->
                 if (response.status.value !in SUCCESS_RANGE) throw failure(response)
+                onHeaders(response.lowerCaseHeaders())
                 val channel = response.bodyAsChannel()
                 var line = channel.readLine()
                 while (line != null) {
@@ -181,23 +204,29 @@ public class ApiClient(private val http: HttpClient) {
      * @throws ApiException on a non-success status.
      */
     public suspend fun send(endpoint: ApiEndpoint<*, *>, path: String, body: String?, idempotencyKey: String?): String =
-        execute(endpoint, path, emptyList(), body, idempotencyKey).bodyAsText()
+        execute(endpoint, path, emptyList(), body, RequestExtras(idempotencyKey)).bodyAsText()
 
     /** A GET whose body the app keeps as text, undecoded: a file the server generates (the data export). */
     public suspend fun text(endpoint: ApiEndpoint<Unit, *>, query: List<Pair<String, String>> = emptyList()): String =
-        execute(endpoint, endpoint.pathTemplate, query, null, null).bodyAsText()
+        execute(endpoint, endpoint.pathTemplate, query, null).bodyAsText()
 
     private suspend fun execute(
         endpoint: ApiEndpoint<*, *>,
         path: String,
         query: List<Pair<String, String>>,
         json: String?,
-        idempotencyKey: String?,
+        extras: RequestExtras = RequestExtras(),
     ): HttpResponse {
         val response = http.request(path) {
             method = endpoint.method.toKtor()
+            extras.timeoutMillis?.let { limit ->
+                timeout {
+                    requestTimeoutMillis = limit
+                    socketTimeoutMillis = limit
+                }
+            }
             query.forEach { (name, value) -> parameter(name, value) }
-            idempotencyKey?.let { header(IDEMPOTENCY_KEY_HEADER, it) }
+            extras.idempotencyKey?.let { header(IDEMPOTENCY_KEY_HEADER, it) }
             if (json != null) {
                 contentType(ContentType.Application.Json)
                 setBody(json)
@@ -270,6 +299,13 @@ private fun HttpMethod.toKtor(): KtorMethod = when (this) {
     HttpMethod.Patch -> KtorMethod.Patch
     HttpMethod.Delete -> KtorMethod.Delete
 }
+
+/** What a request may carry besides its body: an idempotency key, and a longer timeout than usual. */
+private data class RequestExtras(val idempotencyKey: String? = null, val timeoutMillis: Long? = null)
+
+/** The response's headers, one value each, by lower-cased name. */
+private fun HttpResponse.lowerCaseHeaders(): Map<String, String> =
+    headers.entries().associate { (name, values) -> name.lowercase() to values.first() }
 
 internal const val APP_PLATFORM_HEADER = "X-App-Platform"
 internal const val APP_VERSION_HEADER = "X-App-Version"

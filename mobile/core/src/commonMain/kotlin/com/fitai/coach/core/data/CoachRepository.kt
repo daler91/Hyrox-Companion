@@ -1,8 +1,11 @@
 package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
+import com.fitai.coach.core.api.Patch
+import com.fitai.coach.core.api.generated.AiSuggestion
 import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.ChatHistoryMessage
+import com.fitai.coach.core.api.generated.ChatRagInfo
 import com.fitai.coach.core.api.generated.ChatStreamEvent
 import com.fitai.coach.core.api.generated.GetChatHistoryQuery
 import com.fitai.coach.core.api.generated.GetChatWelcomeResponse
@@ -14,6 +17,9 @@ import com.fitai.coach.core.api.generated.PostChatStreamRequest
 import com.fitai.coach.core.api.generated.PostPlanProposalsByIdApplyRequest
 import com.fitai.coach.core.api.generated.PostPlanProposalsByIdApplyResponse
 import com.fitai.coach.core.api.generated.PostPlanProposalsByIdUndoResponse
+import com.fitai.coach.core.api.generated.PostTimelineAiSuggestionsApplyRequest
+import com.fitai.coach.core.api.generated.PostTimelineAiSuggestionsApplyResponse
+import com.fitai.coach.core.api.generated.PostTimelineAiSuggestionsResponse
 import kotlinx.coroutines.flow.Flow
 
 /** A page of the conversation, oldest first, and the cursor of the page before it (null at the start). */
@@ -78,12 +84,15 @@ public class CoachRepository(private val api: ApiClient) {
      * Sends [message] and streams the reply's events. With the turn's [ids]
      * the server reads the conversation itself and saves both turns under
      * them; [focus] puts both turns in that workout's thread.
+     * [onBudgetWarning] runs when the server says most of the athlete's
+     * rolling 24-hour AI allowance is spent (X-AI-Budget-Warning).
      */
     public fun send(
         message: String,
         ids: ChatTurnIds,
         photo: EncodedImage? = null,
         focus: ChatFocus? = null,
+        onBudgetWarning: () -> Unit = {},
     ): Flow<ChatStreamEvent> = api.stream(
         ApiEndpoints.PostChatStream,
         PostChatStreamRequest(
@@ -101,12 +110,59 @@ public class CoachRepository(private val api: ApiClient) {
                 )
             },
         ),
+        onHeaders = { headers -> if (headers[BUDGET_WARNING] == "true") onBudgetWarning() },
     )
 
     /** Saves a turn the server didn't write itself (the "Done — I've updated…" after applying a change). */
     public suspend fun saveAssistantMessage(content: String) {
         api.call(ApiEndpoints.PostChatMessage, PostChatMessageRequest(role = PostChatMessageRequest.Role.Assistant, content = content))
     }
+
+    /** Saves the athlete's side of a turn the stream didn't carry ("Get workout suggestions"). */
+    public suspend fun saveUserMessage(content: String) {
+        api.call(ApiEndpoints.PostChatMessage, PostChatMessageRequest(role = PostChatMessageRequest.Role.User, content = content))
+    }
+
+    /**
+     * The coach's suggestions for the upcoming plan days (POST
+     * /timeline/ai-suggestions). It reasons over the whole training log, so
+     * it is given longer than an ordinary request.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun suggestions(): PostTimelineAiSuggestionsResponse =
+        api.callWithTimeout(ApiEndpoints.PostTimelineAiSuggestions, AI_TIMEOUT_MS)
+
+    /**
+     * Writes [suggestion] into its plan day. A day with an exercise table may
+     * need an AI pass to turn it into rows, and the server answers
+     * `applied: false` with its reason when that can't happen.
+     *
+     * @param source where the suggestions came from (the coaching notes or not), recorded on the day.
+     * @throws com.fitai.coach.core.api.ApiException 404 when the plan day is gone.
+     */
+    public suspend fun applySuggestion(suggestion: AiSuggestion, source: ChatRagInfo.Source?): PostTimelineAiSuggestionsApplyResponse =
+        api.callWithTimeout(
+            ApiEndpoints.PostTimelineAiSuggestionsApply,
+            AI_TIMEOUT_MS,
+            PostTimelineAiSuggestionsApplyRequest(
+                workoutId = suggestion.workoutId,
+                targetField = PostTimelineAiSuggestionsApplyRequest.TargetField.entries
+                    .first { it.wireValue == suggestion.targetField.wireValue },
+                action = PostTimelineAiSuggestionsApplyRequest.Action.entries.first { it.wireValue == suggestion.action.wireValue },
+                recommendation = suggestion.recommendation,
+                rationale = Patch.of(suggestion.rationale),
+                aiSource = Patch.of(
+                    source?.takeIf { it != ChatRagInfo.Source.Unknown }
+                        ?.let { known ->
+                            PostTimelineAiSuggestionsApplyRequest.AiSource.entries.firstOrNull {
+                                it.wireValue ==
+                                    known.wireValue
+                            }
+                        },
+                ),
+            ),
+        )
 
     /** Rates a reply; null clears the rating. */
     public suspend fun rate(messageId: String, up: Boolean?) {
@@ -156,5 +212,9 @@ public class CoachRepository(private val api: ApiClient) {
         const val PAGE_SIZE = 50
         const val NEXT_CURSOR = "x-next-cursor"
         const val NEXT_CURSOR_ID = "x-next-cursor-id"
+        const val BUDGET_WARNING = "x-ai-budget-warning"
+
+        /** As the web gives suggestions: they often take longer than the usual 30 seconds. */
+        const val AI_TIMEOUT_MS = 90_000L
     }
 }

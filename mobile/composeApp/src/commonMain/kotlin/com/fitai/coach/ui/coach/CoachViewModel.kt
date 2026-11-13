@@ -2,7 +2,10 @@ package com.fitai.coach.ui.coach
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fitai.coach.core.api.ApiException
+import com.fitai.coach.core.api.generated.AiSuggestion
 import com.fitai.coach.core.api.generated.ChatFactProposal
+import com.fitai.coach.core.api.generated.ChatRagInfo
 import com.fitai.coach.core.api.generated.PlanProposal
 import com.fitai.coach.core.data.ChatFocus
 import com.fitai.coach.core.data.ChatTurnIds
@@ -24,7 +27,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class QuickAction(val label: String, val message: String)
+/** A chip under the conversation; [id] `suggestions` asks for workout suggestions instead of a reply. */
+data class QuickAction(val label: String, val message: String, val id: String = "")
 
 data class CoachUiState(
     val items: List<ChatItem> = listOf(welcomeItem()),
@@ -42,7 +46,16 @@ data class CoachUiState(
     val enablingAi: Boolean = false,
     /** A proposal action (apply / dismiss / undo) is in flight for this proposal id. */
     val busyProposal: String? = null,
-)
+    /** The coach's suggestions for upcoming plan days, waiting for Apply or Dismiss. */
+    val suggestions: List<AiSuggestion> = emptyList(),
+    /** Suggestions are being worked out. */
+    val suggesting: Boolean = false,
+    /** The suggestion being applied. */
+    val applying: AiSuggestion? = null,
+) {
+    /** Something is on its way, so nothing else is sent meanwhile. */
+    val busy: Boolean get() = sending || suggesting
+}
 
 /**
  * The coach panel: the conversation, streamed replies and plan-change
@@ -72,6 +85,10 @@ class CoachViewModel(
 
     /** What each sent message carried, so a failed reply can be retried as it was. */
     private val sent = mutableMapOf<String, Pair<String, EncodedImage?>>()
+
+    /** Where the pending suggestions came from (the coaching notes or not), recorded on a day they're applied to. */
+    private var suggestionsSource: ChatRagInfo.Source? = null
+    private var warnedBudget = false
 
     init {
         load()
@@ -108,7 +125,9 @@ class CoachViewModel(
     private suspend fun loadWelcome(): String = try {
         val welcome = coach.welcome()
         local.update { s ->
-            s.copy(quickActions = welcome.quickActions.take(MAX_QUICK_ACTIONS).map { QuickAction(it.label, it.message ?: it.label) })
+            s.copy(
+                quickActions = welcome.quickActions.take(MAX_QUICK_ACTIONS).map { QuickAction(it.label, it.message ?: it.label, it.id) },
+            )
         }
         welcome.greeting
     } catch (e: CancellationException) {
@@ -151,7 +170,7 @@ class CoachViewModel(
     fun send(text: String): Boolean {
         val photo = local.value.photo
         val message = text.trim().ifEmpty { if (photo != null) PHOTO_ONLY_PROMPT else "" }
-        val sendable = message.isNotEmpty() && !local.value.sending && message.length <= MAX_CHAT_MESSAGE
+        val sendable = message.isNotEmpty() && !local.value.busy && message.length <= MAX_CHAT_MESSAGE
         if (sendable) {
             val userId = newId()
             sent[userId] = message to photo
@@ -161,9 +180,76 @@ class CoachViewModel(
         return sendable
     }
 
-    /** Sends a quick action's message as an ordinary message. */
+    /** Sends a quick action's message as an ordinary message; "Get workout suggestions" asks for suggestions instead. */
     fun quickAction(action: QuickAction) {
-        send(action.message)
+        if (action.id == SUGGESTIONS_ACTION && focus == null) suggest(action.label) else send(action.message)
+    }
+
+    /**
+     * Asks the coach for changes to the upcoming plan days (useSuggestions):
+     * the ask and the coach's answer join the conversation, and the
+     * suggestions wait below it for Apply or Dismiss.
+     */
+    private fun suggest(label: String) {
+        if (local.value.busy) return
+        local.update { s ->
+            s.copy(
+                suggesting = true,
+                progress = "Looking at your upcoming workouts...",
+                items = s.items + ChatItem(newId(), ChatRole.User, label),
+            )
+        }
+        viewModelScope.launch {
+            runCatching { coach.saveUserMessage(label) }
+            try {
+                val result = coach.suggestions()
+                suggestionsSource = result.ragInfo?.source
+                val reply = suggestionsReply(result.suggestions.size, result.message?.trim())
+                local.update { it.copy(suggestions = result.suggestions) }
+                say(reply, save = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say(suggestionsFailure(e), save = false)
+            }
+            local.update { it.copy(suggesting = false, progress = null) }
+        }
+    }
+
+    /** Writes a suggestion into its plan day, then refreshes the timeline. */
+    fun applySuggestion(suggestion: AiSuggestion) {
+        if (local.value.applying != null) return
+        local.update { it.copy(applying = suggestion) }
+        viewModelScope.launch {
+            try {
+                val result = coach.applySuggestion(suggestion, suggestionsSource)
+                if (result.applied) {
+                    local.update { s -> s.copy(suggestions = s.suggestions - suggestion) }
+                    say(suggestion.appliedNote(), save = false)
+                    planChanged()
+                } else {
+                    say(result.message ?: "I couldn't apply that suggestion just now.", save = false)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                say(if (e.status == NOT_FOUND) suggestion.missingNote() else applyFailure(suggestion), save = false)
+            } catch (_: Exception) {
+                say(applyFailure(suggestion), save = false)
+            }
+            local.update { it.copy(applying = null) }
+        }
+    }
+
+    fun dismissSuggestion(suggestion: AiSuggestion) = local.update { s -> s.copy(suggestions = s.suggestions - suggestion) }
+
+    private fun applyFailure(suggestion: AiSuggestion) = "Failed to apply suggestion to ${suggestion.focus}. Please try again."
+
+    /** Says once a panel that most of today's AI allowance is spent, before the limit stops the chat. */
+    private fun warnBudget() {
+        if (warnedBudget) return
+        warnedBudget = true
+        toasts.trySend(BUDGET_WARNING)
     }
 
     /** Stops the reply being streamed; the server keeps what was said so far. */
@@ -187,7 +273,7 @@ class CoachViewModel(
         val index = items.indexOfFirst { it.id == assistantId }
         val user = items.getOrNull(index - 1)?.takeIf { it.role == ChatRole.User } ?: return
         val (message, photo) = sent[user.id] ?: (user.content to null)
-        if (local.value.sending) return
+        if (local.value.busy) return
         local.update { s -> s.copy(items = s.items.filterNot { it.id == assistantId || it.id == user.id }) }
         stream(user.id, message, photo, replaceAssistantId = assistantId)
     }
@@ -204,7 +290,7 @@ class CoachViewModel(
         }
         sendJob = viewModelScope.launch {
             try {
-                coach.send(message, ChatTurnIds(userId, assistantId, replaceAssistantId), photo, focus).collect { event ->
+                coach.send(message, ChatTurnIds(userId, assistantId, replaceAssistantId), photo, focus, ::warnBudget).collect { event ->
                     local.update { s ->
                         val label = when {
                             event.status != null -> statusLabel(event.status)
@@ -322,7 +408,7 @@ class CoachViewModel(
         viewModelScope.launch {
             try {
                 coach.clearHistory()
-                local.update { s -> s.copy(items = s.items.take(1)) }
+                local.update { s -> s.copy(items = s.items.take(1), suggestions = emptyList()) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -369,5 +455,6 @@ class CoachViewModel(
 
     private companion object {
         const val MAX_QUICK_ACTIONS = 4
+        const val NOT_FOUND = 404
     }
 }
