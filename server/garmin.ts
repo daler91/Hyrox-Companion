@@ -440,6 +440,19 @@ function tokensStillFresh(tokenExpiresAt: Date | null): boolean {
  * answers 502 and records no lastError: setGarminError would also wipe the
  * stored credentials and force a reconnect over a Garmin-side hiccup.
  */
+/**
+ * An error whose message was written for the athlete and is safe to return in
+ * a response. Anything else thrown while building the client (a DB or
+ * decryption failure, an SDK bug) may carry internal detail, so the sync
+ * route only echoes the message of this class and answers generically otherwise.
+ */
+class GarminClientError extends Error {
+  constructor(message: string, options?: { cause: unknown }) {
+    super(message, options);
+    this.name = "GarminClientError";
+  }
+}
+
 class GarminTokenRefreshError extends Error {
   constructor(message: string, options: { cause: unknown }) {
     super(message, options);
@@ -565,12 +578,12 @@ function loadCachedTokens(
 async function getGarminClient(userId: string, reqLog: typeof logger): Promise<GarminConnect> {
   const conn = await storage.users.getGarminConnection(userId);
   if (!conn) {
-    throw new Error("Garmin not connected");
+    throw new GarminClientError("Garmin not connected");
   }
 
   // Layer 4 — fail fast on broken connections.
   if (conn.lastError) {
-    throw new Error(`${conn.lastError} (Disconnect and reconnect to retry.)`);
+    throw new GarminClientError(`${conn.lastError} (Disconnect and reconnect to retry.)`);
   }
 
   // Storage layer decrypts these in place — they hold plaintext after the
@@ -582,7 +595,7 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
     // Credentials are cleared when a connection fails (setGarminError), which
     // also sets lastError — so a broken connection would have thrown above.
     // Belt-and-suspenders so we never call login() with blank credentials.
-    throw new Error("Garmin credentials are no longer stored — disconnect and reconnect.");
+    throw new GarminClientError("Garmin credentials are no longer stored — disconnect and reconnect.");
   }
 
   const client = new GarminConnectCtor({ username: email, password });
@@ -609,7 +622,7 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
     const friendly = translateGarminError(err);
     await storage.users.setGarminError(userId, friendly);
     reqLog.error({ err, userId, context: LOG_CTX }, "Garmin login failed");
-    throw new Error(friendly, { cause: err });
+    throw new GarminClientError(friendly, { cause: err });
   }
 
   // Persist the freshly-minted tokens so subsequent /sync calls can skip
@@ -1033,8 +1046,13 @@ async function handleGarminSync(req: Request, res: Response) {
           res.status(502).json({ error: err.message, code: "GARMIN_API_ERROR" });
           return;
         }
-        const message = err instanceof Error ? err.message : "Garmin sync failed";
-        res.status(401).json({ error: message, code: "GARMIN_AUTH_FAILED" });
+        if (err instanceof GarminClientError) {
+          res.status(401).json({ error: err.message, code: "GARMIN_AUTH_FAILED" });
+          return;
+        }
+        // Unexpected (DB, decryption, SDK): log it, never echo its message.
+        reqLog.error({ err, userId, context: LOG_CTX }, "Garmin client setup failed");
+        res.status(401).json({ error: "Garmin sync failed. Disconnect and reconnect to retry.", code: "GARMIN_AUTH_FAILED" });
         return;
       }
 
