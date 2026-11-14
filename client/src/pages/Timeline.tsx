@@ -12,7 +12,6 @@ import type { FuellingDayPoint, TimelineEntry } from "@shared/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
   BulkDeleteControls,
   CoachReviewingIndicator,
@@ -44,6 +43,7 @@ import { renderedFuellingWindow } from "@/pages/timeline/fuellingWindow";
 import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
+import { TimelineOnboardingWizard } from "@/pages/timeline/TimelineOnboardingWizard";
 import { TimelineWorkoutSurfaces } from "@/pages/timeline/TimelineWorkoutSurfaces";
 import { useBulkDeleteSelection } from "@/pages/timeline/useBulkDeleteSelection";
 import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRouting";
@@ -397,7 +397,7 @@ export default function Timeline() {
 
   return (
     <>
-      <OnboardingWizard open={showOnboarding} onComplete={handleOnboardingComplete} />
+      <TimelineOnboardingWizard open={showOnboarding} onComplete={handleOnboardingComplete} />
       <Input
         ref={fileInputRef}
         type="file"
