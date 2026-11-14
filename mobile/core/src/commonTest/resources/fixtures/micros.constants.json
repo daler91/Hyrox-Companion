@@ -1,0 +1,97 @@
+{
+  "suite": "micros.constants",
+  "description": "MICRO_DISPLAY_DEFS: the curated micronutrients in display order, with label, unit and FDA Daily Value.",
+  "cases": [
+    {
+      "input": null,
+      "output": {
+        "MICRO_DISPLAY_DEFS": [
+          {
+            "key": "sodium",
+            "label": "Sodium",
+            "unit": "mg",
+            "rdi": 2300
+          },
+          {
+            "key": "potassium",
+            "label": "Potassium",
+            "unit": "mg",
+            "rdi": 4700
+          },
+          {
+            "key": "calcium",
+            "label": "Calcium",
+            "unit": "mg",
+            "rdi": 1300
+          },
+          {
+            "key": "iron",
+            "label": "Iron",
+            "unit": "mg",
+            "rdi": 18
+          },
+          {
+            "key": "magnesium",
+            "label": "Magnesium",
+            "unit": "mg",
+            "rdi": 420
+          },
+          {
+            "key": "zinc",
+            "label": "Zinc",
+            "unit": "mg",
+            "rdi": 11
+          },
+          {
+            "key": "vitaminC",
+            "label": "Vitamin C",
+            "unit": "mg",
+            "rdi": 90
+          },
+          {
+            "key": "vitaminA",
+            "label": "Vitamin A",
+            "unit": "mcg",
+            "rdi": 900
+          },
+          {
+            "key": "vitaminD",
+            "label": "Vitamin D",
+            "unit": "mcg",
+            "rdi": 20
+          },
+          {
+            "key": "vitaminE",
+            "label": "Vitamin E",
+            "unit": "mg",
+            "rdi": 15
+          },
+          {
+            "key": "vitaminK",
+            "label": "Vitamin K",
+            "unit": "mcg",
+            "rdi": 120
+          },
+          {
+            "key": "vitaminB6",
+            "label": "Vitamin B6",
+            "unit": "mg",
+            "rdi": 1.7
+          },
+          {
+            "key": "vitaminB12",
+            "label": "Vitamin B12",
+            "unit": "mcg",
+            "rdi": 2.4
+          },
+          {
+            "key": "folate",
+            "label": "Folate",
+            "unit": "mcg",
+            "rdi": 400
+          }
+        ]
+      }
+    }
+  ]
+}

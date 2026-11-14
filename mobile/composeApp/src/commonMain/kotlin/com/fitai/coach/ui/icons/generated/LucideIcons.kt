@@ -47,11 +47,27 @@ object LucideIcons {
         )
     }
 
+    val ArrowDown: ImageVector by lazy {
+        lucide(
+            "ArrowDown",
+            "M12 5v14",
+            "m19 12-7 7-7-7",
+        )
+    }
+
     val ArrowLeft: ImageVector by lazy {
         lucide(
             "ArrowLeft",
             "m12 19-7-7 7-7",
             "M19 12H5",
+        )
+    }
+
+    val ArrowUp: ImageVector by lazy {
+        lucide(
+            "ArrowUp",
+            "m5 12 7-7 7 7",
+            "M12 19V5",
         )
     }
 
@@ -78,6 +94,17 @@ object LucideIcons {
             "M8 14h.01",
             "M12 18h.01",
             "M8 18h.01",
+        )
+    }
+
+    val CalendarCheck: ImageVector by lazy {
+        lucide(
+            "CalendarCheck",
+            "M8 2v3",
+            "M16 2v3",
+            "M5 3H19A2 2 0 0 1 21 5V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3Z",
+            "M3 9h18",
+            "m9 15 2 2 4-4",
         )
     }
 
@@ -177,6 +204,15 @@ object LucideIcons {
         )
     }
 
+    val CloudUpload: ImageVector by lazy {
+        lucide(
+            "CloudUpload",
+            "M12 13v8",
+            "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242",
+            "m8 17 4-4 4 4",
+        )
+    }
+
     val CopyPlus: ImageVector by lazy {
         lucide(
             "CopyPlus",
@@ -229,6 +265,14 @@ object LucideIcons {
             "Gauge",
             "m12 14 4-4",
             "M3.34 19a10 10 0 1 1 17.32 0",
+        )
+    }
+
+    val HeartPulse: ImageVector by lazy {
+        lucide(
+            "HeartPulse",
+            "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5",
+            "M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27",
         )
     }
 
@@ -511,6 +555,19 @@ object LucideIcons {
             "M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Zm0 0 7 7",
             "m2.1 21.8 6.4-6.3",
             "m19 5-7 7",
+        )
+    }
+
+    val WifiOff: ImageVector by lazy {
+        lucide(
+            "WifiOff",
+            "M12 20h.01",
+            "M8.5 16.429a5 5 0 0 1 7 0",
+            "M5 12.859a10 10 0 0 1 5.17-2.69",
+            "M19 12.859a10 10 0 0 0-2.007-1.523",
+            "M2 8.82a15 15 0 0 1 4.177-2.643",
+            "M22 8.82a15 15 0 0 0-11.288-3.764",
+            "m2 2 20 20",
         )
     }
 

@@ -6,6 +6,7 @@ import com.fitai.coach.core.api.generated.PatchPlansByIdGoalRequest
 import com.fitai.coach.core.api.generated.PatchPlansByIdRequest
 import com.fitai.coach.core.api.generated.PatchPlansByIdRetirementRequest
 import com.fitai.coach.core.api.generated.PostPlansByPlanIdScheduleRequest
+import com.fitai.coach.core.api.generated.PostPlansSampleRequest
 
 /**
  * What the athlete can do to a whole plan (PlanToolsMenu.tsx): rename it, set
@@ -14,6 +15,19 @@ import com.fitai.coach.core.api.generated.PostPlansByPlanIdScheduleRequest
  * refreshes the plans, and the timeline when the plan's days change.
  */
 public class PlanTools(private val api: ApiClient, private val timeline: TimelineRepository) {
+    /**
+     * Creates the 8-week template plan (the timeline's "Use 8-week template"),
+     * still without dates: the athlete sets its start date next.
+     *
+     * @return the new plan's id.
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun createSample(): String {
+        val plan = api.call(ApiEndpoints.PostPlansSample, PostPlansSampleRequest())
+        timeline.refreshPlans()
+        return plan.id
+    }
+
     /** @throws com.fitai.coach.core.api.ApiException on an error response. */
     public suspend fun rename(planId: String, name: String) {
         api.call(

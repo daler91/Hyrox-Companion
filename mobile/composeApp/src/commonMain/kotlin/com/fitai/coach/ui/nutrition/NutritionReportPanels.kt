@@ -129,7 +129,7 @@ fun MicronutrientPanel(state: MicrosState) {
 
 /** One micronutrient: its %RDI, a bar (green at 100% or more), and the amount against the RDI (MicroRow.tsx). */
 @Composable
-private fun MicroRow(micro: GetNutritionMicrosResponse.MicrosItem, modifier: Modifier) {
+fun MicroRow(micro: GetNutritionMicrosResponse.MicrosItem, modifier: Modifier) {
     val unit = micro.unit.wireValue
     val amounts = "${formatNumber(micro.amount)} / ${formatNumber(micro.rdi)} $unit"
     Column(

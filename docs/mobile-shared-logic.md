@@ -3,9 +3,9 @@
 # Mobile App: Shared Logic Inventory
 
 **Status:** inventory for Phase 2, step 2 of [mobile-app-plan.md](mobile-app-plan.md), taken
-2026-11-07 against the web client as it stands. **Every module in the port list except
-`schema/micros` (deferred) is now ported**, each pinned to its TypeScript original by golden
-fixtures; see [Ports done](#ports-done) below.
+2026-11-07 against the web client as it stands. **Every module in the port list is now ported**
+(`schema/micros` last, with the Log Food preview), each pinned to its TypeScript original by
+golden fixtures; see [Ports done](#ports-done) below.
 
 ## What this is
 
@@ -67,7 +67,7 @@ How it was checked:
 | `exerciseEquipment` | 172 | port (dependency) | `implementFor`, `loadIncrement` | The client imports it only in a test, but `progression` needs it at runtime |
 | `planPhase` | 141 | port | `computeCurrentWeek`, `computePlanPhase`, `PLAN_PHASE_ORDER` | "Week 6 of 12 · Build" depends on the device's today, so it must work offline. The coach's prompts use the same function |
 | `notifyHours` | 75 | port | `resolveNotifyHour`, `fallbackNotifyHour`, `isValidNotifyHour`, `DEFAULT_NOTIFY_HOUR`, `BRIEF_TOMORROW_FROM_HOUR`, `NOTIFY_HOUR_FIELD` | Settings copy changes as the athlete picks an hour, and it must agree with the email scheduler |
-| `schema*` | ~10.5k (dir) | port (mixed) | `schema/exercises`: `EXERCISE_DEFINITIONS`, `EXERCISE_NAME_ALIASES`, `normalizeExerciseName`, `isRunningExerciseName`, `knownExerciseLabel`. `schema/structureLint`: `lintWorkoutStructure`. `schema/micros`: `MICRO_DISPLAY_DEFS` (data, deferred). The barrel and `schema/enums`: render | The composer needs the exercise catalogue offline, and the outbox must not queue a structure the server will reject with a 400. The barrel is type-only in client code |
+| `schema*` | ~10.5k (dir) | port (mixed) | `schema/exercises`: `EXERCISE_DEFINITIONS`, `EXERCISE_NAME_ALIASES`, `normalizeExerciseName`, `isRunningExerciseName`, `knownExerciseLabel`. `schema/structureLint`: `lintWorkoutStructure`. `schema/micros`: `MICRO_DISPLAY_DEFS` (data). The barrel and `schema/enums`: render | The composer needs the exercise catalogue offline, and the outbox must not queue a structure the server will reject with a 400. The barrel is type-only in client code |
 | `plannedSessionEstimate` | 519 | api | `GET /api/v1/timeline`: `sessionEstimate` on planned entries | The server already computes it per day, personalised by run pace. A port would also need the exercise catalogue and the athlete's run history |
 | `maf` | 224 | api | `PATCH /api/v1/preferences` derives `mafHr`. `mafCompliance` on timeline and workout entries | The server already runs `calculateMafHr` on every preferences save, but stores the client's number |
 | `fuellingCorrelation` | 152 | api | `GET /api/v1/nutrition/block`: `correlation` | Pure analytics over the response's own points. No server file imports it |
@@ -108,6 +108,7 @@ All in `mobile/core/src/commonMain/kotlin/com/fitai/coach/core/`, pure common Ko
 | `nutritionTargets` (3 functions) | `nutrition` | `nutritionTargets.*` (501) |
 | `progression`, `exerciseEquipment`, `schema/exercises` | `exercises` | 8 suites (5,158) |
 | `schema/structureLint` | `structure` | `structureLint.lintWorkoutStructure` (184) |
+| `schema/micros` | `nutrition` | `micros.constants` (1) |
 | JS number and string semantics the ports share | `js` | `js.*` |
 
 The exercise tables are generated Kotlin (`exercises/generated/ExerciseCatalogue.kt`,
@@ -619,12 +620,12 @@ models (both are registered in `shared/openapiRoutes/entities.ts`).
 - `repMode:"per_side"` with both top-level and per-set reps: warning.
 - Four errors: the score clamps to 0.
 
-### `shared/schema/micros.ts` (part of `schema*`, deferred)
+### `shared/schema/micros.ts` (part of `schema*`)
 
 `MICRO_DISPLAY_DEFS` is data: key, label, unit and RDI for 14 micronutrients. The web uses it only
-for the micronutrient preview in Log Food (`pages/nutrition/utils.ts:103`). That panel is not in
-the v1 scope. When it ships, emit the table as a fixture resource, so that the app's %RDI matches the
-server's `GET /api/v1/nutrition/micros`.
+for the micronutrient preview in Log Food (`pages/nutrition/utils.ts:103`). It shipped with the
+app's Log Food preview (Wave 6): `core/nutrition/Micros.kt`, pinned by the `micros.constants`
+fixture, so the app's %RDI matches the server's `GET /api/v1/nutrition/micros`.
 
 ## API fields to add
 
@@ -636,7 +637,7 @@ server's `GET /api/v1/nutrition/micros`.
 | 3b | `maf` | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}` | `mafCompliance: {compliancePct, classification, nextAction, avgOverBy}` on completed sessions with an average HR, for MAF-method athletes | **Partly.** `computeMafCompliance` runs in `server/services/mafTestService.ts:71`, but only for tagged MAF tests. The web computes it for every session in `lib/mafFormat.ts:55` |
 | 4 | `fuellingCorrelation` | `GET /api/v1/nutrition/block` | `correlation: FuellingCorrelationResult` | **No.** No server file imports the module. Its inputs are the response's own `points` (`components/analytics/FuellingCorrelationCard.tsx:70`) |
 | 5 | `bodySystemLoad` | `GET /api/v1/training-overview` | `bodySystemLoad.divergence: string \| null` | **Yes.** `describeBodySystemDivergence` runs in `server/services/overviewAnalysisService.ts:224` for the AI analysis, but not for this response |
-| 6 | `coachNotes` | `GET /api/v1/timeline`, and any workout or plan-day response that carries `notes` | `coachNotes: {athleteText, cues: [{label: string \| null, text}]}` | **No.** The server only writes the format, through `appendCoachCue` (`server/services/coachService.ts:80`, `server/services/aiSuggestionService.ts:120`) |
+| 6 | `coachNotes` | `GET /api/v1/timeline`, and any workout or plan-day response that carries `notes` | `coachNotes: {athleteText, cues: [{label: string \| null, text}]}` | **No.** The server only writes the format, through `appendCoachCue` (`server/services/coachService.ts:80`, `server/services/aiSuggestionService.ts:120`). **Shipped on `GET /api/v1/timeline`** (`server/services/timelineCoachNotes.ts`), the only place the app shows cues |
 | 7 | `deviceSportTypes` | `GET /api/v1/timeline`, `GET /api/v1/workouts/{id}` | `avgCadenceUnit: "spm" \| "rpm"` | **No.** `cadenceUnitFor` exists in `shared/`, but only the client calls it. `server/services/stravaMapper.ts:86` says the UI labels cadence |
 | 8 | `planDayKind`, `raceDay` | `GET /api/v1/timeline` | `dayKind: "session" \| "rest" \| "race"` | **Yes.** `isRestLikePlanDay` runs in `server/storage/plans.ts:1037` and `server/emailScheduler.ts:463`. The race marker is written in `server/storage/raceDayView.ts:44` and tested in `server/storage/timeline.ts:188` |
 | 9 | `ratio` | `GET /api/v1/training-overview/summary` | `completionRate: number \| null`: last 28 days, excluding today, excused days and `let_go` misses | **No, a different number.** The coach context rate (`server/services/ai/trainingStats.ts:36`) counts every loaded entry and returns 0 where the web returns `null` (`lib/statsUtils.ts:112`) |
@@ -795,7 +796,7 @@ Paths are relative to `client/src/`. "Server" means non-test files in `server/`.
     - Server: through the barrel, in `server/services/workoutUseCases.ts`. Bucket: port.
   - **`schema/micros`** (41 lines):
     - Client use: `MICRO_DISPLAY_DEFS` in `pages/nutrition/utils.ts`.
-    - Server: has its own `MICRO_DEFS`. Bucket: port as data, deferred.
+    - Server: has its own `MICRO_DEFS`. Bucket: port as data (done).
 
 ### api
 

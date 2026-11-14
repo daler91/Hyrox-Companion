@@ -67,6 +67,12 @@ export const ICONS: Readonly<Record<string, string>> = {
   ClipboardList: "clipboard-list",
   Activity: "activity",
   CircleCheck: "circle-check",
+  ArrowUp: "arrow-up",
+  ArrowDown: "arrow-down",
+  CalendarCheck: "calendar-check",
+  WifiOff: "wifi-off",
+  CloudUpload: "cloud-upload",
+  HeartPulse: "heart-pulse",
   StarFilled: "star",
 };
 

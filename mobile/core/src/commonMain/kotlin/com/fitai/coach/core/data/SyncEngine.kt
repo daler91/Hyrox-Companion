@@ -15,10 +15,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -108,6 +110,13 @@ public class SyncEngine(
 
     /** How many writes are waiting to be sent. */
     public val pendingCount: Flow<Int> = outbox.observeCount()
+
+    /**
+     * The plan days, workouts and sets with writes waiting to be sent (see
+     * [pendingIdsOf]): a timeline card shows "Pending sync" while its plan
+     * day or workout is here.
+     */
+    public val pendingIds: Flow<Set<String>> = outbox.observeAll().map(::pendingIdsOf).distinctUntilChanged()
 
     /** Registers what happens around [endpoint]'s writes. Call before [start]. */
     public fun handle(endpoint: ApiEndpoint<*, *>, handler: OutboxHandler) {

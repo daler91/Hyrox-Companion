@@ -107,6 +107,9 @@ public interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox")
     public fun observeCount(): Flow<Int>
 
+    @Query("SELECT * FROM outbox ORDER BY seq")
+    public fun observeAll(): Flow<List<OutboxEntity>>
+
     @Query("SELECT target FROM outbox WHERE target IS NOT NULL")
     public suspend fun pendingTargets(): List<String>
 

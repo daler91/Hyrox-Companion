@@ -229,6 +229,15 @@
           "rpe": 1.5,
           "source": "none",
           "clamped": true
+        },
+        "coachNotes": {
+          "athleteText": "sample text",
+          "cues": [
+            {
+              "label": "sample text",
+              "text": "sample text"
+            }
+          ]
         }
       }
     ],
@@ -487,6 +496,21 @@
           "rpe": 1.5,
           "source": "zz_value_from_a_newer_server",
           "clamped": true,
+          "zzPropertyFromANewerServer": {
+            "added": true
+          }
+        },
+        "coachNotes": {
+          "athleteText": "sample text",
+          "cues": [
+            {
+              "label": "sample text",
+              "text": "sample text",
+              "zzPropertyFromANewerServer": {
+                "added": true
+              }
+            }
+          ],
           "zzPropertyFromANewerServer": {
             "added": true
           }

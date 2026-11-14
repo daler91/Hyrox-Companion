@@ -27,6 +27,18 @@ class PlanToolsTest {
     private suspend fun cachedPlan() = timeline.plans.first()!!.single()
 
     @Test
+    fun theTemplatePlanIsCreatedUndatedAndThePlansRefresh() = runTest {
+        server.on("POST", "/api/v1/plans/sample", 200, plan("8-Week Hyrox Template").dropLast(1) + ""","days":[]}""")
+        server.on("GET", "/api/v1/plans", 200, "[${plan("8-Week Hyrox Template")}]")
+
+        val id = plans.createSample()
+
+        assertEquals("p1", id)
+        assertEquals("{}", server.sentTo("POST", "/api/v1/plans/sample").single().body)
+        assertEquals("8-Week Hyrox Template", cachedPlan().name)
+    }
+
+    @Test
     fun aRenameAndAGoalSendOnlyWhatChangedAndRefreshThePlans() = runTest {
         server.on("PATCH", "/api/v1/plans/p1", 200, plan("Spring block"))
         server.on("PATCH", "/api/v1/plans/p1/goal", 200, plan("Spring block"))

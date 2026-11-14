@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -57,6 +58,18 @@ class SessionManagerTest {
 
     private suspend fun UserSession.queueAWrite() {
         workouts.createWorkout(CreateWorkoutRequest(date = "2026-11-02", focus = "Run", mainWorkout = "5 km"))
+    }
+
+    @Test
+    fun theSessionSaysWhetherThePhoneHasANetwork() = runTest {
+        val network = MutableStateFlow(true)
+        val manager = SessionManager(auth, store, server.api, online = network).also { it.start(backgroundScope) }
+        val session = signIn(manager, "user_a")
+
+        network.value = false
+
+        withTimeout(5.seconds) { session.online.first { !it } }
+        assertFalse(session.online.value)
     }
 
     @Test
@@ -117,7 +130,9 @@ class SessionManagerTest {
 
     @Test
     fun anotherUserSigningInDeletesTheDatabaseLeftBehindUnsent() = runTest {
-        val manager = manager()
+        // Offline, so the write only waits: online, the outbox's own send could land at the
+        // server after the count below is taken, while the session is still closing.
+        val manager = SessionManager(auth, store, server.api, online = flowOf(false)).also { it.start(backgroundScope) }
         signIn(manager, "user_a").queueAWrite()
         auth.state.value = AuthState.SignedOut
         manager.session.first { it == null }
