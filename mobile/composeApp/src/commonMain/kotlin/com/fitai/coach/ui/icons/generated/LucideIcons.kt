@@ -12,6 +12,13 @@ import androidx.compose.ui.unit.dp
 
 /** The Lucide icons the app uses: 24 dp, 1.5 dp stroke, tinted by Icon's colour (brand kit §8). A filled icon is also filled in that colour. */
 object LucideIcons {
+    val Activity: ImageVector by lazy {
+        lucide(
+            "Activity",
+            "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2",
+        )
+    }
+
     val Apple: ImageVector by lazy {
         lucide(
             "Apple",
@@ -147,6 +154,14 @@ object LucideIcons {
         lucide(
             "ChevronRight",
             "m9 18 6-6-6-6",
+        )
+    }
+
+    val CircleCheck: ImageVector by lazy {
+        lucide(
+            "CircleCheck",
+            "M2 12A10 10 0 1 0 22 12A10 10 0 1 0 2 12Z",
+            "m16 9-5.5 5.5L8 12",
         )
     }
 

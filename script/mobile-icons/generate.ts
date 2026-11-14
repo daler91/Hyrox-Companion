@@ -65,6 +65,8 @@ export const ICONS: Readonly<Record<string, string>> = {
   ArchiveRestore: "archive-arrow-up",
   CalendarDays: "calendar-days",
   ClipboardList: "clipboard-list",
+  Activity: "activity",
+  CircleCheck: "circle-check",
   StarFilled: "star",
 };
 

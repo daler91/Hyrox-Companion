@@ -1,6 +1,7 @@
 package com.fitai.coach.core.data
 
 import com.fitai.coach.core.api.ApiClient
+import com.fitai.coach.core.api.Patch
 import com.fitai.coach.core.api.generated.ApiEndpoints
 import com.fitai.coach.core.api.generated.CoachInsights
 import com.fitai.coach.core.api.generated.GetExerciseAnalyticsQuery
@@ -13,9 +14,13 @@ import com.fitai.coach.core.api.generated.GetPersonalRecordsQuery
 import com.fitai.coach.core.api.generated.GetRacePredictionQuery
 import com.fitai.coach.core.api.generated.GetSessionGradesQuery
 import com.fitai.coach.core.api.generated.GetTrainingOverviewQuery
+import com.fitai.coach.core.api.generated.MafTestResult
+import com.fitai.coach.core.api.generated.MafWorkoutAnalysis
 import com.fitai.coach.core.api.generated.OverviewAnalysis
+import com.fitai.coach.core.api.generated.PatchWorkoutsByIdMafTestRequest
 import com.fitai.coach.core.api.generated.PersonalRecord
 import com.fitai.coach.core.api.generated.PostOverviewAnalysisQuery
+import com.fitai.coach.core.api.generated.PostWorkoutsByIdMafTestRequest
 import com.fitai.coach.core.api.generated.RacePrediction
 import com.fitai.coach.core.api.generated.SessionGradesResponse
 import com.fitai.coach.core.api.generated.TrainingOverview
@@ -152,6 +157,73 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
         cache.put(MAF_TESTS, GetMafTestsResponse.serializer(), api.call(ApiEndpoints.GetMafTests))
     }
 
+    /**
+     * Tags a run as a MAF test, scored against the athlete's ceiling when it
+     * has an average heart rate. [metrics] replace the run's own; a null one
+     * is left out of the test. The kept list takes the new test. Online.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun tagMafTest(workoutId: String, metrics: MafMetrics) {
+        val body = PostWorkoutsByIdMafTestRequest(
+            metrics = PostWorkoutsByIdMafTestRequest.Metrics(
+                avgHeartRate = Patch.of(metrics.avgHeartRate),
+                maxHeartRate = Patch.of(metrics.maxHeartRate),
+                durationSeconds = Patch.of(metrics.durationSeconds),
+                distanceMeters = Patch.of(metrics.distanceMeters),
+            ),
+        )
+        val saved = api.call(ApiEndpoints.PostWorkoutsByIdMafTest, body, ApiEndpoints.PostWorkoutsByIdMafTest.path(workoutId))
+        keepMafTest(workoutId, saved.testResult, saved.analysis)
+    }
+
+    /**
+     * Corrects a tagged run's metrics (null clears one) and rescores it; the
+     * kept list takes the corrected test. Online.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun updateMafTest(workoutId: String, metrics: MafMetrics) {
+        val body = PatchWorkoutsByIdMafTestRequest(
+            metrics = PatchWorkoutsByIdMafTestRequest.Metrics(
+                avgHeartRate = Patch.of(metrics.avgHeartRate),
+                maxHeartRate = Patch.of(metrics.maxHeartRate),
+                durationSeconds = Patch.of(metrics.durationSeconds),
+                distanceMeters = Patch.of(metrics.distanceMeters),
+            ),
+        )
+        val saved = api.call(ApiEndpoints.PatchWorkoutsByIdMafTest, body, ApiEndpoints.PatchWorkoutsByIdMafTest.path(workoutId))
+        keepMafTest(workoutId, saved.testResult, saved.analysis)
+    }
+
+    /**
+     * Takes a run out of the MAF trend, its compliance score too, here and
+     * on the server. Online.
+     *
+     * @throws com.fitai.coach.core.api.ApiException on an error response.
+     */
+    public suspend fun untagMafTest(workoutId: String) {
+        api.call(ApiEndpoints.DeleteWorkoutsByIdMafTest, path = ApiEndpoints.DeleteWorkoutsByIdMafTest.path(workoutId))
+        keepMafTest(workoutId, test = null, analysis = null)
+    }
+
+    /**
+     * Puts the server's answer in the kept list: a corrected test keeps its
+     * place, a new one goes first (newest first), null takes the run out. A
+     * test without a heart rate has no score, so its old score goes.
+     */
+    private suspend fun keepMafTest(workoutId: String, test: MafTestResult?, analysis: MafWorkoutAnalysis?) {
+        val kept = cache.get(MAF_TESTS, GetMafTestsResponse.serializer()) ?: GetMafTestsResponse(emptyList(), emptyList(), emptyMap())
+        cache.put(
+            MAF_TESTS,
+            GetMafTestsResponse.serializer(),
+            kept.copy(
+                tests = kept.tests.replacing(test) { it.conditions?.workoutLogId == workoutId },
+                analysis = kept.analysis.replacing(analysis) { it.workoutLogId == workoutId },
+            ),
+        )
+    }
+
     /** Daily intake against training load over [range], kept on the device per range. */
     public fun nutritionBlock(range: AnalyticsRange): Flow<GetNutritionBlockResponse?> =
         cache.observe(key(NUTRITION_BLOCK, range), GetNutritionBlockResponse.serializer())
@@ -187,5 +259,16 @@ public class AnalyticsRepository(private val api: ApiClient, private val cache: 
 
         /** "90" or "all", as the analysis routes name a range. */
         fun AnalyticsRange.wire() = JsonPrimitive(days?.toString() ?: "all")
+    }
+}
+
+/** The list with [item] in place of what [matches] (first when nothing does), or without it when [item] is null. */
+private fun <T : Any> List<T>.replacing(item: T?, matches: (T) -> Boolean): List<T> {
+    val rest = filterNot(matches)
+    val at = indexOfFirst(matches)
+    return when {
+        item == null -> rest
+        at < 0 -> listOf(item) + rest
+        else -> rest.toMutableList().apply { add(at, item) }
     }
 }

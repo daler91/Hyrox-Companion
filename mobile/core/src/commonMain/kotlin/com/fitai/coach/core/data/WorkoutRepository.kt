@@ -11,12 +11,15 @@ import com.fitai.coach.core.api.generated.PatchWorkoutsByIdPlanDayRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetOrderRequest
 import com.fitai.coach.core.api.generated.PatchWorkoutsByIdSetsBySetIdRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdDeviceLinkRequest
+import com.fitai.coach.core.api.generated.PostWorkoutsByIdReparseFromImageRequest
+import com.fitai.coach.core.api.generated.PostWorkoutsByIdReparseRequest
 import com.fitai.coach.core.api.generated.PostWorkoutsByIdSetsRequest
 import com.fitai.coach.core.api.generated.SessionGrade
 import com.fitai.coach.core.api.generated.UpdateWorkoutRequest
 import com.fitai.coach.core.api.generated.WorkoutLatest
 import com.fitai.coach.core.api.generated.WorkoutLogDetail
 import com.fitai.coach.core.api.generated.WorkoutLogWithSets
+import com.fitai.coach.core.api.generated.WorkoutReparseResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -226,6 +229,43 @@ public class WorkoutRepository(
             ApiEndpoints.PatchWorkoutsByIdPlanDay.path(workoutId),
         )
         refresh(workoutId)
+    }
+
+    /**
+     * Reads the workout's text into sets, replacing its sets and structure
+     * blocks, then fetches it. The server reads the text the workout has: its
+     * prescription, else its description. Online.
+     *
+     * @throws ApiException on an error response (422: nothing could be read).
+     */
+    public suspend fun reparse(workoutId: String): WorkoutReparseResponse {
+        val result = api.call(
+            ApiEndpoints.PostWorkoutsByIdReparse,
+            PostWorkoutsByIdReparseRequest(),
+            ApiEndpoints.PostWorkoutsByIdReparse.path(workoutId),
+        )
+        refresh(workoutId)
+        return result
+    }
+
+    /**
+     * Reads the sets from a photo of the session (a whiteboard, a coach's
+     * sheet), replacing the workout's, then fetches it. Online.
+     *
+     * @throws ApiException on an error response.
+     */
+    public suspend fun reparseFromImage(workoutId: String, photo: EncodedImage): WorkoutReparseResponse {
+        val result = api.call(
+            ApiEndpoints.PostWorkoutsByIdReparseFromImage,
+            PostWorkoutsByIdReparseFromImageRequest(
+                mimeType = PostWorkoutsByIdReparseFromImageRequest.MimeType.entries.firstOrNull { it.wireValue == photo.mimeType }
+                    ?: PostWorkoutsByIdReparseFromImageRequest.MimeType.ImageJpeg,
+                imageBase64 = photo.base64,
+            ),
+            ApiEndpoints.PostWorkoutsByIdReparseFromImage.path(workoutId),
+        )
+        refresh(workoutId)
+        return result
     }
 
     /**

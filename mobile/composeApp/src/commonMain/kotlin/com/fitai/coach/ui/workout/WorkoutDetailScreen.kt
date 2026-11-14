@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,9 +58,11 @@ import com.fitai.coach.ui.format.formatWeight
 import com.fitai.coach.ui.format.shortDate
 import com.fitai.coach.ui.fuelling.FuellingAroundSessionPanel
 import com.fitai.coach.ui.icons.generated.LucideIcons
+import com.fitai.coach.ui.media.rememberPhotoPicker
 import com.fitai.coach.ui.session.LocalUserSession
 import com.fitai.coach.ui.theme.FitaiTheme
 import com.fitai.coach.ui.theme.Spacing
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -84,6 +87,17 @@ fun WorkoutDetailScreen(
     LaunchedEffect(vm) { vm.refreshFuelling() }
     var sheet by remember { mutableStateOf<DetailSheet?>(null) }
     var confirm by remember { mutableStateOf<Confirm?>(null) }
+    val scope = rememberCoroutineScope()
+    val pickPhoto = rememberPhotoPicker(onPicked = vm::parsePhoto, onError = { scope.launch { toasts.showSnackbar(it) } })
+    // Reading text or a photo replaces the sets, so ask first when there are some.
+    var replacing by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val replaceSets: (read: () -> Unit) -> Unit = { read ->
+        if (state.workout?.exerciseSets.isNullOrEmpty()) {
+            read()
+        } else {
+            replacing = read
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         val workout = state.workout
@@ -108,6 +122,18 @@ fun WorkoutDetailScreen(
                     override fun useNext(sets: List<ExerciseSetRow>, target: NextTarget) = vm.useNext(sets, target)
 
                     override fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int) = vm.moveExercise(groups, index, offset)
+
+                    override val readsPhotos = pickPhoto != null
+
+                    override fun readText() = replaceSets(vm::parseText)
+
+                    override fun readPhoto() {
+                        pickPhoto?.let(replaceSets)
+                    }
+
+                    override fun removeMaf() {
+                        confirm = Confirm.RemoveMaf
+                    }
 
                     override fun reopen() {
                         confirm = Confirm.Reopen
@@ -157,6 +183,19 @@ fun WorkoutDetailScreen(
             },
             onDismiss = close,
         )
+        DetailSheet.Maf -> state.workout?.let { workout ->
+            state.maf?.let { tag ->
+                val unit = prefs?.distanceUnit
+                MafFormSheet(
+                    initial = if (tag.tagged) MafForm.forTest(tag.saved, unit) else MafForm.forWorkout(workout, unit),
+                    tagged = tag.tagged,
+                    distanceUnit = unit,
+                    saving = state.mafSaving,
+                    onSave = { form -> vm.saveMaf(form, unit) { if (sheet == DetailSheet.Maf) close() } },
+                    onDismiss = close,
+                )
+            }
+        }
         DetailSheet.AddExercise -> ExercisePickerSheet(
             onPick = { name, label ->
                 vm.addExercise(name, label)
@@ -179,6 +218,17 @@ fun WorkoutDetailScreen(
             onDismiss = { confirm = null },
             destructive = true,
         )
+        Confirm.RemoveMaf -> FitaiDialog(
+            title = "Remove MAF test?",
+            text = "This removes the workout from your MAF trend, including its compliance score. You can tag it again later.",
+            confirmLabel = "Remove",
+            onConfirm = {
+                confirm = null
+                vm.untagMaf()
+            },
+            onDismiss = { confirm = null },
+            destructive = true,
+        )
         Confirm.Delete -> FitaiDialog(
             title = "Delete this workout?",
             text = "It moves to the recycle bin. You can undo straight after.",
@@ -192,6 +242,22 @@ fun WorkoutDetailScreen(
         )
         null -> Unit
     }
+
+    replacing?.let { read ->
+        val count = state.workout?.exerciseSets?.size ?: 0
+        FitaiDialog(
+            title = "Replace the sets?",
+            text = "The workout's $count ${if (count == 1) "set is" else "sets are"} replaced with the ones read in. " +
+                "Edits you've made to them are lost.",
+            confirmLabel = "Replace",
+            onConfirm = {
+                replacing = null
+                read()
+            },
+            onDismiss = { replacing = null },
+            destructive = true,
+        )
+    }
 }
 
 private sealed interface DetailSheet {
@@ -201,10 +267,12 @@ private sealed interface DetailSheet {
 
     data object AddExercise : DetailSheet
 
+    data object Maf : DetailSheet
+
     data class EditSet(val set: ExerciseSetRow) : DetailSheet
 }
 
-private enum class Confirm { Reopen, Delete }
+private enum class Confirm { Reopen, Delete, RemoveMaf }
 
 /** What the workout's controls do. */
 private interface WorkoutActions {
@@ -223,6 +291,18 @@ private interface WorkoutActions {
     fun useNext(sets: List<ExerciseSetRow>, target: NextTarget)
 
     fun moveExercise(groups: List<ExerciseGroup>, index: Int, offset: Int)
+
+    /** Whether there's a photo picker to read a photo of the session from. */
+    val readsPhotos: Boolean
+
+    /** Reads the workout's text into sets, asking first when it has sets to replace. */
+    fun readText()
+
+    /** Picks a photo of the session to read into sets, asking first when it has sets to replace. */
+    fun readPhoto()
+
+    /** Asks before taking the run out of the MAF trend. */
+    fun removeMaf()
 
     fun reopen()
 
@@ -248,6 +328,9 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
         }
         item { Stats(workout, distanceUnit) }
         item { PlanDayRow(state.linkedPlanDay, linked = workout.planDayId != null, onChange = { actions.open(DetailSheet.PlanDay) }) }
+        state.maf?.let { tag ->
+            item { MafTagRow(tag, state.mafSaving, onOpenForm = { actions.open(DetailSheet.Maf) }, onRemove = actions::removeMaf) }
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
                 FitaiButton(
@@ -273,6 +356,7 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
         if (groups.isEmpty()) {
             item { Text("No structured sets for this workout.", style = type.body, color = colors.textMuted) }
         }
+        item { ReadIntoSets(hasText = hasReadableText(workout), hasSets = groups.isNotEmpty(), state = state, actions = actions) }
         itemsIndexed(groups, key = { _, group -> group.key }) { index, group ->
             ExerciseCard(
                 group = group,
@@ -304,6 +388,43 @@ private fun WorkoutContent(workout: WorkoutLogDetail, state: WorkoutDetailState,
                     variant = ButtonVariant.Danger,
                     enabled = !state.busy,
                     leadingIcon = LucideIcons.Trash,
+                )
+            }
+        }
+    }
+}
+
+/** Reading the workout's text, or a photo of the session, into sets (PrescriptionEditor's parse). */
+@Composable
+private fun ReadIntoSets(hasText: Boolean, hasSets: Boolean, state: WorkoutDetailState, actions: WorkoutActions) {
+    if (!hasText && !actions.readsPhotos) return
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
+        if (!hasSets) {
+            Text(
+                "Read the workout's text, or a photo of it, into sets you can edit.",
+                style = FitaiTheme.typography.bodySm,
+                color = FitaiTheme.colors.textMuted,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Sm)) {
+            if (hasText) {
+                FitaiButton(
+                    "Read the text",
+                    onClick = actions::readText,
+                    variant = ButtonVariant.Secondary,
+                    size = ButtonSize.Sm,
+                    enabled = !state.busy,
+                    loading = state.parsing,
+                )
+            }
+            if (actions.readsPhotos) {
+                FitaiButton(
+                    "From a photo",
+                    onClick = actions::readPhoto,
+                    variant = ButtonVariant.Ghost,
+                    size = ButtonSize.Sm,
+                    enabled = !state.busy,
+                    leadingIcon = LucideIcons.Camera,
                 )
             }
         }

@@ -120,6 +120,27 @@ Every gap below already has a server endpoint, so closing one is client work onl
 - [x] **Recycle bin**: restore, delete forever, empty — `/recycle-bin`.
 - [x] Automatic timezone sync — `PATCH /preferences` with `userTimezone`.
 
+## Wave 5: the rest of the workout endpoints
+
+An audit of the API against the app after Wave 4 found these still unused.
+
+- [x] Re-parse a logged workout: read its text, or a photo of the session, into sets, asking before it replaces the
+  sets it has — `POST /workouts/{id}/reparse`, `…/reparse-from-image`.
+- [x] Tag a run as a **MAF test** from workout detail, correct its heart rate, duration and distance, or take it out
+  of the trend. MAF-method athletes with a ceiling only — `POST`, `PATCH`, `DELETE /workouts/{id}/maf-test`.
+- [ ] Structure blocks on workout detail (rounds, EMOMs, AMRAPs) and scoring each one —
+  `PATCH /workouts/{id}/structure-blocks/{blockId}/score`.
+- [ ] Select several workouts and delete them together, with one undo — `POST /workouts/bulk-delete`,
+  `POST /recycle-bin/batches/{batchId}/restore`.
+- [ ] Combine workouts into one — `POST /workouts/combine`.
+
+Deferred: the structure-block **editor**. The plan-day version is behind a flag on the web, and it is a large editor.
+
+Not needed in the app:
+
+- `POST /workouts/{id}/seed-from-plan`: the server seeds a workout's sets from its plan day when the day is marked done.
+- `GET /workouts/{id}/history`: no web screen uses it.
+
 ## Staying on the web (decided in docs/mobile-app-plan.md)
 
 - Coaching-materials upload and the RAG status card.
